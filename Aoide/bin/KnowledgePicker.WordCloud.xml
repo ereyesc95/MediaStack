@@ -1,0 +1,150 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>KnowledgePicker.WordCloud</name>
+    </assembly>
+    <members>
+        <member name="T:KnowledgePicker.WordCloud.Collections.QuadTree`1">
+            <summary>
+            A Quadtree is a structure designed to partition space so that it's
+            faster to find out what is inside or outside a given area. See
+            http://en.wikipedia.org/wiki/Quadtree.
+            </summary>
+            <remarks>
+            This Quadtree contains items that have an area (<see
+            cref="T:KnowledgePicker.WordCloud.Primitives.RectangleD"/>). It will store a reference to the item in the quad
+            that is just big enough to hold it. Each quad has a bucket that contains
+            multiple items.
+            </remarks>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.Collections.QuadTreeNode`1.Query(KnowledgePicker.WordCloud.Primitives.RectangleD)">
+            <summary>
+            Query the QuadTree for items that are in the given area
+            </summary>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.Coloring.IColorizer.GetColor(KnowledgePicker.WordCloud.Primitives.LayoutItem)">
+            <summary>
+            Gets color for the specified <paramref name="item"/>.
+            </summary>
+            <param name="item">The item being colored.</param>
+            <returns>
+            Can return <see langword="null"/> to use the default color
+            (<see cref="P:KnowledgePicker.WordCloud.WordCloudInput.TextColor"/>).
+            </returns>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Coloring.RandomColorizer">
+            <summary>
+            Allows random colors for the word cloud text.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Coloring.SpecificColorizer">
+            <summary>
+            Colors specific words with provided colors.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Drawing.IGraphicEngine">
+            <summary>
+            Can draw and measure texts.
+            </summary>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.Drawing.IGraphicEngine.Measure(System.String,System.Int32)">
+            <summary>
+            Measures <paramref name="text"/> with weight proportional to
+            <paramref name="count"/>.
+            </summary>
+            <returns>
+            Width and height of the <paramref name="text"/> and location of its
+            baseline (x/y are horizontal/vertical offsets of the leftmost point
+            of the baseline).
+            </returns>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.Drawing.IGraphicEngine.Draw(KnowledgePicker.WordCloud.Primitives.PointD,KnowledgePicker.WordCloud.Primitives.RectangleD,System.String,System.Int32,System.String)">
+            <summary>
+            Draws <paramref name="text"/> with weight proportional to
+            <paramref name="count"/>.
+            </summary>
+            <param name="measured">
+            Result of <see cref="M:KnowledgePicker.WordCloud.Drawing.IGraphicEngine.Measure(System.String,System.Int32)"/>.
+            </param>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Drawing.SkGraphicEngine">
+            <summary>
+            <see cref="T:KnowledgePicker.WordCloud.Drawing.IGraphicEngine"/> that uses <see cref="T:SkiaSharp.SKCanvas"/>.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Layouts.ILayout">
+            <summary>
+            Can arrange words into some cloud.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Layouts.SpiralLayout">
+            <summary>
+            Arranges words on a spiral starting in center and going outwards.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Primitives.LayoutItem">
+            <summary>
+            Word arranged somewhere in word cloud.
+            </summary>
+        </member>
+        <member name="P:KnowledgePicker.WordCloud.Primitives.LayoutItem.Rectangle">
+            <summary>
+            Bounding box of the word.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Sizers.ISizer">
+            <summary>
+            Converter from count to font size.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.Sizers.LogSizer">
+            <summary>
+            Converts counts to font sizes using <see cref="M:System.Math.Log(System.Double)"/>.
+            </summary>
+            <remarks>
+            Inspired by Wowchemy's Tag Cloud (commit
+            <c>b647d7e81a5ac59326fe8e5a1424df6a8bff7146</c>, file
+            <c>wowchemy/layouts/partials/widgets/tag_cloud.html</c>).
+            </remarks>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.Utilities.ColorUtil.ToHexString(System.Drawing.Color)">
+            <summary>
+            Converts <see cref="T:System.Drawing.Color"/> to hex string.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.WordCloudGenerator`1">
+            <summary>
+            Service for arranging and drawing word clouds.
+            </summary>
+            <remarks>
+            <para>
+            Inspired by https://archive.codeplex.com/?p=sourcecodecloud.
+            </para>
+            <para>
+            This class is thread-safe.
+            </para>
+            </remarks>
+        </member>
+        <member name="M:KnowledgePicker.WordCloud.WordCloudGenerator`1.Draw">
+            <summary>
+            Draws the word cloud into <see
+            cref="P:KnowledgePicker.WordCloud.Drawing.IGraphicEngine`1.Bitmap"/>.
+            </summary>
+        </member>
+        <member name="T:KnowledgePicker.WordCloud.WordCloudInput">
+            <summary>
+            Input to <see cref="T:KnowledgePicker.WordCloud.WordCloudGenerator`1"/>.
+            </summary>
+        </member>
+        <member name="P:KnowledgePicker.WordCloud.WordCloudInput.ItemMargin">
+            <summary>
+            Margin around each word in the cloud.
+            </summary>
+        </member>
+        <member name="P:KnowledgePicker.WordCloud.WordCloudInput.CutOut">
+            <summary>
+            Rectangle where no words shall be placed.
+            </summary>
+        </member>
+    </members>
+</doc>

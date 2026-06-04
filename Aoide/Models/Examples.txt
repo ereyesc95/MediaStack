@@ -1,0 +1,286 @@
+ User's music menu bar
+  2. Activity: Favorite artists - 3 Most played artists - 3 Least Played artists - 3 most popular in the world (from your library) - 3 least popular in the world
+		3 Most popular genres - 3 Most popular countries -Most popular decade
+
+0. Artists:
+	Type: All Artists - Fictional - Non fictional - People
+	Number of members: 1 -2 -3 -4 -5 -6 (depending on the highest registered)
+	Continent : List of continents (Include all continents option)
+	Country: List of countries (include "All countries" option)
+	Start Date: Include years registered from artists (Add 1 option per decade (1980-1989, 1990-1999, etc) Add any year option
+	End Date:Include years registered from artists (Add 1 option per decade (1980-1989, 1990-1999, etc) Add any year option
+	Genre: List of genres (Include all genres option)
+	Gender: List of genders (for solo artists and lead roles)
+	Label: List of labels, add any label option
+	Producer: List of producers, add any producer
+	Clear filter button - Filter button
+
+1. Playlists: Favorites - Blacklist - Most played - Today's choice - Your playlist 1 - Your playlist 2 - Create new playist
+3. Releases: Favorites- Latest - Window with list of releases ordered by release date from the most recent (click to go to the release or links to stores/torrents to get it
+4. Newsfeed: 2 columns with 15 news each, one per artist
+
+Modify column names for FK (Add FK+tablename)
+ALTER TABLE users MODIFY id INTEGER NOT NULL AUTO_INCREMENT; !!!!!
+Create bar to select options Music
+
+
+
+
+
+
+
+
+
+About: History - Members - Newsfeed/Websites - Related Artists
+Music:
+
+
+PUT IT ON A MODAL SO YOU CAN ACCESS TO IT FROM ANYWHERE
+
+
+tracktypes:
+1, Original
+2, Remix
+3, Cover
+4, Single
+5, Sample
+6, Acoustic
+7, Instrumental
+8, Remastered
+9, Live
+10, Orchestral
+11, Strings
+12, Unplugged
+
+tracks
+0, (Don't Fear) The Reaper,"",{3,8},6:30,Blue Oyster Cult's Buck Darma ID, HIM's ID, 123 
+
+releasetracklists
+0,track ID,9
+
+releases
+0,Greatest Love Songs Vol. 666, "", {Him's ID}, {03-11-1997,23-12-2014},{BMG's ID,The End Records ID}, {Gothic Metal's ID,Rock ID}, {Studio album ID},{front cover album id, back cover id, booklet scans id, disc scan id},{standard edition duration, remastered edition duration},{producer ID},{Standard edition id, Remastered edition id},Tracklist ID
+
+releaseTypes
+0, Studio Album, Album
+1, Extended Play, EP
+2, Long Play, LP
+3, Compilation Album, Compilation
+4, Cover album, ""
+5, Tribute album, ""
+6, Instrumental Album, ""
+7, Live album, ""
+8, Mixtape, ""
+9, Acoustic album, ""
+
+websites
+0, Facebook, logoID, www.facebook.com, 1
+
+websiteTypes
+0, Official Website
+1, Social
+2, News
+3, Other
+
+Images
+0, {Cover designer ID}, front id, musicID, edition id, imagedate
+
+imageTypes
+0, Front
+1, Back
+2, Side
+3, page 1
+4, page 2
+5, disc
+6, logo
+7, icon
+8, photography
+9, background
+
+editions
+0, Standard
+1, Deluxe
+2, Japanese
+3, Special
+4, Remastered
+5, Live
+
+subgenres
+0, Gothic Metal, musicID
+1, Alternative Metal, musicID
+3, Shonen, bookID
+4, Seinen, bookID
+5, Biography, bookID
+
+genres
+0, Rock,{subgensID}, musicID
+1, Metal,{subgensID}, musicID
+2, Anime,{subgensID}, seriesID
+3, Live-Action,{subgensID}, seriesID
+4, Stop-Motion,{subgensID}, moviesID
+5, Nonfiction,{subgensID}, booksID
+
+
+companies
+0, BMG, {Founder ID},Creation date,Defunction Date, labelID
+1, MadHouse, {FounderID}, Creation date, Defunction Date, studioID
+
+companyTypes
+0, label, {musicID}
+1, studio, {seriesID}
+
+instrumentTypes
+0, percussion
+1, woodwind
+2, string
+3, brass
+4, keyboard
+5, vocals
+
+instruments
+0, guitar, strings id
+
+artists
+0, Ville, Hermani, Valo, "", birthdate, Helsinki, Finland ID, deathdate, deathplace,
+ deathcountry, 
+{main skill: vocals id, guitar id},male id, {musician id}
+
+occupations
+0, musician
+1, producer
+2, designer
+3, writer
+
+artistparticipations
+0,HIM id, Ville Valo ID,{startdates},{enddates}, participation type id,
+instrument id
+
+participationTypes
+0, Official
+1, Touring
+2, Session
+
+bands
+0, HIM, Helsinki, Finland ID,{starting dates},{defunction dates},
+{members id (look in participations table)}, {subgenres id},0 or 1,{website urls}
+
+countries
+0, Finland
+
+genders
+0, male
+1, female
+2, other
+
+contentTypes
+0, music, {sort id}
+1, movies, {sort id}
+2, series, {sort id}
+3, books, {sort id}
+
+sorttypes
+0, Name
+1, Year
+2, Genre
+3, Author
+4, Band
+5, Studio
+6, Writer
+7, Director
+8, Producer
+9, Composer
+10, editor
+11, Country
+
+Example for Music: General|Artist (#-Z bar below)|Genre|Country|Year|Type (Solo-Band)|Gender (Male-Female-Trans)|Activity (Active-On Hiatus-Ended)
+
+playstatus
+0, Not started
+1, Started
+2, Ended
+3, To start soon
+4, Not found
+
+users
+0, ereyesc95, pass,mail, Eduardo, "", Reyes, birthdate, picture path, gender, 
+last login date, registration date, 0
+
+userRoles
+0, admin
+1, user
+2, superuser
+
+
+userSettings
+0,usrID,{categoryID-itemID},{categoryID-itemID},{view-list,theme-dark}
+
+continuities
+0, Main
+1, Prequel
+2, Sequel
+3, Spin-off
+4, Reboot
+
+series
+0,Dragon Ball,"",{AnimeID},"",{website,wiki,social},{othernames},"", "","",seriesID
+1, iZombie, {writerID},{Live-ActionID},{HorrorID},{website,wiki,social},{othernames},{directorID},{studioID},{comicID},seriesID
+
+subseries
+1,dragon ball ID, Dragon Ball Z,{othernames},{writerID},{directorID},{studioID},{ShonenID,FantasyID},{mangaID},{MainID}
+
+seasons
+0,"",dbzID,Saiyan Saga,release date,ending date,{openingID},{endingID},1,{languageIDs},{gokuID,gohanID}
+1,Riverdale,"","",release date,ending date,{openingID},{endingID},1,{languageIDs},{archieID,bettyID}
+
+characters
+0,goku,{0,1},{dragon ball id}
+1, jughead,{2,3},{riverdale id}
+
+performances
+0, mazako id, {start dates},{enddates},{roleIDs}
+1, mario id, {start dates},{enddates},{roleIDs}
+2, cole id, {start dates},{enddates},{roleIDs}
+
+roles
+0, main
+1, regular
+2, recurrent
+3, other
+4, extra
+5, cameo
+6, narrator
+
+
+episodes
+0,episode number, episode name, episode extra name, season id, episode type id
+
+episodetypes
+0,Regular
+1,Special
+2,OVA
+3,ONA
+4,Extra
+5,Movie
+
+
+movieseries
+0,Harry Potter, {jk rowling ID},"",books id, {covers id}, {websites}
+
+moviesID
+0, hpphilosopher, fantasy id, magic id, {WB id}, {director id},{producer id}, {composer id},{soundtrack id}, release date,{characters id}, {book id}, {language id},continuity id, {0},1,UK id, {movie id}, {cover ids}
+
+bookseries
+0, Harry Potter, {JK rowling id}, "", {bookid},{{cover ids}, {websites}
+
+books
+0, hpphilosopher, {jk rowling id},{editor id}, release date, {cover ids}, country id, {novel id},{fantasy id}, 1, {publisher id},{continuity id}, isbn, "", bookid,{language id}, edition, volume, {characters id}
+
+
+Ratings
+0,Full name, PG-13, brief desc, movieID
+
+
+
+
+
+

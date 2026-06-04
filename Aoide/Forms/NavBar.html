@@ -1,0 +1,20 @@
+﻿<div id="navbar" style="position: static; padding: 20px">
+    <div id="homeButton" style="float: left">
+        <a id="appName" href="Forms/Home.aspx" style="font-size:26px;text-decoration:none;color:aliceblue">
+            <img src="/Images/System/logo.png" style="width:26px;margin-top:-3px" />
+            <!--<label id="menuType" class="titleLink" style="font-family:'Times New Roman', Times, serif"><i>Media</i></label><label id="bingerName" class="titleLink">Binger</label>-->
+        </a>
+        
+    </div>
+
+    <div class="dropdown imageBorder" style="float: right; cursor:pointer">
+        <div id="menuButton" class="userImage">
+            <div class="dropdown-content">
+                <a id="userOption" href="javascript:void(0)">User</a>
+                <a id="writeOption" href="javascript:void(0)" runat="server" style="display:none" onclick="writeData()">Write Data</a>
+                <a id="logoutOption" href="javascript:void(0)" onclick="logout()">Logout</a>
+            </div>
+        </div>
+
+    </div>
+</div>

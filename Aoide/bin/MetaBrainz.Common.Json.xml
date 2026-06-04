@@ -1,0 +1,621 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>MetaBrainz.Common.Json</name>
+    </assembly>
+    <members>
+        <member name="T:MetaBrainz.Common.Json.Converters.AnyObjectReader">
+            <summary>A JSON reader that handles fields of type <see cref="T:System.Object"/> using the most appropriate framework type.</summary>
+        </member>
+        <member name="F:MetaBrainz.Common.Json.Converters.AnyObjectReader.Instance">
+            <summary>A global instance, for easy use without unnecessary object allocation.</summary>
+            <remarks>This reader is stateless, so this single instance can be used everywhere.</remarks>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.AnyObjectReader.Read(System.Text.Json.Utf8JsonReader@,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to the most appropriate .NET framework type.</summary>
+            <param name="reader">The reader to read from.</param>
+            <param name="typeToConvert">The type of object to convert (ignored; assumed to be <see cref="T:System.Object"/>).</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            The object converted from JSON. The specific type depends on the JSON token; see the table below.
+            <list type="table">
+            <listheader>
+            <term>JSON Token</term>
+            <description>Mapped Object Type</description>
+            </listheader>
+            <item>
+            <term><c>null</c></term>
+            <description><see cref="T:System.Object"/> (<see langword="null"/>).</description>
+            </item>
+            <item>
+            <term><c>true</c></term>
+            <description><see cref="T:System.Boolean"/> (<see langword="true"/>).</description>
+            </item>
+            <item>
+            <term><c>false</c></term>
+            <description><see cref="T:System.Boolean"/> (<see langword="false"/>).</description>
+            </item>
+            <item>
+            <term>a string</term>
+            <description>
+            <para>If it can be recognized as a date/time value: <see cref="T:System.DateTimeOffset"/>.</para>
+            <para>If it can be recognized as a UUID: <see cref="T:System.Guid"/>.</para>
+            <para>If it can be recognized as an absolute URI: <see cref="T:System.Uri"/>.</para>
+            <para>Otherwise: <see cref="T:System.String"/>.</para>
+            </description>
+            </item>
+            <item>
+            <term>a number</term>
+            <description>
+            <para>If an integral value that fits in a 32-bit signed integer: <see cref="T:System.Int32"/>.</para>
+            <para>If an integral value that fits in a 64-bit signed integer: <see cref="T:System.Int64"/>.</para>
+            <para>If a value that fits in a .NET decimal: <see cref="T:System.Decimal"/>.</para>
+            <para>Otherwise, if it can be represented as a 64-bit double-precision floating point value: <see cref="T:System.Double"/>.</para>
+            <para>Otherwise: <see cref="T:System.String"/>.</para>
+            </description>
+            </item>
+            <item>
+            <term>an array</term>
+            <description>
+            <para>If empty: an <see cref="M:System.Array.Empty``1">empty array</see> of <see cref="T:System.Object"/>.</para>
+            <para>If all elements are the same type (or null, if it's a reference type): an array of that type.</para>
+            <para>
+            If all elements are the same value type or <see langword="null"/>: an array of a
+            <see cref="T:System.Nullable`1">nullable version</see> of that value type.
+            </para>
+            <para>Otherwise: an array of <see cref="T:System.Object"/>.</para>
+            </description>
+            </item>
+            <item>
+            <term>an object</term>
+            <description>
+            <see cref="T:System.Collections.Generic.Dictionary`2"/>, with <see cref="T:System.String"/> as key and (nullable) <see cref="T:System.Object"/> as value.
+            </description>
+            </item>
+            </list>
+            </returns>
+            <remarks>
+            Unfortunately, <see cref="M:System.Text.Json.Utf8JsonReader.TryGetDecimal(System.Decimal@)"/> will happily truncate decimals, even when a double would have
+            preserved more digits. The degenerate case (where the decimal would be 0) is detected, but in other cases the less precise
+            decimal will be used.
+            </remarks>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.Converters.JsonConverter`3">
+            <summary>
+            A JSON converter that delegates deserialization to a <see cref="T:MetaBrainz.Common.Json.Converters.JsonReader`1"/> instance and serialization to a
+            <see cref="T:MetaBrainz.Common.Json.Converters.JsonWriter`1"/> instance.
+            </summary>
+            <typeparam name="T">The type to be deserialized and/or serialized by this converter.</typeparam>
+            <typeparam name="TReader">The type of <see cref="T:MetaBrainz.Common.Json.Converters.JsonReader`1"/> to use for deserialization.</typeparam>
+            <typeparam name="TWriter">The type of <see cref="T:MetaBrainz.Common.Json.Converters.JsonWriter`1"/> to use for serialization.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.#ctor">
+            <summary>Creates a new JSON converter, using a new default-constructed reader and writer.</summary>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.#ctor(`1)">
+            <summary>Creates a new JSON converter, using a specific reader instance and a new default-constructed writer.</summary>
+            <param name="reader">The reader to use.</param>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.#ctor(`2)">
+            <summary>Creates a new JSON converter, using a new default-constructed reader and a specific writer instance.</summary>
+            <param name="writer">The writer to use.</param>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.#ctor(`1,`2)">
+            <summary>Creates a new JSON converter, using specific reader and writer instances.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="writer">The writer to use.</param>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.Read(System.Text.Json.Utf8JsonReader@,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a value of type <typeparamref name="T"/>.</summary>
+            <param name="reader">The reader to read from.</param>
+            <param name="typeToConvert">The type of value to convert (ignored; assumed to be <typeparamref name="T"/>).</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>The value of type <typeparamref name="T"/> that was read and converted.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonConverter`3.Write(System.Text.Json.Utf8JsonWriter,`0,System.Text.Json.JsonSerializerOptions)">
+            <summary>Write a value as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="value">The value to write.</param>
+            <param name="options">The options to use for serialization.</param>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.Converters.JsonReader`1">
+            <summary>A <see cref="T:System.Text.Json.Serialization.JsonConverter`1"/> that only supports deserialization.</summary>
+            <typeparam name="T">The type for which deserialization is implemented by this converter.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonReader`1.Write(System.Text.Json.Utf8JsonWriter,`0,System.Text.Json.JsonSerializerOptions)">
+            <summary>Not supported.</summary>
+            <param name="writer">Ignored.</param>
+            <param name="value">Ignored.</param>
+            <param name="options">Ignored.</param>
+            <exception cref="T:System.NotSupportedException">Always.</exception>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.Converters.JsonWriter`1">
+            <summary>A <see cref="T:System.Text.Json.Serialization.JsonConverter`1"/> that only supports serialization.</summary>
+            <typeparam name="T">The type for which serialization is implemented by this converter.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.JsonWriter`1.Read(System.Text.Json.Utf8JsonReader@,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>Not supported.</summary>
+            <param name="reader">Ignored.</param>
+            <param name="typeToConvert">Ignored.</param>
+            <param name="options">Ignored.</param>
+            <returns>Never returns.</returns>
+            <exception cref="T:System.NotSupportedException">Always.</exception>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.Converters.ObjectReader`1">
+            <summary>A <see cref="T:MetaBrainz.Common.Json.Converters.JsonReader`1"/> for objects.</summary>
+            <typeparam name="T">The type for which deserialization is implemented by this reader.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.ObjectReader`1.Read(System.Text.Json.Utf8JsonReader@,System.Type,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an object of type <typeparamref name="T"/>.</summary>
+            <param name="reader">The reader to read from.</param>
+            <param name="typeToConvert">The type of object to convert (ignored; assumed to be <typeparamref name="T"/>).</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>The object of type <typeparamref name="T"/> that was read and converted.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.ObjectReader`1.ReadObjectContents(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts the contents of an object of type <typeparamref name="T"/> from JSON.</summary>
+            <param name="reader">The reader to read JSON data from.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>The object of type <typeparamref name="T"/> that was read and converted.</returns>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.Converters.ObjectWriter`1">
+            <summary>A <see cref="T:MetaBrainz.Common.Json.Converters.JsonWriter`1"/> for objects.</summary>
+            <typeparam name="T">The type for which serialization is implemented by this writer.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.ObjectWriter`1.Write(System.Text.Json.Utf8JsonWriter,`0,System.Text.Json.JsonSerializerOptions)">
+            <summary>Write an object as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="value">The value to write.</param>
+            <param name="options">The options to use for serialization.</param>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.Converters.ObjectWriter`1.WriteObjectContents(System.Text.Json.Utf8JsonWriter,`0,System.Text.Json.JsonSerializerOptions)">
+            <summary>Write the contents of an object as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="value">The value to write the contents of.</param>
+            <param name="options">The options to use for serialization.</param>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.IJsonBasedObject">
+            <summary>An object based on a JSON string (as returned by web services).</summary>
+        </member>
+        <member name="P:MetaBrainz.Common.Json.IJsonBasedObject.UnhandledProperties">
+            <summary>
+            A dictionary containing all properties not otherwise handled.
+            This should be <see langword="null"/>; if it's not, please file a ticket, listing its contents.
+            </summary>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.JsonBasedObject">
+            <summary>A JSON-based object, holding any properties not handled by normal deserialization.</summary>
+        </member>
+        <member name="P:MetaBrainz.Common.Json.JsonBasedObject.UnhandledProperties">
+            <summary>A dictionary containing all properties not otherwise handled.</summary>
+        </member>
+        <member name="T:MetaBrainz.Common.Json.JsonUtils">
+            <summary>Utility class, providing various methods to ease the use of System.Text.Json.</summary>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.Deserialize``1(System.String)">
+            <summary>Deserializes JSON to an object of the specified type, using default options.</summary>
+            <param name="json">The JSON to deserialize.</param>
+            <typeparam name="T">The type of object to deserialize.</typeparam>
+            <returns>A newly deserialized object of type <typeparamref name="T"/>.</returns>
+            <remarks>The options used match those returned by <see cref="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions"/>.</remarks>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.Deserialize``1(System.String,System.Text.Json.JsonSerializerOptions)">
+            <summary>Deserializes JSON to an object of the specified type.</summary>
+            <param name="json">The JSON to deserialize.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <typeparam name="T">The type of object to deserialize.</typeparam>
+            <returns>A newly deserialized object of type <typeparamref name="T"/>.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.DeserializeAsync``1(System.IO.Stream,System.Threading.CancellationToken)">
+            <summary>Deserializes JSON to an object of the specified type, using default options.</summary>
+            <param name="json">The JSON to deserialize.</param>
+            <typeparam name="T">The type of object to deserialize.</typeparam>
+            <param name="cancellationToken">A token that may be used to cancel the read operation.</param>
+            <returns>A newly deserialized object of type <typeparamref name="T"/>.</returns>
+            <remarks>The options used match those returned by <see cref="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions"/>.</remarks>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.DeserializeAsync``1(System.IO.Stream,System.Text.Json.JsonSerializerOptions,System.Threading.CancellationToken)">
+            <summary>Deserializes JSON to an object of the specified type.</summary>
+            <param name="json">The JSON to deserialize.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <param name="cancellationToken">A token that may be used to cancel the read operation.</param>
+            <typeparam name="T">The type of object to deserialize.</typeparam>
+            <returns>A newly deserialized object of type <typeparamref name="T"/>.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetJsonContent``1(System.Net.Http.HttpResponseMessage)">
+            <summary>Deserializes an object from the JSON content of an HTTP response.</summary>
+            <param name="response">The response to process.</param>
+            <typeparam name="T">The specific type to deserialize.</typeparam>
+            <returns>The deserialized object.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When an object of type <typeparamref name="T"/> could not be deserialized from the contents of <paramref name="response"/>.
+            </exception>
+            <remarks>The options used match those returned by <see cref="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions"/>.</remarks>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetJsonContent``1(System.Net.Http.HttpResponseMessage,System.Text.Json.JsonSerializerOptions)">
+            <summary>Deserializes an object from the JSON content of an HTTP response.</summary>
+            <param name="response">The response to process.</param>
+            <param name="options">The JSON serializer options to apply.</param>
+            <typeparam name="T">The specific type to deserialize.</typeparam>
+            <returns>The deserialized object.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When an object of type <typeparamref name="T"/> could not be deserialized from the contents of <paramref name="response"/>.
+            </exception>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetJsonContentAsync``1(System.Net.Http.HttpResponseMessage,System.Threading.CancellationToken)">
+            <summary>Deserializes an object from the JSON content of an HTTP response.</summary>
+            <param name="response">The response to process.</param>
+            <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+            <typeparam name="T">The specific type to deserialize.</typeparam>
+            <returns>The deserialized object.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When an object of type <typeparamref name="T"/> could not be deserialized from the contents of <paramref name="response"/>.
+            </exception>
+            <remarks>The options used match those returned by <see cref="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions"/>.</remarks>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetJsonContentAsync``1(System.Net.Http.HttpResponseMessage,System.Text.Json.JsonSerializerOptions,System.Threading.CancellationToken)">
+            <summary>Deserializes an object from the JSON content of an HTTP response.</summary>
+            <param name="response">The response to process.</param>
+            <param name="options">The JSON serializer options to apply.</param>
+            <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+            <typeparam name="T">The specific type to deserialize.</typeparam>
+            <returns>The deserialized object.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When an object of type <typeparamref name="T"/> could not be deserialized from the contents of <paramref name="response"/>.
+            </exception>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.Prettify(System.String)">
+            <summary>Pretty-prints a JSON string.</summary>
+            <param name="json">The JSON string to pretty-print.</param>
+            <returns>
+            An indented version of <paramref name="json"/>. If anything goes wrong, <paramref name="json"/> is returned unchanged.
+            </returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions">
+            <summary>Creates JSON serializer options for reading (deserialization).</summary>
+            <returns>JSON serializer options for reading (deserialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions(System.Collections.Generic.IEnumerable{System.Text.Json.Serialization.JsonConverter})">
+            <summary>Creates JSON serializer options for reading (deserialization).</summary>
+            <param name="readers">JSON converters to register in the options.</param>
+            <returns>JSON serializer options for reading (deserialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions(System.Text.Json.Serialization.JsonConverter[])">
+            <summary>Creates JSON serializer options for reading (deserialization).</summary>
+            <param name="readers">JSON converters to register in the options.</param>
+            <returns>JSON serializer options for reading (deserialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateReaderOptions(System.Collections.Generic.IEnumerable{System.Text.Json.Serialization.JsonConverter},System.Text.Json.Serialization.JsonConverter[])">
+            <summary>Creates JSON serializer options for reading (deserialization).</summary>
+            <param name="readers">JSON converters to register in the options.</param>
+            <param name="moreReaders">More JSON converters to register in the options.</param>
+            <returns>JSON serializer options for reading (deserialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateWriterOptions">
+            <summary>Creates JSON serializer options for writing (serialization).</summary>
+            <returns>JSON serializer options for writing (serialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateWriterOptions(System.Collections.Generic.IEnumerable{System.Text.Json.Serialization.JsonConverter})">
+            <summary>Creates JSON serializer options for writing (serialization).</summary>
+            <param name="writers">JSON converters to register in the options.</param>
+            <returns>JSON serializer options for writing (serialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateWriterOptions(System.Text.Json.Serialization.JsonConverter[])">
+            <summary>Creates JSON serializer options for writing (serialization).</summary>
+            <param name="writers">JSON converters to register in the options.</param>
+            <returns>JSON serializer options for writing (serialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.CreateWriterOptions(System.Collections.Generic.IEnumerable{System.Text.Json.Serialization.JsonConverter},System.Text.Json.Serialization.JsonConverter[])">
+            <summary>Creates JSON serializer options for writing (serialization).</summary>
+            <param name="writers">JSON converters to register in the options.</param>
+            <param name="moreWriters">More JSON converters to register in the options.</param>
+            <returns>JSON serializer options for writing (serialization).</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetObject``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an object of type <typeparamref name="T"/>.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <returns>The object of type <typeparamref name="T"/> that was read.</returns>
+            <typeparam name="T">The type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetObject(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an appropriate object.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>The object that was read (using <see cref="T:MetaBrainz.Common.Json.Converters.AnyObjectReader"/>.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetObject``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an object of type <typeparamref name="T"/>.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>The object of type <typeparamref name="T"/> that was read.</returns>
+            <typeparam name="T">The type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalBoolean(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a boolean value, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The boolean value that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalByte(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to an 8-bit unsigned integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 8-bit unsigned integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalDateTimeOffset(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a <see cref="T:System.DateTimeOffset"/>, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The <see cref="T:System.DateTimeOffset"/> that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalDecimal(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a decimal value, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The decimal value that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalDouble(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a double-precision floating-point value, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>
+            The double-precision floating-point value that was read, or <see langword="null"/> if a JSON null value was found.
+            </returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalGuid(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a <see cref="T:System.Guid">UUID</see>, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The <see cref="T:System.Guid">UUID</see> that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalInt16(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 16-bit signed integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 16-bit signed integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalInt32(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 32-bit signed integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 32-bit signed integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalInt64(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 64-bit signed integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 64-bit signed integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalObject``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an object of type <typeparamref name="T"/>, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <returns>
+            The object of type <typeparamref name="T"/> that was read, or <see langword="null"/> if a JSON null value was found.
+            </returns>
+            <typeparam name="T">The reference type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalObject(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an appropriate object, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            The object that was read (using <see cref="T:MetaBrainz.Common.Json.Converters.AnyObjectReader"/>, or <see langword="null"/> if a JSON null value was found.
+            </returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalObject``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to an object of type <typeparamref name="T"/>, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            The object of type <typeparamref name="T"/> that was read, or <see langword="null"/> if a JSON null value was found.
+            </returns>
+            <typeparam name="T">The reference type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalSByte(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to an 8-bit signed integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 8-bit signed integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalSingle(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a single-precision floating-point value, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>
+            The single-precision floating-point value that was read, or <see langword="null"/> if a JSON null value was found.
+            </returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalUInt16(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 16-bit unsigned integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 16-bit unsigned integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalUInt32(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 32-bit unsigned integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 32-bit unsigned integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalUInt64(System.Text.Json.Utf8JsonReader@)">
+            <summary>Reads and converts JSON to a 64-bit unsigned integer, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The 64-bit unsigned integer that was read, or <see langword="null"/> if a JSON null value was found.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalUri(System.Text.Json.Utf8JsonReader@)">
+            <summary>
+            Takes the next JSON token value from the specified reader and parses it as an absolute <see cref="T:System.Uri">URI</see>.
+            </summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The URI, if the entire UTF-8 encoded token value was successfully parsed.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When the current JSON token value is not a string, or could not be parsed as an absolute <see cref="T:System.Uri">URI</see>.
+            </exception>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetOptionalValue``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a value of type <typeparamref name="T"/>, allowing null.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <returns>
+            The (nullable) value of type <typeparamref name="T"/> that was read, or <see langword="null"/> if a JSON null value was
+            found.
+            </returns>
+            <typeparam name="T">The value type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetPropertyName(System.Text.Json.Utf8JsonReader@)">
+            <summary>Gets the value for a property name node.</summary>
+            <param name="reader">The UTF-8 JSON reader to get the value from.</param>
+            <returns>The property name node's value.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetRawStringValue(System.Text.Json.Utf8JsonReader@)">
+            <summary>Decodes the current raw JSON value as a string.</summary>
+            <param name="reader">The UTF-8 JSON reader to get the raw value from.</param>
+            <returns>The raw value as a string.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetStringValue(System.Text.Json.Utf8JsonReader@)">
+            <summary>Gets the value for a string node.</summary>
+            <param name="reader">The UTF-8 JSON reader to get the value from.</param>
+            <returns>The string node's value.</returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetUri(System.Text.Json.Utf8JsonReader@)">
+            <summary>
+            Takes the next JSON token value from the specified reader and parses it as an absolute <see cref="T:System.Uri">URI</see>.
+            </summary>
+            <param name="reader">The reader to use.</param>
+            <returns>The URI, if the entire UTF-8 encoded token value was successfully parsed.</returns>
+            <exception cref="T:System.Text.Json.JsonException">
+            When the current JSON token value is not a string, or could not be parsed as an absolute <see cref="T:System.Uri">URI</see>.
+            </exception>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.GetValue``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a value of type <typeparamref name="T"/>.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <returns>The value of type <typeparamref name="T"/> that was read.</returns>
+            <typeparam name="T">The value type to read.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadDictionary``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) dictionary.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) dictionary of containing the key/value pairs read, or <see langword="null"/> if the value was specified as
+            <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the dictionary.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadDictionary``2(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) dictionary.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) dictionary of containing the key/value pairs read, or <see langword="null"/> if the value was specified as
+            <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the dictionary.</typeparam>
+            <typeparam name="TValue">The type to use when deserializing the dictionary values.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadDictionary``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) dictionary.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) dictionary of containing the key/value pairs read, or <see langword="null"/> if the value was specified as
+            <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the dictionary.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadDictionary``2(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``1},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) dictionary.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) dictionary of containing the key/value pairs read, or <see langword="null"/> if the value was specified as
+            <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the dictionary.</typeparam>
+            <typeparam name="TValue">The type to use when deserializing the dictionary values.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadList``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) list.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) list containing the values read, or <see langword="null"/> if the value was specified as <c>null</c>.
+            </returns>
+            <typeparam name="T">The element type for the list.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadList``2(System.Text.Json.Utf8JsonReader@,System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) list.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) list containing the values read, or <see langword="null"/> if the value was specified as <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the list.</typeparam>
+            <typeparam name="TValue">The type to use when deserializing the list values.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadList``1(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) list.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) list containing the values read, or <see langword="null"/> if the value was specified as <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the list.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.ReadList``2(System.Text.Json.Utf8JsonReader@,System.Text.Json.Serialization.JsonConverter{``1},System.Text.Json.JsonSerializerOptions)">
+            <summary>Reads and converts JSON to a (read-only) list.</summary>
+            <param name="reader">The reader to use.</param>
+            <param name="converter">The specific converter to use for deserialization.</param>
+            <param name="options">The options to use for deserialization.</param>
+            <returns>
+            A (read-only) list containing the elements read, or <see langword="null"/> if the value was specified as <c>null</c>.
+            </returns>
+            <typeparam name="T">The value type for the list.</typeparam>
+            <typeparam name="TValue">The type to use when deserializing the list values.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.TryGetUri(System.Text.Json.Utf8JsonReader@,System.Uri@)">
+            <summary>
+            Tries to parse the given reader's current JSON token value as an absolute <see cref="T:System.Uri">URI</see> and returns a value that
+            indicates whether the operation succeeded.
+            </summary>
+            <param name="reader">The reader to use.</param>
+            <param name="value">When this method returns, contains the parsed value.</param>
+            <returns>
+            <see langword="true"/> if the entire UTF-8 encoded token value can be successfully parsed as an absolute
+            <see cref="T:System.Uri">URI</see>; otherwise, <see langword="false"/>.
+            </returns>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.WriteList``1(System.Text.Json.Utf8JsonWriter,System.Collections.Generic.IEnumerable{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Writes a list of values of type <typeparamref name="T"/> as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="values">The values to write.</param>
+            <param name="options">The options to use for serialization.</param>
+            <typeparam name="T">The element type for the list.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.WriteList``2(System.Text.Json.Utf8JsonWriter,System.Collections.Generic.IEnumerable{``0},System.Text.Json.Serialization.JsonConverter{``1},System.Text.Json.JsonSerializerOptions)">
+            <summary>Writes a list of values of type <typeparamref name="TList"/> as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="values">The values to write.</param>
+            <param name="converter">The specific converter to use for serialization.</param>
+            <param name="options">The options to use for serialization.</param>
+            <typeparam name="TList">The element type for the list.</typeparam>
+            <typeparam name="TConverter">The specific type used by the converter.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.WriteListAsync``1(System.Text.Json.Utf8JsonWriter,System.Collections.Generic.IAsyncEnumerable{``0},System.Text.Json.JsonSerializerOptions)">
+            <summary>Writes a list of values of type <typeparamref name="T"/> as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="values">The values to write.</param>
+            <param name="options">The options to use for serialization.</param>
+            <returns>A task that performs the writes.</returns>
+            <typeparam name="T">The element type for the list.</typeparam>
+        </member>
+        <member name="M:MetaBrainz.Common.Json.JsonUtils.WriteListAsync``2(System.Text.Json.Utf8JsonWriter,System.Collections.Generic.IAsyncEnumerable{``0},System.Text.Json.Serialization.JsonConverter{``1},System.Text.Json.JsonSerializerOptions)">
+            <summary>Writes a list of values of type <typeparamref name="TList"/> as JSON.</summary>
+            <param name="writer">The writer to write to.</param>
+            <param name="values">The values to write.</param>
+            <param name="converter">The specific converter to use for serialization.</param>
+            <param name="options">The options to use for serialization.</param>
+            <returns>A task that performs the writes.</returns>
+            <typeparam name="TList">The element type for the list.</typeparam>
+            <typeparam name="TConverter">The specific type used by the converter.</typeparam>
+        </member>
+    </members>
+</doc>

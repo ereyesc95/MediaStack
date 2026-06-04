@@ -1,0 +1,66 @@
+﻿@model Aoide.Models.Pages
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>GetSubItems</title>
+</head>
+<body>
+    <div>
+        <h4>Pages</h4>
+        <hr />
+        <dl class="dl-horizontal">
+            <dt>
+                @Html.DisplayNameFor(model => model.PageType)
+            </dt>
+    
+            <dd>
+                @Html.DisplayFor(model => model.PageType)
+            </dd>
+    
+            <dt>
+                @Html.DisplayNameFor(model => model.Library)
+            </dt>
+    
+            <dd>
+                @Html.DisplayFor(model => model.Library)
+            </dd>
+    
+            <dt>
+                @Html.DisplayNameFor(model => model.Movies)
+            </dt>
+    
+            <dd>
+                @Html.DisplayFor(model => model.Movies)
+            </dd>
+    
+            <dt>
+                @Html.DisplayNameFor(model => model.Music)
+            </dt>
+    
+            <dd>
+                @Html.DisplayFor(model => model.Music)
+            </dd>
+    
+            <dt>
+                @Html.DisplayNameFor(model => model.Series)
+            </dt>
+    
+            <dd>
+                @Html.DisplayFor(model => model.Series)
+            </dd>
+    
+        </dl>
+    </div>
+    <p>
+        @Html.ActionLink("Edit", "Edit", new { /* id = Model.PrimaryKey */ }) |
+        @Html.ActionLink("Back to List", "Index")
+    </p>
+</body>
+</html>

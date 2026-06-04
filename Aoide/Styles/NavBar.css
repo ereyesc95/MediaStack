@@ -1,0 +1,149 @@
+﻿body {
+    font-family: 'Century Gothic';
+}
+
+    body::-webkit-scrollbar {
+        display: none;
+    }
+
+.imageBorder {
+    border: solid 2px #fff;
+    padding: 4px;
+    display: inline-block;
+    border-radius: 50%;
+}
+
+.userImage {
+    width: 26px;
+    height: 26px;
+    border-radius: 60px;
+    background-clip: padding-box;
+    background-size: cover;
+    background-position: center center;
+    border: 1px solid #fff;
+}
+
+.dropdown-content {
+    display: none;
+    position: relative;
+    width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    margin-left: -114px;
+    margin-top: 30px;
+    opacity: 0.95;
+    border-radius: 5px;
+    background-color: rgba(18, 18, 18, 0.9)
+}
+
+    .dropdown-content a {
+        color: #f1f1f1;
+        padding: 12px 16px;
+        text-decoration: none;
+        text-align: right;
+        display: block;
+        border-radius: 5px;
+    }
+
+        .dropdown-content a:hover {
+            color: #ddd;
+        }
+
+.dropdown:hover {
+    background-color: rgba(0, 128, 128, 0.5)
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.scrollabletextbox {
+    padding: 10px 10px 10px 10px;
+    height: 300px;
+    width: 100%;
+    overflow: scroll;
+    background-color: transparent;
+    color: aliceblue;
+    border: none;
+    overflow-x: hidden;
+    padding-right: 25px;
+    box-sizing: content-box;
+    font-size: 18px;
+    text-align: justify;
+    white-space: normal;
+    outline: none;
+    cursor: default;
+    white-space: pre-wrap;
+}
+
+.scrollabletextbox-sm {
+    padding: 10px 10px 10px 10px;
+    height: 205px;
+    width: 100%;
+    overflow: scroll;
+    background-color: transparent;
+    color: aliceblue;
+    border: none;
+    overflow-x: hidden;
+    padding-right: 25px;
+    box-sizing: content-box;
+    font-size: 18px;
+    text-align: justify;
+    white-space: normal;
+    outline: none;
+    cursor: default;
+    white-space: pre-wrap;
+}
+
+.scrollableDiv {
+    width: 101.6%;
+    padding-right: 55px;
+    box-sizing: content-box;
+    font-size: 18px;
+    overflow: auto;
+    height: 395px;
+}
+
+.scrollableDiv-lg {
+    width: 101.6%;
+    padding-right: 55px;
+    box-sizing: content-box;
+    font-size: 18px;
+    overflow-y: auto;
+    height: 525px;
+    overflow-x: hidden;
+}
+
+.scrollableDiv-gi {
+    width: 101.6%;
+    margin-right: -32px;
+    box-sizing: content-box;
+    overflow-y: auto;
+    height: 755px;
+    overflow-x: hidden;
+}
+
+.scrollableItemsDiv {
+    width: 101.6%;
+    box-sizing: content-box;
+    overflow: auto;
+    height: 760px;
+}
+
+.infoDiv {
+    padding: 25px 10px 10px 10px;
+    color: aliceblue;
+    font-size: 18px;
+}
+
+    .infoDiv .hlist {
+        margin-top: 34px;
+    }
+
+    .infoDiv ul li {
+        display: inline-block;
+    }
+
+.thLabel{
+    min-width: 25%;
+}

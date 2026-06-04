@@ -1,0 +1,26 @@
+﻿<div id="navbar" style="position: static; padding: 20px">
+    <div id="homeButton" style="float: left; padding-right:10%">
+        <a id="appName" href="/Media" style="font-size:26px;text-decoration:none;color:aliceblue">
+            <img src="/Images/System/logo.png" style="width:26px;margin-top:-3px" />
+            <!--<label id="menuType" class="titleLink" style="font-family:'Times New Roman', Times, serif;cursor:pointer"><i>Media</i></label><label id="bingerName" class="titleLink" style="cursor:pointer">Binger</label>-->
+        </a>
+        
+    </div>
+    <div id="pageIndex" style="float: left;width: 73%;margin-right: 0;margin-left: 0;text-align: center">
+        <a id="appPageIndex" href="javascript:void(0)" style="font-size:26px;text-decoration:none;color:aliceblue;display: inline;float:none"></a>
+    </div>
+
+    <div class="dropdown imageBorder" style="float: right">
+        <div id="menuButton" class="userImage">
+            <div class="dropdown-content">
+                <a id="userOption" class="navBarOption" href="javascript:void(0)">User</a>
+                <a id="writeOption" class="navBarOption" href="javascript:void(0)" runat="server" style="display:none" onclick="writeData()">Write Data</a>
+                <a id="viewOption" class="navBarOption" href="javascript:void(0)" runat="server" style="display:none">Switch View</a>
+                <a id="bndEdit" class="navBarOption" href="javascript:void(0)" runat="server" style="display:none">Edit Artist</a>
+                <a id="bndRefreshTop" class="navBarOption"  href="javascript:void(0)" runat="server" style="display:none">Refresh Top Tracks</a>
+                <a id="logoutOption" class="navBarOption" href="javascript:void(0)" onclick="logout()">Logout</a>
+            </div>
+        </div>
+        
+    </div>
+</div>

@@ -1,0 +1,100 @@
+﻿body {
+    margin: 0;
+    font-family: 'Century Gothic';
+}
+
+.ReleaseContainer {
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+    .ReleaseContainer a {
+        float: left;
+        color: #f2f2f2;
+        text-align: center;
+        text-decoration: none;
+        font-size: 15px;
+    }
+        .ReleaseContainer a:hover {
+            cursor: default;
+        }
+
+.topnav {
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+    .topnav a {
+        float: left;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 3px 3px;
+        text-decoration: none;
+        font-size: 15px;
+    }
+
+        .topnav a:hover {
+            border-bottom: 1px solid aliceblue;
+        }
+
+        .topnav a.active {
+            border-bottom: 1px solid rgba(0, 128, 128, 1);
+            text-shadow: 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1);
+        }
+
+    .barnav {
+        overflow: hidden;
+        background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .barnav a {
+        float: left;
+        color: #f2f2f2;
+        text-align: center;
+        padding: 2px 2px;
+        text-decoration: none;
+        font-size: 12px;
+    }
+
+        .barnav a:hover {
+            border-bottom: 1px solid aliceblue;
+        }
+
+        .barnav a.active {
+            border-bottom: 1px solid rgba(0, 128, 128, 1);
+            text-shadow: 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1), 0 1px 10px rgba(0, 128, 128, 1);
+        }
+
+    .FilterSearch {
+        float: left;
+        text-align: center;
+        padding: 5px 0px;
+        font-size: 12px;
+        background: transparent;
+        color: white;
+        height: 95%;
+        border: none;
+    }
+
+    .FilterSearch:focus {
+        background: transparent;
+        border: none;
+        color: white;
+    }
+
+    .navBarOption:hover {
+        background-color: rgba(0,128,128, 0.5);
+    }
+
+.controlWrapper {
+    width: auto;
+    display: inline-block;
+}
+
+    .controlWrapper:hover .controlTrack {
+        display: none;
+    }
+
+    .controlWrapper:hover .numberTrack {
+        display: block;
+    }

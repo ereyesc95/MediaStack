@@ -1,0 +1,2232 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Hqub.MusicBrainz.API</name>
+    </assembly>
+    <members>
+        <member name="T:Hqub.MusicBrainz.API.Cache.IRequestCache">
+            <summary>
+            A simple cache interface.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Cache.IRequestCache.Add(System.String,System.IO.Stream)">
+            <summary>
+            Add a request and its response to the cache.
+            </summary>
+            <param name="request">The request url used to identify the cache item.</param>
+            <param name="response">The MusicbBrainz webservice response stream.</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Cache.IRequestCache.TryGetCachedItem(System.String,System.IO.Stream@)">
+            <summary>
+            Try to find the cached response for given request url.
+            </summary>
+            <param name="request">The request url used to identify the cache item.</param>
+            <param name="stream">The response stream read form cache.</param>
+            <returns>True, if a cache entry matching the request was found.</returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Cache.NullCache">
+            <summary>
+            A cache that does not cache anything.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Cache.NullCache.Default">
+            <summary>
+            Gets the default <see cref="T:Hqub.MusicBrainz.API.Cache.NullCache"/> instance.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Cache.NullCache.Add(System.String,System.IO.Stream)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Cache.NullCache.TryGetCachedItem(System.String,System.IO.Stream@)">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Configuration">
+            <summary>
+            Hqub.MusicBrainz configuration.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Configuration.Proxy">
+            <summary>
+            Gets or sets a <see cref="T:System.Net.IWebProxy"/> used to query the webservice.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Configuration.UserAgent">
+            <summary>
+            Gets or sets a custom user agent string.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Configuration.Cache">
+            <summary>
+            Gets or sets the request cache.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Alias">
+            <summary>
+            Aliases are alternative names for all types of MusicBrainz entities.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Aliases"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.SortName">
+            <summary>
+            Gets or sets the sort name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Type">
+            <summary>
+            Gets or sets the type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Locale">
+            <summary>
+            Gets or sets the locale.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Begin">
+            <summary>
+            Gets or sets the begin date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.End">
+            <summary>
+            Gets or sets the end date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Ended">
+            <summary>
+            Gets or sets a value indicating whether the alias ended or not.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Alias.Primary">
+            <summary>
+            Gets or sets a value indicating whether this is a primary alias.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Area">
+            <summary>
+            Areas are geographic regions or settlements.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Area"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Area.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Area.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Area.Type">
+            <summary>
+            Gets or sets the type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Area.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Area.IsoCodes">
+            <summary>
+            Gets or sets the iso-3166-1 codes.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Artist">
+            <summary>
+            An artist is generally a musician (or musician persona), group of musicians
+            or other music professional (like a producer or engineer).
+            </summary>
+            <see href="https://musicbrainz.org/doc/Artist"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Score">
+            <summary>
+            Gets or sets the score (only available in search results).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Type">
+            <summary>
+            Gets or sets the type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.SortName">
+            <summary>
+            Gets or sets the sort name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Gender">
+            <summary>
+            Gets or sets the gender.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.LifeSpan">
+            <summary>
+            Gets or sets the life-span.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Area">
+            <summary>
+            Gets or sets the area.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.BeginArea">
+            <summary>
+            Gets or sets the begin area.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.EndArea">
+            <summary>
+            Gets or sets the end area.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Country">
+            <summary>
+            Gets or sets the country.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Rating">
+            <summary>
+            Gets or sets the rating.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Recordings">
+            <summary>
+            Gets or sets a list of recordings associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "recordings");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.ReleaseGroups">
+            <summary>
+            Gets or sets a list of release-groups associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "release-groups");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Releases">
+            <summary>
+            Gets or sets a list of releases associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "releases");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Works">
+            <summary>
+            Gets or sets a list of works associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "works");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Tags">
+            <summary>
+            Gets or sets a list of tags associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "tags");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Genres">
+            <summary>
+            Gets or sets a list of genres associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "genres");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Relations">
+            <summary>
+            Gets or sets a list of relations associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "url-rels", "artist-rels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Artist.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this artist.
+            </summary>
+            <example>
+            var e = await Artist.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Artist.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup an artist in the MusicBrainz database.
+            </summary>
+            <param name="id">The artist MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Artist.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Artist.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Artist.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the artists in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ArtistList">
+            <summary>
+            List of artists returned by MusicBrainz search requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ArtistList.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Collections.ArtistList.GetEnumerator">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ArtistListBrowse">
+            <summary>
+            List of artists returned by MusicBrainz browse requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ArtistListBrowse.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ArtistListBrowse.Count">
+            <summary>
+            Gets or sets the total list items count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ArtistListBrowse.Offset">
+            <summary>
+            Gets or sets the list offset.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.RecordingList">
+            <summary>
+            List of recordings returned by MusicBrainz search requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.RecordingList.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Collections.RecordingList.GetEnumerator">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.RecordingListBrowse">
+            <summary>
+            List of recordings returned by MusicBrainz browse requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.RecordingListBrowse.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.RecordingListBrowse.Count">
+            <summary>
+            Gets or sets the total list items count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.RecordingListBrowse.Offset">
+            <summary>
+            Gets or sets the list offset.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupList">
+            <summary>
+            List of release-groups returned by MusicBrainz search requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupList.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupList.GetEnumerator">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupListBrowse">
+            <summary>
+            List of release-groups returned by MusicBrainz browse requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupListBrowse.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupListBrowse.Count">
+            <summary>
+            Gets or sets the total list items count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseGroupListBrowse.Offset">
+            <summary>
+            Gets or sets the list offset.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ReleaseList">
+            <summary>
+            List of releases returned by MusicBrainz search requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseList.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Collections.ReleaseList.GetEnumerator">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Collections.ReleaseListBrowse">
+            <summary>
+            List of releases returned by MusicBrainz browse requests.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseListBrowse.Items">
+            <summary>
+            Gets or sets the list of artists.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseListBrowse.Count">
+            <summary>
+            Gets or sets the total list items count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Collections.ReleaseListBrowse.Offset">
+            <summary>
+            Gets or sets the list offset.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.CoverArtArchive">
+            <summary>
+            Cover Art Archive information.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Cover_Art_Archive"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.CoverArtArchive.Artwork">
+            <summary>
+            Gets or sets a value indicating whether artwork is available or not.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.CoverArtArchive.Count">
+            <summary>
+            Gets or sets the count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.CoverArtArchive.Front">
+            <summary>
+            Gets or sets a value indicating whether a front crover is available or not.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.CoverArtArchive.Back">
+            <summary>
+            Gets or sets a value indicating whether a back crover is available or not.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Disc">
+            <summary>
+            The Disc entity.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Disc.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Disc.Sectors">
+            <summary>
+            Gets or sets the number of sectors.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Disc.Offsets">
+            <summary>
+            Gets or sets the track offsets.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Genre">
+            <summary>
+            Genre information.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Genre"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Genre.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Genre.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Genre.Count">
+            <summary>
+            Gets or sets the count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Genre.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Label">
+            <summary>
+            Label information.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Label"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Label.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Label.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Label.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Label.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this label.
+            </summary>
+            <example>
+            var e = await Label.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.LabelInfo">
+            <summary>
+            The LabelInfo entity.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.LabelInfo.CatalogNumber">
+            <summary>
+            Gets or sets the catalog-number.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.LabelInfo.Label">
+            <summary>
+            Gets or sets the label.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.LifeSpan">
+            <summary>
+            The LifeSpan entity.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.LifeSpan.Begin">
+            <summary>
+            Gets or sets the begin date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.LifeSpan.End">
+            <summary>
+            Gets or sets the end date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.LifeSpan.Ended">
+            <summary>
+            Gets or sets a value indicating whether the life-span ended or not.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Medium">
+            <summary>
+            Physical representation of a release.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Medium"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Medium.TrackCount">
+            <summary>
+            Gets or sets the number of tracks.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Medium.Position">
+            <summary>
+            Gets or sets the position.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Medium.Format">
+            <summary>
+            Gets or sets the format.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Medium.Discs">
+            <summary>
+            Gets or sets the disc list.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Medium.Tracks">
+            <summary>
+            Gets or sets the track list.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.NameCredit">
+            <summary>
+            Artist credits indicate who is the main credited artist (or artists) for releases, release groups, tracks and recordings.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Artist_Credits"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.NameCredit.JoinPhrase">
+            <summary>
+            Gets or sets the joinphrase.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.NameCredit.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.NameCredit.Artist">
+            <summary>
+            Gets or sets the artist.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Rating">
+            <summary>
+            Rating information.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Rating_System"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Rating.VotesCount">
+            <summary>
+            Gets or sets the votes-count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Rating.Value">
+            <summary>
+            Gets or sets the rating value.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Recording">
+            <summary>
+            A recording is an entity in MusicBrainz which can be linked to tracks on releases. Each track must always
+            be associated with a single recording, but a recording can be linked to any number of tracks. 
+            </summary>
+            <see href="https://musicbrainz.org/doc/Recording"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Score">
+            <summary>
+            Gets or sets the score (only available in search results).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Title">
+            <summary>
+            Gets or sets the title.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Length">
+            <summary>
+            Gets or sets the length.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Rating">
+            <summary>
+            Gets or sets the rating.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Credits">
+            <summary>
+            Gets or sets a list of artists associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "artists");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Releases">
+            <summary>
+            Gets or sets a list of releases associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "releases");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Tags">
+            <summary>
+            Gets or sets a list of tags associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "tags");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Genres">
+            <summary>
+            Gets or sets a list of genres associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "genres");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Relations">
+            <summary>
+            Gets or sets a list of relations associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "url-rels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Recording.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this recording.
+            </summary>
+            <example>
+            var e = await Recording.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Recording.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup an recording in the MusicBrainz database.
+            </summary>
+            <param name="id">The recording MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Recording.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for an recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Recording.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Recording},System.Int32,System.Int32)">
+            <summary>
+            Search for an recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Recording.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the recordings in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Relation">
+            <summary>
+            Relationships are a way to represent all the different ways in which entities are connected
+            to each other and to URLs outside MusicBrainz.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Relationships"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Type">
+            <summary>
+            Gets or sets the relation type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.TypeId">
+            <summary>
+            Gets or sets the relation type ID.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.TargetType">
+            <summary>
+            Gets or sets the relation target type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Direction">
+            <summary>
+            Gets or sets the relation direction.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Begin">
+            <summary>
+            Gets or sets the begin date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.End">
+            <summary>
+            Gets or sets the end date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Ended">
+            <summary>
+            Gets or sets a value indicating whether the relation ended or not.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Attributes">
+            <summary>
+            Gets or sets a list of attributes.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Url">
+            <summary>
+            Gets or sets the url relationship (include url-rels).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Artist">
+            <summary>
+            Gets or sets the artist relationship (include artist-rels).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Relation.Work">
+            <summary>
+            Gets or sets the work relationship (include work-rels).
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Release">
+            <summary>
+            A MusicBrainz release represents the unique release (i.e. issuing) of a product on a specific
+            date with specific release information such as the country, label, barcode and packaging.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Release"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Score">
+            <summary>
+            Gets or sets the score (only available in search results).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Title">
+            <summary>
+            Gets or sets the title.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Status">
+            <summary>
+            Gets or sets the status.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Quality">
+            <summary>
+            Gets or sets the quality.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.TextRepresentation">
+            <summary>
+            Gets or sets the text-representation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Date">
+            <summary>
+            Gets or sets the date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Country">
+            <summary>
+            Gets or sets the country.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Barcode">
+            <summary>
+            Gets or sets the barcode.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.ReleaseGroup">
+            <summary>
+            Gets or sets the release-group.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.CoverArtArchive">
+            <summary>
+            Gets or sets the cover-art-archive.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Credits">
+            <summary>
+            Gets or sets a list of artists associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "artists");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Labels">
+            <summary>
+            Gets or sets a list of labels associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "labels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Media">
+            <summary>
+            Gets or sets a list of media/tracks associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "recordings");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Tags">
+            <summary>
+            Gets or sets a list of tags associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "tags");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Genres">
+            <summary>
+            Gets or sets a list of genres associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "genres");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Relations">
+            <summary>
+            Gets or sets a list of relations associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "url-rels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Release.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this release.
+            </summary>
+            <example>
+            var e = await Release.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Release.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a release in the MusicBrainz database.
+            </summary>
+            <param name="id">The release MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Release.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Release.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Release},System.Int32,System.Int32)">
+            <summary>
+            Search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Release.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the releases in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Release.BrowseAsync(System.String,System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the releases in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="type">If releases or release-groups are included in the result, filter by type (for example 'album').</param>
+            <param name="status">If releases are included in the result, filter by status (for example 'official', default = null).</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+            <remarks>
+            See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values of type and status.
+            </remarks>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.ReleaseGroup">
+            <summary>
+            A release group is used to group several different releases into a single logical entity.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Release_Group"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Score">
+            <summary>
+            Gets or sets the score (only available in search results).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Title">
+            <summary>
+            Gets or sets the title.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.FirstReleaseDate">
+            <summary>
+            Gets or sets the first release date.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.PrimaryType">
+            <summary>
+            Gets or sets the primary type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.SecondaryTypes">
+            <summary>
+            Gets or sets the secondary types.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Rating">
+            <summary>
+            Gets or sets the rating.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Credits">
+            <summary>
+            Gets or sets a list of artists associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "artists");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Releases">
+            <summary>
+            Gets or sets a list of releases associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "releases");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Tags">
+            <summary>
+            Gets or sets a list of tags associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "tags");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Genres">
+            <summary>
+            Gets or sets a list of genres associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "genres");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Relations">
+            <summary>
+            Gets or sets a list of relations associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "url-rels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.ReleaseGroup.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this release-group.
+            </summary>
+            <example>
+            var e = await ReleaseGroup.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.ReleaseGroup.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a release-group in the MusicBrainz database.
+            </summary>
+            <param name="id">The release-group MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.ReleaseGroup.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.ReleaseGroup.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.ReleaseGroup},System.Int32,System.Int32)">
+            <summary>
+            Search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.ReleaseGroup.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the release-groups in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.ReleaseGroup.BrowseAsync(System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the release-groups in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="type">If releases or release-groups are included in the result, filter by type (for example 'album').</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+            <remarks>
+            See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values of type and status.
+            </remarks>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Tag">
+            <summary>
+            The Tag entity.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Tag.Count">
+            <summary>
+            Gets or sets the count.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Tag.Name">
+            <summary>
+            Gets or sets the name.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.TextRepresentation">
+            <summary>
+            The TextRepresentation entity.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.TextRepresentation.Language">
+            <summary>
+            Gets or sets the language.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.TextRepresentation.Script">
+            <summary>
+            Gets or sets the script.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Track">
+            <summary>
+            In MusicBrainz, a track is the way a recording is represented on a particular
+            release (or, more exactly, on a particular medium).
+            </summary>
+            <see href="https://musicbrainz.org/doc/Track"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Track.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Track.Number">
+            <summary>
+            Gets or sets the number.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Track.Position">
+            <summary>
+            Gets or sets the position.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Track.Length">
+            <summary>
+            Gets or sets the length.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Track.Recording">
+            <summary>
+            Gets or sets the recording.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Url">
+            <summary>
+            A URL in MusicBrainz is a specific entity representing a regular internet Uniform Resource Locator.
+            </summary>
+            <see href="https://musicbrainz.org/doc/URL"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Url.Id">
+            <summary>
+            Gets or sets the id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Url.Resource">
+            <summary>
+            Gets or sets the resource.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Entities.Work">
+            <summary>
+            In MusicBrainz terminology, a work is a distinct intellectual or artistic creation,
+            which can be expressed in the form of one or more audio recordings.
+            </summary>
+            <see href="https://musicbrainz.org/doc/Work"/>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Id">
+            <summary>
+            Gets or sets the MusicBrainz id.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Language">
+            <summary>
+            Gets or sets the language.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Type">
+            <summary>
+            Gets or sets the type.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Title">
+            <summary>
+            Gets or sets the title.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.ISWC">
+            <summary>
+            Gets or sets the ISW code.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Disambiguation">
+            <summary>
+            Gets or sets the disambiguation.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Relations">
+            <summary>
+            Gets or sets a list of relations associated to this work.
+            </summary>
+            <example>
+            var e = await Work.GetAsync(mbid, "url-rels");
+            </example>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Entities.Work.Aliases">
+            <summary>
+            Gets or sets a list of aliases associated to this work.
+            </summary>
+            <example>
+            var e = await Work.GetAsync(mbid, "aliases");
+            </example>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Entities.Work.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a work in the MusicBrainz database.
+            </summary>
+            <param name="id">The work MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.MusicBrainzClient">
+            <summary>
+            MusicBrainz client.
+            </summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.MusicBrainzClient.ServiceBaseAddress">
+            <summary>
+            The default address of the MusicBrainz webservice.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.Artists">
+            <summary>
+            Gets the artists entity service.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.Recordings">
+            <summary>
+            Gets the recordings entity service.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.Releases">
+            <summary>
+            Gets the releases entity service.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.ReleaseGroups">
+            <summary>
+            Gets the release-groups entity service.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.Work">
+            <summary>
+            Gets the work entity service.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.MusicBrainzClient.Cache">
+            <summary>
+            Gets or sets the <see cref="T:Hqub.MusicBrainz.API.Cache.IRequestCache"/> implementation.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.MusicBrainzClient"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.#ctor(System.Net.IWebProxy)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.MusicBrainzClient"/> class.
+            </summary>
+            <param name="proxy">The <see cref="T:System.Net.IWebProxy"/> used to connect to the webservice.</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.MusicBrainzClient"/> class.
+            </summary>
+            <param name="baseAddress">The base address of the webservice (default = <see cref="F:Hqub.MusicBrainz.API.MusicBrainzClient.ServiceBaseAddress"/>).</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.#ctor(System.String,System.Net.IWebProxy)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.MusicBrainzClient"/> class.
+            </summary>
+            <param name="baseAddress">The base address of the webservice (default = <see cref="F:Hqub.MusicBrainz.API.MusicBrainzClient.ServiceBaseAddress"/>).</param>
+            <param name="proxy">The <see cref="T:System.Net.IWebProxy"/> used to connect to the webservice.</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.#ctor(System.Net.Http.HttpClient)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.MusicBrainzClient"/> class.
+            </summary>
+            <param name="httpClient">The <see cref="T:System.Net.Http.HttpClient"/> used for request to the webservice.</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.MusicBrainzClient.Dispose">
+            <summary>
+            Disposes the HTTP client.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.QueryParameters`1">
+            <summary>
+            Helper for building MusicBrainz query strings.
+            </summary>
+            <typeparam name="T">The entity type to search for.</typeparam>
+            <remarks>
+            See https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2/Search
+            </remarks>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryParameters`1.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.QueryParameters`1"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryParameters`1.Add(System.String,System.String,System.Boolean)">
+            <summary>
+            Add a field to the query paramaters.
+            </summary>
+            <param name="key">The field key.</param>
+            <param name="value">The field value.</param>
+            <param name="negate">Negate the field (will result in 'AND NOT key:value')</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryParameters`1.GetEnumerator">
+            <summary>
+            Returns an enumerator that iterates through a collection.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryParameters`1.ToString">
+            <summary>
+            Returns the query string that represents the current object.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.QueryParameters`1.Node">
+            <summary>
+            Represents a node of the search query.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.QueryParameters`1.Node.Key">
+            <summary>
+            Gets the key of the node.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.QueryParameters`1.Node.Value">
+            <summary>
+            Gets the value of the node.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.QueryParameters`1.Node.Negate">
+            <summary>
+            Gets a value indicating whether the node should be negated.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryParameters`1.Node.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.QueryParameters`1.Node"/> class.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.QueryResult`1">
+            <summary>
+            Abstract base class for MusicBrainz queries returning lists (with paging support).
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.QueryResult`1.Count">
+            <summary>
+            Gets or sets the total list items count.
+            </summary>
+            <remarks>
+            This might be different form the actual list items count. If the list was
+            generated from a search request, this property will return the total number
+            of available items (on the server), while the number of returned items is
+            limited by the requests 'limit' parameter (default = 25).
+            </remarks>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.QueryResult`1.Offset">
+            <summary>
+            Gets or sets the list offset (only available in search requests).
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.QueryResult`1.GetEnumerator">
+            <summary>
+            Returns an enumerator that iterates through the collection.
+            </summary>
+            <returns>An enumerator that can be used to iterate through the collection.</returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Resources.Constants">
+            <summary>
+              A strongly-typed resource class, for looking up localized strings, etc.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.ResourceManager">
+            <summary>
+              Returns the cached ResourceManager instance used by this class.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.Culture">
+            <summary>
+              Overrides the current thread's CurrentUICulture property for all
+              resource lookups using this strongly typed resource class.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.ArtistQueryParams">
+            <summary>
+              Looks up a localized string similar to -area-beginarea-endarea-arid-artist-artistaccent-alias-begin-comment-country-end-ended-gender-ipi-sortname-tag-type-.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.BrowseStatus">
+            <summary>
+              Looks up a localized string similar to +official+promotion+bootleg+pseudo-release+.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.BrowseType">
+            <summary>
+              Looks up a localized string similar to +nat+album+single+ep+compilation+soundtrack+spokenword+interview+audiobook+live+remix+other+.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.RecordingQueryParams">
+            <summary>
+              Looks up a localized string similar to -arid-artist-artistname-creditname-comment-country-date-dur-format-isrc-number-position-primarytype-puid-qdur-recording-recordingaccent-reid-release-rgid--rid-secondarytype-status-tid-tnum-tracks-tracksrelease-tag-type-video-.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.ReleaseGroupQueryParams">
+            <summary>
+              Looks up a localized string similar to -arid-artist-artistname-comment-creditname-primarytype-rgid-releasegroup-releasegroupaccent-releases-release-reid-secondarytype-status-tag-type-.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Constants.ReleaseQueryParams">
+            <summary>
+              Looks up a localized string similar to -arid-artist-artistname-asin-barcode-catno-comment-country-creditname-date-discids-discidsmedium-format-laid-label-lang-mediums-primarytype-puid-quality-reid-release-releaseaccent-rgid-script-secondarytype-status-tag-tracks-tracksmedium-type-.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Resources.Messages">
+            <summary>
+              A strongly-typed resource class, for looking up localized strings, etc.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.ResourceManager">
+            <summary>
+              Returns the cached ResourceManager instance used by this class.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.Culture">
+            <summary>
+              Overrides the current thread's CurrentUICulture property for all
+              resource lookups using this strongly typed resource class.
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.EmptyStream">
+            <summary>
+              Looks up a localized string similar to Query returned an empty result..
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.InvalidQueryParameter">
+            <summary>
+              Looks up a localized string similar to Key not supported ({0})..
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.InvalidQueryValue">
+            <summary>
+              Looks up a localized string similar to Invalid value &apos;{0}&apos; for {1} parameter..
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.MissingParameter">
+            <summary>
+              Looks up a localized string similar to Attribute &apos;{0}&apos; must be specified..
+            </summary>
+        </member>
+        <member name="P:Hqub.MusicBrainz.API.Resources.Messages.WrongResponseFormat">
+            <summary>
+              Looks up a localized string similar to Webservice returned invalid response format..
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.Get(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.Search(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.GetAsync(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ArtistService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.BrowseRequest`1">
+            <summary>
+            Prepare a browse request to the MusicBrainz webservice.
+            </summary>
+            <typeparam name="T">Any supported MusicBrainz entity.</typeparam>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.EntityName">
+            <summary>Entity name.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.relatedEntity">
+            <summary>Related entity name.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.id">
+            <summary>MusicBrainz id.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.include">
+            <summary>Include entities.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.limit">
+            <summary>Limit of fetched items.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.offset">
+            <summary>Offset to start browsing.</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.type">
+            <summary>Album type (only release or release-group).</summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.Services.BrowseRequest`1.status">
+            <summary>Album type (only release).</summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.Include(System.String[])">
+            <summary>
+            Set a collection of entity names to include in the response.
+            </summary>
+            <param name="include">The entity names to include.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.Limit(System.Int32)">
+            <summary>
+            Set the maximum number of items to return.
+            </summary>
+            <param name="limit">The maximum number of items to return.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.Offset(System.Int32)">
+            <summary>
+            Set the offset to the list of browsed items (enables paging).
+            </summary>
+            <param name="offset">The offset to the list of browsed items.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.Type(System.String)">
+            <summary>
+            Set the type of release or release-group to browse.
+            </summary>
+            <param name="type">The release type (for example 'album').</param>
+            <returns></returns>
+            <remarks>
+            See https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values.
+            </remarks>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.Status(System.String)">
+            <summary>
+            Set the status of release to browse.
+            </summary>
+            <param name="status">The release status (for example 'official').</param>
+            <returns></returns>
+            <remarks>
+            See https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values.
+            </remarks>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.GetAsync(System.Threading.CancellationToken)">
+            <summary>
+            Execute the browse request.
+            </summary>
+            <param name="ct">The cancellation token.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.BrowseRequest`1.BrowseAsync(Hqub.MusicBrainz.API.MusicBrainzClient,System.Threading.CancellationToken)">
+            <summary>
+            Initiate the actual request.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.IArtistService">
+            <summary>
+            Interface defining the artist service.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.Get(System.String,System.String[])">
+            <summary>
+            Create a request to lookup an artist in the MusicBrainz database.
+            </summary>
+            <param name="id">The artist MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.Search(System.String,System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Create a request to browse all the artists in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup an artist in the MusicBrainz database.
+            </summary>
+            <param name="id">The artist MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Search for an artist in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IArtistService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the artists in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of artists to return (default = 25).</param>
+            <param name="offset">The offset to the artists list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.IRecordingService">
+            <summary>
+            Interface defining the recording service.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.Get(System.String,System.String[])">
+            <summary>
+            Create a request to lookup a recording in the MusicBrainz database.
+            </summary>
+            <param name="id">The recording MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.Search(System.String,System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Create a request to browse all the recordings in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a recording in the MusicBrainz database.
+            </summary>
+            <param name="id">The recording MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for a recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Recording},System.Int32,System.Int32)">
+            <summary>
+            Search for a recording in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IRecordingService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the recordings in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of recordings to return (default = 25).</param>
+            <param name="offset">The offset to the recordings list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.IReleaseGroupService">
+            <summary>
+            Interface defining the release-group service.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.Get(System.String,System.String[])">
+            <summary>
+            Create a request to lookup a release-group in the MusicBrainz database.
+            </summary>
+            <param name="id">The release-group MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.Search(System.String,System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Create a request to browse all the release-groups in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a release-group in the MusicBrainz database.
+            </summary>
+            <param name="id">The release-group MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.ReleaseGroup},System.Int32,System.Int32)">
+            <summary>
+            Search for a release-group in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the release-groups in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseGroupService.BrowseAsync(System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the release-groups in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="type">If releases or release-groups are included in the result, filter by type (for example 'album').</param>
+            <param name="limit">The maximum number of release-groups to return (default = 25).</param>
+            <param name="offset">The offset to the release-groups list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+            <remarks>
+            See https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values of type.
+            </remarks>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.IReleaseService">
+            <summary>
+            Interface defining the release service.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.Get(System.String,System.String[])">
+            <summary>
+            Create a request to lookup a release in the MusicBrainz database.
+            </summary>
+            <param name="id">The release MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.Search(System.String,System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <summary>
+            Create a request to search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Create a request to browse all the releases in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a release in the MusicBrainz database.
+            </summary>
+            <param name="id">The release MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            Search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query string.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Release},System.Int32,System.Int32)">
+            <summary>
+            Search for a release in the MusicBrainz database, matching the given query.
+            </summary>
+            <param name="query">The query parameters.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the releases in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IReleaseService.BrowseAsync(System.String,System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Browse all the releases in the MusicBrainz database, which are directly linked to the entity with given id.
+            </summary>
+            <param name="entity">The name of the related entity.</param>
+            <param name="id">The id of the related entity.</param>
+            <param name="type">If releases or release-groups are included in the result, filter by type (for example 'album').</param>
+            <param name="status">If releases are included in the result, filter by status (for example 'official', default = null).</param>
+            <param name="limit">The maximum number of releases to return (default = 25).</param>
+            <param name="offset">The offset to the releases list (enables paging, default = 0).</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+            <remarks>
+            See https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#Release_Type_and_Status for supported values of type and status.
+            </remarks>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.IWorkService">
+            <summary>
+            Interface defining the work service.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IWorkService.Get(System.String,System.String[])">
+            <summary>
+            Create a request to lookup a work in the MusicBrainz database.
+            </summary>
+            <param name="id">The work MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.IWorkService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a work in the MusicBrainz database.
+            </summary>
+            <param name="id">The work MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.LookupRequest`1">
+            <summary>
+            Prepare a lookup request to the MusicBrainz webservice.
+            </summary>
+            <typeparam name="T">Any supported MusicBrainz entity.</typeparam>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.LookupRequest`1.Include(System.String[])">
+            <summary>
+            Set a collection of entity names to include in the response.
+            </summary>
+            <param name="include">The entity names to include.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.LookupRequest`1.GetAsync(System.Threading.CancellationToken)">
+            <summary>
+            Execute the lookup request.
+            </summary>
+            <param name="ct">The cancellation token.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.Get(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.Search(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.GetAsync(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Recording},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.RecordingService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.Get(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.Search(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.GetAsync(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.ReleaseGroup},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseGroupService.BrowseAsync(System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.Get(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.Search(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.Search(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Artist},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.Browse(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.GetAsync(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.SearchAsync(System.String,System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.SearchAsync(Hqub.MusicBrainz.API.QueryParameters{Hqub.MusicBrainz.API.Entities.Release},System.Int32,System.Int32)">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.BrowseAsync(System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.ReleaseService.BrowseAsync(System.String,System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.Services.SearchRequest`1">
+            <summary>
+            Prepare a search request to the MusicBrainz webservice.
+            </summary>
+            <typeparam name="T">Any supported MusicBrainz entity.</typeparam>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.SearchRequest`1.Query(System.String)">
+            <summary>
+            Set the search query string.
+            </summary>
+            <param name="query">The query string.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.SearchRequest`1.Limit(System.Int32)">
+            <summary>
+            Set the maximum number of matches to return.
+            </summary>
+            <param name="limit">The maximum number of matches to return.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.SearchRequest`1.Offset(System.Int32)">
+            <summary>
+            Set the offset to the list of matches (enables paging).
+            </summary>
+            <param name="offset">The offset to the list of matches.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.SearchRequest`1.GetAsync(System.Threading.CancellationToken)">
+            <summary>
+            Execute the search request.
+            </summary>
+            <param name="ct">The cancellation token.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.WorkService.Get(System.String,System.String[])">
+            <inheritdoc />
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.Services.WorkService.GetAsync(System.String,System.String[])">
+            <summary>
+            Lookup a work in the MusicBrainz database.
+            </summary>
+            <param name="id">The work MusicBrainz id.</param>
+            <param name="inc">A list of entities to include (subqueries).</param>
+            <returns></returns>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.UrlBuilder">
+            <summary>
+            Helper class to build MusicBrainz webservice urls.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateLookupUrl(System.String,System.String,System.String[])">
+            <summary>
+            Creates a webservice lookup template.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateLookupUrl(System.String,System.String,System.String)">
+            <summary>
+            Creates a webservice lookup template.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateBrowseUrl(System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Creates a webservice browse template.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateBrowseUrl(System.String,System.String,System.String,System.String,System.String,System.Int32,System.Int32,System.String[])">
+            <summary>
+            Creates a webservice browse template.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateBrowseUrl(System.String,System.String,System.String,System.Int32,System.Int32,System.String)">
+            <summary>
+            Creates a webservice browse template.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.UrlBuilder.CreateSearchUrl(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Creates a webservice search template.
+            </summary>
+        </member>
+        <member name="T:Hqub.MusicBrainz.API.WebServiceException">
+            <summary>
+            Exception containing error information returned by the MusicBrainz webservice.
+            </summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.WebServiceException.StatusCode">
+            <summary>
+            Gets the response HTTP status code.
+            </summary>
+        </member>
+        <member name="F:Hqub.MusicBrainz.API.WebServiceException.Uri">
+            <summary>
+            Gets the requested uri.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.WebServiceException"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.WebServiceException"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.#ctor(System.String,System.Exception)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.WebServiceException"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.#ctor(System.String,System.Net.HttpStatusCode,System.String)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.WebServiceException"/> class.
+            </summary>
+            <param name="statusCode">The response HTTP status code.</param>
+            <param name="uri">The requested uri.</param>
+            <param name="message">The error message.</param>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.#ctor(System.Runtime.Serialization.SerializationInfo,System.Runtime.Serialization.StreamingContext)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Hqub.MusicBrainz.API.WebServiceException"/> class.
+            </summary>
+        </member>
+        <member name="M:Hqub.MusicBrainz.API.WebServiceException.GetObjectData(System.Runtime.Serialization.SerializationInfo,System.Runtime.Serialization.StreamingContext)">
+            <summary>
+            Sets the SerializationInfo with information about the exception.
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,268 @@
+D:\other\Aoide\bin\Aoide.dll.config
+D:\other\Aoide\bin\Aoide.dll
+D:\other\Aoide\bin\Aoide.pdb
+D:\other\Aoide\bin\roslyn\csc.exe
+D:\other\Aoide\bin\roslyn\csc.exe.config
+D:\other\Aoide\bin\roslyn\csc.rsp
+D:\other\Aoide\bin\roslyn\csi.exe
+D:\other\Aoide\bin\roslyn\csi.exe.config
+D:\other\Aoide\bin\roslyn\csi.rsp
+D:\other\Aoide\bin\roslyn\Microsoft.Build.Tasks.CodeAnalysis.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CodeAnalysis.CSharp.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CodeAnalysis.CSharp.Scripting.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CodeAnalysis.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CodeAnalysis.Scripting.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CodeAnalysis.VisualBasic.dll
+D:\other\Aoide\bin\roslyn\Microsoft.CSharp.Core.targets
+D:\other\Aoide\bin\roslyn\Microsoft.DiaSymReader.Native.amd64.dll
+D:\other\Aoide\bin\roslyn\Microsoft.DiaSymReader.Native.x86.dll
+D:\other\Aoide\bin\roslyn\Microsoft.Managed.Core.targets
+D:\other\Aoide\bin\roslyn\Microsoft.VisualBasic.Core.targets
+D:\other\Aoide\bin\roslyn\Microsoft.Win32.Primitives.dll
+D:\other\Aoide\bin\roslyn\System.AppContext.dll
+D:\other\Aoide\bin\roslyn\System.Collections.Immutable.dll
+D:\other\Aoide\bin\roslyn\System.Console.dll
+D:\other\Aoide\bin\roslyn\System.Diagnostics.DiagnosticSource.dll
+D:\other\Aoide\bin\roslyn\System.Diagnostics.FileVersionInfo.dll
+D:\other\Aoide\bin\roslyn\System.Diagnostics.StackTrace.dll
+D:\other\Aoide\bin\roslyn\System.Globalization.Calendars.dll
+D:\other\Aoide\bin\roslyn\System.IO.Compression.dll
+D:\other\Aoide\bin\roslyn\System.IO.Compression.ZipFile.dll
+D:\other\Aoide\bin\roslyn\System.IO.FileSystem.dll
+D:\other\Aoide\bin\roslyn\System.IO.FileSystem.Primitives.dll
+D:\other\Aoide\bin\roslyn\System.Net.Http.dll
+D:\other\Aoide\bin\roslyn\System.Net.Sockets.dll
+D:\other\Aoide\bin\roslyn\System.Reflection.Metadata.dll
+D:\other\Aoide\bin\roslyn\System.Runtime.InteropServices.RuntimeInformation.dll
+D:\other\Aoide\bin\roslyn\System.Security.Cryptography.Algorithms.dll
+D:\other\Aoide\bin\roslyn\System.Security.Cryptography.Encoding.dll
+D:\other\Aoide\bin\roslyn\System.Security.Cryptography.Primitives.dll
+D:\other\Aoide\bin\roslyn\System.Security.Cryptography.X509Certificates.dll
+D:\other\Aoide\bin\roslyn\System.Text.Encoding.CodePages.dll
+D:\other\Aoide\bin\roslyn\System.Threading.Tasks.Extensions.dll
+D:\other\Aoide\bin\roslyn\System.ValueTuple.dll
+D:\other\Aoide\bin\roslyn\System.Xml.ReaderWriter.dll
+D:\other\Aoide\bin\roslyn\System.Xml.XmlDocument.dll
+D:\other\Aoide\bin\roslyn\System.Xml.XPath.dll
+D:\other\Aoide\bin\roslyn\System.Xml.XPath.XDocument.dll
+D:\other\Aoide\bin\roslyn\vbc.exe
+D:\other\Aoide\bin\roslyn\vbc.exe.config
+D:\other\Aoide\bin\roslyn\vbc.rsp
+D:\other\Aoide\bin\roslyn\VBCSCompiler.exe
+D:\other\Aoide\bin\roslyn\VBCSCompiler.exe.config
+D:\other\Aoide\bin\Antlr3.Runtime.dll
+D:\other\Aoide\bin\AspNet.ScriptManager.bootstrap.dll
+D:\other\Aoide\bin\AspNet.ScriptManager.jQuery.dll
+D:\other\Aoide\bin\Microsoft.AspNet.FriendlyUrls.dll
+D:\other\Aoide\bin\Microsoft.AspNet.Web.Optimization.WebForms.dll
+D:\other\Aoide\bin\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.dll
+D:\other\Aoide\bin\Microsoft.ScriptManager.MSAjax.dll
+D:\other\Aoide\bin\Microsoft.ScriptManager.WebForms.dll
+D:\other\Aoide\bin\Microsoft.Web.Infrastructure.dll
+D:\other\Aoide\bin\Newtonsoft.Json.dll
+D:\other\Aoide\bin\System.Net.Http.Formatting.dll
+D:\other\Aoide\bin\System.Web.Helpers.dll
+D:\other\Aoide\bin\System.Web.Http.dll
+D:\other\Aoide\bin\System.Web.Http.WebHost.dll
+D:\other\Aoide\bin\System.Web.Mvc.dll
+D:\other\Aoide\bin\System.Web.Optimization.dll
+D:\other\Aoide\bin\System.Web.Razor.dll
+D:\other\Aoide\bin\System.Web.Webpages.Deployment.dll
+D:\other\Aoide\bin\System.Web.Webpages.dll
+D:\other\Aoide\bin\System.Web.Webpages.Razor.dll
+D:\other\Aoide\bin\WebGrease.dll
+D:\other\Aoide\bin\System.Web.Optimization.xml
+D:\other\Aoide\bin\Newtonsoft.Json.xml
+D:\other\Aoide\bin\Antlr3.Runtime.pdb
+D:\other\Aoide\bin\Microsoft.AspNet.FriendlyUrls.xml
+D:\other\Aoide\bin\System.Web.Razor.xml
+D:\other\Aoide\bin\System.Web.Webpages.xml
+D:\other\Aoide\bin\System.Web.Webpages.Deployment.xml
+D:\other\Aoide\bin\System.Web.Webpages.Razor.xml
+D:\other\Aoide\bin\System.Web.Helpers.xml
+D:\other\Aoide\bin\System.Web.Mvc.xml
+D:\other\Aoide\bin\System.Net.Http.Formatting.xml
+D:\other\Aoide\bin\System.Web.Http.xml
+D:\other\Aoide\bin\System.Web.Http.WebHost.xml
+D:\other\Aoide\bin\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.xml
+D:\other\Aoide\bin\es\System.Web.Optimization.resources.dll
+D:\other\Aoide\bin\es\Microsoft.AspNet.FriendlyUrls.resources.dll
+D:\other\Aoide\bin\es\System.Web.Razor.resources.dll
+D:\other\Aoide\bin\es\System.Web.Webpages.resources.dll
+D:\other\Aoide\bin\es\System.Web.Webpages.Deployment.resources.dll
+D:\other\Aoide\bin\es\System.Web.Webpages.Razor.resources.dll
+D:\other\Aoide\bin\es\System.Web.Helpers.resources.dll
+D:\other\Aoide\bin\es\System.Web.Mvc.resources.dll
+D:\other\Aoide\bin\es\System.Net.Http.Formatting.resources.dll
+D:\other\Aoide\bin\es\System.Web.Http.resources.dll
+D:\other\Aoide\bin\es\System.Web.Http.WebHost.resources.dll
+D:\other\Aoide\obj\Debug\Aoide.csprojAssemblyReference.cache
+D:\other\Aoide\obj\Debug\Aoide.csproj.CoreCompileInputs.cache
+D:\other\Aoide\obj\Debug\Aoide.csproj.CopyComplete
+D:\other\Aoide\obj\Debug\Aoide.dll
+D:\other\Aoide\obj\Debug\Aoide.pdb
+D:\other\Aoide\bin\BouncyCastle.Crypto.dll
+D:\other\Aoide\bin\Google.Protobuf.dll
+D:\other\Aoide\bin\K4os.Compression.LZ4.dll
+D:\other\Aoide\bin\K4os.Compression.LZ4.Streams.dll
+D:\other\Aoide\bin\K4os.Hash.xxHash.dll
+D:\other\Aoide\bin\MySql.Data.dll
+D:\other\Aoide\bin\MySql.Web.dll
+D:\other\Aoide\bin\Renci.SshNet.dll
+D:\other\Aoide\bin\System.Buffers.dll
+D:\other\Aoide\bin\System.Memory.dll
+D:\other\Aoide\bin\System.Numerics.Vectors.dll
+D:\other\Aoide\bin\System.Runtime.CompilerServices.Unsafe.dll
+D:\other\Aoide\bin\Ubiety.Dns.Core.dll
+D:\other\Aoide\bin\WebMatrix.Data.dll
+D:\other\Aoide\bin\WebMatrix.WebData.dll
+D:\other\Aoide\bin\Zstandard.Net.dll
+D:\other\Aoide\bin\Google.Protobuf.pdb
+D:\other\Aoide\bin\Google.Protobuf.xml
+D:\other\Aoide\bin\K4os.Compression.LZ4.xml
+D:\other\Aoide\bin\K4os.Compression.LZ4.Streams.xml
+D:\other\Aoide\bin\K4os.Hash.xxHash.xml
+D:\other\Aoide\bin\MySql.Data.xml
+D:\other\Aoide\bin\MySql.Web.xml
+D:\other\Aoide\bin\Renci.SshNet.xml
+D:\other\Aoide\bin\System.Buffers.xml
+D:\other\Aoide\bin\System.Memory.xml
+D:\other\Aoide\bin\System.Numerics.Vectors.xml
+D:\other\Aoide\bin\System.Runtime.CompilerServices.Unsafe.xml
+D:\other\Aoide\bin\WebMatrix.Data.xml
+D:\other\Aoide\bin\WebMatrix.WebData.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Aoide.dll.config
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Aoide.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Aoide.pdb
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csc.exe
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csc.exe.config
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csc.rsp
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csi.exe
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csi.exe.config
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\csi.rsp
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.Build.Tasks.CodeAnalysis.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CodeAnalysis.CSharp.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CodeAnalysis.CSharp.Scripting.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CodeAnalysis.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CodeAnalysis.Scripting.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CodeAnalysis.VisualBasic.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.CSharp.Core.targets
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.DiaSymReader.Native.amd64.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.DiaSymReader.Native.x86.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.Managed.Core.targets
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.VisualBasic.Core.targets
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\Microsoft.Win32.Primitives.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.AppContext.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Collections.Immutable.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Console.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Diagnostics.DiagnosticSource.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Diagnostics.FileVersionInfo.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Diagnostics.StackTrace.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Globalization.Calendars.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.IO.Compression.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.IO.Compression.ZipFile.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.IO.FileSystem.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.IO.FileSystem.Primitives.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Net.Http.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Net.Sockets.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Reflection.Metadata.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Runtime.InteropServices.RuntimeInformation.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Security.Cryptography.Algorithms.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Security.Cryptography.Encoding.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Security.Cryptography.Primitives.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Security.Cryptography.X509Certificates.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Text.Encoding.CodePages.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Threading.Tasks.Extensions.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.ValueTuple.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Xml.ReaderWriter.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Xml.XmlDocument.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Xml.XPath.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\System.Xml.XPath.XDocument.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\vbc.exe
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\vbc.exe.config
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\vbc.rsp
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\VBCSCompiler.exe
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\roslyn\VBCSCompiler.exe.config
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Antlr3.Runtime.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\AspNet.ScriptManager.bootstrap.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\AspNet.ScriptManager.jQuery.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\BouncyCastle.Crypto.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Google.Protobuf.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Compression.LZ4.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Compression.LZ4.Streams.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Hash.xxHash.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.AspNet.FriendlyUrls.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.AspNet.Web.Optimization.WebForms.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.ScriptManager.MSAjax.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.ScriptManager.WebForms.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.Web.Infrastructure.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\MySql.Data.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\MySql.Web.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Newtonsoft.Json.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Renci.SshNet.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Buffers.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Memory.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Net.Http.Formatting.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Numerics.Vectors.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Runtime.CompilerServices.Unsafe.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Helpers.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Http.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Http.WebHost.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Mvc.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Optimization.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Razor.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.Deployment.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.Razor.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Ubiety.Dns.Core.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\WebGrease.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\WebMatrix.Data.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\WebMatrix.WebData.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Zstandard.Net.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Google.Protobuf.pdb
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Google.Protobuf.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Compression.LZ4.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Compression.LZ4.Streams.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\K4os.Hash.xxHash.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\MySql.Data.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\MySql.Web.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Newtonsoft.Json.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Renci.SshNet.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Buffers.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Memory.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Numerics.Vectors.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Runtime.CompilerServices.Unsafe.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Optimization.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Antlr3.Runtime.pdb
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.AspNet.FriendlyUrls.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\WebMatrix.Data.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\WebMatrix.WebData.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Razor.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.Deployment.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Webpages.Razor.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Helpers.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Mvc.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Net.Http.Formatting.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Http.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\System.Web.Http.WebHost.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.xml
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Optimization.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\Microsoft.AspNet.FriendlyUrls.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Razor.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Webpages.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Webpages.Deployment.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Webpages.Razor.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Helpers.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Mvc.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Net.Http.Formatting.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Http.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\es\System.Web.Http.WebHost.resources.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\obj\Debug\Aoide.csproj.CoreCompileInputs.cache
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\obj\Debug\Aoide.csproj.CopyComplete
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\obj\Debug\Aoide.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\obj\Debug\Aoide.pdb
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\obj\Debug\Aoide.csprojAssemblyReference.cache
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\DeviceId.dll
+C:\Users\Surface Pro 6\Downloads\2021\Aoide\bin\DeviceId.xml

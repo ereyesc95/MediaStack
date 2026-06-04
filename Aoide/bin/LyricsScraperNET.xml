@@ -1,0 +1,218 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>LyricsScraperNET</name>
+    </assembly>
+    <members>
+        <member name="P:LyricsScraperNET.Configuration.ILyricScraperClientConfig.IsEnabled">
+            <summary>
+            Check if any external provider options is enabled
+            </summary>
+        </member>
+        <member name="T:LyricsScraperNET.Helpers.Ensure">
+            <summary>
+              Check input parameters
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.Helpers.Ensure.ArgumentNotNull(System.Object,System.String)">
+            <summary>
+              Checks an argument if it isn't null.
+            </summary>
+            <param name = "value">The argument value to check</param>
+            <param name = "name">The name of the argument</param>
+        </member>
+        <member name="M:LyricsScraperNET.Helpers.Ensure.ArgumentNotNullOrEmptyString(System.String,System.String)">
+            <summary>
+              Checks an argument if it isn't null or an empty string
+            </summary>
+            <param name = "value">The argument value to check</param>
+            <param name = "name">The name of the argument</param>
+        </member>
+        <member name="M:LyricsScraperNET.Helpers.Ensure.ArgumentNotNullOrEmptyList``1(System.Collections.Generic.IEnumerable{``0},System.String)">
+            <summary>
+              Checks an argument list if it isn't null or an empty string
+            </summary>
+            <param name = "value">The argument value to check</param>
+            <param name = "name">The name of the argument</param>
+        </member>
+        <member name="P:LyricsScraperNET.ILyricsScraperClient.IsEnabled">
+            <summary>
+            Checking that there is some enabled external provider available for search.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.SearchLyric(LyricsScraperNET.Models.Requests.SearchRequest)">
+            <summary>
+            Search lyric by different search requests:
+            1) Search by Uri: <see cref="T:LyricsScraperNET.Models.Requests.UriSearchRequest"/>
+            2) Search by Artist and Song name: <see cref="T:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest"/>
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.SearchLyricAsync(LyricsScraperNET.Models.Requests.SearchRequest)">
+            <summary>
+            Async search lyric by different search requests:
+            1) Search by Uri: <see cref="T:LyricsScraperNET.Models.Requests.UriSearchRequest"/>
+            2) Search by Artist and Song name: <see cref="T:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest"/>
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.AddProvider(LyricsScraperNET.Providers.Abstract.IExternalProvider)">
+            <summary>
+            Adding a new external provider that will be used to search for lyrics.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.RemoveProvider(LyricsScraperNET.Providers.Models.ExternalProviderType)">
+            <summary>
+            Removing an external provider by <paramref name="providerType"/> from the list of search providers.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.Enable">
+            <summary>
+            Enable lyrics search. All external providers will be enabled in this case.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.Disable">
+            <summary>
+            Disable lyrics search. All external providers will be enabled in this case.
+            Calling the lyrics search method will return an empty result.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.ILyricsScraperClient.WithLogger(Microsoft.Extensions.Logging.ILoggerFactory)">
+            <summary>
+            Creates a new ILogger instance from <paramref name="loggerFactory"/>.
+            Can be useful for error analysis if the lyric text is not found.
+            </summary>
+        </member>
+        <member name="T:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest">
+            <summary>
+            Query model for searching lyrics by artist/band name and song/track title.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest.Artist">
+            <summary>
+            Artist or band name.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest.Song">
+            <summary>
+            Song or track title.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Requests.ArtistAndSongSearchRequest.Provider">
+            <summary>
+            The type of external provider for which lyrics will be searched.
+            By default, it is set to <see cref="F:LyricsScraperNET.Providers.Models.ExternalProviderType.None"/> - the search will be performed across all available client providers.
+            </summary>
+        </member>
+        <member name="T:LyricsScraperNET.Models.Requests.UriSearchRequest">
+            <summary>
+            Query model for searching lyrics by the web address where the lyrics of one of the supported providers are located.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Requests.UriSearchRequest.Uri">
+            <summary>
+            The web address where the lyrics of one of the supported providers are located.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Requests.UriSearchRequest.Provider">
+            <summary>
+            The type of external provider for which lyrics will be searched.
+            By default, it is set to <see cref="F:LyricsScraperNET.Providers.Models.ExternalProviderType.None"/> - the search will be performed across all available client providers.
+            </summary>
+        </member>
+        <member name="T:LyricsScraperNET.Models.Responses.ResponseStatusCode">
+            <summary>
+            Search response status code list.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Models.Responses.ResponseStatusCode.None">
+            <summary>
+            Not specified status code.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Models.Responses.ResponseStatusCode.Error">
+            <summary>
+            An error occurred during the search.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Models.Responses.ResponseStatusCode.Success">
+            <summary>
+            The lyrics was found in one of the available providers.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Models.Responses.ResponseStatusCode.NoDataFound">
+            <summary>
+            The lyrics could not be found in one of the available providers.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Models.Responses.ResponseStatusCode.BadRequest">
+            <summary>
+            The search request is incorrect or contains malformed data.
+            </summary>
+        </member>
+        <member name="T:LyricsScraperNET.Models.Responses.SearchResult">
+            <summary>
+            Lyrics search result model.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Responses.SearchResult.LyricText">
+            <summary>
+            The text of the found lyrics. If the lyrics could not be found, an empty value is returned.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Responses.SearchResult.ExternalProviderType">
+            <summary>
+            The type of external provider for which the lyrics were found.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Responses.SearchResult.ResponseStatusCode">
+            <summary>
+            Search result status code.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Responses.SearchResult.ResponseMessage">
+            <summary>
+            A message that may contain additional information in case of problems with the search.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Models.Responses.SearchResult.Instrumental">
+            <summary>
+            The flag indicates that the search results are for music only, without text.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.Models.Responses.SearchResult.IsEmpty">
+            <summary>
+            Returns true if the field <seealso cref="P:LyricsScraperNET.Models.Responses.SearchResult.LyricText"/> is empty.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Providers.Abstract.IExternalProvider.SearchPriority">
+            <summary>
+            If there are multiple external providers, then the search will start from the provider with the highest priority.
+            </summary>
+        </member>
+        <member name="P:LyricsScraperNET.Providers.Abstract.IExternalProviderOptions.SearchPriority">
+            <summary>
+            If there are multiple external providers, then the search will start from the provider with the highest priority.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Providers.LyricFind.LyricFindProvider._lyricStart">
+            <summary>
+            Field name in json format that contains lyric text.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.Providers.LyricFind.LyricFindProvider.IsInstumentalLyric(System.String)">
+            <summary>
+            Check if lyric text contains instrumental flag.
+            </summary>
+        </member>
+        <member name="M:LyricsScraperNET.Providers.LyricFind.LyricFindProvider.TryReturnBooleanFieldValue(System.String,System.String)">
+            <summary>
+            Try to find and return the fielad value as boolean. Pattern: [<paramref name="fieldName"/>:true(or false)].
+            In case if fieldName is not found returns false.
+            </summary>
+        </member>
+        <member name="F:LyricsScraperNET.Providers.SongLyrics.SongLyricsProvider.InstrumentalLyricText">
+            <summary>
+            For instrumental songs, the text "[Instrumental]" is returned in the songLyricsDiv
+            </summary>
+        </member>
+    </members>
+</doc>
