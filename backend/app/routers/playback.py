@@ -1,0 +1,96 @@
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy.orm import Session
+
+from app import crud
+from app.database import get_db
+from app.deps import get_current_user
+from app.models import User
+from app.media_paths import path_to_local_file, resolve_stream_url
+from app.schemas import LyricsOut, PlayRequest, PlayResponse, ReproductionOut
+from app.services.lyrics import fetch_lyrics
+
+router = APIRouter(prefix="/api/music", tags=["playback"])
+
+
+@router.post("/play", response_model=PlayResponse)
+def play_track(
+    body: PlayRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    stream = resolve_stream_url(body.path)
+    local = path_to_local_file(body.path)
+    title = body.title
+    if not title and "/" in body.path:
+        title = Path(body.path.split("/")[-1]).stem[4:] if len(Path(body.path.split("/")[-1]).stem) > 4 else Path(body.path.split("/")[-1]).stem
+    crud.record_play(
+        db,
+        path=body.path,
+        artist_id=body.artist_id,
+        title=title,
+        release=body.release,
+        media_type=body.media_type,
+        user_id=user.usr_id,
+    )
+    return PlayResponse(
+        stream_url=stream,
+        local_file=str(local) if local else None,
+        title=title,
+    )
+
+
+@router.get("/stream")
+def stream_track(path: str = Query(..., min_length=1)):
+    local = path_to_local_file(path)
+    if local and local.is_file():
+        return FileResponse(local, media_type="audio/mpeg")
+    url = resolve_stream_url(path)
+    return RedirectResponse(url)
+
+
+@router.get("/lyrics", response_model=LyricsOut)
+async def track_lyrics(
+    artist: str = Query(...),
+    title: str = Query(...),
+):
+    import asyncio
+
+    lyrics = await fetch_lyrics(artist, title)
+    return LyricsOut(artist=artist, title=title, lyrics=lyrics)
+
+
+@router.get("/reproductions", response_model=list[ReproductionOut])
+def recent_plays(
+    limit: int = Query(30, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    rows = crud.list_recent_plays(db, user_id=user.usr_id, limit=limit)
+    return [
+        ReproductionOut(
+            id=r.rep_id,
+            title=r.rep_title,
+            artist_id=r.rep_artist_id,
+            play_count=int(r.rep_reproductions or "0"),
+            path=r.rep_path,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/playlist-tracks/{track_id}")
+def playlist_track(track_id: int, db: Session = Depends(get_db)):
+    row = crud.get_playlist_track(db, track_id)
+    if not row:
+        raise HTTPException(404, "Track not found")
+    return {
+        "id": row.pld_id,
+        "title": row.pld_title,
+        "artist": row.pld_artist,
+        "release": row.pld_release,
+        "path": row.pld_path,
+        "stream_url": resolve_stream_url(row.pld_path),
+    }

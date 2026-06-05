@@ -1,0 +1,59 @@
+import type { ArtistCard as ArtistCardType, CardOrientation } from "../types";
+
+type Props = {
+  artist: ArtistCardType;
+  orientation: CardOrientation;
+  onClick: () => void;
+  tapReveal?: boolean;
+  revealed?: boolean;
+};
+
+export default function ArtistCard({
+  artist,
+  orientation,
+  onClick,
+  tapReveal = false,
+  revealed = false,
+}: Props) {
+  const hasPhoto = Boolean(artist.photo_url);
+  const bg = hasPhoto
+    ? `url("${artist.photo_url}")`
+    : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+
+  const hasIcon = Boolean(artist.icon_url);
+  const hasLogo = Boolean(artist.logo_url);
+  const showName = !hasIcon && !hasLogo;
+
+  const displayName = (artist.name ?? "Untitled")
+    .replace(/■/g, ",")
+    .replace(/█/g, "'");
+
+  return (
+    <button
+      type="button"
+      className={[
+        "artist-card",
+        `artist-card--${orientation}`,
+        tapReveal ? "artist-card--tap-reveal" : "",
+        revealed ? "artist-card--revealed" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={onClick}
+    >
+      <span className="artist-card-bg card-bg-layer" style={{ backgroundImage: bg }} />
+      <span className="artist-card-dim" />
+      <span className="artist-card-footer">
+        {hasIcon && (
+          <img src={artist.icon_url!} alt="" className="artist-card-icon" />
+        )}
+        {hasLogo && (
+          <img src={artist.logo_url!} alt="" className="artist-card-logo" />
+        )}
+        {showName && (
+          <span className="artist-card-name">{displayName}</span>
+        )}
+      </span>
+    </button>
+  );
+}

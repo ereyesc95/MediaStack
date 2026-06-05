@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+node_modules/
+frontend/dist/
+data/mediastack.db
+data/user_settings.json
+data/avatars/
+Media/
+*.log
+.DS_Store
+TMDB key.txt
+*key*.txt
