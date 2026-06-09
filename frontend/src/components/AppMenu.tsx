@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { applySavedArtistTheme } from "../mediaTheme";
 import {
   THEMES,
   applyTheme,
   getCustomColors,
-  getStoredTheme,
+  hasArtistTheme,
+  readDomTheme,
   saveCustomColors,
   type CustomThemeColors,
   type ThemeId,
@@ -30,6 +32,11 @@ type Props = {
   userId?: number;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
+  onRefreshMetadata?: () => void;
+  onRescanLibrary?: () => void;
+  refreshIncludeBio?: boolean;
+  onRefreshIncludeBioChange?: (v: boolean) => void;
+  artistThemeActive?: boolean;
 };
 
 const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
@@ -52,18 +59,36 @@ export default function AppMenu({
   userId,
   onSwitchProfile,
   onEditProfile,
+  onRefreshMetadata,
+  onRescanLibrary,
+  refreshIncludeBio = false,
+  onRefreshIncludeBioChange,
+  artistThemeActive = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [artistDataOpen, setArtistDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeId>(() => getStoredTheme(userId));
+  const [activeTheme, setActiveTheme] = useState<ThemeId>(() => readDomTheme());
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
+  const showArtistThemeOption =
+    artistThemeActive && hasArtistTheme(userId);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setTheme(getStoredTheme(userId));
     setCustom(getCustomColors(userId));
+    setActiveTheme(readDomTheme());
+  }, [userId]);
+
+  useEffect(() => {
+    const sync = () => setActiveTheme(readDomTheme());
+    window.addEventListener("theme-changed", sync);
+    window.addEventListener("artist-theme-updated", sync);
+    return () => {
+      window.removeEventListener("theme-changed", sync);
+      window.removeEventListener("artist-theme-updated", sync);
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -71,6 +96,7 @@ export default function AppMenu({
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
         setSettingsOpen(false);
+        setArtistDataOpen(false);
         setThemeOpen(false);
         setCustomOpen(false);
       }
@@ -82,13 +108,19 @@ export default function AppMenu({
   function pickTheme(id: ThemeId) {
     if (id === "custom") {
       setCustomOpen(true);
-      setTheme("custom");
       applyTheme("custom", userId);
+      setActiveTheme("custom");
+      return;
+    }
+    if (id === "artist") {
+      setCustomOpen(false);
+      applySavedArtistTheme(userId);
+      setActiveTheme("artist");
       return;
     }
     setCustomOpen(false);
     applyTheme(id, userId);
-    setTheme(id);
+    setActiveTheme(id);
   }
 
   function updateCustom(key: keyof CustomThemeColors, value: string) {
@@ -96,7 +128,7 @@ export default function AppMenu({
     setCustom(next);
     saveCustomColors(next, userId);
     applyTheme("custom", userId);
-    setTheme("custom");
+    setActiveTheme("custom");
   }
 
   return (
@@ -113,6 +145,61 @@ export default function AppMenu({
       </button>
       {open && (
         <div className="app-menu-dropdown">
+          {isAdmin && (onRefreshMetadata || onRescanLibrary) && (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => setArtistDataOpen((o) => !o)}
+              >
+                <IconSync className="menu-item-icon" />
+                Artist Data
+                <span className="menu-chevron">
+                  {artistDataOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              {artistDataOpen && (
+                <div className="app-menu-submenu">
+                  {onRefreshMetadata && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshMetadata();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Refresh metadata
+                    </button>
+                  )}
+                  {onRefreshIncludeBioChange && (
+                    <label className="app-menu-checkbox app-menu-checkbox--sub">
+                      <input
+                        type="checkbox"
+                        checked={refreshIncludeBio}
+                        onChange={(e) =>
+                          onRefreshIncludeBioChange(e.target.checked)
+                        }
+                      />
+                      Include bio
+                    </label>
+                  )}
+                  {onRescanLibrary && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRescanLibrary();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconFolder className="menu-item-icon" />
+                      Rescan library
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
           {isAdmin && showAddArtist && onAddArtist && (
             <button
               type="button"
@@ -136,15 +223,44 @@ export default function AppMenu({
           </button>
           {themeOpen && (
             <div className="app-menu-submenu">
-              {THEMES.map((t) => (
+              {THEMES.filter((t) => t.id !== "custom").map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  className={theme === t.id ? "active" : ""}
+                  className={activeTheme === t.id ? "active" : ""}
                   onClick={() => pickTheme(t.id)}
                 >
-                  {theme === t.id && <IconCheck className="menu-item-icon" />}
-                  <span className={theme === t.id ? "" : "menu-submenu-pad"}>
+                  {activeTheme === t.id && <IconCheck className="menu-item-icon" />}
+                  <span className={activeTheme === t.id ? "" : "menu-submenu-pad"}>
+                    {t.label}
+                  </span>
+                </button>
+              ))}
+              {showArtistThemeOption && (
+                <button
+                  type="button"
+                  className={activeTheme === "artist" ? "active" : ""}
+                  onClick={() => pickTheme("artist")}
+                >
+                  {activeTheme === "artist" && (
+                    <IconCheck className="menu-item-icon" />
+                  )}
+                  <span
+                    className={activeTheme === "artist" ? "" : "menu-submenu-pad"}
+                  >
+                    Artist theme
+                  </span>
+                </button>
+              )}
+              {THEMES.filter((t) => t.id === "custom").map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={activeTheme === t.id ? "active" : ""}
+                  onClick={() => pickTheme(t.id)}
+                >
+                  {activeTheme === t.id && <IconCheck className="menu-item-icon" />}
+                  <span className={activeTheme === t.id ? "" : "menu-submenu-pad"}>
                     {t.label}
                   </span>
                 </button>

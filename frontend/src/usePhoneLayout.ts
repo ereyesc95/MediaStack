@@ -63,3 +63,31 @@ export function usePhoneLayout(): boolean {
 
   return phone;
 }
+
+/** Stacked About layout: image on top (phone + tablet portrait only). */
+export function isStackedArtistLayout(layout?: DeviceLayout): boolean {
+  const l = layout ?? resolveDeviceLayout();
+  return l === "mobile-portrait" || l === "tablet-portrait";
+}
+
+export function isMobilePortraitLayout(layout?: DeviceLayout): boolean {
+  return (layout ?? resolveDeviceLayout()) === "mobile-portrait";
+}
+
+export function useDeviceLayout(): DeviceLayout {
+  const [layout, setLayout] = useState<DeviceLayout>(() => resolveDeviceLayout());
+
+  useLayoutEffect(() => {
+    const update = () => setLayout(resolveDeviceLayout());
+    const landscapeMq = window.matchMedia("(orientation: landscape)");
+    landscapeMq.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      landscapeMq.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  return layout;
+}

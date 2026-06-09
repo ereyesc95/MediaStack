@@ -23,6 +23,12 @@ from app.models import (
 ANTARCTICA_ID = 1007
 MUSIC_MEDIA_TYPE = 200
 VOCALS_INSTRUMENT_ID = 1016
+
+
+def is_catalog_label(name: str) -> bool:
+    """Exclude placeholder labels (e.g. self-released) from catalog and artist UI."""
+    q = (name or "").strip()
+    return bool(q) and "self-released" not in q.lower()
 SOLO_ARTIST_TYPE_ID = 1
 
 def _artist_gender_ids(artist: Artist) -> set[int]:
@@ -454,7 +460,7 @@ def filter_options(db: Session) -> dict:
         if not any(bid in band_ids for bid in rel_band_ids):
             continue
         lab = (rel.rel_fk_companies or "").strip()
-        if lab:
+        if lab and is_catalog_label(lab):
             labels.add(lab)
         prod = (rel.rel_fk_artists or "").strip()
         if prod:

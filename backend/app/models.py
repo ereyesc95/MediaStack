@@ -56,6 +56,12 @@ class Band(Base):
     bnd_fk_images: Mapped[str | None] = mapped_column("bndFKimages", Text)
     bnd_top_tracks: Mapped[str | None] = mapped_column("bndtoptracks", Text)
     bnd_top_100: Mapped[str | None] = mapped_column("bndtop100", Text)
+    bnd_bio_manual: Mapped[int | None] = mapped_column("bndBioManual", Integer, default=0)
+    bnd_bio_source: Mapped[str | None] = mapped_column("bndBioSource", Text)
+    bnd_metadata_refreshed_at: Mapped[str | None] = mapped_column(
+        "bndMetadataRefreshedAt", Text
+    )
+    bnd_library_scanned_at: Mapped[str | None] = mapped_column("bndLibraryScannedAt", Text)
 
 
 class Release(Base):

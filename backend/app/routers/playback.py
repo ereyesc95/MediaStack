@@ -8,7 +8,7 @@ from app import crud
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
-from app.media_paths import path_to_local_file, resolve_stream_url
+from app.media_paths import path_to_local_file, resolve_playback_url, resolve_stream_url
 from app.schemas import LyricsOut, PlayRequest, PlayResponse, ReproductionOut
 from app.services.lyrics import fetch_lyrics
 
@@ -21,7 +21,7 @@ def play_track(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    stream = resolve_stream_url(body.path)
+    stream = resolve_playback_url(body.path)
     local = path_to_local_file(body.path)
     title = body.title
     if not title and "/" in body.path:

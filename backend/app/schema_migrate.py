@@ -48,6 +48,16 @@ def migrate_schema(eng: Engine) -> None:
                 conn.execute(
                     text('ALTER TABLE reproductions ADD COLUMN "repUserID" INTEGER')
                 )
+        if "bands" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("bands")}
+            for col, typ in (
+                ("bndBioManual", "INTEGER"),
+                ("bndBioSource", "TEXT"),
+                ("bndMetadataRefreshedAt", "TEXT"),
+                ("bndLibraryScannedAt", "TEXT"),
+            ):
+                if col not in cols:
+                    conn.execute(text(f'ALTER TABLE bands ADD COLUMN "{col}" {typ}'))
         if "artistparticipations" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("artistparticipations")}
             for col, typ in (

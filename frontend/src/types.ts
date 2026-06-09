@@ -141,12 +141,78 @@ export type CardOrientation = "landscape" | "portrait";
 
 export type MusicTab = "home" | "artists" | "playlists";
 
+export type ArtistSection = "overview" | "audio" | "video" | "library" | "gallery";
+export type ArtistOverviewTab = "about" | "lineup" | "links" | "related";
+
+export type BandOverview = {
+  id: number;
+  name: string;
+  code: string | null;
+  bio: string | null;
+  bio_manual: boolean;
+  bio_source: string | null;
+  city: string | null;
+  country: { id: number; name: string | null; iso: string | null } | null;
+  aliases: string[];
+  activity_periods: { start: string | null; end: string | null; label: string }[];
+  subgenres: { id: number; name: string }[];
+  labels: string[];
+  eras: {
+    id?: string;
+    year: number;
+    orientation?: string;
+    slide_url?: string | null;
+    portrait_url: string | null;
+    landscape_url: string | null;
+    icon_url: string | null;
+    logo_url: string | null;
+  }[];
+  top_tracks: {
+    title: string;
+    release_date: string | null;
+    cover_url: string | null;
+    play_path: string | null;
+    album_folder: string | null;
+  }[];
+  links: Record<string, { type: string; url: string }[]>;
+  lineup: {
+    current: LineupMember[];
+    founding: LineupMember[];
+    former: LineupMember[];
+  };
+  show_lineup: boolean;
+  similar_artists: { id: number; name: string }[];
+  related_projects: { id: number; name: string }[];
+  audio: Record<string, AudioAlbum[]>;
+  metadata_refreshed_at: string | null;
+  library_scanned_at: string | null;
+};
+
+export type LineupMember = {
+  id: number;
+  name: string;
+  photo_url: string | null;
+  start: string | null;
+  end: string | null;
+};
+
+export type AudioAlbum = {
+  id: string;
+  title: string;
+  date: string | null;
+  cover_url: string | null;
+  folder_path: string;
+  category: string;
+};
+
 export type View =
   | { kind: "hub" }
   | {
       kind: "music";
       tab?: MusicTab;
       bandId?: number;
+      artistSection?: ArtistSection;
+      artistOverviewTab?: ArtistOverviewTab;
       playlistId?: number;
       genreFilterId?: number;
       countryFilterId?: number;

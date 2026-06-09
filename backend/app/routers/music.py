@@ -26,6 +26,14 @@ class ImportBandBody(BaseModel):
     mbid: str
 
 
+class RefreshMetadataBody(BaseModel):
+    include_bio: bool = False
+
+
+class PatchBioBody(BaseModel):
+    bio: str
+
+
 @router.get("/dashboard")
 def music_dashboard(
     db: Session = Depends(get_db),
@@ -171,6 +179,62 @@ def get_band(band_id: int, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(404, "Band not found")
     return crud.band_to_out(row)
+
+
+@router.get("/bands/{band_id}/overview")
+def band_overview(band_id: int, db: Session = Depends(get_db)):
+    from app.band_overview import build_band_overview
+
+    data = build_band_overview(db, band_id)
+    if not data:
+        raise HTTPException(404, "Band not found")
+    return data
+
+
+@router.post("/bands/{band_id}/refresh-metadata")
+async def band_refresh_metadata(
+    band_id: int,
+    body: RefreshMetadataBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.band_refresh import refresh_band_metadata
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return await refresh_band_metadata(db, row, include_bio=body.include_bio)
+
+
+@router.post("/bands/{band_id}/rescan-library")
+def band_rescan_library(
+    band_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.band_refresh import rescan_band_library
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return rescan_band_library(db, row)
+
+
+@router.patch("/bands/{band_id}/bio")
+def band_patch_bio(
+    band_id: int,
+    body: PatchBioBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    row.bnd_fk_images = body.bio.strip()
+    row.bnd_bio_manual = 1
+    row.bnd_bio_source = "manual"
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/bands/{band_id}/releases", response_model=ReleaseListOut)

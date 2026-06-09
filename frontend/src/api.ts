@@ -163,6 +163,35 @@ export async function fetchBand(id: number): Promise<Band> {
   return request(`${API}/music/bands/${id}`);
 }
 
+export async function fetchBandOverview(id: number) {
+  return request<import("./types").BandOverview>(`${API}/music/bands/${id}/overview`);
+}
+
+export async function refreshBandMetadata(
+  id: number,
+  includeBio: boolean
+): Promise<{ ok: boolean; refreshed_at?: string; error?: string }> {
+  return request(`${API}/music/bands/${id}/refresh-metadata`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ include_bio: includeBio }),
+  });
+}
+
+export async function rescanBandLibrary(
+  id: number
+): Promise<{ ok: boolean; scanned_at?: string; error?: string }> {
+  return request(`${API}/music/bands/${id}/rescan-library`, { method: "POST" });
+}
+
+export async function patchBandBio(id: number, bio: string) {
+  return request(`${API}/music/bands/${id}/bio`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bio }),
+  });
+}
+
 export async function fetchUserPlaylists(): Promise<{ items: UserPlaylist[] }> {
   return request(`${API}/music/playlists`);
 }

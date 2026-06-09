@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchArtistCards,
-  fetchBand,
   fetchFilterOptions,
   fetchMusicDashboard,
   fetchPlaylistTracks,
@@ -11,7 +10,6 @@ import {
 import type {
   ArtistCard,
   ArtistFilterMode,
-  Band,
   CardOrientation,
   FilterOptions,
   MusicDashboard,
@@ -20,10 +18,13 @@ import type {
   UserPlaylist,
 } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
+import { clearMediaTheme } from "../../mediaTheme";
 import AppMenu from "../AppMenu";
 import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
+import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import AddArtistModal from "./AddArtistModal";
+import ArtistPage from "./artist/ArtistPage";
 import ArtistBrowse from "./ArtistBrowse";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -31,6 +32,8 @@ import PlaylistsView from "./PlaylistsView";
 type Props = {
   tab: MusicTab;
   bandId?: number;
+  artistSection?: ArtistSection;
+  artistOverviewTab?: ArtistOverviewTab;
   playlistId?: number;
   genreFilterId?: number;
   countryFilterId?: number;
@@ -49,6 +52,10 @@ type Props = {
   onSelectMedia: (opt: MediaOption) => void;
   onTab: (tab: MusicTab) => void;
   onBand: (id?: number) => void;
+  onArtistNavigate: (
+    section: ArtistSection,
+    overviewTab?: ArtistOverviewTab
+  ) => void;
   onPlaylist: (id?: number) => void;
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
@@ -57,6 +64,8 @@ type Props = {
 export default function MusicModule({
   tab,
   bandId,
+  artistSection = "overview",
+  artistOverviewTab = "about",
   playlistId,
   genreFilterId,
   countryFilterId,
@@ -75,6 +84,7 @@ export default function MusicModule({
   onSelectMedia,
   onTab,
   onBand,
+  onArtistNavigate,
   onPlaylist,
   onGenreFilter,
   onCountryFilter,
@@ -102,7 +112,6 @@ export default function MusicModule({
   const [producer, setProducer] = useState("");
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
-  const [selectedBand, setSelectedBand] = useState<Band | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadArtistsGeneration = useRef(0);
 
@@ -369,13 +378,6 @@ export default function MusicModule({
     }
   }, [playlistId]);
 
-  useEffect(() => {
-    if (bandId) {
-      fetchBand(bandId).then(setSelectedBand).catch((e) => setError(String(e)));
-    } else {
-      setSelectedBand(null);
-    }
-  }, [bandId]);
 
   async function handlePlay(
     path: string,
@@ -420,72 +422,116 @@ export default function MusicModule({
           <div className="music-module__backdrop-overlay" />
         </div>
       )}
-      <ModuleTopBar
-        media={mediaOptions.find((m) => m.kind === "music") ?? mediaOptions[0]}
-        mediaOptions={mediaOptions}
-        onSelectMedia={onSelectMedia}
-        tabs={[
-          {
-            id: "home",
-            label: "HOME",
-            active: tab === "home",
-            onClick: () => onTab("home"),
-          },
-          {
-            id: "artists",
-            label: "CATALOG",
-            active: tab === "artists",
-            onClick: () => onTab("artists"),
-          },
-          {
-            id: "playlists",
-            label: "PLAYLISTS",
-            active: tab === "playlists",
-            onClick: () => onTab("playlists"),
-          },
-        ]}
-        menu={
-          <>
-            {busy && <span className="status-bar module-top-bar__status">{busy}</span>}
-            {showArtistTools && (
-              <button
-                type="button"
-                className="card-orientation-toggle"
-                aria-label={`Cards: ${cardOrientation}. Tap to switch layout.`}
-                onClick={onToggleOrientation}
-              >
-                {cardOrientation === "landscape" ? (
-                  <IconCardLandscape />
-                ) : (
-                  <IconCardPortrait />
-                )}
-              </button>
-            )}
-            <AppMenu
-              onImport={onImport}
-              onSync={onSync}
-              onChooseSource={onChooseSource}
-              isAdmin={isAdmin}
-              userId={userId}
-              onSwitchProfile={onSwitchProfile}
-              onEditProfile={onEditProfile}
-              showAddArtist={showArtistTools && isAdmin}
-              onAddArtist={() => setShowAddArtist(true)}
-            />
-          </>
-        }
-      />
+      {!bandId && (
+        <ModuleTopBar
+          media={mediaOptions.find((m) => m.kind === "music") ?? mediaOptions[0]}
+          mediaOptions={mediaOptions}
+          onSelectMedia={onSelectMedia}
+          tabs={[
+            {
+              id: "home",
+              label: "HOME",
+              active: tab === "home",
+              onClick: () => onTab("home"),
+            },
+            {
+              id: "artists",
+              label: "CATALOG",
+              active: tab === "artists",
+              onClick: () => onTab("artists"),
+            },
+            {
+              id: "playlists",
+              label: "PLAYLISTS",
+              active: tab === "playlists",
+              onClick: () => onTab("playlists"),
+            },
+          ]}
+          menu={
+            <>
+              {busy && (
+                <span className="status-bar module-top-bar__status">{busy}</span>
+              )}
+              {showArtistTools && (
+                <button
+                  type="button"
+                  className="card-orientation-toggle"
+                  aria-label={`Cards: ${cardOrientation}. Tap to switch layout.`}
+                  onClick={onToggleOrientation}
+                >
+                  {cardOrientation === "landscape" ? (
+                    <IconCardLandscape />
+                  ) : (
+                    <IconCardPortrait />
+                  )}
+                </button>
+              )}
+              <AppMenu
+                onImport={onImport}
+                onSync={onSync}
+                onChooseSource={onChooseSource}
+                isAdmin={isAdmin}
+                userId={userId}
+                onSwitchProfile={onSwitchProfile}
+                onEditProfile={onEditProfile}
+                showAddArtist={showArtistTools && isAdmin}
+                onAddArtist={() => setShowAddArtist(true)}
+              />
+            </>
+          }
+        />
+      )}
 
-      {error && <div className="error">{error}</div>}
+      {error && !bandId && <div className="error">{error}</div>}
 
-      {bandId && selectedBand ? (
-        <div className="detail">
-          <button type="button" className="btn" onClick={() => onBand()}>
-            ← Back
-          </button>
-          <h2>{selectedBand.name?.replace(/■/g, ",")}</h2>
-          {selectedBand.code && <span className="badge">MB: {selectedBand.code}</span>}
-        </div>
+      {bandId ? (
+        <ArtistPage
+          bandId={bandId}
+          section={artistSection}
+          overviewTab={artistOverviewTab}
+          isAdmin={isAdmin}
+          userId={userId}
+          onBack={() => {
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onBand(undefined);
+            onTab("artists");
+          }}
+          onNavigate={(section, overviewTab) =>
+            onArtistNavigate(section, overviewTab ?? artistOverviewTab)
+          }
+          onOpenArtist={(id) => {
+            onArtistNavigate("overview", "about");
+            onBand(id);
+          }}
+          onCountry={(id) => {
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onBand(undefined);
+            onTab("artists");
+            onCountryFilter(id);
+          }}
+          onSubgenre={(id) => {
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onBand(undefined);
+            onTab("artists");
+            onGenreFilter(id);
+          }}
+          onLabel={(name) => {
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onBand(undefined);
+            onTab("artists");
+            setFilterMode("label");
+            setLabel(name);
+          }}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+        />
       ) : tab === "home" ? (
         <div className="music-module__body">
           <MusicHome

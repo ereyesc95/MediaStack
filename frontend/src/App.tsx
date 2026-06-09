@@ -33,6 +33,7 @@ import {
   getStoredOrientation,
   saveOrientation,
 } from "./themes";
+import { parseArtistPath } from "./musicRoute";
 import type { CardOrientation, MusicTab, View } from "./types";
 
 
@@ -121,7 +122,46 @@ export default function App() {
         setSourceModal("welcome");
       }
     }
+    const route = parseArtistPath(window.location.pathname);
+    if (route) {
+      setView({
+        kind: "music",
+        tab: "artists",
+        bandId: route.bandId,
+        artistSection: route.section,
+        artistOverviewTab: route.overviewTab,
+      });
+    }
     init();
+  }, []);
+
+  useEffect(() => {
+    function onPopState() {
+      const route = parseArtistPath(window.location.pathname);
+      if (route) {
+        setView((v) =>
+          v.kind === "music"
+            ? {
+                ...v,
+                tab: "artists",
+                bandId: route.bandId,
+                artistSection: route.section,
+                artistOverviewTab: route.overviewTab,
+              }
+            : {
+                kind: "music",
+                tab: "artists",
+                bandId: route.bandId,
+                artistSection: route.section,
+                artistOverviewTab: route.overviewTab,
+              }
+        );
+      } else if (window.location.pathname === "/" || window.location.pathname === "") {
+        setView({ kind: "hub" });
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   function handleProfileSelected(user: ProfileUser, token: string) {
@@ -130,6 +170,7 @@ export default function App() {
     saveProfile(user, token);
     setProfile(user);
     setHighlightProfileId(null);
+    setView({ kind: "hub" });
   }
 
   function handleProfileUpdated(user: ProfileUser) {
@@ -152,6 +193,7 @@ export default function App() {
     clearProfile();
     setProfile(null);
     setSourceModal(null);
+    setView({ kind: "hub" });
   }
 
   function handleSourceChosen(path: string) {
@@ -242,11 +284,8 @@ export default function App() {
   function selectMedia(opt: MediaOption) {
 
     if (opt.kind === "music") {
-
       setView({ kind: "music", tab: "home" });
-
       return;
-
     }
 
     if (opt.kind === "series") setView({ kind: "series" });
@@ -372,10 +411,14 @@ export default function App() {
         {appReady && view.kind === "music" && (
 
           <MusicModule
-
+            key={profile.user_id}
             tab={musicTab ?? "home"}
 
             bandId={view.bandId}
+
+            artistSection={view.artistSection}
+
+            artistOverviewTab={view.artistOverviewTab}
 
             playlistId={view.playlistId}
 
@@ -400,17 +443,28 @@ export default function App() {
             onTab={(tab: MusicTab) => openMusic({ tab, bandId: undefined, playlistId: undefined })}
 
             onBand={(id) =>
-
               openMusic(
-
                 id !== undefined
-
-                  ? { bandId: id, tab: "artists" }
-
-                  : { bandId: undefined, tab: "artists" }
-
+                  ? {
+                      bandId: id,
+                      tab: "artists",
+                      artistSection: "overview",
+                      artistOverviewTab: "about",
+                    }
+                  : {
+                      bandId: undefined,
+                      tab: "artists",
+                      artistSection: undefined,
+                      artistOverviewTab: undefined,
+                    }
               )
+            }
 
+            onArtistNavigate={(section, overviewTab) =>
+              openMusic({
+                artistSection: section,
+                artistOverviewTab: overviewTab,
+              })
             }
 
             onPlaylist={(id) => openMusic({ playlistId: id, tab: "playlists" })}
