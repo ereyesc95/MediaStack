@@ -79,6 +79,15 @@ export type FilterOptions = {
       continent_id: number | null;
     }[];
   }[];
+  all_country_groups?: {
+    continent: string;
+    items: {
+      id: number;
+      name: string | null;
+      iso: string | null;
+      continent_id: number | null;
+    }[];
+  }[];
   decades: number[];
   continents: { id: number; name: string | null }[];
   labels: string[];
@@ -144,6 +153,79 @@ export type MusicTab = "home" | "artists" | "playlists";
 export type ArtistSection = "overview" | "audio" | "video" | "library" | "gallery";
 export type ArtistOverviewTab = "about" | "lineup" | "links" | "related";
 
+export type LinkCategory =
+  | "social"
+  | "streaming"
+  | "shopping"
+  | "downloads"
+  | "databases"
+  | "lyrics";
+
+export type LinkItem = {
+  id: number;
+  label: string;
+  url: string;
+  category: LinkCategory;
+  logo_key: string | null;
+  logo_url: string;
+  show_label: boolean;
+  famous: boolean;
+  sort_tier: number;
+  source: string | null;
+  manual: boolean;
+};
+
+export type LinkCategoryTab = {
+  id: LinkCategory;
+  label: string;
+  count: number;
+};
+
+export type EntityLinksPayload = {
+  entity_type: "band" | "artist";
+  entity_id: number;
+  groups: Partial<Record<LinkCategory, LinkItem[]>>;
+  categories: LinkCategoryTab[];
+};
+
+export type RelatedTab = "similar" | "participations";
+
+export type RelatedCardItem = {
+  id: number;
+  name: string;
+  code: string | null;
+  local_band_id: number | null;
+  in_library: boolean;
+  photo_url: string | null;
+  logo_url: string | null;
+  icon_url: string | null;
+  era_year: number | null;
+  show_name_on_hover: boolean;
+  external_urls: Record<string, string>;
+  via_members?: string[];
+  manual: boolean;
+  source: string | null;
+};
+
+export type EntityRelatedPayload = {
+  entity_type: "band" | "artist";
+  entity_id: number;
+  similar: RelatedCardItem[];
+  participations: RelatedCardItem[];
+  similar_count: number;
+  participations_count: number;
+  similar_fetched_at: string | null;
+  participations_fetched_at: string | null;
+  needs_similar_fetch: boolean;
+  needs_participations_fetch: boolean;
+};
+
+export type LinkCatalogEntry = {
+  key: string;
+  name: string;
+  category: LinkCategory;
+};
+
 export type BandOverview = {
   id: number;
   name: string;
@@ -174,15 +256,19 @@ export type BandOverview = {
     play_path: string | null;
     album_folder: string | null;
   }[];
-  links: Record<string, { type: string; url: string }[]>;
+  links: EntityLinksPayload;
   lineup: {
+    all: LineupMember[];
     current: LineupMember[];
     founding: LineupMember[];
     former: LineupMember[];
+    lineup_imported_at: string | null;
+    importing: boolean;
   };
   show_lineup: boolean;
-  similar_artists: { id: number; name: string }[];
-  related_projects: { id: number; name: string }[];
+  is_solo: boolean;
+  solo_performer: LineupMember | null;
+  related: EntityRelatedPayload;
   audio: Record<string, AudioAlbum[]>;
   metadata_refreshed_at: string | null;
   library_scanned_at: string | null;
@@ -190,10 +276,67 @@ export type BandOverview = {
 
 export type LineupMember = {
   id: number;
+  participation_id?: number;
   name: string;
   photo_url: string | null;
   start: string | null;
   end: string | null;
+  years?: string | null;
+  roles?: string[];
+  is_deceased?: boolean;
+  is_active?: boolean;
+  is_founding?: boolean;
+  is_former?: boolean;
+  is_official?: boolean;
+};
+
+export type ArtistParticipationRef = {
+  participation_id: number;
+  band_id: number | null;
+  band_db_id?: number;
+  name: string;
+  mbid: string | null;
+  in_library: boolean;
+  start: string | null;
+  end: string | null;
+  roles?: string[];
+  is_official?: boolean;
+  is_founding?: boolean;
+  is_former?: boolean;
+  participation_types: string | null;
+  urls: Record<string, string>;
+};
+
+export type BandMembership = {
+  participation_id: number;
+  start: string | null;
+  end: string | null;
+  roles: string[];
+  is_official: boolean;
+  is_founding: boolean;
+  is_former: boolean;
+};
+
+export type ArtistDetails = {
+  id: number;
+  mbid: string | null;
+  name: string;
+  birth_name: string | null;
+  aliases: string[];
+  origin: {
+    city: string | null;
+    country: { id: number; name: string | null; iso: string | null } | null;
+  };
+  birth_date: string | null;
+  death_date: string | null;
+  age_text: string | null;
+  is_deceased: boolean;
+  photo_url: string | null;
+  urls: Record<string, string>;
+  participations: ArtistParticipationRef[];
+  band_membership: BandMembership | null;
+  band_memberships?: BandMembership[];
+  source: string | null;
 };
 
 export type AudioAlbum = {

@@ -388,6 +388,72 @@ def search_roster_artists(db: Session, query: str, *, limit: int = 25) -> list[d
     return out
 
 
+def _country_groups_from_ids(
+    db: Session,
+    country_ids: set[int] | None = None,
+) -> list[dict]:
+    continent_names = {
+        c.con_id: c.con_name
+        for c in db.scalars(select(Continent)).all()
+        if c.con_name and c.con_id != ANTARCTICA_ID
+    }
+    by_continent: dict[str, list[dict]] = {}
+    rows = db.scalars(select(Country)).all()
+    for c in rows:
+        if country_ids is not None and c.cou_id not in country_ids:
+            continue
+        if not c.cou_name:
+            continue
+        cont_id = getattr(c, "cou_continent_id", None)
+        if cont_id == ANTARCTICA_ID:
+            continue
+        group = continent_names.get(cont_id or 0) or "Other"
+        by_continent.setdefault(group, []).append(
+            {
+                "id": c.cou_id,
+                "name": c.cou_name,
+                "iso": (c.cou_iso or "").lower(),
+                "continent_id": cont_id,
+            }
+        )
+    for items in by_continent.values():
+        items.sort(key=lambda x: (x.get("name") or "").lower())
+    return [
+        {"continent": name, "items": items}
+        for name, items in sorted(by_continent.items(), key=lambda x: x[0].lower())
+    ]
+
+
+def all_country_groups(db: Session) -> list[dict]:
+    """Every country in the database, grouped by continent (for admin pickers)."""
+    return _country_groups_from_ids(db, country_ids=None)
+
+
+def search_roster_bands(db: Session, query: str, *, limit: int = 25) -> list[dict]:
+    term = query.strip().lower()
+    if len(term) < 1:
+        return []
+    out: list[dict] = []
+    for b in db.scalars(select(Band).order_by(Band.bnd_name)).all():
+        hay = " ".join(
+            filter(
+                None,
+                [
+                    (b.bnd_name or "").lower(),
+                    (b.bnd_other_names or "").lower(),
+                ],
+            )
+        )
+        if term not in hay:
+            continue
+        label = (b.bnd_name or "").strip()
+        if label:
+            out.append({"id": b.bnd_id, "name": label})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def filter_options(db: Session) -> dict:
     bands = list(db.scalars(select(Band)).all())
     band_ids = {b.bnd_id for b in bands}
@@ -426,32 +492,7 @@ def filter_options(db: Session) -> dict:
         for name, items in sorted(by_parent.items(), key=lambda x: x[0].lower())
     ]
 
-    continent_names = {
-        c.con_id: c.con_name
-        for c in db.scalars(select(Continent)).all()
-        if c.con_name and c.con_id != ANTARCTICA_ID
-    }
-    by_continent: dict[str, list[dict]] = {}
-    for cid in sorted(used_country_ids):
-        c = db.get(Country, cid)
-        if not c or not c.cou_name:
-            continue
-        cont_id = getattr(c, "cou_continent_id", None)
-        if cont_id == ANTARCTICA_ID:
-            continue
-        group = continent_names.get(cont_id or 0) or "Other"
-        by_continent.setdefault(group, []).append(
-            {
-                "id": c.cou_id,
-                "name": c.cou_name,
-                "iso": (c.cou_iso or "").lower(),
-                "continent_id": cont_id,
-            }
-        )
-    country_groups = [
-        {"continent": name, "items": items}
-        for name, items in sorted(by_continent.items(), key=lambda x: x[0].lower())
-    ]
+    country_groups = _country_groups_from_ids(db, used_country_ids)
 
     labels: set[str] = set()
     producers: dict[str, str] = {}
@@ -478,6 +519,7 @@ def filter_options(db: Session) -> dict:
     return {
         "subgenre_groups": subgenre_groups,
         "country_groups": country_groups,
+        "all_country_groups": all_country_groups(db),
         "decades": decade_options(),
         "labels": sorted(labels, key=str.lower),
         "producers": producer_list,

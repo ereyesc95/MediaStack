@@ -55,6 +55,11 @@ def migrate_schema(eng: Engine) -> None:
                 ("bndBioSource", "TEXT"),
                 ("bndMetadataRefreshedAt", "TEXT"),
                 ("bndLibraryScannedAt", "TEXT"),
+                ("bndLineupImportedAt", "TEXT"),
+                ("bndLineupSource", "TEXT"),
+                ("bndRelatedSimilarAt", "TEXT"),
+                ("bndRelatedParticipationsAt", "TEXT"),
+                ("bndRelatedLegacyImported", "INTEGER"),
             ):
                 if col not in cols:
                     conn.execute(text(f'ALTER TABLE bands ADD COLUMN "{col}" {typ}'))
@@ -65,8 +70,24 @@ def migrate_schema(eng: Engine) -> None:
                 ("arpEndDates", "TEXT"),
                 ("arpFKparticipationtypes", "TEXT"),
                 ("artFKinstruments", "TEXT"),
+                ("arpManual", "INTEGER"),
             ):
                 if col not in cols:
                     conn.execute(
                         text(f'ALTER TABLE artistparticipations ADD COLUMN "{col}" {typ}')
                     )
+        if "artists" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("artists")}
+            for col, typ in (
+                ("artPhotoUrl", "TEXT"),
+                ("artPhotoSource", "TEXT"),
+                ("artPhotoFetchedAt", "TEXT"),
+                ("artPhotoManual", "INTEGER"),
+                ("artFieldsManual", "TEXT"),
+                ("artSource", "TEXT"),
+                ("artExternalUrls", "TEXT"),
+                ("artRelatedSimilarAt", "TEXT"),
+                ("artRelatedParticipationsAt", "TEXT"),
+            ):
+                if col not in cols:
+                    conn.execute(text(f'ALTER TABLE artists ADD COLUMN "{col}" {typ}'))

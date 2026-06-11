@@ -194,6 +194,7 @@ export default function App() {
     setProfile(null);
     setSourceModal(null);
     setView({ kind: "hub" });
+    window.history.replaceState(null, "", "/");
   }
 
   function handleSourceChosen(path: string) {

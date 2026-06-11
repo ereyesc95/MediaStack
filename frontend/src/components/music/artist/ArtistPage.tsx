@@ -9,8 +9,14 @@ import {
 import { createPortal } from "react-dom";
 import {
   fetchBandOverview,
+  fetchBandRelated,
   playTrack,
+  refreshBandLineup,
+  refreshBandLinks,
   refreshBandMetadata,
+  refreshBandPhotos,
+  refreshBandRelatedParticipations,
+  refreshBandRelatedSimilar,
   rescanBandLibrary,
 } from "../../../api";
 import {
@@ -29,10 +35,23 @@ import {
   isStackedArtistLayout,
   useDeviceLayout,
 } from "../../../usePhoneLayout";
-import type { BandOverview } from "../../../types";
+import type {
+  BandOverview,
+  CardOrientation,
+  LinkCategory,
+  RelatedTab,
+} from "../../../types";
 import AppMenu from "../../AppMenu";
-import ArtistAbout, { LineupSection } from "./ArtistAbout";
+import { IconCardLandscape, IconCardPortrait } from "../../MenuIcons";
+import ArtistAbout from "./ArtistAbout";
 import ArtistAudio from "./ArtistAudio";
+import ArtistAboutEditModal from "./ArtistAboutEditModal";
+import ArtistLineup, { type LineupTab } from "./ArtistLineup";
+import ArtistLinks from "./ArtistLinks";
+import ArtistRelated from "./ArtistRelated";
+import AddSimilarModal from "./AddSimilarModal";
+import ArtistMemberModal from "./ArtistMemberModal";
+import MemberFormModal from "./MemberFormModal";
 import {
   MiniAudioPlayerControls,
   useMiniAudio,
@@ -53,19 +72,31 @@ const OVERVIEW_TABS: { id: ArtistOverviewTab; label: string }[] = [
   { id: "related", label: "RELATED" },
 ];
 
-const LINK_GROUP_LABELS: Record<string, string> = {
-  databases: "Databases",
-  social: "Social media",
-  stores: "Stores",
-  lyrics: "Lyrics",
-  downloads: "Downloads",
-  other: "Other",
+const LINEUP_TABS: { id: LineupTab; label: string }[] = [
+  { id: "official", label: "OFFICIAL" },
+  { id: "original", label: "ORIGINAL" },
+  { id: "former", label: "FORMER" },
+];
+
+const LINK_TAB_SHORT: Record<LinkCategory, string> = {
+  social: "SOCIAL",
+  streaming: "STREAM",
+  shopping: "SHOP",
+  downloads: "DL",
+  databases: "DATA",
+  lyrics: "LYRICS",
 };
+
+const RELATED_TABS: { id: RelatedTab; label: string; short: string }[] = [
+  { id: "similar", label: "SIMILAR", short: "SIMILAR" },
+  { id: "participations", label: "PROJECTS", short: "PROJECTS" },
+];
 
 type Props = {
   bandId: number;
   section: ArtistSection;
   overviewTab: ArtistOverviewTab;
+  cardOrientation: CardOrientation;
   isAdmin: boolean;
   userId?: number;
   onBack: () => void;
@@ -82,6 +113,7 @@ type Props = {
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
+  onToggleOrientation?: () => void;
 };
 
 function pageBgUrl(
@@ -97,6 +129,7 @@ export default function ArtistPage({
   bandId,
   section,
   overviewTab,
+  cardOrientation,
   isAdmin,
   userId,
   onBack,
@@ -110,6 +143,7 @@ export default function ArtistPage({
   onImport,
   onSync,
   onChooseSource,
+  onToggleOrientation,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,23 +165,100 @@ export default function ArtistPage({
   } = useMiniAudio();
   const [refreshBio, setRefreshBio] = useState(false);
   const [busy, setBusy] = useState("");
+  const [memberModalId, setMemberModalId] = useState<number | null>(null);
+  const [lineupTab, setLineupTab] = useState<LineupTab>("official");
+  const [linkTab, setLinkTab] = useState<LinkCategory>("social");
+  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
+  const [addSimilarOpen, setAddSimilarOpen] = useState(false);
+  const relatedFetchStarted = useRef(false);
+  const loadSeq = useRef(0);
+  const [relatedFetchInProgress, setRelatedFetchInProgress] = useState(false);
+  const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [eraIndex, setEraIndex] = useState(0);
   const deviceLayout = useDeviceLayout();
   const stacked = isStackedArtistLayout(deviceLayout);
   const mobilePortrait = isMobilePortraitLayout(deviceLayout);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchBandOverview(bandId)
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+  const load = useCallback(
+    (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      const seq = ++loadSeq.current;
+      const requestedBand = bandId;
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      fetchBandOverview(requestedBand, cardOrientation)
+        .then((result) => {
+          if (seq !== loadSeq.current) return;
+          setData(result);
+        })
+        .catch((e) => {
+          if (seq !== loadSeq.current) return;
+          if (!silent) {
+            setError(e instanceof Error ? e.message : String(e));
+          }
+        })
+        .finally(() => {
+          if (seq !== loadSeq.current) return;
+          if (!silent) setLoading(false);
+        });
+    },
+    [bandId, cardOrientation]
+  );
+
+  useEffect(() => {
+    setData(null);
+    load();
+  }, [bandId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!data) return;
+    load({ silent: true });
+  }, [cardOrientation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const cats = data?.links?.categories ?? [];
+    if (!cats.some((c) => c.id === linkTab) && cats[0]) {
+      setLinkTab(cats[0].id);
+    }
+  }, [data?.links?.categories, linkTab]);
+
+  useEffect(() => {
+    relatedFetchStarted.current = false;
   }, [bandId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (overviewTab !== "related" || !data?.related) return;
+    const needs =
+      data.related.needs_similar_fetch ||
+      data.related.needs_participations_fetch;
+    if (!needs || relatedFetchStarted.current) return;
+    relatedFetchStarted.current = true;
+    setRelatedFetchInProgress(true);
+    fetchBandRelated(bandId)
+      .then(() => load({ silent: true }))
+      .catch(() => load({ silent: true }))
+      .finally(() => setRelatedFetchInProgress(false));
+  }, [
+    overviewTab,
+    bandId,
+    data?.related?.needs_similar_fetch,
+    data?.related?.needs_participations_fetch,
+    load,
+  ]);
+
+  useEffect(() => {
+    if (!data?.lineup?.all) return;
+    for (const member of data.lineup.all) {
+      if (!member.photo_url) continue;
+      const img = new Image();
+      img.decoding = "async";
+      img.src = member.photo_url;
+    }
+  }, [data?.lineup]);
 
   useEffect(() => {
     setEraIndex(0);
@@ -291,6 +402,66 @@ export default function ArtistPage({
     }
   };
 
+  const handleRefreshLineup = async () => {
+    setBusy("Refreshing lineup (may take a minute)…");
+    try {
+      await refreshBandLineup(bandId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleRefreshPhotos = async () => {
+    setBusy("Refreshing photos (may take a minute)…");
+    try {
+      await refreshBandPhotos(bandId, true);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleRefreshLinks = async () => {
+    setBusy("Refreshing links from MusicBrainz…");
+    try {
+      await refreshBandLinks(bandId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleRefreshRelatedSimilar = async () => {
+    setBusy("Refreshing similar artists…");
+    try {
+      await refreshBandRelatedSimilar(bandId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleRefreshRelatedParticipations = async () => {
+    setBusy("Refreshing participations…");
+    try {
+      await refreshBandRelatedParticipations(bandId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const topBrand = era?.icon_url ? (
     <img src={era.icon_url} alt="" className="artist-page__brand-icon" />
   ) : null;
@@ -369,6 +540,22 @@ export default function ArtistPage({
           </div>
           <div className="artist-page__top-right">
             {busy && <span className="muted">{busy}</span>}
+            {section === "overview" &&
+              overviewTab === "related" &&
+              onToggleOrientation && (
+                <button
+                  type="button"
+                  className="card-orientation-toggle"
+                  aria-label={`Cards: ${cardOrientation}. Tap to switch layout.`}
+                  onClick={onToggleOrientation}
+                >
+                  {cardOrientation === "landscape" ? (
+                    <IconCardLandscape />
+                  ) : (
+                    <IconCardPortrait />
+                  )}
+                </button>
+              )}
             {showPlayerRestore && (
               <button
                 type="button"
@@ -397,13 +584,74 @@ export default function ArtistPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               onRefreshMetadata={
-                isAdmin ? () => void handleRefreshMetadata() : undefined
+                isAdmin && overviewTab === "about"
+                  ? () => void handleRefreshMetadata()
+                  : undefined
               }
               onRescanLibrary={
-                isAdmin ? () => void handleRescanLibrary() : undefined
+                isAdmin && overviewTab === "about"
+                  ? () => void handleRescanLibrary()
+                  : undefined
+              }
+              onRefreshLineup={
+                isAdmin &&
+                overviewTab === "lineup" &&
+                data?.show_lineup
+                  ? () => void handleRefreshLineup()
+                  : undefined
+              }
+              onRefreshPhotos={
+                isAdmin &&
+                overviewTab === "lineup" &&
+                data?.show_lineup
+                  ? () => void handleRefreshPhotos()
+                  : undefined
+              }
+              onRefreshLinks={
+                isAdmin && overviewTab === "links"
+                  ? () => void handleRefreshLinks()
+                  : undefined
               }
               refreshIncludeBio={refreshBio}
-              onRefreshIncludeBioChange={setRefreshBio}
+              onRefreshIncludeBioChange={
+                isAdmin && overviewTab === "about"
+                  ? setRefreshBio
+                  : undefined
+              }
+              onEditAbout={
+                isAdmin && overviewTab === "about"
+                  ? () => setAboutEditOpen(true)
+                  : undefined
+              }
+              onAddMember={
+                isAdmin &&
+                overviewTab === "lineup" &&
+                data?.show_lineup
+                  ? () => setAddMemberOpen(true)
+                  : undefined
+              }
+              onAddLink={
+                isAdmin && overviewTab === "links"
+                  ? () => setAddLinkOpen(true)
+                  : undefined
+              }
+              onAddSimilar={
+                isAdmin &&
+                overviewTab === "related" &&
+                relatedTab === "similar"
+                  ? () => setAddSimilarOpen(true)
+                  : undefined
+              }
+              onRefreshRelatedSimilar={
+                isAdmin && overviewTab === "related"
+                  ? () => void handleRefreshRelatedSimilar()
+                  : undefined
+              }
+              onRefreshRelatedParticipations={
+                isAdmin && overviewTab === "related"
+                  ? () => void handleRefreshRelatedParticipations()
+                  : undefined
+              }
             />
           </div>
         </header>
@@ -433,6 +681,79 @@ export default function ArtistPage({
                 <span>{t.label}</span>
               </button>
             ))}
+          </nav>
+        )}
+
+        {section === "overview" && overviewTab === "lineup" && data?.show_lineup && (
+          <nav className="artist-page__subtabs artist-page__lineup-subtabs">
+            {LINEUP_TABS.map((t) => {
+              const count =
+                t.id === "official"
+                  ? data.lineup.current.length
+                  : t.id === "original"
+                    ? data.lineup.founding.length
+                    : data.lineup.former.length;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={lineupTab === t.id ? "active" : ""}
+                  onClick={() => setLineupTab(t.id)}
+                >
+                  <span>
+                    {t.label}
+                    <span className="artist-page__lineup-count">{count}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
+        {section === "overview" &&
+          overviewTab === "links" &&
+          data?.links &&
+          data.links.categories.length > 0 && (
+            <nav className="artist-page__subtabs artist-page__links-subtabs">
+              {data.links.categories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={linkTab === c.id ? "active" : ""}
+                  onClick={() => setLinkTab(c.id)}
+                >
+                  <span>
+                    {mobilePortrait
+                      ? LINK_TAB_SHORT[c.id]
+                      : c.label.toUpperCase()}
+                    <span className="artist-page__lineup-count">{c.count}</span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+          )}
+
+        {section === "overview" && overviewTab === "related" && data?.related && (
+          <nav className="artist-page__subtabs artist-page__related-subtabs">
+            {RELATED_TABS.map((t) => {
+              const count =
+                t.id === "similar"
+                  ? data.related.similar_count
+                  : data.related.participations_count;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={relatedTab === t.id ? "active" : ""}
+                  onClick={() => setRelatedTab(t.id)}
+                >
+                  <span>
+                    {mobilePortrait ? t.short : t.label}
+                    <span className="artist-page__lineup-count">{count}</span>
+                  </span>
+                </button>
+              );
+            })}
           </nav>
         )}
 
@@ -502,63 +823,91 @@ export default function ArtistPage({
             onPlayTrack={handlePlay}
             playingPath={playingPath}
             onPlayerHost={setPlayerHost}
+            onOpenPerformer={setMemberModalId}
           />
         )}
 
-        {data && !loading && section === "overview" && overviewTab === "lineup" && (
-          <div className="artist-lineup">
-            <LineupSection lineup={data.lineup.current} title="Current lineup" />
-            <LineupSection lineup={data.lineup.founding} title="Founding members" />
-            <LineupSection lineup={data.lineup.former} title="Former members" />
-          </div>
+        {data && !loading && section === "overview" && data.show_lineup && (
+          <ArtistLineup
+            bandId={bandId}
+            bandName={data.name}
+            lineup={data.lineup}
+            tab={lineupTab}
+            hidden={!(section === "overview" && overviewTab === "lineup")}
+            isAdmin={isAdmin}
+            loading={loading}
+            onOpenArtist={onOpenArtist}
+            onDataChanged={load}
+          />
         )}
 
-        {data && !loading && section === "overview" && overviewTab === "links" && (
-          <div className="artist-links">
-            {Object.entries(data.links).map(([group, items]) => (
-              <section key={group}>
-                <h3>{LINK_GROUP_LABELS[group] ?? group}</h3>
-                <ul>
-                  {items.map((l) => (
-                    <li key={l.url}>
-                      <a href={l.url} target="_blank" rel="noreferrer">
-                        {l.type}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
+        {memberModalId !== null && data && (
+          <ArtistMemberModal
+            artistId={memberModalId}
+            bandId={bandId}
+            bandName={data.name}
+            isAdmin={isAdmin}
+            onClose={() => setMemberModalId(null)}
+            onOpenArtist={onOpenArtist}
+            onDataChanged={load}
+          />
         )}
 
-        {data && !loading && section === "overview" && overviewTab === "related" && (
-          <div className="artist-related">
-            <section>
-              <h3>Similar artists</h3>
-              <ul className="artist-chip-list">
-                {data.similar_artists.map((a) => (
-                  <li key={a.id}>
-                    <button type="button" onClick={() => onOpenArtist(a.id)}>
-                      {a.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section>
-              <h3>Other projects</h3>
-              <ul className="artist-chip-list">
-                {data.related_projects.map((a) => (
-                  <li key={a.id}>
-                    <button type="button" onClick={() => onOpenArtist(a.id)}>
-                      {a.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
+        {aboutEditOpen && data && (
+          <ArtistAboutEditModal
+            bandId={bandId}
+            data={data}
+            onClose={() => setAboutEditOpen(false)}
+            onSaved={load}
+          />
+        )}
+
+        {addMemberOpen && data && (
+          <MemberFormModal
+            mode="add"
+            bandId={bandId}
+            bandName={data.name}
+            stackLayer={1}
+            onClose={() => setAddMemberOpen(false)}
+            onSaved={load}
+          />
+        )}
+
+        {data && !loading && (
+          <ArtistLinks
+            links={data.links}
+            tab={linkTab}
+            hidden={!(section === "overview" && overviewTab === "links")}
+            isAdmin={isAdmin}
+            addOpen={addLinkOpen}
+            onAddClose={() => setAddLinkOpen(false)}
+            onDataChanged={load}
+          />
+        )}
+
+        {data?.related && (
+          <ArtistRelated
+            related={data.related}
+            tab={relatedTab}
+            hidden={!(section === "overview" && overviewTab === "related")}
+            orientation={cardOrientation}
+            bandId={bandId}
+            isAdmin={isAdmin}
+            fetchInProgress={relatedFetchInProgress}
+            onOpenArtist={onOpenArtist}
+            onDataChanged={load}
+          />
+        )}
+
+        {addSimilarOpen && (
+          <AddSimilarModal
+            bandId={bandId}
+            onClose={() => setAddSimilarOpen(false)}
+            onSaved={() => {
+              setAddSimilarOpen(false);
+              load();
+            }}
+          />
         )}
 
         {data && !loading && section === "audio" && (

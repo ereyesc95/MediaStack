@@ -50,3 +50,23 @@ def apply_saved_media_root(settings) -> None:
     saved = get_saved_media_root()
     if saved:
         settings.media_root = saved
+
+
+DEFAULT_MEMBER_PHOTO_REFRESH_DAYS = 730
+
+
+def get_member_photo_refresh_days() -> int:
+    raw = load_user_settings().get("member_photo_refresh_days")
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MEMBER_PHOTO_REFRESH_DAYS
+    return max(30, min(days, 3650))
+
+
+def save_member_photo_refresh_days(days: int) -> int:
+    clamped = max(30, min(int(days), 3650))
+    data = load_user_settings()
+    data["member_photo_refresh_days"] = clamped
+    save_user_settings(data)
+    return clamped

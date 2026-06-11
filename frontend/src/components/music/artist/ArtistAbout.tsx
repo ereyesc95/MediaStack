@@ -16,10 +16,21 @@ type Props = {
   onPlayTrack: (path: string, title: string) => void;
   playingPath: string | null;
   onPlayerHost?: (el: HTMLDivElement | null) => void;
+  onOpenPerformer?: (artistId: number) => void;
 };
 
 function normalizeBio(bio: string): string {
   return bio.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+}
+
+function bioParagraphs(bio: string): string[] {
+  const text = normalizeBio(bio).replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  const parts = text
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.length ? parts : [text];
 }
 
 function carouselEras(eras: Era[], stacked: boolean): Era[] {
@@ -79,6 +90,7 @@ export default function ArtistAbout({
   onPlayTrack,
   playingPath,
   onPlayerHost,
+  onOpenPerformer,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
   const slides = useMemo(
@@ -115,8 +127,7 @@ export default function ArtistAbout({
     const sync = () => {
       const colStyle = getComputedStyle(photoCol);
       const padTop = parseFloat(colStyle.paddingTop) || 0;
-      const padBottom = parseFloat(colStyle.paddingBottom) || 0;
-      const h = photoStage.offsetHeight + padTop + padBottom;
+      const h = photoStage.offsetHeight + padTop;
       content.style.height = `${h}px`;
       content.style.minHeight = `${h}px`;
     };
@@ -192,8 +203,7 @@ export default function ArtistAbout({
                   if (!photoStage || !content || !photoCol) return;
                   const colStyle = getComputedStyle(photoCol);
                   const padTop = parseFloat(colStyle.paddingTop) || 0;
-                  const padBottom = parseFloat(colStyle.paddingBottom) || 0;
-                  const h = photoStage.offsetHeight + padTop + padBottom;
+                  const h = photoStage.offsetHeight + padTop;
                   content.style.height = `${h}px`;
                   content.style.minHeight = `${h}px`;
                 }}
@@ -233,7 +243,11 @@ export default function ArtistAbout({
               }`}
             >
               {hasBio ? (
-                <p className="artist-about__bio">{normalizeBio(data.bio!)}</p>
+                bioParagraphs(data.bio!).map((paragraph, i) => (
+                  <p key={i} className="artist-about__bio">
+                    {paragraph}
+                  </p>
+                ))
               ) : (
                 <p className="muted">No biography stored yet.</p>
               )}
@@ -344,6 +358,44 @@ export default function ArtistAbout({
             )}
           </dl>
           </div>
+          {data.solo_performer && onOpenPerformer && (
+            <section className="artist-about__performer">
+              <h3 className="artist-about__performer-title">Performer</h3>
+              <button
+                type="button"
+                className={`artist-about__performer-card${
+                  data.solo_performer.is_deceased
+                    ? " artist-about__performer-card--deceased"
+                    : ""
+                }`}
+                onClick={() => onOpenPerformer(data.solo_performer!.id)}
+              >
+                {data.solo_performer.photo_url ? (
+                  <img src={data.solo_performer.photo_url} alt="" />
+                ) : (
+                  <span className="artist-about__performer-ph">
+                    {data.solo_performer.name
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((w) => w[0])
+                      .join("")
+                      .toUpperCase()}
+                  </span>
+                )}
+                <span className="artist-about__performer-name">
+                  {data.solo_performer.name}
+                  {data.solo_performer.is_deceased && (
+                    <span title="Deceased"> †</span>
+                  )}
+                </span>
+                {data.solo_performer.years && (
+                  <span className="artist-about__performer-years">
+                    {data.solo_performer.years}
+                  </span>
+                )}
+              </button>
+            </section>
+          )}
           {data.top_tracks.length > 0 && (
             <section className="artist-about__tracks">
               <h3 className="artist-about__tracks-title">Top tracks</h3>
@@ -390,36 +442,3 @@ export default function ArtistAbout({
   );
 }
 
-export function LineupSection({
-  lineup,
-  title,
-}: {
-  lineup: BandOverview["lineup"]["current"];
-  title: string;
-}) {
-  if (!lineup.length) return null;
-  return (
-    <section className="artist-lineup-group">
-      <h3>{title}</h3>
-      <ul className="artist-lineup-list">
-        {lineup.map((m) => (
-          <li key={m.id} className="artist-lineup-member">
-            {m.photo_url ? (
-              <img src={m.photo_url} alt="" />
-            ) : (
-              <span className="artist-lineup-member__ph">
-                {m.name
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((w) => w[0])
-                  .join("")
-                  .toUpperCase()}
-              </span>
-            )}
-            <span className="artist-lineup-member__name">{m.name}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}

@@ -282,6 +282,22 @@ def register_user(
     return user
 
 
+def get_lastfm_key(db: Session) -> str | None:
+    from app.config import settings
+    from app.models import ApiAuth
+
+    if settings.lastfm_api_key:
+        return settings.lastfm_api_key
+    row = db.scalar(
+        select(ApiAuth).where(ApiAuth.api_name.in_(("Last.fm", "LastFM", "lastfm")))
+    )
+    if row and row.api_key_encrypted:
+        return row.api_key_encrypted
+    if row and row.api_token:
+        return row.api_token
+    return None
+
+
 def get_tmdb_key(db: Session) -> str | None:
     from app.config import settings
     from app.models import ApiAuth

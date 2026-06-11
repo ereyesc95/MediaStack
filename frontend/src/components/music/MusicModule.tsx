@@ -489,6 +489,7 @@ export default function MusicModule({
           bandId={bandId}
           section={artistSection}
           overviewTab={artistOverviewTab}
+          cardOrientation={cardOrientation}
           isAdmin={isAdmin}
           userId={userId}
           onBack={() => {
@@ -531,6 +532,7 @@ export default function MusicModule({
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource}
+          onToggleOrientation={onToggleOrientation}
         />
       ) : tab === "home" ? (
         <div className="music-module__body">

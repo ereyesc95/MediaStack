@@ -62,6 +62,15 @@ class Band(Base):
         "bndMetadataRefreshedAt", Text
     )
     bnd_library_scanned_at: Mapped[str | None] = mapped_column("bndLibraryScannedAt", Text)
+    bnd_lineup_imported_at: Mapped[str | None] = mapped_column("bndLineupImportedAt", Text)
+    bnd_lineup_source: Mapped[str | None] = mapped_column("bndLineupSource", Text)
+    bnd_related_similar_at: Mapped[str | None] = mapped_column("bndRelatedSimilarAt", Text)
+    bnd_related_participations_at: Mapped[str | None] = mapped_column(
+        "bndRelatedParticipationsAt", Text
+    )
+    bnd_related_legacy_imported: Mapped[int | None] = mapped_column(
+        "bndRelatedLegacyImported", Integer, default=0
+    )
 
 
 class Release(Base):
@@ -293,6 +302,15 @@ class ArtistParticipation(Base):
         "arpFKparticipationtypes", Text
     )
     arp_fk_instruments: Mapped[str | None] = mapped_column("artFKinstruments", Text)
+    arp_manual: Mapped[int | None] = mapped_column("arpManual", Integer, default=0)
+
+
+class Instrument(Base):
+    __tablename__ = "instruments"
+
+    ins_id: Mapped[int] = mapped_column("insID", Integer, primary_key=True)
+    ins_name: Mapped[str | None] = mapped_column("insName", Text)
+    ins_fk_instrumenttypes: Mapped[str | None] = mapped_column("insFKinstrumenttypes", Text)
 
 
 class Artist(Base):
@@ -314,6 +332,52 @@ class Artist(Base):
     art_fk_genders: Mapped[str | None] = mapped_column("artFKgenders", Text)
     art_fk_occupations: Mapped[str | None] = mapped_column("artFKoccupations", Text)
     art_fk_images: Mapped[str | None] = mapped_column("artFKimages", Text)
+    art_photo_url: Mapped[str | None] = mapped_column("artPhotoUrl", Text)
+    art_photo_source: Mapped[str | None] = mapped_column("artPhotoSource", Text)
+    art_photo_fetched_at: Mapped[str | None] = mapped_column("artPhotoFetchedAt", Text)
+    art_photo_manual: Mapped[int | None] = mapped_column("artPhotoManual", Integer, default=0)
+    art_fields_manual: Mapped[str | None] = mapped_column("artFieldsManual", Text)
+    art_source: Mapped[str | None] = mapped_column("artSource", Text)
+    art_external_urls: Mapped[str | None] = mapped_column("artExternalUrls", Text)
+    art_related_similar_at: Mapped[str | None] = mapped_column("artRelatedSimilarAt", Text)
+    art_related_participations_at: Mapped[str | None] = mapped_column(
+        "artRelatedParticipationsAt", Text
+    )
+
+
+class EntityLink(Base):
+    __tablename__ = "entity_links"
+
+    lnk_id: Mapped[int] = mapped_column("lnkID", Integer, primary_key=True)
+    lnk_fk_bands: Mapped[int | None] = mapped_column("lnkFKbands", Integer)
+    lnk_fk_artists: Mapped[int | None] = mapped_column("lnkFKartists", Integer)
+    lnk_category: Mapped[str | None] = mapped_column("lnkCategory", Text)
+    lnk_label: Mapped[str | None] = mapped_column("lnkLabel", Text)
+    lnk_url: Mapped[str | None] = mapped_column("lnkURL", Text)
+    lnk_logo_key: Mapped[str | None] = mapped_column("lnkLogoKey", Text)
+    lnk_logo_path: Mapped[str | None] = mapped_column("lnkLogoPath", Text)
+    lnk_source: Mapped[str | None] = mapped_column("lnkSource", Text)
+    lnk_manual: Mapped[int | None] = mapped_column("lnkManual", Integer, default=0)
+    lnk_hidden: Mapped[int | None] = mapped_column("lnkHidden", Integer, default=0)
+    lnk_mb_type: Mapped[str | None] = mapped_column("lnkMBType", Text)
+
+
+class EntityRelated(Base):
+    __tablename__ = "entity_related"
+
+    erl_id: Mapped[int] = mapped_column("erlID", Integer, primary_key=True)
+    erl_kind: Mapped[str | None] = mapped_column("erlKind", Text)
+    erl_fk_bands: Mapped[int | None] = mapped_column("erlFKbands", Integer)
+    erl_fk_artists: Mapped[int | None] = mapped_column("erlFKartists", Integer)
+    erl_target_band_id: Mapped[int | None] = mapped_column("erlTargetBandID", Integer)
+    erl_name: Mapped[str | None] = mapped_column("erlName", Text)
+    erl_code: Mapped[str | None] = mapped_column("erlCode", Text)
+    erl_photo_url: Mapped[str | None] = mapped_column("erlPhotoUrl", Text)
+    erl_external_urls: Mapped[str | None] = mapped_column("erlExternalUrls", Text)
+    erl_source: Mapped[str | None] = mapped_column("erlSource", Text)
+    erl_manual: Mapped[int | None] = mapped_column("erlManual", Integer, default=0)
+    erl_hidden: Mapped[int | None] = mapped_column("erlHidden", Integer, default=0)
+    erl_sort_order: Mapped[int | None] = mapped_column("erlSortOrder", Integer, default=0)
 
 
 class ApiAuth(Base):

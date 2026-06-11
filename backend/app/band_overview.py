@@ -205,95 +205,109 @@ def list_era_slides(artist_name: str | None, media_root: Path) -> list[dict]:
     return slides
 
 
-def _member_photo_url(artist: Artist, media_root: Path) -> str | None:
-    if not artist.art_code:
+def _member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
+    from app.artist_photo import member_photo_url
+
+    return member_photo_url(artist, media_root)
+
+
+def _format_years(start: str | None, end: str | None) -> str | None:
+    s = (start or "").strip()
+    e = (end or "").strip()
+    if not s and not e:
         return None
+    sy = s[:4] if len(s) >= 4 else s or "?"
+    ey = e[:4] if len(e) >= 4 else ("present" if not e else e)
+    return f"{sy}–{ey}"
+
+
+def _participation_flags(
+    arp: ArtistParticipation,
+    founding_year: int | None,
+) -> dict[str, bool]:
+    start = (arp.arp_start_dates or "").strip()
+    end = (arp.arp_end_dates or "").strip()
+    type_ids = _parse_ids(arp.arp_fk_participation_types)
+    is_active = not end
+    is_founding = 1 in type_ids
+    if not is_founding and founding_year and start[:4].isdigit():
+        is_founding = int(start[:4]) <= founding_year + 2
+    is_former = bool(end) or 3 in type_ids
+    is_official = is_active or 0 in type_ids or (not type_ids and is_active)
+    return {
+        "is_active": is_active,
+        "is_founding": is_founding,
+        "is_former": is_former,
+        "is_official": is_official,
+    }
+
+
+def _lineup_entry(
+    db: Session,
+    arp: ArtistParticipation,
+    artist: Artist,
+    media_root: Path | None,
+    founding_year: int | None,
+) -> dict:
+    from app.lineup_instruments import instrument_label
+
     name = _display_name(artist.art_stage_name or artist.art_name)
-    letter = name[0].upper() if name and name[0].isalpha() else "#"
-    people = media_root / "People" / letter
-    if not people.is_dir():
-        people = media_root / "Music" / "People" / letter
-    if not people.is_dir():
-        return None
-    code = artist.art_code.lower()
-    for p in people.iterdir():
-        if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
-            continue
-        if code in p.stem.lower():
-            return _media_url(p, media_root)
-    return None
+    start = (arp.arp_start_dates or "").strip() or None
+    end = (arp.arp_end_dates or "").strip() or None
+    inst_raw = arp.arp_fk_instruments or ""
+    inst_ids = _parse_ids(inst_raw)
+    roles: list[str] = []
+    if inst_ids:
+        for iid in inst_ids:
+            label = instrument_label(db, iid)
+            if label:
+                roles.append(label)
+    flags = _participation_flags(arp, founding_year)
+    deceased = bool((artist.art_death_date or "").strip())
+    return {
+        "id": artist.art_id,
+        "participation_id": arp.arp_id,
+        "name": name,
+        "photo_url": _member_photo_url(artist, media_root),
+        "start": start,
+        "end": end,
+        "years": _format_years(start, end),
+        "roles": roles,
+        "instrument_ids_raw": inst_raw,
+        "is_deceased": deceased,
+        **flags,
+    }
 
 
-def _build_lineup(db: Session, band: Band, media_root: Path) -> dict[str, list[dict]]:
+def _build_lineup(db: Session, band: Band, media_root: Path | None) -> dict:
+    from app.lineup_sort import sort_lineup_members
+
     rows = db.scalars(
         select(ArtistParticipation).where(ArtistParticipation.arp_fk_bands == band.bnd_id)
     ).all()
     band_start = (band.bnd_starting_dates or "").split(";")[0].strip()[:4]
     founding_year = int(band_start) if band_start.isdigit() else None
 
-    current: list[dict] = []
-    founding: list[dict] = []
-    former: list[dict] = []
-
+    all_entries: list[dict] = []
     for arp in rows:
         artist = db.get(Artist, arp.arp_fk_artists) if arp.arp_fk_artists else None
         if not artist:
             continue
-        name = _display_name(artist.art_stage_name or artist.art_name)
-        start = (arp.arp_start_dates or "").strip()
-        end = (arp.arp_end_dates or "").strip()
-        entry = {
-            "id": artist.art_id,
-            "name": name,
-            "photo_url": _member_photo_url(artist, media_root),
-            "start": start or None,
-            "end": end or None,
-        }
-        if not end:
-            current.append(entry)
-        elif founding_year and start[:4].isdigit() and int(start[:4]) <= founding_year + 2:
-            founding.append(entry)
-        else:
-            former.append(entry)
+        all_entries.append(_lineup_entry(db, arp, artist, media_root, founding_year))
 
-    return {"current": current, "founding": founding, "former": former}
+    sorted_entries = sort_lineup_members(all_entries)
+    official = [e for e in sorted_entries if e.get("is_official")]
+    founding = [e for e in sorted_entries if e.get("is_founding")]
+    former = [e for e in sorted_entries if e.get("is_former")]
 
-
-def _similar_artists(db: Session, band: Band) -> list[dict]:
-    ids = _parse_ids(band.bnd_fk_artists)
-    out: list[dict] = []
-    for bid in ids:
-        if bid == band.bnd_id:
-            continue
-        b = db.get(Band, bid)
-        if b and b.bnd_name:
-            out.append({"id": b.bnd_id, "name": _display_name(b.bnd_name)})
-    return out
-
-
-def _related_projects(db: Session, band: Band) -> list[dict]:
-    member_ids = {
-        arp.arp_fk_artists
-        for arp in db.scalars(
-            select(ArtistParticipation).where(
-                ArtistParticipation.arp_fk_bands == band.bnd_id
-            )
-        ).all()
-        if arp.arp_fk_artists
+    return {
+        "all": sorted_entries,
+        "current": official,
+        "founding": founding,
+        "former": former,
+        "lineup_imported_at": band.bnd_lineup_imported_at,
+        "importing": False,
     }
-    seen: set[int] = {band.bnd_id}
-    out: list[dict] = []
-    for mid in member_ids:
-        for arp in db.scalars(
-            select(ArtistParticipation).where(ArtistParticipation.arp_fk_artists == mid)
-        ).all():
-            if not arp.arp_fk_bands or arp.arp_fk_bands in seen:
-                continue
-            b = db.get(Band, arp.arp_fk_bands)
-            if b and b.bnd_name:
-                seen.add(b.bnd_id)
-                out.append({"id": b.bnd_id, "name": _display_name(b.bnd_name)})
-    return out
 
 
 def _resolve_country(db: Session, band: Band) -> dict | None:
@@ -334,6 +348,39 @@ def _resolve_labels(db: Session, band_id: int) -> list[str]:
     return sorted(labels, key=str.lower)
 
 
+def _solo_performer(
+    db: Session, band: Band, media_root: Path | None
+) -> dict | None:
+    if not _is_solo(db, band):
+        return None
+    artist: Artist | None = None
+    arp = db.scalars(
+        select(ArtistParticipation).where(ArtistParticipation.arp_fk_bands == band.bnd_id)
+    ).first()
+    if arp and arp.arp_fk_artists:
+        artist = db.get(Artist, arp.arp_fk_artists)
+    if not artist and band.bnd_code:
+        artist = db.scalars(
+            select(Artist).where(Artist.art_code == band.bnd_code)
+        ).first()
+    if not artist:
+        return None
+    start = (band.bnd_starting_dates or "").split(";")[0].strip() or None
+    end = (band.bnd_ending_dates or "").split(";")[0].strip() or None
+    name = _display_name(artist.art_stage_name or artist.art_name)
+    deceased = bool((artist.art_death_date or "").strip())
+    return {
+        "id": artist.art_id,
+        "name": name,
+        "photo_url": _member_photo_url(artist, media_root),
+        "start": start,
+        "end": end,
+        "years": _format_years(start, end),
+        "roles": [],
+        "is_deceased": deceased,
+    }
+
+
 def _is_solo(db: Session, band: Band) -> bool:
     if not band.bnd_fk_artisttypes:
         return False
@@ -344,7 +391,13 @@ def _is_solo(db: Session, band: Band) -> bool:
     return False
 
 
-def build_band_overview(db: Session, band_id: int) -> dict | None:
+def build_band_overview(
+    db: Session,
+    band_id: int,
+    *,
+    is_admin: bool = False,
+    card_orientation: str = "landscape",
+) -> dict | None:
     band = db.get(Band, band_id)
     if not band:
         return None
@@ -378,11 +431,23 @@ def build_band_overview(db: Session, band_id: int) -> dict | None:
         )
         audio_library = scan_audio_library(band.bnd_name, root)
 
-    links = _parse_websites(band.bnd_websites)
-    lineup = _build_lineup(db, band, root) if root else {"current": [], "founding": [], "former": []}
+    lineup = _build_lineup(db, band, root)
     solo = _is_solo(db, band)
-    show_lineup = not solo and (
-        bool(lineup["current"]) or bool(lineup["founding"]) or bool(lineup["former"])
+    show_lineup = not solo and bool(lineup.get("all"))
+    solo_performer = _solo_performer(db, band, root) if solo else None
+
+    from app.entity_links import links_payload_for_band
+    from app.entity_related import related_payload
+
+    solo_artist_id = solo_performer["id"] if solo_performer else None
+    links = links_payload_for_band(
+        db, band, is_admin=is_admin, solo_artist_id=solo_artist_id
+    )
+    related = related_payload(
+        db,
+        band=band,
+        solo_artist_id=solo_artist_id,
+        orientation=card_orientation,
     )
 
     aliases = [
@@ -408,11 +473,12 @@ def build_band_overview(db: Session, band_id: int) -> dict | None:
         "labels": _resolve_labels(db, band.bnd_id),
         "eras": eras,
         "top_tracks": top_tracks,
-        "links": _categorize_links(links),
+        "links": links,
         "lineup": lineup,
         "show_lineup": show_lineup,
-        "similar_artists": _similar_artists(db, band),
-        "related_projects": _related_projects(db, band),
+        "solo_performer": solo_performer,
+        "is_solo": solo,
+        "related": related,
         "audio": audio_library,
         "metadata_refreshed_at": band.bnd_metadata_refreshed_at,
         "library_scanned_at": band.bnd_library_scanned_at,

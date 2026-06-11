@@ -13,6 +13,7 @@ import { EMPTY_DASHBOARD } from "./types";
 
 const API = "/api";
 const FETCH_TIMEOUT_MS = 30_000;
+const LONG_RUNNING_TIMEOUT_MS = 180_000;
 
 async function request<T>(
   url: string,
@@ -133,12 +134,27 @@ export async function fetchFilterOptions(): Promise<FilterOptions> {
   return request(`${API}/music/filters/options`);
 }
 
+export async function fetchInstrumentOptions(): Promise<{
+  groups: { type: string; items: { id: number; name: string }[] }[];
+}> {
+  return request(`${API}/music/filters/instruments`);
+}
+
 export async function searchRosterArtists(
   q: string,
   limit = 25
 ): Promise<{ items: { id: number; name: string }[] }> {
   return request(
     `${API}/music/filters/roster-artists?q=${encodeURIComponent(q)}&limit=${limit}`
+  );
+}
+
+export async function searchRosterBands(
+  q: string,
+  limit = 25
+): Promise<{ items: { id: number; name: string }[] }> {
+  return request(
+    `${API}/music/filters/roster-bands?q=${encodeURIComponent(q)}&limit=${limit}`
   );
 }
 
@@ -163,8 +179,15 @@ export async function fetchBand(id: number): Promise<Band> {
   return request(`${API}/music/bands/${id}`);
 }
 
-export async function fetchBandOverview(id: number) {
-  return request<import("./types").BandOverview>(`${API}/music/bands/${id}/overview`);
+export async function fetchBandOverview(
+  id: number,
+  orientation: "landscape" | "portrait" = "landscape"
+) {
+  return request<import("./types").BandOverview>(
+    `${API}/music/bands/${id}/overview?orientation=${orientation}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function refreshBandMetadata(
@@ -190,6 +213,292 @@ export async function patchBandBio(id: number, bio: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ bio }),
   });
+}
+
+export async function fetchArtistDetails(id: number, bandId?: number) {
+  const q = bandId ? `?band_id=${bandId}` : "";
+  return request<import("./types").ArtistDetails>(
+    `${API}/music/artists/${id}${q}`
+  );
+}
+
+export async function uploadArtistPhoto(
+  artistId: number,
+  file: File
+): Promise<{ ok: boolean; photo_url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  const res = await fetch(`${API}/music/artists/${artistId}/photo`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+export async function patchArtist(
+  id: number,
+  body: {
+    name?: string;
+    stage_name?: string;
+    aliases?: string;
+    birth_date?: string;
+    birth_place?: string;
+    birth_country_id?: number | null;
+    death_date?: string;
+    mbid?: string;
+  }
+) {
+  return request(`${API}/music/artists/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchBandAbout(
+  bandId: number,
+  body: {
+    bio?: string;
+    aliases?: string;
+    origin_city?: string;
+    country_id?: number | null;
+    activity_start?: string;
+    activity_end?: string;
+  }
+) {
+  return request(`${API}/music/bands/${bandId}/about`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function createParticipation(
+  bandId: number,
+  body: {
+    artist_id?: number;
+    name?: string;
+    mbid?: string;
+    start?: string;
+    end?: string;
+    roles_text?: string;
+    is_official?: boolean;
+    is_founding?: boolean;
+    is_former?: boolean;
+  }
+) {
+  return request<{ ok: boolean; participation_id: number; artist_id: number }>(
+    `${API}/music/bands/${bandId}/participations`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchParticipation(
+  bandId: number,
+  arpId: number,
+  body: {
+    start?: string;
+    end?: string;
+    roles_text?: string;
+    is_official?: boolean;
+    is_founding?: boolean;
+    is_former?: boolean;
+  }
+) {
+  return request(`${API}/music/bands/${bandId}/participations/${arpId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteParticipation(bandId: number, arpId: number) {
+  return request(`${API}/music/bands/${bandId}/participations/${arpId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function refreshBandLineup(
+  id: number
+): Promise<{ ok: boolean; imported?: number; error?: string }> {
+  return request(
+    `${API}/music/bands/${id}/refresh-lineup`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function refreshBandPhotos(
+  id: number,
+  force = false
+): Promise<{ ok: boolean; resolved?: number }> {
+  const q = force ? "?force=true" : "";
+  return request(
+    `${API}/music/bands/${id}/refresh-photos${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function refreshBandLinks(
+  id: number
+): Promise<{ ok: boolean; added?: number; error?: string }> {
+  return request(
+    `${API}/music/bands/${id}/refresh-links`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function resolveBandRelatedPhotos(id: number) {
+  return request<{ ok: boolean; resolved?: number }>(
+    `${API}/music/bands/${id}/resolve-related-photos`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchBandRelated(id: number) {
+  return request<{ ok: boolean }>(
+    `${API}/music/bands/${id}/fetch-related`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function refreshBandRelatedSimilar(id: number) {
+  return request<{ ok: boolean; added?: number; fetched_at?: string }>(
+    `${API}/music/bands/${id}/refresh-related-similar`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function refreshBandRelatedParticipations(id: number) {
+  return request<{ ok: boolean; count?: number; fetched_at?: string }>(
+    `${API}/music/bands/${id}/refresh-related-participations`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function addBandSimilar(
+  bandId: number,
+  body: { name: string; mbid?: string | null }
+) {
+  return request<{ ok: boolean; id: number }>(
+    `${API}/music/bands/${bandId}/related/similar`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function deleteBandRelated(bandId: number, erlId: number) {
+  return request(`${API}/music/bands/${bandId}/related/${erlId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchLinkCatalog(): Promise<{
+  items: import("./types").LinkCatalogEntry[];
+}> {
+  return request(`${API}/music/filters/link-catalog`);
+}
+
+export async function createEntityLink(
+  entityType: "band" | "artist",
+  entityId: number,
+  body: {
+    category: string;
+    label: string;
+    url: string;
+    logo_key?: string | null;
+  }
+): Promise<{ ok: boolean; id: number }> {
+  const base =
+    entityType === "band"
+      ? `${API}/music/bands/${entityId}/links`
+      : `${API}/music/artists/${entityId}/links`;
+  return request(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchEntityLink(
+  entityType: "band" | "artist",
+  entityId: number,
+  linkId: number,
+  body: {
+    category?: string;
+    label?: string;
+    url?: string;
+    logo_key?: string | null;
+    clear_logo_upload?: boolean;
+  }
+): Promise<{ ok: boolean }> {
+  const base =
+    entityType === "band"
+      ? `${API}/music/bands/${entityId}/links/${linkId}`
+      : `${API}/music/artists/${entityId}/links/${linkId}`;
+  return request(base, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteEntityLink(
+  entityType: "band" | "artist",
+  entityId: number,
+  linkId: number
+): Promise<{ ok: boolean }> {
+  const base =
+    entityType === "band"
+      ? `${API}/music/bands/${entityId}/links/${linkId}`
+      : `${API}/music/artists/${entityId}/links/${linkId}`;
+  return request(base, { method: "DELETE" });
+}
+
+export async function uploadEntityLinkLogo(
+  entityType: "band" | "artist",
+  entityId: number,
+  linkId: number,
+  file: File
+): Promise<{ ok: boolean; logo_path: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  const base =
+    entityType === "band"
+      ? `${API}/music/bands/${entityId}/links/${linkId}/logo`
+      : `${API}/music/artists/${entityId}/links/${linkId}/logo`;
+  const res = await fetch(base, { method: "POST", headers, body: form });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
 }
 
 export async function fetchUserPlaylists(): Promise<{ items: UserPlaylist[] }> {

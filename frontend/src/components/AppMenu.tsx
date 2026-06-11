@@ -12,10 +12,14 @@ import {
 } from "../themes";
 import {
   IconAddArtist,
+  IconCamera,
+  IconCards,
   IconCheck,
   IconEditProfile,
   IconFolder,
-  IconImport,
+  IconLineup,
+  IconLinks,
+  IconMetadata,
   IconSettings,
   IconSwitchProfile,
   IconSync,
@@ -23,7 +27,7 @@ import {
 } from "./MenuIcons";
 
 type Props = {
-  onImport: () => void;
+  onImport?: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
   onAddArtist?: () => void;
@@ -34,6 +38,15 @@ type Props = {
   onEditProfile?: () => void;
   onRefreshMetadata?: () => void;
   onRescanLibrary?: () => void;
+  onRefreshLineup?: () => void;
+  onRefreshPhotos?: () => void;
+  onRefreshLinks?: () => void;
+  onEditAbout?: () => void;
+  onAddMember?: () => void;
+  onAddLink?: () => void;
+  onAddSimilar?: () => void;
+  onRefreshRelatedSimilar?: () => void;
+  onRefreshRelatedParticipations?: () => void;
   refreshIncludeBio?: boolean;
   onRefreshIncludeBioChange?: (v: boolean) => void;
   artistThemeActive?: boolean;
@@ -50,7 +63,6 @@ const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
 ];
 
 export default function AppMenu({
-  onImport,
   onSync,
   onChooseSource,
   onAddArtist,
@@ -61,6 +73,15 @@ export default function AppMenu({
   onEditProfile,
   onRefreshMetadata,
   onRescanLibrary,
+  onRefreshLineup,
+  onRefreshPhotos,
+  onRefreshLinks,
+  onEditAbout,
+  onAddMember,
+  onAddLink,
+  onAddSimilar,
+  onRefreshRelatedSimilar,
+  onRefreshRelatedParticipations,
   refreshIncludeBio = false,
   onRefreshIncludeBioChange,
   artistThemeActive = false,
@@ -131,6 +152,50 @@ export default function AppMenu({
     setActiveTheme("custom");
   }
 
+  function toggleArtistData() {
+    setArtistDataOpen((o) => {
+      const next = !o;
+      if (next) {
+        setThemeOpen(false);
+        setSettingsOpen(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleTheme() {
+    setThemeOpen((o) => {
+      const next = !o;
+      if (next) {
+        setArtistDataOpen(false);
+        setSettingsOpen(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleSettings() {
+    setSettingsOpen((o) => {
+      const next = !o;
+      if (next) {
+        setArtistDataOpen(false);
+        setThemeOpen(false);
+      }
+      return next;
+    });
+  }
+
+  const showRefreshData =
+    onEditAbout ||
+    onRefreshMetadata ||
+    onRescanLibrary ||
+    onRefreshLineup ||
+    onRefreshPhotos ||
+    onRefreshLinks ||
+    onRefreshRelatedSimilar ||
+    onRefreshRelatedParticipations ||
+    onRefreshIncludeBioChange;
+
   return (
     <div className="app-menu" ref={ref}>
       <button
@@ -145,31 +210,67 @@ export default function AppMenu({
       </button>
       {open && (
         <div className="app-menu-dropdown">
-          {isAdmin && (onRefreshMetadata || onRescanLibrary) && (
+          {isAdmin && onAddMember && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddMember();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              Add member
+            </button>
+          )}
+          {isAdmin && onAddLink && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddLink();
+                setOpen(false);
+              }}
+            >
+              <IconLinks className="menu-item-icon" />
+              Add link
+            </button>
+          )}
+          {isAdmin && onAddSimilar && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddSimilar();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              Add similar artist
+            </button>
+          )}
+          {isAdmin && showRefreshData && (
             <>
               <button
                 type="button"
                 className="menu-item-with-sub"
-                onClick={() => setArtistDataOpen((o) => !o)}
+                onClick={toggleArtistData}
               >
-                <IconSync className="menu-item-icon" />
-                Artist Data
+                <IconMetadata className="menu-item-icon" />
+                Refresh data
                 <span className="menu-chevron">
                   {artistDataOpen ? "▴" : "▾"}
                 </span>
               </button>
               {artistDataOpen && (
                 <div className="app-menu-submenu">
-                  {onRefreshMetadata && (
+                  {onEditAbout && (
                     <button
                       type="button"
                       onClick={() => {
-                        onRefreshMetadata();
+                        onEditAbout();
                         setOpen(false);
                       }}
                     >
-                      <IconSync className="menu-item-icon" />
-                      Refresh metadata
+                      <IconEditProfile className="menu-item-icon" />
+                      Edit about
                     </button>
                   )}
                   {onRefreshIncludeBioChange && (
@@ -184,6 +285,18 @@ export default function AppMenu({
                       Include bio
                     </label>
                   )}
+                  {onRefreshMetadata && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshMetadata();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconMetadata className="menu-item-icon" />
+                      Metadata
+                    </button>
+                  )}
                   {onRescanLibrary && (
                     <button
                       type="button"
@@ -193,7 +306,67 @@ export default function AppMenu({
                       }}
                     >
                       <IconFolder className="menu-item-icon" />
-                      Rescan library
+                      Local files
+                    </button>
+                  )}
+                  {onRefreshLineup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshLineup();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLineup className="menu-item-icon" />
+                      Lineup
+                    </button>
+                  )}
+                  {onRefreshPhotos && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshPhotos();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconCamera className="menu-item-icon" />
+                      Photos
+                    </button>
+                  )}
+                  {onRefreshLinks && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshLinks();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLinks className="menu-item-icon" />
+                      Links
+                    </button>
+                  )}
+                  {onRefreshRelatedSimilar && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshRelatedSimilar();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconCards className="menu-item-icon" />
+                      Similar
+                    </button>
+                  )}
+                  {onRefreshRelatedParticipations && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshRelatedParticipations();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLineup className="menu-item-icon" />
+                      Participations
                     </button>
                   )}
                 </div>
@@ -215,7 +388,7 @@ export default function AppMenu({
           <button
             type="button"
             className="menu-item-with-sub"
-            onClick={() => setThemeOpen((o) => !o)}
+            onClick={toggleTheme}
           >
             <IconTheme className="menu-item-icon" />
             Theme
@@ -286,7 +459,7 @@ export default function AppMenu({
               <button
                 type="button"
                 className="menu-item-with-sub"
-                onClick={() => setSettingsOpen((o) => !o)}
+                onClick={toggleSettings}
               >
                 <IconSettings className="menu-item-icon" />
                 Setup
@@ -306,16 +479,6 @@ export default function AppMenu({
                       Choose source
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onImport();
-                      setOpen(false);
-                    }}
-                  >
-                    <IconImport className="menu-item-icon" />
-                    Import SQL
-                  </button>
                   <button
                     type="button"
                     onClick={() => {

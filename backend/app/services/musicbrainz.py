@@ -43,12 +43,27 @@ async def search_artists(
     return out
 
 
-async def fetch_artist(mbid: str, *, user_agent: str = DEFAULT_UA) -> dict:
+async def fetch_artist(
+    mbid: str,
+    *,
+    user_agent: str = DEFAULT_UA,
+    inc: str = "aliases+tags+url-rels",
+) -> dict:
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(
             f"{MB_BASE}/artist/{mbid}",
-            params={"fmt": "json", "inc": "aliases+tags"},
+            params={"fmt": "json", "inc": inc},
             headers={"User-Agent": user_agent},
         )
         r.raise_for_status()
         return r.json()
+
+
+async def fetch_artist_with_members(
+    mbid: str, *, user_agent: str = DEFAULT_UA
+) -> dict:
+    return await fetch_artist(
+        mbid,
+        user_agent=user_agent,
+        inc="aliases+tags+url-rels+artist-rels",
+    )
