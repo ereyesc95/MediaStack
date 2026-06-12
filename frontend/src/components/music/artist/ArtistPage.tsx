@@ -81,6 +81,7 @@ const SECTIONS: { id: ArtistSection; label: string }[] = [
   { id: "video", label: "VIDEO" },
   { id: "library", label: "LIBRARY" },
   { id: "gallery", label: "GALLERY" },
+  { id: "quiz", label: "QUIZ" },
 ];
 
 const OVERVIEW_TABS: { id: ArtistOverviewTab; label: string }[] = [
@@ -88,7 +89,6 @@ const OVERVIEW_TABS: { id: ArtistOverviewTab; label: string }[] = [
   { id: "lineup", label: "LINEUP" },
   { id: "links", label: "LINKS" },
   { id: "related", label: "RELATED" },
-  { id: "quiz", label: "QUIZ" },
 ];
 
 const LINEUP_TABS: { id: LineupTab; label: string }[] = [
@@ -220,7 +220,7 @@ export default function ArtistPage({
     if (!data?.media) return SECTIONS;
     const m = data.media;
     return SECTIONS.filter((s) => {
-      if (s.id === "overview") return true;
+      if (s.id === "overview" || s.id === "quiz") return true;
       if (s.id === "audio") return m.has_audio;
       if (s.id === "video") return m.has_video;
       if (s.id === "library") return m.has_library;
@@ -815,7 +815,7 @@ export default function ArtistPage({
           </nav>
         )}
 
-        {section === "overview" && overviewTab === "quiz" && data && (
+        {section === "quiz" && data && (
           <nav className="artist-page__subtabs artist-page__quiz-subtabs">
             {QUIZ_MODES.filter((m) => !(m.soloHidden && data.is_solo)).map(
               (m) => (
@@ -1069,7 +1069,7 @@ export default function ArtistPage({
           />
         )}
 
-        {data && section === "overview" && overviewTab === "quiz" && (
+        {data && section === "quiz" && (
           <ArtistQuiz
             bandId={bandId}
             isSolo={data.is_solo}

@@ -1,6 +1,12 @@
 import type { ArtistOverviewTab } from "./types";
 
-export type ArtistSection = "overview" | "audio" | "video" | "library" | "gallery";
+export type ArtistSection =
+  | "overview"
+  | "audio"
+  | "video"
+  | "library"
+  | "gallery"
+  | "quiz";
 export type { ArtistOverviewTab };
 export type ReleaseTab = "overview" | "tracklist" | "gallery";
 
@@ -19,8 +25,14 @@ const SECTIONS: ArtistSection[] = [
   "video",
   "library",
   "gallery",
+  "quiz",
 ];
-const OVERVIEW_TABS: ArtistOverviewTab[] = ["about", "lineup", "links", "related", "quiz"];
+const OVERVIEW_TABS: ArtistOverviewTab[] = [
+  "about",
+  "lineup",
+  "links",
+  "related",
+];
 const RELEASE_TABS: ReleaseTab[] = ["overview", "tracklist", "gallery"];
 
 const RELEASE_ID_RE = /^rel_[0-9a-f]{12}$/;
@@ -80,9 +92,13 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
       : "overview";
   } else if (parts[0] === "overview") {
     section = "overview";
-    overviewTab = OVERVIEW_TABS.includes(parts[1] as ArtistOverviewTab)
-      ? (parts[1] as ArtistOverviewTab)
-      : "about";
+    if (parts[1] === "quiz") {
+      section = "quiz";
+    } else {
+      overviewTab = OVERVIEW_TABS.includes(parts[1] as ArtistOverviewTab)
+        ? (parts[1] as ArtistOverviewTab)
+        : "about";
+    }
   } else if (
     parts[0] === "video" &&
     parts[1] &&

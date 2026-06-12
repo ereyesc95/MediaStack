@@ -156,8 +156,14 @@ export type CardOrientation = "landscape" | "portrait";
 
 export type MusicTab = "home" | "artists" | "playlists";
 
-export type ArtistSection = "overview" | "audio" | "video" | "library" | "gallery";
-export type ArtistOverviewTab = "about" | "lineup" | "links" | "related" | "quiz";
+export type ArtistSection =
+  | "overview"
+  | "audio"
+  | "video"
+  | "library"
+  | "gallery"
+  | "quiz";
+export type ArtistOverviewTab = "about" | "lineup" | "links" | "related";
 
 export type LinkCategory =
   | "social"
