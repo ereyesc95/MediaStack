@@ -6,8 +6,15 @@ venv/
 node_modules/
 frontend/dist/
 data/mediastack.db
+data/media_index/
+data/overview_cache/
+data/lyrics_cache/
+data/release_overrides/
+data/release_mb_cache/
+data/quiz_scores/
 data/user_settings.json
 data/avatars/
+data/backups/
 Media/
 *.log
 .DS_Store

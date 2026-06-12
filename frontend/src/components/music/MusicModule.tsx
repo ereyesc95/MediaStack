@@ -19,12 +19,16 @@ import type {
 } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
 import { clearMediaTheme } from "../../mediaTheme";
+import { prefetchBandOverview } from "../../overviewCache";
 import AppMenu from "../AppMenu";
 import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import AddArtistModal from "./AddArtistModal";
 import ArtistPage from "./artist/ArtistPage";
+import MediaItemPage from "./media/MediaItemPage";
+import ReleasePage from "./release/ReleasePage";
+import type { ReleaseTab } from "../../musicRoute";
 import ArtistBrowse from "./ArtistBrowse";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -34,6 +38,9 @@ type Props = {
   bandId?: number;
   artistSection?: ArtistSection;
   artistOverviewTab?: ArtistOverviewTab;
+  releaseId?: string;
+  releaseTab?: ReleaseTab;
+  mediaItemId?: string;
   playlistId?: number;
   genreFilterId?: number;
   countryFilterId?: number;
@@ -56,6 +63,15 @@ type Props = {
     section: ArtistSection,
     overviewTab?: ArtistOverviewTab
   ) => void;
+  onReleaseNavigate?: (
+    releaseId?: string,
+    releaseTab?: ReleaseTab,
+    bandId?: number
+  ) => void;
+  onMediaItemNavigate?: (
+    itemId?: string,
+    section?: ArtistSection
+  ) => void;
   onPlaylist: (id?: number) => void;
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
@@ -66,6 +82,9 @@ export default function MusicModule({
   bandId,
   artistSection = "overview",
   artistOverviewTab = "about",
+  releaseId,
+  releaseTab = "overview",
+  mediaItemId,
   playlistId,
   genreFilterId,
   countryFilterId,
@@ -85,6 +104,8 @@ export default function MusicModule({
   onTab,
   onBand,
   onArtistNavigate,
+  onReleaseNavigate,
+  onMediaItemNavigate,
   onPlaylist,
   onGenreFilter,
   onCountryFilter,
@@ -113,7 +134,39 @@ export default function MusicModule({
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
   const loadArtistsGeneration = useRef(0);
+
+  const resolveArtistShell = useCallback(
+    (id: number): ArtistCard | null => {
+      return (
+        artists.find((a) => a.id === id) ??
+        dashboard.top_artists?.find((a) => a.id === id) ??
+        null
+      );
+    },
+    [artists, dashboard.top_artists]
+  );
+
+  const openArtist = useCallback(
+    (id: number, shellHint?: ArtistCard | null) => {
+      const card = shellHint ?? resolveArtistShell(id);
+      if (card) setArtistShell(card);
+      void prefetchBandOverview(id, cardOrientation);
+      onArtistNavigate("overview", "about");
+      onBand(id);
+    },
+    [cardOrientation, onArtistNavigate, onBand, resolveArtistShell]
+  );
+
+  useEffect(() => {
+    if (!bandId) {
+      setArtistShell(null);
+      return;
+    }
+    const card = resolveArtistShell(bandId);
+    if (card) setArtistShell(card);
+  }, [bandId, resolveArtistShell]);
 
   useEffect(() => {
     if (tab === "home") {
@@ -484,14 +537,76 @@ export default function MusicModule({
 
       {error && !bandId && <div className="error">{error}</div>}
 
-      {bandId ? (
+      {bandId &&
+      mediaItemId &&
+      (artistSection === "video" || artistSection === "library") ? (
+        <MediaItemPage
+          bandId={bandId}
+          kind={artistSection}
+          itemId={mediaItemId}
+          isAdmin={isAdmin}
+          userId={userId}
+          onBack={() => onMediaItemNavigate?.(undefined, artistSection)}
+          onOpenArtist={(id) => {
+            onMediaItemNavigate?.(undefined);
+            openArtist(id);
+          }}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
+        />
+      ) : bandId && releaseId ? (
+        <ReleasePage
+          bandId={bandId}
+          releaseId={releaseId}
+          tab={releaseTab}
+          cardOrientation={cardOrientation}
+          isAdmin={isAdmin}
+          userId={userId}
+          onBack={() => {
+            onReleaseNavigate?.(undefined, undefined);
+            onArtistNavigate("audio", artistOverviewTab);
+          }}
+          onOpenArtist={(id) => {
+            onReleaseNavigate?.(undefined, undefined);
+            openArtist(id);
+          }}
+          onOpenRelease={(bid, rid) => {
+            onReleaseNavigate?.(
+              rid,
+              "overview",
+              bid !== bandId ? bid : undefined
+            );
+          }}
+          onTab={(t) => onReleaseNavigate?.(releaseId, t)}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+          onToggleOrientation={onToggleOrientation}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
+        />
+      ) : bandId ? (
         <ArtistPage
           bandId={bandId}
+          shell={artistShell}
           section={artistSection}
           overviewTab={artistOverviewTab}
           cardOrientation={cardOrientation}
           isAdmin={isAdmin}
           userId={userId}
+          onOpenReleaseNavigate={(bid, rid) => {
+            onReleaseNavigate?.(
+              rid,
+              "overview",
+              bid !== bandId ? bid : undefined
+            );
+          }}
+          onOpenMediaItem={(kind, itemId) =>
+            onMediaItemNavigate?.(itemId, kind)
+          }
           onBack={() => {
             clearMediaTheme(userId);
             window.history.pushState(null, "", "/");
@@ -501,10 +616,7 @@ export default function MusicModule({
           onNavigate={(section, overviewTab) =>
             onArtistNavigate(section, overviewTab ?? artistOverviewTab)
           }
-          onOpenArtist={(id) => {
-            onArtistNavigate("overview", "about");
-            onBand(id);
-          }}
+          onOpenArtist={openArtist}
           onCountry={(id) => {
             clearMediaTheme(userId);
             window.history.pushState(null, "", "/");
@@ -541,8 +653,8 @@ export default function MusicModule({
             loading={dashLoading}
             onPlayTrack={handlePlay}
             onArtist={(id) => {
-              onTab("artists");
-              onBand(id);
+              const card = dashboard.top_artists?.find((a) => a.id === id) ?? null;
+              openArtist(id, card);
             }}
             onGenre={(id) => onGenreFilter(id)}
             onCountry={(country) =>
@@ -586,7 +698,7 @@ export default function MusicModule({
           onLabelChange={setLabel}
           onProducerChange={setProducer}
           onPageChange={setArtistPage}
-          onArtist={(id) => onBand(id)}
+          onArtist={openArtist}
           onClearFilter={() => {
             onGenreFilter();
             onCountryFilter();

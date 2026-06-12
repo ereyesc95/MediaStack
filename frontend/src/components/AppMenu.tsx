@@ -37,6 +37,7 @@ type Props = {
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   onRefreshMetadata?: () => void;
+  onFetchLyrics?: () => void;
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -49,6 +50,7 @@ type Props = {
   onRefreshRelatedParticipations?: () => void;
   refreshIncludeBio?: boolean;
   onRefreshIncludeBioChange?: (v: boolean) => void;
+  refreshIncludeLabel?: string;
   artistThemeActive?: boolean;
 };
 
@@ -72,6 +74,7 @@ export default function AppMenu({
   onSwitchProfile,
   onEditProfile,
   onRefreshMetadata,
+  onFetchLyrics,
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -84,6 +87,7 @@ export default function AppMenu({
   onRefreshRelatedParticipations,
   refreshIncludeBio = false,
   onRefreshIncludeBioChange,
+  refreshIncludeLabel = "Include bio",
   artistThemeActive = false,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -246,6 +250,18 @@ export default function AppMenu({
               Add similar artist
             </button>
           )}
+          {isAdmin && onFetchLyrics && (
+            <button
+              type="button"
+              onClick={() => {
+                onFetchLyrics();
+                setOpen(false);
+              }}
+            >
+              <IconMetadata className="menu-item-icon" />
+              Fetch lyrics
+            </button>
+          )}
           {isAdmin && showRefreshData && (
             <>
               <button
@@ -282,7 +298,7 @@ export default function AppMenu({
                           onRefreshIncludeBioChange(e.target.checked)
                         }
                       />
-                      Include bio
+                      {refreshIncludeLabel}
                     </label>
                   )}
                   {onRefreshMetadata && (

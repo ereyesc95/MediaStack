@@ -10,7 +10,7 @@ from app.deps import get_current_user
 from app.models import User
 from app.media_paths import path_to_local_file, resolve_playback_url, resolve_stream_url
 from app.schemas import LyricsOut, PlayRequest, PlayResponse, ReproductionOut
-from app.services.lyrics import fetch_lyrics
+from app.services.lyrics import resolve_lyrics
 
 router = APIRouter(prefix="/api/music", tags=["playback"])
 
@@ -55,11 +55,15 @@ def stream_track(path: str = Query(..., min_length=1)):
 async def track_lyrics(
     artist: str = Query(...),
     title: str = Query(...),
+    play_path: str | None = Query(None),
 ):
-    import asyncio
-
-    lyrics = await fetch_lyrics(artist, title)
-    return LyricsOut(artist=artist, title=title, lyrics=lyrics)
+    lyrics, source = await resolve_lyrics(artist, title, play_path=play_path)
+    return LyricsOut(
+        artist=artist,
+        title=title,
+        lyrics=lyrics,
+        source=source or "none",
+    )
 
 
 @router.get("/reproductions", response_model=list[ReproductionOut])

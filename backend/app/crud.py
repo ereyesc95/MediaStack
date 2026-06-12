@@ -298,6 +298,24 @@ def get_lastfm_key(db: Session) -> str | None:
     return None
 
 
+def get_setlistfm_key(db: Session) -> str | None:
+    from app.config import settings
+    from app.models import ApiAuth
+
+    if settings.setlistfm_api_key:
+        return settings.setlistfm_api_key
+    row = db.scalar(
+        select(ApiAuth).where(
+            ApiAuth.api_name.in_(("Setlist.fm", "SetlistFM", "setlistfm"))
+        )
+    )
+    if row and row.api_key_encrypted:
+        return row.api_key_encrypted
+    if row and row.api_token:
+        return row.api_token
+    return None
+
+
 def get_tmdb_key(db: Session) -> str | None:
     from app.config import settings
     from app.models import ApiAuth

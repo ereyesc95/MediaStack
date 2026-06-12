@@ -41,6 +41,10 @@ def _resolve_system_path(slug: str) -> Path | None:
             return _first_existing(SYSTEM_DIR / "media", stem)
         if folder == "icons":
             return _first_existing(SYSTEM_DIR / "icons", stem)
+        if folder == "playlists":
+            return _first_existing(SYSTEM_DIR / "playlists", stem)
+        if folder == "labels":
+            return _first_existing(SYSTEM_DIR / "labels", stem)
         if folder in NESTED_PREFIXES:
             return _first_existing(SYSTEM_DIR / folder, stem)
 

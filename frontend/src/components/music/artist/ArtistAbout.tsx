@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatTrackDate } from "../../../formatDate";
 import type { BandOverview } from "../../../types";
+import ArtistWordCloud from "./ArtistWordCloud";
 
 type Era = BandOverview["eras"][number];
 
@@ -333,6 +334,12 @@ export default function ArtistAbout({
                 </dd>
               </div>
             )}
+            <div className="artist-about__meta-row">
+              <dt>Topics</dt>
+              <dd className="artist-about__topics-dd">
+                <ArtistWordCloud bandId={data.id} embedded />
+              </dd>
+            </div>
             {visibleLabels.length > 0 && (
               <div className="artist-about__meta-row">
                 <dt>Labels</dt>
@@ -344,12 +351,28 @@ export default function ArtistAbout({
                           <span className="artist-about__meta-sep"> • </span>
                         )}
                         <MetaValue flat onClick={() => onLabel(l)}>
-                          {l}
+                          {data.label_logos?.[l] ? (
+                            <img
+                              src={data.label_logos[l]!}
+                              alt={l}
+                              className="artist-about__label-logo"
+                            />
+                          ) : (
+                            l
+                          )}
                         </MetaValue>
                       </span>
                     ) : (
                       <MetaValue key={l} flat={false} onClick={() => onLabel(l)}>
-                        {l}
+                        {data.label_logos?.[l] ? (
+                          <img
+                            src={data.label_logos[l]!}
+                            alt={l}
+                            className="artist-about__label-logo"
+                          />
+                        ) : (
+                          l
+                        )}
                       </MetaValue>
                     )
                   )}
@@ -412,14 +435,16 @@ export default function ArtistAbout({
                         t.play_path && onPlayTrack(t.play_path, t.title)
                       }
                     >
-                      <span
-                        className="artist-about__track-cover"
-                        style={
-                          t.cover_url
-                            ? { backgroundImage: `url("${t.cover_url}")` }
-                            : undefined
-                        }
-                      />
+                      <span className="artist-about__track-cover">
+                        <span
+                          className="artist-about__track-cover-bg"
+                          style={
+                            t.cover_url
+                              ? { backgroundImage: `url("${t.cover_url}")` }
+                              : undefined
+                          }
+                        />
+                      </span>
                       <span className="artist-about__track-title">{t.title}</span>
                       {t.release_date && (
                         <span className="artist-about__track-date">

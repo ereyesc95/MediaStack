@@ -151,7 +151,7 @@ export type CardOrientation = "landscape" | "portrait";
 export type MusicTab = "home" | "artists" | "playlists";
 
 export type ArtistSection = "overview" | "audio" | "video" | "library" | "gallery";
-export type ArtistOverviewTab = "about" | "lineup" | "links" | "related";
+export type ArtistOverviewTab = "about" | "lineup" | "links" | "related" | "quiz";
 
 export type LinkCategory =
   | "social"
@@ -239,6 +239,7 @@ export type BandOverview = {
   activity_periods: { start: string | null; end: string | null; label: string }[];
   subgenres: { id: number; name: string }[];
   labels: string[];
+  label_logos?: Record<string, string | null>;
   eras: {
     id?: string;
     year: number;
@@ -269,9 +270,11 @@ export type BandOverview = {
   is_solo: boolean;
   solo_performer: LineupMember | null;
   related: EntityRelatedPayload;
-  audio: Record<string, AudioAlbum[]>;
+  media: MediaFlags;
   metadata_refreshed_at: string | null;
   library_scanned_at: string | null;
+  needs_lineup_import?: boolean;
+  cached?: boolean;
 };
 
 export type LineupMember = {
@@ -339,6 +342,305 @@ export type ArtistDetails = {
   source: string | null;
 };
 
+export type MediaFlags = {
+  has_audio: boolean;
+  has_video: boolean;
+  has_library: boolean;
+  has_gallery: boolean;
+  has_playlists?: boolean;
+  audio_categories: string[];
+};
+
+export type ArtistPlaylistCard = {
+  slug: string;
+  name: string;
+  track_count: number;
+  cover_url: string | null;
+  show_count?: number;
+  years?: string[];
+};
+
+export type PlaylistIndexPayload = {
+  playlists: ArtistPlaylistCard[];
+  scanned_at: string | null;
+  cached: boolean;
+};
+
+export type ArtistPlaylistTrack = {
+  title: string;
+  release_date: string | null;
+  cover_url: string | null;
+  play_path: string | null;
+  album_folder: string | null;
+};
+
+export type ArtistPlaylistDetail = {
+  slug: string;
+  name: string;
+  tracks: ArtistPlaylistTrack[];
+  years?: string[];
+  show_count?: number;
+};
+
+export type AudioReleaseCard = {
+  id: string;
+  category: string;
+  title: string;
+  date_iso: string | null;
+  display_date: string | null;
+  official: boolean;
+  cover_url: string | null;
+  logo_url: string | null;
+  folder_path: string;
+  navigate_band_id: number;
+  navigate_release_id: string;
+  source_band_id: number | null;
+};
+
+export type GalleryPhotoItem = {
+  id: string;
+  url: string;
+  year: number;
+  orientation: string;
+  title: string;
+  folder_path: string;
+};
+
+export type GalleryBrandItem = {
+  id: string;
+  url: string;
+  kind: "logo" | "icon";
+  start: number;
+  end: number;
+  label: string;
+  folder_path: string;
+};
+
+export type GalleryIndexPayload = {
+  photos: GalleryPhotoItem[];
+  branding: GalleryBrandItem[];
+  logos: GalleryBrandItem[];
+  icons: GalleryBrandItem[];
+};
+
+export type AudioIndexPayload = {
+  releases: AudioReleaseCard[];
+  categories: string[];
+  unofficial_by_category: Record<string, boolean>;
+  scanned_at: string | null;
+  cached: boolean;
+  stale?: boolean;
+};
+
+export type ReleaseSingleCard = {
+  id: string;
+  title: string;
+  folder_path: string;
+  cover_url: string | null;
+};
+
+export type ReleaseNeighbor = {
+  id: string;
+  title: string;
+  cover_url: string | null;
+};
+
+export type ReleaseTrackItem = {
+  id: string;
+  number: number;
+  title: string;
+  play_path: string;
+  duration_sec: number | null;
+  duration: string | null;
+  has_lrc: boolean;
+  is_link: boolean;
+  youtube_url?: string | null;
+};
+
+export type TrackVersionItem = {
+  title: string;
+  play_path: string;
+  album_title: string | null;
+  album_folder: string | null;
+  cover_url: string | null;
+  date_iso: string | null;
+};
+
+export type ReleaseTrackGroup = {
+  id: string;
+  kind: "disc" | "side" | "tape" | "flat" | "link";
+  label: string | null;
+  disc_url?: string | null;
+  tracks: ReleaseTrackItem[];
+};
+
+export type ReleaseEdition = {
+  id: string;
+  label: string;
+  date_iso: string | null;
+  groups: ReleaseTrackGroup[];
+  is_link?: boolean;
+  cover_url?: string | null;
+  cover_animation_url?: string | null;
+  disc_url?: string | null;
+  background_layers?: string[];
+};
+
+export type WordCloudTerm = {
+  text: string;
+  count: number;
+  weight: number;
+};
+
+export type WordCloudPayload = {
+  terms: WordCloudTerm[];
+  track_sources: number;
+  ready: boolean;
+  hint: string | null;
+};
+
+export type MediaItemFile = {
+  name: string;
+  path: string;
+  kind: string;
+  size: number;
+};
+
+export type MediaItemOverview = {
+  id: string;
+  kind: "video" | "library";
+  band_id: number;
+  artist_name: string;
+  title: string;
+  date_iso: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  description: string | null;
+  files: MediaItemFile[];
+};
+
+export type TrackCredits = {
+  title: string;
+  writers: string[];
+  composers: string[];
+  lyricists: string[];
+  source: string | null;
+};
+
+export type MediaTabItem = {
+  id: string;
+  title: string;
+  date_iso: string | null;
+  cover_url: string | null;
+  folder_path: string;
+};
+
+export type MediaTabCategory = {
+  key: string;
+  label: string;
+  items: MediaTabItem[];
+};
+
+export type MediaTabIndexPayload = {
+  band_id: number;
+  kind: string;
+  categories: MediaTabCategory[];
+  scanned_at: string | null;
+  cached?: boolean;
+};
+
+export type QuizScoreEntry = {
+  last_score: number;
+  last_total: number;
+  last_time_ms?: number;
+  best_score: number;
+  best_total: number;
+  best_time_ms?: number;
+  played_at?: string;
+};
+
+export type QuizScores = {
+  discography?: QuizScoreEntry;
+  lineup?: QuizScoreEntry;
+  songs?: QuizScoreEntry;
+};
+
+export type ReleaseTracklist = {
+  release_id: string;
+  title: string;
+  artist_name: string | null;
+  editions: ReleaseEdition[];
+};
+
+export type ReleaseGalleryItem = {
+  id: string;
+  url: string;
+  title: string;
+  folder_path: string;
+  section: string;
+  year?: number;
+  orientation?: string;
+};
+
+export type ReleaseGalleryPayload = {
+  release_id: string;
+  title: string;
+  artwork: ReleaseGalleryItem[];
+  photos: ReleaseGalleryItem[];
+  extras: ReleaseGalleryItem[];
+};
+
+export type ReleaseOverview = {
+  id: string;
+  band_id: number;
+  artist_name: string;
+  title: string;
+  category: string;
+  release_type: string;
+  release_type_line: string;
+  date_iso: string | null;
+  display_date: string | null;
+  official: boolean;
+  folder_path: string;
+  source_artist: string | null;
+  description: string | null;
+  description_manual: boolean;
+  description_source: string | null;
+  subgenres: { id: number; name: string }[];
+  producer: string | null;
+  label: string | null;
+  label_logo_url?: string | null;
+  release_code: string | null;
+  reviews: { label: string; url: string }[];
+  metadata_refreshed_at?: string | null;
+  cover_url: string | null;
+  cover_animation_url?: string | null;
+  playback_kind?: "disc" | "vinyl" | "tape";
+  disc_url: string | null;
+  background_layers: string[];
+  era_icon_url: string | null;
+  era_logo_url: string | null;
+  logo_url: string | null;
+  spotify_url: string | null;
+  qr_url: string | null;
+  photocards: {
+    portrait_front: string | null;
+    portrait_back: string | null;
+    landscape_front: string | null;
+    landscape_back: string | null;
+  };
+  gallery_photo_url: string | null;
+  lineup: LineupMember[];
+  show_lineup: boolean;
+  is_solo: boolean;
+  singles: ReleaseSingleCard[];
+  prev: ReleaseNeighbor | null;
+  next: ReleaseNeighbor | null;
+  navigate_band_id: number;
+  navigate_release_id: string;
+};
+
+/** @deprecated Use AudioReleaseCard via lazy /media/audio endpoint */
 export type AudioAlbum = {
   id: string;
   title: string;
@@ -356,6 +658,9 @@ export type View =
       bandId?: number;
       artistSection?: ArtistSection;
       artistOverviewTab?: ArtistOverviewTab;
+      releaseId?: string;
+      releaseTab?: "overview" | "tracklist" | "gallery";
+      mediaItemId?: string;
       playlistId?: number;
       genreFilterId?: number;
       countryFilterId?: number;

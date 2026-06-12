@@ -67,3 +67,51 @@ async def fetch_artist_with_members(
         user_agent=user_agent,
         inc="aliases+tags+url-rels+artist-rels",
     )
+
+
+async def search_release_groups(
+    *,
+    artist_mbid: str,
+    title: str,
+    limit: int = 3,
+    user_agent: str = DEFAULT_UA,
+) -> list[dict]:
+    clean = title.replace('"', "").strip()
+    if not clean or not artist_mbid:
+        return []
+    query = f'release:"{clean}" AND arid:{artist_mbid}'
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{MB_BASE}/release-group/",
+            params={"query": query, "fmt": "json", "limit": limit},
+            headers={"User-Agent": user_agent},
+        )
+        r.raise_for_status()
+        data = r.json()
+    out: list[dict] = []
+    for rg in (data.get("release-groups") or [])[:limit]:
+        out.append(
+            {
+                "mbid": rg.get("id"),
+                "title": rg.get("title"),
+                "primary_type": (rg.get("primary-type") or "").lower(),
+                "first_release_date": rg.get("first-release-date"),
+            }
+        )
+    return out
+
+
+async def fetch_release_group(
+    mbid: str,
+    *,
+    user_agent: str = DEFAULT_UA,
+    inc: str = "url-rels+releases+artist-credits+tags+annotation",
+) -> dict:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{MB_BASE}/release-group/{mbid}",
+            params={"fmt": "json", "inc": inc},
+            headers={"User-Agent": user_agent},
+        )
+        r.raise_for_status()
+        return r.json()

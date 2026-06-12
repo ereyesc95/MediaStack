@@ -10,6 +10,7 @@ import {
 
 let themeBeforeArtist: ThemeId | null = null;
 let artistPageActive = false;
+let albumPageActive = false;
 
 function clamp(n: number) {
   return Math.max(0, Math.min(255, Math.round(n)));
@@ -92,9 +93,9 @@ export function colorsFromImageUrl(
   });
 }
 
-function applyMediaCss(colors: CustomThemeColors) {
+function applyMediaCss(colors: CustomThemeColors, theme: "artist" | "album" = "artist") {
   const el = document.documentElement;
-  el.dataset.theme = "artist";
+  el.dataset.theme = theme;
   el.style.setProperty("--bg", colors.bg);
   el.style.setProperty("--bg-elevated", colors.bgElevated);
   el.style.setProperty("--bg-hover", colors.bgHover);
@@ -131,9 +132,25 @@ export function beginArtistPageSession(userId?: number) {
 
 export function applyMediaTheme(colors: CustomThemeColors, userId?: number) {
   saveArtistThemeColors(colors, userId);
-  applyMediaCss(colors);
+  applyMediaCss(colors, "artist");
   window.dispatchEvent(new CustomEvent("artist-theme-updated"));
   window.dispatchEvent(new CustomEvent("theme-changed"));
+}
+
+/** Call when entering a release page (artist session should stay active). */
+export function beginAlbumPageSession() {
+  albumPageActive = true;
+}
+
+export function applyAlbumTheme(colors: CustomThemeColors) {
+  applyMediaCss(colors, "album");
+  window.dispatchEvent(new CustomEvent("theme-changed"));
+}
+
+export function clearAlbumTheme(userId?: number) {
+  if (!albumPageActive) return;
+  albumPageActive = false;
+  applySavedArtistTheme(userId);
 }
 
 export function applySavedArtistTheme(userId?: number) {
@@ -145,6 +162,7 @@ export function applySavedArtistTheme(userId?: number) {
 }
 
 export function clearMediaTheme(userId?: number) {
+  albumPageActive = false;
   if (!artistPageActive && themeBeforeArtist === null) {
     clearMediaCss();
     applyTheme(getStoredTheme(userId), userId);

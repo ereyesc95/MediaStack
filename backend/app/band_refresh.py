@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.band_library import match_top_tracks, scan_audio_library
+from app.band_library import match_top_tracks
+from app.band_overview_cache import invalidate_overview_cache
+from app.media_index import invalidate_media_cache
+from app.playlist_index import invalidate_playlist_cache
 from app.config import settings
 from app.models import Band
 from app.services.musicbrainz import fetch_artist
@@ -49,6 +52,7 @@ async def refresh_band_metadata(
 
     band.bnd_metadata_refreshed_at = _now()
     db.commit()
+    invalidate_overview_cache(band.bnd_id)
     return {"ok": True, "refreshed_at": band.bnd_metadata_refreshed_at}
 
 
@@ -59,7 +63,9 @@ def rescan_band_library(db: Session, band: Band) -> dict:
     if not root or not root.is_dir():
         return {"ok": False, "error": "Media root not configured"}
 
-    scan_audio_library(band.bnd_name, root)
+    invalidate_media_cache(band.bnd_id)
+    invalidate_playlist_cache(band.bnd_id)
+    invalidate_overview_cache(band.bnd_id)
     tracks = match_top_tracks(
         band.bnd_name,
         root,

@@ -190,6 +190,22 @@ export async function fetchBandOverview(
   );
 }
 
+export async function importBandLineup(
+  bandId: number
+): Promise<{
+  ok: boolean;
+  skipped?: boolean;
+  imported?: number;
+  imported_at?: string;
+  error?: string;
+}> {
+  return request(
+    `${API}/music/bands/${bandId}/import-lineup`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function refreshBandMetadata(
   id: number,
   includeBio: boolean
@@ -205,6 +221,310 @@ export async function rescanBandLibrary(
   id: number
 ): Promise<{ ok: boolean; scanned_at?: string; error?: string }> {
   return request(`${API}/music/bands/${id}/rescan-library`, { method: "POST" });
+}
+
+export async function fetchBandGalleryIndex(
+  id: number
+): Promise<import("./types").GalleryIndexPayload> {
+  return request(`${API}/music/bands/${id}/media/gallery`);
+}
+
+export async function fetchBandAudioIndex(
+  id: number,
+  force = false
+): Promise<import("./types").AudioIndexPayload> {
+  const q = force ? "?force=true" : "";
+  return request(
+    `${API}/music/bands/${id}/media/audio${q}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchReleaseOverview(
+  bandId: number,
+  releaseId: string,
+  orientation: "landscape" | "portrait" = "landscape"
+): Promise<import("./types").ReleaseOverview> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/overview?orientation=${orientation}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchReleaseTracklist(
+  bandId: number,
+  releaseId: string
+): Promise<import("./types").ReleaseTracklist> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/tracklist`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchReleaseGallery(
+  bandId: number,
+  releaseId: string
+): Promise<import("./types").ReleaseGalleryPayload> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/gallery`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function searchArtistReleases(bandId: number, q: string) {
+  return request<{
+    releases: {
+      id: string;
+      title: string;
+      cover_url: string | null;
+      display_date: string | null;
+      category: string;
+    }[];
+    tracks: {
+      title: string;
+      play_path: string;
+      album_title: string | null;
+    }[];
+  }>(
+    `${API}/music/bands/${bandId}/releases/search?q=${encodeURIComponent(q)}`
+  );
+}
+
+export async function fetchTrackCredits(
+  bandId: number,
+  releaseId: string,
+  title: string
+): Promise<import("./types").TrackCredits> {
+  const q = new URLSearchParams({ title });
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/tracks/credits?${q}`
+  );
+}
+
+export async function addTrackToPlaylist(
+  playlistId: number,
+  body: { title: string; artist: string; release: string; path: string }
+) {
+  return request<{ ok: boolean; id?: number; duplicate?: boolean }>(
+    `${API}/music/playlists/${playlistId}/tracks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function fetchBandVideoIndex(
+  bandId: number
+): Promise<import("./types").MediaTabIndexPayload> {
+  return request(`${API}/music/bands/${bandId}/media/video`);
+}
+
+export async function fetchBandLibraryIndex(
+  bandId: number
+): Promise<import("./types").MediaTabIndexPayload> {
+  return request(`${API}/music/bands/${bandId}/media/library`);
+}
+
+export async function fetchQuizDiscography(bandId: number) {
+  return request<{
+    releases: { id: string; title: string; tracks: { title: string }[] }[];
+    is_solo: boolean;
+  }>(`${API}/music/bands/${bandId}/quiz/discography`);
+}
+
+export async function fetchQuizLineup(bandId: number) {
+  return request<{
+    members: {
+      id: number;
+      name: string;
+      photo_url?: string | null;
+      years?: string | null;
+      roles?: string[];
+      is_deceased?: boolean;
+    }[];
+    disabled?: boolean;
+  }>(`${API}/music/bands/${bandId}/quiz/lineup`);
+}
+
+export async function fetchQuizSongs(bandId: number, rounds = 10) {
+  return request<{
+    questions: {
+      play_path: string;
+      correct_title: string;
+      choices: {
+        title: string;
+        cover_url?: string | null;
+        release_date?: string | null;
+      }[];
+    }[];
+    rounds: number;
+  }>(`${API}/music/bands/${bandId}/quiz/songs?rounds=${rounds}`);
+}
+
+export async function fetchQuizScores(bandId: number) {
+  return request<import("./types").QuizScores>(
+    `${API}/music/bands/${bandId}/quiz/scores`
+  );
+}
+
+export async function fetchWordCloud(bandId: number) {
+  return request<import("./types").WordCloudPayload>(
+    `${API}/music/bands/${bandId}/word-cloud`
+  );
+}
+
+export async function prefetchWordCloud(bandId: number, maxTracks = 24) {
+  return request<import("./types").WordCloudPayload & { cached_tracks: number }>(
+    `${API}/music/bands/${bandId}/word-cloud/prefetch?max_tracks=${maxTracks}`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchMediaItemOverview(
+  bandId: number,
+  kind: "video" | "library",
+  itemId: string
+) {
+  return request<import("./types").MediaItemOverview>(
+    `${API}/music/bands/${bandId}/media/${kind}/${itemId}`
+  );
+}
+
+export async function saveQuizScore(
+  bandId: number,
+  body: {
+    quiz_type: string;
+    score: number;
+    total: number;
+    time_ms?: number;
+  }
+) {
+  return request<import("./types").QuizScoreEntry>(
+    `${API}/music/bands/${bandId}/quiz/scores`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function fetchTrackVersions(
+  bandId: number,
+  releaseId: string,
+  title: string,
+  playPath: string
+): Promise<{ title: string; versions: import("./types").TrackVersionItem[] }> {
+  const q = new URLSearchParams({ title, play_path: playPath });
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/tracks/versions?${q}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchReleaseLyrics(
+  bandId: number,
+  releaseId: string,
+  force = false
+): Promise<{
+  ok: boolean;
+  error?: string;
+  fetched?: number;
+  skipped?: number;
+  failed?: number;
+  not_found?: number;
+  items?: {
+    title: string;
+    status: string;
+    path?: string;
+    matched_title?: string;
+  }[];
+}> {
+  const q = force ? "?force=true" : "";
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/lyrics/fetch${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function refreshReleaseMetadata(
+  bandId: number,
+  releaseId: string,
+  includeWikipedia: boolean
+): Promise<{
+  ok: boolean;
+  refreshed_at?: string;
+  error?: string;
+  overview?: import("./types").ReleaseOverview;
+}> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/refresh-metadata`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ include_wikipedia: includeWikipedia }),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function patchReleaseOverview(
+  bandId: number,
+  releaseId: string,
+  body: {
+    description?: string | null;
+    producer?: string | null;
+    label?: string | null;
+    subgenres?: string[] | null;
+  }
+) {
+  return request<import("./types").ReleaseOverview>(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/overview`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function fetchTrackLyrics(
+  artist: string,
+  title: string,
+  playPath?: string
+) {
+  const q = new URLSearchParams({ artist, title });
+  if (playPath) q.set("play_path", playPath);
+  return request<{ artist: string; title: string; lyrics: string | null; source: string }>(
+    `${API}/music/lyrics?${q}`
+  );
+}
+
+export async function fetchBandPlaylistIndex(
+  id: number,
+  force = false
+): Promise<import("./types").PlaylistIndexPayload> {
+  const q = force ? "?force=true" : "";
+  return request(
+    `${API}/music/bands/${id}/media/playlists${q}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchBandPlaylistDetail(
+  bandId: number,
+  slug: string
+): Promise<import("./types").ArtistPlaylistDetail> {
+  return request(`${API}/music/bands/${bandId}/media/playlists/${slug}`);
 }
 
 export async function patchBandBio(id: number, bio: string) {

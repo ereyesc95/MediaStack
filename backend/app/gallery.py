@@ -10,6 +10,7 @@ Example: Music/H/HIM/Gallery/Photos/1997.00. Era, Landscape.jpg
 """
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 from collections import defaultdict
@@ -225,6 +226,81 @@ def resolve_artist_card(
         era_year=era_year,
         show_name_on_hover=show_name,
     )
+
+
+def _gallery_item_id(rel_path: str) -> str:
+    digest = hashlib.sha256(rel_path.casefold().encode("utf-8")).hexdigest()[:12]
+    return f"gal_{digest}"
+
+
+def _photo_title(path: Path) -> str:
+    stem = path.stem.strip()
+    m = re.match(r"^\d{4}(?:\.\d{2})?(?:\.\d{2})?\.\s*(.+)$", stem)
+    if not m:
+        return stem
+    title = ORIENTATION_RE.sub("", m.group(1)).strip(" ,")
+    return title or stem
+
+
+def _brand_sort_key(brand: EraBrand) -> tuple:
+    kind_order = 0 if brand.kind == "icon" else 1
+    return (brand.start, kind_order, brand.end, brand.path.name.casefold())
+
+
+def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
+    """List gallery photos and era logos/icons for the artist Gallery tab."""
+    empty = {"photos": [], "branding": [], "logos": [], "icons": []}
+    if not artist_name or not media_root.is_dir():
+        return empty
+
+    artist_dir = _artist_dir(media_root, artist_name)
+    if not artist_dir:
+        return empty
+
+    photos_out: list[dict] = []
+    for photo in sorted(
+        _list_photos(_gallery_subdir(artist_dir, "Photos")),
+        key=lambda p: (p.year, p.path.name.casefold()),
+    ):
+        rel = photo.path.relative_to(media_root).as_posix()
+        photos_out.append(
+            {
+                "id": _gallery_item_id(rel),
+                "url": _media_url(photo.path, media_root),
+                "year": photo.year,
+                "orientation": photo.orientation,
+                "title": _photo_title(photo.path),
+                "folder_path": rel,
+            }
+        )
+
+    branding_out: list[dict] = []
+    for brand in sorted(
+        _list_era_brands(_gallery_subdir(artist_dir, "Logos")),
+        key=_brand_sort_key,
+    ):
+        rel = brand.path.relative_to(media_root).as_posix()
+        branding_out.append(
+            {
+                "id": _gallery_item_id(rel),
+                "url": _media_url(brand.path, media_root),
+                "kind": brand.kind,
+                "start": brand.start,
+                "end": brand.end,
+                "label": f"{brand.start}–{brand.end}",
+                "folder_path": rel,
+            }
+        )
+
+    logos_out = [b for b in branding_out if b["kind"] == "logo"]
+    icons_out = [b for b in branding_out if b["kind"] == "icon"]
+
+    return {
+        "photos": photos_out,
+        "branding": branding_out,
+        "logos": logos_out,
+        "icons": icons_out,
+    }
 
 
 def pick_playlist_cover(artist_name: str | None, release_hint: str | None) -> str | None:

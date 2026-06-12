@@ -112,4 +112,18 @@ for decade in range(1950, 2030, 10):
     slug = f"{decade}s"
     save_gradient(dec_dir / f"{slug}.png", c1, c2)
 
+# Artist playlists → assets/system/playlists/
+PLAYLISTS = {
+    "top-tracks": ((48, 28, 72), (160, 90, 220), "TOP"),
+    "setlists": ((22, 42, 58), (0, 150, 170), "LIVE"),
+}
+playlist_dir = OUT / "playlists"
+playlist_dir.mkdir(exist_ok=True)
+for slug, (c1, c2, label) in PLAYLISTS.items():
+    img = gradient(512, 512, c1, c2)
+    d = ImageDraw.Draw(img)
+    d.text((256, 256), label, fill=(255, 255, 255), anchor="mm")
+    img.save(playlist_dir / f"{slug}.png", "PNG")
+    print("wrote", playlist_dir / f"{slug}.png")
+
 print("Done.")

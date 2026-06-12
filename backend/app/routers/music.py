@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -41,8 +41,33 @@ class RefreshMetadataBody(BaseModel):
     include_bio: bool = False
 
 
+class RefreshReleaseMetadataBody(BaseModel):
+    include_wikipedia: bool = True
+
+
+class AddPlaylistTrackBody(BaseModel):
+    title: str
+    artist: str
+    release: str = ""
+    path: str
+
+
+class QuizScoreBody(BaseModel):
+    quiz_type: str
+    score: int
+    total: int
+    time_ms: int = 0
+
+
 class PatchBioBody(BaseModel):
     bio: str
+
+
+class PatchReleaseBody(BaseModel):
+    description: str | None = None
+    producer: str | None = None
+    label: str | None = None
+    subgenres: list[str] | None = None
 
 
 class PatchBandAboutBody(BaseModel):
@@ -262,32 +287,484 @@ def get_band(band_id: int, db: Session = Depends(get_db)):
     return crud.band_to_out(row)
 
 
+@router.get("/bands/{band_id}/media/gallery")
+def band_gallery_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+):
+    from app.gallery import build_gallery_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        return {"photos": [], "branding": [], "logos": [], "icons": []}
+    return build_gallery_index(row.bnd_name, root)
+
+
+@router.get("/bands/{band_id}/media/audio")
+def band_audio_index(
+    band_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.database import SessionLocal
+    from app.media_index import get_audio_index, refresh_audio_index_cache
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_audio_index(db, row, force=force)
+    if data.get("stale"):
+
+        def _refresh() -> None:
+            bg = SessionLocal()
+            try:
+                refresh_audio_index_cache(bg, band_id)
+            finally:
+                bg.close()
+
+        background_tasks.add_task(_refresh)
+    return data
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/overview")
+def release_overview(
+    band_id: int,
+    release_id: str,
+    orientation: str = Query("landscape"),
+    db: Session = Depends(get_db),
+):
+    from app.release_overview import build_release_overview
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    card_orientation = "portrait" if orientation == "portrait" else "landscape"
+    data = build_release_overview(
+        db, band_id, release_id, card_orientation=card_orientation
+    )
+    if not data:
+        raise HTTPException(404, "Release not found")
+    return data
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/tracklist")
+def release_tracklist(
+    band_id: int,
+    release_id: str,
+    db: Session = Depends(get_db),
+):
+    from app.release_tracklist import build_release_tracklist
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = build_release_tracklist(db, band_id, release_id)
+    if not data:
+        raise HTTPException(404, "Tracklist not found")
+    return data
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/gallery")
+def release_gallery(
+    band_id: int,
+    release_id: str,
+    db: Session = Depends(get_db),
+):
+    from app.release_gallery import build_release_gallery
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = build_release_gallery(db, band_id, release_id)
+    if not data:
+        raise HTTPException(404, "Gallery not found")
+    return data
+
+
+@router.get("/bands/{band_id}/releases/search")
+def release_search(
+    band_id: int,
+    q: str = Query(..., min_length=2),
+    db: Session = Depends(get_db),
+):
+    from app.release_search import search_artist_media
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = search_artist_media(db, band_id, q)
+    if data is None:
+        raise HTTPException(404, "Artist not found")
+    return data
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/tracks/versions")
+def release_track_versions(
+    band_id: int,
+    release_id: str,
+    title: str = Query(..., min_length=1),
+    play_path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    from app.release_track_extras import find_track_versions
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    versions = find_track_versions(
+        db,
+        band_id,
+        title=title,
+        play_path=play_path,
+    )
+    return {"title": title, "versions": versions}
+
+
+@router.post("/bands/{band_id}/releases/{release_id}/refresh-metadata")
+async def release_refresh_metadata(
+    band_id: int,
+    release_id: str,
+    body: RefreshReleaseMetadataBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_metadata_refresh import refresh_release_metadata
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return await refresh_release_metadata(
+        db,
+        band_id,
+        release_id,
+        include_wikipedia=body.include_wikipedia,
+    )
+
+
+@router.patch("/bands/{band_id}/releases/{release_id}/overview")
+def patch_release_overview(
+    band_id: int,
+    release_id: str,
+    body: PatchReleaseBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_admin import patch_release_overview
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = patch_release_overview(
+        db,
+        band_id,
+        release_id,
+        description=body.description,
+        producer=body.producer,
+        label=body.label,
+        subgenres=body.subgenres,
+    )
+    if not data:
+        raise HTTPException(404, "Release not found")
+    return data
+
+
+@router.post("/bands/{band_id}/releases/{release_id}/lyrics/fetch")
+async def release_fetch_lyrics(
+    band_id: int,
+    release_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+    force: bool = Query(False),
+):
+    from app.release_lyrics_fetch import fetch_release_lyrics
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return await fetch_release_lyrics(db, band_id, release_id, force=force)
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/tracks/credits")
+def release_track_credits(
+    band_id: int,
+    release_id: str,
+    title: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    from app.release_track_credits import get_track_credits
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return get_track_credits(db, band_id, release_id, title=title)
+
+
+@router.get("/bands/{band_id}/media/video")
+def band_video_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.media_tabs_index import get_media_tab_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_media_tab_index(db, band_id, kind="video", force=force)
+    if not data:
+        raise HTTPException(404, "Video not found")
+    return data
+
+
+@router.get("/bands/{band_id}/media/library")
+def band_library_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.media_tabs_index import get_media_tab_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_media_tab_index(db, band_id, kind="library", force=force)
+    if not data:
+        raise HTTPException(404, "Library not found")
+    return data
+
+
+@router.get("/bands/{band_id}/word-cloud")
+def band_word_cloud(band_id: int, db: Session = Depends(get_db)):
+    from app.artist_word_cloud import build_word_cloud
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return build_word_cloud(db, row)
+
+
+@router.post("/bands/{band_id}/word-cloud/prefetch")
+async def band_word_cloud_prefetch(
+    band_id: int,
+    db: Session = Depends(get_db),
+    max_tracks: int = Query(24, ge=1, le=60),
+):
+    from app.artist_word_cloud import build_word_cloud, prefetch_lyrics_for_cloud
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    cached = await prefetch_lyrics_for_cloud(db, row, max_tracks=max_tracks)
+    cloud = build_word_cloud(db, row)
+    return {"cached_tracks": cached, **cloud}
+
+
+@router.get("/bands/{band_id}/media/{kind}/{item_id}")
+def band_media_item(
+    band_id: int,
+    kind: str,
+    item_id: str,
+    db: Session = Depends(get_db),
+):
+    from app.media_item_overview import build_media_item_overview
+
+    if kind not in ("video", "library"):
+        raise HTTPException(404, "Not found")
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = build_media_item_overview(db, band_id, kind, item_id)
+    if not data:
+        raise HTTPException(404, "Item not found")
+    return data
+
+
+@router.get("/bands/{band_id}/quiz/discography")
+def quiz_discography(band_id: int, db: Session = Depends(get_db)):
+    from app.artist_quiz import build_discography_quiz
+
+    data = build_discography_quiz(db, band_id)
+    if not data:
+        raise HTTPException(404, "Band not found")
+    return data
+
+
+@router.get("/bands/{band_id}/quiz/lineup")
+def quiz_lineup(band_id: int, db: Session = Depends(get_db)):
+    from app.artist_quiz import build_lineup_quiz
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    root = Path(settings.media_root) if settings.media_root else Path()
+    data = build_lineup_quiz(db, band_id, root)
+    if not data:
+        raise HTTPException(404, "Band not found")
+    return data
+
+
+@router.get("/bands/{band_id}/quiz/songs")
+def quiz_songs(
+    band_id: int,
+    rounds: int = 10,
+    db: Session = Depends(get_db),
+):
+    from app.artist_quiz import build_songs_quiz
+
+    data = build_songs_quiz(db, band_id, rounds=max(1, min(rounds, 20)))
+    if not data:
+        raise HTTPException(404, "Band not found")
+    return data
+
+
+@router.get("/bands/{band_id}/quiz/scores")
+def quiz_scores(
+    band_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.artist_quiz import load_scores
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return load_scores(user.usr_id, band_id)
+
+
+@router.post("/bands/{band_id}/quiz/scores")
+def quiz_save_score(
+    band_id: int,
+    body: QuizScoreBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.artist_quiz import save_score
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return save_score(
+        user.usr_id,
+        band_id,
+        quiz_type=body.quiz_type,
+        score=body.score,
+        total=body.total,
+        time_ms=body.time_ms,
+    )
+
+
+@router.get("/bands/{band_id}/media/playlists")
+def band_playlist_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.playlist_index import get_playlist_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return get_playlist_index(db, row, force=force)
+
+
+@router.get("/bands/{band_id}/media/playlists/{slug}")
+def band_playlist_detail(
+    band_id: int,
+    slug: str,
+    db: Session = Depends(get_db),
+):
+    from app.playlist_index import get_playlist_index, get_top_tracks_playlist_tracks
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        raise HTTPException(404, "Playlist not found")
+
+    if slug == "top-tracks":
+        tracks = get_top_tracks_playlist_tracks(row, root)
+        if not tracks:
+            raise HTTPException(404, "Playlist not found")
+        return {"slug": slug, "name": "Top Tracks", "tracks": tracks}
+
+    if slug == "setlists":
+        from app.playlist_index import _build_setlists_detail
+
+        detail = _build_setlists_detail(db, row, root)
+        if not detail:
+            raise HTTPException(404, "Playlist not found")
+        return detail
+
+    from app.playlist_index import get_suffix_playlist_tracks
+
+    suffix_tracks = get_suffix_playlist_tracks(db, row, root, slug)
+    if suffix_tracks:
+        from app.cross_artist_playlists import CROSS_PLAYLIST_LABELS
+        from app.system_playlists import ORIGINALS_SLUG, PLAYLIST_RULES
+
+        name = CROSS_PLAYLIST_LABELS.get(slug)
+        if not name:
+            name = next((label for s, label, _ in PLAYLIST_RULES if s == slug), None)
+        if not name and slug == ORIGINALS_SLUG:
+            name = "Originals"
+        if not name:
+            name = slug
+        return {"slug": slug, "name": name, "tracks": suffix_tracks}
+
+    raise HTTPException(404, "Playlist not found")
+
+
 @router.get("/bands/{band_id}/overview")
-async def band_overview(
+def band_overview(
     band_id: int,
     orientation: str = Query("landscape"),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    from app.band_lineup_import import ensure_lineup_imported_sync, import_band_lineup
-    from app.band_overview import build_band_overview
+    from app.band_overview import get_band_overview
     from app.crud import get_band
 
     row = get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
-    if not row.bnd_lineup_imported_at and row.bnd_code:
-        result = await import_band_lineup(db, row, replace_non_manual=True)
-        if not result.get("ok"):
-            ensure_lineup_imported_sync(db, row)  # fallback no-op path
     admin = is_admin_role(user.usr_role_id) if user else False
     card_orientation = "portrait" if orientation == "portrait" else "landscape"
-    data = build_band_overview(
+    data = get_band_overview(
         db, band_id, is_admin=admin, card_orientation=card_orientation
     )
     if not data:
         raise HTTPException(404, "Band not found")
     return data
+
+
+@router.post("/bands/{band_id}/import-lineup")
+async def band_import_lineup(
+    band_id: int,
+    db: Session = Depends(get_db),
+):
+    """First-visit MusicBrainz lineup import. Skips if already stored in DB."""
+    from app.band_lineup_import import import_band_lineup
+    from app.band_overview import _is_solo
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    if row.bnd_lineup_imported_at:
+        return {
+            "ok": True,
+            "skipped": True,
+            "imported_at": row.bnd_lineup_imported_at,
+        }
+    if not row.bnd_code:
+        return {"ok": False, "error": "No MusicBrainz ID on band"}
+    if _is_solo(db, row):
+        return {"ok": False, "error": "Solo artist — no band lineup"}
+    return await import_band_lineup(db, row, replace_non_manual=True)
 
 
 @router.get("/artists/{artist_id}")
@@ -474,6 +951,9 @@ def patch_band_about_endpoint(
         activity_start=body.activity_start,
         activity_end=body.activity_end,
     )
+    from app.band_overview_cache import invalidate_overview_cache
+
+    invalidate_overview_cache(band_id)
     return {"ok": True}
 
 
@@ -488,7 +968,11 @@ async def band_refresh_lineup(
     row = crud.get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
-    return await import_band_lineup(db, row, replace_non_manual=True)
+    from app.band_overview_cache import invalidate_overview_cache
+
+    result = await import_band_lineup(db, row, replace_non_manual=True)
+    invalidate_overview_cache(band_id)
+    return result
 
 
 @router.get("/filters/link-catalog")
@@ -1007,6 +1491,28 @@ def user_playlists(
             is_admin=is_admin_role(user.usr_role_id),
         )
     }
+
+
+@router.post("/playlists/{playlist_id}/tracks")
+def add_playlist_track(
+    playlist_id: int,
+    body: AddPlaylistTrackBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.user_playlist import add_track_to_playlist
+
+    result = add_track_to_playlist(
+        db,
+        playlist_id,
+        title=body.title,
+        artist=body.artist,
+        release=body.release,
+        path=body.path,
+    )
+    if not result.get("ok"):
+        raise HTTPException(404, result.get("error") or "Failed")
+    return result
 
 
 @router.get("/playlists/{playlist_id}/tracks")

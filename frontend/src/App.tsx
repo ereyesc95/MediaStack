@@ -130,6 +130,9 @@ export default function App() {
         bandId: route.bandId,
         artistSection: route.section,
         artistOverviewTab: route.overviewTab,
+        releaseId: route.releaseId,
+        releaseTab: route.releaseTab,
+        mediaItemId: route.mediaItemId,
       });
     }
     init();
@@ -147,6 +150,9 @@ export default function App() {
                 bandId: route.bandId,
                 artistSection: route.section,
                 artistOverviewTab: route.overviewTab,
+                releaseId: route.releaseId,
+                releaseTab: route.releaseTab,
+                mediaItemId: route.mediaItemId,
               }
             : {
                 kind: "music",
@@ -154,6 +160,9 @@ export default function App() {
                 bandId: route.bandId,
                 artistSection: route.section,
                 artistOverviewTab: route.overviewTab,
+                releaseId: route.releaseId,
+                releaseTab: route.releaseTab,
+                mediaItemId: route.mediaItemId,
               }
         );
       } else if (window.location.pathname === "/" || window.location.pathname === "") {
@@ -421,6 +430,12 @@ export default function App() {
 
             artistOverviewTab={view.artistOverviewTab}
 
+            releaseId={view.releaseId}
+
+            releaseTab={view.releaseTab}
+
+            mediaItemId={view.mediaItemId}
+
             playlistId={view.playlistId}
 
             genreFilterId={view.genreFilterId}
@@ -451,12 +466,16 @@ export default function App() {
                       tab: "artists",
                       artistSection: "overview",
                       artistOverviewTab: "about",
+                      releaseId: undefined,
+                      releaseTab: undefined,
                     }
                   : {
                       bandId: undefined,
                       tab: "artists",
                       artistSection: undefined,
                       artistOverviewTab: undefined,
+                      releaseId: undefined,
+                      releaseTab: undefined,
                     }
               )
             }
@@ -465,6 +484,29 @@ export default function App() {
               openMusic({
                 artistSection: section,
                 artistOverviewTab: overviewTab,
+                releaseId: undefined,
+                releaseTab: undefined,
+                mediaItemId: undefined,
+              })
+            }
+
+            onMediaItemNavigate={(itemId, section) =>
+              openMusic({
+                mediaItemId: itemId,
+                artistSection: section ?? view.artistSection ?? "video",
+                tab: "artists",
+                releaseId: undefined,
+                releaseTab: undefined,
+              })
+            }
+
+            onReleaseNavigate={(releaseId, releaseTab, patchBandId) =>
+              openMusic({
+                releaseId,
+                releaseTab: releaseTab ?? "overview",
+                artistSection: "audio",
+                tab: "artists",
+                ...(patchBandId !== undefined ? { bandId: patchBandId } : {}),
               })
             }
 

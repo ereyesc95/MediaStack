@@ -8,7 +8,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.band_library import match_top_tracks, scan_audio_library
+from app.band_library import match_top_tracks
+from app.media_index import media_visibility_flags
 from app.config import settings
 from app.gallery import (
     EraBrand,
@@ -21,6 +22,7 @@ from app.gallery import (
 )
 from app.models import Artist, ArtistParticipation, ArtistType, Band, Country, Subgenre
 from app.music_dashboard import _parse_country_id, _resolve_subgenre_name
+from app.label_assets import label_logo_url
 from app.music_filters import _parse_ids, is_catalog_label
 
 LINK_CATEGORIES: dict[str, tuple[str, ...]] = {
@@ -415,9 +417,14 @@ def build_band_overview(
     )
 
     top_tracks: list[dict] = []
-    audio_library: dict[str, list[dict]] = {k: [] for k in (
-        "albums", "extended_plays", "compilations", "soundtracks", "live_albums", "singles"
-    )}
+    media: dict = {
+        "has_audio": False,
+        "has_video": False,
+        "has_library": False,
+        "has_gallery": False,
+        "has_playlists": False,
+        "audio_categories": [],
+    }
     eras: list[dict] = []
 
     if root:
@@ -429,11 +436,16 @@ def build_band_overview(
             top_titles=band.bnd_top_100,
             limit=5,
         )
-        audio_library = scan_audio_library(band.bnd_name, root)
+        media = media_visibility_flags(band.bnd_name, root, db=db, band=band)
 
     lineup = _build_lineup(db, band, root)
     solo = _is_solo(db, band)
-    show_lineup = not solo and bool(lineup.get("all"))
+    needs_lineup_import = bool(
+        band.bnd_code and not band.bnd_lineup_imported_at and not solo
+    )
+    show_lineup = not solo and (
+        bool(lineup.get("all")) or needs_lineup_import
+    )
     solo_performer = _solo_performer(db, band, root) if solo else None
 
     from app.entity_links import links_payload_for_band
@@ -470,7 +482,10 @@ def build_band_overview(
             band.bnd_starting_dates, band.bnd_ending_dates
         ),
         "subgenres": _resolve_subgenres(db, band),
-        "labels": _resolve_labels(db, band.bnd_id),
+        "labels": (
+            label_names := _resolve_labels(db, band.bnd_id)
+        ),
+        "label_logos": {name: label_logo_url(name) for name in label_names},
         "eras": eras,
         "top_tracks": top_tracks,
         "links": links,
@@ -479,7 +494,83 @@ def build_band_overview(
         "solo_performer": solo_performer,
         "is_solo": solo,
         "related": related,
-        "audio": audio_library,
+        "media": media,
         "metadata_refreshed_at": band.bnd_metadata_refreshed_at,
         "library_scanned_at": band.bnd_library_scanned_at,
+        "needs_lineup_import": needs_lineup_import,
     }
+
+
+def _overview_media_mtimes(band: Band, root: Path | None) -> tuple[float, float]:
+    gallery_mtime = 0.0
+    audio_mtime = 0.0
+    if not root:
+        return gallery_mtime, audio_mtime
+    artist_dir = _artist_dir(root, band.bnd_name)
+    if not artist_dir:
+        return gallery_mtime, audio_mtime
+    from app.media_index import _audio_mtime
+
+    audio_mtime = _audio_mtime(artist_dir)
+    photos = _gallery_subdir(artist_dir, "Photos")
+    if photos.is_dir():
+        try:
+            gallery_mtime = photos.stat().st_mtime
+        except OSError:
+            pass
+    return gallery_mtime, audio_mtime
+
+
+def get_band_overview(
+    db: Session,
+    band_id: int,
+    *,
+    is_admin: bool = False,
+    card_orientation: str = "landscape",
+) -> dict | None:
+    from app.band_overview_cache import (
+        cache_fingerprint,
+        load_cached_overview,
+        save_cached_overview,
+    )
+
+    band = db.get(Band, band_id)
+    if not band:
+        return None
+
+    media_root = Path(settings.media_root) if settings.media_root else None
+    root = media_root if media_root and media_root.is_dir() else None
+    gallery_mtime, audio_mtime = _overview_media_mtimes(band, root)
+    fingerprint = cache_fingerprint(
+        library_scanned_at=band.bnd_library_scanned_at,
+        metadata_refreshed_at=band.bnd_metadata_refreshed_at,
+        lineup_imported_at=band.bnd_lineup_imported_at,
+        gallery_mtime=gallery_mtime,
+        audio_mtime=audio_mtime,
+    )
+
+    cached = load_cached_overview(
+        band_id, card_orientation, fingerprint=fingerprint
+    )
+    if cached is not None:
+        cached = dict(cached)
+        cached["cached"] = True
+        return cached
+
+    data = build_band_overview(
+        db,
+        band_id,
+        is_admin=is_admin,
+        card_orientation=card_orientation,
+    )
+    if data is None:
+        return None
+    data = dict(data)
+    data["cached"] = False
+    save_cached_overview(
+        band_id,
+        card_orientation,
+        fingerprint=fingerprint,
+        data=data,
+    )
+    return data
