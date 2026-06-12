@@ -112,6 +112,7 @@ def _band_matches_country(b: Band, country_ids: set[int]) -> bool:
 
 
 def _play_counts(db: Session, user_id: int) -> Counter[int]:
+    from app.play_stats import is_quiz_play_title
     from app.profile_scope import rep_user_filter
 
     counts: Counter[int] = Counter()
@@ -121,13 +122,14 @@ def _play_counts(db: Session, user_id: int) -> Counter[int]:
             rep_user_filter(user_id),
         )
     ).all():
-        if not r.rep_artist_id:
+        if not r.rep_artist_id or is_quiz_play_title(r.rep_title):
             continue
         try:
             n = int(r.rep_reproductions or "0")
         except ValueError:
             n = 1
-        counts[r.rep_artist_id] += n or 1
+        if n > 0:
+            counts[r.rep_artist_id] += n
     return counts
 
 

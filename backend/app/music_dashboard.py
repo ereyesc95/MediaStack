@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.band_library import cover_url_for_track_path, title_from_track_path
+from app.config import settings
 from app.gallery import pick_playlist_cover, resolve_artist_card
 from app.models import Band, Country, Genre, Playlist, PlaylistData, Reproduction, Subgenre
+from app.play_stats import is_quiz_play_title, subgenre_image_url
 
 FEAT_RE = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?|featuring)[^\)\]]*[\)\]]", re.I)
 
@@ -58,6 +62,24 @@ def _country_info(db: Session, country_field: str | None) -> tuple[str | None, s
     return None, None
 
 
+def _effective_track_title(r: Reproduction) -> str:
+    raw = r.rep_title or ""
+    if is_quiz_play_title(raw) and r.rep_path:
+        from_path = title_from_track_path(r.rep_path)
+        if from_path:
+            return from_path
+    return raw
+
+
+def _dashboard_rep_weight(r: Reproduction) -> int:
+    if is_quiz_play_title(r.rep_title):
+        return 0
+    try:
+        return int(r.rep_reproductions or "0")
+    except ValueError:
+        return 0
+
+
 def build_dashboard(db: Session, user_id: int) -> dict:
     from app.profile_scope import rep_user_filter
 
@@ -74,12 +96,15 @@ def build_dashboard(db: Session, user_id: int) -> dict:
     )
 
     def plays(r: Reproduction) -> int:
-        try:
-            return int(r.rep_reproductions or "0")
-        except ValueError:
-            return 0
+        return _dashboard_rep_weight(r)
 
-    reps_sorted = sorted(reps, key=plays, reverse=True)
+    reps_sorted = sorted(
+        [r for r in reps if plays(r) > 0 and not is_quiz_play_title(r.rep_title)],
+        key=plays,
+        reverse=True,
+    )
+
+    media_root = Path(settings.media_root) if settings.media_root else None
 
     top_tracks = []
     for r in reps_sorted[:10]:
@@ -87,7 +112,10 @@ def build_dashboard(db: Session, user_id: int) -> dict:
         if r.rep_artist_id:
             band = db.get(Band, r.rep_artist_id)
             artist_name = band.bnd_name if band else None
-        raw_title = r.rep_title or ""
+        raw_title = _effective_track_title(r)
+        cover_url = (
+            cover_url_for_track_path(r.rep_path, media_root) if media_root else None
+        )
         top_tracks.append(
             {
                 "id": r.rep_id,
@@ -99,13 +127,14 @@ def build_dashboard(db: Session, user_id: int) -> dict:
                 "play_count": plays(r),
                 "path": r.rep_path,
                 "release": r.rep_release,
+                "cover_url": cover_url,
             }
         )
 
     artist_counts: Counter[int] = Counter()
     for r in reps:
-        if r.rep_artist_id:
-            artist_counts[r.rep_artist_id] += plays(r) or 1
+        if r.rep_artist_id and plays(r) > 0 and not is_quiz_play_title(r.rep_title):
+            artist_counts[r.rep_artist_id] += plays(r)
 
     top_artists = []
     for aid, count in artist_counts.most_common(10):
@@ -144,7 +173,14 @@ def build_dashboard(db: Session, user_id: int) -> dict:
     for gid, count in genre_counts.most_common(10):
         name = _resolve_subgenre_name(db, gid)
         if name:
-            top_genres.append({"id": gid, "name": name, "play_count": count})
+            top_genres.append(
+                {
+                    "id": gid,
+                    "name": name,
+                    "play_count": count,
+                    "image_url": subgenre_image_url(name),
+                }
+            )
 
     top_countries = []
     for cid, count in country_counts.most_common(10):

@@ -26,15 +26,16 @@ def play_track(
     title = body.title
     if not title and "/" in body.path:
         title = Path(body.path.split("/")[-1]).stem[4:] if len(Path(body.path.split("/")[-1]).stem) > 4 else Path(body.path.split("/")[-1]).stem
-    crud.record_play(
-        db,
-        path=body.path,
-        artist_id=body.artist_id,
-        title=title,
-        release=body.release,
-        media_type=body.media_type,
-        user_id=user.usr_id,
-    )
+    if body.record:
+        crud.record_play(
+            db,
+            path=body.path,
+            artist_id=body.artist_id,
+            title=title,
+            release=body.release,
+            media_type=body.media_type,
+            user_id=user.usr_id,
+        )
     return PlayResponse(
         stream_url=stream,
         local_file=str(local) if local else None,
@@ -73,6 +74,8 @@ def recent_plays(
     user: User = Depends(get_current_user),
 ):
     rows = crud.list_recent_plays(db, user_id=user.usr_id, limit=limit)
+    from app.play_stats import is_quiz_play_title
+
     return [
         ReproductionOut(
             id=r.rep_id,
@@ -82,6 +85,7 @@ def recent_plays(
             path=r.rep_path,
         )
         for r in rows
+        if not is_quiz_play_title(r.rep_title)
     ]
 
 

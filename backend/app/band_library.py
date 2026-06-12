@@ -100,6 +100,24 @@ def _find_cover_front_artwork(track_dir: Path, media_root: Path) -> str | None:
     return None
 
 
+def title_from_track_path(path: str | None) -> str:
+    if not path:
+        return ""
+    name = Path(path.replace("\\", "/")).name
+    stem = Path(name).stem
+    return TRACK_PREFIX_RE.sub("", stem).strip()
+
+
+def cover_url_for_track_path(path: str | None, media_root: Path) -> str | None:
+    if not path:
+        return None
+    root = media_root.resolve()
+    file_path = (root / path.replace("\\", "/")).resolve()
+    if not str(file_path).startswith(str(root)) or not file_path.is_file():
+        return None
+    return _find_cover_front_artwork(file_path.parent, root)
+
+
 def _album_title_from_folder(name: str) -> str:
     m = DATE_PREFIX_RE.match(name.strip())
     if m:

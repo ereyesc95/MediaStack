@@ -184,6 +184,7 @@ class PlayRequest(BaseModel):
     title: str | None = None
     release: str | None = None
     media_type: int = 200
+    record: bool = True
 
 
 class PlayResponse(BaseModel):

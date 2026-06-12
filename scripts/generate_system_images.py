@@ -79,6 +79,7 @@ for slug, colors in CONTINENTS.items():
     save_gradient(cont_dir / f"{slug}.png", colors[0], colors[1])
 
 # Parent music genres → assets/system/genre/
+# Subgenre artwork (Music Vibes pane) → assets/system/subgenre/{slug}.png
 GENRES = {
     "blues": ((30, 40, 80), (80, 100, 200)),
     "classical": ((50, 35, 60), (160, 120, 180)),

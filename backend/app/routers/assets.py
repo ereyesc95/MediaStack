@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["assets"])
 SYSTEM_DIR = PROJECT_ROOT / "assets" / "system"
 MEDIA_SLUGS = ("music", "series", "movies", "books", "games")
 PANE_SLUGS = ("pane-on-repeat", "pane-icons", "pane-vibes", "pane-global")
-NESTED_PREFIXES = ("continent", "genre", "decade")
+NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade")
 
 
 def _first_existing(base: Path, stem: str) -> Path | None:

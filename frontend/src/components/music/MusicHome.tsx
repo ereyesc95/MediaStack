@@ -275,7 +275,14 @@ export default function MusicHome({
               }
             >
               <span className="dash-track-art">
-                <span className="dash-track-art-bg card-bg-layer" />
+                <span
+                  className="dash-track-art-bg card-bg-layer"
+                  style={
+                    t.cover_url
+                      ? { backgroundImage: `url("${t.cover_url}")` }
+                      : undefined
+                  }
+                />
               </span>
               <BillboardText
                 className="dash-track-title"
@@ -335,7 +342,14 @@ export default function MusicHome({
               onClick={() => onGenre(Number(g.id))}
             >
               <span className="dash-genre-ring">
-                <span className="dash-genre-ring-bg card-bg-layer" />
+                <span
+                  className="dash-genre-ring-bg card-bg-layer"
+                  style={
+                    g.image_url
+                      ? { backgroundImage: `url("${g.image_url}")` }
+                      : undefined
+                  }
+                />
               </span>
               <span className="dash-item-label">{g.name}</span>
             </button>

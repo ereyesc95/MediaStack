@@ -340,6 +340,7 @@ def record_play(
     media_type: int,
     user_id: int,
 ) -> Reproduction:
+    from app.play_stats import is_quiz_play_title
     from app.profile_scope import rep_user_filter
     from app.profiles import ADMIN_USER_ID
 
@@ -349,11 +350,31 @@ def record_play(
     )
     row = db.scalar(q)
     if row:
-        count = int(row.rep_reproductions or "0") + 1
-        row.rep_reproductions = str(count)
+        if title and not is_quiz_play_title(title):
+            if is_quiz_play_title(row.rep_title):
+                row.rep_title = title
+                if release:
+                    row.rep_release = release
+                row.rep_reproductions = "1"
+            else:
+                count = int(row.rep_reproductions or "0") + 1
+                row.rep_reproductions = str(count)
+        elif not is_quiz_play_title(row.rep_title):
+            count = int(row.rep_reproductions or "0") + 1
+            row.rep_reproductions = str(count)
         db.commit()
         db.refresh(row)
         return row
+    if is_quiz_play_title(title):
+        return Reproduction(
+            rep_id=0,
+            rep_title=title,
+            rep_artist_id=artist_id,
+            rep_release=release,
+            rep_media_type=media_type,
+            rep_reproductions="0",
+            rep_path=path,
+        )
     max_id = db.scalar(select(func.max(Reproduction.rep_id))) or 0
     row = Reproduction(
         rep_id=max_id + 1,

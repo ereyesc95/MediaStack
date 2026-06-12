@@ -838,6 +838,7 @@ export async function playTrack(body: {
   artist_id?: number;
   title?: string;
   release?: string;
+  record?: boolean;
 }) {
   return request<{ stream_url: string; title?: string }>(`${API}/music/play`, {
     method: "POST",

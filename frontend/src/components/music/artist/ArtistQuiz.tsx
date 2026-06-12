@@ -416,7 +416,7 @@ export default function ArtistQuiz({
   const playSnippet = useCallback(
     async (path: string) => {
       try {
-        const res = await playTrack({ path, artist_id: bandId, title: "Quiz" });
+        const res = await playTrack({ path, artist_id: bandId, record: false });
         quizAudio.loadSrc(res.stream_url, true);
       } catch {
         /* ignore */
@@ -1004,10 +1004,7 @@ export default function ArtistQuiz({
       )}
 
       {phase === "playing" && mode === "songs" && songQuestions[songRound] && (
-        <div
-          key={`songs-round-${songRound}`}
-          className="artist-quiz__panel artist-quiz__panel--songs"
-        >
+        <div className="artist-quiz__panel artist-quiz__panel--songs">
           <div className="artist-quiz__songs-head">
             <div className="artist-quiz__songs-head-right">
               <span className="artist-quiz__timer-label">

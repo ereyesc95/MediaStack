@@ -113,12 +113,18 @@ export type DashboardTrack = {
   play_count: number;
   path: string | null;
   release: string | null;
+  cover_url?: string | null;
 };
 
 export type MusicDashboard = {
   top_tracks: DashboardTrack[];
   top_artists: ArtistCard[];
-  top_genres: { id: number | string; name: string; play_count: number }[];
+  top_genres: {
+    id: number | string;
+    name: string;
+    play_count: number;
+    image_url?: string | null;
+  }[];
   top_countries: { id?: number; name: string; play_count: number; iso: string }[];
 };
 
