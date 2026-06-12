@@ -89,7 +89,7 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
           <button
             key={item.id}
             type="button"
-            className="media-release-card artist-media-grid__card"
+            className="media-release-card artist-media-grid__card media-beat-frame media-beat-frame--cover"
             onClick={() => onOpenItem?.(item.id)}
           >
             <div

@@ -5,23 +5,50 @@ import {
   fetchQuizLineup,
   fetchQuizScores,
   fetchQuizSongs,
+  playTrack,
   saveQuizScore,
 } from "../../../api";
+import { useBeatPulse } from "../../../useBeatPulse";
 import type { QuizScoreEntry, QuizScores } from "../../../types";
+import { useMiniAudio } from "./MiniAudioPlayer";
+
+export type QuizMode = "discography" | "lineup" | "songs";
+
+export const QUIZ_MODES: {
+  id: QuizMode;
+  label: string;
+  soloHidden?: boolean;
+}[] = [
+  { id: "discography", label: "DISCOGRAPHY" },
+  { id: "lineup", label: "LINEUP", soloHidden: true },
+  { id: "songs", label: "SONGS" },
+];
 
 type Props = {
   bandId: number;
   isSolo: boolean;
-  onPlaySnippet: (path: string) => void;
+  mode: QuizMode;
+  onModeChange: (mode: QuizMode) => void;
+  /** Stops artist-page playback so quiz audio (songs mode) does not overlap. */
+  onStopPageAudio?: () => void;
+  onSongsBeatChange?: (active: boolean, playing: boolean) => void;
 };
 
-type QuizMode = "discography" | "lineup" | "songs";
+const QUIZ_INTROS: Record<QuizMode, string> = {
+  discography:
+    "Every release and track title is hiding in the tables. Type a name from memory and watch the puzzle unlock — race the clock to reveal them all.",
+  lineup:
+    "Empty circles wait for each member. Type a name and their photo, role, and years snap into place. How fast can you complete the roster?",
+  songs:
+    "Study the covers, trust your ears, and pick the right song before moving on. Each round plays a different track.",
+};
+
 type Phase = "loading" | "ready" | "playing" | "finished";
 
 type DiscographyRelease = {
   id: string;
   title: string;
-  tracks: { title: string }[];
+  tracks: { title: string; number: number }[];
 };
 
 type LineupMember = {
@@ -34,6 +61,8 @@ type LineupMember = {
 };
 
 type SongChoice = {
+  id: string;
+  play_path?: string;
   title: string;
   cover_url?: string | null;
   release_date?: string | null;
@@ -47,6 +76,8 @@ type SongQuestion = {
 
 const SONG_ROUNDS = 10;
 const DISCO_COLUMNS = 3;
+const SONG_CHOICE_COUNT = 3;
+const SONG_ROUND_DELAY_MS = 650;
 
 function normalizeGuess(text: string): string {
   return text
@@ -58,8 +89,22 @@ function normalizeGuess(text: string): string {
     .trim();
 }
 
+function stripBracketSuffixes(title: string): string {
+  return title.replace(/\s*\[[^\]]*\]/g, "").trim();
+}
+
+/** Title shown in quiz tables and song choices (no bracket suffixes). */
+function quizDisplayTitle(title: string): string {
+  return stripBracketSuffixes(title);
+}
+
+function normalizeQuizMatch(text: string): string {
+  const stripped = stripBracketSuffixes(text).replace(/[()]/g, "");
+  return normalizeGuess(stripped);
+}
+
 function matchesGuess(guess: string, answer: string): boolean {
-  return normalizeGuess(guess) === normalizeGuess(answer);
+  return normalizeQuizMatch(guess) === normalizeQuizMatch(answer);
 }
 
 function formatQuizTime(ms: number): string {
@@ -67,6 +112,22 @@ function formatQuizTime(ms: number): string {
   const mins = Math.floor(totalSec / 60);
   const secs = totalSec % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatQuizTrackNum(n: number): string {
+  return String(Math.max(1, n)).padStart(2, "0");
+}
+
+function normalizeDiscographyReleases(
+  releases: { id: string; title: string; tracks: { title: string; number?: number }[] }[]
+): DiscographyRelease[] {
+  return releases.map((rel) => ({
+    ...rel,
+    tracks: rel.tracks.map((t, i) => ({
+      title: t.title,
+      number: t.number ?? i + 1,
+    })),
+  }));
 }
 
 function splitRows<T>(items: T[]): { top: T[]; bottom: T[] } {
@@ -91,6 +152,95 @@ function initials(name: string): string {
 
 function quizTimeLimitMs(totalItems: number): number {
   return Math.max(180_000, totalItems * 12_000);
+}
+
+function scrollRevealIntoView(
+  container: HTMLElement | null,
+  target: string
+) {
+  if (!container) return;
+  const el = container.querySelector<HTMLElement>(
+    `[data-quiz-target="${CSS.escape(target)}"]`
+  );
+  if (!el) return;
+  requestAnimationFrame(() => {
+    const pad = 16;
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const visible =
+      eRect.top >= cRect.top + pad && eRect.bottom <= cRect.bottom - pad;
+    if (!visible) {
+      const elTop =
+        el.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop;
+      const next = elTop - (container.clientHeight - el.offsetHeight) / 2;
+      container.scrollTo({
+        top: Math.max(0, next),
+        behavior: "smooth",
+      });
+    }
+  });
+}
+
+type QuizControlBarProps = {
+  guessInputRef: React.RefObject<HTMLInputElement | null>;
+  placeholder: string;
+  guessInput: string;
+  onGuessChange: (value: string) => void;
+  timerProgress: number | null;
+  timeLimitMs: number | null;
+  elapsedMs: number;
+  onFinish: () => void;
+};
+
+function QuizControlBar({
+  guessInputRef,
+  placeholder,
+  guessInput,
+  onGuessChange,
+  timerProgress,
+  timeLimitMs,
+  elapsedMs,
+  onFinish,
+}: QuizControlBarProps) {
+  return (
+    <div className="artist-quiz__chrome">
+      <div className="artist-quiz__input-row">
+        <input
+          ref={guessInputRef}
+          type="text"
+          className="artist-quiz__guess-input"
+          placeholder={placeholder}
+          value={guessInput}
+          onChange={(e) => onGuessChange(e.target.value)}
+          autoFocus
+        />
+        <div className="artist-quiz__timer" aria-hidden>
+          <div
+            className="artist-quiz__timer-bar"
+            style={
+              timerProgress != null
+                ? { width: `${(1 - timerProgress) * 100}%` }
+                : undefined
+            }
+          />
+          <span className="artist-quiz__timer-label">
+            {timeLimitMs != null
+              ? formatQuizTime(Math.max(0, timeLimitMs - elapsedMs))
+              : formatQuizTime(elapsedMs)}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="artist-quiz__finish"
+          onClick={onFinish}
+        >
+          Finish
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ScoreSummary({
@@ -136,8 +286,14 @@ function ScoreSummary({
   );
 }
 
-export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
-  const [mode, setMode] = useState<QuizMode>("discography");
+export default function ArtistQuiz({
+  bandId,
+  isSolo,
+  mode,
+  onModeChange,
+  onStopPageAudio,
+  onSongsBeatChange,
+}: Props) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [error, setError] = useState<string | null>(null);
   const [scores, setScores] = useState<QuizScores>({});
@@ -160,6 +316,45 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
   const [songRound, setSongRound] = useState(0);
   const [songCorrect, setSongCorrect] = useState(0);
   const [songPicked, setSongPicked] = useState<string | null>(null);
+  const songQuestionsRef = useRef(songQuestions);
+  const songRoundRef = useRef(songRound);
+  const songCorrectRef = useRef(songCorrect);
+  const songAdvanceRef = useRef<number | null>(null);
+  const songAnsweringRef = useRef(false);
+  const guessInputRef = useRef<HTMLInputElement>(null);
+  const discoScrollRef = useRef<HTMLDivElement>(null);
+  const lineupScrollRef = useRef<HTMLDivElement>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(
+    null
+  );
+
+  songQuestionsRef.current = songQuestions;
+  songRoundRef.current = songRound;
+  songCorrectRef.current = songCorrect;
+
+  const quizAudio = useMiniAudio();
+  useBeatPulse(
+    quizAudio.audioRef,
+    phase === "playing" && mode === "songs" && Boolean(quizAudio.src),
+    quizAudio.playing
+  );
+
+  useEffect(() => {
+    if (!onSongsBeatChange) return;
+    const active =
+      phase === "playing" && mode === "songs" && Boolean(quizAudio.src);
+    onSongsBeatChange(active, active && quizAudio.playing);
+  }, [
+    onSongsBeatChange,
+    phase,
+    mode,
+    quizAudio.src,
+    quizAudio.playing,
+  ]);
+
+  useEffect(() => {
+    return () => onSongsBeatChange?.(false, false);
+  }, [onSongsBeatChange]);
 
   const [elapsedMs, setElapsedMs] = useState(0);
   const [timeLimitMs, setTimeLimitMs] = useState<number | null>(null);
@@ -209,6 +404,30 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
   }, [stopTimer]);
 
   useEffect(() => {
+    return () => {
+      if (songAdvanceRef.current != null) {
+        window.clearTimeout(songAdvanceRef.current);
+        songAdvanceRef.current = null;
+      }
+      songAnsweringRef.current = false;
+    };
+  }, []);
+
+  const playSnippet = useCallback(
+    async (path: string) => {
+      try {
+        const res = await playTrack({ path, artist_id: bandId, title: "Quiz" });
+        quizAudio.loadSrc(res.stream_url, true);
+      } catch {
+        /* ignore */
+      }
+    },
+    [bandId, quizAudio.loadSrc]
+  );
+
+  useEffect(() => () => quizAudio.clear(), [quizAudio.clear]);
+
+  useEffect(() => {
     fetchQuizScores(bandId)
       .then(setScores)
       .catch(() => {});
@@ -226,6 +445,11 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
       setSongRound(0);
       setSongCorrect(0);
       setSongPicked(null);
+      songAnsweringRef.current = false;
+      if (songAdvanceRef.current != null) {
+        window.clearTimeout(songAdvanceRef.current);
+        songAdvanceRef.current = null;
+      }
       stopTimer();
 
       try {
@@ -237,7 +461,7 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
             setDiscography([]);
             return;
           }
-          setDiscography(data.releases);
+          setDiscography(normalizeDiscographyReleases(data.releases));
         } else if (next === "lineup") {
           const data = await fetchQuizLineup(bandId);
           if (data.disabled || !data.members.length) {
@@ -255,7 +479,12 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
             setSongQuestions([]);
             return;
           }
-          setSongQuestions(data.questions);
+          setSongQuestions(
+            data.questions.map((q) => ({
+              ...q,
+              choices: q.choices.slice(0, SONG_CHOICE_COUNT),
+            }))
+          );
         }
         setPhase("ready");
       } catch (e) {
@@ -268,11 +497,11 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
 
   useEffect(() => {
     if (mode === "lineup" && isSolo) {
-      setMode("discography");
+      onModeChange("discography");
       return;
     }
     void loadMode(mode);
-  }, [mode, bandId, isSolo, loadMode]);
+  }, [mode, bandId, isSolo, loadMode, onModeChange]);
 
   const finishDiscography = useCallback(async () => {
     stopTimer();
@@ -357,66 +586,106 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
     [discography]
   );
 
-  const tryRevealGuess = useCallback(() => {
-    const raw = guessInput.trim();
-    if (!raw) return;
-    const norm = normalizeGuess(raw);
-    if (!norm) return;
-
-    if (mode === "discography") {
-      const nextReleases = new Set(revealedReleases);
-      const nextTracks = new Set(revealedTracks);
-      for (const rel of discography) {
-        if (!nextReleases.has(rel.id) && matchesGuess(raw, rel.title)) {
-          nextReleases.add(rel.id);
-        }
-        for (const track of rel.tracks) {
-          const key = `${rel.id}:${track.title}`;
-          if (!nextTracks.has(key) && matchesGuess(raw, track.title)) {
-            nextTracks.add(key);
-          }
-        }
-      }
-      if (
-        nextReleases.size === revealedReleases.size &&
-        nextTracks.size === revealedTracks.size
-      ) {
-        return;
-      }
-      setRevealedReleases(nextReleases);
-      setRevealedTracks(nextTracks);
-      setGuessInput("");
-      if (checkDiscographyComplete(nextReleases, nextTracks)) {
-        void finishDiscography();
-      }
-    } else if (mode === "lineup") {
-      const next = new Set(revealedMembers);
-      for (const m of lineup) {
-        if (!next.has(m.id) && matchesGuess(raw, m.name)) {
-          next.add(m.id);
-        }
-      }
-      if (next.size === revealedMembers.size) return;
-      setRevealedMembers(next);
-      setGuessInput("");
-      if (next.size >= lineup.length) {
-        void finishLineup();
-      }
-    }
+  useEffect(() => {
+    if (!pendingScrollTarget || phase !== "playing") return;
+    const container =
+      mode === "discography"
+        ? discoScrollRef.current
+        : mode === "lineup"
+          ? lineupScrollRef.current
+          : null;
+    scrollRevealIntoView(container, pendingScrollTarget);
+    setPendingScrollTarget(null);
   }, [
-    checkDiscographyComplete,
-    discography,
-    finishDiscography,
-    finishLineup,
-    guessInput,
-    lineup,
+    pendingScrollTarget,
+    phase,
     mode,
-    revealedMembers,
-    revealedReleases,
     revealedTracks,
+    revealedReleases,
+    revealedMembers,
   ]);
 
+  const processGuessValue = useCallback(
+    (raw: string): string => {
+      const trimmed = raw.trim();
+      if (!trimmed) return raw;
+
+      if (mode === "discography") {
+        const nextReleases = new Set(revealedReleases);
+        const nextTracks = new Set(revealedTracks);
+        let matched = false;
+        let scrollTarget: string | null = null;
+        for (const rel of discography) {
+          if (!nextReleases.has(rel.id) && matchesGuess(trimmed, rel.title)) {
+            nextReleases.add(rel.id);
+            matched = true;
+            scrollTarget = `release:${rel.id}`;
+          }
+          for (const track of rel.tracks) {
+            const key = `${rel.id}:${track.title}`;
+            if (!nextTracks.has(key) && matchesGuess(trimmed, track.title)) {
+              nextTracks.add(key);
+              matched = true;
+              scrollTarget = `track:${key}`;
+            }
+          }
+        }
+        if (!matched) return raw;
+        if (scrollTarget) setPendingScrollTarget(scrollTarget);
+        setRevealedReleases(nextReleases);
+        setRevealedTracks(nextTracks);
+        if (checkDiscographyComplete(nextReleases, nextTracks)) {
+          void finishDiscography();
+        }
+        requestAnimationFrame(() => guessInputRef.current?.focus());
+        return "";
+      }
+
+      if (mode === "lineup") {
+        const next = new Set(revealedMembers);
+        let matched = false;
+        let scrollTarget: string | null = null;
+        for (const m of lineup) {
+          if (!next.has(m.id) && matchesGuess(trimmed, m.name)) {
+            next.add(m.id);
+            matched = true;
+            scrollTarget = `member:${m.id}`;
+          }
+        }
+        if (!matched) return raw;
+        if (scrollTarget) setPendingScrollTarget(scrollTarget);
+        setRevealedMembers(next);
+        if (next.size >= lineup.length) {
+          void finishLineup();
+        }
+        requestAnimationFrame(() => guessInputRef.current?.focus());
+        return "";
+      }
+
+      return raw;
+    },
+    [
+      checkDiscographyComplete,
+      discography,
+      finishDiscography,
+      finishLineup,
+      lineup,
+      mode,
+      revealedMembers,
+      revealedReleases,
+      revealedTracks,
+    ]
+  );
+
+  const handleGuessChange = (value: string) => {
+    setGuessInput(processGuessValue(value));
+  };
+
   const beginQuiz = () => {
+    if (mode === "songs") {
+      onStopPageAudio?.();
+    }
+    setPendingScrollTarget(null);
     setFinishState(null);
     setGuessInput("");
     setRevealedReleases(new Set());
@@ -425,6 +694,11 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
     setSongRound(0);
     setSongCorrect(0);
     setSongPicked(null);
+    songAnsweringRef.current = false;
+    if (songAdvanceRef.current != null) {
+      window.clearTimeout(songAdvanceRef.current);
+      songAdvanceRef.current = null;
+    }
     setPhase("playing");
 
     if (mode === "discography") {
@@ -434,7 +708,7 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
     } else {
       startTimer(null);
       const q = songQuestions[0];
-      if (q) onPlaySnippet(q.play_path);
+      if (q) void playSnippet(q.play_path);
     }
   };
 
@@ -445,27 +719,48 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
     else void finishSongs();
   }, [phase, mode, finishDiscography, finishLineup, finishSongs]);
 
-  const answerSong = (choice: string) => {
-    if (songPicked || phase !== "playing") return;
-    const q = songQuestions[songRound];
-    if (!q) return;
-    const correct = matchesGuess(choice, q.correct_title);
-    setSongPicked(choice);
-    const nextCorrect = songCorrect + (correct ? 1 : 0);
-    setSongCorrect(nextCorrect);
+  const clearSongAdvance = useCallback(() => {
+    if (songAdvanceRef.current != null) {
+      window.clearTimeout(songAdvanceRef.current);
+      songAdvanceRef.current = null;
+    }
+  }, []);
 
-    window.setTimeout(() => {
-      const nextRound = songRound + 1;
-      if (nextRound >= songQuestions.length) {
-        setSongCorrect(nextCorrect);
-        void finishSongs(nextCorrect);
-        return;
-      }
-      setSongRound(nextRound);
-      setSongPicked(null);
-      onPlaySnippet(songQuestions[nextRound].play_path);
-    }, 650);
-  };
+  const answerSong = useCallback(
+    (choiceId: string, choiceTitle: string) => {
+      if (songAnsweringRef.current || songPicked || phase !== "playing") return;
+      const round = songRoundRef.current;
+      const q = songQuestionsRef.current[round];
+      if (!q) return;
+
+      songAnsweringRef.current = true;
+      clearSongAdvance();
+
+      const correct = matchesGuess(choiceTitle, q.correct_title);
+      setSongPicked(choiceId);
+      const nextCorrect = songCorrectRef.current + (correct ? 1 : 0);
+      setSongCorrect(nextCorrect);
+
+      songAdvanceRef.current = window.setTimeout(() => {
+        songAdvanceRef.current = null;
+        songAnsweringRef.current = false;
+        setSongPicked(null);
+
+        const questions = songQuestionsRef.current;
+        const nextRound = round + 1;
+        if (nextRound >= questions.length) {
+          setSongCorrect(nextCorrect);
+          void finishSongs(nextCorrect);
+          return;
+        }
+
+        setSongRound(nextRound);
+        const nextQ = questions[nextRound];
+        if (nextQ) void playSnippet(nextQ.play_path);
+      }, SONG_ROUND_DELAY_MS);
+    },
+    [songPicked, phase, clearSongAdvance, finishSongs, playSnippet]
+  );
 
   const timerProgress =
     timeLimitMs != null && timeLimitMs > 0
@@ -479,34 +774,26 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
 
   const lineupRows = useMemo(() => splitRows(lineup), [lineup]);
 
-  const modes: { id: QuizMode; label: string; hidden?: boolean }[] = [
-    { id: "discography", label: "Discography" },
-    { id: "lineup", label: "Lineup", hidden: isSolo },
-    { id: "songs", label: "Songs" },
-  ];
+  const quizActive =
+    phase === "playing" &&
+    (mode === "discography" || mode === "lineup" || mode === "songs");
 
   return (
-    <div className="artist-quiz">
-      <nav className="artist-page__subtabs artist-quiz__subtabs">
-        {modes
-          .filter((m) => !m.hidden)
-          .map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={mode === m.id ? "active" : ""}
-              onClick={() => setMode(m.id)}
-            >
-              <span>{m.label}</span>
-            </button>
-          ))}
-      </nav>
-
+    <div
+      className={`artist-quiz${quizActive ? " artist-quiz--active" : ""}`}
+    >
       {error && <p className="error">{error}</p>}
       {phase === "loading" && <p className="muted">Loading quiz…</p>}
 
       {phase === "ready" && !error && (
         <div className="artist-quiz__ready">
+          <p className="artist-quiz__intro">
+            {mode === "songs" && songQuestions.length > 0
+              ? `${songQuestions.length} round${
+                  songQuestions.length === 1 ? "" : "s"
+                } of mystery audio. ${QUIZ_INTROS.songs}`
+              : QUIZ_INTROS[mode]}
+          </p>
           <button type="button" className="artist-quiz__start" onClick={beginQuiz}>
             Start
           </button>
@@ -566,138 +853,99 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
       )}
 
       {phase === "playing" && mode === "discography" && (
-        <div className="artist-quiz__panel">
-          <div className="artist-quiz__input-row">
-            <input
-              type="text"
-              className="artist-quiz__guess-input"
-              placeholder="Type a release or track title…"
-              value={guessInput}
-              onChange={(e) => setGuessInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  tryRevealGuess();
-                }
-              }}
-              onBlur={() => tryRevealGuess()}
-              autoFocus
-            />
-            <div className="artist-quiz__timer" aria-hidden>
-              <div
-                className="artist-quiz__timer-bar"
-                style={
-                  timerProgress != null
-                    ? { width: `${(1 - timerProgress) * 100}%` }
-                    : undefined
-                }
-              />
-              <span className="artist-quiz__timer-label">
-                {timeLimitMs != null
-                  ? formatQuizTime(Math.max(0, timeLimitMs - elapsedMs))
-                  : formatQuizTime(elapsedMs)}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="artist-quiz__finish"
-              onClick={handleFinishEarly}
-            >
-              Finish
-            </button>
-          </div>
-          <div className="artist-quiz__disco-grid">
-            {discographyColumns.map((col, ci) => (
-              <div key={ci} className="artist-quiz__disco-col">
-                {col.map((rel) => (
-                  <section key={rel.id} className="artist-quiz__release">
-                    <h3 className="artist-quiz__release-title">
-                      {revealedReleases.has(rel.id) ? rel.title : "—"}
-                    </h3>
-                    <ul className="artist-quiz__track-list">
-                      {rel.tracks.map((t) => {
-                        const key = `${rel.id}:${t.title}`;
-                        const revealed = revealedTracks.has(key);
-                        return (
-                          <li key={key} className="artist-quiz__track-cell">
-                            <span className="artist-quiz__track-bullet">•</span>
-                            <span
-                              className={
-                                revealed
-                                  ? "artist-quiz__track-revealed"
-                                  : "artist-quiz__track-hidden"
-                              }
+        <div className="artist-quiz__panel artist-quiz__panel--scrollable">
+          <QuizControlBar
+            guessInputRef={guessInputRef}
+            placeholder="Type a release or track title…"
+            guessInput={guessInput}
+            onGuessChange={handleGuessChange}
+            timerProgress={timerProgress}
+            timeLimitMs={timeLimitMs}
+            elapsedMs={elapsedMs}
+            onFinish={handleFinishEarly}
+          />
+          <div ref={discoScrollRef} className="artist-quiz__scroll">
+            <div className="artist-quiz__disco-grid">
+              {discographyColumns.map((col, ci) => (
+                <div key={ci} className="artist-quiz__disco-col">
+                  {col.map((rel) => (
+                    <section
+                      key={rel.id}
+                      className="artist-quiz__release"
+                      data-quiz-target={`release:${rel.id}`}
+                    >
+                      <h3 className="artist-quiz__release-title">
+                        {revealedReleases.has(rel.id)
+                          ? quizDisplayTitle(rel.title)
+                          : "—"}
+                      </h3>
+                      <ul className="artist-quiz__track-list">
+                        {rel.tracks.map((t) => {
+                          const key = `${rel.id}:${t.title}`;
+                          const revealed = revealedTracks.has(key);
+                          return (
+                            <li
+                              key={key}
+                              className="artist-quiz__track-cell"
+                              data-quiz-target={`track:${key}`}
                             >
-                              {revealed ? t.title : "—"}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                ))}
-              </div>
-            ))}
+                              <span className="artist-quiz__track-num">
+                                {formatQuizTrackNum(t.number)}
+                              </span>
+                              <span
+                                className={
+                                  revealed
+                                    ? "artist-quiz__track-revealed"
+                                    : "artist-quiz__track-hidden"
+                                }
+                              >
+                                {revealed ? quizDisplayTitle(t.title) : "—"}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {phase === "playing" && mode === "lineup" && (
-        <div className="artist-quiz__panel artist-quiz__panel--lineup">
-          <div className="artist-quiz__input-row">
-            <input
-              type="text"
-              className="artist-quiz__guess-input"
-              placeholder="Type a member name…"
-              value={guessInput}
-              onChange={(e) => setGuessInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  tryRevealGuess();
-                }
-              }}
-              onBlur={() => tryRevealGuess()}
-              autoFocus
-            />
-            <div className="artist-quiz__timer" aria-hidden>
-              <div
-                className="artist-quiz__timer-bar"
-                style={
-                  timerProgress != null
-                    ? { width: `${(1 - timerProgress) * 100}%` }
-                    : undefined
-                }
-              />
-              <span className="artist-quiz__timer-label">
-                {timeLimitMs != null
-                  ? formatQuizTime(Math.max(0, timeLimitMs - elapsedMs))
-                  : formatQuizTime(elapsedMs)}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="artist-quiz__finish"
-              onClick={handleFinishEarly}
-            >
-              Finish
-            </button>
-          </div>
+        <div className="artist-quiz__panel artist-quiz__panel--scrollable artist-quiz__panel--lineup">
+          <QuizControlBar
+            guessInputRef={guessInputRef}
+            placeholder="Type a member name…"
+            guessInput={guessInput}
+            onGuessChange={handleGuessChange}
+            timerProgress={timerProgress}
+            timeLimitMs={timeLimitMs}
+            elapsedMs={elapsedMs}
+            onFinish={handleFinishEarly}
+          />
           <div
-            className="artist-quiz__lineup-grid"
-            data-count={Math.min(Math.max(lineup.length, 1), 8)}
+            ref={lineupScrollRef}
+            className="artist-quiz__scroll artist-quiz__scroll--lineup"
           >
-            {[lineupRows.top, lineupRows.bottom].map((row, ri) => (
-              <div key={ri} className="artist-quiz__lineup-row">
-                {row.map((m) => {
-                  const revealed = revealedMembers.has(m.id);
-                  return (
-                    <div
-                      key={m.id}
-                      className={`artist-quiz__member${
-                        m.is_deceased ? " artist-quiz__member--deceased" : ""
-                      }`}
-                    >
+            <div
+              className="artist-quiz__lineup-grid"
+              data-count={Math.min(Math.max(lineup.length, 1), 8)}
+            >
+              {[lineupRows.top, lineupRows.bottom].map((row, ri) => (
+                <div key={ri} className="artist-quiz__lineup-row">
+                  {row.map((m) => {
+                    const revealed = revealedMembers.has(m.id);
+                    return (
+                      <div
+                        key={m.id}
+                        data-quiz-target={`member:${m.id}`}
+                        className={`artist-quiz__member${
+                          m.is_deceased ? " artist-quiz__member--deceased" : ""
+                        }`}
+                      >
                       <span className="artist-quiz__member-photo">
                         {revealed ? (
                           m.photo_url ? (
@@ -711,36 +959,56 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
                           <span className="artist-quiz__member-ph artist-quiz__member-ph--empty" />
                         )}
                       </span>
-                      {revealed && (
-                        <>
-                          <span className="artist-quiz__member-name">
-                            {m.name}
-                            {m.is_deceased && (
-                              <span title="Deceased"> †</span>
-                            )}
-                          </span>
-                          {m.years && (
-                            <span className="artist-quiz__member-years">
-                              {m.years}
+                      <div className="artist-quiz__member-meta">
+                        {revealed ? (
+                          <>
+                            <span className="artist-quiz__member-name">
+                              {m.name}
+                              {m.is_deceased && (
+                                <span title="Deceased"> †</span>
+                              )}
                             </span>
-                          )}
-                        </>
-                      )}
+                            <span
+                              className={`artist-quiz__member-years${
+                                m.years ? "" : " artist-quiz__member-years--empty"
+                              }`}
+                            >
+                              {m.years ?? "\u00A0"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="artist-quiz__member-name artist-quiz__member-name--reserve"
+                              aria-hidden="true"
+                            >
+                              {"\u00A0"}
+                            </span>
+                            <span
+                              className="artist-quiz__member-years artist-quiz__member-years--reserve"
+                              aria-hidden="true"
+                            >
+                              {"\u00A0"}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
-                })}
-              </div>
-            ))}
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {phase === "playing" && mode === "songs" && songQuestions[songRound] && (
-        <div className="artist-quiz__panel artist-quiz__panel--songs">
+        <div
+          key={`songs-round-${songRound}`}
+          className="artist-quiz__panel artist-quiz__panel--songs"
+        >
           <div className="artist-quiz__songs-head">
-            <span className="muted">
-              Round {songRound + 1} / {songQuestions.length}
-            </span>
             <div className="artist-quiz__songs-head-right">
               <span className="artist-quiz__timer-label">
                 {formatQuizTime(elapsedMs)}
@@ -755,16 +1023,20 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
             </div>
           </div>
           <p className="artist-quiz__songs-prompt">Which track is playing?</p>
-          <div className="artist-quiz__song-cards">
-            {songQuestions[songRound].choices.map((c) => {
+          <div className="artist-quiz__songs-body">
+            <div className="artist-quiz__song-cards">
+            {songQuestions[songRound].choices
+              .slice(0, SONG_CHOICE_COUNT)
+              .map((c) => {
               const q = songQuestions[songRound];
-              const picked = songPicked === c.title;
+              const choiceId = c.id;
+              const picked = songPicked === choiceId;
               const showResult = songPicked != null;
               const isCorrect = matchesGuess(c.title, q.correct_title);
               const dateLabel = formatTrackDate(c.release_date);
               return (
                 <button
-                  key={c.title}
+                  key={`${songRound}-${c.id}`}
                   type="button"
                   className={`artist-quiz__song-card${
                     showResult && isCorrect ? " artist-quiz__song-card--correct" : ""
@@ -774,7 +1046,7 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
                       : ""
                   }`}
                   disabled={songPicked != null}
-                  onClick={() => answerSong(c.title)}
+                  onClick={() => answerSong(choiceId, c.title)}
                 >
                   <span className="artist-quiz__song-cover">
                     <span
@@ -786,15 +1058,30 @@ export default function ArtistQuiz({ bandId, isSolo, onPlaySnippet }: Props) {
                       }
                     />
                   </span>
-                  <span className="artist-quiz__song-title">{c.title}</span>
+                  <span className="artist-quiz__song-title">
+                    {quizDisplayTitle(c.title)}
+                  </span>
                   {dateLabel && (
                     <span className="artist-quiz__song-date">{dateLabel}</span>
                   )}
                 </button>
               );
             })}
+            </div>
+            {songQuestions[songRound].choices.length < SONG_CHOICE_COUNT && (
+              <p className="error artist-quiz__songs-error">
+                Not enough choices for this round — restart the quiz.
+              </p>
+            )}
           </div>
+          <p className="artist-quiz__songs-round muted">
+            Round {songRound + 1} / {songQuestions.length}
+          </p>
         </div>
+      )}
+
+      {quizAudio.src && (
+        <audio ref={quizAudio.audioRef} src={quizAudio.src} preload="auto" />
       )}
     </div>
   );

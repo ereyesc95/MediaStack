@@ -13,11 +13,6 @@ type Props = {
   onDataChanged: () => void;
 };
 
-function splitRows<T>(items: T[]): { top: T[]; bottom: T[] } {
-  const topCount = Math.ceil(items.length / 2);
-  return { top: items.slice(0, topCount), bottom: items.slice(topCount) };
-}
-
 function LinkCard({
   item,
   isAdmin,
@@ -90,7 +85,6 @@ export default function ArtistLinks({
   const [formLink, setFormLink] = useState<LinkItem | null>(null);
 
   const items = useMemo(() => links.groups[tab] ?? [], [links.groups, tab]);
-  const rows = useMemo(() => splitRows(items), [items]);
 
   if (!links.categories.length) {
     return (
@@ -120,35 +114,20 @@ export default function ArtistLinks({
     <div className={`artist-links${hidden ? " artist-panel--hidden" : ""}`}>
       <div
         className="artist-links-grid"
-        data-count={Math.min(Math.max(items.length, 1), 12)}
+        data-count={Math.max(items.length, 1)}
+        data-many={items.length > 6 ? "" : undefined}
       >
         {items.length === 0 ? (
           <p className="muted artist-links__empty">No links in this category.</p>
         ) : (
-          <>
-            <div className="artist-links-row">
-              {rows.top.map((item) => (
-                <LinkCard
-                  key={item.id}
-                  item={item}
-                  isAdmin={isAdmin}
-                  onEdit={setFormLink}
-                />
-              ))}
-            </div>
-            {rows.bottom.length > 0 && (
-              <div className="artist-links-row">
-                {rows.bottom.map((item) => (
-                  <LinkCard
-                    key={item.id}
-                    item={item}
-                    isAdmin={isAdmin}
-                    onEdit={setFormLink}
-                  />
-                ))}
-              </div>
-            )}
-          </>
+          items.map((item) => (
+            <LinkCard
+              key={item.id}
+              item={item}
+              isAdmin={isAdmin}
+              onEdit={setFormLink}
+            />
+          ))
         )}
       </div>
 

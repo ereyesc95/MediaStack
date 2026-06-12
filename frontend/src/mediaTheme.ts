@@ -2,6 +2,7 @@ import {
   applyTheme,
   getArtistThemeColors,
   getStoredTheme,
+  readDomTheme,
   readPersistedTheme,
   saveArtistThemeColors,
   type CustomThemeColors,
@@ -11,6 +12,27 @@ import {
 let themeBeforeArtist: ThemeId | null = null;
 let artistPageActive = false;
 let albumPageActive = false;
+/** When set, era/orientation sampling must not override the user's preset theme. */
+let artistPageThemePin: ThemeId | null = null;
+
+export function pinArtistPageTheme(id: ThemeId) {
+  if (id === "artist" || id === "album") {
+    artistPageThemePin = null;
+    return;
+  }
+  artistPageThemePin = id;
+}
+
+export function clearArtistPageThemePin() {
+  artistPageThemePin = null;
+}
+
+function shouldApplySampledTheme(): boolean {
+  if (artistPageThemePin) return false;
+  if (artistPageActive || albumPageActive) return true;
+  const dom = readDomTheme();
+  return dom === "artist" || dom === "album";
+}
 
 function clamp(n: number) {
   return Math.max(0, Math.min(255, Math.round(n)));
@@ -104,6 +126,7 @@ function applyMediaCss(colors: CustomThemeColors, theme: "artist" | "album" = "a
   el.style.setProperty("--text-muted", colors.textMuted);
   el.style.setProperty("--accent", colors.accent);
   el.style.setProperty("--accent-hover", colors.accent);
+  el.style.removeProperty("--beat-accent");
 }
 
 function clearMediaCss() {
@@ -132,9 +155,12 @@ export function beginArtistPageSession(userId?: number) {
 
 export function applyMediaTheme(colors: CustomThemeColors, userId?: number) {
   saveArtistThemeColors(colors, userId);
-  applyMediaCss(colors, "artist");
+  if (shouldApplySampledTheme()) {
+    const active = readDomTheme();
+    applyMediaCss(colors, active === "album" ? "album" : "artist");
+    window.dispatchEvent(new CustomEvent("theme-changed"));
+  }
   window.dispatchEvent(new CustomEvent("artist-theme-updated"));
-  window.dispatchEvent(new CustomEvent("theme-changed"));
 }
 
 /** Call when entering a release page (artist session should stay active). */
@@ -145,6 +171,7 @@ export function beginAlbumPageSession() {
 export function applyAlbumTheme(colors: CustomThemeColors) {
   applyMediaCss(colors, "album");
   window.dispatchEvent(new CustomEvent("theme-changed"));
+  window.dispatchEvent(new CustomEvent("artist-theme-updated"));
 }
 
 export function clearAlbumTheme(userId?: number) {
@@ -163,6 +190,7 @@ export function applySavedArtistTheme(userId?: number) {
 
 export function clearMediaTheme(userId?: number) {
   albumPageActive = false;
+  clearArtistPageThemePin();
   if (!artistPageActive && themeBeforeArtist === null) {
     clearMediaCss();
     applyTheme(getStoredTheme(userId), userId);

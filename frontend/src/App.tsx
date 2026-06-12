@@ -335,6 +335,9 @@ export default function App() {
   );
 
   const appReady = profileReady && mediaRootConfigured === true;
+  const booting =
+    profile === undefined ||
+    (profileReady && mediaRootConfigured === null);
   const showSourceModal =
     profileReady &&
     (sourceModal === "settings" ||
@@ -343,6 +346,12 @@ export default function App() {
   return (
 
     <div className={`app ${view.kind === "hub" ? "app--hub" : "app--module-view"}`}>
+
+      {booting && (
+        <div className="app-boot" role="status" aria-live="polite">
+          <p className="app-boot__label">Loading MediaStack…</p>
+        </div>
+      )}
 
       {showProfilePicker && (
         <ProfilePickerModal

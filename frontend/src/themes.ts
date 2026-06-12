@@ -7,7 +7,8 @@ export type ThemeId =
   | "ember"
   | "ocean"
   | "custom"
-  | "artist";
+  | "artist"
+  | "album";
 
 export type CustomThemeColors = {
   bg: string;
@@ -115,6 +116,7 @@ function applyCustomCss(colors: CustomThemeColors) {
   el.style.setProperty("--accent", colors.accent);
   el.style.setProperty("--accent-hover", colors.accent);
   el.style.setProperty("--accent-fg", accentForeground(colors.accent));
+  el.style.removeProperty("--beat-accent");
   el.style.setProperty("--scrollbar-thumb", colors.border);
   el.style.setProperty("--scrollbar-track", colors.bgElevated);
 }
@@ -139,6 +141,7 @@ function clearCustomCss() {
 export function readDomTheme(): ThemeId {
   const ds = document.documentElement.getAttribute("data-theme");
   if (ds === "artist") return "artist";
+  if (ds === "album") return "album";
   if (ds === "custom") return "custom";
   if (ds && THEMES.some((t) => t.id === ds)) return ds as ThemeId;
   return "dark";
@@ -158,6 +161,7 @@ export function applyTheme(id: ThemeId, userId?: number) {
     if (colors) applyCustomCss(colors);
   } else {
     clearCustomCss();
+    document.documentElement.style.removeProperty("--beat-accent");
   }
   updateFavicon();
   window.dispatchEvent(new CustomEvent("theme-changed"));

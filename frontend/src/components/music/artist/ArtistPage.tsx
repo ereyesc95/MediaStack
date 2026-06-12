@@ -62,7 +62,9 @@ import ArtistAboutEditModal from "./ArtistAboutEditModal";
 import ArtistLineup, { type LineupTab } from "./ArtistLineup";
 import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
-import ArtistQuiz from "./ArtistQuiz";
+import MediaBeatFx from "../MediaBeatFx";
+import MediaBeatFrame from "../MediaBeatFrame";
+import ArtistQuiz, { QUIZ_MODES, type QuizMode } from "./ArtistQuiz";
 import ArtistRelated from "./ArtistRelated";
 import AddSimilarModal from "./AddSimilarModal";
 import ArtistMemberModal from "./ArtistMemberModal";
@@ -71,6 +73,7 @@ import {
   MiniAudioPlayerControls,
   useMiniAudio,
 } from "./MiniAudioPlayer";
+import { useBeatPulse } from "../../../useBeatPulse";
 
 const SECTIONS: { id: ArtistSection; label: string }[] = [
   { id: "overview", label: "OVERVIEW" },
@@ -192,6 +195,7 @@ export default function ArtistPage({
   const [linkTab, setLinkTab] = useState<LinkCategory>("social");
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
+  const [quizMode, setQuizMode] = useState<QuizMode>("discography");
   const [addSimilarOpen, setAddSimilarOpen] = useState(false);
   const [audioRefreshKey, setAudioRefreshKey] = useState(0);
   const relatedFetchStarted = useRef(false);
@@ -338,7 +342,12 @@ export default function ArtistPage({
     clear();
   }, [bandId, clear]);
 
-  useEffect(() => () => clear(), [clear]);
+  useEffect(
+    () => () => {
+      clear();
+    },
+    [clear]
+  );
 
   const carouselEras = useMemo(() => {
     if (!data?.eras.length) return [];
@@ -382,16 +391,19 @@ export default function ArtistPage({
     beginArtistPageSession(userId);
   }, [userId]);
 
-  useEffect(() => {
+  const themeSampleUrl = useMemo(() => {
     const sampleUrl = stacked
       ? (era?.landscape_url ?? era?.slide_url)
       : (era?.portrait_url ?? era?.slide_url);
-    const themeUrl = sampleUrl ?? shell?.photo_url ?? undefined;
-    if (!themeUrl) return;
-    colorsFromImageUrl(themeUrl).then((c) => {
+    return sampleUrl ?? shell?.photo_url ?? undefined;
+  }, [era, stacked, shell?.photo_url]);
+
+  useEffect(() => {
+    if (!themeSampleUrl) return;
+    colorsFromImageUrl(themeSampleUrl).then((c) => {
       if (c) applyMediaTheme(c, userId);
     });
-  }, [era, stacked, userId, shell?.photo_url]);
+  }, [themeSampleUrl, userId]);
 
   useEffect(() => {
     pushArtistRoute({ bandId, section, overviewTab }, true);
@@ -406,8 +418,38 @@ export default function ArtistPage({
     [data?.top_tracks]
   );
 
+  const [quizSongsBeat, setQuizSongsBeat] = useState({
+    active: false,
+    playing: false,
+  });
+
+  const beatActive = Boolean(playingPath && audioSrc) || quizSongsBeat.active;
+  const beatPlaying =
+    (Boolean(playingPath && audioSrc) && playing) || quizSongsBeat.playing;
+  useBeatPulse(audioRef, Boolean(playingPath && audioSrc), playing);
+
+  const handleQuizSongsBeatChange = useCallback(
+    (active: boolean, playing: boolean) => {
+      setQuizSongsBeat({ active, playing });
+    },
+    []
+  );
+
+  const stopPageAudio = useCallback(() => {
+    audioRef.current?.pause();
+    setPlayingPath(null);
+    clear();
+  }, [audioRef, clear]);
+
   const handlePlay = useCallback(
     async (path: string, title: string) => {
+      if (playingPath === path && audioSrc) {
+        if (!playing) {
+          toggle();
+          return;
+        }
+        return;
+      }
       setPlayingPath(path);
       try {
         const res = await playTrack({ path, artist_id: bandId, title });
@@ -416,7 +458,7 @@ export default function ArtistPage({
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [bandId, loadSrc]
+    [bandId, loadSrc, playingPath, audioSrc, playing, toggle]
   );
 
   const stepTrack = useCallback(
@@ -551,6 +593,8 @@ export default function ArtistPage({
     stacked ? "artist-page--stacked" : "",
     mobilePortrait ? "artist-page--mobile-portrait" : "",
     bgLayers.current ? "artist-page--has-bg" : "",
+    beatActive ? "artist-page--beat-ready" : "",
+    beatPlaying ? "artist-page--playing" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -580,6 +624,7 @@ export default function ArtistPage({
             }
           />
         )}
+        <MediaBeatFx />
       </div>
       <div className="artist-page__chrome">
         <header className="artist-page__top">
@@ -608,8 +653,12 @@ export default function ArtistPage({
             </button>
           </div>
           <div className="artist-page__top-center">
-            {topBrand}
-            {topLogo}
+            {topBrand && (
+              <MediaBeatFrame variant="logo">{topBrand}</MediaBeatFrame>
+            )}
+            {topLogo && (
+              <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
+            )}
             {!topBrand && !topLogo && (data?.name ?? shell?.name) && (
               <span className="artist-page__brand-name">
                 {data?.name ?? shell?.name}
@@ -766,6 +815,23 @@ export default function ArtistPage({
           </nav>
         )}
 
+        {section === "overview" && overviewTab === "quiz" && data && (
+          <nav className="artist-page__subtabs artist-page__quiz-subtabs">
+            {QUIZ_MODES.filter((m) => !(m.soloHidden && data.is_solo)).map(
+              (m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={quizMode === m.id ? "active" : ""}
+                  onClick={() => setQuizMode(m.id)}
+                >
+                  <span>{m.label}</span>
+                </button>
+              )
+            )}
+          </nav>
+        )}
+
         {section === "overview" && overviewTab === "lineup" && data?.show_lineup && (
           <nav className="artist-page__subtabs artist-page__lineup-subtabs">
             {LINEUP_TABS.map((t) => {
@@ -861,9 +927,7 @@ export default function ArtistPage({
         />
       </div>
 
-      {audioSrc && (
-        <audio ref={audioRef} src={audioSrc} preload="auto" />
-      )}
+      <audio ref={audioRef} src={audioSrc ?? undefined} preload="auto" />
       {audioSrc &&
         playerPortalTarget &&
         createPortal(
@@ -1009,7 +1073,10 @@ export default function ArtistPage({
           <ArtistQuiz
             bandId={bandId}
             isSolo={data.is_solo}
-            onPlaySnippet={(path) => void handlePlay(path, "Quiz")}
+            mode={quizMode}
+            onModeChange={setQuizMode}
+            onStopPageAudio={stopPageAudio}
+            onSongsBeatChange={handleQuizSongsBeatChange}
           />
         )}
 

@@ -258,7 +258,7 @@ function ReleaseCard({
 
   return (
     <article
-      className="media-release-card media-release-card--clickable"
+      className="media-release-card media-release-card--clickable media-beat-frame media-beat-frame--cover"
       role="button"
       tabIndex={0}
       onClick={handleOpen}

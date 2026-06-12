@@ -333,7 +333,7 @@ export async function fetchBandLibraryIndex(
 
 export async function fetchQuizDiscography(bandId: number) {
   return request<{
-    releases: { id: string; title: string; tracks: { title: string }[] }[];
+    releases: { id: string; title: string; tracks: { title: string; number: number }[] }[];
     is_solo: boolean;
   }>(`${API}/music/bands/${bandId}/quiz/discography`);
 }
@@ -358,6 +358,8 @@ export async function fetchQuizSongs(bandId: number, rounds = 10) {
       play_path: string;
       correct_title: string;
       choices: {
+        id: string;
+        play_path?: string;
         title: string;
         cover_url?: string | null;
         release_date?: string | null;

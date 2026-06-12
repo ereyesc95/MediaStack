@@ -14,6 +14,7 @@ from app.band_library import (
     _collect_audio_files,
     _track_title_from_filename,
 )
+from app.release_tracklist import _track_number
 from app.band_overview import _build_lineup, _is_solo
 from app.config import settings
 from app.gallery import _artist_dir
@@ -110,25 +111,30 @@ def save_score(
     return entry
 
 
-def _tracks_in_release_folder(media_root: Path, folder_rel: str) -> list[str]:
+def _tracks_in_release_folder(media_root: Path, folder_rel: str) -> list[dict]:
     folder = media_root / Path(folder_rel.replace("\\", "/"))
     if not folder.is_dir():
         return []
-    titles: list[str] = []
-    seen: set[str] = set()
+    files: list[Path] = []
     for path in folder.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in AUDIO_EXTS:
             continue
         if not _track_tags_ok_original(path.stem):
             continue
+        files.append(path)
+    files.sort(key=lambda p: (_track_number(p.name, 9999), p.name.lower()))
+    tracks: list[dict] = []
+    seen: set[str] = set()
+    for path in files:
         title = _track_title_from_filename(path)
         key = title.casefold()
         if key in seen:
             continue
         seen.add(key)
-        titles.append(title)
-    titles.sort(key=lambda t: t.casefold())
-    return titles
+        tracks.append(
+            {"title": title, "number": _track_number(path.name, len(tracks) + 1)}
+        )
+    return tracks
 
 
 def build_discography_quiz(db: Session, band_id: int) -> dict | None:
@@ -154,7 +160,7 @@ def build_discography_quiz(db: Session, band_id: int) -> dict | None:
                 "id": rel.get("id"),
                 "title": rel.get("title") or "",
                 "cover_url": rel.get("cover_url"),
-                "tracks": [{"title": t, "hidden": True} for t in tracks],
+                "tracks": [{"title": t["title"], "number": t["number"], "hidden": True} for t in tracks],
             }
         )
     if not releases_out:
@@ -225,34 +231,53 @@ def build_songs_quiz(db: Session, band_id: int, *, rounds: int = 10) -> dict | N
                 path,
             )
         )
+    # One unique correct track per round; need at least 3 tracks to build choices.
+    by_path: dict[str, dict] = {}
+    for c in candidates:
+        by_path.setdefault(c["play_path"], c)
+    candidates = list(by_path.values())
     if len(candidates) < 3:
         return {"questions": [], "rounds": 0}
 
-    rounds = max(1, min(rounds, 20))
+    # Cap rounds to available unique tracks (default 10 when library is large enough).
+    rounds = max(1, min(rounds, len(candidates), 20))
     questions: list[dict] = []
     used: set[str] = set()
 
     for _ in range(rounds):
         pool = [c for c in candidates if c["play_path"] not in used]
-        if len(pool) < 3:
-            pool = candidates
+        if not pool:
+            break
         correct = random.choice(pool)
         used.add(correct["play_path"])
         distractors = [c for c in candidates if c["play_path"] != correct["play_path"]]
         random.shuffle(distractors)
-        choice_pool = [correct] + distractors[:2]
+        choice_pool: list[dict] = [correct]
+        seen_paths = {correct["play_path"]}
+        for pick in distractors:
+            if pick["play_path"] in seen_paths:
+                continue
+            seen_paths.add(pick["play_path"])
+            choice_pool.append(pick)
+            if len(choice_pool) >= 3:
+                break
+        if len(choice_pool) < 3:
+            continue
         random.shuffle(choice_pool)
+        qidx = len(questions)
         questions.append(
             {
                 "play_path": correct["play_path"],
                 "correct_title": correct["title"],
                 "choices": [
                     {
+                        "id": f"{qidx}-{ci}",
+                        "play_path": c["play_path"],
                         "title": c["title"],
                         "cover_url": c.get("cover_url"),
                         "release_date": c.get("release_date"),
                     }
-                    for c in choice_pool
+                    for ci, c in enumerate(choice_pool[:3])
                 ],
             }
         )

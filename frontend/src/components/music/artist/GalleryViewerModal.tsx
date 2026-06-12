@@ -77,7 +77,11 @@ export default function GalleryViewerModal({
             if (hasMany) step(x < rect.width / 2 ? -1 : 1);
           }}
         >
-          <img src={item.url} alt="" className="gallery-viewer__image" />
+          <img
+            src={item.url}
+            alt=""
+            className="gallery-viewer__image media-beat-glow"
+          />
         </div>
         {hasMany && (
           <button

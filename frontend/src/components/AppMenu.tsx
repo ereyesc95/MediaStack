@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { applySavedArtistTheme } from "../mediaTheme";
+import { applySavedArtistTheme, pinArtistPageTheme } from "../mediaTheme";
 import {
   THEMES,
   applyTheme,
@@ -131,6 +131,7 @@ export default function AppMenu({
   }, []);
 
   function pickTheme(id: ThemeId) {
+    pinArtistPageTheme(id);
     if (id === "custom") {
       setCustomOpen(true);
       applyTheme("custom", userId);

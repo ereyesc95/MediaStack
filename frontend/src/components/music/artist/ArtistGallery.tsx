@@ -263,7 +263,7 @@ export default function ArtistGallery({ state }: Props) {
               className="artist-gallery__brand-card"
               onClick={() => openViewer(brand.id)}
             >
-              <span className="artist-gallery__brand-stage">
+              <span className="artist-gallery__brand-stage media-beat-frame media-beat-frame--logo">
                 <img src={brand.url} alt="" loading="lazy" draggable={false} />
               </span>
               <span className="artist-gallery__card-label">{brand.label}</span>

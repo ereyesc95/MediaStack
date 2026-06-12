@@ -33,6 +33,8 @@ export default function ArtistCard({
       type="button"
       className={[
         "artist-card",
+        "media-beat-frame",
+        "media-beat-frame--card",
         `artist-card--${orientation}`,
         tapReveal ? "artist-card--tap-reveal" : "",
         revealed ? "artist-card--revealed" : "",

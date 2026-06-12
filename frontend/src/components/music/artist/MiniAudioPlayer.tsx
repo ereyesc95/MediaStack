@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { resumeBeatAudioContext } from "../../../beatAudioGraph";
 
 export type MiniAudioControls = {
   playing: boolean;
@@ -15,17 +16,27 @@ export function useMiniAudio() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const autoPlayRef = useRef(false);
+  const srcRef = useRef<string | null>(null);
 
   const loadSrc = useCallback((url: string | null, autoPlay = false) => {
     if (!url) {
       autoPlayRef.current = false;
+      srcRef.current = null;
       setSrc(null);
       setPlaying(false);
       setProgress(0);
       setDuration(0);
       return;
     }
+    if (url === srcRef.current) {
+      if (autoPlay) {
+        const el = audioRef.current;
+        if (el) void el.play().catch(() => {});
+      }
+      return;
+    }
     autoPlayRef.current = autoPlay;
+    srcRef.current = url;
     setSrc(url);
   }, []);
 
@@ -71,6 +82,7 @@ export function useMiniAudio() {
       if (!el || !duration) return;
       el.currentTime = (value / 100) * duration;
       setProgress(el.currentTime);
+      resumeBeatAudioContext();
     },
     [duration]
   );

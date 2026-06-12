@@ -37,6 +37,8 @@ import {
   MiniAudioPlayerControls,
   useMiniAudio,
 } from "../artist/MiniAudioPlayer";
+import MediaBeatFx from "../MediaBeatFx";
+import MediaBeatFrame from "../MediaBeatFrame";
 import { useBeatPulse } from "../../../useBeatPulse";
 import ReleaseGallery from "./ReleaseGallery";
 import ReleaseTracklist, {
@@ -142,7 +144,8 @@ export default function ReleasePage({
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
   const [tracklistKey, setTracklistKey] = useState(0);
   const miniAudio = useMiniAudio();
-  useBeatPulse(miniAudio.audioRef, Boolean(playingPath && miniAudio.playing));
+  const beatActive = Boolean(playingPath && miniAudio.src);
+  useBeatPulse(miniAudio.audioRef, beatActive, miniAudio.playing);
   const [bgLayers, setBgLayers] = useState<{
     current?: string;
     outgoing?: string;
@@ -174,14 +177,6 @@ export default function ReleasePage({
   }, [userId]);
 
   useEffect(() => {
-    const sample = data?.cover_url;
-    if (!sample) return;
-    colorsFromImageUrl(sample).then((c) => {
-      if (c) applyAlbumTheme(c);
-    });
-  }, [data?.cover_url]);
-
-  useEffect(() => {
     return () => clearAlbumTheme(userId);
   }, [userId]);
 
@@ -211,6 +206,15 @@ export default function ReleasePage({
     data?.background_layers[0] ??
     displayCover ??
     undefined;
+
+  const themeSampleUrl = displayCover ?? data?.cover_url ?? undefined;
+
+  useEffect(() => {
+    if (!themeSampleUrl) return;
+    colorsFromImageUrl(themeSampleUrl).then((c) => {
+      if (c) applyAlbumTheme(c);
+    });
+  }, [themeSampleUrl]);
 
   useEffect(() => {
     if (!bgUrl) return;
@@ -247,20 +251,24 @@ export default function ReleasePage({
   };
 
   const topBrand = data?.era_icon_url ? (
-    <img
-      src={data.era_icon_url}
-      alt=""
-      className="release-page__brand-icon"
-      draggable={false}
-    />
+    <MediaBeatFrame variant="logo">
+      <img
+        src={data.era_icon_url}
+        alt=""
+        className="release-page__brand-icon"
+        draggable={false}
+      />
+    </MediaBeatFrame>
   ) : null;
   const topLogo = data?.era_logo_url ? (
-    <img
-      src={data.era_logo_url}
-      alt=""
-      className="release-page__brand-logo"
-      draggable={false}
-    />
+    <MediaBeatFrame variant="logo">
+      <img
+        src={data.era_logo_url}
+        alt=""
+        className="release-page__brand-logo"
+        draggable={false}
+      />
+    </MediaBeatFrame>
   ) : null;
 
   const scrollBody = tab !== "overview";
@@ -307,6 +315,13 @@ export default function ReleasePage({
 
   const handlePlayTrack = useCallback(
     async (path: string, title: string, art?: ReleasePlaybackArt) => {
+      if (playingPath === path && miniAudio.src) {
+        if (!miniAudio.playing) {
+          miniAudio.toggle();
+          return;
+        }
+        return;
+      }
       if (art) {
         setPlaybackArt((prev) => ({ ...prev, ...art }));
       }
@@ -324,7 +339,7 @@ export default function ReleasePage({
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [bandId, data?.title, miniAudio]
+    [bandId, data?.title, miniAudio, playingPath]
   );
 
   useEffect(() => {
@@ -343,7 +358,8 @@ export default function ReleasePage({
     tab === "tracklist" && stacked && mobileTrackView === "tracks"
       ? "release-page--track-tracks"
       : "",
-    playingPath ? "release-page--playing" : "",
+    beatActive ? "release-page--beat-ready" : "",
+    playingPath && miniAudio.playing ? "release-page--playing" : "",
     playingPath && data?.playback_kind === "tape" ? "release-page--tape" : "",
     playingPath && data?.playback_kind === "vinyl" ? "release-page--vinyl" : "",
   ]
@@ -365,6 +381,7 @@ export default function ReleasePage({
             style={{ backgroundImage: `url("${bgLayers.current}")` }}
           />
         )}
+        <MediaBeatFx />
       </div>
 
       <div className="release-page__chrome">
@@ -502,10 +519,14 @@ export default function ReleasePage({
                 onClick={() => onOpenArtist(bandId)}
               >
                 {data.era_icon_url && (
-                  <img src={data.era_icon_url} alt="" className="release-page__meta-icon" />
+                  <MediaBeatFrame variant="logo">
+                    <img src={data.era_icon_url} alt="" className="release-page__meta-icon" />
+                  </MediaBeatFrame>
                 )}
                 {data.era_logo_url && (
-                  <img src={data.era_logo_url} alt="" className="release-page__meta-logo" />
+                  <MediaBeatFrame variant="logo">
+                    <img src={data.era_logo_url} alt="" className="release-page__meta-logo" />
+                  </MediaBeatFrame>
                 )}
                 {!data.era_icon_url && !data.era_logo_url && (
                   <span>{data.artist_name}</span>
@@ -727,11 +748,11 @@ export default function ReleasePage({
         />
       )}
 
+      <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
       {playingPath && nowPlayingTitle && (
         <div className="release-page__player">
           <span className="release-page__player-title">{nowPlayingTitle}</span>
           <MiniAudioPlayerControls {...miniAudio} />
-          <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
         </div>
       )}
     </div>

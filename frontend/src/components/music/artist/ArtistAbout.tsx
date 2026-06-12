@@ -157,7 +157,7 @@ export default function ArtistAbout({
     setPhotoLayers({ current: heroUrl, outgoing });
     const t = window.setTimeout(() => {
       setPhotoLayers((s) => ({ current: s.current, outgoing: undefined }));
-    }, 240);
+    }, 360);
     return () => window.clearTimeout(t);
   }, [heroUrl]);
 
@@ -212,18 +212,20 @@ export default function ArtistAbout({
               <div className="artist-about__photo-stack">
                 {photoLayers.outgoing && (
                   <img
+                    key={photoLayers.outgoing}
                     src={photoLayers.outgoing}
                     alt=""
                     className="artist-about__photo artist-about__photo--layer artist-about__photo--layer-out"
                   />
                 )}
                 <img
+                  key={photoLayers.current}
                   src={photoLayers.current}
                   alt=""
                   className={`artist-about__photo artist-about__photo--layer${
                     photoLayers.outgoing
                       ? " artist-about__photo--layer-in"
-                      : ""
+                      : " media-beat-glow"
                   }`}
                 />
               </div>
@@ -394,7 +396,11 @@ export default function ArtistAbout({
                 onClick={() => onOpenPerformer(data.solo_performer!.id)}
               >
                 {data.solo_performer.photo_url ? (
-                  <img src={data.solo_performer.photo_url} alt="" />
+                  <img
+                    src={data.solo_performer.photo_url}
+                    alt=""
+                    className="media-beat-glow"
+                  />
                 ) : (
                   <span className="artist-about__performer-ph">
                     {data.solo_performer.name
