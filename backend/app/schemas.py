@@ -197,6 +197,7 @@ class LyricsOut(BaseModel):
     artist: str
     title: str
     lyrics: str | None
+    synced_lyrics: str | None = None
     source: str = "lyrics.ovh"
 
 

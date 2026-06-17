@@ -100,16 +100,16 @@ export default function ReleaseGallery({ bandId, releaseId }: Props) {
       {items.length === 0 ? (
         <p className="muted release-gallery__empty">No items in this section.</p>
       ) : (
-        <div className="release-gallery__grid">
+        <div className="release-gallery__photo-grid">
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
-              className="release-gallery__card"
+              className="release-gallery__photo-card"
               onClick={() => openViewer(item.id)}
             >
               <img src={item.url} alt="" draggable={false} />
-              <span className="release-gallery__label">{item.title}</span>
+              <span className="release-gallery__card-label">{item.title}</span>
             </button>
           ))}
         </div>

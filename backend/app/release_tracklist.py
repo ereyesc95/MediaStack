@@ -13,16 +13,22 @@ from app.band_library import (
     DATE_PREFIX_RE,
     TRACK_PREFIX_RE,
     _album_title_from_folder,
-    _find_artwork_subdir,
     _parse_folder_date,
     _track_title_from_filename,
 )
 from app.config import settings
-from app.media_index import DISC_DIR_RE, _disc_sort_key, _is_edition_folder
+from app.media_index import DISC_DIR_RE, _disc_sort_key, _is_edition_folder, release_id_from_path
 from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
 from app.models import Track
 from app.gallery import IMAGE_EXTS, _media_url
-from app.release_overview import _artwork_urls, resolve_release_content
+from app.release_overview import (
+    _artwork_urls,
+    _find_artwork_subdir,
+    _find_singles_parent_folder,
+    _singles_category_dir,
+    _single_title_from_folder,
+    resolve_release_content,
+)
 from app.lyrics_storage import find_lrc_path
 from app.release_track_extras import _youtube_map_for_band
 
@@ -147,6 +153,28 @@ def _track_number(filename: str, fallback: int) -> int:
     return fallback
 
 
+def _track_playback_art(audio_file: Path, media_root: Path) -> dict[str, str | None]:
+    folder = audio_file.parent
+    visited: set[str] = set()
+    while folder and str(folder) not in visited:
+        visited.add(str(folder))
+        art = _find_artwork_subdir(folder)
+        if art:
+            urls = _artwork_urls(art, media_root)
+            return {
+                "cover_url": urls.get("cover_front_url"),
+                "cover_animation_url": urls.get("cover_animation_url"),
+                "canvas_url": urls.get("canvas_url"),
+                "disc_url": urls.get("disc_url"),
+            }
+        low = folder.name.casefold()
+        if low in {"standard edition", "deluxe edition", "bonus", "b-sides", "b sides"}:
+            folder = folder.parent
+            continue
+        break
+    return {}
+
+
 def _build_track(
     audio_file: Path,
     media_root: Path,
@@ -162,6 +190,7 @@ def _build_track(
     duration_sec = _duration_from_file(audio_file)
     if duration_sec is None:
         duration_sec = db_durations.get(norm)
+    art = _track_playback_art(audio_file, media_root)
     return {
         "id": _track_id(play_path),
         "number": _track_number(audio_file.name, index),
@@ -171,6 +200,10 @@ def _build_track(
         "duration": _format_duration(duration_sec),
         "has_lrc": _find_lrc(audio_file) is not None,
         "is_link": False,
+        "cover_url": art.get("cover_url"),
+        "cover_animation_url": art.get("cover_animation_url"),
+        "canvas_url": art.get("canvas_url"),
+        "disc_url": art.get("disc_url"),
     }
 
 
@@ -298,10 +331,18 @@ def _scan_lnk_group(lnk: Path, media_root: Path, *, db_durations: dict[str, floa
 
 def _edition_label(folder: Path) -> str:
     name = folder.name
-    m = DATE_PREFIX_RE.match(name)
+    m = DATE_PREFIX_RE.match(name.strip())
     if m:
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        date_part = y
+        if mo:
+            date_part += f".{mo}"
+        if d:
+            date_part += f".{d}"
         rest = name[m.end() :].lstrip(". ").strip()
-        return rest or name
+        if rest:
+            return f"{date_part}. {rest}"
+        return date_part
     return name
 
 
@@ -342,6 +383,127 @@ def _dedupe_tracks(groups: list[dict]) -> list[dict]:
     return out_groups
 
 
+def _append_bside_groups(
+    db: Session,
+    band,
+    content: Path,
+    media_root: Path,
+    *,
+    db_durations: dict[str, float],
+    release_title: str,
+    editions_out: list[dict],
+) -> None:
+    from app.gallery import _artist_dir
+
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return
+    singles_cat = _singles_category_dir(artist_dir)
+    if not singles_cat:
+        return
+    parent = _find_singles_parent_folder(
+        singles_cat, release_title=release_title, content=content
+    )
+    if not parent:
+        return
+
+    seen_paths: set[str] = set()
+    for edition in editions_out:
+        for group in edition.get("groups") or []:
+            for track in group.get("tracks") or []:
+                seen_paths.add(track.get("play_path") or "")
+
+    for child in sorted(parent.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir() or child.name.casefold() == "[artwork]":
+            continue
+        rel = safe_relative(child, media_root) or child.name
+        label = _single_title_from_folder(child, entry_display_name(child))
+        edition_artwork = _find_artwork_subdir(_resolve_standard_edition(child) or child)
+        urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+        scanned = _scan_resolved_folder(
+            child,
+            media_root,
+            db_durations=db_durations,
+            label=label,
+            kind="single",
+            edition_artwork=edition_artwork,
+        )
+        groups: list[dict] = []
+        for group in scanned.get("groups") or []:
+            tracks = [
+                t
+                for t in group.get("tracks") or []
+                if t.get("play_path") and t["play_path"] not in seen_paths
+            ]
+            if tracks:
+                for t in tracks:
+                    seen_paths.add(t["play_path"])
+                groups.append({**group, "tracks": tracks})
+        if not groups:
+            continue
+        bg_layers = [
+            u
+            for u in (
+                urls.get("cover_inner_url"),
+                urls.get("cover_back_url"),
+                urls.get("cover_front_url"),
+            )
+            if u
+        ]
+        editions_out.append(
+            {
+                "id": _edition_id(rel),
+                "label": f"{label} (Single)",
+                "date_iso": _parse_folder_date(child.name),
+                "cover_url": urls.get("cover_front_url"),
+                "cover_animation_url": urls.get("cover_animation_url"),
+                "canvas_url": urls.get("canvas_url"),
+                "disc_url": urls.get("disc_url"),
+                "background_layers": bg_layers,
+                "groups": groups,
+            }
+        )
+
+    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir() or child.name.casefold() == ARTWORK_DIR:
+            continue
+        low = child.name.casefold()
+        if not re.search(r"\bb[- ]?sides?\b|\bbonus\b", low):
+            continue
+        rel = safe_relative(child, media_root) or child.name
+        edition_artwork = _find_artwork_subdir(child)
+        urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+        scanned = _scan_resolved_folder(
+            child,
+            media_root,
+            db_durations=db_durations,
+            label=child.name,
+            kind="bside",
+            edition_artwork=edition_artwork,
+        )
+        groups = _dedupe_tracks(scanned.get("groups") or [])
+        if not groups:
+            continue
+        editions_out.append(
+            {
+                "id": _edition_id(rel),
+                "label": child.name,
+                "date_iso": _parse_folder_date(child.name),
+                "cover_url": urls.get("cover_front_url"),
+                "cover_animation_url": urls.get("cover_animation_url"),
+                "canvas_url": urls.get("canvas_url"),
+                "disc_url": urls.get("disc_url"),
+                "groups": groups,
+            }
+        )
+
+
+def _resolve_standard_edition(folder: Path) -> Path | None:
+    from app.release_overview import _resolve_standard_edition as _rse
+
+    return _rse(folder)
+
+
 def build_release_tracklist(
     db: Session,
     band_id: int,
@@ -352,6 +514,7 @@ def build_release_tracklist(
         return None
     band, card, media_root, content = resolved
     db_durations = _db_duration_map(db)
+    release_title = card.get("title") or _album_title_from_folder(content.name)
 
     editions_out: list[dict] = []
     edition_dirs = _list_edition_dirs(content)
@@ -387,11 +550,22 @@ def build_release_tracklist(
                     "date_iso": _parse_folder_date(edition_dir.name),
                     "cover_url": urls.get("cover_front_url"),
                     "cover_animation_url": urls.get("cover_animation_url"),
+                    "canvas_url": urls.get("canvas_url"),
                     "disc_url": urls.get("disc_url"),
                     "background_layers": bg_layers,
                     "groups": groups,
                 }
             )
+
+    _append_bside_groups(
+        db,
+        band,
+        content,
+        media_root,
+        db_durations=db_durations,
+        release_title=release_title,
+        editions_out=editions_out,
+    )
 
     for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
         if child.suffix.casefold() != ".lnk":

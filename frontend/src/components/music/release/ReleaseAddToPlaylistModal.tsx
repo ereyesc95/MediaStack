@@ -23,7 +23,9 @@ export default function ReleaseAddToPlaylistModal({
 
   useEffect(() => {
     fetchUserPlaylists()
-      .then((res) => setPlaylists(res.items))
+      .then((res) =>
+        setPlaylists(res.items.filter((p) => p.type_id !== 200))
+      )
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, []);

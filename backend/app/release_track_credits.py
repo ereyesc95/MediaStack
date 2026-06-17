@@ -6,23 +6,12 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Artist, Band, Release, Track
+from app.models import Artist, Release, Track
 from app.music_filters import _parse_ids
 from app.release_overview import _match_db_release, resolve_release_content
 from app.release_tracklist import _normalize_title
 
-SEP_RE = re.compile(r"[■;]")
-
-
-def _split_names(raw: str | None) -> list[str]:
-    if not raw:
-        return []
-    out: list[str] = []
-    for part in SEP_RE.split(raw):
-        name = part.strip().replace("█", "'").replace("■", ",")
-        if name and name not in out:
-            out.append(name)
-    return out
+TRACK_WRITERS_RE = re.compile(r"~([^~]+)~\[\{([^}]*)\}\]")
 
 
 def _artist_names(db: Session, ids: list[int]) -> list[str]:
@@ -34,6 +23,37 @@ def _artist_names(db: Session, ids: list[int]) -> list[str]:
             if n and n not in names:
                 names.append(n)
     return names
+
+
+def _parse_writer_refs(db: Session, refs: str) -> list[str]:
+    names: list[str] = []
+    for part in refs.split(";"):
+        token = part.strip().strip("{}")
+        if not token:
+            continue
+        if token.endswith("_not_found"):
+            name = token[: -len("_not_found")].strip()
+            if name and name not in names:
+                names.append(name)
+            continue
+        if token.isdigit():
+            for artist_name in _artist_names(db, [int(token)]):
+                if artist_name not in names:
+                    names.append(artist_name)
+            continue
+        if token not in names:
+            names.append(token)
+    return names
+
+
+def _writers_from_release_field(db: Session, raw: str, title: str) -> list[str]:
+    want = _normalize_title(title)
+    for match in TRACK_WRITERS_RE.finditer(raw):
+        track_part = match.group(1).strip()
+        if _normalize_title(track_part) != want:
+            continue
+        return _parse_writer_refs(db, match.group(2))
+    return []
 
 
 def _track_row(db: Session, band_id: int, title: str) -> Track | None:
@@ -60,7 +80,7 @@ def get_track_credits(
     if not resolved:
         return {"title": title, "writers": [], "composers": [], "lyricists": [], "source": None}
 
-    band, card, _, _ = resolved
+    _, card, _, _ = resolved
     album_title = card.get("title") or ""
 
     writers: list[str] = []
@@ -78,7 +98,7 @@ def get_track_credits(
     if not writers:
         rel = _match_db_release(db, band_id, album_title)
         if rel and rel.rel_fk_writers:
-            writers = _split_names(rel.rel_fk_writers)
+            writers = _writers_from_release_field(db, rel.rel_fk_writers, title)
             if writers:
                 source = "release"
 

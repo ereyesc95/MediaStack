@@ -353,28 +353,12 @@ export default function ArtistAbout({
                           <span className="artist-about__meta-sep"> • </span>
                         )}
                         <MetaValue flat onClick={() => onLabel(l)}>
-                          {data.label_logos?.[l] ? (
-                            <img
-                              src={data.label_logos[l]!}
-                              alt={l}
-                              className="artist-about__label-logo"
-                            />
-                          ) : (
-                            l
-                          )}
+                          {l}
                         </MetaValue>
                       </span>
                     ) : (
                       <MetaValue key={l} flat={false} onClick={() => onLabel(l)}>
-                        {data.label_logos?.[l] ? (
-                          <img
-                            src={data.label_logos[l]!}
-                            alt={l}
-                            className="artist-about__label-logo"
-                          />
-                        ) : (
-                          l
-                        )}
+                        {l}
                       </MetaValue>
                     )
                   )}

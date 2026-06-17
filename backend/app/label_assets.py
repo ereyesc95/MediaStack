@@ -27,4 +27,4 @@ def label_logo_url(name: str | None) -> str | None:
         path = LABELS_DIR / f"{slug}{ext}"
         if path.is_file():
             return f"/api/assets/system/labels/{slug}{ext}"
-    return None
+    return "/api/assets/system/default/label.png"

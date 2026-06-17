@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBandAudioIndex, fetchBandPlaylistIndex } from "../../../api";
+import { prefetchReleaseOverview } from "../../../releaseOverviewCache";
 import { pushArtistRoute, saveReleaseReferrer } from "../../../musicRoute";
 import type {
   ArtistPlaylistCard,
@@ -238,6 +239,7 @@ function ReleaseCard({
     if (onOpenReleaseNavigate) {
       onOpenReleaseNavigate(targetBand, targetRelease);
     }
+    void prefetchReleaseOverview(targetBand, targetRelease);
     pushArtistRoute({
       bandId: targetBand,
       section: "audio",

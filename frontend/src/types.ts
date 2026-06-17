@@ -444,13 +444,6 @@ export type AudioIndexPayload = {
   stale?: boolean;
 };
 
-export type ReleaseSingleCard = {
-  id: string;
-  title: string;
-  folder_path: string;
-  cover_url: string | null;
-};
-
 export type ReleaseNeighbor = {
   id: string;
   title: string;
@@ -467,6 +460,20 @@ export type ReleaseTrackItem = {
   has_lrc: boolean;
   is_link: boolean;
   youtube_url?: string | null;
+  cover_url?: string | null;
+  cover_animation_url?: string | null;
+  canvas_url?: string | null;
+  disc_url?: string | null;
+};
+
+export type ReleaseSingleCard = {
+  id: string;
+  title: string;
+  folder_path: string;
+  cover_url: string | null;
+  display_date?: string | null;
+  date_iso?: string | null;
+  navigate_release_id?: string;
 };
 
 export type TrackVersionItem = {
@@ -494,6 +501,7 @@ export type ReleaseEdition = {
   is_link?: boolean;
   cover_url?: string | null;
   cover_animation_url?: string | null;
+  canvas_url?: string | null;
   disc_url?: string | null;
   background_layers?: string[];
 };
@@ -618,6 +626,8 @@ export type ReleaseOverview = {
   description: string | null;
   description_manual: boolean;
   description_source: string | null;
+  needs_description_fetch?: boolean;
+  needs_metadata_fetch?: boolean;
   subgenres: { id: number; name: string }[];
   producer: string | null;
   label: string | null;
@@ -627,6 +637,8 @@ export type ReleaseOverview = {
   metadata_refreshed_at?: string | null;
   cover_url: string | null;
   cover_animation_url?: string | null;
+  canvas_url?: string | null;
+  icon_url?: string | null;
   playback_kind?: "disc" | "vinyl" | "tape";
   disc_url: string | null;
   background_layers: string[];

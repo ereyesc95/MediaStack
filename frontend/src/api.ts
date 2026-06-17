@@ -305,6 +305,16 @@ export async function fetchTrackCredits(
   );
 }
 
+export async function resolveArtistName(name: string): Promise<{
+  name: string;
+  in_library: boolean;
+  band_id: number | null;
+  urls: Record<string, string>;
+}> {
+  const q = new URLSearchParams({ name });
+  return request(`${API}/music/resolve-artist-name?${q}`);
+}
+
 export async function addTrackToPlaylist(
   playlistId: number,
   body: { title: string; artist: string; release: string; path: string }
@@ -505,9 +515,13 @@ export async function fetchTrackLyrics(
 ) {
   const q = new URLSearchParams({ artist, title });
   if (playPath) q.set("play_path", playPath);
-  return request<{ artist: string; title: string; lyrics: string | null; source: string }>(
-    `${API}/music/lyrics?${q}`
-  );
+  return request<{
+    artist: string;
+    title: string;
+    lyrics: string | null;
+    synced_lyrics?: string | null;
+    source: string;
+  }>(`${API}/music/lyrics?${q}`);
 }
 
 export async function fetchBandPlaylistIndex(

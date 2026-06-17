@@ -331,13 +331,15 @@ def band_audio_index(
 
 
 @router.get("/bands/{band_id}/releases/{release_id}/overview")
-def release_overview(
+async def release_overview(
     band_id: int,
     release_id: str,
-    orientation: str = Query("landscape"),
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    orientation: str = Query("landscape"),
 ):
     from app.release_overview import build_release_overview
+    from app.release_metadata_refresh import refresh_release_metadata
 
     row = crud.get_band(db, band_id)
     if not row:
@@ -348,6 +350,20 @@ def release_overview(
     )
     if not data:
         raise HTTPException(404, "Release not found")
+    if data.get("needs_metadata_fetch"):
+
+        async def _lazy_refresh() -> None:
+            from app.database import SessionLocal
+
+            bg = SessionLocal()
+            try:
+                await refresh_release_metadata(
+                    bg, band_id, release_id, include_wikipedia=True
+                )
+            finally:
+                bg.close()
+
+        background_tasks.add_task(_lazy_refresh)
     return data
 
 
@@ -501,6 +517,29 @@ def release_track_credits(
     if not row:
         raise HTTPException(404, "Band not found")
     return get_track_credits(db, band_id, release_id, title=title)
+
+
+@router.get("/resolve-artist-name")
+def resolve_artist_name(
+    name: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    from app.person_lookup import find_local_band_for_person
+
+    band_id = find_local_band_for_person(db, name)
+    if band_id:
+        return {
+            "name": name,
+            "in_library": True,
+            "band_id": band_id,
+            "urls": {},
+        }
+    return {
+        "name": name,
+        "in_library": False,
+        "band_id": None,
+        "urls": {},
+    }
 
 
 @router.get("/bands/{band_id}/media/video")

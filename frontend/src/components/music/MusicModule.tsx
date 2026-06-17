@@ -20,6 +20,7 @@ import type {
 import { EMPTY_DASHBOARD } from "../../types";
 import { clearMediaTheme } from "../../mediaTheme";
 import { prefetchBandOverview } from "../../overviewCache";
+import { prefetchReleaseOverview } from "../../releaseOverviewCache";
 import AppMenu from "../AppMenu";
 import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
@@ -562,7 +563,6 @@ export default function MusicModule({
           bandId={bandId}
           releaseId={releaseId}
           tab={releaseTab}
-          cardOrientation={cardOrientation}
           isAdmin={isAdmin}
           userId={userId}
           onBack={() => {
@@ -574,17 +574,49 @@ export default function MusicModule({
             openArtist(id);
           }}
           onOpenRelease={(bid, rid) => {
+            void prefetchReleaseOverview(bid, rid);
             onReleaseNavigate?.(
               rid,
               "overview",
               bid !== bandId ? bid : undefined
             );
           }}
+          onOpenCatalogProducer={(producerName) => {
+            clearMediaTheme(userId);
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onTab("artists");
+            setFilterMode("producer");
+            void (async () => {
+              const opts = filterOptions ?? (await fetchFilterOptions());
+              if (!filterOptions) setFilterOptions(opts);
+              const match = opts.producers.find(
+                (p) => p.name.toLowerCase() === producerName.toLowerCase()
+              );
+              setProducer(match?.id ?? producerName);
+            })();
+          }}
+          onOpenCatalogLabel={(labelName) => {
+            clearMediaTheme(userId);
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onTab("artists");
+            setFilterMode("label");
+            setLabel(labelName);
+          }}
+          onOpenCatalogSubgenre={(id) => {
+            clearMediaTheme(userId);
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onTab("artists");
+            setFilterMode("genre");
+            setSubgenreId(id);
+            onGenreFilter(id);
+          }}
           onTab={(t) => onReleaseNavigate?.(releaseId, t)}
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource}
-          onToggleOrientation={onToggleOrientation}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
         />

@@ -222,10 +222,22 @@ def _producer_band_ids(db: Session, producer: str) -> set[int]:
     if not q:
         return set()
     band_ids: set[int] = set()
+    want = q.casefold()
     for rel in db.scalars(select(Release)).all():
         prod = (rel.rel_fk_artists or "").strip()
-        if prod != q and prod.lower() != q.lower():
+        if not prod:
             continue
+        if prod != q and prod.lower() != want:
+            if prod.isdigit():
+                artist = db.get(Artist, int(prod))
+                if artist:
+                    aname = (artist.art_stage_name or artist.art_name or "").strip()
+                    if aname.casefold() != want:
+                        continue
+                else:
+                    continue
+            else:
+                continue
         for bid in _parse_ids(rel.rel_fk_bands):
             band_ids.add(bid)
     return band_ids

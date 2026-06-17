@@ -127,6 +127,20 @@ async def _fetch_lyrics_ovh(artist: str, title: str) -> str | None:
     return data.get("lyrics")
 
 
+def _read_raw_lrc_file(play_path: str) -> str | None:
+    local = path_to_local_file(play_path)
+    if not local:
+        return None
+    candidate = find_lrc_path(local)
+    if not candidate:
+        return None
+    try:
+        raw = candidate.read_text(encoding="utf-8", errors="replace").strip()
+        return raw or None
+    except OSError:
+        return None
+
+
 async def resolve_lyrics(
     artist: str,
     title: str,

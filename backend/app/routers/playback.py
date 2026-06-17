@@ -58,11 +58,15 @@ async def track_lyrics(
     title: str = Query(...),
     play_path: str | None = Query(None),
 ):
+    from app.services.lyrics import _read_raw_lrc_file, resolve_lyrics
+
+    synced = _read_raw_lrc_file(play_path) if play_path else None
     lyrics, source = await resolve_lyrics(artist, title, play_path=play_path)
     return LyricsOut(
         artist=artist,
         title=title,
         lyrics=lyrics,
+        synced_lyrics=synced,
         source=source or "none",
     )
 

@@ -7,7 +7,13 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.band_library import AUDIO_CATEGORIES, _find_artwork_subdir
+from app.band_library import (
+    AUDIO_CATEGORIES,
+    AUDIO_EXTS,
+    _audio_root,
+    _find_artwork_subdir,
+    _track_title_from_filename,
+)
 from app.band_overview import (
     _build_lineup,
     _display_name,
@@ -35,9 +41,11 @@ from app.media_index import (
     _artwork_file,
     _child_release_folders,
     _disc_sort_key,
+    _is_edition_folder,
     format_display_date,
     get_audio_index,
     parse_bracket_tags,
+    release_id_from_path,
 )
 from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
 from app.models import Artist, Band, Release, Subgenre
@@ -46,7 +54,10 @@ from app.music_filters import _parse_ids
 COVER_INNER_STEM = "cover - inner"
 COVER_BACK_STEM = "cover - back"
 COVER_ANIMATION_STEM = "cover - animation"
+CANVAS_ALBUM_STEM = "canvas - album"
 LOGO_STEM = "logo"
+ICON_STEM = "icon"
+VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
 TAPE_RE = re.compile(r"^\d+\.\s*(Tape|Cassette)\s+", re.I)
 
 PHOTOCARD_STEMS = {
@@ -134,9 +145,22 @@ def _disc_image_url(artwork: Path, media_root: Path) -> str | None:
         if "disc" in stem or "vinyl" in stem or "cd" in stem:
             candidates.append(p)
     if not candidates:
-        return None
+        return "/api/assets/system/default/disc.png"
     candidates.sort(key=lambda p: (0 if p.stem.casefold().startswith("disc 1") else 1, p.name.casefold()))
     return _media_url(candidates[0], media_root)
+
+
+def _artwork_media_file(
+    artwork: Path, stem: str, *, allow_video: bool = False
+) -> Path | None:
+    want = stem.casefold()
+    exts = set(IMAGE_EXTS)
+    if allow_video:
+        exts |= VIDEO_EXTS
+    for p in artwork.iterdir():
+        if p.is_file() and p.suffix.lower() in exts and p.stem.casefold() == want:
+            return p
+    return None
 
 
 def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | None]:
@@ -146,16 +170,22 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
             "cover_back_url": None,
             "cover_inner_url": None,
             "cover_animation_url": None,
+            "canvas_url": None,
+            "icon_url": None,
             "logo_url": None,
-            "disc_url": None,
+            "disc_url": "/api/assets/system/default/disc.png",
             "spotify_url": None,
             "qr_url": None,
         }
     cover_front = _artwork_file(artwork, COVER_FRONT_STEM)
     cover_back = _artwork_file(artwork, COVER_BACK_STEM)
     cover_inner = _artwork_file(artwork, COVER_INNER_STEM)
-    cover_animation = _artwork_file(artwork, COVER_ANIMATION_STEM)
+    cover_animation = _artwork_media_file(
+        artwork, COVER_ANIMATION_STEM, allow_video=True
+    )
+    canvas = _artwork_media_file(artwork, CANVAS_ALBUM_STEM, allow_video=True)
     logo = _artwork_file(artwork, LOGO_STEM)
+    icon = _artwork_file(artwork, ICON_STEM)
     spotify = _artwork_file(artwork, "spotify")
     qr = _artwork_file(artwork, "qr")
     return {
@@ -165,6 +195,8 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
         "cover_animation_url": _media_url(cover_animation, media_root)
         if cover_animation
         else None,
+        "canvas_url": _media_url(canvas, media_root) if canvas else None,
+        "icon_url": _media_url(icon, media_root) if icon else None,
         "logo_url": _media_url(logo, media_root) if logo else None,
         "disc_url": _disc_image_url(artwork, media_root),
         "spotify_url": _media_url(spotify, media_root) if spotify else None,
@@ -238,26 +270,133 @@ def _filter_lineup(lineup: dict, year: int | None) -> list[dict]:
     return [m for m in lineup.get("all") or [] if _member_active_at_year(m, year)]
 
 
-def _singles_for_release(content: Path, media_root: Path) -> list[dict]:
-    out: list[dict] = []
-    for child in _child_release_folders(content):
-        rel = safe_relative(child, media_root)
-        if not rel:
+def _normalize_release_match(name: str) -> str:
+    clean, _ = parse_bracket_tags(name)
+    m = re.match(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?", clean.strip())
+    if m:
+        clean = clean[m.end() :].lstrip(". ").strip()
+    return clean.casefold().strip()
+
+
+def _singles_category_dir(artist_dir: Path) -> Path | None:
+    audio = _audio_root(artist_dir)
+    if not audio.is_dir():
+        return None
+    for child in audio.iterdir():
+        if child.is_dir() and child.name.casefold() == "singles":
+            return child
+    return None
+
+
+def _find_singles_parent_folder(
+    singles_cat: Path, *, release_title: str, content: Path
+) -> Path | None:
+    targets = {
+        _normalize_release_match(release_title),
+        _normalize_release_match(entry_display_name(content)),
+    }
+    targets.discard("")
+    for child in sorted(singles_cat.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir():
             continue
-        edition = _resolve_standard_edition(child)
-        artwork = _standard_artwork_dir(edition)
-        urls = _artwork_urls(artwork, media_root)
-        name = entry_display_name(child)
-        clean, _ = parse_bracket_tags(name)
-        out.append(
-            {
-                "id": rel,
-                "title": clean.split(" ", 1)[-1] if re.match(r"^\d{4}", clean) else clean,
-                "folder_path": rel,
-                "cover_url": urls.get("cover_front_url"),
-            }
-        )
+        key = _normalize_release_match(entry_display_name(child))
+        if key in targets:
+            return child
+    return None
+
+
+def _single_title_from_folder(single_dir: Path, folder_name: str) -> str:
+    clean, _ = parse_bracket_tags(folder_name)
+    title = clean
+    if re.match(r"^\d{4}", clean):
+        title = clean.split(" ", 1)[-1] if " " in clean else clean
+    title = title.strip()
+    low = title.casefold()
+    if low in {STANDARD_EDITION, "deluxe edition"} or low.endswith(" edition"):
+        for path in sorted(single_dir.rglob("*")):
+            if path.is_file() and path.suffix.lower() in AUDIO_EXTS:
+                return _track_title_from_filename(path)
+    return title
+
+
+def _single_card_from_folder(single_dir: Path, media_root: Path) -> dict | None:
+    rel = safe_relative(single_dir, media_root)
+    if not rel:
+        return None
+    edition = _resolve_standard_edition(single_dir)
+    artwork = _standard_artwork_dir(edition)
+    urls = _artwork_urls(artwork, media_root)
+    name = entry_display_name(single_dir)
+    title = _single_title_from_folder(single_dir, name)
+    date_iso = None
+    m = re.match(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?", name.strip())
+    if m:
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        date_iso = y
+        if mo:
+            date_iso += f"-{mo}"
+        if d:
+            date_iso += f"-{d}"
+    return {
+        "id": rel,
+        "title": title.strip(),
+        "folder_path": rel,
+        "cover_url": urls.get("cover_front_url"),
+        "date_iso": date_iso,
+        "display_date": format_display_date(date_iso) if date_iso else None,
+        "navigate_release_id": release_id_from_path(rel),
+    }
+
+
+def _singles_from_parent(parent: Path, media_root: Path) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    dated = _child_release_folders(parent)
+    if dated:
+        for single_dir in dated:
+            card = _single_card_from_folder(single_dir, media_root)
+            if card and card["id"] not in seen:
+                seen.add(card["id"])
+                out.append(card)
+        return out
+
+    for child in sorted(parent.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir() or child.name.casefold() == "[artwork]":
+            continue
+        if _is_edition_folder(child.name):
+            for card in _singles_from_parent(child, media_root):
+                if card["id"] not in seen:
+                    seen.add(card["id"])
+                    out.append(card)
+            continue
+        card = _single_card_from_folder(child, media_root)
+        if card and card["id"] not in seen:
+            seen.add(card["id"])
+            out.append(card)
     return out
+
+
+def _singles_for_release(
+    band: Band,
+    content: Path,
+    media_root: Path,
+    release_title: str,
+) -> list[dict]:
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return []
+    singles_cat = _singles_category_dir(artist_dir)
+    if not singles_cat:
+        return []
+
+    parent = _find_singles_parent_folder(
+        singles_cat, release_title=release_title, content=content
+    )
+    if not parent:
+        return []
+
+    return _singles_from_parent(parent, media_root)
 
 
 def _prev_next_neighbors(
@@ -293,7 +432,7 @@ def _match_db_release(db: Session, band_id: int, title: str) -> Release | None:
     norm = title.casefold().strip()
     for rel in db.scalars(select(Release)).all():
         fk = rel.rel_fk_bands or ""
-        if str(band_id) not in _parse_ids(fk):
+        if band_id not in _parse_ids(fk):
             continue
         rt = (rel.rel_title or "").casefold().strip()
         if rt == norm:
@@ -308,17 +447,34 @@ def _resolve_subgenres(db: Session, raw: str | None) -> list[dict]:
         sg = db.get(Subgenre, sid)
         if sg and sg.sgn_name:
             out.append({"id": sg.sgn_id, "name": sg.sgn_name})
-    return out
+    if out:
+        return out
+    names = [part.strip() for part in re.split(r"[;,]", raw or "") if part.strip()]
+    return [{"id": i, "name": name} for i, name in enumerate(names)]
 
 
 def _resolve_producer(db: Session, raw: str | None) -> str | None:
-    ids = _parse_ids(raw or "")
+    text = (raw or "").strip()
+    if not text:
+        return None
+    ids = _parse_ids(text)
     names: list[str] = []
     for aid in ids:
         artist = db.get(Artist, aid)
         if artist:
             names.append(_display_name(artist.art_stage_name or artist.art_name))
-    return "; ".join(names) if names else None
+    if names:
+        return "; ".join(names)
+    return text
+
+
+def release_has_metadata(payload: dict) -> bool:
+    return bool(
+        payload.get("description")
+        or payload.get("subgenres")
+        or payload.get("producer")
+        or payload.get("label")
+    )
 
 
 def _enrich_from_db(
@@ -344,7 +500,23 @@ def _enrich_from_db(
             disk["label"] = label
     if rel.rel_release_code and not disk.get("release_code"):
         disk["release_code"] = rel.rel_release_code
+    disk["metadata_from_database"] = release_has_metadata(disk)
     return disk
+
+
+def _nearest_brand(
+    brands: list[EraBrand], year: int, kind: str
+) -> EraBrand | None:
+    pool = [b for b in brands if b.kind == kind]
+    if not pool:
+        return None
+
+    def distance(b: EraBrand) -> int:
+        if b.start <= year <= b.end:
+            return 0
+        return min(abs(b.start - year), abs(b.end - year))
+
+    return min(pool, key=lambda b: (distance(b), b.path.name.lower()))
 
 
 def build_release_overview(
@@ -404,6 +576,10 @@ def build_release_overview(
         if release_year:
             icon = _pick_brand_for_year_deterministic(brands, release_year, "icon")
             logo = _pick_brand_for_year_deterministic(brands, release_year, "logo")
+            if icon and not logo:
+                logo = _nearest_brand(brands, release_year, "logo")
+            if logo and not icon:
+                icon = _nearest_brand(brands, release_year, "icon")
             if icon:
                 era_icon_url = _media_url(icon.path, media_root)
             if logo:
@@ -434,6 +610,8 @@ def build_release_overview(
     if tags.get("source_artist"):
         source_artist = tags["source_artist"]
 
+    release_title = card.get("title") or ""
+
     payload: dict = {
         "id": card["id"],
         "band_id": band_id,
@@ -458,12 +636,14 @@ def build_release_overview(
         "reviews": [],
         "cover_url": urls.get("cover_front_url") or card.get("cover_url"),
         "cover_animation_url": urls.get("cover_animation_url"),
+        "canvas_url": urls.get("canvas_url"),
+        "icon_url": urls.get("icon_url"),
+        "logo_url": urls.get("logo_url") or card.get("logo_url"),
         "disc_url": urls.get("disc_url"),
         "playback_kind": _detect_playback_kind(content),
         "background_layers": bg_layers,
         "era_icon_url": era_icon_url,
         "era_logo_url": era_logo_url,
-        "logo_url": urls.get("logo_url") or card.get("logo_url"),
         "spotify_url": urls.get("spotify_url"),
         "qr_url": urls.get("qr_url"),
         "photocards": photocards,
@@ -471,7 +651,7 @@ def build_release_overview(
         "lineup": lineup_members,
         "show_lineup": show_lineup,
         "is_solo": solo,
-        "singles": _singles_for_release(content, media_root),
+        "singles": _singles_for_release(band, content, media_root, release_title),
         "prev": prev_r,
         "next": next_r,
         "navigate_band_id": card.get("navigate_band_id") or band_id,
@@ -479,10 +659,17 @@ def build_release_overview(
     }
 
     payload = _enrich_from_db(db, band_id, payload["title"], payload)
-    if payload.get("label"):
-        payload["label_logo_url"] = label_logo_url(payload["label"])
-    from app.release_metadata_refresh import apply_mb_cache
     from app.release_admin import apply_release_overrides
+    from app.release_metadata_refresh import apply_mb_cache
 
     payload = apply_mb_cache(payload, band_id, release_id)
-    return apply_release_overrides(payload, band_id, release_id)
+    payload = apply_release_overrides(payload, band_id, release_id)
+    if payload.get("label"):
+        payload["label_logo_url"] = label_logo_url(payload["label"])
+    payload["needs_metadata_fetch"] = bool(
+        not payload.get("description_manual")
+        and not release_has_metadata(payload)
+        and not payload.get("metadata_refreshed_at")
+    )
+    payload["needs_description_fetch"] = payload["needs_metadata_fetch"]
+    return payload
