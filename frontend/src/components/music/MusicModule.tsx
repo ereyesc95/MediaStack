@@ -170,6 +170,12 @@ export default function MusicModule({
   }, [bandId, resolveArtistShell]);
 
   useEffect(() => {
+    if (bandId && releaseId) {
+      void prefetchReleaseOverview(bandId, releaseId);
+    }
+  }, [bandId, releaseId]);
+
+  useEffect(() => {
     if (tab === "home") {
       setDashLoading(true);
       fetchMusicDashboard()
@@ -604,14 +610,26 @@ export default function MusicModule({
             setFilterMode("label");
             setLabel(labelName);
           }}
-          onOpenCatalogSubgenre={(id) => {
+          onOpenCatalogSubgenre={(id, subgenreName) => {
             clearMediaTheme(userId);
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("artists");
             setFilterMode("genre");
-            setSubgenreId(id);
-            onGenreFilter(id);
+            void (async () => {
+              const opts = filterOptions ?? (await fetchFilterOptions());
+              if (!filterOptions) setFilterOptions(opts);
+              const items = opts.subgenre_groups.flatMap((g) => g.items);
+              const match = items.find(
+                (s) =>
+                  s.id === id ||
+                  (subgenreName &&
+                    s.name?.toLowerCase() === subgenreName.toLowerCase())
+              );
+              const resolvedId = match?.id ?? id;
+              setSubgenreId(resolvedId);
+              onGenreFilter(resolvedId);
+            })();
           }}
           onTab={(t) => onReleaseNavigate?.(releaseId, t)}
           onImport={onImport}
@@ -630,6 +648,7 @@ export default function MusicModule({
           isAdmin={isAdmin}
           userId={userId}
           onOpenReleaseNavigate={(bid, rid) => {
+            void prefetchReleaseOverview(bid, rid);
             onReleaseNavigate?.(
               rid,
               "overview",

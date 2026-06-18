@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.models import User
 from app.media_paths import path_to_local_file, resolve_playback_url, resolve_stream_url
-from app.schemas import LyricsOut, PlayRequest, PlayResponse, ReproductionOut
-from app.services.lyrics import resolve_lyrics
+from app.schemas import LyricsOut, LyricsSaveIn, PlayRequest, PlayResponse, ReproductionOut
+from app.services.lyrics import resolve_lyrics, save_manual_lyrics
 
 router = APIRouter(prefix="/api/music", tags=["playback"])
 
@@ -68,6 +68,30 @@ async def track_lyrics(
         lyrics=lyrics,
         synced_lyrics=synced,
         source=source or "none",
+    )
+
+
+@router.put("/lyrics", response_model=LyricsOut)
+def save_track_lyrics(
+    body: LyricsSaveIn,
+    _admin: User = Depends(require_admin),
+):
+    from app.services.lyrics import _read_raw_lrc_file
+
+    save_manual_lyrics(
+        body.artist,
+        body.title,
+        body.lyrics,
+        play_path=body.play_path,
+        synced_lyrics=body.synced_lyrics,
+    )
+    synced = _read_raw_lrc_file(body.play_path) if body.play_path else body.synced_lyrics
+    return LyricsOut(
+        artist=body.artist,
+        title=body.title,
+        lyrics=body.lyrics.strip(),
+        synced_lyrics=synced,
+        source="manual",
     )
 
 

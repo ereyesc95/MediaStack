@@ -22,19 +22,17 @@ function parseLrc(raw: string): LrcLine[] {
 }
 
 type Props = {
-  title: string;
   lyrics: string | null;
   syncedLyrics?: string | null;
   currentTime?: number;
-  error?: string | null;
+  loading?: boolean;
 };
 
 export default function ReleaseInlineLyrics({
-  title,
   lyrics,
   syncedLyrics,
   currentTime = 0,
-  error,
+  loading = false,
 }: Props) {
   const lrcLines = useMemo(
     () => (syncedLyrics ? parseLrc(syncedLyrics) : []),
@@ -53,9 +51,8 @@ export default function ReleaseInlineLyrics({
 
   return (
     <div className="release-tracklist__inline release-tracklist__inline--lyrics">
-      <h2 className="release-tracklist__inline-title">{title}</h2>
-      {error && <p className="error">{error}</p>}
-      {lrcLines.length > 0 ? (
+      {loading && <p className="muted">Loading lyrics…</p>}
+      {!loading && lrcLines.length > 0 ? (
         <div className="release-tracklist__lyrics-sync">
           {lrcLines.map((line, i) => (
             <p
@@ -73,7 +70,7 @@ export default function ReleaseInlineLyrics({
       ) : lyrics ? (
         <pre className="release-tracklist__lyrics-plain">{lyrics}</pre>
       ) : (
-        !error && <p className="muted">No lyrics found for this track.</p>
+        !loading && <p className="muted">No lyrics found for this track.</p>
       )}
     </div>
   );

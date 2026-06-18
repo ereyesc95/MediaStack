@@ -14,25 +14,49 @@ from app.gallery import _artist_dir
 from app.models import Band
 from app.services.lyrics import LYRICS_CACHE_DIR, _read_lrc_file, _strip_lrc_tags
 
-WORD_RE = re.compile(r"[a-z0-9']{3,}", re.IGNORECASE)
+WORD_RE = re.compile(r"[a-z0-9']{2,}", re.IGNORECASE)
 LRC_TAG_RE = re.compile(r"\[[^\]]+\]")
+CONTRACTION_RE = re.compile(
+    r"^(i|you|he|she|we|they|it|who|what|where|when|why|how|that|there|here|let|ain)"
+    r"['']?(m|s|re|ve|ll|d|t)$",
+    re.IGNORECASE,
+)
 
 STOP_WORDS = frozenset(
     """
     a an and are as at be but by for from had has have he her hers him his i if in into
     is it its me my no nor not of on or our ours out she so than that the their them then
     there these they this those to too up us was we were what when where which who why will
-    with you your yours am been being can could did do does doing done get got had has having
+    with you your yours am been being can could did do does doing done get got having
     just like ll re s t ve vey ya yeah oh ah um uh la na da di de du le les des ein eine
+    im i'm ill i'll ive i've id i'd youre you're youll you'll youve you've youd you'd
+    hes he's hell he'll shed she'd shes she's shell she'll wed we'd were we're weve we've
+    well we'll theyre they're theyll they'll theyve they've theyd they'd thats that's
+    theres there's heres here's wont won't can't cannot dont don't doesnt doesn't didnt
+    didn't isnt isn't wasnt wasn't werent weren't havent haven't hasnt hasn't hadnt hadn't
+    shouldnt shouldn't wouldnt wouldn't couldnt couldn't ain't aint lets let's
     """.split()
 )
+
+
+def _is_stop_word(word: str) -> bool:
+    w = word.casefold().strip("'")
+    if not w or w in STOP_WORDS:
+        return True
+    if CONTRACTION_RE.match(w):
+        return True
+    if "'" in w:
+        head = w.split("'", 1)[0]
+        if head in STOP_WORDS:
+            return True
+    return False
 
 
 def _tokenize(text: str) -> list[str]:
     tokens: list[str] = []
     for match in WORD_RE.finditer(text.casefold()):
         word = match.group(0).strip("'")
-        if len(word) < 3 or word in STOP_WORDS:
+        if _is_stop_word(word):
             continue
         tokens.append(word)
     return tokens

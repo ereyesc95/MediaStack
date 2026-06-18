@@ -201,6 +201,14 @@ class LyricsOut(BaseModel):
     source: str = "lyrics.ovh"
 
 
+class LyricsSaveIn(BaseModel):
+    artist: str
+    title: str
+    play_path: str | None = None
+    lyrics: str
+    synced_lyrics: str | None = None
+
+
 class ReproductionOut(BaseModel):
     id: int
     title: str | None

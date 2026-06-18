@@ -11,16 +11,12 @@ export type TrackPanelMeta = {
   lines: TrackPanelLine[];
 };
 
-const VERSION_ONLY = /^(acoustic|remix|live)$/i;
+const VERSION_ONLY = /^(acoustic|remix|live|remastered)$/i;
 
 function stripOuterBrackets(title: string): { main: string; inner: string | null } {
   const bracket = title.match(/^(.+?)\s*\[([^\]]+)\]\s*$/);
   if (bracket) {
     return { main: bracket[1].trim(), inner: bracket[2].trim() };
-  }
-  const paren = title.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-  if (paren) {
-    return { main: paren[1].trim(), inner: paren[2].trim() };
   }
   return { main: title.trim(), inner: null };
 }
@@ -46,22 +42,31 @@ function parseCoverArtist(part: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+function titleCaseWords(text: string): string {
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function versionLabel(part: string): string | null {
   const norm = part.trim();
   if (VERSION_ONLY.test(norm)) {
-    return `${norm.toLowerCase()} version`;
+    return titleCaseWords(`${norm.toLowerCase()} version`);
   }
   return null;
 }
 
 export function parseTrackPanelMeta(title: string): TrackPanelMeta {
   const { main, inner } = stripOuterBrackets(title);
+  const versionLines: TrackPanelLine[] = [];
   const lines: TrackPanelLine[] = [];
   if (inner) {
     for (const part of splitSuffixParts(inner)) {
       const version = versionLabel(part);
       if (version) {
-        lines.push({ kind: "version", label: version });
+        versionLines.push({ kind: "version", label: version });
         continue;
       }
       const cover = parseCoverArtist(part);
@@ -77,7 +82,19 @@ export function parseTrackPanelMeta(title: string): TrackPanelMeta {
       lines.push({ kind: "other", text: part });
     }
   }
-  return { mainTitle: main, lines };
+  return { mainTitle: main, lines: [...versionLines, ...lines] };
+}
+
+export function trackMainTitle(title: string): string {
+  return parseTrackPanelMeta(title).mainTitle;
+}
+
+export function trackDisplayTitle(title: string): string {
+  const trimmed = title.trim();
+  if (/\[[^\]]+\]\s*$/.test(trimmed)) {
+    return parseTrackPanelMeta(trimmed).mainTitle;
+  }
+  return trimmed;
 }
 
 export function writerSearchUrl(name: string): string {

@@ -441,6 +441,21 @@ export async function fetchTrackVersions(
   );
 }
 
+export async function fetchTrackSourceArt(
+  bandId: number,
+  releaseId: string,
+  playPath: string
+): Promise<{
+  play_path: string;
+  playback: import("./types").ReleasePlaybackArt;
+  artwork: import("./types").ReleaseGalleryItem[];
+}> {
+  const q = new URLSearchParams({ play_path: playPath });
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/tracks/source-art?${q}`
+  );
+}
+
 export async function fetchReleaseLyrics(
   bandId: number,
   releaseId: string,
@@ -521,7 +536,27 @@ export async function fetchTrackLyrics(
     lyrics: string | null;
     synced_lyrics?: string | null;
     source: string;
-  }>(`${API}/music/lyrics?${q}`);
+  }>(`${API}/music/lyrics?${q}`, undefined, 25_000);
+}
+
+export async function saveTrackLyrics(body: {
+  artist: string;
+  title: string;
+  play_path?: string;
+  lyrics: string;
+  synced_lyrics?: string | null;
+}) {
+  return request<{
+    artist: string;
+    title: string;
+    lyrics: string | null;
+    synced_lyrics?: string | null;
+    source: string;
+  }>(`${API}/music/lyrics`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function fetchBandPlaylistIndex(

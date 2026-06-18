@@ -436,8 +436,46 @@ def release_track_versions(
         band_id,
         title=title,
         play_path=play_path,
+        release_id=release_id,
     )
     return {"title": title, "versions": versions}
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/tracks/source-art")
+def release_track_source_art(
+    band_id: int,
+    release_id: str,
+    play_path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    from app.config import settings
+    from app.release_overview import resolve_release_content
+    from app.release_playback_art import artwork_gallery_for_play_path, playback_art_for_play_path
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    resolved = resolve_release_content(db, band_id, release_id)
+    if not resolved:
+        raise HTTPException(404, "Release not found")
+    band_row, card, media_root, content = resolved
+    if not settings.media_root:
+        raise HTTPException(404, "Media root not configured")
+    from app.release_playback_art import PlaybackArtContext
+
+    ctx = PlaybackArtContext(
+        release_content=content,
+        release_title=card.get("title"),
+        band_name=band_row.bnd_name,
+    )
+    playback = playback_art_for_play_path(media_root, play_path, ctx=ctx)
+    if not playback:
+        raise HTTPException(404, "Track not found")
+    return {
+        "play_path": play_path,
+        "playback": playback,
+        "artwork": artwork_gallery_for_play_path(media_root, play_path, ctx=ctx),
+    }
 
 
 @router.post("/bands/{band_id}/releases/{release_id}/refresh-metadata")

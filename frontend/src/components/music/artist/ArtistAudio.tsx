@@ -236,10 +236,10 @@ function ReleaseCard({
     if (targetBand !== bandId) {
       saveReleaseReferrer({ bandId, section: "audio", category });
     }
+    void prefetchReleaseOverview(targetBand, targetRelease);
     if (onOpenReleaseNavigate) {
       onOpenReleaseNavigate(targetBand, targetRelease);
     }
-    void prefetchReleaseOverview(targetBand, targetRelease);
     pushArtistRoute({
       bandId: targetBand,
       section: "audio",

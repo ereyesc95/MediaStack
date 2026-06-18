@@ -1,16 +1,16 @@
-/** Split track title into main part and bracket/paren suffix for display. */
+/** Split track title into main part and bracket suffix for display. */
+function formatTrackTitleSuffix(bracketed: string): string {
+  const inner = bracketed.replace(/^\[/, "").replace(/\]$/, "");
+  return `(${inner.replace(/;/g, ", ")})`;
+}
+
 export function splitTrackTitleDisplay(title: string): {
   main: string;
   suffix: string | null;
 } {
   const bracket = title.match(/^(.+?)\s*(\[[^\]]+\])\s*$/);
   if (bracket) {
-    const suffix = bracket[2].replace(/^\[/, "(").replace(/\]$/, ")");
-    return { main: bracket[1].trim(), suffix };
-  }
-  const paren = title.match(/^(.+?)\s*(\([^)]+\))\s*$/);
-  if (paren) {
-    return { main: paren[1].trim(), suffix: paren[2] };
+    return { main: bracket[1].trim(), suffix: formatTrackTitleSuffix(bracket[2]) };
   }
   return { main: title, suffix: null };
 }

@@ -464,6 +464,7 @@ export type ReleaseTrackItem = {
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
+  background_layers?: string[];
 };
 
 export type ReleaseSingleCard = {
@@ -482,7 +483,12 @@ export type TrackVersionItem = {
   album_title: string | null;
   album_folder: string | null;
   cover_url: string | null;
+  cover_animation_url?: string | null;
+  canvas_url?: string | null;
+  disc_url?: string | null;
+  background_layers?: string[];
   date_iso: string | null;
+  duration?: string | null;
 };
 
 export type ReleaseTrackGroup = {
@@ -496,6 +502,7 @@ export type ReleaseTrackGroup = {
 export type ReleaseEdition = {
   id: string;
   label: string;
+  kind?: "edition" | "single" | "bside" | "link";
   date_iso: string | null;
   groups: ReleaseTrackGroup[];
   is_link?: boolean;
@@ -590,6 +597,14 @@ export type ReleaseTracklist = {
   title: string;
   artist_name: string | null;
   editions: ReleaseEdition[];
+};
+
+export type ReleasePlaybackArt = {
+  cover_url?: string | null;
+  cover_animation_url?: string | null;
+  canvas_url?: string | null;
+  disc_url?: string | null;
+  background_layers?: string[];
 };
 
 export type ReleaseGalleryItem = {

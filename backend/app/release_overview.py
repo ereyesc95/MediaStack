@@ -119,6 +119,12 @@ def _resolve_standard_edition(content: Path) -> Path:
         if child.is_dir() and child.name.casefold() == STANDARD_EDITION:
             return child
     for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir():
+            continue
+        low = child.name.casefold()
+        if low.endswith(f". {STANDARD_EDITION}") or low.endswith(STANDARD_EDITION):
+            return child
+    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
         if child.is_dir() and DISC_DIR_RE.match(child.name):
             return child
     return content
@@ -440,17 +446,42 @@ def _match_db_release(db: Session, band_id: int, title: str) -> Release | None:
     return None
 
 
+def _lookup_subgenre(db: Session, name: str) -> Subgenre | None:
+    trimmed = name.strip()
+    if not trimmed:
+        return None
+    sg = (
+        db.query(Subgenre)
+        .filter(Subgenre.sgn_name.ilike(trimmed))
+        .first()
+    )
+    if sg:
+        return sg
+    lowered = trimmed.casefold()
+    for row in db.query(Subgenre).filter(Subgenre.sgn_name.isnot(None)).all():
+        if (row.sgn_name or "").casefold() == lowered:
+            return row
+    return None
+
+
 def _resolve_subgenres(db: Session, raw: str | None) -> list[dict]:
     ids = _parse_ids(raw or "")
     out: list[dict] = []
+    seen: set[int] = set()
     for sid in ids:
         sg = db.get(Subgenre, sid)
-        if sg and sg.sgn_name:
+        if sg and sg.sgn_name and sg.sgn_id not in seen:
+            seen.add(sg.sgn_id)
             out.append({"id": sg.sgn_id, "name": sg.sgn_name})
     if out:
         return out
     names = [part.strip() for part in re.split(r"[;,]", raw or "") if part.strip()]
-    return [{"id": i, "name": name} for i, name in enumerate(names)]
+    for name in names:
+        sg = _lookup_subgenre(db, name)
+        if sg and sg.sgn_name and sg.sgn_id not in seen:
+            seen.add(sg.sgn_id)
+            out.append({"id": sg.sgn_id, "name": sg.sgn_name})
+    return out
 
 
 def _resolve_producer(db: Session, raw: str | None) -> str | None:

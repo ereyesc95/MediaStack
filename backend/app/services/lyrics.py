@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
@@ -13,6 +15,8 @@ from app.paths import DATA_DIR
 
 LYRICS_CACHE_DIR = DATA_DIR / "lyrics_cache"
 LRC_TAG_RE = re.compile(r"\[[^\]]+\]")
+LYRICS_HTTP_TIMEOUT = 8.0
+LYRICS_CONNECT_TIMEOUT = 3.0
 
 
 def _cache_key(artist: str, title: str) -> str:
@@ -58,6 +62,114 @@ def _strip_lrc_tags(text: str) -> str:
     return "\n".join(lines)
 
 
+def _strip_paren_subtitle(title: str) -> str | None:
+    match = re.match(r"^(.+?)\s*\([^)]+\)\s*$", title.strip())
+    return match.group(1).strip() if match else None
+
+
+def _lyrics_title_variants(title: str) -> list[str]:
+    from app.lyrics_storage import lrclib_title_variants
+
+    seen: set[str] = set()
+    out: list[str] = []
+    canonical = _canonical_lyrics_title(title)
+    paren_variants = [
+        _strip_paren_subtitle(canonical),
+        _strip_paren_subtitle(title.strip()),
+    ]
+    for candidate in (
+        canonical,
+        title.strip(),
+        re.split(r"\s*;\s*", title.strip(), maxsplit=1)[0].strip(),
+        *paren_variants,
+        *lrclib_title_variants(canonical),
+        *lrclib_title_variants(title.strip()),
+    ):
+        if not candidate:
+            continue
+        key = candidate.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(candidate)
+    return out or [canonical or title.strip()]
+
+
+def _canonical_lyrics_title(title: str) -> str:
+    raw = title.strip()
+    if not raw:
+        return raw
+    bracket = re.match(r"^(.+?)\s*\[([^\]]+)\]\s*$", raw)
+    if bracket:
+        return bracket.group(1).strip()
+    return raw
+
+
+def _http_timeout() -> httpx.Timeout:
+    return httpx.Timeout(LYRICS_HTTP_TIMEOUT, connect=LYRICS_CONNECT_TIMEOUT)
+
+
+async def _race_lyrics_tasks(tasks: list[asyncio.Task[str | None]]) -> str | None:
+    pending = set(tasks)
+    try:
+        while pending:
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                try:
+                    result = task.result()
+                except Exception:
+                    result = None
+                if result:
+                    for other in pending:
+                        other.cancel()
+                    return result
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+    return None
+
+
+async def _fetch_lrclib_search(artist: str, title: str) -> str | None:
+    query = f"{artist.strip()} {title.strip()}"
+    async with httpx.AsyncClient(timeout=_http_timeout()) as client:
+        r = await client.get("https://lrclib.net/api/search", params={"q": query})
+        if r.status_code != 200:
+            return None
+        items = r.json()
+    if not isinstance(items, list):
+        return None
+    want_artist = artist.strip().casefold()
+    want_title = title.strip().casefold()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_artist = (item.get("artistName") or "").strip().casefold()
+        item_title = (item.get("trackName") or "").strip().casefold()
+        if item_artist != want_artist and want_artist not in item_artist:
+            continue
+        if item_title != want_title and want_title not in item_title:
+            continue
+        synced = (item.get("syncedLyrics") or "").strip()
+        if synced:
+            return _strip_lrc_tags(synced)
+        plain = (item.get("plainLyrics") or "").strip()
+        if plain:
+            return plain
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        synced = (item.get("syncedLyrics") or "").strip()
+        if synced:
+            return _strip_lrc_tags(synced)
+        plain = (item.get("plainLyrics") or "").strip()
+        if plain:
+            return plain
+    return None
+
+
 def _read_lrc_file(play_path: str) -> str | None:
     local = path_to_local_file(play_path)
     if not local:
@@ -90,7 +202,7 @@ async def fetch_lrclib_synced(
     if duration and duration > 0:
         params["duration"] = int(round(duration))
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=_http_timeout()) as client:
         r = await client.get("https://lrclib.net/api/get", params=params)
         if r.status_code == 404:
             return None
@@ -101,30 +213,56 @@ async def fetch_lrclib_synced(
 
 
 async def _fetch_lrclib(artist: str, title: str) -> str | None:
-    synced = await fetch_lrclib_synced(artist, title)
-    if synced:
-        return _strip_lrc_tags(synced)
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(
-            "https://lrclib.net/api/get",
-            params={"artist_name": artist, "track_name": title},
-        )
+    params = {"artist_name": artist.strip(), "track_name": title.strip()}
+    async with httpx.AsyncClient(timeout=_http_timeout()) as client:
+        r = await client.get("https://lrclib.net/api/get", params=params)
         if r.status_code == 404:
             return None
         r.raise_for_status()
         data = r.json()
+    synced = (data.get("syncedLyrics") or "").strip()
+    if synced:
+        return _strip_lrc_tags(synced)
     plain = (data.get("plainLyrics") or "").strip()
     return plain or None
 
 
 async def _fetch_lyrics_ovh(artist: str, title: str) -> str | None:
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.get(f"https://api.lyrics.ovh/v1/{artist}/{title}")
+    artist_q = quote(artist.strip(), safe="")
+    title_q = quote(title.strip(), safe="")
+    async with httpx.AsyncClient(timeout=_http_timeout()) as client:
+        r = await client.get(f"https://api.lyrics.ovh/v1/{artist_q}/{title_q}")
         if r.status_code == 404:
             return None
         r.raise_for_status()
         data = r.json()
-    return data.get("lyrics")
+    lyrics = data.get("lyrics")
+    return lyrics.strip() if isinstance(lyrics, str) and lyrics.strip() else None
+
+
+async def _fetch_remote_lyrics(artist: str, title: str) -> tuple[str | None, str | None]:
+    variants = _lyrics_title_variants(title)
+    for batch_start in range(0, len(variants), 5):
+        batch = variants[batch_start : batch_start + 5]
+        if not batch:
+            break
+        tasks: list[asyncio.Task[str | None]] = []
+        for variant in batch:
+            tasks.append(asyncio.create_task(_fetch_lrclib(artist, variant)))
+            tasks.append(asyncio.create_task(_fetch_lyrics_ovh(artist, variant)))
+        if batch_start == 0:
+            tasks.append(asyncio.create_task(_fetch_lrclib_search(artist, batch[0])))
+        lyrics = await _race_lyrics_tasks(tasks)
+        if lyrics:
+            return lyrics, "lrclib"
+    if variants:
+        retry = await _fetch_lrclib(artist, variants[0])
+        if retry:
+            return retry, "lrclib"
+        retry = await _fetch_lyrics_ovh(artist, variants[0])
+        if retry:
+            return retry, "lyrics.ovh"
+    return None, None
 
 
 def _read_raw_lrc_file(play_path: str) -> str | None:
@@ -149,7 +287,7 @@ async def resolve_lyrics(
 ) -> tuple[str | None, str | None]:
     """Return (lyrics_text, source). Sources: cache, lrc, lrclib, lyrics.ovh."""
     artist = artist.strip()
-    title = title.strip()
+    title = _canonical_lyrics_title(title.strip())
     if not artist or not title:
         return None, None
 
@@ -163,23 +301,43 @@ async def resolve_lyrics(
             _write_cache(artist, title, lyrics=lrc, source="lrc")
             return lrc, "lrc"
 
-    try:
-        lrclib = await _fetch_lrclib(artist, title)
-        if lrclib:
-            _write_cache(artist, title, lyrics=lrclib, source="lrclib")
-            return lrclib, "lrclib"
-    except Exception:
-        pass
-
-    try:
-        ovh = await _fetch_lyrics_ovh(artist, title)
-        if ovh:
-            _write_cache(artist, title, lyrics=ovh, source="lyrics.ovh")
-            return ovh, "lyrics.ovh"
-    except Exception:
-        pass
+    lyrics, source = await _fetch_remote_lyrics(artist, title)
+    if lyrics and source:
+        _write_cache(artist, title, lyrics=lyrics, source=source)
+        return lyrics, source
 
     return None, None
+
+
+def save_manual_lyrics(
+    artist: str,
+    title: str,
+    lyrics: str,
+    *,
+    play_path: str | None = None,
+    synced_lyrics: str | None = None,
+) -> None:
+    artist = artist.strip()
+    title = title.strip()
+    text = lyrics.strip()
+    if not artist or not title or not text:
+        raise ValueError("Artist, title, and lyrics are required")
+
+    cache_title = _canonical_lyrics_title(title)
+    _write_cache(artist, cache_title, lyrics=text, source="manual")
+
+    if not play_path:
+        return
+    from app.lyrics_storage import ensure_artwork_lyrics_dir
+
+    local = path_to_local_file(play_path)
+    if not local:
+        return
+    dest = ensure_artwork_lyrics_dir(local)
+    if not dest:
+        return
+    payload = (synced_lyrics or "").strip() or text
+    dest.write_text(payload, encoding="utf-8")
 
 
 async def fetch_lyrics(artist: str, title: str) -> str | None:

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchReleaseGallery } from "../../../api";
-import type { ReleaseGalleryPayload } from "../../../types";
+import { fetchReleaseGallery, fetchTrackSourceArt } from "../../../api";
+import type { ReleaseGalleryItem, ReleaseGalleryPayload } from "../../../types";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "../artist/GalleryViewerModal";
@@ -10,14 +10,16 @@ type GalleryTab = "artwork" | "photos" | "extras";
 type Props = {
   bandId: number;
   releaseId: string;
+  playingPath?: string | null;
 };
 
-export default function ReleaseGallery({ bandId, releaseId }: Props) {
+export default function ReleaseGallery({ bandId, releaseId, playingPath = null }: Props) {
   const [data, setData] = useState<ReleaseGalleryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<GalleryTab>("artwork");
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [playingArtwork, setPlayingArtwork] = useState<ReleaseGalleryItem[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,7 +49,25 @@ export default function ReleaseGallery({ bandId, releaseId }: Props) {
 
   useEffect(() => {
     setViewerIndex(null);
-  }, [tab]);
+  }, [tab, playingPath]);
+
+  useEffect(() => {
+    if (!playingPath) {
+      setPlayingArtwork(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchTrackSourceArt(bandId, releaseId, playingPath)
+      .then((res) => {
+        if (!cancelled) setPlayingArtwork(res.artwork);
+      })
+      .catch(() => {
+        if (!cancelled) setPlayingArtwork(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bandId, releaseId, playingPath]);
 
   if (loading && !data) {
     return <p className="muted release-gallery__loading">Loading gallery…</p>;
@@ -59,8 +79,13 @@ export default function ReleaseGallery({ bandId, releaseId }: Props) {
     return <p className="muted release-gallery__empty">No gallery items found.</p>;
   }
 
+  const activeArtwork =
+    playingPath && playingArtwork && playingArtwork.length > 0
+      ? playingArtwork
+      : data.artwork;
+
   const items =
-    tab === "artwork" ? data.artwork : tab === "photos" ? data.photos : data.extras;
+    tab === "artwork" ? activeArtwork : tab === "photos" ? data.photos : data.extras;
 
   const viewerItems: GalleryViewerItem[] = items.map((item) => ({
     id: item.id,
@@ -76,7 +101,7 @@ export default function ReleaseGallery({ bandId, releaseId }: Props) {
   };
 
   const tabs: { id: GalleryTab; label: string; count: number }[] = [
-    { id: "artwork", label: "ARTWORK", count: data.artwork.length },
+    { id: "artwork", label: "ARTWORK", count: activeArtwork.length },
     { id: "photos", label: "PHOTOS", count: data.photos.length },
     { id: "extras", label: "EXTRAS", count: data.extras.length },
   ];
