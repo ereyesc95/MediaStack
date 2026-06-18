@@ -195,3 +195,58 @@ export function IconMetadata({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconTrackData({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6zM4 19h16v2H4v-2z"
+      />
+    </svg>
+  );
+}
+
+export function IconLyrics({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"
+      />
+    </svg>
+  );
+}
+
+export function IconVideo({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M21 6.5a1.5 1.5 0 0 0-1.45-1.1C17.9 5 12 5 12 5s-5.9 0-7.55.4A1.5 1.5 0 0 0 3 6.5 26 26 0 0 0 2.5 12 26 26 0 0 0 3 17.5 1.5 1.5 0 0 0 4.45 18.6C6.1 19 12 19 12 19s5.9 0 7.55-.4a1.5 1.5 0 0 0 1.45-1.1A26 26 0 0 0 21.5 12 26 26 0 0 0 21 6.5zM10 15.5v-7l6 3.5-6 3.5z"
+      />
+    </svg>
+  );
+}
+
+export function IconAbout({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+      />
+    </svg>
+  );
+}
+
+export function IconEditRelease({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L18.5 9H15zM8 13h8v2H8v-2zm0 4h8v2H8v-2z"
+      />
+    </svg>
+  );
+}

@@ -46,3 +46,38 @@ def add_track_to_playlist(
     db.commit()
     db.refresh(row)
     return {"ok": True, "id": row.pld_id, "duplicate": False}
+
+
+def create_user_playlist(db: Session, *, name: str) -> dict:
+    clean = name.strip()
+    if not clean:
+        return {"ok": False, "error": "Playlist name is required"}
+    existing = db.scalars(
+        select(Playlist).where(
+            Playlist.pla_type == 200,
+            Playlist.pla_name == clean,
+        )
+    ).first()
+    if existing:
+        return {
+            "ok": True,
+            "id": existing.pla_id,
+            "name": existing.pla_name,
+            "duplicate": True,
+        }
+    next_id = int(db.scalar(select(func.max(Playlist.pla_id))) or 0) + 1
+    row = Playlist(
+        pla_id=next_id,
+        pla_name=clean,
+        pla_type=200,
+        pla_description=None,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {
+        "ok": True,
+        "id": row.pla_id,
+        "name": row.pla_name,
+        "duplicate": False,
+    }

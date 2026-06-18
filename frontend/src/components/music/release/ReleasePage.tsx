@@ -10,6 +10,7 @@ import {
   fetchReleaseLyrics,
   fetchReleaseOverview,
   fetchReleaseTracklist,
+  fetchReleaseYoutubeCandidates,
   fetchTrackSourceArt,
   playTrack,
   refreshReleaseMetadata,
@@ -50,6 +51,11 @@ import MediaInlineSearch from "../MediaInlineSearch";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
 import NotInLibraryDialog from "../artist/NotInLibraryDialog";
 import ReleaseAboutEditModal from "./ReleaseAboutEditModal";
+import ReleaseVideoSetModal from "./ReleaseVideoSetModal";
+import ReleaseVideoFetchModal, {
+  type YoutubeFetchItem,
+} from "./ReleaseVideoFetchModal";
+import { openYoutubeFullscreen, youtubeVideoId } from "../../../utils/youtube";
 import {
   MiniAudioPlayerControls,
   useMiniAudio,
@@ -221,14 +227,21 @@ export default function ReleasePage({
   const [mobileTrackView, setMobileTrackView] =
     useState<ReleaseMobileTrackView>("tracks");
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [videoSetOpen, setVideoSetOpen] = useState(false);
+  const [videoFetchOpen, setVideoFetchOpen] = useState(false);
+  const [videoFetchItems, setVideoFetchItems] = useState<YoutubeFetchItem[]>([]);
   const [busy, setBusy] = useState("");
   const [refreshWiki, setRefreshWiki] = useState(true);
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
   const [trackWriters, setTrackWriters] = useState<string[]>([]);
-  const [activeTrack, setActiveTrack] = useState<ReleaseTrackItem | null>(null);
+  const [, setActiveTrack] = useState<ReleaseTrackItem | null>(null);
   const [panelActionTrack, setPanelActionTrack] = useState<ReleaseTrackItem | null>(null);
   const [showLyricsAction, setShowLyricsAction] = useState(true);
   const [showVersionsAction, setShowVersionsAction] = useState(true);
+  const [versionSource, setVersionSource] = useState<{
+    album_title: string;
+    navigate_release_id: string;
+  } | null>(null);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
   const [externalArtist, setExternalArtist] = useState<{
     name: string;
@@ -490,25 +503,30 @@ export default function ReleasePage({
   }, [bandId, releaseId, data]);
 
   const hasActiveTrack = Boolean(playingPath);
+  const showPlaybackMotion = hasActiveTrack && isPlaying;
   const displayCover = hasActiveTrack
-    ? (playbackArt?.cover_url ?? null)
+    ? (playbackArt?.cover_url ?? data?.cover_url ?? null)
     : (data?.cover_url ?? null);
-  const displayAnim = hasActiveTrack
-    ? (playbackArt?.cover_animation_url ?? null)
-    : (data?.cover_animation_url ?? null);
-  const displayCanvas = hasActiveTrack
-    ? (playbackArt?.canvas_url ?? null)
-    : (data?.canvas_url ?? null);
+  const displayAnim =
+    showPlaybackMotion ? (playbackArt?.cover_animation_url ?? null) : null;
+  const displayCanvas =
+    showPlaybackMotion ? (playbackArt?.canvas_url ?? null) : null;
   const displayDisc = hasActiveTrack
     ? (playbackArt?.disc_url ?? data?.disc_url ?? DEFAULT_DISC_URL)
     : (data?.disc_url ?? DEFAULT_DISC_URL);
   const showPanelCanvas =
-    hasActiveTrack && Boolean(displayCanvas) && isVideoMedia(displayCanvas);
+    Boolean(displayCanvas) && isVideoMedia(displayCanvas);
   const albumCover = data?.cover_url ?? null;
   const albumDisc = data?.disc_url ?? DEFAULT_DISC_URL;
-  const panelCoverSrc = hasActiveTrack ? displayAnim || displayCover : albumCover;
+  const panelCoverSrc = hasActiveTrack
+    ? displayAnim && isVideoMedia(displayAnim)
+      ? displayAnim
+      : displayCover
+    : albumCover;
   const panelDiscSrc = hasActiveTrack ? displayDisc : albumDisc;
-  const panelCoverIsVideo = isVideoMedia(panelCoverSrc);
+  const panelCoverIsVideo = Boolean(
+    panelCoverSrc && isVideoMedia(panelCoverSrc) && showPlaybackMotion
+  );
   const bgUrl =
     playingPath
       ? (playbackArt?.background_layers?.[0] ??
@@ -633,6 +651,49 @@ export default function ReleasePage({
     }
   };
 
+  const handleFetchVideos = async () => {
+    setBusy("Searching MusicBrainz for official videos…");
+    setError(null);
+    try {
+      const res = await fetchReleaseYoutubeCandidates(bandId, releaseId, true);
+      if (!res.ok) {
+        setError(res.error ?? "Video fetch failed");
+        return;
+      }
+      setBusy("");
+      setVideoFetchItems(res.items ?? []);
+      setVideoFetchOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      window.setTimeout(() => setBusy(""), 4000);
+    }
+  };
+
+  const handleVideoSaved = useCallback(async () => {
+    setTracklistKey((k) => k + 1);
+    const path = panelActionTrack?.play_path;
+    if (!path) return;
+    try {
+      const payload = await fetchReleaseTracklist(bandId, releaseId);
+      const updated = payload.editions
+        .flatMap((ed) => ed.groups.flatMap((g) => g.tracks))
+        .find((t) => t.play_path === path);
+      if (updated) setPanelActionTrack(updated);
+    } catch {
+      /* tracklist will refresh on next load */
+    }
+  }, [bandId, releaseId, panelActionTrack?.play_path]);
+
+  const handleOpenYoutube = useCallback(
+    (url: string) => {
+      openYoutubeFullscreen(url, () => {
+        miniAudio.audioRef.current?.pause();
+      });
+    },
+    [miniAudio.audioRef]
+  );
+
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
     try {
@@ -657,7 +718,7 @@ export default function ReleasePage({
     async (
       path: string,
       title: string,
-      art?: ReleasePlaybackArt,
+      _art?: ReleasePlaybackArt,
       _editionLabel?: string | null
     ) => {
       if (playingPath === path && miniAudio.src) {
@@ -759,6 +820,18 @@ export default function ReleasePage({
   }, [bandId, releaseId, handlePlayTrack, miniAudio, playingPath]);
 
   useEffect(() => {
+    const el = miniAudio.audioRef.current;
+    if (!el) return;
+    const onEnded = () => {
+      if (playingPath && tab === "tracklist") {
+        playAdjacentTrack("next");
+      }
+    };
+    el.addEventListener("ended", onEnded);
+    return () => el.removeEventListener("ended", onEnded);
+  }, [miniAudio.audioRef, playAdjacentTrack, playingPath, tab]);
+
+  useEffect(() => {
     if (!playingPath) return;
     void resolvePlaybackArt(playingPath).then((resolved) => {
       if (resolved) setPlaybackArt(resolved);
@@ -774,6 +847,7 @@ export default function ReleasePage({
   const pageClass = [
     "release-page",
     stacked ? "release-page--stacked" : "",
+    layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
     tab === "overview" ? "release-page--overview" : "",
     scrollBody ? "release-page--scroll" : "",
     tab === "tracklist" && stacked && mobileTrackView === "album"
@@ -791,7 +865,9 @@ export default function ReleasePage({
     .join(" ");
 
   const showTrackPanel =
-    tab === "tracklist" && Boolean(nowPlayingTitle) && isPlaying;
+    tab === "tracklist" &&
+    Boolean(nowPlayingTitle) &&
+    (isPlaying || Boolean(versionSource));
   const panelFadedCover = displayCover ?? data?.cover_url ?? null;
   const trackPanelMeta = nowPlayingTitle ? parseTrackPanelMeta(nowPlayingTitle) : null;
   const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
@@ -826,25 +902,29 @@ export default function ReleasePage({
       <div className="release-page__art">
         <div className="release-page__art-stage">
           {panelCoverSrc &&
-            (panelCoverIsVideo && hasActiveTrack ? (
-              <video
-                key={panelCoverSrc}
-                src={panelCoverSrc}
-                className="release-page__cover release-page__cover--video"
-                autoPlay={isPlaying}
-                loop
-                muted
-                playsInline
-                draggable={false}
-              />
+            (panelCoverIsVideo ? (
+              <span className="release-page__cover-wrap">
+                <video
+                  key={panelCoverSrc}
+                  src={panelCoverSrc!}
+                  className="release-page__cover release-page__cover--video"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  draggable={false}
+                />
+              </span>
             ) : (
-              <img
-                key={panelCoverSrc}
-                src={panelCoverSrc}
-                alt=""
-                className="release-page__cover"
-                draggable={false}
-              />
+              <span className="release-page__cover-wrap">
+                <img
+                  key={panelCoverSrc}
+                  src={panelCoverSrc}
+                  alt=""
+                  className="release-page__cover"
+                  draggable={false}
+                />
+              </span>
             ))}
           {data.playback_kind !== "tape" && (
             <img
@@ -921,6 +1001,20 @@ export default function ReleasePage({
                       {line.label}
                     </p>
                   ))}
+                {versionSource && (
+                  <p className="release-page__track-panel-source">
+                    Taken from{" "}
+                    <button
+                      type="button"
+                      className="release-page__release-link"
+                      onClick={() =>
+                        onOpenRelease(bandId, versionSource.navigate_release_id)
+                      }
+                    >
+                      {versionSource.album_title}
+                    </button>
+                  </p>
+                )}
                 {trackPanelMeta.lines
                   .filter((line) => line.kind !== "version")
                   .map((line, i) => {
@@ -1055,7 +1149,7 @@ export default function ReleasePage({
           )}
         </div>
 
-        <div className="release-page__panel-bottom" ref={panelBottomRef}>
+          <div className="release-page__panel-bottom" ref={panelBottomRef}>
           {tab !== "tracklist" && data.label && (
             <div className="release-page__label" ref={panelLabelRef}>
               <button
@@ -1094,6 +1188,54 @@ export default function ReleasePage({
             </div>
           )}
 
+          {tab === "tracklist" && panelActionTrack && (
+            <div className="release-page__track-actions release-page__track-actions--above-player">
+              {showLyricsAction && (
+                <button
+                  type="button"
+                  className="release-page__track-action"
+                  data-tooltip="Lyrics"
+                  aria-label="Lyrics"
+                  onClick={() => tracklistRef.current?.openLyrics(panelActionTrack)}
+                >
+                  <TrackActionLyricsIcon className="release-page__track-action-icon" />
+                </button>
+              )}
+              {showVersionsAction && (
+                <button
+                  type="button"
+                  className="release-page__track-action"
+                  data-tooltip="Versions"
+                  aria-label="Versions"
+                  onClick={() => tracklistRef.current?.openVersions(panelActionTrack)}
+                >
+                  <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                </button>
+              )}
+              <button
+                type="button"
+                className="release-page__track-action"
+                data-tooltip="Add to playlist"
+                aria-label="Add to playlist"
+                onClick={() => tracklistRef.current?.openPlus(panelActionTrack)}
+              >
+                <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+              </button>
+              {panelActionTrack.youtube_url &&
+                youtubeVideoId(panelActionTrack.youtube_url) && (
+                <button
+                  type="button"
+                  className="release-page__track-action"
+                  data-tooltip="Official video"
+                  aria-label="Official video"
+                  onClick={() => handleOpenYoutube(panelActionTrack.youtube_url!)}
+                >
+                  <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="release-page__panel-footer">
           <div className="release-page__panel-player">
             <MiniAudioPlayerControls
@@ -1112,53 +1254,6 @@ export default function ReleasePage({
               />
             ) : (
               <span className="release-page__neighbor-spacer" />
-            )}
-            {tab === "tracklist" && panelActionTrack && (
-              <div className="release-page__track-actions">
-                {showLyricsAction && (
-                  <button
-                    type="button"
-                    className="release-page__track-action"
-                    title="Lyrics"
-                    aria-label="Lyrics"
-                    onClick={() => tracklistRef.current?.openLyrics(panelActionTrack)}
-                  >
-                    <TrackActionLyricsIcon className="release-page__track-action-icon" />
-                  </button>
-                )}
-                {showVersionsAction && (
-                  <button
-                    type="button"
-                    className="release-page__track-action"
-                    title="Versions"
-                    aria-label="Versions"
-                    onClick={() => tracklistRef.current?.openVersions(panelActionTrack)}
-                  >
-                    <TrackActionVersionsIcon className="release-page__track-action-icon" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="release-page__track-action"
-                  title="Add to playlist"
-                  aria-label="Add to playlist"
-                  onClick={() => tracklistRef.current?.openPlus(panelActionTrack)}
-                >
-                  <TrackActionPlaylistIcon className="release-page__track-action-icon" />
-                </button>
-                {panelActionTrack.youtube_url && (
-                  <a
-                    href={panelActionTrack.youtube_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="release-page__track-action"
-                    title="Official video"
-                    aria-label="Official video"
-                  >
-                    <TrackActionYoutubeIcon className="release-page__track-action-icon" />
-                  </a>
-                )}
-              </div>
             )}
             {data.next ? (
               <ReleaseNeighborLink
@@ -1241,14 +1336,17 @@ export default function ReleasePage({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              menuVariant="release"
               onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
               onRefreshMetadata={
                 isAdmin ? () => void handleRefreshMetadata() : undefined
               }
               onFetchLyrics={isAdmin ? () => void handleFetchLyrics() : undefined}
+              onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
+              onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
               refreshIncludeBio={refreshWiki}
               onRefreshIncludeBioChange={setRefreshWiki}
-              refreshIncludeLabel="Include Wikipedia"
+              refreshIncludeLabel="Include description"
             />
           </div>
         </header>
@@ -1384,6 +1482,7 @@ export default function ReleasePage({
                   ref={tracklistRef}
                   bandId={bandId}
                   releaseId={releaseId}
+                  releaseNavigateId={data.navigate_release_id}
                   artistName={data.artist_name}
                   releaseTitle={data.title}
                   stacked={stacked}
@@ -1393,10 +1492,11 @@ export default function ReleasePage({
                   onMobileViewChange={setMobileTrackView}
                   mobileBackdropUrl={displayCover}
                   onActiveTrackChange={setActiveTrack}
-                  onPanelActionsChange={({ track, showLyrics, showVersions }) => {
+                  onPanelActionsChange={({ track, showLyrics, showVersions, versionSource: src }) => {
                     setPanelActionTrack(track);
                     setShowLyricsAction(showLyrics);
                     setShowVersionsAction(showVersions);
+                    setVersionSource(src ?? null);
                   }}
                   onResumeTrack={(path) => {
                     const ctx = tracklistRef.current?.findTrackContext(path);
@@ -1429,6 +1529,26 @@ export default function ReleasePage({
           data={data}
           onClose={() => setAboutEditOpen(false)}
           onSaved={() => void load()}
+        />
+      )}
+
+      {videoSetOpen && data && (
+        <ReleaseVideoSetModal
+          bandId={bandId}
+          releaseId={releaseId}
+          artistName={data.artist_name}
+          onClose={() => setVideoSetOpen(false)}
+          onSaved={handleVideoSaved}
+        />
+      )}
+
+      {videoFetchOpen && data && (
+        <ReleaseVideoFetchModal
+          bandId={bandId}
+          artistName={data.artist_name}
+          items={videoFetchItems}
+          onClose={() => setVideoFetchOpen(false)}
+          onApplied={() => setTracklistKey((k) => k + 1)}
         />
       )}
 

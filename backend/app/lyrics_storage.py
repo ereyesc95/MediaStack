@@ -1,15 +1,25 @@
-"""Local synced lyrics (.lrc) under [Artwork]/Lyrics/."""
+"""Local synced lyrics (.lrc) — database overrides with legacy file fallback."""
 from __future__ import annotations
 
 from pathlib import Path
+
+from sqlalchemy.orm import Session
 
 from app.band_library import (
     _find_artwork_subdir,
     _strip_bracket_suffix,
     _title_from_filename_stem,
 )
+from app.config import settings
+from app.media_paths_util import safe_relative
 
 LYRICS_SUBDIR = "Lyrics"
+
+
+def play_path_for_audio(audio_file: Path) -> str | None:
+    if not settings.media_root:
+        return None
+    return safe_relative(audio_file, Path(settings.media_root))
 
 
 def track_title_from_stem(stem: str) -> str:
@@ -67,10 +77,11 @@ def find_lrc_path(audio_file: Path) -> Path | None:
     return None
 
 
-def ensure_artwork_lyrics_dir(audio_file: Path) -> Path | None:
-    art = resolve_artwork_for_audio(audio_file)
-    if not art:
-        return None
-    dest_dir = art / LYRICS_SUBDIR
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    return dest_dir / f"{audio_file.stem}.lrc"
+def has_stored_lyrics(db: Session | None, audio_file: Path) -> bool:
+    if db is not None:
+        from app.track_overrides import read_lyrics_lrc, read_lyrics_plain
+
+        rel = play_path_for_audio(audio_file)
+        if rel and (read_lyrics_lrc(db, rel) or read_lyrics_plain(db, rel)):
+            return True
+    return find_lrc_path(audio_file) is not None

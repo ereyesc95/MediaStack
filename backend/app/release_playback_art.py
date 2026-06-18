@@ -119,8 +119,15 @@ def _is_disc_group_name(name: str) -> bool:
 def _disc_stem_matches_group(stem: str, group_label: str) -> bool:
     group_num = _disc_number_from_label(group_label)
     stem_num = _disc_number_from_label(stem)
-    if group_num is not None and stem_num is not None:
-        return group_num == stem_num
+    if group_num is not None:
+        if stem_num is not None:
+            return group_num == stem_num
+        stem_cf = stem.casefold().strip()
+        if stem_cf in {"disc", "cd", "vinyl"}:
+            return group_num == 1
+        return False
+    if stem_num is not None:
+        return False
     gl = group_label.casefold().replace(" ", "")
     sl = stem.casefold().replace(" ", "")
     return sl in gl or gl in sl

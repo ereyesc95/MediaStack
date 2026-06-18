@@ -2,19 +2,14 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.lyrics_storage import (
-    ensure_artwork_lyrics_dir,
-    find_lrc_path,
-    lrclib_title_variants,
-)
+from app.lyrics_storage import lrclib_title_variants
 from app.media_paths import path_to_local_file
 from app.release_tracklist import build_release_tracklist
 from app.services.lyrics import _strip_lrc_tags, _write_cache, fetch_lrclib_synced
+from app.track_overrides import read_lyrics_lrc, save_lyrics
 
 
 async def fetch_release_lyrics(
@@ -56,22 +51,16 @@ async def fetch_release_lyrics(
                     items.append({"title": title, "status": "missing_file"})
                     continue
 
-                existing = find_lrc_path(audio_file)
+                existing = read_lyrics_lrc(db, play_path)
                 if existing and not force:
                     skipped += 1
                     items.append(
                         {
                             "title": title,
                             "status": "skipped",
-                            "path": str(existing),
+                            "path": play_path,
                         }
                     )
-                    continue
-
-                dest = ensure_artwork_lyrics_dir(audio_file)
-                if not dest:
-                    failed += 1
-                    items.append({"title": title, "status": "no_artwork"})
                     continue
 
                 duration = track.get("duration_sec")
@@ -95,30 +84,31 @@ async def fetch_release_lyrics(
                     items.append({"title": title, "status": "not_found"})
                     continue
 
+                plain = _strip_lrc_tags(synced).strip()
                 try:
-                    dest.write_text(synced, encoding="utf-8")
-                except OSError:
+                    save_lyrics(
+                        db,
+                        play_path=play_path,
+                        band_id=band_id,
+                        title=title,
+                        lyrics_plain=plain or None,
+                        lyrics_lrc=synced,
+                    )
+                except ValueError:
                     failed += 1
                     items.append({"title": title, "status": "write_error"})
                     continue
 
-                plain = _strip_lrc_tags(synced).strip()
                 if plain:
                     _write_cache(artist, title, lyrics=plain, source="lrclib-lrc")
 
                 fetched += 1
-                rel_path = None
-                if settings.media_root:
-                    try:
-                        rel_path = dest.relative_to(Path(settings.media_root)).as_posix()
-                    except ValueError:
-                        rel_path = dest.as_posix()
                 items.append(
                     {
                         "title": title,
                         "status": "fetched",
                         "matched_title": matched_title,
-                        "path": rel_path,
+                        "path": play_path,
                     }
                 )
 

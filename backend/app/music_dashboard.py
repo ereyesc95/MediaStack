@@ -285,9 +285,12 @@ def list_artist_cards(
 
 
 def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[dict]:
-    rows = db.scalars(select(Playlist).order_by(Playlist.pla_name)).all()
-    if not is_admin:
-        rows = [p for p in rows if p.pla_type != 200]
+    del user_id, is_admin
+    rows = db.scalars(
+        select(Playlist)
+        .where(Playlist.pla_type == 200)
+        .order_by(Playlist.pla_name)
+    ).all()
     out = []
     for p in rows:
         first = db.scalars(

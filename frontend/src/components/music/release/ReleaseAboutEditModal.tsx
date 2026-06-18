@@ -52,22 +52,28 @@ export default function ReleaseAboutEditModal({
   return (
     <ModalPortal onClose={onClose}>
       <div
-        className="modal-panel artist-admin-modal artist-admin-modal--wide"
+        className="artist-word-cloud-modal__panel release-about-edit-modal"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="modal-panel-header">
-          <h3>Edit release</h3>
-          <button type="button" className="modal-close-x" onClick={onClose}>
+        <header className="artist-word-cloud-modal__head">
+          <h3>About</h3>
+          <button
+            type="button"
+            className="artist-word-cloud-modal__close"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ×
           </button>
-        </div>
+        </header>
 
         {error && <p className="error">{error}</p>}
 
-        <div className="artist-admin-form">
+        <div className="artist-admin-form release-about-edit-modal__form">
           <label>
             Description
             <textarea
+              className="release-about-edit-modal__textarea ms-scrollbar"
               rows={8}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -95,15 +101,12 @@ export default function ReleaseAboutEditModal({
           </label>
         </div>
 
-        <div className="modal-panel-actions">
-          <button type="button" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
+        <div className="modal-actions-row">
           <button
             type="button"
-            className="primary"
-            onClick={() => void handleSave()}
+            className="btn"
             disabled={saving}
+            onClick={() => void handleSave()}
           >
             {saving ? "Saving…" : "Save"}
           </button>

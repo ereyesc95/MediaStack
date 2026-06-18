@@ -108,6 +108,18 @@ class Track(Base):
     tra_video: Mapped[str | None] = mapped_column("traVideo", Text)
 
 
+class TrackOverride(Base):
+    __tablename__ = "track_overrides"
+
+    tro_play_path: Mapped[str] = mapped_column("troPlayPath", Text, primary_key=True)
+    tro_band_id: Mapped[int | None] = mapped_column("troBandID", Integer)
+    tro_title: Mapped[str | None] = mapped_column("troTitle", Text)
+    tro_lyrics_lrc: Mapped[str | None] = mapped_column("troLyricsLrc", Text)
+    tro_lyrics_plain: Mapped[str | None] = mapped_column("troLyricsPlain", Text)
+    tro_youtube_url: Mapped[str | None] = mapped_column("troYoutubeUrl", Text)
+    tro_updated_at: Mapped[str | None] = mapped_column("troUpdatedAt", Text)
+
+
 class Playlist(Base):
     __tablename__ = "playlists"
 

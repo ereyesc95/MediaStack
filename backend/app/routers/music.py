@@ -52,6 +52,10 @@ class AddPlaylistTrackBody(BaseModel):
     path: str
 
 
+class CreatePlaylistBody(BaseModel):
+    name: str
+
+
 class QuizScoreBody(BaseModel):
     quiz_type: str
     score: int
@@ -540,6 +544,27 @@ async def release_fetch_lyrics(
     if not row:
         raise HTTPException(404, "Band not found")
     return await fetch_release_lyrics(db, band_id, release_id, force=force)
+
+
+@router.post("/bands/{band_id}/releases/{release_id}/youtube/fetch")
+async def release_fetch_youtube(
+    band_id: int,
+    release_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+    singles_only: bool = Query(False),
+):
+    from app.release_youtube_fetch import fetch_release_youtube_candidates
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return await fetch_release_youtube_candidates(
+        db,
+        band_id,
+        release_id,
+        singles_only=singles_only,
+    )
 
 
 @router.get("/bands/{band_id}/releases/{release_id}/tracks/credits")
@@ -1568,6 +1593,20 @@ def user_playlists(
             is_admin=is_admin_role(user.usr_role_id),
         )
     }
+
+
+@router.post("/playlists")
+def create_playlist(
+    body: CreatePlaylistBody,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import create_user_playlist
+
+    result = create_user_playlist(db, name=body.name)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Failed")
+    return result
 
 
 @router.post("/playlists/{playlist_id}/tracks")

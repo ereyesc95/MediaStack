@@ -11,19 +11,24 @@ import {
   type ThemeId,
 } from "../themes";
 import {
+  IconAbout,
   IconAddArtist,
   IconCamera,
   IconCards,
   IconCheck,
   IconEditProfile,
+  IconEditRelease,
   IconFolder,
   IconLineup,
   IconLinks,
+  IconLyrics,
   IconMetadata,
   IconSettings,
   IconSwitchProfile,
   IconSync,
   IconTheme,
+  IconTrackData,
+  IconVideo,
 } from "./MenuIcons";
 
 type Props = {
@@ -38,6 +43,9 @@ type Props = {
   onEditProfile?: () => void;
   onRefreshMetadata?: () => void;
   onFetchLyrics?: () => void;
+  onFetchVideos?: () => void;
+  onSetVideo?: () => void;
+  menuVariant?: "artist" | "release";
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -75,6 +83,9 @@ export default function AppMenu({
   onEditProfile,
   onRefreshMetadata,
   onFetchLyrics,
+  onFetchVideos,
+  onSetVideo,
+  menuVariant = "artist",
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -93,6 +104,7 @@ export default function AppMenu({
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
+  const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => readDomTheme());
@@ -122,6 +134,7 @@ export default function AppMenu({
         setOpen(false);
         setSettingsOpen(false);
         setArtistDataOpen(false);
+        setTrackDataOpen(false);
         setThemeOpen(false);
         setCustomOpen(false);
       }
@@ -157,10 +170,23 @@ export default function AppMenu({
     setActiveTheme("custom");
   }
 
+  function toggleTrackData() {
+    setTrackDataOpen((o) => {
+      const next = !o;
+      if (next) {
+        setArtistDataOpen(false);
+        setThemeOpen(false);
+        setSettingsOpen(false);
+      }
+      return next;
+    });
+  }
+
   function toggleArtistData() {
     setArtistDataOpen((o) => {
       const next = !o;
       if (next) {
+        setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
       }
@@ -190,6 +216,11 @@ export default function AppMenu({
     });
   }
 
+  const showTrackDataMenu =
+    menuVariant === "release" &&
+    isAdmin &&
+    (onFetchLyrics || onFetchVideos || onSetVideo);
+
   const showRefreshData =
     onEditAbout ||
     onRefreshMetadata ||
@@ -200,6 +231,11 @@ export default function AppMenu({
     onRefreshRelatedSimilar ||
     onRefreshRelatedParticipations ||
     onRefreshIncludeBioChange;
+
+  const refreshMenuLabel = menuVariant === "release" ? "Edit Release" : "Refresh data";
+  const RefreshMenuIcon = menuVariant === "release" ? IconEditRelease : IconMetadata;
+  const aboutLabel = menuVariant === "release" ? "About" : "Edit about";
+  const AboutIcon = menuVariant === "release" ? IconAbout : IconEditProfile;
 
   return (
     <div className="app-menu" ref={ref}>
@@ -251,7 +287,60 @@ export default function AppMenu({
               Add similar artist
             </button>
           )}
-          {isAdmin && onFetchLyrics && (
+          {showTrackDataMenu && (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={toggleTrackData}
+              >
+                <IconTrackData className="menu-item-icon" />
+                Track data
+                <span className="menu-chevron">{trackDataOpen ? "▴" : "▾"}</span>
+              </button>
+              {trackDataOpen && (
+                <div className="app-menu-submenu">
+                  {onFetchLyrics && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFetchLyrics();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLyrics className="menu-item-icon" />
+                      Get lyrics
+                    </button>
+                  )}
+                  {onFetchVideos && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFetchVideos();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconVideo className="menu-item-icon" />
+                      Get videos
+                    </button>
+                  )}
+                  {onSetVideo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSetVideo();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconVideo className="menu-item-icon" />
+                      Set video
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {menuVariant === "artist" && isAdmin && onFetchLyrics && (
             <button
               type="button"
               onClick={() => {
@@ -259,7 +348,7 @@ export default function AppMenu({
                 setOpen(false);
               }}
             >
-              <IconMetadata className="menu-item-icon" />
+              <IconLyrics className="menu-item-icon" />
               Fetch lyrics
             </button>
           )}
@@ -270,8 +359,8 @@ export default function AppMenu({
                 className="menu-item-with-sub"
                 onClick={toggleArtistData}
               >
-                <IconMetadata className="menu-item-icon" />
-                Refresh data
+                <RefreshMenuIcon className="menu-item-icon" />
+                {refreshMenuLabel}
                 <span className="menu-chevron">
                   {artistDataOpen ? "▴" : "▾"}
                 </span>
@@ -286,8 +375,20 @@ export default function AppMenu({
                         setOpen(false);
                       }}
                     >
-                      <IconEditProfile className="menu-item-icon" />
-                      Edit about
+                      <AboutIcon className="menu-item-icon" />
+                      {aboutLabel}
+                    </button>
+                  )}
+                  {onRefreshMetadata && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshMetadata();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconMetadata className="menu-item-icon" />
+                      Metadata
                     </button>
                   )}
                   {onRefreshIncludeBioChange && (
@@ -301,18 +402,6 @@ export default function AppMenu({
                       />
                       {refreshIncludeLabel}
                     </label>
-                  )}
-                  {onRefreshMetadata && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshMetadata();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconMetadata className="menu-item-icon" />
-                      Metadata
-                    </button>
                   )}
                   {onRescanLibrary && (
                     <button

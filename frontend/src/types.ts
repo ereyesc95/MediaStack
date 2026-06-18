@@ -482,6 +482,7 @@ export type TrackVersionItem = {
   play_path: string;
   album_title: string | null;
   album_folder: string | null;
+  navigate_release_id?: string | null;
   cover_url: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;

@@ -207,6 +207,22 @@ class LyricsSaveIn(BaseModel):
     play_path: str | None = None
     lyrics: str
     synced_lyrics: str | None = None
+    band_id: int | None = None
+
+
+class YouTubeOut(BaseModel):
+    artist: str
+    title: str
+    youtube_url: str | None = None
+    source: str = "none"
+
+
+class YouTubeSaveIn(BaseModel):
+    artist: str
+    title: str
+    play_path: str | None = None
+    youtube_url: str | None = None
+    band_id: int | None = None
 
 
 class ReproductionOut(BaseModel):

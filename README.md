@@ -254,14 +254,28 @@ If no disc image exists, the app uses `assets/system/default/disc.png`.
 
 Synced lyrics (`.lrc`) are resolved in this order:
 
-1. Next to the audio file (`Song.flac` → `Song.lrc`)
-2. `[Artwork]/Lyrics/{same stem as audio}.lrc`
+1. **Database** — `track_overrides` table (`troLyricsLrc` / `troLyricsPlain`), keyed by `play_path`
+2. Next to the audio file (`Song.flac` → `Song.lrc`)
+3. `[Artwork]/Lyrics/{same stem as audio}.lrc`
 
-Example:
+Example (legacy file layout):
 
 ```
 [Artwork]/Lyrics/01. Wicked Game.lrc
 ```
+
+Fetched or edited lyrics are stored in the database so they stay with the track without extra folders.
+
+### Official videos (YouTube)
+
+YouTube links are stored in **`track_overrides`** (`troYoutubeUrl`), keyed by `play_path`. Resolution order:
+
+1. Database override for that `play_path`
+2. Legacy `[Artwork]/YouTube.txt` (or similar) beside the track
+3. `tracks.traVideo` in the database (matched by title)
+4. Single inheritance — if the album track shares a title with a file under `Audio/Singles/`, the single’s link may apply
+
+Admins can bulk-fetch official videos from MusicBrainz (**Track data → Get videos**) or set links manually (**Set video**). Playback opens YouTube in a new tab (autoplay) and pauses local audio.
 
 ---
 
@@ -377,11 +391,27 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 - **Artist page** — bio, lineup, discography, singles, playlists, gallery, word cloud, quizzes
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions
 - **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]`
-- **Versions panel** — acoustic/live/remix plus language adaptations via `of` tags
-- **Lyrics** — inline synced LRC, on-demand fetch, edit modal
-- **Playlists** — user playlists + suffix-based system playlists (Remixes, Acoustic, …)
+- **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
+- **Versions panel** — acoustic/live/remix plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
+- **Lyrics** — inline synced LRC, on-demand fetch, edit modal; stored in DB via `track_overrides`
+- **YouTube** — per-track official video links in DB; bulk fetch, manual set, open in new tab with autoplay
+- **Playlists** — user playlists (`plaType` 200) + suffix-based system templates (`plaType` 201: Remixes, Acoustic, …); add-to-playlist modal with create-and-add
+- **Release admin menu** — Track data (lyrics/videos), Edit release (About, metadata, description), styled modals with inner-only scrollbars
 - **Search** — in-library media search per artist
-- **Playback** — play logging, stream via local file or media server
+- **Playback** — play logging, auto-advance to next track, stream via local file or media server
+
+### Track overrides (`track_overrides`)
+
+Per-track data keyed by **`play_path`** (stable across renames if path unchanged):
+
+| Column | Purpose |
+|--------|---------|
+| `troPlayPath` | Primary key — relative path to audio file |
+| `troYoutubeUrl` | Official video URL or video ID |
+| `troLyricsLrc` | Synced lyrics (LRC text) |
+| `troLyricsPlain` | Plain lyrics fallback |
+
+Created automatically on schema migrate. Prefer DB storage over `[Artwork]` subfolders for lyrics and YouTube links going forward.
 
 ---
 
@@ -404,6 +434,7 @@ Then `python run.py` serves the built UI from `frontend/dist` at port 8766.
 | Settings | `/api/settings` |
 | Music | `/api/music` |
 | Playback / stream / lyrics | `/api/music/play`, `/stream`, `/lyrics` |
+| Track YouTube (get/set/fetch) | `/api/music/youtube`, `.../youtube/fetch` |
 | Series | `/api/series` |
 | Movies / Books / Games | `/api/movies`, `/api/books`, `/api/games` |
 | Import | `/api/import` |

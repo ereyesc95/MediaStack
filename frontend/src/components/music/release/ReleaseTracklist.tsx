@@ -30,7 +30,7 @@ import { TrackActionEditIcon, TrackActionRetryIcon } from "./releaseTrackActionI
 const tracklistCache = new Map<string, ReleaseTracklist>();
 
 function tracklistCacheKey(bandId: number, releaseId: string) {
-  return `v6:${bandId}:${releaseId}`;
+  return `v8:${bandId}:${releaseId}`;
 }
 
 export function prefetchReleaseTracklist(bandId: number, releaseId: string) {
@@ -68,9 +68,25 @@ export type ReleaseTracklistHandle = {
   } | null;
 };
 
+function versionSourceFromItem(
+  version: TrackVersionItem,
+  releaseId: string,
+  releaseNavigateId?: string | null
+): { album_title: string; navigate_release_id: string } | null {
+  const albumTitle = version.album_title?.trim();
+  const navId = version.navigate_release_id?.trim();
+  if (!albumTitle || !navId) return null;
+  const currentIds = new Set(
+    [releaseId, releaseNavigateId].filter((id): id is string => Boolean(id))
+  );
+  if (currentIds.has(navId)) return null;
+  return { album_title: albumTitle, navigate_release_id: navId };
+}
+
 type Props = {
   bandId: number;
   releaseId: string;
+  releaseNavigateId?: string | null;
   artistName: string;
   releaseTitle: string;
   stacked: boolean;
@@ -89,6 +105,7 @@ type Props = {
     track: ReleaseTrackItem | null;
     showLyrics: boolean;
     showVersions: boolean;
+    versionSource?: { album_title: string; navigate_release_id: string } | null;
   }) => void;
   onResumeTrack?: (path: string) => void;
   onRightViewChange?: (view: ReleaseRightView) => void;
@@ -172,6 +189,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   {
     bandId,
     releaseId,
+    releaseNavigateId,
     artistName,
     releaseTitle,
     stacked,
@@ -209,6 +227,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   const [lyricsEditOpen, setLyricsEditOpen] = useState(false);
   const [versionsReturnPath, setVersionsReturnPath] = useState<string | null>(null);
   const [playingVersionPath, setPlayingVersionPath] = useState<string | null>(null);
+  const [activeVersionSource, setActiveVersionSource] = useState<{
+    album_title: string;
+    navigate_release_id: string;
+  } | null>(null);
   const lyricsRequestRef = useRef(0);
 
   const setView = useCallback(
@@ -281,11 +303,16 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     );
   }, [data]);
 
-  const playingEditionId = useMemo(() => {
-    if (!playingPath) return null;
-    const match = trackContexts.find((ctx) => ctx.track.play_path === playingPath);
-    return match?.edition.id ?? null;
-  }, [playingPath, trackContexts]);
+
+  const editionSectionLabel = (edition: ReleaseEdition) => {
+    if (edition.kind === "bside") return "B-sides";
+    return edition.label;
+  };
+
+  const shouldShowEditionHeader = (edition: ReleaseEdition) => {
+    if (edition.kind === "bside") return true;
+    return data ? data.editions.length > 1 : false;
+  };
 
   const resolveTrackContext = useCallback(
     (path: string) => {
@@ -309,11 +336,22 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   useEffect(() => {
     if (!onPanelActionsChange) return;
 
+    const versionSourceForPath = (path: string | null) => {
+      if (!path) return null;
+      if (activeVersionSource && path === playingVersionPath) {
+        return activeVersionSource;
+      }
+      const version = versions.find((v) => v.play_path === path);
+      if (!version) return null;
+      return versionSourceFromItem(version, releaseId, releaseNavigateId);
+    };
+
     if (rightView === "lyrics") {
       onPanelActionsChange({
         track: lyricsTrack ?? resolveTrackContext(playingPath ?? "")?.track ?? null,
         showLyrics: false,
         showVersions: true,
+        versionSource: versionSourceForPath(playingPath ?? null),
       });
       return;
     }
@@ -325,6 +363,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           track: version ? versionToTrackItem(version) : versionsTrack,
           showLyrics: true,
           showVersions: false,
+          versionSource: versionSourceForPath(playingVersionPath),
         });
         return;
       }
@@ -332,6 +371,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         track: versionsTrack,
         showLyrics: true,
         showVersions: false,
+        versionSource: null,
       });
       return;
     }
@@ -341,6 +381,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       track: current,
       showLyrics: true,
       showVersions: true,
+      versionSource: versionSourceForPath(playingPath ?? null),
     });
   }, [
     playingPath,
@@ -351,6 +392,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     versions,
     versionsTrack,
     onPanelActionsChange,
+    releaseId,
+    releaseNavigateId,
+    activeVersionSource,
+    playingVersionPath,
   ]);
 
   const loadLyricsForTrack = useCallback(
@@ -410,6 +455,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   const openVersions = (track: ReleaseTrackItem) => {
     setVersionsReturnPath(playingPath);
     setPlayingVersionPath(null);
+    setActiveVersionSource(null);
     setVersionsTrack(track);
     setVersions([]);
     setVersionsError(null);
@@ -427,6 +473,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     if (rightView === "versions") {
       const returnPath = versionsReturnPath;
       setPlayingVersionPath(null);
+      setActiveVersionSource(null);
       setVersionsReturnPath(null);
       setView("tracks");
       if (returnPath && onResumeTrack) {
@@ -473,24 +520,20 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     return <p className="muted release-tracklist__empty">No tracks found.</p>;
   }
 
-  const showMultipleEditions = data.editions.length > 1;
-
   const tracklistBody = (
     <div className="release-tracklist__content">
-      {data.editions.map((ed) => {
-        const editionActive = playingEditionId === ed.id;
-        const editionClass = [
-          "release-tracklist__edition-block",
-          ed.kind === "bside" ? "release-tracklist__edition-block--bside" : "",
-          editionActive ? "release-tracklist__edition-block--active" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-
-        return (
-          <section key={ed.id} className={editionClass}>
-            {(showMultipleEditions || ed.kind === "bside") && (
-              <h2 className="release-tracklist__edition-title">{ed.label}</h2>
+      {data.editions.map((ed) => (
+          <section
+            key={ed.id}
+            className={[
+              "release-tracklist__edition-block",
+              ed.kind === "bside" ? "release-tracklist__edition-block--bside" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {shouldShowEditionHeader(ed) && (
+              <h2 className="release-tracklist__edition-title">{editionSectionLabel(ed)}</h2>
             )}
 
             {ed.groups.map((group) => {
@@ -515,7 +558,11 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                         <button
                           type="button"
                           className="release-tracklist__play"
-                          onClick={() => onPlay(track.play_path, track.title, art, ed.label)}
+                          onClick={() => {
+                            setPlayingVersionPath(null);
+                            setActiveVersionSource(null);
+                            onPlay(track.play_path, track.title, art, ed.label);
+                          }}
                           aria-label={`Play ${track.title}`}
                         >
                           <span className="release-tracklist__num">{track.number}</span>
@@ -532,13 +579,12 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               );
             })}
           </section>
-        );
-      })}
+      ))}
     </div>
   );
 
   const versionsTitle = versionsTrack
-    ? `${parseTrackPanelMeta(versionsTrack.title).mainTitle} versions`
+    ? `${parseTrackPanelMeta(versionsTrack.title).mainTitle} Versions`
     : "Versions";
 
   const lyricsBody = lyricsTrack && (
@@ -614,8 +660,18 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                     type="button"
                     className="release-tracklist__play"
                     onClick={() => {
+                      const source = versionSourceFromItem(v, releaseId, releaseNavigateId);
                       setPlayingVersionPath(v.play_path);
+                      setActiveVersionSource(source);
                       onPlay(v.play_path, v.title, versionPlaybackArt(v));
+                      if (onPanelActionsChange) {
+                        onPanelActionsChange({
+                          track: versionToTrackItem(v),
+                          showLyrics: true,
+                          showVersions: false,
+                          versionSource: source,
+                        });
+                      }
                     }}
                   >
                     <span className="release-tracklist__num">{i + 1}</span>
@@ -665,8 +721,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         </nav>
       )}
 
-      {(!stacked || mobileView === "tracks") && (
-        <>
+      <div className="release-tracklist__body">
           {rightView === "lyrics" && lyricsTrack && (
             <>
               {lyricsHead}
@@ -676,7 +731,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           {rightView === "tracks" && tracklistBody}
           {rightView === "versions" && (
             <>
-              <div className="release-tracklist__subview-head">
+              <div className="release-tracklist__subview-head release-tracklist__subview-head--left">
                 <button
                   type="button"
                   className="release-tracklist__back"
@@ -690,8 +745,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               {versionsListBody}
             </>
           )}
-        </>
-      )}
+      </div>
 
       {plusTrack && (
         <ReleaseAddToPlaylistModal

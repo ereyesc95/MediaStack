@@ -76,6 +76,22 @@ def migrate_schema(eng: Engine) -> None:
                     conn.execute(
                         text(f'ALTER TABLE artistparticipations ADD COLUMN "{col}" {typ}')
                     )
+        if "track_overrides" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE track_overrides (
+                        "troPlayPath" TEXT NOT NULL PRIMARY KEY,
+                        "troBandID" INTEGER,
+                        "troTitle" TEXT,
+                        "troLyricsLrc" TEXT,
+                        "troLyricsPlain" TEXT,
+                        "troYoutubeUrl" TEXT,
+                        "troUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
         if "artists" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("artists")}
             for col, typ in (

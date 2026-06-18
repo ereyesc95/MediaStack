@@ -559,6 +559,71 @@ export async function saveTrackLyrics(body: {
   });
 }
 
+export async function fetchTrackYoutube(
+  artist: string,
+  title: string,
+  playPath?: string,
+  bandId?: number
+) {
+  const q = new URLSearchParams({ artist, title });
+  if (playPath) q.set("play_path", playPath);
+  if (bandId) q.set("band_id", String(bandId));
+  return request<{
+    artist: string;
+    title: string;
+    youtube_url: string | null;
+    source: string;
+  }>(`${API}/music/youtube?${q}`);
+}
+
+export async function saveTrackYoutube(body: {
+  artist: string;
+  title: string;
+  play_path?: string;
+  youtube_url?: string | null;
+  band_id?: number;
+}) {
+  return request<{
+    artist: string;
+    title: string;
+    youtube_url: string | null;
+    source: string;
+  }>(`${API}/music/youtube`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchReleaseYoutubeCandidates(
+  bandId: number,
+  releaseId: string,
+  singlesOnly = false
+): Promise<{
+  ok: boolean;
+  error?: string;
+  artist?: string;
+  found?: number;
+  skipped?: number;
+  not_found?: number;
+  items?: {
+    title: string;
+    play_path: string;
+    edition_kind?: string;
+    group_kind?: string;
+    existing_url?: string | null;
+    status: string;
+    candidates: { url: string; label: string; source: string }[];
+  }[];
+}> {
+  const q = singlesOnly ? "?singles_only=true" : "";
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/youtube/fetch${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function fetchBandPlaylistIndex(
   id: number,
   force = false
@@ -874,6 +939,20 @@ export async function uploadEntityLinkLogo(
 
 export async function fetchUserPlaylists(): Promise<{ items: UserPlaylist[] }> {
   return request(`${API}/music/playlists`);
+}
+
+export async function createUserPlaylist(name: string): Promise<{
+  ok: boolean;
+  id: number;
+  name?: string;
+  duplicate?: boolean;
+  error?: string;
+}> {
+  return request(`${API}/music/playlists`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
 }
 
 export async function fetchPlaylistTracks(

@@ -20,6 +20,7 @@ from app.config import settings
 from app.gallery import _artist_dir
 from app.media_paths_util import safe_relative
 from app.models import Band, Track
+from app.media_index import release_id_from_path
 from app.music_filters import _parse_ids
 
 YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "music.youtube.com")
@@ -236,16 +237,24 @@ def _resolve_work_keys(
     return keys
 
 
+def _is_nested_edition_folder(name: str) -> bool:
+    low = name.casefold().strip()
+    if low in ("standard edition", "deluxe edition", "bonus"):
+        return True
+    return low.endswith(
+        (" standard edition", " deluxe edition", " bonus edition")
+    )
+
+
 def _album_context(
     audio_file, media_root
 ) -> tuple[str | None, str | None, str | None, str | None]:
     album_dir = audio_file.parent
-    while album_dir.name.casefold() in (
-        "standard edition",
-        "deluxe edition",
-        "bonus",
-    ):
-        album_dir = album_dir.parent
+    while _is_nested_edition_folder(album_dir.name):
+        parent = album_dir.parent
+        if parent == album_dir:
+            break
+        album_dir = parent
     rel = safe_relative(album_dir, media_root)
     title = _album_title_from_folder(album_dir.name)
     cover = _find_cover_front_artwork(audio_file.parent, media_root)
@@ -331,12 +340,16 @@ def find_track_versions(
         duration_sec = _duration_from_file(entry.audio_file)
         if duration_sec is None:
             duration_sec = db_durations.get(_track_norm_title(entry.file_title))
+        navigate_release_id = (
+            release_id_from_path(album_path) if album_path else None
+        )
         out.append(
             {
                 "title": entry.file_title,
                 "play_path": path,
                 "album_title": album_title,
                 "album_folder": album_path,
+                "navigate_release_id": navigate_release_id,
                 "cover_url": playback.get("cover_url") or cover_url,
                 "cover_animation_url": playback.get("cover_animation_url"),
                 "canvas_url": playback.get("canvas_url"),

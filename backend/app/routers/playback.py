@@ -9,7 +9,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models import User
 from app.media_paths import path_to_local_file, resolve_playback_url, resolve_stream_url
-from app.schemas import LyricsOut, LyricsSaveIn, PlayRequest, PlayResponse, ReproductionOut
+from app.schemas import LyricsOut, LyricsSaveIn, PlayRequest, PlayResponse, ReproductionOut, YouTubeOut, YouTubeSaveIn
 from app.services.lyrics import resolve_lyrics, save_manual_lyrics
 
 router = APIRouter(prefix="/api/music", tags=["playback"])
@@ -57,11 +57,12 @@ async def track_lyrics(
     artist: str = Query(...),
     title: str = Query(...),
     play_path: str | None = Query(None),
+    db: Session = Depends(get_db),
 ):
     from app.services.lyrics import _read_raw_lrc_file, resolve_lyrics
 
-    synced = _read_raw_lrc_file(play_path) if play_path else None
-    lyrics, source = await resolve_lyrics(artist, title, play_path=play_path)
+    synced = _read_raw_lrc_file(play_path, db=db) if play_path else None
+    lyrics, source = await resolve_lyrics(artist, title, play_path=play_path, db=db)
     return LyricsOut(
         artist=artist,
         title=title,
@@ -74,6 +75,7 @@ async def track_lyrics(
 @router.put("/lyrics", response_model=LyricsOut)
 def save_track_lyrics(
     body: LyricsSaveIn,
+    db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
     from app.services.lyrics import _read_raw_lrc_file
@@ -84,13 +86,76 @@ def save_track_lyrics(
         body.lyrics,
         play_path=body.play_path,
         synced_lyrics=body.synced_lyrics,
+        db=db,
+        band_id=body.band_id,
     )
-    synced = _read_raw_lrc_file(body.play_path) if body.play_path else body.synced_lyrics
+    synced = (
+        _read_raw_lrc_file(body.play_path, db=db)
+        if body.play_path
+        else body.synced_lyrics
+    )
     return LyricsOut(
         artist=body.artist,
         title=body.title,
         lyrics=body.lyrics.strip(),
         synced_lyrics=synced,
+        source="manual",
+    )
+
+
+@router.get("/youtube", response_model=YouTubeOut)
+def track_youtube(
+    artist: str = Query(...),
+    title: str = Query(...),
+    play_path: str | None = Query(None),
+    band_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    from app.person_lookup import find_local_band_for_person
+    from app.track_youtube import read_track_youtube
+
+    bid = band_id
+    if not bid:
+        bid = find_local_band_for_person(db, artist)
+    if not bid:
+        return YouTubeOut(artist=artist, title=title, youtube_url=None, source="none")
+    url, source = read_track_youtube(
+        db,
+        band_id=bid,
+        title=title,
+        play_path=play_path,
+    )
+    return YouTubeOut(artist=artist, title=title, youtube_url=url, source=source)
+
+
+@router.put("/youtube", response_model=YouTubeOut)
+def save_track_youtube_route(
+    body: YouTubeSaveIn,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.person_lookup import find_local_band_for_person
+    from app.track_youtube import save_track_youtube
+
+    bid = body.band_id
+    if not bid:
+        bid = find_local_band_for_person(db, body.artist)
+    if not bid:
+        raise HTTPException(400, "Could not resolve band for artist")
+    try:
+        url = save_track_youtube(
+            db,
+            band_id=bid,
+            title=body.title,
+            play_path=body.play_path,
+            youtube_url=body.youtube_url,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return YouTubeOut(
+        artist=body.artist,
+        title=body.title,
+        youtube_url=url,
         source="manual",
     )
 

@@ -31,9 +31,10 @@ from app.release_overview import (
     _standard_artwork_dir,
     resolve_release_content,
 )
-from app.lyrics_storage import find_lrc_path
+from app.lyrics_storage import has_stored_lyrics
 from app.release_playback_art import PlaybackArtContext, resolve_disc_url_for_group
-from app.release_track_extras import _lookup_youtube, _youtube_map_for_band
+from app.release_track_extras import find_track_versions
+from app.track_youtube import attach_release_youtube_urls
 
 ARTWORK_DIR = "[artwork]"
 TRACK_NUM_RE = re.compile(r"^(\d+)\.")
@@ -160,9 +161,15 @@ def _group_kind(name: str) -> str:
     return "flat"
 
 
-def _find_lrc(audio_file: Path) -> str | None:
-    path = find_lrc_path(audio_file)
-    return path.name if path else None
+def _attach_has_lrc(db: Session, editions: list[dict]) -> None:
+    from app.media_paths import path_to_local_file
+
+    for edition in editions:
+        for group in edition.get("groups") or []:
+            for track in group.get("tracks") or []:
+                play_path = (track.get("play_path") or "").strip()
+                local = path_to_local_file(play_path) if play_path else None
+                track["has_lrc"] = bool(local and has_stored_lyrics(db, local))
 
 
 def _track_number(filename: str, fallback: int) -> int:
@@ -210,7 +217,7 @@ def _build_track(
         "play_path": play_path,
         "duration_sec": duration_sec,
         "duration": _format_duration(duration_sec),
-        "has_lrc": _find_lrc(audio_file) is not None,
+        "has_lrc": False,
         "is_link": False,
         "cover_url": art.get("cover_url"),
         "cover_animation_url": art.get("cover_animation_url"),
@@ -642,13 +649,16 @@ def build_release_tracklist(
     if not editions_out:
         return None
 
-    youtube_map = _youtube_map_for_band(db, band_id)
-    for edition in editions_out:
-        for group in edition.get("groups") or []:
-            for track in group.get("tracks") or []:
-                track["youtube_url"] = _lookup_youtube(
-                    youtube_map, track.get("title") or ""
-                )
+    attach_release_youtube_urls(
+        db,
+        band_id,
+        editions_out,
+        media_root=media_root,
+        release_content=content,
+        release_title=release_title,
+        band_name=band.bnd_name,
+    )
+    _attach_has_lrc(db, editions_out)
 
     return {
         "release_id": card.get("id") or release_id,

@@ -115,3 +115,50 @@ async def fetch_release_group(
         )
         r.raise_for_status()
         return r.json()
+
+
+async def search_recordings(
+    *,
+    artist_mbid: str,
+    title: str,
+    limit: int = 5,
+    user_agent: str = DEFAULT_UA,
+) -> list[dict]:
+    clean = title.replace('"', "").strip()
+    if not clean or not artist_mbid:
+        return []
+    query = f'recording:"{clean}" AND arid:{artist_mbid}'
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{MB_BASE}/recording/",
+            params={"query": query, "fmt": "json", "limit": limit},
+            headers={"User-Agent": user_agent},
+        )
+        r.raise_for_status()
+        data = r.json()
+    out: list[dict] = []
+    for rec in (data.get("recordings") or [])[:limit]:
+        out.append(
+            {
+                "mbid": rec.get("id"),
+                "title": rec.get("title"),
+                "length": rec.get("length"),
+            }
+        )
+    return out
+
+
+async def fetch_recording(
+    mbid: str,
+    *,
+    user_agent: str = DEFAULT_UA,
+    inc: str = "url-rels",
+) -> dict:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{MB_BASE}/recording/{mbid}",
+            params={"fmt": "json", "inc": inc},
+            headers={"User-Agent": user_agent},
+        )
+        r.raise_for_status()
+        return r.json()
