@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,11 +21,83 @@ from app.gallery import _artist_dir
 from app.media_paths_util import safe_relative
 from app.models import Band, Track
 from app.music_filters import _parse_ids
+
 YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "music.youtube.com")
+BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
+OF_TAG_RE = re.compile(r"^of\s+(.+)$", re.I)
+
+LANGUAGE_NAMES = frozenset(
+    {
+        "spanish",
+        "french",
+        "german",
+        "italian",
+        "portuguese",
+        "japanese",
+        "korean",
+        "chinese",
+        "mandarin",
+        "cantonese",
+        "russian",
+        "finnish",
+        "swedish",
+        "norwegian",
+        "danish",
+        "dutch",
+        "polish",
+        "hungarian",
+        "czech",
+        "greek",
+        "turkish",
+        "arabic",
+        "hebrew",
+        "hindi",
+        "english",
+    }
+)
 
 
 def _normalize_title(title: str) -> str:
     return re.sub(r"\s*\[.*\]\s*$", "", title.strip()).casefold()
+
+
+def _split_bracket_parts(title: str) -> tuple[str, list[str]]:
+    text = title.strip()
+    match = BRACKET_SUFFIX_RE.search(text)
+    if not match:
+        return text, []
+    main = text[: match.start()].strip()
+    parts = [piece.strip() for piece in match.group(1).split(";") if piece.strip()]
+    return main, parts
+
+
+def _of_title_from_parts(parts: list[str]) -> str | None:
+    for part in parts:
+        match = OF_TAG_RE.match(part.strip())
+        if not match:
+            continue
+        norm = _normalize_title(match.group(1))
+        if norm:
+            return norm
+    return None
+
+
+def _version_label_from_parts(parts: list[str]) -> str | None:
+    labels: list[str] = []
+    for part in parts:
+        stripped = part.strip()
+        low = stripped.casefold()
+        match = OF_TAG_RE.match(stripped)
+        if match:
+            labels.append(f"Adaptation of {match.group(1).strip()}")
+            continue
+        if low in LANGUAGE_NAMES:
+            labels.append(f"{low.title()} version")
+            continue
+        version_match = re.fullmatch(r"(.+)\s+version", low)
+        if version_match and version_match.group(1) in LANGUAGE_NAMES:
+            labels.append(f"{version_match.group(1).title()} version")
+    return "; ".join(labels) if labels else None
 
 
 def _youtube_title_keys(title: str) -> list[str]:
@@ -54,7 +129,7 @@ def _normalize_youtube(url: str) -> str | None:
     if not raw:
         return None
     if raw.startswith("http"):
-        if not any(h in raw.casefold() for h in YOUTUBE_HOSTS):
+        if not any(host in raw.casefold() for host in YOUTUBE_HOSTS):
             return raw if "youtube" in raw.casefold() else None
         return raw
     if re.match(r"^[A-Za-z0-9_-]{6,}$", raw):
@@ -82,6 +157,83 @@ def _youtube_map_for_band(db: Session, band_id: int) -> dict[str, str]:
                 if key not in out:
                     out[key] = video
     return out
+
+
+def _db_title_alias_adjacency(db: Session, band_id: int) -> dict[str, set[str]]:
+    needle = str(band_id)
+    adjacency: dict[str, set[str]] = defaultdict(set)
+    for row in db.scalars(select(Track)).all():
+        bid = row.tra_band_id or ""
+        if bid != needle and needle not in _parse_ids(bid):
+            continue
+        primary = _normalize_title(row.tra_name or "")
+        alternate = _normalize_title(row.tra_alt_name or "")
+        if not primary or not alternate or primary == alternate:
+            continue
+        adjacency[primary].add(alternate)
+        adjacency[alternate].add(primary)
+    return adjacency
+
+
+def _expand_title_aliases(keys: set[str], adjacency: dict[str, set[str]]) -> set[str]:
+    expanded = set(keys)
+    pending = list(keys)
+    while pending:
+        key = pending.pop()
+        for alias in adjacency.get(key, ()):
+            if alias not in expanded:
+                expanded.add(alias)
+                pending.append(alias)
+    return expanded
+
+
+@dataclass(frozen=True)
+class _IndexedTrack:
+    audio_file: Path
+    file_title: str
+    norm_title: str
+    of_norm: str | None
+    bracket_parts: tuple[str, ...]
+
+
+def _index_artist_tracks(artist_dir: Path) -> list[_IndexedTrack]:
+    indexed: list[_IndexedTrack] = []
+    for audio_file in _collect_audio_files(artist_dir):
+        file_title = _track_title_from_filename(audio_file)
+        _, parts = _split_bracket_parts(file_title)
+        indexed.append(
+            _IndexedTrack(
+                audio_file=audio_file,
+                file_title=file_title,
+                norm_title=_normalize_title(file_title),
+                of_norm=_of_title_from_parts(parts),
+                bracket_parts=tuple(parts),
+            )
+        )
+    return indexed
+
+
+def _resolve_work_keys(
+    seed_keys: set[str],
+    indexed: list[_IndexedTrack],
+    alias_adjacency: dict[str, set[str]],
+) -> set[str]:
+    keys = _expand_title_aliases(seed_keys, alias_adjacency)
+    changed = True
+    while changed:
+        changed = False
+        for entry in indexed:
+            if entry.norm_title in keys and entry.of_norm and entry.of_norm not in keys:
+                keys.add(entry.of_norm)
+                changed = True
+            if entry.of_norm and entry.of_norm in keys and entry.norm_title not in keys:
+                keys.add(entry.norm_title)
+                changed = True
+        expanded = _expand_title_aliases(keys, alias_adjacency)
+        if expanded != keys:
+            keys = expanded
+            changed = True
+    return keys
 
 
 def _album_context(
@@ -117,7 +269,6 @@ def find_track_versions(
     band = db.get(Band, band_id)
     if not band or not settings.media_root:
         return []
-    from pathlib import Path
 
     media_root = Path(settings.media_root)
     artist_dir = _artist_dir(media_root, band.bnd_name)
@@ -149,28 +300,40 @@ def find_track_versions(
                 release_title=card.get("title"),
                 band_name=band_row.bnd_name,
             )
+
+    indexed = _index_artist_tracks(artist_dir)
+    alias_adjacency = _db_title_alias_adjacency(db, band_id)
+
+    seed_keys = {want}
+    _, source_parts = _split_bracket_parts(title)
+    source_of = _of_title_from_parts(source_parts)
+    if source_of:
+        seed_keys.add(source_of)
+    work_keys = _resolve_work_keys(seed_keys, indexed, alias_adjacency)
+
     out: list[dict] = []
     seen: set[str] = set()
-    for audio_file in _collect_audio_files(artist_dir):
-        file_title = _track_title_from_filename(audio_file)
-        if _normalize_title(file_title) != want:
+    for entry in indexed:
+        if entry.norm_title not in work_keys:
             continue
-        path = safe_relative(audio_file, media_root)
+        path = safe_relative(entry.audio_file, media_root)
         if not path or path == play_path or path in seen:
             continue
         seen.add(path)
         album_title, album_path, cover_url, date_iso = _album_context(
-            audio_file, media_root
+            entry.audio_file, media_root
         )
         from app.release_playback_art import playback_art_for_audio_file
 
-        playback = playback_art_for_audio_file(audio_file, media_root, ctx=art_ctx)
-        duration_sec = _duration_from_file(audio_file)
+        playback = playback_art_for_audio_file(
+            entry.audio_file, media_root, ctx=art_ctx
+        )
+        duration_sec = _duration_from_file(entry.audio_file)
         if duration_sec is None:
-            duration_sec = db_durations.get(_track_norm_title(file_title))
+            duration_sec = db_durations.get(_track_norm_title(entry.file_title))
         out.append(
             {
-                "title": file_title,
+                "title": entry.file_title,
                 "play_path": path,
                 "album_title": album_title,
                 "album_folder": album_path,
@@ -181,9 +344,8 @@ def find_track_versions(
                 "background_layers": playback.get("background_layers") or [],
                 "date_iso": date_iso,
                 "duration": _format_duration(duration_sec),
+                "version_label": _version_label_from_parts(list(entry.bracket_parts)),
             }
         )
-        if len(out) >= limit:
-            break
     out.sort(key=lambda v: (v.get("date_iso") or "", v.get("album_title") or ""))
-    return out
+    return out[:limit]

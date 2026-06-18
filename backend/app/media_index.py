@@ -99,6 +99,8 @@ def parse_bracket_tags(name: str) -> tuple[str, dict]:
             tags["source_artist"] = piece[3:].strip()
         elif low.startswith("with "):
             tags["with_artist"] = piece[5:].strip()
+        elif low.startswith("of "):
+            tags["of_title"] = piece[3:].strip()
     return clean, tags
 
 

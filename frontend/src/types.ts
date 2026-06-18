@@ -489,6 +489,7 @@ export type TrackVersionItem = {
   background_layers?: string[];
   date_iso: string | null;
   duration?: string | null;
+  version_label?: string | null;
 };
 
 export type ReleaseTrackGroup = {

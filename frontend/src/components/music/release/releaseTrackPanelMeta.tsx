@@ -13,6 +13,34 @@ export type TrackPanelMeta = {
 
 const VERSION_ONLY = /^(acoustic|remix|live|remastered)$/i;
 
+const LANGUAGE_NAMES = new Set([
+  "spanish",
+  "french",
+  "german",
+  "italian",
+  "portuguese",
+  "japanese",
+  "korean",
+  "chinese",
+  "mandarin",
+  "cantonese",
+  "russian",
+  "finnish",
+  "swedish",
+  "norwegian",
+  "danish",
+  "dutch",
+  "polish",
+  "hungarian",
+  "czech",
+  "greek",
+  "turkish",
+  "arabic",
+  "hebrew",
+  "hindi",
+  "english",
+]);
+
 function stripOuterBrackets(title: string): { main: string; inner: string | null } {
   const bracket = title.match(/^(.+?)\s*\[([^\]]+)\]\s*$/);
   if (bracket) {
@@ -52,8 +80,20 @@ function titleCaseWords(text: string): string {
 
 function versionLabel(part: string): string | null {
   const norm = part.trim();
+  const low = norm.toLowerCase();
   if (VERSION_ONLY.test(norm)) {
-    return titleCaseWords(`${norm.toLowerCase()} version`);
+    return titleCaseWords(`${low} version`);
+  }
+  const ofMatch = norm.match(/^of\s+(.+)$/i);
+  if (ofMatch) {
+    return `Adaptation of ${ofMatch[1].trim()}`;
+  }
+  if (LANGUAGE_NAMES.has(low)) {
+    return titleCaseWords(`${low} version`);
+  }
+  const langVersion = low.match(/^(.+)\s+version$/);
+  if (langVersion && LANGUAGE_NAMES.has(langVersion[1])) {
+    return titleCaseWords(`${langVersion[1]} version`);
   }
   return null;
 }
