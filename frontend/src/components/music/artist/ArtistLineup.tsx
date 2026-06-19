@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BandOverview, LineupMember } from "../../../types";
+import { useDeviceLayout } from "../../../usePhoneLayout";
 import ArtistMemberModal from "./ArtistMemberModal";
 
 export type LineupTab = "official" | "original" | "former";
@@ -25,7 +26,10 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-function splitRows<T>(items: T[]): { top: T[]; bottom: T[] } {
+function splitRows<T>(items: T[], perRow?: number): { top: T[]; bottom: T[] } {
+  if (perRow != null && perRow > 0) {
+    return { top: items.slice(0, perRow), bottom: items.slice(perRow) };
+  }
   const topCount = Math.ceil(items.length / 2);
   return { top: items.slice(0, topCount), bottom: items.slice(topCount) };
 }
@@ -96,6 +100,7 @@ export default function ArtistLineup({
   onDataChanged,
 }: Props) {
   const [modalId, setModalId] = useState<number | null>(null);
+  const deviceLayout = useDeviceLayout();
 
   const members = useMemo(() => {
     if (tab === "official") return lineup.current;
@@ -103,7 +108,14 @@ export default function ArtistLineup({
     return lineup.former;
   }, [lineup, tab]);
 
-  const rows = useMemo(() => splitRows(members), [members]);
+  const rows = useMemo(
+    () =>
+      splitRows(
+        members,
+        deviceLayout === "mobile-landscape" ? 5 : undefined
+      ),
+    [members, deviceLayout]
+  );
 
   if (loading) {
     return (

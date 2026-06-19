@@ -257,6 +257,10 @@ export function trackDisplayTitle(title: string): string {
   return trimmed;
 }
 
+export function isAdaptationLine(line: TrackPanelLine): boolean {
+  return line.kind === "other" && /^Adaptation of /i.test(line.text);
+}
+
 export function writerSearchUrl(name: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
 }

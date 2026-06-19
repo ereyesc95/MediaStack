@@ -1,3 +1,5 @@
+import BillboardText from "../../BillboardText";
+
 /** Split track title into main part and bracket suffix for display. */
 function formatSuffixParts(parts: string[]): string {
   const formatted: string[] = [];
@@ -31,8 +33,28 @@ export function splitTrackTitleDisplay(title: string): {
   return { main: title, suffix: null };
 }
 
-export function ReleaseTrackTitle({ title }: { title: string }) {
+function trackTitlePlain(title: string): string {
   const { main, suffix } = splitTrackTitleDisplay(title);
+  return suffix ? `${main} ${suffix}` : main;
+}
+
+export function ReleaseTrackTitle({
+  title,
+  billboard = false,
+}: {
+  title: string;
+  billboard?: boolean;
+}) {
+  const { main, suffix } = splitTrackTitleDisplay(title);
+  if (billboard) {
+    return (
+      <BillboardText
+        className="release-tracklist__title"
+        short={trackTitlePlain(title)}
+        full={trackTitlePlain(title)}
+      />
+    );
+  }
   if (!suffix) {
     return <span className="release-tracklist__title">{title}</span>;
   }

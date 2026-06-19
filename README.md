@@ -412,6 +412,14 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 - **Search** — in-library media search per artist
 - **Playback** — play logging, auto-advance to next track, stream via local file or media server
 
+### Mobile landscape (phones, ≤900px width)
+
+Phone **landscape** uses dedicated layouts (`usePhoneLayout`, scoped CSS classes). Portrait, tablet, and desktop layouts are unchanged.
+
+- **Home** — horizontally scrolling dashboard panes (10 items); On Repeat auto-scrolls to the active track
+- **Artist** — lineup and audio discography five per row; gallery five columns; scrollable About tab with beat-reactive photo glow; member modal uses side-by-side photo and info
+- **Release** — split tracklist and track panel; scrollable panels; cover, disc, and canvas playback in the left panel when a track is playing; gallery sub-bars and full-width five-column photo grid
+
 ### Track overrides (`track_overrides`)
 
 Per-track data keyed by **`play_path`** (stable across renames if path unchanged):

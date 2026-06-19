@@ -501,6 +501,7 @@ export type ReleaseTrackGroup = {
   id: string;
   kind: "disc" | "side" | "tape" | "flat" | "link" | "single" | "folder";
   label: string | null;
+  single_title?: string | null;
   date_iso?: string | null;
   display_date?: string | null;
   source_single_title?: string | null;

@@ -21,6 +21,7 @@ import type {
   ReleaseTracklist,
   TrackVersionItem,
 } from "../../../types";
+import BillboardText from "../../BillboardText";
 import { ReleaseTrackTitle } from "./releaseTrackTitle";
 import ReleaseAddToPlaylistModal from "./ReleaseAddToPlaylistModal";
 import ReleaseInlineLyrics from "./ReleaseInlineLyrics";
@@ -31,7 +32,25 @@ import { TrackActionEditIcon, TrackActionRetryIcon } from "./releaseTrackActionI
 const tracklistCache = new Map<string, ReleaseTracklist>();
 
 function tracklistCacheKey(bandId: number, releaseId: string) {
-  return `v10:${bandId}:${releaseId}`;
+  return `v11:${bandId}:${releaseId}`;
+}
+
+function groupBsideGroups(groups: ReleaseTrackGroup[]) {
+  const order: string[] = [];
+  const map = new Map<string, ReleaseTrackGroup[]>();
+  for (const group of groups) {
+    const key = (group.single_title ?? group.label ?? group.id).trim();
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(group);
+  }
+  return order.map((singleTitle) => ({
+    singleTitle,
+    groups: map.get(singleTitle)!,
+    showSingleHeader: (map.get(singleTitle)?.length ?? 0) > 1,
+  }));
 }
 
 export function clearReleaseTracklistCache(bandId?: number, releaseId?: string) {
@@ -59,7 +78,7 @@ export type ReleasePlaybackArt = {
   background_layers?: string[];
 };
 
-export type ReleaseMobileTrackView = "album" | "tracks";
+export type ReleaseMobileTrackView = "player" | "tracks";
 export type ReleaseRightView = "tracks" | "lyrics" | "versions";
 
 export type ReleaseTracklistHandle = {
@@ -275,6 +294,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   ref
 ) {
   const cacheKey = tracklistCacheKey(bandId, releaseId);
+  const onActiveTrackChangeRef = useRef(onActiveTrackChange);
+  const onPanelActionsChangeRef = useRef(onPanelActionsChange);
+  onActiveTrackChangeRef.current = onActiveTrackChange;
+  onPanelActionsChangeRef.current = onPanelActionsChange;
   const [data, setData] = useState<ReleaseTracklist | null>(
     () => tracklistCache.get(cacheKey) ?? null
   );
@@ -412,12 +435,13 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   );
 
   useEffect(() => {
-    if (!onActiveTrackChange) return;
+    if (!onActiveTrackChangeRef.current) return;
     const current = resolveTrackContext(playingPath ?? "")?.track ?? null;
-    onActiveTrackChange(current);
-  }, [playingPath, resolveTrackContext, onActiveTrackChange]);
+    onActiveTrackChangeRef.current(current);
+  }, [playingPath, resolveTrackContext]);
 
   useEffect(() => {
+    const onPanelActionsChange = onPanelActionsChangeRef.current;
     if (!onPanelActionsChange) return;
 
     const versionSourceForPath = (path: string | null) => {
@@ -495,11 +519,9 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     bandId,
     versions,
     versionsTrack,
-    onPanelActionsChange,
     releaseId,
     releaseNavigateId,
     activeVersionSource,
-    playingVersionPath,
   ]);
 
   const loadLyricsForTrack = useCallback(
@@ -601,7 +623,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       if (returnPath) {
         playMainTrackByPath(returnPath);
       } else {
-        onPanelActionsChange?.({
+        onPanelActionsChangeRef.current?.({
           track: null,
           showLyrics: true,
           showVersions: true,
@@ -611,13 +633,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       return;
     }
     setView("tracks");
-  }, [
-    onPanelActionsChange,
-    playMainTrackByPath,
-    rightView,
-    setView,
-    versionsReturnPath,
-  ]);
+  }, [playMainTrackByPath, rightView, setView, versionsReturnPath]);
 
   const adjacentTracks = useCallback(
     (path: string) => {
@@ -660,20 +676,64 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       {data.editions.map((ed) => (
           <section
             key={ed.id}
-            className={[
-              "release-tracklist__edition-block",
-              ed.kind === "bside" ? "release-tracklist__edition-block--bside" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            className="release-tracklist__edition-block"
           >
             {shouldShowEditionHeader(ed) && (
               <h2 className="release-tracklist__edition-title">{editionSectionLabel(ed)}</h2>
             )}
 
-            {ed.groups.map((group) => {
-              const showGroupLabels =
-                ed.groups.length > 1 || (ed.kind === "bside" && Boolean(group.label));
+            {ed.kind === "bside"
+              ? groupBsideGroups(ed.groups).map(({ singleTitle, groups, showSingleHeader }) => (
+                  <div key={singleTitle} className="release-tracklist__bside-single">
+                    {showSingleHeader && (
+                      <h3 className="release-tracklist__single-title">{singleTitle}</h3>
+                    )}
+                    {groups.map((group) => {
+                      const showEditionLabel =
+                        showSingleHeader || groups.length > 1 || Boolean(group.label);
+                      return (
+                        <div key={group.id} className="release-tracklist__group">
+                          {showEditionLabel && group.label && (
+                            <h4 className="release-tracklist__group-label">{group.label}</h4>
+                          )}
+                          <ol className="release-tracklist__tracks">
+                            {group.tracks.map((track) => {
+                              const active = playingPath === track.play_path;
+                              const art = trackArt(track, ed, group.disc_url);
+                              return (
+                                <li
+                                  key={track.id}
+                                  className={
+                                    active ? "release-tracklist__row active" : "release-tracklist__row"
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    className="release-tracklist__play"
+                                    onClick={() => {
+                                      setPlayingVersionPath(null);
+                                      setActiveVersionSource(null);
+                                      onPlay(track.play_path, track.title, art, ed.label);
+                                    }}
+                                    aria-label={`Play ${track.title}`}
+                                  >
+                                    <span className="release-tracklist__num">{track.number}</span>
+                                    <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                    {track.duration && (
+                                      <span className="release-tracklist__duration">{track.duration}</span>
+                                    )}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+              : ed.groups.map((group) => {
+              const showGroupLabels = ed.groups.length > 1;
               return (
               <div key={group.id} className="release-tracklist__group">
                 {showGroupLabels && group.label && (
@@ -701,7 +761,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           aria-label={`Play ${track.title}`}
                         >
                           <span className="release-tracklist__num">{track.number}</span>
-                          <ReleaseTrackTitle title={track.title} />
+                          <ReleaseTrackTitle title={track.title} billboard={stacked} />
                           {track.duration && (
                             <span className="release-tracklist__duration">{track.duration}</span>
                           )}
@@ -815,7 +875,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                     }}
                   >
                     <span className="release-tracklist__num">{i + 1}</span>
-                    <ReleaseTrackTitle title={v.title} />
+                    <ReleaseTrackTitle title={v.title} billboard={stacked} />
                     {v.duration && (
                       <span className="release-tracklist__duration">{v.duration}</span>
                     )}
@@ -842,25 +902,6 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           : undefined
       }
     >
-      {stacked && (
-        <nav className="release-tracklist__mobile-toggle">
-          <button
-            type="button"
-            className={mobileView === "album" ? "active" : ""}
-            onClick={() => onMobileViewChange("album")}
-          >
-            ALBUM
-          </button>
-          <button
-            type="button"
-            className={mobileView === "tracks" ? "active" : ""}
-            onClick={() => onMobileViewChange("tracks")}
-          >
-            TRACKS
-          </button>
-        </nav>
-      )}
-
       <div className="release-tracklist__body">
           {rightView === "lyrics" && lyricsTrack && (
             <>
@@ -880,7 +921,15 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                 >
                   <ChevronIcon direction="left" />
                 </button>
-                <h2 className="release-tracklist__subview-title">{versionsTitle}</h2>
+                {stacked ? (
+                  <BillboardText
+                    className="release-tracklist__subview-title"
+                    short={versionsTitle}
+                    full={versionsTitle}
+                  />
+                ) : (
+                  <h2 className="release-tracklist__subview-title">{versionsTitle}</h2>
+                )}
               </div>
               {versionsListBody}
             </>

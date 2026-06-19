@@ -74,6 +74,10 @@ export function isMobilePortraitLayout(layout?: DeviceLayout): boolean {
   return (layout ?? resolveDeviceLayout()) === "mobile-portrait";
 }
 
+export function isMobileLandscapeLayout(layout?: DeviceLayout): boolean {
+  return (layout ?? resolveDeviceLayout()) === "mobile-landscape";
+}
+
 export function useDeviceLayout(): DeviceLayout {
   const [layout, setLayout] = useState<DeviceLayout>(() => resolveDeviceLayout());
 

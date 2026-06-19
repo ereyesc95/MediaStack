@@ -993,7 +993,11 @@ input {
 .billboard-text--scroll:hover .billboard-text-inner,
 .dash-track:hover .billboard-text--scroll .billboard-text-inner,
 .dash-genre:hover .billboard-text--scroll .billboard-text-inner,
-.dash-country:hover .billboard-text--scroll .billboard-text-inner {
+.dash-country:hover .billboard-text--scroll .billboard-text-inner,
+.release-tracklist__row:hover .billboard-text--scroll .billboard-text-inner,
+.release-tracklist__row.active .billboard-text--scroll .billboard-text-inner,
+.release-page--stacked .release-tracklist__row .billboard-text--scroll .billboard-text-inner,
+.release-page--stacked .release-tracklist__subview-head .billboard-text--scroll .billboard-text-inner {
   width: max-content;
   max-width: none;
   overflow: visible;
@@ -2738,6 +2742,90 @@ input {
   min-height: 0.65rem;
 }
 
+/* Mobile landscape phones — horizontal scroll panes (tablet landscape keeps grid) */
+.music-dashboard--mobile-landscape .dash-scroll {
+  overflow: visible;
+  align-items: flex-start;
+}
+
+.music-dashboard--mobile-landscape .dash-scroll--tracks,
+.music-dashboard--mobile-landscape .dash-scroll--icons,
+.music-dashboard--mobile-landscape .dash-scroll--genres,
+.music-dashboard--mobile-landscape .dash-scroll--flags {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  align-items: flex-start;
+  align-content: flex-start;
+  justify-content: flex-start;
+  justify-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  padding: 0.2rem 0.2rem 0.1rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.music-dashboard--mobile-landscape .dash-scroll--tracks::-webkit-scrollbar,
+.music-dashboard--mobile-landscape .dash-scroll--icons::-webkit-scrollbar,
+.music-dashboard--mobile-landscape .dash-scroll--genres::-webkit-scrollbar,
+.music-dashboard--mobile-landscape .dash-scroll--flags::-webkit-scrollbar {
+  display: none;
+}
+
+.music-dashboard--mobile-landscape .dash-track,
+.music-dashboard--mobile-landscape .dash-icon-item,
+.music-dashboard--mobile-landscape .dash-genre,
+.music-dashboard--mobile-landscape .dash-country,
+.music-dashboard--mobile-landscape .dash-placeholder-slot,
+.music-dashboard--mobile-landscape .dash-placeholder-item {
+  flex: 0 0 calc((100% - 1.4rem) / 5);
+  width: calc((100% - 1.4rem) / 5);
+  max-width: calc((100% - 1.4rem) / 5);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  height: auto;
+}
+
+.music-dashboard--mobile-landscape .dash-track-art,
+.music-dashboard--mobile-landscape .dash-placeholder--square {
+  width: 100%;
+  max-width: 46px;
+  aspect-ratio: 1;
+  height: auto;
+  margin: 0 auto 0.08rem;
+  flex-shrink: 0;
+}
+
+.music-dashboard--mobile-landscape .dash-genre-ring,
+.music-dashboard--mobile-landscape .dash-placeholder--circle {
+  width: 100%;
+  max-width: 48px;
+  aspect-ratio: 1;
+  height: auto;
+  margin: 0 auto 0.08rem;
+  flex-shrink: 0;
+}
+
+.music-dashboard--mobile-landscape .dash-icon-item-cover,
+.music-dashboard--mobile-landscape .dash-placeholder-item .dash-placeholder--landscape {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  flex-shrink: 0;
+}
+
 /* —— Mobile / narrow screens —— */
 @media (max-width: 900px) {
   .app--module-view .main--module {
@@ -2917,38 +3005,46 @@ input {
     flex: 1 1 0;
     min-height: 0;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
   }
 
   .music-dashboard--mobile-portrait .dash-scroll--tracks,
   .music-dashboard--mobile-portrait .dash-scroll--icons,
   .music-dashboard--mobile-portrait .dash-scroll--genres,
   .music-dashboard--mobile-portrait .dash-scroll--flags {
-    display: grid;
-    grid-template-columns: repeat(var(--dash-pane-cols), minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
     gap: 0.4rem;
     width: 100%;
     max-width: 100%;
     height: auto;
     max-height: 100%;
-    align-content: center;
-    justify-content: center;
-    justify-items: center;
     align-items: center;
-    overflow: hidden;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
     box-sizing: border-box;
     padding: 0 0.2rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .music-dashboard--mobile-portrait .dash-scroll--tracks::-webkit-scrollbar,
+  .music-dashboard--mobile-portrait .dash-scroll--icons::-webkit-scrollbar,
+  .music-dashboard--mobile-portrait .dash-scroll--genres::-webkit-scrollbar,
+  .music-dashboard--mobile-portrait .dash-scroll--flags::-webkit-scrollbar {
+    display: none;
   }
 
   .music-dashboard--mobile-portrait .dash-track,
   .music-dashboard--mobile-portrait .dash-icon-item,
   .music-dashboard--mobile-portrait .dash-genre,
-  .music-dashboard--mobile-portrait .dash-country {
-    width: 100%;
-    max-width: 100%;
+  .music-dashboard--mobile-portrait .dash-country,
+  .music-dashboard--mobile-portrait .dash-placeholder-slot {
+    flex: 0 0 calc((100% - 0.8rem) / 3);
+    width: calc((100% - 0.8rem) / 3);
+    max-width: calc((100% - 0.8rem) / 3);
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -3656,6 +3752,97 @@ input {
 
 .artist-page--mobile-portrait .artist-page__catalog-label {
   display: none;
+}
+
+.artist-page--mobile-portrait .artist-page__body {
+  overflow-x: hidden;
+}
+
+.artist-page--mobile-portrait .artist-about__layout {
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.artist-page--mobile-portrait .artist-about__content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.artist-page--mobile-portrait .artist-about__meta-row {
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+}
+
+.artist-page--mobile-portrait .artist-about__meta-row dd {
+  min-width: 0;
+}
+
+.artist-page--mobile-portrait .artist-about__bio,
+.artist-page--mobile-portrait .artist-about__bio-scroll {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.artist-page--mobile-portrait .artist-word-cloud--embedded {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.artist-page--mobile-portrait .artist-lineup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.35rem 0.85rem;
+  --lineup-photo: clamp(4.25rem, 34vw, 6.75rem);
+  --lineup-text-block: 4.5rem;
+  --lineup-row-gap: 0;
+}
+
+.artist-page--mobile-portrait .artist-lineup-row {
+  display: contents;
+}
+
+.artist-page--mobile-portrait .artist-lineup-card {
+  max-width: 100%;
+  width: 100%;
+}
+
+.artist-page--mobile-landscape .artist-lineup-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 100%;
+  --lineup-photo: clamp(2.35rem, 11vw, 4.25rem);
+  --lineup-text-block: 3.75rem;
+  --lineup-row-gap: 0;
+}
+
+.artist-page--mobile-landscape .artist-lineup-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.artist-page--mobile-landscape .artist-lineup-card {
+  flex: 0 0 calc((100% - 1.8rem) / 5);
+  width: calc((100% - 1.8rem) / 5);
+  max-width: calc((100% - 1.8rem) / 5);
+  min-width: 0;
+}
+
+.artist-page--mobile-landscape .artist-lineup-card__name {
+  font-size: 0.68rem;
+}
+
+.artist-page--mobile-landscape .artist-lineup-card__roles,
+.artist-page--mobile-landscape .artist-lineup-card__years {
+  font-size: 0.58rem;
 }
 
 
@@ -4610,6 +4797,77 @@ input {
   font-size: 0.85rem;
 }
 
+@media (max-width: 480px) and (orientation: portrait) {
+  .artist-member-modal__hero img,
+  .artist-member-modal__ph {
+    width: 6.75rem;
+    height: 6.75rem;
+  }
+}
+
+/* Phone landscape — photo left, info scrolls on the right */
+@media (max-width: 900px) and (orientation: landscape) {
+  .artist-member-modal.modal-panel {
+    width: min(96vw, 56rem);
+    max-width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1.25rem);
+    padding: 0.75rem 0.9rem;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .artist-member-modal__body {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.65rem 0.85rem;
+    align-items: center;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    font-size: 0.78rem;
+  }
+
+  .artist-member-modal__hero {
+    display: contents;
+  }
+
+  .artist-member-modal__photo-btn {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: center;
+  }
+
+  .artist-member-modal__hero img,
+  .artist-member-modal__ph {
+    width: clamp(5.25rem, 17vw, 7rem);
+    height: clamp(5.25rem, 17vw, 7rem);
+  }
+
+  .artist-member-modal__info {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: calc(100dvh - 5rem);
+    padding-right: 0.2rem;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    font-size: 0.78rem;
+  }
+
+  .artist-member-modal__title {
+    font-size: 1rem;
+  }
+
+  .artist-member-modal__row {
+    font-size: 0.76rem;
+  }
+}
+
 .artist-member-modal__photo--deceased {
   filter: grayscale(0.85);
   opacity: 0.85;
@@ -4710,6 +4968,42 @@ input {
   font-size: 0.85rem;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+/* Phone landscape — inline related projects (must follow base list rules) */
+@media (max-width: 900px) and (orientation: landscape) {
+  .artist-member-modal__row--projects {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+
+  .artist-member-modal__projects {
+    display: inline;
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .artist-member-modal__projects li {
+    display: inline;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+    gap: 0;
+    font-size: 0.76rem;
+  }
+
+  .artist-member-modal__projects li + li::before {
+    content: " • ";
+    color: var(--text-muted);
+  }
+
+  .artist-member-modal__project-name,
+  .artist-member-modal__years {
+    display: inline;
+    font-size: 0.76rem;
+  }
 }
 
 .artist-member-modal__row--links {
@@ -5396,6 +5690,19 @@ input {
   }
 }
 
+.artist-page--mobile-landscape .media-release-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.artist-page--mobile-landscape .artist-gallery__photo-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+
+.artist-page--mobile-landscape .artist-gallery {
+  padding-bottom: 1.25rem;
+}
+
 .media-release-card {
   position: relative;
   aspect-ratio: 1;
@@ -5953,16 +6260,29 @@ input {
 }
 
 /* Phone landscape: side-by-side, sticky photo + scrolling content */
+.artist-page--mobile-landscape {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.artist-page--mobile-landscape .artist-page__body {
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
 .artist-about--flat-meta .artist-about__layout,
 .artist-page--mobile-landscape .artist-about__layout {
-  --artist-ml-bottom-gap: 0.85rem;
+  --artist-ml-bottom-gap: 1.15rem;
   grid-template-columns: minmax(80px, 24vw) minmax(0, 1fr);
   gap: 0.65rem;
   padding: 0.5rem 0.65rem var(--artist-ml-bottom-gap);
   align-items: stretch;
-  height: calc(100vh - 5.85rem);
-  min-height: calc(100vh - 5.85rem);
-  max-height: calc(100vh - 5.85rem);
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   box-sizing: border-box;
 }
 
@@ -5971,6 +6291,8 @@ input {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .artist-about--flat-meta .artist-about__photo-col,
@@ -5981,7 +6303,7 @@ input {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 0.35rem 0 0;
+  padding: 0.35rem 0 1.15rem;
   max-width: 24vw;
   align-self: stretch;
   height: 100%;
@@ -5991,20 +6313,22 @@ input {
 
 .artist-about--flat-meta .artist-about__photo-stage,
 .artist-page--mobile-landscape .artist-about__photo-stage {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
-  max-height: calc(100% - 0.35rem);
-  width: 100%;
+  max-height: calc(100% - 1.15rem);
+  width: fit-content;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .artist-about--flat-meta .artist-about__photo,
 .artist-about--flat-meta .artist-about__photo--layer,
 .artist-page--mobile-landscape .artist-about__photo,
 .artist-page--mobile-landscape .artist-about__photo--layer {
-  width: 100%;
+  width: auto;
   max-width: 100%;
   height: auto;
-  max-height: 100%;
+  max-height: calc(100% - 1.15rem);
   aspect-ratio: auto;
   object-fit: contain;
   object-position: left top;
@@ -6030,7 +6354,13 @@ input {
   --artist-meta-gap: 0.5rem;
   scrollbar-width: thin;
   overscroll-behavior: contain;
-  padding-bottom: 0.35rem;
+  padding-bottom: 2rem;
+  scroll-padding-bottom: 2rem;
+}
+
+.artist-page--mobile-landscape .artist-about__content:has(.artist-about__tracks-player:not(:empty)) {
+  padding-bottom: 3.5rem;
+  scroll-padding-bottom: 3.5rem;
 }
 
 .artist-page--mobile-landscape .artist-about__bio-block {
@@ -6080,12 +6410,25 @@ input {
 
 .artist-page--mobile-landscape .artist-about__tracks {
   flex-shrink: 0;
-  padding-bottom: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+.artist-page--mobile-landscape .artist-about__tracks-stack {
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding-bottom: 0.35rem;
 }
 
 .artist-page--mobile-landscape .artist-about__tracks-row {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.artist-page--mobile-landscape .artist-about__tracks-player:not(:empty) {
+  min-height: 2.25rem;
+  margin-top: 0.25rem;
+  padding-bottom: 0.5rem;
 }
 
 .artist-page--mobile-landscape .artist-about__track-cover {
@@ -6098,6 +6441,18 @@ input {
 
 .artist-page--mobile-landscape .artist-about__track-date {
   font-size: 0.58rem;
+  padding-bottom: 0.15rem;
+}
+
+.artist-page--mobile-landscape .artist-page__body--lineup {
+  overflow-y: auto;
+  padding-bottom: 1.25rem;
+}
+
+.artist-page--mobile-landscape .artist-lineup {
+  min-height: 0;
+  justify-content: flex-start;
+  padding: 0.75rem 0.65rem 1.25rem;
 }
 
 /* --- Release page --- */
@@ -6249,6 +6604,37 @@ input {
 .release-page__tabs button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+.release-page__subtabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.release-page__subtabs button {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.55rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.release-page__subtabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.release-page__subtabs button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .release-page__body {
@@ -7504,9 +7890,95 @@ input {
   flex-direction: column;
 }
 
+.release-page--stacked.release-page--overview .release-page__overview {
+  overflow: visible;
+}
+
+.release-page--stacked.release-page--overview .release-page__overview-top {
+  max-height: none;
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-block {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-scroll {
+  flex: 0 0 auto;
+}
+
+.release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-scroll--collapsed {
+  max-height: 5rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 38%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 38%, transparent);
+}
+
+.release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-scroll--expanded {
+  max-height: none;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.release-page--stacked.release-page--overview .release-page__main {
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .release-page--stacked .release-page__overview-top .release-page__photocards {
   max-width: 100%;
   width: 100%;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(0.5rem, 3vw, 0.85rem);
+  --overview-photo-col: calc((100% - clamp(0.5rem, 3vw, 0.85rem)) / 1.74);
+  --overview-portrait-max-h: clamp(12rem, 52vw, 19rem);
+  --overview-landscape-max-h: clamp(9rem, 36vw, 13rem);
+}
+
+.release-page--stacked .release-page__overview-top .release-photocard--portrait {
+  flex: 0.74 0 auto;
+  width: calc(var(--overview-photo-col) * var(--overview-portrait-width));
+  max-width: none;
+}
+
+.release-page--stacked .release-page__overview-top .release-photocard--landscape {
+  flex: 1 0 auto;
+  width: var(--overview-photo-col);
+  max-width: none;
+}
+
+.release-page--stacked .release-page__desc-scroll--collapsed {
+  max-height: 5rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 38%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 38%, transparent);
+}
+
+.release-page--stacked .release-page__desc-scroll--expanded {
+  max-height: none;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.release-page__desc-toggle {
+  margin-top: 0.35rem;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .release-page__desc-block {
@@ -7950,29 +8422,425 @@ input {
   display: none;
 }
 
-.release-page--track-album .release-tracklist__body {
+.release-page--track-player .release-tracklist__body {
   display: none;
 }
 
+.release-page--stacked.release-page--tab-gallery .release-page__panel {
+  display: none;
+}
+
+/* Mobile landscape phones — two-column layout with scrollable panels */
+.release-page--mobile-landscape {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.release-page--mobile-landscape .release-page__body {
+  grid-template-columns: minmax(8.5rem, 12.5rem) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem 0.75rem;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.release-page--mobile-landscape.release-page--tab-gallery .release-page__body {
+  grid-template-columns: 1fr;
+  padding: 0.5rem 0.65rem 0.75rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel {
+  position: static;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-self: stretch;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Track panel — background canvas must span full scrollable content */
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track {
+  display: grid;
+  grid-template-areas: "stack";
+  align-content: start;
+  isolation: isolate;
+  padding-top: 0.55rem;
+  scroll-padding-top: 0.35rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track::before {
+  grid-area: stack;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 0;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-canvas-layer {
+  grid-area: stack;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-canvas,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-canvas-shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-content {
+  grid-area: stack;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: start;
+  width: 100%;
+  min-height: min-content;
+  min-width: 0;
+  flex: none;
+  gap: 0.35rem;
+  padding-top: 0.15rem;
+  padding-bottom: 0.85rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__art {
+  flex-shrink: 0;
+  overflow: visible;
+  padding: 0.15rem 0.4rem 0;
+  width: 100%;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-meta {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: visible;
+  justify-content: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-fit,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__panel-fit-inner {
+  overflow: visible;
+  width: 100%;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-title {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-version,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-line {
+  font-size: 0.58rem;
+  line-height: 1.3;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-date,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-writers,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel--track .release-page__track-panel-source {
+  font-size: 0.54rem;
+  line-height: 1.3;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-meta {
+  overflow: visible;
+  justify-content: flex-start;
+  gap: 0.25rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-fit,
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-fit-inner {
+  overflow: visible;
+}
+
+.release-page--mobile-landscape .release-page__top {
+  padding: 0.35rem 0.75rem;
+}
+
+.release-page--mobile-landscape .release-page__top-center {
+  min-height: 2.1rem;
+}
+
+.release-page--mobile-landscape .release-page__brand-logo {
+  height: 2.25rem;
+  max-width: min(14rem, 38vw);
+}
+
+.release-page--mobile-landscape .release-page__brand-icon {
+  height: 2rem;
+}
+
+.release-page--mobile-landscape .release-page__back {
+  font-size: 0.68rem;
+  padding: 0.15rem 0;
+}
+
+.release-page--mobile-landscape .release-page__panel-content {
+  overflow: visible;
+  padding-bottom: 0.65rem;
+}
+
+.release-page--mobile-landscape .release-page__art-stage {
+  --release-cover-size: clamp(1.85rem, 7vw, 2.55rem);
+}
+
+.release-page--mobile-landscape .release-page__art {
+  overflow: visible;
+  padding: 0 0.4rem;
+}
+
+.release-page--mobile-landscape .release-page__disc {
+  margin-left: calc(var(--release-cover-size) * -0.3);
+  height: calc(var(--release-cover-size) * 0.72);
+  width: calc(var(--release-cover-size) * 0.72);
+}
+
+.release-page--mobile-landscape .release-page__panel-head {
+  gap: 0.18rem;
+}
+
+.release-page--mobile-landscape .release-page__panel-body {
+  gap: 0.12rem;
+}
+
+.release-page--mobile-landscape .release-page__panel-credits {
+  gap: 0.1rem;
+}
+
+.release-page--mobile-landscape .release-page__brand-row {
+  gap: 0.18rem;
+}
+
+.release-page--mobile-landscape .release-page__album-title {
+  font-size: 0.58rem;
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.release-page--mobile-landscape .release-page__meta-logo {
+  height: 1.05rem;
+  max-width: 5.5rem;
+}
+
+.release-page--mobile-landscape .release-page__meta-icon {
+  height: 1.15rem;
+}
+
+.release-page--mobile-landscape .release-page__date,
+.release-page--mobile-landscape .release-page__type-line,
+.release-page--mobile-landscape .release-page__source,
+.release-page--mobile-landscape .release-page__subgenres,
+.release-page--mobile-landscape .release-page__producer,
+.release-page--mobile-landscape .release-page__label-name {
+  font-size: 0.52rem;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.release-page--mobile-landscape .release-page__type-line {
+  font-weight: 500;
+}
+
+.release-page--mobile-landscape .release-page__label {
+  gap: 0.12rem;
+}
+
+.release-page--mobile-landscape .release-page__panel-bottom {
+  gap: 0.1rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--scroll) .release-page__main {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  display: block;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 1rem;
+  scroll-padding-bottom: 1rem;
+}
+
+.release-page--mobile-landscape .release-page__overview {
+  overflow: visible;
+  flex: none;
+  min-height: min-content;
+  padding-bottom: 0.5rem;
+}
+
+.release-page--mobile-landscape .release-page__overview-top {
+  max-height: none;
+  overflow: visible;
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+.release-page--mobile-landscape .release-page__overview-top .release-page__desc-block {
+  max-height: none;
+  overflow: visible;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.release-page--mobile-landscape .release-page__overview-top .release-page__desc-scroll {
+  overflow: visible;
+  max-height: none;
+}
+
+.release-page--mobile-landscape .release-page__overview-top .release-page__photocards {
+  position: sticky;
+  top: 0.35rem;
+  align-self: flex-start;
+  flex-shrink: 0;
+  z-index: 1;
+  --overview-photo-col: clamp(3.75rem, 14vw, 5.5rem);
+  --overview-portrait-max-h: clamp(5.5rem, 22vh, 8rem);
+  --overview-landscape-max-h: clamp(3.75rem, 14vh, 5.5rem);
+}
+
+.release-page--mobile-landscape.release-page--overview .release-page__lineup,
+.release-page--mobile-landscape.release-page--overview .release-page__singles {
+  flex: 0 0 auto;
+  min-height: unset;
+}
+
+.release-page--mobile-landscape.release-page--tab-gallery .release-page__panel {
+  display: none;
+}
+
+.release-page--mobile-landscape .release-gallery {
+  width: 100%;
+}
+
+.release-page--mobile-landscape .release-gallery__photo-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+
 .release-page--stacked .release-page__art-stage {
-  --release-cover-size: clamp(12.5rem, 58vw, 16.5rem);
+  --release-cover-size: clamp(7.5rem, 34vw, 9.75rem);
+}
+
+.release-page--stacked.release-page--track-player {
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+.release-page--stacked.release-page--track-player .release-page__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.release-page--stacked.release-page--track-player .release-page__main {
+  display: none;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-meta {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-fit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-fit-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.release-page--stacked.release-page--track-player .release-page__panel-bottom {
+  flex-shrink: 0;
+  margin-top: auto;
+  width: 100%;
+}
+
+.release-page--stacked .release-page__art {
+  overflow: visible;
+  max-width: 100%;
+}
+
+.release-page--stacked .release-page__art-stage {
+  max-width: 100%;
 }
 
 .release-page--tablet-portrait .release-page__art-stage {
   --release-cover-size: clamp(14rem, 42vw, 20rem);
 }
 
-.release-page--stacked.release-page--track-album .release-tracklist__mobile-toggle {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  margin-top: 0.75rem;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(10px);
-}
-
 .release-page--playing.release-page--stacked .release-page__body {
   padding-bottom: 4rem;
+}
+
+.release-page--stacked.release-page--track-player.release-page--playing .release-page__body {
+  padding-bottom: 1.25rem;
 }
 
 .release-page__player {
@@ -8004,6 +8872,10 @@ input {
 }
 
 /* --- Release tracklist --- */
+.release-page--stacked .release-tracklist__mobile-toggle {
+  display: none;
+}
+
 .release-tracklist__mobile-toggle {
   display: flex;
   margin-bottom: 0.75rem;
@@ -8041,9 +8913,16 @@ input {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.release-tracklist__edition-block--bside .release-tracklist__edition-title {
-  color: var(--text-muted);
-  font-size: 0.82rem;
+.release-tracklist__bside-single + .release-tracklist__bside-single {
+  margin-top: 1rem;
+}
+
+.release-tracklist__single-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
 }
 
 .release-tracklist__title-suffix {
@@ -8131,6 +9010,14 @@ input {
 
 .release-tracklist__title {
   font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.release-tracklist__title.billboard-text {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8827,6 +9714,47 @@ input {
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: 0;
   width: 100%;
+}
+
+.release-page--stacked .release-gallery__photo-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.release-gallery__brand-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  padding: 0.65rem 0.35rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text);
+  aspect-ratio: 1;
+}
+
+.release-gallery__brand-card:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.release-gallery__brand-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.35rem;
+}
+
+.release-gallery__brand-stage img {
+  max-width: 92%;
+  max-height: 92%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
 .release-gallery__photo-card {

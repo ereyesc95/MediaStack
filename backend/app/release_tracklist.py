@@ -633,6 +633,9 @@ def _append_bside_groups(
             for i, track in enumerate(tracks, 1):
                 track["number"] = i
             date_iso = _edition_date_iso(ed_dir, single_dir)
+            single_title = _single_title_from_folder(
+                single_dir, entry_display_name(single_dir)
+            )
             group_label = (
                 _edition_label(ed_dir) if ed_dir != single_dir else _edition_label(single_dir)
             )
@@ -641,6 +644,7 @@ def _append_bside_groups(
                     "id": _edition_id(f"{single_rel}:{ed_dir.name}"),
                     "kind": "single",
                     "label": group_label,
+                    "single_title": single_title,
                     "date_iso": date_iso,
                     "display_date": format_display_date(date_iso),
                     "source_single_title": _bside_source_title(single_dir, ed_dir),

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { MusicDashboard } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
+import BillboardText from "../BillboardText";
 import DashIconCard from "./DashIconCard";
 
 const PHONE_MAX_WIDTH = 900;
@@ -17,8 +18,8 @@ function hasTouchScreen(): boolean {
 const DESKTOP_PANE_ITEMS = 10;
 const TABLET_LANDSCAPE_ITEMS = 7;
 const TABLET_PORTRAIT_ITEMS = 5;
-const MOBILE_LANDSCAPE_ITEMS = 5;
-const MOBILE_PORTRAIT_ITEMS = 3;
+const MOBILE_LANDSCAPE_ITEMS = 10;
+const MOBILE_PORTRAIT_ITEMS = 10;
 
 type DashLayout =
   | "desktop"
@@ -172,65 +173,6 @@ function DashPaneLabel({
   );
 }
 
-function BillboardText({
-  short,
-  full,
-  className,
-}: {
-  short: string;
-  full: string;
-  className: string;
-}) {
-  const complete = (full || short || "").trim();
-  const clipRef = useRef<HTMLSpanElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [scrolls, setScrolls] = useState(false);
-  const [scrollEnd, setScrollEnd] = useState("0px");
-  const [scrollDuration, setScrollDuration] = useState("6s");
-
-  useLayoutEffect(() => {
-    const clip = clipRef.current;
-    const text = textRef.current;
-    if (!clip || !text) return;
-
-    const measure = () => {
-      const overflow = Math.max(0, text.scrollWidth - clip.clientWidth);
-      const needsScroll = overflow > 1;
-      setScrolls(needsScroll);
-      setScrollEnd(needsScroll ? `-${overflow}px` : "0px");
-      setScrollDuration(`${Math.max(4, overflow / 32)}s`);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(clip);
-    return () => observer.disconnect();
-  }, [complete]);
-
-  const scrollStyle = scrolls
-    ? ({
-        "--scroll-end": scrollEnd,
-        "--scroll-duration": scrollDuration,
-      } as React.CSSProperties)
-    : undefined;
-
-  return (
-    <span
-      className={`billboard-text ${className}${scrolls ? " billboard-text--scroll" : ""}`}
-      title={scrolls ? undefined : complete}
-    >
-      <span className="billboard-text-clip" ref={clipRef}>
-        <span
-          className="billboard-text-inner"
-          ref={textRef}
-          style={scrollStyle}
-        >
-          {complete}
-        </span>
-      </span>
-    </span>
-  );
-}
-
 export default function MusicHome({
   data,
   loading,
@@ -255,6 +197,32 @@ export default function MusicHome({
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
   const dashClass = DASH_LAYOUT_CLASS[layout];
+  const tracksScrollRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (
+      (layout !== "mobile-portrait" && layout !== "mobile-landscape") ||
+      !playingPath
+    ) {
+      return;
+    }
+    const scroller = tracksScrollRef.current;
+    if (!scroller) return;
+    const active = scroller.querySelector<HTMLElement>(
+      `.dash-track.active[data-track-path="${CSS.escape(playingPath)}"]`
+    );
+    if (!active) return;
+    const scrollerRect = scroller.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const left =
+      active.offsetLeft -
+      scroller.clientWidth / 2 +
+      active.clientWidth / 2;
+    scroller.scrollTo({
+      left: Math.max(0, left),
+      behavior: scrollerRect.width > 0 && activeRect.width > 0 ? "smooth" : "auto",
+    });
+  }, [layout, playingPath, topTracks]);
 
   return (
     <div className={`music-dashboard${dashClass}`}>
@@ -266,7 +234,7 @@ export default function MusicHome({
           title="ON REPEAT"
           subtitle="Most played tracks"
         />
-        <div className="dash-scroll dash-scroll--tracks">
+        <div className="dash-scroll dash-scroll--tracks" ref={tracksScrollRef}>
           {topTracks.map((t) => (
             <button
               key={t.id}
@@ -274,6 +242,7 @@ export default function MusicHome({
               className={`dash-track${
                 playingPath && t.path === playingPath ? " active" : ""
               }`}
+              data-track-path={t.path ?? undefined}
               onClick={() =>
                 t.path && onPlayTrack(t.path, t.artist_id, t.title)
               }
