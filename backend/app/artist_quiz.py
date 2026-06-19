@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.band_library import (
     AUDIO_EXTS,
     _collect_audio_files,
+    display_track_title_from_path,
     _track_title_from_filename,
 )
 from app.release_tracklist import _track_number
@@ -227,7 +228,7 @@ def build_songs_quiz(db: Session, band_id: int, *, rounds: int = 10) -> dict | N
             _enrich_track_candidate(
                 media_root,
                 audio_file,
-                _track_title_from_filename(audio_file),
+                display_track_title_from_path(audio_file),
                 path,
             )
         )

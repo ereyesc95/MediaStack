@@ -117,6 +117,20 @@ for decade in range(1950, 2030, 10):
 PLAYLISTS = {
     "top-tracks": ((48, 28, 72), (160, 90, 220), "TOP"),
     "setlists": ((22, 42, 58), (0, 150, 170), "LIVE"),
+    "remixes": ((32, 18, 48), (200, 60, 180), "RMX"),
+    "acoustic": ((36, 52, 38), (120, 170, 90), "ACO"),
+    "demos": ((40, 36, 28), (150, 110, 70), "DMO"),
+    "instrumentals": ((24, 36, 52), (70, 130, 200), "INS"),
+    "covers": ((52, 28, 32), (180, 80, 90), "COV"),
+    "a-cappella": ((44, 32, 58), (130, 100, 190), "ACA"),
+    "b-sides": ((28, 32, 42), (90, 110, 160), "B/S"),
+    "bonus-tracks": ((48, 38, 18), (200, 160, 50), "BNS"),
+    "tributes": ((38, 22, 30), (160, 70, 100), "TRB"),
+    "collaborations": ((18, 42, 52), (40, 140, 170), "COL"),
+    "features": ((42, 24, 58), (170, 90, 210), "FEAT"),
+    "originals": ((26, 40, 34), (80, 150, 110), "ORG"),
+    "writing-credits": ((30, 34, 48), (100, 120, 200), "WRT"),
+    "appearances": ((34, 28, 44), (120, 90, 180), "APP"),
 }
 playlist_dir = OUT / "playlists"
 playlist_dir.mkdir(exist_ok=True)

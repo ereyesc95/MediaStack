@@ -1,7 +1,23 @@
 /** Split track title into main part and bracket suffix for display. */
+function formatSuffixParts(parts: string[]): string {
+  const formatted: string[] = [];
+  for (const part of parts) {
+    if (/^of\s+/i.test(part) && formatted.length) {
+      formatted[formatted.length - 1] = `${formatted[formatted.length - 1]} ${part}`;
+      continue;
+    }
+    formatted.push(part);
+  }
+  return formatted.join(", ");
+}
+
 function formatTrackTitleSuffix(bracketed: string): string {
   const inner = bracketed.replace(/^\[/, "").replace(/\]$/, "");
-  return `(${inner.replace(/;/g, ", ")})`;
+  const parts = inner
+    .split(/[;:]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return `(${formatSuffixParts(parts)})`;
 }
 
 export function splitTrackTitleDisplay(title: string): {

@@ -24,6 +24,7 @@ from app.paths import DATA_DIR
 from app.gallery import IMAGE_EXTS, _artist_dir, _display_name, _media_url, _resolve_child_dir
 from app.media_paths_util import (
     entry_display_name,
+    is_under_root,
     resolve_media_entry,
     safe_relative,
 )
@@ -33,9 +34,17 @@ ARTWORK_DIR = "[artwork]"
 COVER_FRONT_STEM = "cover - front"
 LOGO_STEM = "logo"
 DISC_DIR_RE = re.compile(r"^\d+\.\s*Disc\s+\d+", re.I)
+DISC_LOOSE_RE = re.compile(r"^Disc\s+(\d+)", re.I)
+SIDE_RE = re.compile(r"^\d+\.\s*Side\s+", re.I)
+SIDE_LOOSE_RE = re.compile(r"^Side\s+[A-Z]\b", re.I)
+TAPE_RE = re.compile(r"^\d+\.\s*(Tape|Cassette)\s+", re.I)
+TAPE_LOOSE_RE = re.compile(r"^Tape\s+[A-Z]\b", re.I)
+CASSETTE_LOOSE_RE = re.compile(r"^Cassette\s+[A-Z]\b", re.I)
 BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
 STANDARD_EDITION = "standard edition"
 VARIOUS_ARTISTS_DEFAULT_ID = 120
+
+AUDIO_INDEX_VERSION = 3
 
 CATEGORY_ORDER = list(AUDIO_CATEGORIES.keys())
 
@@ -164,17 +173,83 @@ def _has_direct_audio(folder: Path) -> bool:
     return False
 
 
+def _is_group_subdir_name(name: str) -> bool:
+    return bool(
+        DISC_DIR_RE.match(name)
+        or DISC_LOOSE_RE.match(name)
+        or SIDE_RE.match(name)
+        or SIDE_LOOSE_RE.match(name)
+        or TAPE_RE.match(name)
+        or TAPE_LOOSE_RE.match(name)
+        or CASSETTE_LOOSE_RE.match(name)
+    )
+
+
+def _has_group_subdirs(folder: Path) -> bool:
+    if not folder.is_dir():
+        return False
+    for child in folder.iterdir():
+        if (
+            child.is_dir()
+            and child.name.casefold() != ARTWORK_DIR
+            and _is_group_subdir_name(child.name)
+            and _has_direct_audio(child)
+        ):
+            return True
+    return False
+
+
 def _is_edition_folder(name: str) -> bool:
+    """Name-based heuristics for edition folders (no path inspection)."""
     low = name.casefold()
     if low == STANDARD_EDITION:
         return True
-    if DATE_PREFIX_RE.match(name):
+    if DATE_PREFIX_RE.match(name.strip()):
         return True
     if DISC_DIR_RE.match(name):
         return False
     if name.casefold() == ARTWORK_DIR:
         return False
-    return bool(_parse_folder_date(name)) or low.endswith("edition")
+    if _parse_folder_date(name):
+        return True
+    if low.endswith("edition"):
+        return True
+    return False
+
+
+def _is_edition_content_dir(folder: Path) -> bool:
+    """Whether a folder holds edition-level audio/artwork (name, tracks, groups, or [Artwork])."""
+    if not folder.is_dir() or folder.name.casefold() == ARTWORK_DIR:
+        return False
+    if _is_edition_folder(folder.name):
+        return True
+    if _find_artwork_subdir(folder):
+        return True
+    if _has_direct_audio(folder):
+        return True
+    if _has_group_subdirs(folder):
+        return True
+    return False
+
+
+def _is_edition_dir(folder: Path) -> bool:
+    """True when folder is an edition inside a release, not the release root itself."""
+    if not _is_edition_content_dir(folder):
+        return False
+    parent = folder.parent
+    if parent == folder:
+        return False
+    parent_name = entry_display_name(parent).strip()
+    if DATE_PREFIX_RE.match(parent_name):
+        return True
+    peers = [
+        c
+        for c in parent.iterdir()
+        if c.is_dir()
+        and c.name.casefold() != ARTWORK_DIR
+        and _is_edition_content_dir(c)
+    ]
+    return len(peers) >= 2
 
 
 def _child_release_folders(folder: Path) -> list[Path]:
@@ -215,10 +290,50 @@ def _band_id_for_artist_name(db: Session, name: str) -> int | None:
     return None
 
 
+def _band_id_from_content_path(db: Session, media_root: Path, content: Path) -> int | None:
+    rel = safe_relative(content, media_root)
+    if not rel:
+        return None
+    parts = Path(rel).parts
+    if len(parts) < 3 or parts[0].casefold() != "music":
+        return None
+    return _band_id_for_artist_name(db, parts[2])
+
+
+def _find_release_under_artist(
+    artist_dir: Path,
+    release_folder_name: str,
+    *,
+    media_root: Path,
+) -> Path | None:
+    """Locate a release folder anywhere under an artist's audio tree."""
+    audio = _audio_root(artist_dir)
+    if not audio.is_dir():
+        return None
+    fold = release_folder_name.casefold()
+    for category_folder in AUDIO_CATEGORIES.values():
+        cat_dir = _resolve_child_dir(audio, category_folder)
+        if not cat_dir.is_dir():
+            continue
+        target = cat_dir / release_folder_name
+        if target.exists():
+            resolved = resolve_media_entry(target, media_root=media_root)
+            if resolved:
+                return resolved
+        for child in cat_dir.iterdir():
+            if entry_display_name(child).casefold() == fold:
+                resolved = resolve_media_entry(child, media_root=media_root)
+                if resolved:
+                    return resolved
+    return None
+
+
 def _mirror_path_under_artist(
     artist_dir: Path | None,
     category_folder: str,
     release_folder_name: str,
+    *,
+    media_root: Path | None = None,
 ) -> Path | None:
     if not artist_dir:
         return None
@@ -227,13 +342,13 @@ def _mirror_path_under_artist(
     if not cat_dir.is_dir():
         return None
     target = cat_dir / release_folder_name
-    resolved = resolve_media_entry(target) if target.exists() else None
+    resolved = resolve_media_entry(target, media_root=media_root) if target.exists() else None
     if resolved:
         return resolved
     fold = release_folder_name.casefold()
     for child in cat_dir.iterdir():
         if entry_display_name(child).casefold() == fold:
-            return resolve_media_entry(child)
+            return resolve_media_entry(child, media_root=media_root)
     return None
 
 
@@ -255,7 +370,15 @@ def _build_release_card(
 
     content = content_root
     if content is None:
-        content = resolve_media_entry(display_entry)
+        content = resolve_media_entry(display_entry, media_root=media_root)
+    if content is None and tags.get("source_artist"):
+        _source_id, source_dir = _resolve_source_artist_dir(
+            db, media_root, tags["source_artist"]
+        )
+        if source_dir:
+            content = _find_release_under_artist(
+                source_dir, clean_name, media_root=media_root
+            )
     if content is None or not content.is_dir():
         return None
 
@@ -263,15 +386,30 @@ def _build_release_card(
     navigate_band_id = owner_band_id
     artwork_root = content
 
-    if tags.get("source_artist"):
+    owner_band = db.get(Band, owner_band_id)
+    owner_artist_dir = (
+        _artist_dir(media_root, owner_band.bnd_name) if owner_band else None
+    )
+    resolved_outside_owner = bool(
+        owner_artist_dir and not is_under_root(content, owner_artist_dir)
+    )
+
+    if resolved_outside_owner:
+        content_band_id = _band_id_from_content_path(db, media_root, content)
+        if content_band_id:
+            navigate_band_id = content_band_id
+            source_band_id = content_band_id
+        artwork_root = content
+    elif tags.get("source_artist"):
         source_band_id, source_dir = _resolve_source_artist_dir(
             db, media_root, tags["source_artist"]
         )
         if source_band_id:
             navigate_band_id = source_band_id
-        rel_name = clean_name
         if source_dir:
-            mirrored = _mirror_path_under_artist(source_dir, category_folder, rel_name)
+            mirrored = _find_release_under_artist(
+                source_dir, clean_name, media_root=media_root
+            )
             if mirrored:
                 artwork_root = mirrored
                 navigate_band_id = source_band_id or navigate_band_id
@@ -284,6 +422,12 @@ def _build_release_card(
     navigate_rel_path = safe_relative(artwork_root, media_root) or rel_path
     release_id = release_id_from_path(rel_path)
     navigate_release_id = release_id_from_path(navigate_rel_path)
+
+    source_artist_name: str | None = tags.get("source_artist")
+    if not source_artist_name and source_band_id:
+        src_band = db.get(Band, source_band_id)
+        if src_band and src_band.bnd_name:
+            source_artist_name = src_band.bnd_name
 
     return {
         "id": release_id,
@@ -298,6 +442,7 @@ def _build_release_card(
         "navigate_band_id": navigate_band_id,
         "navigate_release_id": navigate_release_id,
         "source_band_id": source_band_id,
+        "source_artist_name": source_artist_name,
     }
 
 
@@ -306,7 +451,14 @@ def _iter_category_release_entries(cat_dir: Path) -> list[Path]:
     for child in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold()):
         if child.name.casefold() in ("desktop.ini", "thumbs.db"):
             continue
-        if child.is_dir() or child.suffix.casefold() == ".lnk":
+        suffix = child.suffix.casefold()
+        try:
+            is_link = child.is_symlink() or getattr(child, "is_junction", lambda: False)()
+        except OSError:
+            is_link = False
+        if suffix == ".path" and child.with_suffix(".lnk").exists():
+            continue
+        if child.is_dir() or suffix in (".lnk", ".path") or is_link:
             entries.append(child)
     return entries
 
@@ -325,7 +477,7 @@ def _scan_category_releases(
 
     for entry in _iter_category_release_entries(cat_dir):
         name = entry_display_name(entry)
-        resolved = resolve_media_entry(entry)
+        resolved = resolve_media_entry(entry, media_root=media_root)
 
         if category_key == "singles" and resolved and resolved.is_dir():
             nested = _child_release_folders(resolved)
@@ -341,7 +493,7 @@ def _scan_category_releases(
                         category_key=category_key,
                         category_folder=category_folder,
                         display_entry=single_dir,
-                        content_root=resolve_media_entry(single_dir),
+                        content_root=resolve_media_entry(single_dir, media_root=media_root),
                         bracket_name=single_dir.name,
                     )
                     if card:
@@ -517,6 +669,7 @@ def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> d
     categories, unofficial = _audio_index_from_releases(releases)
     payload = {
         "band_id": band.bnd_id,
+        "index_version": AUDIO_INDEX_VERSION,
         "audio_mtime": mtime,
         "scanned_at": _now(),
         "releases": releases,
@@ -601,7 +754,11 @@ def get_audio_index(
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
             if cached.get("releases") is not None:
-                if not force and cached.get("audio_mtime") == mtime:
+                if (
+                    not force
+                    and cached.get("audio_mtime") == mtime
+                    and cached.get("index_version") == AUDIO_INDEX_VERSION
+                ):
                     return _cached_audio_response(cached, stale=False)
                 if not force:
                     stale_cache = cached

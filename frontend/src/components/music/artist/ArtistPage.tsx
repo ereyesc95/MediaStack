@@ -33,6 +33,12 @@ import {
   applyMediaTheme,
   beginArtistPageSession,
   colorsFromImageUrl,
+  applyPlaybackThemeFromCover,
+  endPlaybackThemeSession,
+  isPlaybackThemeActive,
+  onPlaybackPaused,
+  onPlaybackResumed,
+  setPlaybackPlaying,
 } from "../../../mediaTheme";
 import {
   isMobilePortraitLayout,
@@ -399,10 +405,25 @@ export default function ArtistPage({
   }, [era, stacked, shell?.photo_url]);
 
   useEffect(() => {
-    if (!themeSampleUrl) return;
+    if (!themeSampleUrl || isPlaybackThemeActive()) return;
     colorsFromImageUrl(themeSampleUrl).then((c) => {
-      if (c) applyMediaTheme(c, userId);
+      if (c && !isPlaybackThemeActive()) applyMediaTheme(c, userId);
     });
+  }, [themeSampleUrl, userId]);
+
+  useEffect(() => {
+    const onPlaybackThemeEnded = () => {
+      if (!themeSampleUrl) {
+        beginArtistPageSession(userId);
+        return;
+      }
+      void colorsFromImageUrl(themeSampleUrl).then((c) => {
+        if (c) applyMediaTheme(c, userId);
+      });
+    };
+    window.addEventListener("playback-theme-ended", onPlaybackThemeEnded);
+    return () =>
+      window.removeEventListener("playback-theme-ended", onPlaybackThemeEnded);
   }, [themeSampleUrl, userId]);
 
   useEffect(() => {
@@ -439,26 +460,35 @@ export default function ArtistPage({
     audioRef.current?.pause();
     setPlayingPath(null);
     clear();
-  }, [audioRef, clear]);
+    endPlaybackThemeSession(userId);
+  }, [audioRef, clear, userId]);
 
   const handlePlay = useCallback(
     async (path: string, title: string) => {
       if (playingPath === path && audioSrc) {
         if (!playing) {
           toggle();
+          onPlaybackResumed(
+            playableTracks.find((t) => t.play_path === path)?.cover_url ?? null,
+            userId
+          );
           return;
         }
+        toggle();
         return;
       }
       setPlayingPath(path);
+      const track = playableTracks.find((t) => t.play_path === path);
       try {
         const res = await playTrack({ path, artist_id: bandId, title });
+        setPlaybackPlaying(true);
         loadSrc(res.stream_url, true);
+        applyPlaybackThemeFromCover(track?.cover_url ?? res.cover_url ?? null, userId);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [bandId, loadSrc, playingPath, audioSrc, playing, toggle]
+    [bandId, loadSrc, playingPath, audioSrc, playing, toggle, playableTracks, userId]
   );
 
   const stepTrack = useCallback(
@@ -474,6 +504,32 @@ export default function ArtistPage({
     },
     [playableTracks, playingPath, handlePlay]
   );
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !audioSrc) return;
+    const onPause = () => onPlaybackPaused(userId);
+    const onPlay = () => {
+      setPlaybackPlaying(true);
+      if (playingPath) {
+        const track = playableTracks.find((t) => t.play_path === playingPath);
+        onPlaybackResumed(track?.cover_url ?? null, userId);
+      }
+    };
+    const onEnded = () => {
+      setPlaybackPlaying(false);
+      endPlaybackThemeSession(userId);
+      setPlayingPath(null);
+    };
+    el.addEventListener("pause", onPause);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("ended", onEnded);
+    return () => {
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [audioRef, audioSrc, playingPath, playableTracks, userId]);
 
   const onAboutTab = section === "overview" && overviewTab === "about";
   const playerPortalTarget = onAboutTab
@@ -1097,6 +1153,7 @@ export default function ArtistPage({
             bandId={bandId}
             onPlayTrack={(path, title) => void handlePlay(path, title)}
             onOpenReleaseNavigate={onOpenReleaseNavigate}
+            onOpenArtist={(id) => onOpenArtist(id)}
           />
         )}
         {data && section === "audio" && !data.media?.has_audio && (

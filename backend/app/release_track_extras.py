@@ -17,10 +17,18 @@ from app.band_library import (
     _track_title_from_filename,
 )
 from app.config import settings
-from app.gallery import _artist_dir
+from app.gallery import _artist_dir, _display_name
 from app.media_paths_util import safe_relative
 from app.models import Band, Track
-from app.media_index import release_id_from_path
+from app.media_index import (
+    VARIOUS_ARTISTS_DEFAULT_ID,
+    _band_id_from_content_path,
+    _is_edition_dir,
+    _is_group_subdir_name,
+    format_display_date,
+    parse_bracket_tags,
+    release_id_from_path,
+)
 from app.music_filters import _parse_ids
 
 YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "music.youtube.com")
@@ -237,33 +245,56 @@ def _resolve_work_keys(
     return keys
 
 
-def _is_nested_edition_folder(name: str) -> bool:
-    low = name.casefold().strip()
-    if low in ("standard edition", "deluxe edition", "bonus"):
-        return True
-    return low.endswith(
-        (" standard edition", " deluxe edition", " bonus edition")
+def _version_source_context(
+    audio_file, media_root
+) -> tuple[str | None, str | None, str | None, str | None, str | None]:
+    """Release title, edition title, release folder rel, cover url, date iso."""
+    file_dir = audio_file.parent
+
+    after_groups = file_dir
+    while _is_group_subdir_name(after_groups.name):
+        parent = after_groups.parent
+        if parent == after_groups:
+            break
+        after_groups = parent
+
+    edition_dir = after_groups if _is_edition_dir(after_groups) else None
+
+    release_dir = after_groups
+    while _is_edition_dir(release_dir):
+        parent = release_dir.parent
+        if parent == release_dir:
+            break
+        release_dir = parent
+
+    release_rel = safe_relative(release_dir, media_root)
+    clean_folder, _ = parse_bracket_tags(release_dir.name)
+    release_title = _album_title_from_folder(clean_folder)
+    edition_title = (
+        _album_title_from_folder(edition_dir.name) if edition_dir else None
     )
+    cover = _find_cover_front_artwork(audio_file.parent, media_root)
+    if not cover:
+        cover = _find_cover_front_artwork(release_dir, media_root)
+    date_iso = _parse_folder_date(clean_folder) or _parse_folder_date(release_dir.name)
+    return release_title, edition_title, release_rel, cover, date_iso
 
 
 def _album_context(
     audio_file, media_root
 ) -> tuple[str | None, str | None, str | None, str | None]:
-    album_dir = audio_file.parent
-    while _is_nested_edition_folder(album_dir.name):
-        parent = album_dir.parent
-        if parent == album_dir:
-            break
-        album_dir = parent
-    rel = safe_relative(album_dir, media_root)
-    title = _album_title_from_folder(album_dir.name)
-    cover = _find_cover_front_artwork(audio_file.parent, media_root)
-    if not cover:
-        cover = _find_cover_front_artwork(album_dir, media_root)
-    date_iso = _parse_folder_date(album_dir.name) or _parse_folder_date(
-        album_dir.parent.name
+    release_title, _edition_title, release_rel, cover, date_iso = _version_source_context(
+        audio_file, media_root
     )
-    return title, rel, cover, date_iso
+    return release_title, release_rel, cover, date_iso
+
+
+def _artist_cover_tag(band_name: str) -> str:
+    return f"{_display_name(band_name)} cover".casefold()
+
+
+def _matches_artist_cover(parts: tuple[str, ...], band_name: str) -> bool:
+    return any(part.casefold() == _artist_cover_tag(band_name) for part in parts)
 
 
 def find_track_versions(
@@ -329,7 +360,7 @@ def find_track_versions(
         if not path or path == play_path or path in seen:
             continue
         seen.add(path)
-        album_title, album_path, cover_url, date_iso = _album_context(
+        album_title, edition_title, album_path, cover_url, date_iso = _version_source_context(
             entry.audio_file, media_root
         )
         from app.release_playback_art import playback_art_for_audio_file
@@ -343,22 +374,93 @@ def find_track_versions(
         navigate_release_id = (
             release_id_from_path(album_path) if album_path else None
         )
+        navigate_band_id = band_id
+        if album_path:
+            alt_band_id = _band_id_from_content_path(
+                db, media_root, media_root / album_path
+            )
+            if alt_band_id:
+                navigate_band_id = alt_band_id
         out.append(
             {
                 "title": entry.file_title,
                 "play_path": path,
                 "album_title": album_title,
+                "edition_title": edition_title,
                 "album_folder": album_path,
                 "navigate_release_id": navigate_release_id,
+                "navigate_band_id": navigate_band_id,
                 "cover_url": playback.get("cover_url") or cover_url,
                 "cover_animation_url": playback.get("cover_animation_url"),
                 "canvas_url": playback.get("canvas_url"),
                 "disc_url": playback.get("disc_url"),
                 "background_layers": playback.get("background_layers") or [],
                 "date_iso": date_iso,
+                "display_date": format_display_date(date_iso),
                 "duration": _format_duration(duration_sec),
                 "version_label": _version_label_from_parts(list(entry.bracket_parts)),
             }
         )
-    out.sort(key=lambda v: (v.get("date_iso") or "", v.get("album_title") or ""))
+
+    va_band = db.get(Band, VARIOUS_ARTISTS_DEFAULT_ID)
+    va_dir = _artist_dir(media_root, va_band.bnd_name) if va_band else None
+    if va_dir and va_dir.resolve() != artist_dir.resolve():
+        va_indexed = _index_artist_tracks(va_dir)
+        band_name = band.bnd_name or ""
+        for entry in va_indexed:
+            if entry.norm_title not in work_keys:
+                continue
+            if not _matches_artist_cover(entry.bracket_parts, band_name):
+                continue
+            path = safe_relative(entry.audio_file, media_root)
+            if not path or path == play_path or path in seen:
+                continue
+            seen.add(path)
+            album_title, edition_title, album_path, cover_url, date_iso = _version_source_context(
+                entry.audio_file, media_root
+            )
+            from app.release_playback_art import playback_art_for_audio_file
+
+            playback = playback_art_for_audio_file(
+                entry.audio_file, media_root, ctx=art_ctx
+            )
+            duration_sec = _duration_from_file(entry.audio_file)
+            if duration_sec is None:
+                duration_sec = db_durations.get(_track_norm_title(entry.file_title))
+            navigate_release_id = (
+                release_id_from_path(album_path) if album_path else None
+            )
+            navigate_band_id = VARIOUS_ARTISTS_DEFAULT_ID
+            if album_path:
+                alt_band_id = _band_id_from_content_path(
+                    db, media_root, media_root / album_path
+                )
+                if alt_band_id:
+                    navigate_band_id = alt_band_id
+            out.append(
+                {
+                    "title": entry.file_title,
+                    "play_path": path,
+                    "album_title": album_title,
+                    "edition_title": edition_title,
+                    "album_folder": album_path,
+                    "navigate_release_id": navigate_release_id,
+                    "navigate_band_id": navigate_band_id,
+                    "cover_url": playback.get("cover_url") or cover_url,
+                    "cover_animation_url": playback.get("cover_animation_url"),
+                    "canvas_url": playback.get("canvas_url"),
+                    "disc_url": playback.get("disc_url"),
+                    "background_layers": playback.get("background_layers") or [],
+                    "date_iso": date_iso,
+                    "display_date": format_display_date(date_iso),
+                    "duration": _format_duration(duration_sec),
+                    "version_label": _version_label_from_parts(list(entry.bracket_parts)),
+                }
+            )
+    out.sort(
+        key=lambda v: (
+            v.get("date_iso") or "9999-12-31",
+            v.get("album_title") or "",
+        )
+    )
     return out[:limit]

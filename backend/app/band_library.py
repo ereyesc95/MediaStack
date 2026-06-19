@@ -23,6 +23,7 @@ AUDIO_CATEGORIES = {
 
 DATE_PREFIX_RE = re.compile(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?")
 TRACK_PREFIX_RE = re.compile(r"^\d+\.\s*")
+VINYL_TRACK_PREFIX_RE = re.compile(r"^[A-Z]\d+\.\s*", re.I)
 AUDIO_EXTS = {".mp3", ".wma", ".aac", ".wav", ".flac"}
 ARTWORK_DIR = "[artwork]"
 COVER_FRONT_STEM = "cover - front"
@@ -186,6 +187,18 @@ def _track_title_from_filename(path: Path) -> str:
     return _title_from_filename_stem(path.stem)
 
 
+def display_track_title_from_path(path: Path) -> str:
+    """UI title — strips numeric and vinyl side prefixes (e.g. A1.)."""
+    stem = path.stem.strip()
+    after_num = TRACK_PREFIX_RE.sub("", stem).strip()
+    vinyl = VINYL_TRACK_PREFIX_RE.match(after_num)
+    if vinyl:
+        rest = after_num[vinyl.end() :].lstrip(". ").strip()
+        if rest:
+            return rest
+    return _track_title_from_filename(path)
+
+
 def _titles_match(expected: str, filename_stem: str) -> bool:
     file_title = _normalize_title_for_match(_title_from_filename_stem(filename_stem))
     want = _normalize_title_for_match(expected)
@@ -211,8 +224,15 @@ def _album_dir_for_track(file_path: Path) -> Path:
 
 
 def _release_date_for_track(file_path: Path) -> str | None:
-    album_dir = _album_dir_for_track(file_path)
-    return _parse_folder_date(album_dir.name) or _parse_folder_date(album_dir.parent.name)
+    folder = file_path.parent
+    for _ in range(5):
+        date = _parse_folder_date(folder.name)
+        if date:
+            return date
+        if folder.parent == folder:
+            break
+        folder = folder.parent
+    return None
 
 
 def _resolve_top_titles(

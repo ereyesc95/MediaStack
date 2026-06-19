@@ -583,26 +583,13 @@ def release_track_credits(
 
 
 @router.get("/resolve-artist-name")
-def resolve_artist_name(
+async def resolve_artist_name(
     name: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    from app.person_lookup import find_local_band_for_person
+    from app.person_lookup import resolve_artist_name_navigation
 
-    band_id = find_local_band_for_person(db, name)
-    if band_id:
-        return {
-            "name": name,
-            "in_library": True,
-            "band_id": band_id,
-            "urls": {},
-        }
-    return {
-        "name": name,
-        "in_library": False,
-        "band_id": None,
-        "urls": {},
-    }
+    return await resolve_artist_name_navigation(db, name)
 
 
 @router.get("/bands/{band_id}/media/video")

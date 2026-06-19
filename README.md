@@ -183,7 +183,7 @@ Multiple editions live as **sibling subfolders** inside the release:
 │   ├── [Artwork]/
 │   ├── 01. Song One.flac
 │   └── 02. Song Two.flac
-└── 2014.02.14. Deluxe Edition/
+└── 2014.02.14. Deluxe/
     ├── [Artwork]/
     ├── Disc 1/
     │   ├── 01. Song One.flac
@@ -193,12 +193,12 @@ Multiple editions live as **sibling subfolders** inside the release:
         └── 02. Another Bonus.flac
 ```
 
-**Edition folder rules:**
+**Edition folder rules** (the word `Edition` is optional):
 
-- Name ends with `Edition` (e.g. `Standard Edition`, `Deluxe Edition`, `Japanese Edition`)
-- Or is date-prefixed (treated as an edition)
-- A folder literally named `Standard Edition` is preferred as the default edition
-- Date-prefixed names ending in `Standard Edition` are also recognized
+- **Date-prefixed** sibling folder (e.g. `2014.02.14. Deluxe`, `2025.10.12. Remastered`)
+- **Any sibling folder** that contains audio files, disc/side/tape groups, or a `[Artwork]` subfolder — e.g. `Deluxe`, `Remastered`, `Japanese Pressing`
+- Name ending in `Edition` still works (e.g. `Standard Edition`, `Deluxe Edition`) but is **not required**
+- A folder literally named `Standard Edition` is preferred as the default edition when present; otherwise the earliest date-prefixed edition is used
 
 If audio files sit directly in the release root (no edition subfolders), the release root is scanned as a single edition.
 
@@ -211,6 +211,7 @@ Multi-disc releases use **group subfolders** inside an edition:
 | Numbered disc | `01. Disc 01/` | Preferred for sorted disc order |
 | Loose disc | `Disc 1/`, `Disc 2/` | Also supported |
 | Vinyl sides | `01. Side A/`, `02. Side B/` | |
+| Vinyl (flat) | `A1. Track.flac`, `A2. …`, `B1. …` in the edition folder | No side subfolders — grouped as Side A / Side B automatically |
 | Tapes | `01. Tape 01/`, `01. Cassette 01/` | |
 
 The tracklist UI shows group headers (Disc 1, Disc 2, …) and can assign **per-disc artwork**.
@@ -293,6 +294,8 @@ Use a numeric prefix for track order:
 
 The prefix (`01. `) is stripped for **display title** and matching. Without a prefix, files are ordered alphabetically and numbered sequentially.
 
+**Vinyl side prefixes** (`A1. `, `B2. `, … `Z10. `) are also stripped for display titles (tracklist, left panel, song quiz). They still define side grouping and per-side track order when files sit flat in an edition folder.
+
 ### Supported audio formats
 
 `.mp3` · `.flac` · `.wav` · `.wma` · `.aac`
@@ -322,6 +325,7 @@ Recognized for **system playlists** and **alternate versions**:
 | `Acoustic` | Acoustic playlist / version label |
 | `Remix` | Remixes playlist |
 | `Live` | Live version |
+| `Radio edit`, `Extended edit`, … | Treated like versions (shown under release date in the track panel) |
 | `Demo` | Demos playlist |
 | `Instrumental` | Instrumentals playlist |
 | `B-Side`, `B Side` | B-sides playlist |
@@ -374,12 +378,19 @@ Singles live under:
 ```
 Music/{Letter}/{Artist}/Audio/Singles/{Parent Album or Era}/
 └── {YYYY}.{MM}.{DD}. {Single Title}/
-    └── Standard Edition/          # or dated edition folder
+    ├── 1998.02.03. Standard Edition/    # optional dated edition
+    │   ├── [Artwork]/
+    │   └── 01. Track.flac
+    └── 2025.10.12. Deluxe Edition/       # another edition with its own date
         ├── [Artwork]/
         └── 01. Track.flac
 ```
 
 When a single is tied to an album, its tracks can appear under a **B-sides** section on the parent release tracklist.
+
+- B-side tracks are numbered **1, 2, 3…** within each single group (filename prefixes are not shown as track numbers).
+- Each **single edition** keeps its own release date; the left panel shows the date for the edition actually playing.
+- While a B-side plays, the left panel shows **Taken from the {Single Title} single** (or **{Single}: {Edition} single** when editions differ). The title is clickable and opens that single in-app — same pattern as **Versions → Taken from {release}**.
 
 **Playback artwork:** if an album track shares a title with a single, playback may use the single’s `[Artwork]` (e.g. `Wicked Game` on an album → single cover).
 
@@ -387,12 +398,13 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 
 ## Music module features
 
-- **Home dashboard** — recent plays, shortcuts
-- **Artist page** — bio, lineup, discography, singles, playlists, gallery, word cloud, quizzes
-- **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions
-- **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]`
+- **Home dashboard** — recent plays, shortcuts; **cover-based theme** while a track plays (restores on pause/stop; menu theme choice is remembered)
+- **Artist page** — bio, lineup, discography, singles, playlists, gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
+- **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions; left panel release date follows the playing track’s edition
+- **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]`; edition `Logo.png` in the top bar when applicable
+- **Playback themes** — home and artist top tracks sample cover colors while playing; changing theme via the menu while playing defers the visual switch until pause/stop, then resumes cover colors on play
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
-- **Versions panel** — acoustic/live/remix plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
+- **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC, on-demand fetch, edit modal; stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB; bulk fetch, manual set, open in new tab with autoplay
 - **Playlists** — user playlists (`plaType` 200) + suffix-based system templates (`plaType` 201: Remixes, Acoustic, …); add-to-playlist modal with create-and-add
@@ -461,7 +473,7 @@ CORS is configured for local Vite dev (`5174`) and RecordStack (`8000` / `8765`)
 ### Track order wrong
 
 - Add `01.`, `02.`, … prefixes to file names.
-- Disc/side subfolders must use recognized naming (`Disc 1`, `01. Disc 01`, …).
+- Disc/side subfolders must use recognized naming (`Disc 1`, `01. Disc 01`, …), or use flat vinyl names (`A1.`, `B1.`, …).
 
 ### Versions not linking
 

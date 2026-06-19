@@ -93,9 +93,16 @@ function stripBracketSuffixes(title: string): string {
   return title.replace(/\s*\[[^\]]*\]/g, "").trim();
 }
 
+function stripFilenamePrefixes(title: string): string {
+  let t = title.trim();
+  t = t.replace(/^\d+\.\s*/, "");
+  t = t.replace(/^[A-Z]\d+\.\s*/i, "");
+  return t.trim();
+}
+
 /** Title shown in quiz tables and song choices (no bracket suffixes). */
 function quizDisplayTitle(title: string): string {
-  return stripBracketSuffixes(title);
+  return stripFilenamePrefixes(stripBracketSuffixes(title));
 }
 
 function normalizeQuizMatch(text: string): string {

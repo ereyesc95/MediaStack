@@ -146,7 +146,7 @@ def playlist_cards_from_buckets(
         tracks = buckets.get(slug) or []
         if not tracks:
             continue
-        cover = tracks[0].get("cover_url") or playlist_cover_url(slug)
+        cover = playlist_cover_url(slug)
         cards.append(
             {
                 "slug": slug,

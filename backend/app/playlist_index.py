@@ -18,6 +18,8 @@ from app.models import Band
 from app.paths import DATA_DIR
 from app.services.setlistfm import fetch_artist_setlist_summaries, fetch_setlist_detail
 
+PLAYLIST_INDEX_VERSION = 3
+
 PLAYLIST_ORDER = (
     ("top-tracks", "Top Tracks"),
     ("setlists", "Setlists"),
@@ -64,7 +66,7 @@ def _build_top_tracks(band: Band, media_root: Path) -> dict | None:
     matched = [t for t in tracks if t.get("play_path")]
     if not matched:
         return None
-    cover = matched[0].get("cover_url") or playlist_cover_url("top-tracks")
+    cover = playlist_cover_url("top-tracks")
     return {
         "slug": "top-tracks",
         "name": "Top Tracks",
@@ -210,6 +212,7 @@ def build_playlist_index(
 
     extra = tuple(CROSS_PLAYLIST_LABELS.items())
     playlists.extend(playlist_cards_from_buckets(merged, extra=extra))
+    playlists.sort(key=lambda p: (p.get("name") or "").casefold())
     return playlists, buckets, cross
 
 
@@ -248,7 +251,10 @@ def get_playlist_index(
     if not force and cache_file.is_file():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            if cached.get("audio_mtime") == audio_mtime:
+            if (
+                cached.get("audio_mtime") == audio_mtime
+                and cached.get("index_version") == PLAYLIST_INDEX_VERSION
+            ):
                 return {
                     "playlists": cached.get("playlists") or [],
                     "scanned_at": cached.get("scanned_at"),
@@ -260,6 +266,7 @@ def get_playlist_index(
     playlists, buckets, cross = build_playlist_index(db, band, media_root)
     payload = {
         "band_id": band.bnd_id,
+        "index_version": PLAYLIST_INDEX_VERSION,
         "audio_mtime": audio_mtime,
         "scanned_at": _now(),
         "playlists": playlists,

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.band_library import _find_artwork_subdir, _track_title_from_filename
 from app.gallery import IMAGE_EXTS, _artist_dir, _media_url
-from app.media_index import _is_edition_folder
+from app.media_index import _is_edition_dir, _is_edition_folder, _is_group_subdir_name
 from app.media_paths_util import safe_relative
 from app.release_overview import (
     _artwork_urls,
@@ -22,6 +22,12 @@ from app.release_overview import (
 ARTWORK_DIR = "[artwork]"
 DEFAULT_DISC_MARKER = "default/disc.png"
 DISC_LOOSE_RE = re.compile(r"^Disc\s+(\d+)", re.I)
+SIDE_RE = re.compile(r"^\d+\.\s*Side\s+", re.I)
+SIDE_LOOSE_RE = re.compile(r"^Side\s+[A-Z]\b", re.I)
+VINYL_SIDE_STEM_RE = re.compile(r"^([A-Z])(\d+)", re.I)
+TAPE_RE = re.compile(r"^\d+\.\s*(Tape|Cassette)\s+", re.I)
+TAPE_LOOSE_RE = re.compile(r"^Tape\s+[A-Z]\b", re.I)
+CASSETTE_LOOSE_RE = re.compile(r"^Cassette\s+[A-Z]\b", re.I)
 EXCLUDED_ARTWORK_STEMS = {
     "logo",
     "spotify",
@@ -80,7 +86,7 @@ def _edition_folder_for_audio(audio_file: Path) -> Path:
         if _find_artwork_subdir(folder):
             return folder
         name_low = folder.name.casefold()
-        if _is_edition_folder(folder.name) or name_low.endswith(" edition"):
+        if _is_edition_folder(folder.name) or _is_edition_dir(folder):
             return folder
         parent = folder.parent
         if parent == folder:
@@ -116,6 +122,21 @@ def _is_disc_group_name(name: str) -> bool:
     return bool(DISC_DIR_RE.match(name) or DISC_LOOSE_RE.match(name))
 
 
+def _is_playback_group_name(name: str) -> bool:
+    return bool(
+        _is_disc_group_name(name)
+        or SIDE_RE.match(name)
+        or SIDE_LOOSE_RE.match(name)
+        or TAPE_RE.match(name)
+        or TAPE_LOOSE_RE.match(name)
+        or CASSETTE_LOOSE_RE.match(name)
+    )
+
+
+def _normalize_group_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.casefold())
+
+
 def _disc_stem_matches_group(stem: str, group_label: str) -> bool:
     group_num = _disc_number_from_label(group_label)
     stem_num = _disc_number_from_label(stem)
@@ -128,9 +149,24 @@ def _disc_stem_matches_group(stem: str, group_label: str) -> bool:
         return False
     if stem_num is not None:
         return False
-    gl = group_label.casefold().replace(" ", "")
-    sl = stem.casefold().replace(" ", "")
-    return sl in gl or gl in sl
+    gn = _normalize_group_token(group_label)
+    sn = _normalize_group_token(stem)
+    if not gn or not sn:
+        return False
+    return gn == sn or sn in gn or gn in sn
+
+
+def _is_group_artwork_stem(stem: str) -> bool:
+    low = stem.casefold().strip()
+    if low.startswith("cover"):
+        return False
+    if low in EXCLUDED_ARTWORK_STEMS:
+        return False
+    if _is_photocard_stem(low):
+        return False
+    if "logo" in low:
+        return False
+    return True
 
 
 def disc_url_for_group(
@@ -154,8 +190,22 @@ def disc_url_for_group(
         for p in art.iterdir():
             if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
                 continue
-            stem = p.stem.casefold()
-            if "disc" in stem or "vinyl" in stem or "cd" in stem:
+            stem = p.stem
+            if not _is_group_artwork_stem(stem):
+                continue
+            stem_cf = stem.casefold()
+            if group_label:
+                if _disc_stem_matches_group(stem, group_label):
+                    candidates.append(p)
+                continue
+            if (
+                "disc" in stem_cf
+                or "vinyl" in stem_cf
+                or "cd" in stem_cf
+                or "side" in stem_cf
+                or "tape" in stem_cf
+                or "cassette" in stem_cf
+            ):
                 candidates.append(p)
     if not candidates:
         return None
@@ -197,8 +247,13 @@ def resolve_disc_url_for_group(
 
 def _disc_group_for_audio(audio_file: Path) -> tuple[Path | None, str | None]:
     parent = audio_file.parent
-    if _is_disc_group_name(parent.name):
+    if _is_playback_group_name(parent.name):
         return parent, parent.name
+    stem = Path(audio_file.name).stem.strip()
+    stem = re.sub(r"^\d+\.\s*", "", stem).strip()
+    vinyl = VINYL_SIDE_STEM_RE.match(stem)
+    if vinyl:
+        return parent, f"Side {vinyl.group(1).upper()}"
     return None, None
 
 
@@ -296,6 +351,20 @@ def _apply_disc_fallback(
     return disc_url
 
 
+def _playback_group_kind(group_label: str | None) -> str:
+    if not group_label:
+        return "disc"
+    if SIDE_RE.match(group_label) or SIDE_LOOSE_RE.match(group_label):
+        return "side"
+    if (
+        TAPE_RE.match(group_label)
+        or TAPE_LOOSE_RE.match(group_label)
+        or CASSETTE_LOOSE_RE.match(group_label)
+    ):
+        return "tape"
+    return "disc"
+
+
 def playback_art_for_audio_file(
     audio_file: Path,
     media_root: Path,
@@ -305,6 +374,13 @@ def playback_art_for_audio_file(
     edition_folder = _artwork_root_for_audio(audio_file, media_root, ctx)
     artwork = _standard_artwork_dir(edition_folder)
     urls = _artwork_urls(artwork, media_root)
+    logo_url = urls.get("logo_url")
+    if not logo_url and ctx and ctx.release_content:
+        standard_artwork = _standard_artwork_dir(
+            _resolve_standard_edition(ctx.release_content)
+        )
+        if standard_artwork:
+            logo_url = _artwork_urls(standard_artwork, media_root).get("logo_url")
     bg_layers = [
         u
         for u in (
@@ -330,6 +406,8 @@ def playback_art_for_audio_file(
         "cover_animation_url": urls.get("cover_animation_url"),
         "canvas_url": urls.get("canvas_url"),
         "disc_url": disc_url,
+        "logo_url": logo_url,
+        "group_kind": _playback_group_kind(group_label),
         "background_layers": bg_layers,
     }
 

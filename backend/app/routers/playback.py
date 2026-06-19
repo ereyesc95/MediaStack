@@ -26,6 +26,12 @@ def play_track(
     title = body.title
     if not title and "/" in body.path:
         title = Path(body.path.split("/")[-1]).stem[4:] if len(Path(body.path.split("/")[-1]).stem) > 4 else Path(body.path.split("/")[-1]).stem
+    cover_url = None
+    from app.config import settings
+    from app.band_library import cover_url_for_track_path
+
+    if settings.media_root:
+        cover_url = cover_url_for_track_path(body.path, Path(settings.media_root))
     if body.record:
         crud.record_play(
             db,
@@ -40,6 +46,7 @@ def play_track(
         stream_url=stream,
         local_file=str(local) if local else None,
         title=title,
+        cover_url=cover_url,
     )
 
 

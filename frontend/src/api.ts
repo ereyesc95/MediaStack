@@ -968,7 +968,7 @@ export async function playTrack(body: {
   release?: string;
   record?: boolean;
 }) {
-  return request<{ stream_url: string; title?: string }>(`${API}/music/play`, {
+  return request<{ stream_url: string; title?: string; cover_url?: string | null }>(`${API}/music/play`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, media_type: 200 }),

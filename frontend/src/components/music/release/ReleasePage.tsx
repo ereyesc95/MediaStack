@@ -69,6 +69,7 @@ import ReleaseTracklist, {
   type ReleaseMobileTrackView,
   type ReleasePlaybackArt,
   type ReleaseTracklistHandle,
+  clearReleaseTracklistCache,
   prefetchReleaseTracklist,
 } from "./ReleaseTracklist";
 import {
@@ -97,6 +98,8 @@ function normalizePlaybackArt(art: ReleasePlaybackArt): ReleasePlaybackArt {
     cover_animation_url: art.cover_animation_url ?? null,
     canvas_url: art.canvas_url ?? null,
     disc_url: art.disc_url ?? null,
+    logo_url: art.logo_url ?? null,
+    group_kind: art.group_kind ?? null,
     background_layers: art.background_layers ?? [],
   };
 }
@@ -238,9 +241,14 @@ export default function ReleasePage({
   const [panelActionTrack, setPanelActionTrack] = useState<ReleaseTrackItem | null>(null);
   const [showLyricsAction, setShowLyricsAction] = useState(true);
   const [showVersionsAction, setShowVersionsAction] = useState(true);
+  const [panelDateIso, setPanelDateIso] = useState<string | null>(null);
   const [versionSource, setVersionSource] = useState<{
     album_title: string;
     navigate_release_id: string;
+    navigate_band_id?: number;
+    date_iso?: string | null;
+    display_date?: string | null;
+    is_single?: boolean;
   } | null>(null);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
   const [externalArtist, setExternalArtist] = useState<{
@@ -524,6 +532,11 @@ export default function ReleasePage({
       : displayCover
     : albumCover;
   const panelDiscSrc = hasActiveTrack ? displayDisc : albumDisc;
+  const panelGroupKind = hasActiveTrack
+    ? playbackArt?.group_kind ?? data?.playback_kind ?? "disc"
+    : data?.playback_kind ?? "disc";
+  const isTapePlayback = panelGroupKind === "tape";
+  const isVinylPlayback = panelGroupKind === "side" || panelGroupKind === "vinyl";
   const panelCoverIsVideo = Boolean(
     panelCoverSrc && isVideoMedia(panelCoverSrc) && showPlaybackMotion
   );
@@ -580,10 +593,15 @@ export default function ReleasePage({
     onBack();
   };
 
-  const topLogo = data?.logo_url ? (
+  const topLogoUrl =
+    hasActiveTrack && playbackArt?.logo_url
+      ? playbackArt.logo_url
+      : data?.logo_url ?? null;
+
+  const topLogo = topLogoUrl ? (
     <MediaBeatFrame variant="logo">
       <img
-        src={data.logo_url}
+        src={topLogoUrl}
         alt=""
         className="release-page__brand-logo"
         draggable={false}
@@ -630,6 +648,13 @@ export default function ReleasePage({
   );
 
   const scrollBody = tab !== "overview";
+
+  const handleRefreshTracklist = useCallback(() => {
+    clearReleaseTracklistCache(bandId, releaseId);
+    setTracklistKey((k) => k + 1);
+    setBusy("Tracklist refreshed from disk");
+    window.setTimeout(() => setBusy(""), 2500);
+  }, [bandId, releaseId]);
 
   const handleFetchLyrics = async () => {
     setBusy("Fetching synced lyrics…");
@@ -728,10 +753,17 @@ export default function ReleasePage({
         }
         return;
       }
+      setPlayingPath(path);
+      setNowPlayingTitle(title);
+      setVersionSource(null);
+      setPanelDateIso(null);
+      if (_art) {
+        setPlaybackArt(normalizePlaybackArt(_art));
+      }
       let resolvedArt = await resolvePlaybackArt(path);
       if (resolvedArt) {
         setPlaybackArt(resolvedArt);
-      } else if (data) {
+      } else if (!_art && data) {
         setPlaybackArt({
           cover_url: data.cover_url,
           cover_animation_url: data.cover_animation_url,
@@ -740,8 +772,6 @@ export default function ReleasePage({
           background_layers: data.background_layers,
         });
       }
-      setPlayingPath(path);
-      setNowPlayingTitle(title);
       const cachedCredits = getCachedTrackCredits(bandId, releaseId, title);
       if (cachedCredits) {
         setTrackWriters(cachedCredits.writers ?? []);
@@ -858,8 +888,8 @@ export default function ReleasePage({
       : "",
     beatActive ? "release-page--beat-ready" : "",
     playingPath && miniAudio.playing ? "release-page--playing" : "",
-    playingPath && data?.playback_kind === "tape" ? "release-page--tape" : "",
-    playingPath && data?.playback_kind === "vinyl" ? "release-page--vinyl" : "",
+    playingPath && isTapePlayback ? "release-page--tape" : "",
+    playingPath && isVinylPlayback ? "release-page--vinyl" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -869,6 +899,13 @@ export default function ReleasePage({
     Boolean(nowPlayingTitle) &&
     (isPlaying || Boolean(versionSource));
   const panelFadedCover = displayCover ?? data?.cover_url ?? null;
+  const trackPanelReleaseDate =
+    versionSource?.display_date ??
+    (versionSource?.date_iso ? formatTrackDate(versionSource.date_iso) : null) ??
+    (panelDateIso ? formatTrackDate(panelDateIso) : null) ??
+    data?.display_date ??
+    null;
+
   const trackPanelMeta = nowPlayingTitle ? parseTrackPanelMeta(nowPlayingTitle) : null;
   const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
 
@@ -926,7 +963,7 @@ export default function ReleasePage({
                 />
               </span>
             ))}
-          {data.playback_kind !== "tape" && (
+          {(!hasActiveTrack ? data.playback_kind !== "tape" : !isTapePlayback) && (
             <img
               key={panelDiscSrc}
               src={panelDiscSrc}
@@ -942,7 +979,7 @@ export default function ReleasePage({
             />
           )}
         </div>
-        {data.playback_kind === "tape" && isPlaying && (
+        {(hasActiveTrack ? isTapePlayback : data.playback_kind === "tape") && isPlaying && (
           <span className="release-page__tape-badge">TAPE</span>
         )}
       </div>
@@ -994,30 +1031,35 @@ export default function ReleasePage({
                 <h2 className="release-page__track-panel-title">
                   {trackPanelMeta.mainTitle}
                 </h2>
-                {trackPanelMeta.lines
-                  .filter((line) => line.kind === "version")
-                  .map((line, i) => (
-                    <p key={`version-${i}`} className="release-page__track-panel-version">
-                      {line.label}
-                    </p>
-                  ))}
+                {trackPanelReleaseDate && (
+                  <p className="release-page__track-panel-date">
+                    Released on {trackPanelReleaseDate}
+                  </p>
+                )}
+                {trackPanelMeta.versionLabel && (
+                  <p className="release-page__track-panel-version">
+                    {trackPanelMeta.versionLabel}
+                  </p>
+                )}
                 {versionSource && (
                   <p className="release-page__track-panel-source">
-                    Taken from{" "}
+                    Taken from{versionSource.is_single ? " the " : " "}
                     <button
                       type="button"
                       className="release-page__release-link"
                       onClick={() =>
-                        onOpenRelease(bandId, versionSource.navigate_release_id)
+                        onOpenRelease(
+                          versionSource.navigate_band_id ?? bandId,
+                          versionSource.navigate_release_id
+                        )
                       }
                     >
                       {versionSource.album_title}
                     </button>
+                    {versionSource.is_single ? " single" : ""}
                   </p>
                 )}
-                {trackPanelMeta.lines
-                  .filter((line) => line.kind !== "version")
-                  .map((line, i) => {
+                {trackPanelMeta.lines.map((line, i) => {
                   if (line.kind === "cover") {
                     return (
                       <p key={i} className="release-page__track-panel-line">
@@ -1051,17 +1093,29 @@ export default function ReleasePage({
                       </p>
                     );
                   }
-                  return (
-                    <p key={i} className="release-page__track-panel-line">
-                      {line.text}
-                    </p>
-                  );
+                  if (line.kind === "performer") {
+                    return (
+                      <p key={i} className="release-page__track-panel-line">
+                        Performed by{" "}
+                        <button
+                          type="button"
+                          className="release-page__person-link"
+                          onClick={() => void openPersonName(line.artist)}
+                        >
+                          {line.artist}
+                        </button>
+                      </p>
+                    );
+                  }
+                  if (line.kind === "other") {
+                    return (
+                      <p key={i} className="release-page__track-panel-line">
+                        {line.text}
+                      </p>
+                    );
+                  }
+                  return null;
                 })}
-                {data.display_date && (
-                  <p className="release-page__track-panel-date">
-                    Released on {data.display_date}
-                  </p>
-                )}
                 {trackWriters.length > 0 && (
                   <p className="release-page__track-panel-writers">
                     Written by{" "}
@@ -1344,6 +1398,7 @@ export default function ReleasePage({
               onFetchLyrics={isAdmin ? () => void handleFetchLyrics() : undefined}
               onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
               onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
+              onRefreshTracklist={() => handleRefreshTracklist()}
               refreshIncludeBio={refreshWiki}
               onRefreshIncludeBioChange={setRefreshWiki}
               refreshIncludeLabel="Include description"
@@ -1492,13 +1547,15 @@ export default function ReleasePage({
                   onMobileViewChange={setMobileTrackView}
                   mobileBackdropUrl={displayCover}
                   onActiveTrackChange={setActiveTrack}
-                  onPanelActionsChange={({ track, showLyrics, showVersions, versionSource: src }) => {
+                  onPanelActionsChange={({ track, showLyrics, showVersions, panelDateIso: dateIso, versionSource: src }) => {
                     setPanelActionTrack(track);
                     setShowLyricsAction(showLyrics);
                     setShowVersionsAction(showVersions);
+                    setPanelDateIso(dateIso ?? null);
                     setVersionSource(src ?? null);
                   }}
                   onResumeTrack={(path) => {
+                    setVersionSource(null);
                     const ctx = tracklistRef.current?.findTrackContext(path);
                     void handlePlayTrack(path, ctx?.track.title ?? "", ctx?.art);
                   }}

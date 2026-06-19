@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { applySavedArtistTheme, pinArtistPageTheme } from "../mediaTheme";
+import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme } from "../mediaTheme";
 import {
   THEMES,
   applyTheme,
   getCustomColors,
   hasArtistTheme,
-  readDomTheme,
   saveCustomColors,
   type CustomThemeColors,
   type ThemeId,
@@ -45,6 +44,7 @@ type Props = {
   onFetchLyrics?: () => void;
   onFetchVideos?: () => void;
   onSetVideo?: () => void;
+  onRefreshTracklist?: () => void;
   menuVariant?: "artist" | "release";
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
@@ -85,6 +85,7 @@ export default function AppMenu({
   onFetchLyrics,
   onFetchVideos,
   onSetVideo,
+  onRefreshTracklist,
   menuVariant = "artist",
   onRescanLibrary,
   onRefreshLineup,
@@ -107,7 +108,7 @@ export default function AppMenu({
   const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<ThemeId>(() => readDomTheme());
+  const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
   const showArtistThemeOption =
     artistThemeActive && hasArtistTheme(userId);
@@ -115,16 +116,18 @@ export default function AppMenu({
 
   useEffect(() => {
     setCustom(getCustomColors(userId));
-    setActiveTheme(readDomTheme());
+    setActiveTheme(getMenuActiveTheme(userId));
   }, [userId]);
 
   useEffect(() => {
-    const sync = () => setActiveTheme(readDomTheme());
+    const sync = () => setActiveTheme(getMenuActiveTheme(userId));
     window.addEventListener("theme-changed", sync);
     window.addEventListener("artist-theme-updated", sync);
+    window.addEventListener("playback-cover-applied", sync);
     return () => {
       window.removeEventListener("theme-changed", sync);
       window.removeEventListener("artist-theme-updated", sync);
+      window.removeEventListener("playback-cover-applied", sync);
     };
   }, [userId]);
 
@@ -145,6 +148,16 @@ export default function AppMenu({
 
   function pickTheme(id: ThemeId) {
     pinArtistPageTheme(id);
+    if (isPlaybackSessionActive() && isPlaybackPlaying()) {
+      if (notifyUserThemePickDuringPlayback(id, userId)) {
+        setActiveTheme(id);
+        if (id === "custom") setCustomOpen(true);
+        return;
+      }
+    }
+    if (isPlaybackSessionActive() && !isPlaybackPlaying()) {
+      notifyUserThemePickWhilePaused(id, userId);
+    }
     if (id === "custom") {
       setCustomOpen(true);
       applyTheme("custom", userId);
@@ -166,6 +179,11 @@ export default function AppMenu({
     const next = { ...custom, [key]: value };
     setCustom(next);
     saveCustomColors(next, userId);
+    if (isPlaybackSessionActive() && isPlaybackPlaying()) {
+      notifyUserThemePickDuringPlayback("custom", userId);
+      setActiveTheme("custom");
+      return;
+    }
     applyTheme("custom", userId);
     setActiveTheme("custom");
   }
@@ -218,8 +236,8 @@ export default function AppMenu({
 
   const showTrackDataMenu =
     menuVariant === "release" &&
-    isAdmin &&
-    (onFetchLyrics || onFetchVideos || onSetVideo);
+    (onRefreshTracklist ||
+      (isAdmin && (onFetchLyrics || onFetchVideos || onSetVideo)));
 
   const showRefreshData =
     onEditAbout ||
@@ -300,6 +318,18 @@ export default function AppMenu({
               </button>
               {trackDataOpen && (
                 <div className="app-menu-submenu">
+                  {onRefreshTracklist && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshTracklist();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Refresh tracklist
+                    </button>
+                  )}
                   {onFetchLyrics && (
                     <button
                       type="button"

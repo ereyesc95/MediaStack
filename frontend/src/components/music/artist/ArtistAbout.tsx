@@ -94,6 +94,9 @@ export default function ArtistAbout({
   onOpenPerformer,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
+    null
+  );
   const slides = useMemo(
     () => carouselEras(data.eras, stacked),
     [data.eras, stacked]
@@ -182,6 +185,13 @@ export default function ArtistAbout({
         <div
           ref={photoColRef}
           className="artist-about__photo-col"
+          onMouseMove={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            setPhotoHoverSide(
+              e.clientX - rect.left < rect.width / 2 ? "left" : "right"
+            );
+          }}
+          onMouseLeave={() => setPhotoHoverSide(null)}
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -191,6 +201,12 @@ export default function ArtistAbout({
         >
           {photoLayers.current ? (
             <div ref={photoStageRef} className="artist-about__photo-stage">
+              {photoHoverSide ? (
+                <span
+                  className={`artist-about__photo-shade artist-about__photo-shade--${photoHoverSide}`}
+                  aria-hidden
+                />
+              ) : null}
               <img
                 src={photoLayers.current}
                 alt=""

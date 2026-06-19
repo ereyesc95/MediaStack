@@ -15,7 +15,7 @@ from app.gallery import (
     _list_photos,
     _media_url,
 )
-from app.media_index import DISC_DIR_RE, _is_edition_folder
+from app.media_index import DISC_DIR_RE, _is_edition_content_dir
 from app.media_paths_util import safe_relative
 from app.release_overview import (
     PHOTOCARD_STEMS,
@@ -73,7 +73,7 @@ def _walk_artwork_dirs(content: Path) -> list[Path]:
             dirs.append(art)
         for child in folder.iterdir():
             if child.is_dir() and child.name.casefold() != ARTWORK_DIR:
-                if DISC_DIR_RE.match(child.name) or _is_edition_folder(child.name):
+                if DISC_DIR_RE.match(child.name) or _is_edition_content_dir(child):
                     walk(child)
 
     for edition in _list_edition_dirs(content):

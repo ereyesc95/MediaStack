@@ -88,9 +88,12 @@ export function ArtistPlaylistGrid({ playlists, onSelect }: GridProps) {
       <p className="muted artist-section-empty">No playlists available yet.</p>
     );
   }
+  const sorted = [...playlists].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
   return (
-    <div className="media-release-grid">
-      {playlists.map((p) => (
+    <div className="media-release-grid artist-playlist-grid">
+      {sorted.map((p) => (
         <PlaylistCard key={p.slug} playlist={p} onClick={() => onSelect(p.slug)} />
       ))}
     </div>

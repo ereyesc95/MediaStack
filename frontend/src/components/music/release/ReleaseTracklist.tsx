@@ -16,6 +16,7 @@ import {
 import { prefetchReleaseTrackCredits } from "../../../releaseTrackCreditsCache";
 import type {
   ReleaseEdition,
+  ReleaseTrackGroup,
   ReleaseTrackItem,
   ReleaseTracklist,
   TrackVersionItem,
@@ -30,7 +31,15 @@ import { TrackActionEditIcon, TrackActionRetryIcon } from "./releaseTrackActionI
 const tracklistCache = new Map<string, ReleaseTracklist>();
 
 function tracklistCacheKey(bandId: number, releaseId: string) {
-  return `v8:${bandId}:${releaseId}`;
+  return `v10:${bandId}:${releaseId}`;
+}
+
+export function clearReleaseTracklistCache(bandId?: number, releaseId?: string) {
+  if (bandId != null && releaseId) {
+    tracklistCache.delete(tracklistCacheKey(bandId, releaseId));
+    return;
+  }
+  tracklistCache.clear();
 }
 
 export function prefetchReleaseTracklist(bandId: number, releaseId: string) {
@@ -46,6 +55,7 @@ export type ReleasePlaybackArt = {
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
+  group_kind?: "disc" | "side" | "tape" | null;
   background_layers?: string[];
 };
 
@@ -63,24 +73,72 @@ export type ReleaseTracklistHandle = {
   allTracks: () => ReleaseTrackItem[];
   findTrackContext: (path: string) => {
     track: ReleaseTrackItem;
+    edition: ReleaseEdition;
+    group: ReleaseTrackGroup;
     art: ReleasePlaybackArt;
     editionIndex: number;
   } | null;
 };
 
+function stripBracketSuffix(text: string): string {
+  return text.replace(/\s*\[[^\]]+\]\s*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function bsideSourceFromGroup(
+  group: ReleaseTrackGroup,
+  bandId: number
+): {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+  is_single?: boolean;
+} | null {
+  const title = group.source_single_title?.trim();
+  const navId = group.navigate_release_id?.trim();
+  if (!title || !navId) return null;
+  return {
+    album_title: title,
+    navigate_release_id: navId,
+    navigate_band_id: bandId,
+    date_iso: group.date_iso ?? null,
+    display_date: group.display_date ?? null,
+    is_single: true,
+  };
+}
+
 function versionSourceFromItem(
   version: TrackVersionItem,
   releaseId: string,
-  releaseNavigateId?: string | null
-): { album_title: string; navigate_release_id: string } | null {
-  const albumTitle = version.album_title?.trim();
+  releaseNavigateId: string | null | undefined,
+  anchorPath?: string | null
+): {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+} | null {
+  if (anchorPath && version.play_path === anchorPath) return null;
   const navId = version.navigate_release_id?.trim();
-  if (!albumTitle || !navId) return null;
-  const currentIds = new Set(
-    [releaseId, releaseNavigateId].filter((id): id is string => Boolean(id))
-  );
-  if (currentIds.has(navId)) return null;
-  return { album_title: albumTitle, navigate_release_id: navId };
+  if (!navId) return null;
+
+  const editionTitle = version.edition_title?.trim();
+  const releaseTitle = stripBracketSuffix(version.album_title?.trim() ?? "");
+  const label = editionTitle
+    ? releaseTitle
+      ? `${releaseTitle}: ${editionTitle}`
+      : editionTitle
+    : releaseTitle || null;
+  if (!label) return null;
+  return {
+    album_title: label,
+    navigate_release_id: navId,
+    navigate_band_id: version.navigate_band_id ?? undefined,
+    date_iso: version.date_iso,
+    display_date: version.display_date ?? null,
+  };
 }
 
 type Props = {
@@ -105,7 +163,15 @@ type Props = {
     track: ReleaseTrackItem | null;
     showLyrics: boolean;
     showVersions: boolean;
-    versionSource?: { album_title: string; navigate_release_id: string } | null;
+    panelDateIso?: string | null;
+    versionSource?: {
+      album_title: string;
+      navigate_release_id: string;
+      navigate_band_id?: number;
+      date_iso?: string | null;
+      display_date?: string | null;
+      is_single?: boolean;
+    } | null;
   }) => void;
   onResumeTrack?: (path: string) => void;
   onRightViewChange?: (view: ReleaseRightView) => void;
@@ -288,20 +354,36 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     if (!data) return [] as Array<{
       track: ReleaseTrackItem;
       edition: ReleaseEdition;
+      group: ReleaseTrackGroup;
       editionIndex: number;
       groupDisc?: string | null;
+      groupDateIso?: string | null;
     }>;
     return data.editions.flatMap((ed, editionIndex) =>
       ed.groups.flatMap((group) =>
         group.tracks.map((track) => ({
           track,
           edition: ed,
+          group,
           editionIndex,
           groupDisc: group.disc_url,
+          groupDateIso: group.date_iso ?? null,
         }))
       )
     );
   }, [data]);
+
+  const resolvePanelDateIso = useCallback(
+    (path: string | null) => {
+      if (!path) return null;
+      const ctx = trackContexts.find((c) => c.track.play_path === path);
+      if (!ctx) return null;
+      if (ctx.edition.date_iso) return ctx.edition.date_iso;
+      if (ctx.groupDateIso) return ctx.groupDateIso;
+      return null;
+    },
+    [trackContexts]
+  );
 
 
   const editionSectionLabel = (edition: ReleaseEdition) => {
@@ -320,6 +402,8 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       if (!match) return null;
       return {
         track: match.track,
+        edition: match.edition,
+        group: match.group,
         art: trackArt(match.track, match.edition, match.groupDisc),
         editionIndex: match.editionIndex,
       };
@@ -343,15 +427,26 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       }
       const version = versions.find((v) => v.play_path === path);
       if (!version) return null;
-      return versionSourceFromItem(version, releaseId, releaseNavigateId);
+      return versionSourceFromItem(
+        version,
+        releaseId,
+        releaseNavigateId,
+        versionsTrack?.play_path ?? null
+      );
     };
 
     if (rightView === "lyrics") {
+      const ctx = resolveTrackContext(playingPath ?? "");
+      const bsideSource =
+        ctx?.edition.kind === "bside"
+          ? bsideSourceFromGroup(ctx.group, bandId)
+          : null;
       onPanelActionsChange({
-        track: lyricsTrack ?? resolveTrackContext(playingPath ?? "")?.track ?? null,
+        track: lyricsTrack ?? ctx?.track ?? null,
         showLyrics: false,
         showVersions: true,
-        versionSource: versionSourceForPath(playingPath ?? null),
+        panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
+        versionSource: bsideSource ?? versionSourceForPath(playingPath ?? null),
       });
       return;
     }
@@ -363,6 +458,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           track: version ? versionToTrackItem(version) : versionsTrack,
           showLyrics: true,
           showVersions: false,
+          panelDateIso: null,
           versionSource: versionSourceForPath(playingVersionPath),
         });
         return;
@@ -371,17 +467,23 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         track: versionsTrack,
         showLyrics: true,
         showVersions: false,
+        panelDateIso: null,
         versionSource: null,
       });
       return;
     }
 
-    const current = resolveTrackContext(playingPath ?? "")?.track ?? null;
+    const current = resolveTrackContext(playingPath ?? "");
+    const bsideSource =
+      current?.edition.kind === "bside"
+        ? bsideSourceFromGroup(current.group, bandId)
+        : null;
     onPanelActionsChange({
-      track: current,
+      track: current?.track ?? null,
       showLyrics: true,
       showVersions: true,
-      versionSource: versionSourceForPath(playingPath ?? null),
+      panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
+      versionSource: bsideSource,
     });
   }, [
     playingPath,
@@ -389,6 +491,8 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     rightView,
     lyricsTrack,
     resolveTrackContext,
+    resolvePanelDateIso,
+    bandId,
     versions,
     versionsTrack,
     onPanelActionsChange,
@@ -452,8 +556,20 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     loadLyricsForTrack(ctx.track, { switchView: false });
   }, [playingPath, rightView, resolveTrackContext, lyricsTrack?.play_path, loadLyricsForTrack]);
 
+  const playMainTrackByPath = useCallback(
+    (path: string) => {
+      const match = trackContexts.find((ctx) => ctx.track.play_path === path);
+      if (!match) return;
+      setPlayingVersionPath(null);
+      setActiveVersionSource(null);
+      const art = trackArt(match.track, match.edition, match.groupDisc);
+      onPlay(match.track.play_path, match.track.title, art, match.edition.label);
+    },
+    [trackContexts, onPlay]
+  );
+
   const openVersions = (track: ReleaseTrackItem) => {
-    setVersionsReturnPath(playingPath);
+    setVersionsReturnPath(track.play_path);
     setPlayingVersionPath(null);
     setActiveVersionSource(null);
     setVersionsTrack(track);
@@ -462,7 +578,13 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     setView("versions");
     setVersionsLoading(true);
     void fetchTrackVersions(bandId, releaseId, track.title, track.play_path)
-      .then((res) => setVersions(res.versions))
+      .then((res) =>
+        setVersions(
+          [...res.versions].sort((a, b) =>
+            (a.date_iso || "9999-12-31").localeCompare(b.date_iso || "9999-12-31")
+          )
+        )
+      )
       .catch((e) => {
         setVersionsError(e instanceof Error ? e.message : String(e));
       })
@@ -476,13 +598,26 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       setActiveVersionSource(null);
       setVersionsReturnPath(null);
       setView("tracks");
-      if (returnPath && onResumeTrack) {
-        onResumeTrack(returnPath);
+      if (returnPath) {
+        playMainTrackByPath(returnPath);
+      } else {
+        onPanelActionsChange?.({
+          track: null,
+          showLyrics: true,
+          showVersions: true,
+          versionSource: null,
+        });
       }
       return;
     }
     setView("tracks");
-  }, [onResumeTrack, rightView, setView, versionsReturnPath]);
+  }, [
+    onPanelActionsChange,
+    playMainTrackByPath,
+    rightView,
+    setView,
+    versionsReturnPath,
+  ]);
 
   const adjacentTracks = useCallback(
     (path: string) => {
@@ -660,7 +795,12 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                     type="button"
                     className="release-tracklist__play"
                     onClick={() => {
-                      const source = versionSourceFromItem(v, releaseId, releaseNavigateId);
+                      const source = versionSourceFromItem(
+                        v,
+                        releaseId,
+                        releaseNavigateId,
+                        versionsTrack?.play_path ?? null
+                      );
                       setPlayingVersionPath(v.play_path);
                       setActiveVersionSource(source);
                       onPlay(v.play_path, v.title, versionPlaybackArt(v));

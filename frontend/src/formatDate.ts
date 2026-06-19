@@ -1,16 +1,16 @@
 const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
+  "January",
+  "February",
+  "March",
+  "April",
   "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sept",
-  "Oct",
-  "Nov",
-  "Dec",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function ordinal(day: number): string {
@@ -22,7 +22,7 @@ function ordinal(day: number): string {
   return `${day}th`;
 }
 
-/** Format stored release date as "Sept 3rd, 1999". */
+/** Format stored release date as "September 3rd, 1999". */
 export function formatTrackDate(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();

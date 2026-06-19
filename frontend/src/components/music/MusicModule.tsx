@@ -18,7 +18,7 @@ import type {
   UserPlaylist,
 } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
-import { clearMediaTheme } from "../../mediaTheme";
+import { clearMediaTheme, beginArtistPageSession, colorsFromImageUrl, applyMediaTheme, applyPlaybackThemeFromCover, endPlaybackThemeSession, onPlaybackPaused, onPlaybackResumed, setPlaybackPlaying } from "../../mediaTheme";
 import { prefetchBandOverview } from "../../overviewCache";
 import { prefetchReleaseOverview } from "../../releaseOverviewCache";
 import AppMenu from "../AppMenu";
@@ -33,6 +33,12 @@ import type { ReleaseTab } from "../../musicRoute";
 import ArtistBrowse from "./ArtistBrowse";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
+import MediaBeatFx from "./MediaBeatFx";
+import {
+  MiniAudioPlayerControls,
+  useMiniAudio,
+} from "./artist/MiniAudioPlayer";
+import { useBeatPulse } from "../../useBeatPulse";
 
 type Props = {
   tab: MusicTab;
@@ -135,6 +141,9 @@ export default function MusicModule({
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
+  const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
+  const homeAudio = useMiniAudio();
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
   const loadArtistsGeneration = useRef(0);
 
@@ -153,12 +162,31 @@ export default function MusicModule({
     (id: number, shellHint?: ArtistCard | null) => {
       const card = shellHint ?? resolveArtistShell(id);
       if (card) setArtistShell(card);
+      beginArtistPageSession(userId);
+      const sampleUrl = card?.photo_url;
+      if (sampleUrl) {
+        void colorsFromImageUrl(sampleUrl).then((c) => {
+          if (c) applyMediaTheme(c, userId);
+        });
+      }
       void prefetchBandOverview(id, cardOrientation);
       onArtistNavigate("overview", "about");
       onBand(id);
     },
-    [cardOrientation, onArtistNavigate, onBand, resolveArtistShell]
+    [cardOrientation, onArtistNavigate, onBand, resolveArtistShell, userId]
   );
+
+  const homeBeatActive = Boolean(!bandId && homeAudio.src);
+  const homeBeatPlaying = homeBeatActive && homeAudio.playing;
+  useBeatPulse(homeAudio.audioRef, homeBeatActive, homeAudio.playing);
+
+  const showHomePlayer =
+    !bandId &&
+    homeAudio.src &&
+    !homePlayerBarHidden &&
+    (tab === "home" || tab === "artists" || tab === "playlists");
+  const showHomePlayerRestore =
+    !bandId && homeAudio.src && homePlayerBarHidden;
 
   useEffect(() => {
     if (!bandId) {
@@ -439,22 +467,92 @@ export default function MusicModule({
   }, [playlistId]);
 
 
+  const homeTracks = dashboard.top_tracks;
+
+  const resolveHomeTrackCover = useCallback(
+    (path: string) => {
+      return homeTracks.find((t) => t.path === path)?.cover_url ?? null;
+    },
+    [homeTracks]
+  );
+
+  const stepHomeTrack = useCallback(
+    (dir: -1 | 1) => {
+      if (!homeTracks.length) return;
+      const idx = homeTracks.findIndex((t) => t.path === homePlayingPath);
+      const base = idx >= 0 ? idx : dir === 1 ? -1 : homeTracks.length;
+      const next = (base + dir + homeTracks.length) % homeTracks.length;
+      const track = homeTracks[next];
+      if (track.path) {
+        void handlePlay(track.path, track.artist_id, track.title);
+      }
+    },
+    [homeTracks, homePlayingPath]
+  );
+
   async function handlePlay(
     path: string,
     artistId: number | null,
     title: string | null
   ) {
     try {
+      if (tab === "home" && homePlayingPath === path && homeAudio.src) {
+        if (!homeAudio.playing) {
+          homeAudio.toggle();
+          onPlaybackResumed(
+            resolveHomeTrackCover(path) ?? null,
+            userId
+          );
+          return;
+        }
+        homeAudio.toggle();
+        return;
+      }
       const res = await playTrack({
         path,
         artist_id: artistId ?? undefined,
         title: title ?? undefined,
       });
-      if (res.stream_url) window.open(res.stream_url, "_blank");
+      if (!res.stream_url) return;
+      setHomePlayingPath(path);
+      setHomePlayerBarHidden(false);
+      homeAudio.loadSrc(res.stream_url, true);
+      setPlaybackPlaying(true);
+      if (!bandId) {
+        applyPlaybackThemeFromCover(
+          resolveHomeTrackCover(path) ?? res.cover_url ?? null,
+          userId
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  useEffect(() => {
+    const el = homeAudio.audioRef.current;
+    if (!el || bandId) return;
+    const onPause = () => onPlaybackPaused(userId);
+    const onPlay = () => {
+      setPlaybackPlaying(true);
+      if (homePlayingPath) {
+        onPlaybackResumed(resolveHomeTrackCover(homePlayingPath), userId);
+      }
+    };
+    const onEnded = () => {
+      setPlaybackPlaying(false);
+      endPlaybackThemeSession(userId);
+      setHomePlayingPath(null);
+    };
+    el.addEventListener("pause", onPause);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("ended", onEnded);
+    return () => {
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [bandId, homeAudio.audioRef, homeAudio.src, homePlayingPath, userId, resolveHomeTrackCover]);
 
   const showArtistTools = tab === "artists" && !bandId;
 
@@ -465,8 +563,11 @@ export default function MusicModule({
     <div
       className={`music-module${
         moduleBackdrop ? " music-module--backdrop" : ""
+      }${homeBeatActive ? " music-module--beat-ready" : ""}${
+        homeBeatPlaying ? " music-module--playing" : ""
       }`}
     >
+      {!bandId && homeBeatActive && <MediaBeatFx />}
       {moduleBackdrop && (
         <div className="music-module__backdrop" aria-hidden>
           {backgroundIso ? (
@@ -526,6 +627,24 @@ export default function MusicModule({
                   )}
                 </button>
               )}
+              {showHomePlayerRestore && (
+                <button
+                  type="button"
+                  className={`artist-page__player-restore${
+                    homeAudio.playing ? " artist-page__player-restore--live" : ""
+                  }`}
+                  onClick={() => setHomePlayerBarHidden(false)}
+                  aria-label="Show player"
+                  title="Show player"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+                    <path
+                      fill="currentColor"
+                      d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"
+                    />
+                  </svg>
+                </button>
+              )}
               <AppMenu
                 onImport={onImport}
                 onSync={onSync}
@@ -543,6 +662,38 @@ export default function MusicModule({
       )}
 
       {error && !bandId && <div className="error">{error}</div>}
+
+      {showHomePlayer && (
+        <div className="artist-page__player-bar artist-page__player-bar--visible music-module__player-bar">
+          <div className="artist-page__player-bar-inner">
+            <MiniAudioPlayerControls
+              playing={homeAudio.playing}
+              progress={homeAudio.progress}
+              duration={homeAudio.duration}
+              toggle={homeAudio.toggle}
+              seek={homeAudio.seek}
+              onPrev={tab === "home" ? () => stepHomeTrack(-1) : undefined}
+              onNext={tab === "home" ? () => stepHomeTrack(1) : undefined}
+            />
+            <button
+              type="button"
+              className="artist-page__player-bar-dismiss"
+              onClick={() => setHomePlayerBarHidden(true)}
+              aria-label="Hide player"
+              title="Hide player"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+      {!bandId && (tab === "home" || tab === "artists" || tab === "playlists") && (
+        <audio
+          ref={homeAudio.audioRef}
+          src={homeAudio.src ?? undefined}
+          preload="auto"
+        />
+      )}
 
       {bandId &&
       mediaItemId &&
@@ -698,10 +849,11 @@ export default function MusicModule({
           onToggleOrientation={onToggleOrientation}
         />
       ) : tab === "home" ? (
-        <div className="music-module__body">
+        <div className="music-module__body music-module__body--home">
           <MusicHome
             data={dashboard}
             loading={dashLoading}
+            playingPath={homePlayingPath}
             onPlayTrack={handlePlay}
             onArtist={(id) => {
               const card = dashboard.top_artists?.find((a) => a.id === id) ?? null;

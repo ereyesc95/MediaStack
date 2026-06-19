@@ -191,6 +191,7 @@ class PlayResponse(BaseModel):
     stream_url: str
     local_file: str | None = None
     title: str | None = None
+    cover_url: str | None = None
 
 
 class LyricsOut(BaseModel):

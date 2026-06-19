@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from app.band_library import (
     AUDIO_CATEGORIES,
     AUDIO_EXTS,
+    DATE_PREFIX_RE,
     _audio_root,
     _find_artwork_subdir,
+    _parse_folder_date,
     _track_title_from_filename,
 )
 from app.band_overview import (
@@ -41,6 +43,7 @@ from app.media_index import (
     _artwork_file,
     _child_release_folders,
     _disc_sort_key,
+    _is_edition_content_dir,
     _is_edition_folder,
     format_display_date,
     get_audio_index,
@@ -108,7 +111,7 @@ def resolve_release_content(
     if not card or not card.get("folder_path"):
         return None
     display_entry = media_root / Path(card["folder_path"])
-    content = resolve_media_entry(display_entry)
+    content = resolve_media_entry(display_entry, media_root=media_root)
     if not content or not content.is_dir():
         return None
     return band, card, media_root, content
@@ -124,6 +127,16 @@ def _resolve_standard_edition(content: Path) -> Path:
         low = child.name.casefold()
         if low.endswith(f". {STANDARD_EDITION}") or low.endswith(STANDARD_EDITION):
             return child
+    dated_editions: list[Path] = []
+    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
+        if child.is_dir() and _is_edition_content_dir(child):
+            if DATE_PREFIX_RE.match(entry_display_name(child).strip()):
+                dated_editions.append(child)
+    if dated_editions:
+        dated_editions.sort(
+            key=lambda p: _parse_folder_date(p.name) or "9999-99-99"
+        )
+        return dated_editions[0]
     for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
         if child.is_dir() and DISC_DIR_RE.match(child.name):
             return child
@@ -576,7 +589,7 @@ def build_release_overview(
     if not folder_rel:
         return None
     display_entry = media_root / Path(folder_rel)
-    content = resolve_media_entry(display_entry)
+    content = resolve_media_entry(display_entry, media_root=media_root)
     if not content or not content.is_dir():
         return None
 

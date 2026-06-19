@@ -105,7 +105,7 @@ function accentForeground(hex: string): string {
   return luminance > 0.58 ? "#0a0c10" : "#ffffff";
 }
 
-function applyCustomCss(colors: CustomThemeColors) {
+export function applyThemeColors(colors: CustomThemeColors) {
   const el = document.documentElement;
   el.style.setProperty("--bg", colors.bg);
   el.style.setProperty("--bg-elevated", colors.bgElevated);
@@ -155,16 +155,23 @@ export function applyTheme(id: ThemeId, userId?: number) {
     localStorage.setItem(themeKey(userId), id);
   }
   if (id === "custom") {
-    applyCustomCss(getCustomColors(userId));
+    applyThemeColors(getCustomColors(userId));
   } else if (id === "artist") {
-    const colors = getArtistThemeColors(userId);
-    if (colors) applyCustomCss(colors);
+    applyThemeColors(getArtistThemeColors(userId) ?? DEFAULT_CUSTOM);
   } else {
     clearCustomCss();
     document.documentElement.style.removeProperty("--beat-accent");
   }
   updateFavicon();
   window.dispatchEvent(new CustomEvent("theme-changed"));
+}
+
+/** Persist theme choice without updating CSS (used during active playback). */
+export function persistThemeChoice(id: ThemeId, userId?: number) {
+  if (id !== "artist") {
+    localStorage.setItem(themeKey(userId), id);
+  }
+  updateFavicon();
 }
 
 export function orientationKey(userId: number) {

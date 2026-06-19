@@ -3,11 +3,13 @@
 export type TrackPanelLine =
   | { kind: "cover"; artist: string }
   | { kind: "featuring"; artists: string[] }
+  | { kind: "performer"; artist: string }
   | { kind: "version"; label: string }
   | { kind: "other"; text: string };
 
 export type TrackPanelMeta = {
   mainTitle: string;
+  versionLabel: string | null;
   lines: TrackPanelLine[];
 };
 
@@ -40,6 +42,15 @@ const LANGUAGE_NAMES = new Set([
   "hindi",
   "english",
 ]);
+
+type VersionToken =
+  | { kind: "language"; label: string }
+  | { kind: "remastered"; detail?: string }
+  | { kind: "live"; detail?: string }
+  | { kind: "acoustic" }
+  | { kind: "remix"; detail?: string }
+  | { kind: "mix"; detail?: string }
+  | { kind: "edit"; detail?: string };
 
 function stripOuterBrackets(title: string): { main: string; inner: string | null } {
   const bracket = title.match(/^(.+?)\s*\[([^\]]+)\]\s*$/);
@@ -78,35 +89,143 @@ function titleCaseWords(text: string): string {
     .join(" ");
 }
 
-function versionLabel(part: string): string | null {
+function parseVersionToken(part: string): VersionToken | null {
   const norm = part.trim();
   const low = norm.toLowerCase();
+
   if (VERSION_ONLY.test(norm)) {
-    return titleCaseWords(`${low} version`);
+    if (low === "remastered") return { kind: "remastered" };
+    if (low === "live") return { kind: "live" };
+    if (low === "acoustic") return { kind: "acoustic" };
+    if (low === "remix") return { kind: "remix" };
+    return null;
   }
-  const ofMatch = norm.match(/^of\s+(.+)$/i);
+
+  const remastered = low.match(/^remastered(?:\s+version|\s+(\d{4}))?$/i);
+  if (remastered) {
+    return { kind: "remastered", detail: remastered[1] };
+  }
+
+  const liveAt = norm.match(/^live\s+at\s+(.+)$/i);
+  if (liveAt) {
+    return { kind: "live", detail: `at ${liveAt[1].trim()}` };
+  }
+  if (/^live(?:\s+version)?$/i.test(norm)) {
+    return { kind: "live" };
+  }
+
+  if (/^acoustic(?:\s+version)?$/i.test(norm)) {
+    return { kind: "acoustic" };
+  }
+
+  const remix = norm.match(/^(.+?)\s+remix$/i);
+  if (remix && remix[1].trim()) {
+    return { kind: "remix", detail: remix[1].trim() };
+  }
+  if (low === "remix") {
+    return { kind: "remix" };
+  }
+
+  const mix = norm.match(/^(.+?)\s+mix$/i);
+  if (mix && mix[1].trim() && !low.endsWith("remix")) {
+    return { kind: "mix", detail: mix[1].trim() };
+  }
+
+  const edit = norm.match(/^(.+?)\s+edit$/i);
+  if (edit && edit[1].trim()) {
+    return { kind: "edit", detail: edit[1].trim() };
+  }
+
+  if (LANGUAGE_NAMES.has(low)) {
+    return { kind: "language", label: titleCaseWords(low) };
+  }
+
+  const langVersion = low.match(/^(.+)\s+version$/);
+  if (langVersion) {
+    const lang = langVersion[1].trim();
+    if (LANGUAGE_NAMES.has(lang)) {
+      return { kind: "language", label: titleCaseWords(lang) };
+    }
+    if (lang === "remastered") return { kind: "remastered" };
+    if (lang === "live") return { kind: "live" };
+    if (lang === "acoustic") return { kind: "acoustic" };
+    if (lang === "remix") return { kind: "remix" };
+  }
+
+  return null;
+}
+
+function combineVersionTokens(tokens: VersionToken[]): string | null {
+  if (!tokens.length) return null;
+
+  const languages: string[] = [];
+  const chunks: string[] = [];
+
+  for (const token of tokens) {
+    switch (token.kind) {
+      case "language":
+        languages.push(token.label);
+        break;
+      case "remastered":
+        chunks.push(token.detail ? `Remastered ${token.detail}` : "Remastered");
+        break;
+      case "live":
+        chunks.push(token.detail ? `Live ${token.detail}` : "Live");
+        break;
+      case "acoustic":
+        chunks.push("Acoustic");
+        break;
+      case "remix":
+        chunks.push(token.detail ? `${titleCaseWords(token.detail)} Remix` : "Remix");
+        break;
+      case "mix":
+        chunks.push(token.detail ? `${titleCaseWords(token.detail)} Mix` : "Mix");
+        break;
+      case "edit":
+        chunks.push(token.detail ? `${titleCaseWords(token.detail)} Edit` : "Edit");
+        break;
+      default:
+        break;
+    }
+  }
+
+  const parts = [...languages, ...chunks];
+  if (!parts.length) return null;
+  return `${parts.join(" ")} Version`;
+}
+
+function parsePerformer(part: string): string | null {
+  const m = part.match(/^by\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+function adaptationLabel(part: string): string | null {
+  const ofMatch = part.match(/^of\s+(.+)$/i);
   if (ofMatch) {
     return `Adaptation of ${ofMatch[1].trim()}`;
-  }
-  if (LANGUAGE_NAMES.has(low)) {
-    return titleCaseWords(`${low} version`);
-  }
-  const langVersion = low.match(/^(.+)\s+version$/);
-  if (langVersion && LANGUAGE_NAMES.has(langVersion[1])) {
-    return titleCaseWords(`${langVersion[1]} version`);
   }
   return null;
 }
 
 export function parseTrackPanelMeta(title: string): TrackPanelMeta {
   const { main, inner } = stripOuterBrackets(title);
-  const versionLines: TrackPanelLine[] = [];
+  const versionTokens: VersionToken[] = [];
   const lines: TrackPanelLine[] = [];
   if (inner) {
     for (const part of splitSuffixParts(inner)) {
-      const version = versionLabel(part);
+      const version = parseVersionToken(part);
       if (version) {
-        versionLines.push({ kind: "version", label: version });
+        versionTokens.push(version);
+        continue;
+      }
+      const adaptation = adaptationLabel(part);
+      if (adaptation) {
+        lines.push({ kind: "other", text: adaptation });
+        continue;
+      }
+      const performer = parsePerformer(part);
+      if (performer) {
+        lines.push({ kind: "performer", artist: performer });
         continue;
       }
       const cover = parseCoverArtist(part);
@@ -122,7 +241,8 @@ export function parseTrackPanelMeta(title: string): TrackPanelMeta {
       lines.push({ kind: "other", text: part });
     }
   }
-  return { mainTitle: main, lines: [...versionLines, ...lines] };
+  const versionLabel = combineVersionTokens(versionTokens);
+  return { mainTitle: main, versionLabel, lines };
 }
 
 export function trackMainTitle(title: string): string {

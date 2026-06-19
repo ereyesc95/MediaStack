@@ -101,6 +101,7 @@ function placeholderCount(itemCount: number, limit: number) {
 type Props = {
   data: MusicDashboard | null;
   loading?: boolean;
+  playingPath?: string | null;
   onPlayTrack: (path: string, artistId: number | null, title: string | null) => void;
   onArtist: (id: number) => void;
   onGenre: (id: number) => void;
@@ -233,6 +234,7 @@ function BillboardText({
 export default function MusicHome({
   data,
   loading,
+  playingPath = null,
   onPlayTrack,
   onArtist,
   onGenre,
@@ -269,7 +271,9 @@ export default function MusicHome({
             <button
               key={t.id}
               type="button"
-              className="dash-track"
+              className={`dash-track${
+                playingPath && t.path === playingPath ? " active" : ""
+              }`}
               onClick={() =>
                 t.path && onPlayTrack(t.path, t.artist_id, t.title)
               }

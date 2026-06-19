@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBandAudioIndex, fetchBandPlaylistIndex } from "../../../api";
+import { fetchBandAudioIndex, fetchBandPlaylistIndex, resolveArtistName } from "../../../api";
 import { prefetchReleaseOverview } from "../../../releaseOverviewCache";
 import { pushArtistRoute, saveReleaseReferrer } from "../../../musicRoute";
+import { writerSearchUrl } from "../release/releaseTrackPanelMeta";
 import type {
   ArtistPlaylistCard,
   AudioIndexPayload,
@@ -224,11 +225,13 @@ function ReleaseCard({
   bandId,
   category,
   onOpenReleaseNavigate,
+  onOpenArtist,
 }: {
   release: AudioReleaseCard;
   bandId: number;
   category: string;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
+  onOpenArtist?: (targetBandId: number) => void;
 }) {
   const handleOpen = () => {
     const targetBand = release.navigate_band_id;
@@ -247,6 +250,40 @@ function ReleaseCard({
       releaseId: targetRelease,
     });
   };
+
+  const openSourceArtist = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const name = release.source_artist_name?.trim();
+    if (!name) return;
+    if (release.source_band_id && release.source_band_id !== bandId) {
+      onOpenArtist?.(release.source_band_id);
+      pushArtistRoute({
+        bandId: release.source_band_id,
+        section: "audio",
+        overviewTab: "about",
+      });
+      return;
+    }
+    try {
+      const res = await resolveArtistName(name);
+      if (res.band_id) {
+        onOpenArtist?.(res.band_id);
+        return;
+      }
+      if (res.urls?.wikipedia) {
+        window.open(res.urls.wikipedia, "_blank", "noopener,noreferrer");
+        return;
+      }
+      if (res.urls?.musicbrainz) {
+        window.open(res.urls.musicbrainz, "_blank", "noopener,noreferrer");
+        return;
+      }
+      window.open(writerSearchUrl(name), "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(writerSearchUrl(name), "_blank", "noopener,noreferrer");
+    }
+  };
+
   const hoverLabel = release.logo_url ? (
     <img
       src={release.logo_url}
@@ -257,6 +294,11 @@ function ReleaseCard({
   ) : (
     <span className="media-release-card__title-hover">{release.title}</span>
   );
+
+  const showSourceArtist =
+    Boolean(release.source_artist_name) &&
+    (release.navigate_band_id !== bandId ||
+      (release.source_band_id != null && release.source_band_id !== bandId));
 
   return (
     <article
@@ -281,9 +323,27 @@ function ReleaseCard({
       />
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">{hoverLabel}</span>
-      {release.display_date && (
-        <span className="media-release-card__date">{release.display_date}</span>
-      )}
+      {release.display_date || showSourceArtist ? (
+        <span className="media-release-card__date">
+          {showSourceArtist ? (
+            <span className="media-release-card__source-artist">
+              By{" "}
+              <button
+                type="button"
+                className="media-release-card__source-artist-link"
+                onClick={(e) => void openSourceArtist(e)}
+              >
+                {release.source_artist_name}
+              </button>
+            </span>
+          ) : null}
+          {release.display_date ? (
+            <span className="media-release-card__date-label">
+              {release.display_date}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </article>
   );
 }
@@ -293,6 +353,7 @@ type Props = {
   onPlayTrack?: (path: string, title: string) => void;
   bandId: number;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
+  onOpenArtist?: (targetBandId: number) => void;
 };
 
 export default function ArtistAudio({
@@ -300,6 +361,7 @@ export default function ArtistAudio({
   onPlayTrack,
   bandId,
   onOpenReleaseNavigate,
+  onOpenArtist,
 }: Props) {
   const {
     index,
@@ -367,6 +429,7 @@ export default function ArtistAudio({
               bandId={bandId}
               category={category}
               onOpenReleaseNavigate={onOpenReleaseNavigate}
+              onOpenArtist={onOpenArtist}
             />
           ))}
         </div>
