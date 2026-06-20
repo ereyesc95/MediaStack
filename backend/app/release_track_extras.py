@@ -25,6 +25,7 @@ from app.media_index import (
     _band_id_from_content_path,
     _is_edition_dir,
     _is_group_subdir_name,
+    _release_dir_from_content_folder,
     format_display_date,
     parse_bracket_tags,
     release_id_from_path,
@@ -260,19 +261,23 @@ def _version_source_context(
 
     edition_dir = after_groups if _is_edition_dir(after_groups) else None
 
-    release_dir = after_groups
-    while _is_edition_dir(release_dir):
-        parent = release_dir.parent
-        if parent == release_dir:
-            break
-        release_dir = parent
+    release_dir = _release_dir_from_content_folder(after_groups)
+    if edition_dir and edition_dir.resolve() == release_dir.resolve():
+        edition_dir = None
 
     release_rel = safe_relative(release_dir, media_root)
     clean_folder, _ = parse_bracket_tags(release_dir.name)
     release_title = _album_title_from_folder(clean_folder)
-    edition_title = (
-        _album_title_from_folder(edition_dir.name) if edition_dir else None
-    )
+    edition_title = None
+    if edition_dir:
+        clean_edition, _ = parse_bracket_tags(edition_dir.name)
+        edition_title = _album_title_from_folder(clean_edition)
+        if (
+            edition_title
+            and release_title
+            and edition_title.casefold() == release_title.casefold()
+        ):
+            edition_title = None
     cover = _find_cover_front_artwork(audio_file.parent, media_root)
     if not cover:
         cover = _find_cover_front_artwork(release_dir, media_root)

@@ -184,6 +184,7 @@ def _group_kind(name: str) -> str:
 
 def _attach_has_lrc(db: Session, editions: list[dict]) -> None:
     from app.media_paths import path_to_local_file
+    from app.track_overrides import read_lyrics_lrc
 
     for edition in editions:
         for group in edition.get("groups") or []:
@@ -191,6 +192,17 @@ def _attach_has_lrc(db: Session, editions: list[dict]) -> None:
                 play_path = (track.get("play_path") or "").strip()
                 local = path_to_local_file(play_path) if play_path else None
                 track["has_lrc"] = bool(local and has_stored_lyrics(db, local))
+                synced = read_lyrics_lrc(db, play_path) if play_path else None
+                if not synced and local:
+                    from app.lyrics_storage import find_lrc_path
+
+                    lrc_path = find_lrc_path(local)
+                    if lrc_path and lrc_path.is_file():
+                        try:
+                            synced = lrc_path.read_text(encoding="utf-8", errors="replace").strip()
+                        except OSError:
+                            synced = None
+                track["has_synced_lrc"] = bool(synced and "[" in synced)
 
 
 def _track_number(filename: str, fallback: int) -> int:
@@ -331,6 +343,7 @@ def _build_track(
         "duration_sec": duration_sec,
         "duration": _format_duration(duration_sec),
         "has_lrc": False,
+        "has_synced_lrc": False,
         "is_link": False,
         "cover_url": art.get("cover_url"),
         "cover_animation_url": art.get("cover_animation_url"),

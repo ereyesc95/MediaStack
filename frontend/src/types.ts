@@ -459,6 +459,7 @@ export type ReleaseTrackItem = {
   duration_sec: number | null;
   duration: string | null;
   has_lrc: boolean;
+  has_synced_lrc?: boolean;
   is_link: boolean;
   youtube_url?: string | null;
   cover_url?: string | null;

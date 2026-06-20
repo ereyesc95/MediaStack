@@ -543,7 +543,18 @@ async def release_fetch_lyrics(
     row = crud.get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
-    return await fetch_release_lyrics(db, band_id, release_id, force=force)
+    try:
+        return await fetch_release_lyrics(db, band_id, release_id, force=force)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"Lyrics fetch failed: {exc}",
+            "fetched": 0,
+            "skipped": 0,
+            "failed": 0,
+            "not_found": 0,
+            "items": [],
+        }
 
 
 @router.post("/bands/{band_id}/releases/{release_id}/youtube/fetch")

@@ -94,7 +94,7 @@ export default function ReleaseVideoSetModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className="artist-word-cloud-modal__head">
-          <h3>Set official videos</h3>
+          <h3>Set Official Videos</h3>
           <button
             type="button"
             className="artist-word-cloud-modal__close"

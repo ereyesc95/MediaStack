@@ -143,13 +143,14 @@ function versionSourceFromItem(
   const navId = version.navigate_release_id?.trim();
   if (!navId) return null;
 
-  const editionTitle = version.edition_title?.trim();
+  const editionTitle = stripBracketSuffix(version.edition_title?.trim() ?? "");
   const releaseTitle = stripBracketSuffix(version.album_title?.trim() ?? "");
-  const label = editionTitle
-    ? releaseTitle
-      ? `${releaseTitle}: ${editionTitle}`
-      : editionTitle
-    : releaseTitle || null;
+  const label =
+    editionTitle && editionTitle.toLowerCase() !== releaseTitle.toLowerCase()
+      ? releaseTitle
+        ? `${releaseTitle}: ${editionTitle}`
+        : editionTitle
+      : releaseTitle || null;
   if (!label) return null;
   return {
     album_title: label,
@@ -197,6 +198,7 @@ type Props = {
   mobileBackdropUrl?: string | null;
   reloadKey?: number;
   isAdmin?: boolean;
+  onOpenLyricsSet?: () => void;
 };
 
 function trackArt(
@@ -261,6 +263,7 @@ function versionToTrackItem(version: TrackVersionItem): ReleaseTrackItem {
     duration_sec: null,
     duration: version.duration ?? null,
     has_lrc: false,
+    has_synced_lrc: false,
     is_link: false,
     cover_url: version.cover_url,
     cover_animation_url: version.cover_animation_url,
@@ -290,6 +293,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     mobileBackdropUrl,
     reloadKey = 0,
     isAdmin = false,
+    onOpenLyricsSet,
   },
   ref
 ) {
@@ -819,6 +823,32 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
             <TrackActionRetryIcon className="release-tracklist__lyrics-retry-icon" />
           </button>
         )}
+        {!lyricsLoading && syncedLyrics && (
+          <span
+            className="lyrics-status-badge lyrics-status-badge--synced"
+            title="Timestamped synced lyrics"
+          >
+            Synced
+          </span>
+        )}
+        {!lyricsLoading && lyricsText && !syncedLyrics &&
+          (isAdmin && onOpenLyricsSet ? (
+            <button
+              type="button"
+              className="lyrics-status-badge lyrics-status-badge--plain lyrics-status-badge--action"
+              title="Upload synced lyrics"
+              onClick={onOpenLyricsSet}
+            >
+              Not synced
+            </button>
+          ) : (
+            <span
+              className="lyrics-status-badge lyrics-status-badge--plain"
+              title="Lyrics without timestamps"
+            >
+              Not synced
+            </span>
+          ))}
         {isAdmin && !lyricsLoading && (
           <button
             type="button"

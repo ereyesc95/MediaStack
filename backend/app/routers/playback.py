@@ -92,7 +92,8 @@ def save_track_lyrics(
         body.title,
         body.lyrics,
         play_path=body.play_path,
-        synced_lyrics=body.synced_lyrics,
+        synced_lyrics=body.synced_lyrics if "synced_lyrics" in body.model_fields_set else None,
+        preserve_synced="synced_lyrics" not in body.model_fields_set,
         db=db,
         band_id=body.band_id,
     )

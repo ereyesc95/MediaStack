@@ -66,18 +66,25 @@ async def fetch_release_lyrics(
                 duration = track.get("duration_sec")
                 synced: str | None = None
                 matched_title: str | None = None
-                for variant in lrclib_title_variants(title):
-                    synced = await fetch_lrclib_synced(
-                        artist,
-                        variant,
-                        album=album or None,
-                        duration=float(duration) if duration else None,
-                    )
-                    if synced:
-                        matched_title = variant
-                        break
+                try:
+                    for variant in lrclib_title_variants(title):
+                        synced = await fetch_lrclib_synced(
+                            artist,
+                            variant,
+                            album=album or None,
+                            duration=float(duration) if duration else None,
+                        )
+                        if synced:
+                            matched_title = variant
+                            break
+                        if delay_sec > 0:
+                            await asyncio.sleep(delay_sec)
+                except Exception:
+                    failed += 1
+                    items.append({"title": title, "status": "error"})
                     if delay_sec > 0:
                         await asyncio.sleep(delay_sec)
+                    continue
 
                 if not synced:
                     no_sync += 1

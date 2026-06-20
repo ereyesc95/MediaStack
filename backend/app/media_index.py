@@ -239,6 +239,8 @@ def _is_edition_dir(folder: Path) -> bool:
     parent = folder.parent
     if parent == folder:
         return False
+    if _is_audio_category_dir(parent):
+        return False
     parent_name = entry_display_name(parent).strip()
     if DATE_PREFIX_RE.match(parent_name):
         return True
@@ -250,6 +252,27 @@ def _is_edition_dir(folder: Path) -> bool:
         and _is_edition_content_dir(c)
     ]
     return len(peers) >= 2
+
+
+def _is_audio_category_dir(folder: Path) -> bool:
+    """True when folder is Albums, Singles, etc. under Audio/."""
+    low = entry_display_name(folder).casefold()
+    return any(cat.casefold() == low for cat in AUDIO_CATEGORIES.values())
+
+
+def _release_dir_from_content_folder(folder: Path) -> Path:
+    """Walk up from edition/disc/content folder to the release root (not the category folder)."""
+    current = folder
+    for _ in range(15):
+        parent = current.parent
+        if parent == current:
+            return current
+        if _is_audio_category_dir(parent):
+            return current
+        if not _is_edition_dir(current):
+            return current
+        current = parent
+    return folder
 
 
 def _child_release_folders(folder: Path) -> list[Path]:

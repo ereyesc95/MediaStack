@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type LrcLine = { time: number; text: string };
 
@@ -21,6 +21,39 @@ function parseLrc(raw: string): LrcLine[] {
   return lines.sort((a, b) => a.time - b.time);
 }
 
+function scrollLineIntoView(
+  line: HTMLElement,
+  preferredScrollRoot?: HTMLElement | null
+) {
+  const candidates: HTMLElement[] = [];
+  if (preferredScrollRoot) candidates.push(preferredScrollRoot);
+  let parent: HTMLElement | null = line.parentElement;
+  while (parent) {
+    if (!candidates.includes(parent)) candidates.push(parent);
+    parent = parent.parentElement;
+  }
+
+  for (const container of candidates) {
+    const style = getComputedStyle(container);
+    const canScrollY =
+      style.overflowY === "auto" ||
+      style.overflowY === "scroll" ||
+      style.overflowY === "overlay";
+    if (!canScrollY || container.scrollHeight <= container.clientHeight + 2) {
+      continue;
+    }
+    const lineRect = line.getBoundingClientRect();
+    const parentRect = container.getBoundingClientRect();
+    const offset =
+      lineRect.top -
+      parentRect.top -
+      container.clientHeight / 2 +
+      lineRect.height / 2;
+    container.scrollBy({ top: offset, behavior: "smooth" });
+    return;
+  }
+}
+
 type Props = {
   lyrics: string | null;
   syncedLyrics?: string | null;
@@ -34,6 +67,10 @@ export default function ReleaseInlineLyrics({
   currentTime = 0,
   loading = false,
 }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const lastScrolledIdx = useRef(-1);
+
   const lrcLines = useMemo(
     () => (syncedLyrics ? parseLrc(syncedLyrics) : []),
     [syncedLyrics]
@@ -49,14 +86,38 @@ export default function ReleaseInlineLyrics({
     return idx;
   }, [lrcLines, currentTime]);
 
+  useEffect(() => {
+    lineRefs.current.length = lrcLines.length;
+    lastScrolledIdx.current = -1;
+  }, [lrcLines.length, syncedLyrics]);
+
+  useEffect(() => {
+    if (activeIdx < 0) return;
+    if (activeIdx === lastScrolledIdx.current) return;
+    const line = lineRefs.current[activeIdx];
+    if (!line) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollLineIntoView(line, scrollRef.current);
+      lastScrolledIdx.current = activeIdx;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeIdx, syncedLyrics]);
+
   return (
     <div className="release-tracklist__inline release-tracklist__inline--lyrics">
       {loading && <p className="muted">Loading lyrics…</p>}
       {!loading && lrcLines.length > 0 ? (
-        <div className="release-tracklist__lyrics-sync">
+        <div
+          ref={scrollRef}
+          className="release-tracklist__lyrics-sync ms-scrollbar"
+        >
           {lrcLines.map((line, i) => (
             <p
               key={`${line.time}-${i}`}
+              ref={(el) => {
+                lineRefs.current[i] = el;
+              }}
               className={
                 i === activeIdx
                   ? "release-tracklist__lyrics-line active"
@@ -66,6 +127,7 @@ export default function ReleaseInlineLyrics({
               {line.text}
             </p>
           ))}
+          <div className="release-tracklist__lyrics-sync-edge" aria-hidden />
         </div>
       ) : lyrics ? (
         <pre className="release-tracklist__lyrics-plain">{lyrics}</pre>

@@ -545,6 +545,7 @@ export async function saveTrackLyrics(body: {
   play_path?: string;
   lyrics: string;
   synced_lyrics?: string | null;
+  band_id?: number;
 }) {
   return request<{
     artist: string;

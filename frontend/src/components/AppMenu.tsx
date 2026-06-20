@@ -42,6 +42,7 @@ type Props = {
   onEditProfile?: () => void;
   onRefreshMetadata?: () => void;
   onFetchLyrics?: () => void;
+  onSetLyrics?: () => void;
   onFetchVideos?: () => void;
   onSetVideo?: () => void;
   onRefreshTracklist?: () => void;
@@ -83,6 +84,7 @@ export default function AppMenu({
   onEditProfile,
   onRefreshMetadata,
   onFetchLyrics,
+  onSetLyrics,
   onFetchVideos,
   onSetVideo,
   onRefreshTracklist,
@@ -237,7 +239,7 @@ export default function AppMenu({
   const showTrackDataMenu =
     menuVariant === "release" &&
     (onRefreshTracklist ||
-      (isAdmin && (onFetchLyrics || onFetchVideos || onSetVideo)));
+      (isAdmin && (onFetchLyrics || onSetLyrics || onFetchVideos || onSetVideo)));
 
   const showRefreshData =
     onEditAbout ||
@@ -339,7 +341,19 @@ export default function AppMenu({
                       }}
                     >
                       <IconLyrics className="menu-item-icon" />
-                      Get lyrics
+                      Fetch lyrics
+                    </button>
+                  )}
+                  {onSetLyrics && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSetLyrics();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLyrics className="menu-item-icon" />
+                      Set lyrics
                     </button>
                   )}
                   {onFetchVideos && (
@@ -351,7 +365,7 @@ export default function AppMenu({
                       }}
                     >
                       <IconVideo className="menu-item-icon" />
-                      Get videos
+                      Fetch videos
                     </button>
                   )}
                   {onSetVideo && (
@@ -363,7 +377,7 @@ export default function AppMenu({
                       }}
                     >
                       <IconVideo className="menu-item-icon" />
-                      Set video
+                      Set videos
                     </button>
                   )}
                 </div>

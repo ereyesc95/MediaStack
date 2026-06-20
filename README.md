@@ -267,6 +267,13 @@ Example (legacy file layout):
 
 Fetched or edited lyrics are stored in the database so they stay with the track without extra folders.
 
+**In the app:**
+
+- **Synced** / **Not synced** badges in the lyrics view show whether timestamped LRC is available.
+- Synced lyrics highlight the active line and auto-scroll during playback.
+- Admins: **Track data → Fetch lyrics** bulk-fetches synced LRC from [LRCLIB](https://lrclib.net); **Set lyrics** uploads `.lrc` files per song (applies to every edition of that title on the release). Clicking **Not synced** (admin only) opens the same Set lyrics modal.
+- Plain-text edits keep existing synced LRC unless you replace it via Set lyrics or a new upload.
+
 ### Official videos (YouTube)
 
 YouTube links are stored in **`track_overrides`** (`troYoutubeUrl`), keyed by `play_path`. Resolution order:
@@ -405,10 +412,10 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 - **Playback themes** — home and artist top tracks sample cover colors while playing; changing theme via the menu while playing defers the visual switch until pause/stop, then resumes cover colors on play
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
-- **Lyrics** — inline synced LRC, on-demand fetch, edit modal; stored in DB via `track_overrides`
+- **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB; bulk fetch, manual set, open in new tab with autoplay
 - **Playlists** — user playlists (`plaType` 200) + suffix-based system templates (`plaType` 201: Remixes, Acoustic, …); add-to-playlist modal with create-and-add
-- **Release admin menu** — Track data (lyrics/videos), Edit release (About, metadata, description), styled modals with inner-only scrollbars
+- **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
 - **Search** — in-library media search per artist
 - **Playback** — play logging, auto-advance to next track, stream via local file or media server
 

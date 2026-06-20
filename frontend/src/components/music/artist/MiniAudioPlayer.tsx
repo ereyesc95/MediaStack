@@ -26,6 +26,12 @@ export function useMiniAudio() {
       setPlaying(false);
       setProgress(0);
       setDuration(0);
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
       return;
     }
     if (url === srcRef.current) {

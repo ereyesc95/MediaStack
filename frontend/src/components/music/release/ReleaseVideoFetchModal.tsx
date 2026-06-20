@@ -79,7 +79,7 @@ export default function ReleaseVideoFetchModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className="artist-word-cloud-modal__head">
-          <h3>Get videos</h3>
+          <h3>Fetch videos</h3>
           <button
             type="button"
             className="artist-word-cloud-modal__close"
@@ -124,7 +124,7 @@ export default function ReleaseVideoFetchModal({
 
         {reviewable.length === 0 ? (
           <p className="muted">
-            No new candidates from MusicBrainz. Use Set video to add links manually.
+            No new candidates from MusicBrainz. Use Set videos to add links manually.
           </p>
         ) : (
           <ul className="release-video-fetch-modal__list ms-scrollbar">

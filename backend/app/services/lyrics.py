@@ -213,12 +213,15 @@ async def fetch_lrclib_synced(
     if duration and duration > 0:
         params["duration"] = int(round(duration))
 
-    async with httpx.AsyncClient(timeout=_http_timeout()) as client:
-        r = await client.get("https://lrclib.net/api/get", params=params)
-        if r.status_code == 404:
-            return None
-        r.raise_for_status()
-        data = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=_http_timeout()) as client:
+            r = await client.get("https://lrclib.net/api/get", params=params)
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            data = r.json()
+    except (httpx.TimeoutException, httpx.HTTPError, ValueError):
+        return None
     synced = (data.get("syncedLyrics") or "").strip()
     return synced or None
 
@@ -334,6 +337,7 @@ def save_manual_lyrics(
     *,
     play_path: str | None = None,
     synced_lyrics: str | None = None,
+    preserve_synced: bool = False,
     db: Session | None = None,
     band_id: int | None = None,
 ) -> None:
@@ -348,7 +352,13 @@ def save_manual_lyrics(
 
     if not play_path or db is None:
         return
-    from app.track_overrides import save_lyrics
+    from app.track_overrides import read_lyrics_lrc, save_lyrics
+
+    lrc_to_save: str | None
+    if preserve_synced:
+        lrc_to_save = read_lyrics_lrc(db, play_path)
+    else:
+        lrc_to_save = (synced_lyrics or "").strip() or None
 
     save_lyrics(
         db,
@@ -356,7 +366,7 @@ def save_manual_lyrics(
         band_id=band_id,
         title=title,
         lyrics_plain=text,
-        lyrics_lrc=(synced_lyrics or "").strip() or None,
+        lyrics_lrc=lrc_to_save,
     )
 
 

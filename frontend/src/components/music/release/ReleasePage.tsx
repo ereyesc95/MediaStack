@@ -53,6 +53,7 @@ import ArtistMemberModal from "../artist/ArtistMemberModal";
 import NotInLibraryDialog from "../artist/NotInLibraryDialog";
 import ReleaseAboutEditModal from "./ReleaseAboutEditModal";
 import ReleaseVideoSetModal from "./ReleaseVideoSetModal";
+import ReleaseLyricsSetModal from "./ReleaseLyricsSetModal";
 import ReleaseVideoFetchModal, {
   type YoutubeFetchItem,
 } from "./ReleaseVideoFetchModal";
@@ -236,6 +237,21 @@ function versionSourcesEqual(
   );
 }
 
+function formatFetchError(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (!raw || raw === "Internal Server Error") {
+    return `${fallback}. The lyrics service may be slow or unavailable — try again in a moment.`;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { detail?: string; error?: string };
+    if (parsed.error) return parsed.error;
+    if (parsed.detail) return String(parsed.detail);
+  } catch {
+    /* plain text */
+  }
+  return raw;
+}
+
 export default function ReleasePage({
   bandId,
   releaseId,
@@ -273,6 +289,7 @@ export default function ReleasePage({
   >([]);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [videoSetOpen, setVideoSetOpen] = useState(false);
+  const [lyricsSetOpen, setLyricsSetOpen] = useState(false);
   const [videoFetchOpen, setVideoFetchOpen] = useState(false);
   const [videoFetchItems, setVideoFetchItems] = useState<YoutubeFetchItem[]>([]);
   const [busy, setBusy] = useState("");
@@ -311,6 +328,7 @@ export default function ReleasePage({
   const panelBottomRef = useRef<HTMLDivElement>(null);
   const [tracklistKey, setTracklistKey] = useState(0);
   const miniAudio = useMiniAudio();
+  const clearMiniAudio = miniAudio.clear;
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const beatActive = Boolean(playingPath && miniAudio.src);
   useBeatPulse(miniAudio.audioRef, beatActive, miniAudio.playing);
@@ -355,6 +373,18 @@ export default function ReleasePage({
   );
 
   useLayoutEffect(() => {
+    miniAudio.audioRef.current?.pause();
+    clearMiniAudio();
+    setPlayingPath(null);
+    setNowPlayingTitle(null);
+    setPlaybackArt(null);
+    setVersionSource(null);
+    setPanelDateIso(null);
+    setPanelActionTrack(null);
+    setActiveTrack(null);
+    setTrackWriters([]);
+    sourceArtCacheRef.current.clear();
+
     const cached = getCachedReleaseOverview(bandId, releaseId);
     setData(cached);
     setError(null);
@@ -363,7 +393,7 @@ export default function ReleasePage({
     prevBgRef.current = url;
     setBgLayers(url ? { current: url } : {});
     load({ silent: Boolean(cached) });
-  }, [bandId, releaseId, load]);
+  }, [bandId, releaseId, load, clearMiniAudio, miniAudio.audioRef]);
 
   useEffect(() => {
     if (!data?.needs_metadata_fetch) return;
@@ -526,11 +556,6 @@ export default function ReleasePage({
       true
     );
   }, [bandId, releaseId, tab]);
-
-  useEffect(() => {
-    setPlaybackArt(null);
-    sourceArtCacheRef.current.clear();
-  }, [releaseId, data?.cover_url]);
 
   const resolvePlaybackArt = useCallback(
     async (path: string): Promise<ReleasePlaybackArt | null> => {
@@ -701,31 +726,33 @@ export default function ReleasePage({
   }, [bandId, releaseId]);
 
   const handleFetchLyrics = async () => {
-    setBusy("Fetching synced lyrics…");
+    setBusy("Fetching lyrics, please wait… This may take a few minutes.");
     setError(null);
     try {
       const res = await fetchReleaseLyrics(bandId, releaseId);
       if (!res.ok) {
+        setBusy("");
         setError(res.error ?? "Lyrics fetch failed");
         return;
       }
       setBusy(
-        `Lyrics: ${res.fetched ?? 0} saved · ${res.skipped ?? 0} skipped · ${res.not_found ?? 0} not found`
+        `Lyrics fetched: ${res.fetched ?? 0} saved · ${res.skipped ?? 0} skipped · ${res.not_found ?? 0} not found`
       );
       setTracklistKey((k) => k + 1);
+      window.setTimeout(() => setBusy(""), 8000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      window.setTimeout(() => setBusy(""), 6000);
+      setBusy("");
+      setError(formatFetchError(e, "Lyrics fetch failed"));
     }
   };
 
   const handleFetchVideos = async () => {
-    setBusy("Searching MusicBrainz for official videos…");
+    setBusy("Fetching videos, please wait…");
     setError(null);
     try {
       const res = await fetchReleaseYoutubeCandidates(bandId, releaseId, true);
       if (!res.ok) {
+        setBusy("");
         setError(res.error ?? "Video fetch failed");
         return;
       }
@@ -733,9 +760,8 @@ export default function ReleasePage({
       setVideoFetchItems(res.items ?? []);
       setVideoFetchOpen(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      window.setTimeout(() => setBusy(""), 4000);
+      setBusy("");
+      setError(formatFetchError(e, "Video fetch failed"));
     }
   };
 
@@ -1521,6 +1547,7 @@ export default function ReleasePage({
                 isAdmin ? () => void handleRefreshMetadata() : undefined
               }
               onFetchLyrics={isAdmin ? () => void handleFetchLyrics() : undefined}
+              onSetLyrics={isAdmin ? () => setLyricsSetOpen(true) : undefined}
               onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
               onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
               onRefreshTracklist={() => handleRefreshTracklist()}
@@ -1580,8 +1607,16 @@ export default function ReleasePage({
         )}
       </div>
 
-      {busy && <p className="muted release-page__busy">{busy}</p>}
-      {error && <p className="error release-page__error">{error}</p>}
+      {busy && (
+        <p className="release-page__status release-page__status--loading" role="status">
+          {busy}
+        </p>
+      )}
+      {error && (
+        <p className="release-page__status release-page__status--error" role="alert">
+          {error}
+        </p>
+      )}
 
       {data && (
         <div className="release-page__body">
@@ -1710,7 +1745,13 @@ export default function ReleasePage({
             )}
 
             {data && mountTracklist && (
-              <div className={tab === "tracklist" ? undefined : "release-page__tab-pane--hidden"}>
+              <div
+                className={
+                  tab === "tracklist"
+                    ? "release-page__tracklist-pane"
+                    : "release-page__tab-pane--hidden"
+                }
+              >
                 <ReleaseTracklist
                   ref={tracklistRef}
                   bandId={bandId}
@@ -1736,6 +1777,7 @@ export default function ReleasePage({
                   }
                   reloadKey={tracklistKey}
                   isAdmin={isAdmin}
+                  onOpenLyricsSet={isAdmin ? () => setLyricsSetOpen(true) : undefined}
                 />
               </div>
             )}
@@ -1772,6 +1814,19 @@ export default function ReleasePage({
           artistName={data.artist_name}
           onClose={() => setVideoSetOpen(false)}
           onSaved={handleVideoSaved}
+        />
+      )}
+
+      {lyricsSetOpen && data && (
+        <ReleaseLyricsSetModal
+          bandId={bandId}
+          releaseId={releaseId}
+          artistName={data.artist_name}
+          onClose={() => setLyricsSetOpen(false)}
+          onSaved={() => {
+            clearReleaseTracklistCache(bandId, releaseId);
+            setTracklistKey((k) => k + 1);
+          }}
         />
       )}
 
