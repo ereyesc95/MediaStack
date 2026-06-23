@@ -163,7 +163,7 @@ export type ArtistSection =
   | "library"
   | "gallery"
   | "quiz";
-export type ArtistOverviewTab = "about" | "lineup" | "links" | "related";
+export type ArtistOverviewTab = "about" | "lineup" | "links" | "related" | "artists";
 
 export type LinkCategory =
   | "social"
@@ -287,6 +287,57 @@ export type BandOverview = {
   library_scanned_at: string | null;
   needs_lineup_import?: boolean;
   cached?: boolean;
+  is_various_artists?: boolean;
+  various_artists_hub?: VariousArtistsHub | null;
+};
+
+export type VariousArtistsHub = {
+  stats: {
+    compilation_count: number;
+    track_count: number;
+    artist_count: number;
+  };
+  cover_urls: string[];
+  featured_compilations: (AudioReleaseCard & {
+    themes?: { id: number | null; name: string }[];
+  })[];
+  featured_tracks: {
+    title: string;
+    artist_name: string;
+    source_band_id: number | null;
+    source_in_library?: boolean;
+    play_path: string;
+    cover_url: string | null;
+    release_date: string | null;
+    album_title: string;
+    navigate_band_id: number;
+    navigate_release_id: string | null;
+  }[];
+  contributing_artists: {
+    band_id: number | null;
+    name: string;
+    code?: string | null;
+    in_library?: boolean;
+    external_urls?: Record<string, string>;
+    photo_url: string | null;
+    icon_url: string | null;
+    logo_url: string | null;
+    era_year?: number | null;
+    show_name_on_hover?: boolean;
+    track_count: number;
+    compilation_count: number;
+    compilation_titles: string[];
+  }[];
+  themes: {
+    id: number | null;
+    name: string;
+    compilation_count: number;
+  }[];
+  timeline: {
+    year: number;
+    compilation_count: number;
+    release_ids: string[];
+  }[];
 };
 
 export type LineupMember = {
@@ -408,6 +459,7 @@ export type AudioReleaseCard = {
   navigate_release_id: string;
   source_band_id: number | null;
   source_artist_name?: string | null;
+  is_box_set?: boolean;
 };
 
 export type GalleryPhotoItem = {
@@ -440,6 +492,8 @@ export type AudioIndexPayload = {
   releases: AudioReleaseCard[];
   categories: string[];
   unofficial_by_category: Record<string, boolean>;
+  box_sets_by_category?: Record<string, boolean>;
+  standard_compilations_by_category?: Record<string, boolean>;
   scanned_at: string | null;
   cached: boolean;
   stale?: boolean;
@@ -467,6 +521,13 @@ export type ReleaseTrackItem = {
   canvas_url?: string | null;
   disc_url?: string | null;
   background_layers?: string[];
+};
+
+export type ReleaseTakenFrom = {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  is_single?: boolean;
 };
 
 export type ReleaseSingleCard = {
@@ -682,12 +743,25 @@ export type ReleaseOverview = {
     portrait_back: string | null;
     landscape_front: string | null;
     landscape_back: string | null;
+    cover_only?: boolean;
   };
   gallery_photo_url: string | null;
   lineup: LineupMember[];
   show_lineup: boolean;
   is_solo: boolean;
+  is_various_artists?: boolean;
+  featured_artists?: {
+    band_id: number | null;
+    name: string;
+    photo_url: string | null;
+    icon_url?: string | null;
+    logo_url?: string | null;
+    in_library?: boolean;
+    track_count?: number;
+  }[];
   singles: ReleaseSingleCard[];
+  appears_on?: ReleaseSingleCard[];
+  taken_from?: ReleaseTakenFrom | null;
   prev: ReleaseNeighbor | null;
   next: ReleaseNeighbor | null;
   navigate_band_id: number;

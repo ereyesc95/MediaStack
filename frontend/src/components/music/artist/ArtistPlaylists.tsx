@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { fetchBandPlaylistDetail } from "../../../api";
+import {
+  getCachedArtistPlaylistDetail,
+  prefetchArtistPlaylistDetail,
+} from "../../../artistPlaylistDetailCache";
 import type {
   ArtistPlaylistCard,
   ArtistPlaylistDetail,
@@ -113,15 +116,33 @@ export function ArtistPlaylistDetailView({
   onBack,
   onPlay,
 }: DetailProps) {
-  const [detail, setDetail] = useState<ArtistPlaylistDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState<ArtistPlaylistDetail | null>(
+    () => getCachedArtistPlaylistDetail(bandId, slug)
+  );
+  const [loading, setLoading] = useState(
+    () => !getCachedArtistPlaylistDetail(bandId, slug)
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const cached = getCachedArtistPlaylistDetail(bandId, slug);
+    if (cached) {
+      setDetail(cached);
+      setLoading(false);
+      setError(null);
+      prefetchArtistPlaylistDetail(bandId, slug, { force: true })
+        .then((d) => {
+          if (!cancelled) setDetail(d);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
     setLoading(true);
     setError(null);
-    fetchBandPlaylistDetail(bandId, slug)
+    prefetchArtistPlaylistDetail(bandId, slug, { force: true })
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
@@ -138,7 +159,7 @@ export function ArtistPlaylistDetailView({
     };
   }, [bandId, slug]);
 
-  if (loading) {
+  if (loading && !detail) {
     return <p className="muted artist-section-empty">Loading playlist…</p>;
   }
   if (error || !detail) {

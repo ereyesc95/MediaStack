@@ -454,7 +454,11 @@ def release_track_source_art(
 ):
     from app.config import settings
     from app.release_overview import resolve_release_content
-    from app.release_playback_art import artwork_gallery_for_play_path, playback_art_for_play_path
+    from app.release_playback_art import (
+        artwork_gallery_for_play_path,
+        playback_art_for_play_path,
+    )
+    from app.release_photocards import photocards_for_play_path
 
     row = crud.get_band(db, band_id)
     if not row:
@@ -466,11 +470,20 @@ def release_track_source_art(
     if not settings.media_root:
         raise HTTPException(404, "Media root not configured")
     from app.release_playback_art import PlaybackArtContext
+    from app.various_artists_hub import is_various_artists_release
+    from app.media_index import parse_bracket_tags, entry_display_name
 
     ctx = PlaybackArtContext(
         release_content=content,
         release_title=card.get("title"),
         band_name=band_row.bnd_name,
+    )
+    folder_name = entry_display_name(content)
+    _, folder_tags = parse_bracket_tags(folder_name)
+    is_va = is_various_artists_release(
+        band_id,
+        source_artist_name=card.get("source_artist_name"),
+        folder_source_artist=folder_tags.get("source_artist"),
     )
     playback = playback_art_for_play_path(media_root, play_path, ctx=ctx)
     if not playback:
@@ -479,6 +492,9 @@ def release_track_source_art(
         "play_path": play_path,
         "playback": playback,
         "artwork": artwork_gallery_for_play_path(media_root, play_path, ctx=ctx),
+        "photocards": photocards_for_play_path(
+            media_root, play_path, ctx=ctx, is_various_artists=is_va
+        ),
     }
 
 
@@ -1333,6 +1349,33 @@ async def band_resolve_related_photos(
         raise HTTPException(404, "Band not found")
     solo = _solo_artist_for_band(db, row)
     return await resolve_related_photos(db, band=row, artist=solo)
+
+
+@router.post("/bands/{band_id}/resolve-va-contributor-photos")
+async def band_resolve_va_contributor_photos(
+    band_id: int,
+    orientation: str = Query("landscape"),
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    from app.band_overview_cache import invalidate_overview_cache
+    from app.various_artists_hub import is_various_artists_band, resolve_va_contributor_photos
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    if not is_various_artists_band(band_id):
+        raise HTTPException(400, "Not a Various Artists band")
+    root = Path(settings.media_root) if settings.media_root else None
+    media_root = root if root and root.is_dir() else None
+    result = await resolve_va_contributor_photos(
+        db,
+        row,
+        media_root,
+        orientation="portrait" if orientation == "portrait" else "landscape",
+    )
+    invalidate_overview_cache(band_id)
+    return result
 
 
 @router.post("/bands/{band_id}/fetch-related")

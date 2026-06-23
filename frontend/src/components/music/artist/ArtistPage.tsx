@@ -24,6 +24,15 @@ import {
   getCachedOverview,
   setCachedOverview,
 } from "../../../overviewCache";
+import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
+import {
+  getCachedArtistGallery,
+  prefetchArtistGallery,
+} from "../../../artistGalleryCache";
+import {
+  getCachedArtistMediaTab,
+  prefetchArtistMediaTab,
+} from "../../../artistMediaTabCache";
 import {
   pushArtistRoute,
   type ArtistOverviewTab,
@@ -56,6 +65,8 @@ import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
 import { IconCardLandscape, IconCardPortrait } from "../../MenuIcons";
 import ArtistAbout from "./ArtistAbout";
+import ArtistVariousAbout from "./ArtistVariousAbout";
+import ArtistContributors from "./ArtistContributors";
 import ArtistAudio, {
   ArtistAudioBars,
   useArtistAudio,
@@ -70,6 +81,7 @@ import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
+import { DEFAULT_ARTIST_PHOTO_URL } from "../release/releaseTrackPanelMeta";
 import ArtistQuiz, { QUIZ_MODES, type QuizMode } from "./ArtistQuiz";
 import ArtistRelated from "./ArtistRelated";
 import AddSimilarModal from "./AddSimilarModal";
@@ -176,8 +188,12 @@ export default function ArtistPage({
   onOpenReleaseNavigate,
   onOpenMediaItem,
 }: Props) {
-  const [data, setData] = useState<BandOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<BandOverview | null>(() =>
+    getCachedOverview(bandId, cardOrientation)
+  );
+  const [loading, setLoading] = useState(
+    () => !getCachedOverview(bandId, cardOrientation)
+  );
   const [error, setError] = useState<string | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [playerHost, setPlayerHost] = useState<HTMLDivElement | null>(null);
@@ -211,29 +227,66 @@ export default function ArtistPage({
   const [lineupImporting, setLineupImporting] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [vaContributorSort, setVaContributorSort] = useState<
+    "tracks" | "compilations" | "name"
+  >("tracks");
   const [eraIndex, setEraIndex] = useState(0);
   const deviceLayout = useDeviceLayout();
   const stacked = isStackedArtistLayout(deviceLayout);
   const mobilePortrait = isMobilePortraitLayout(deviceLayout);
+  const cachedAudio = getCachedArtistAudio(bandId);
+  const cachedGallery = getCachedArtistGallery(bandId);
+  const cachedVideo = getCachedArtistMediaTab(bandId, "video");
+  const cachedLibrary = getCachedArtistMediaTab(bandId, "library");
+  const sectionHasCache = Boolean(
+    (section === "audio" && cachedAudio) ||
+      (section === "gallery" && cachedGallery) ||
+      (section === "video" && cachedVideo) ||
+      (section === "library" && cachedLibrary)
+  );
   const audioEnabled =
-    section === "audio" && Boolean(data?.media?.has_audio);
-  const audioState = useArtistAudio(bandId, audioRefreshKey, audioEnabled);
+    section === "audio" && Boolean(data?.media?.has_audio || cachedAudio);
+  const audioState = useArtistAudio(bandId, audioRefreshKey, audioEnabled, {
+    hidePlaylists: Boolean(data?.is_various_artists),
+  });
   const galleryEnabled =
-    section === "gallery" && Boolean(data?.media?.has_gallery);
+    section === "gallery" && Boolean(data?.media?.has_gallery || cachedGallery);
   const galleryState = useArtistGallery(bandId, galleryEnabled);
 
   const visibleSections = useMemo(() => {
     if (!data?.media) return SECTIONS;
     const m = data.media;
     return SECTIONS.filter((s) => {
-      if (s.id === "overview" || s.id === "quiz") return true;
+      if (s.id === "overview") return true;
+      if (s.id === "quiz") return !data.is_various_artists;
       if (s.id === "audio") return m.has_audio;
       if (s.id === "video") return m.has_video;
       if (s.id === "library") return m.has_library;
       if (s.id === "gallery") return m.has_gallery;
       return false;
     });
-  }, [data?.media]);
+  }, [data?.media, data?.is_various_artists]);
+
+  const visibleOverviewTabs = useMemo(() => {
+    if (data?.is_various_artists) {
+      return [
+        { id: "about", label: "ABOUT" },
+        { id: "artists", label: "FEATURED ARTISTS" },
+      ];
+    }
+    return OVERVIEW_TABS.filter((t) => t.id !== "lineup" || data?.show_lineup);
+  }, [data?.is_various_artists, data?.show_lineup, data?.various_artists_hub]);
+
+  useEffect(() => {
+    if (!data?.is_various_artists) return;
+    if (
+      overviewTab === "lineup" ||
+      overviewTab === "links" ||
+      overviewTab === "related"
+    ) {
+      onNavigate("overview", "about");
+    }
+  }, [data?.is_various_artists, overviewTab, onNavigate]);
 
   const load = useCallback(
     (options?: { silent?: boolean }) => {
@@ -270,6 +323,13 @@ export default function ArtistPage({
     },
     [bandId, cardOrientation]
   );
+
+  useEffect(() => {
+    if (section === "audio") void prefetchArtistAudio(bandId);
+    else if (section === "gallery") void prefetchArtistGallery(bandId);
+    else if (section === "video") void prefetchArtistMediaTab(bandId, "video");
+    else if (section === "library") void prefetchArtistMediaTab(bandId, "library");
+  }, [bandId, section]);
 
   useEffect(() => {
     lineupImportStarted.current = false;
@@ -370,7 +430,43 @@ export default function ArtistPage({
     return carouselEras[eraIndex % carouselEras.length];
   }, [carouselEras, eraIndex]);
 
-  const bgUrl = pageBgUrl(era, stacked) ?? shell?.photo_url ?? undefined;
+  const playableTracks = useMemo(() => {
+    if (data?.is_various_artists && data.various_artists_hub) {
+      return data.various_artists_hub.featured_tracks
+        .filter((t) => t.play_path)
+        .map((t) => ({
+          title: t.title,
+          play_path: t.play_path,
+          cover_url: t.cover_url,
+          release_date: t.release_date,
+          album_folder: null,
+        }));
+    }
+    return (data?.top_tracks ?? []).filter((t) => t.play_path);
+  }, [data?.is_various_artists, data?.various_artists_hub, data?.top_tracks]);
+
+  const bgUrl = useMemo(() => {
+    if (data?.is_various_artists) {
+      if (playing && playingPath) {
+        const track = playableTracks.find((t) => t.play_path === playingPath);
+        if (track?.cover_url) return track.cover_url;
+      }
+      return DEFAULT_ARTIST_PHOTO_URL;
+    }
+    return (
+      pageBgUrl(era, stacked) ??
+      shell?.photo_url ??
+      DEFAULT_ARTIST_PHOTO_URL
+    );
+  }, [
+    data?.is_various_artists,
+    playing,
+    playingPath,
+    playableTracks,
+    era,
+    stacked,
+    shell?.photo_url,
+  ]);
   const [bgLayers, setBgLayers] = useState<{
     current: string | undefined;
     outgoing: string | undefined;
@@ -430,15 +526,6 @@ export default function ArtistPage({
     pushArtistRoute({ bandId, section, overviewTab }, true);
   }, [bandId, section, overviewTab]);
 
-  const visibleOverviewTabs = OVERVIEW_TABS.filter(
-    (t) => t.id !== "lineup" || data?.show_lineup
-  );
-
-  const playableTracks = useMemo(
-    () => (data?.top_tracks ?? []).filter((t) => t.play_path),
-    [data?.top_tracks]
-  );
-
   const [quizSongsBeat, setQuizSongsBeat] = useState({
     active: false,
     playing: false,
@@ -478,6 +565,7 @@ export default function ArtistPage({
         return;
       }
       setPlayingPath(path);
+      setPlayerBarHidden(false);
       const track = playableTracks.find((t) => t.play_path === path);
       try {
         const res = await playTrack({ path, artist_id: bandId, title });
@@ -532,19 +620,13 @@ export default function ArtistPage({
   }, [audioRef, audioSrc, playingPath, playableTracks, userId]);
 
   const onAboutTab = section === "overview" && overviewTab === "about";
-  const playerPortalTarget = onAboutTab
+  const embedPlayerInAbout =
+    onAboutTab && !playerBarHidden && Boolean(audioSrc);
+  const playerPortalTarget = embedPlayerInAbout
     ? playerHost ?? playerFallbackRef.current
     : playerFallbackRef.current;
-  const showFloatingPlayer =
-    Boolean(audioSrc) &&
-    section === "overview" &&
-    !onAboutTab &&
-    !playerBarHidden;
-  const showPlayerRestore =
-    Boolean(audioSrc) &&
-    section === "overview" &&
-    !onAboutTab &&
-    playerBarHidden;
+  const showFloatingPlayer = Boolean(audioSrc) && !playerBarHidden && !embedPlayerInAbout;
+  const showPlayerRestore = Boolean(audioSrc) && playerBarHidden;
 
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
@@ -724,7 +806,8 @@ export default function ArtistPage({
           <div className="artist-page__top-right">
             {busy && <span className="muted">{busy}</span>}
             {section === "overview" &&
-              overviewTab === "related" &&
+              (overviewTab === "related" ||
+                (data?.is_various_artists && overviewTab === "artists")) &&
               onToggleOrientation && (
                 <button
                   type="button"
@@ -937,6 +1020,29 @@ export default function ArtistPage({
             </nav>
           )}
 
+        {section === "overview" &&
+          data?.is_various_artists &&
+          overviewTab === "artists" && (
+            <nav className="artist-page__subtabs artist-page__related-subtabs">
+              {(
+                [
+                  ["tracks", "MOST TRACKS"],
+                  ["compilations", "MOST RELEASES"],
+                  ["name", "A–Z"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={vaContributorSort === key ? "active" : ""}
+                  onClick={() => setVaContributorSort(key)}
+                >
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+
         {section === "audio" && data?.media?.has_audio && (
           <ArtistAudioBars
             state={audioState}
@@ -1032,11 +1138,33 @@ export default function ArtistPage({
         }`}
       >
         {error && <div className="error">{error}</div>}
-        {loading && !data && (
+        {loading && !data && !sectionHasCache && (
           <p className="muted artist-page__loading">Loading…</p>
         )}
 
-        {data && section === "overview" && overviewTab === "about" && (
+        {data &&
+          section === "overview" &&
+          overviewTab === "about" &&
+          data.is_various_artists &&
+          data.various_artists_hub && (
+            <ArtistVariousAbout
+              data={data}
+              hub={data.various_artists_hub}
+              stacked={stacked}
+              onOpenRelease={(targetBandId, releaseId) =>
+                onOpenReleaseNavigate?.(targetBandId, releaseId)
+              }
+              onOpenArtist={onOpenArtist}
+              onPlayTrack={(path, title) => void handlePlay(path, title)}
+              playingPath={playingPath}
+              onPlayerHost={setPlayerHost}
+            />
+          )}
+
+        {data &&
+          section === "overview" &&
+          overviewTab === "about" &&
+          !data.is_various_artists && (
           <ArtistAbout
             data={data}
             eraIndex={eraIndex}
@@ -1052,6 +1180,20 @@ export default function ArtistPage({
             onOpenPerformer={setMemberModalId}
           />
         )}
+
+        {data?.is_various_artists &&
+          data.various_artists_hub &&
+          section === "overview" &&
+          overviewTab === "artists" && (
+            <ArtistContributors
+              hub={data.various_artists_hub}
+              bandId={bandId}
+              orientation={cardOrientation}
+              sort={vaContributorSort}
+              onOpenArtist={onOpenArtist}
+              onDataChanged={load}
+            />
+          )}
 
         {data && section === "overview" && data.show_lineup && (
           <ArtistLineup
@@ -1147,37 +1289,44 @@ export default function ArtistPage({
           />
         )}
 
-        {data && section === "audio" && data.media?.has_audio && (
+        {section === "audio" && (data?.media?.has_audio || cachedAudio) && (
           <ArtistAudio
             state={audioState}
             bandId={bandId}
+            referrerArtistName={data?.name ?? shell?.name}
             onPlayTrack={(path, title) => void handlePlay(path, title)}
             onOpenReleaseNavigate={onOpenReleaseNavigate}
             onOpenArtist={(id) => onOpenArtist(id)}
           />
         )}
-        {data && section === "audio" && !data.media?.has_audio && (
+        {data && section === "audio" && !data.media?.has_audio && !cachedAudio && (
           <p className="muted artist-section-empty">No audio folders found.</p>
         )}
 
-        {data && section === "video" && (
+        {section === "video" && (data?.media?.has_video || cachedVideo) && (
           <ArtistMediaGrid
             bandId={bandId}
             kind="video"
             onOpenItem={(id) => onOpenMediaItem?.("video", id)}
           />
         )}
-        {data && section === "library" && (
+        {data && section === "video" && !data.media?.has_video && !cachedVideo && (
+          <p className="muted artist-section-empty">No video folders found.</p>
+        )}
+        {section === "library" && (data?.media?.has_library || cachedLibrary) && (
           <ArtistMediaGrid
             bandId={bandId}
             kind="library"
             onOpenItem={(id) => onOpenMediaItem?.("library", id)}
           />
         )}
-        {data && section === "gallery" && data.media?.has_gallery && (
+        {data && section === "library" && !data.media?.has_library && !cachedLibrary && (
+          <p className="muted artist-section-empty">No library folders found.</p>
+        )}
+        {section === "gallery" && (data?.media?.has_gallery || cachedGallery) && (
           <ArtistGallery state={galleryState} />
         )}
-        {data && section === "gallery" && !data.media?.has_gallery && (
+        {data && section === "gallery" && !data.media?.has_gallery && !cachedGallery && (
           <p className="muted artist-section-empty">No gallery folders found.</p>
         )}
       </div>

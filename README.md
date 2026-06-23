@@ -223,7 +223,20 @@ The tracklist UI shows group headers (Disc 1, Disc 2, …) and can assign **per-
 
 ### Box sets
 
-Releases that contain `.lnk` shortcuts to other album folders are treated as **box sets**. Each link becomes its own edition group in the tracklist.
+A compilation is labeled **Box set** only when its folder name includes the bracket tag **`[Box Set]`** (case-insensitive):
+
+```
+2005.01.14. Debut Box [Box Set]/
+├── Album One.lnk          → shortcut to another release folder
+├── Album Two.lnk
+└── [Artwork]/
+```
+
+Compilations **without** `[Box Set]` stay **Compilation**, even if they contain `.lnk` files, loose audio, or multiple editions.
+
+Inside a box set, each `.lnk` shortcut to another album folder becomes its own **edition group** in the tracklist. Bracket suffixes (including `[Box Set]`) are stripped from edition labels and from UI lines such as **Taken from …**.
+
+On the artist **Audio → Compilations** tab, when both regular compilations and box sets exist, a sub-bar appears (**RELEASES** / **BOX SETS**) — same pattern as **OFFICIAL** / **UNOFFICIAL** on live albums.
 
 ---
 
@@ -242,7 +255,9 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 | `Canvas - Album` | Spotify-style canvas video |
 | `Disc`, `Disc 01`, `Disc 02`, `Vinyl`, `CD` | Rotating disc art |
 | `Logo`, `Icon` | Branding |
-| `Photocard - Portrait Front`, etc. | K-pop-style photocards (gallery) |
+| `Photocard - Portrait Front`, etc. | K-pop-style flip cards on the release overview |
+| `Photo - Portrait`, `Photo - Landscape` | Various Artists fallback when no photocards exist |
+| `Wallpaper - Portrait`, `Wallpaper - Landscape` | Photocard backs (VA) or era-gallery backs |
 | `Spotify`, `QR` | Optional extras |
 
 **Supported image formats:** `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`
@@ -250,6 +265,17 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 **Supported video formats (animation/canvas):** `.mp4`, `.webm`, `.mov`, `.m4v`
 
 If no disc image exists, the app uses `assets/system/default/disc.png`.
+
+### Release overview photocards
+
+Photocards on the release **Overview** tab resolve in this order:
+
+1. **Dedicated** `Photocard - …` stems in `[Artwork]`
+2. **Various Artists only:** `Photo - …` fronts with `Wallpaper - …` backs (wallpaper-only if no photos)
+3. **Other artists:** era-matched **gallery** photos (portrait + landscape)
+4. **Last resort:** `Cover - Front` / `Cover - Back` as a **single** square-corner flip card when nothing else is available
+
+Layout: description on the left, photocards on the right; **lineup** sits below the description in a glass panel (same as releases with singles).
 
 ### Lyrics
 
@@ -271,6 +297,7 @@ Fetched or edited lyrics are stored in the database so they stay with the track 
 
 - **Synced** / **Not synced** badges in the lyrics view show whether timestamped LRC is available.
 - Synced lyrics highlight the active line and auto-scroll during playback.
+- The same song title on different editions of one release shares synced LRC (opening or playing any edition uses lyrics stored for that title).
 - Admins: **Track data → Fetch lyrics** bulk-fetches synced LRC from [LRCLIB](https://lrclib.net); **Set lyrics** uploads `.lrc` files per song (applies to every edition of that title on the release). Clicking **Not synced** (admin only) opens the same Set lyrics modal.
 - Plain-text edits keep existing synced LRC unless you replace it via Set lyrics or a new upload.
 
@@ -373,8 +400,11 @@ Album or single **folder names** may also carry brackets:
 |-----|---------|
 | `by Artist` | Tribute / source artist |
 | `with Artist` | Split or collaboration context |
-| `unofficial` | Marked unofficial |
+| `unofficial` | Marked unofficial — artist Audio tab shows an **OFFICIAL** / **UNOFFICIAL** sub-bar for that category |
+| `box set` | Marks a compilation as a **box set** (see above) |
 | `of Title` | Work linkage (same as track-level) |
+
+Bracket suffixes are **removed from displayed titles** (release cards, type lines, **Taken from …**, box-set edition labels, etc.). Tags still drive filtering and metadata.
 
 ---
 

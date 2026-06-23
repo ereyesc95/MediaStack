@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchReleaseGallery, fetchTrackSourceArt } from "../../../api";
+import { fetchTrackSourceArt } from "../../../api";
+import {
+  getCachedReleaseGallery,
+  prefetchReleaseGallery,
+} from "../../../releaseGalleryCache";
 import type { ReleaseGalleryItem, ReleaseGalleryPayload } from "../../../types";
 import GalleryViewerModal, {
   type GalleryViewerItem,
@@ -51,19 +55,46 @@ export default function ReleaseGallery({
   const [internalTab, setInternalTab] = useState<GalleryTab>("artwork");
   const tab = galleryTabProp ?? internalTab;
   const setTab = onGalleryTabChange ?? setInternalTab;
-  const [data, setData] = useState<ReleaseGalleryPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ReleaseGalleryPayload | null>(() =>
+    getCachedReleaseGallery(bandId, releaseId)
+  );
+  const [loading, setLoading] = useState(
+    () => !getCachedReleaseGallery(bandId, releaseId)
+  );
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [playingArtwork, setPlayingArtwork] = useState<ReleaseGalleryItem[] | null>(null);
   const onTabsMetaRef = useRef(onTabsMeta);
   onTabsMetaRef.current = onTabsMeta;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    const cached = !force ? getCachedReleaseGallery(bandId, releaseId) : null;
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      setError(null);
+      prefetchReleaseGallery(bandId, releaseId, { force: true })
+        .then((payload) => {
+          setData(payload);
+          if (!galleryTabProp) {
+            const first =
+              payload.artwork.length > 0
+                ? "artwork"
+                : payload.photos.length > 0
+                  ? "photos"
+                  : payload.extras.length > 0
+                    ? "extras"
+                    : "artwork";
+            setInternalTab(first);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const payload = await fetchReleaseGallery(bandId, releaseId);
+      const payload = await prefetchReleaseGallery(bandId, releaseId, { force: true });
       setData(payload);
       const first =
         payload.artwork.length > 0
@@ -127,12 +158,29 @@ export default function ReleaseGallery({
 
   useEffect(() => {
     if (!tabsMetaKey || !data) return;
-    onTabsMetaRef.current?.([
-      { id: "artwork", label: "ARTWORK", count: activeArtwork.length },
-      { id: "photos", label: "PHOTOS", count: data.photos.length },
-      { id: "extras", label: "EXTRAS", count: data.extras.length },
-    ]);
+    const allTabs = [
+      { id: "artwork" as const, label: "ARTWORK", count: activeArtwork.length },
+      { id: "photos" as const, label: "PHOTOS", count: data.photos.length },
+      { id: "extras" as const, label: "EXTRAS", count: data.extras.length },
+    ];
+    onTabsMetaRef.current?.(allTabs.filter((t) => t.count > 0));
   }, [tabsMetaKey, data, activeArtwork.length]);
+
+  const visibleTabs = useMemo(() => {
+    if (!data) return [] as { id: GalleryTab; label: string; count: number }[];
+    return [
+      { id: "artwork" as const, label: "ARTWORK", count: activeArtwork.length },
+      { id: "photos" as const, label: "PHOTOS", count: data.photos.length },
+      { id: "extras" as const, label: "EXTRAS", count: data.extras.length },
+    ].filter((t) => t.count > 0);
+  }, [data, activeArtwork.length]);
+
+  useEffect(() => {
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.some((t) => t.id === tab)) {
+      setTab(visibleTabs[0].id);
+    }
+  }, [visibleTabs, tab, setTab]);
 
   if (loading && !data) {
     return <p className="muted release-gallery__loading">Loading gallery…</p>;
@@ -165,17 +213,11 @@ export default function ReleaseGallery({
     if (i >= 0) setViewerIndex(i);
   };
 
-  const tabs = data
-    ? [
-        { id: "artwork" as const, label: "ARTWORK", count: activeArtworkResolved.length },
-        { id: "photos" as const, label: "PHOTOS", count: data.photos.length },
-        { id: "extras" as const, label: "EXTRAS", count: data.extras.length },
-      ]
-    : [];
+  const tabs = visibleTabs;
 
   return (
     <div className="release-gallery">
-      {!hideTabs && (
+      {!hideTabs && tabs.length > 1 && (
       <nav className="release-gallery__tabs">
         {tabs.map((t) => (
           <button
@@ -183,7 +225,6 @@ export default function ReleaseGallery({
             type="button"
             className={tab === t.id ? "active" : ""}
             onClick={() => setTab(t.id)}
-            disabled={t.count === 0}
           >
             <span>{t.label}</span>
           </button>

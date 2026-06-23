@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchBandLibraryIndex, fetchBandVideoIndex } from "../../../api";
+import {
+  getCachedArtistMediaTab,
+  prefetchArtistMediaTab,
+} from "../../../artistMediaTabCache";
 import type { MediaTabCategory, MediaTabIndexPayload } from "../../../types";
 
 type Props = {
@@ -9,31 +12,52 @@ type Props = {
 };
 
 export function useArtistMediaTab(bandId: number, kind: "video" | "library", enabled: boolean) {
-  const [data, setData] = useState<MediaTabIndexPayload | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<MediaTabIndexPayload | null>(
+    () => getCachedArtistMediaTab(bandId, kind)
+  );
+  const [loading, setLoading] = useState(
+    () => enabled && !getCachedArtistMediaTab(bandId, kind)
+  );
   const [error, setError] = useState<string | null>(null);
-  const [categoryKey, setCategoryKey] = useState("");
+  const [categoryKey, setCategoryKey] = useState(
+    () => getCachedArtistMediaTab(bandId, kind)?.categories[0]?.key ?? ""
+  );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const payload =
-        kind === "video"
-          ? await fetchBandVideoIndex(bandId)
-          : await fetchBandLibraryIndex(bandId);
-      setData(payload);
-      setCategoryKey(payload.categories[0]?.key ?? "");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [bandId, kind]);
+  const load = useCallback(
+    async (force = false) => {
+      const cached = !force ? getCachedArtistMediaTab(bandId, kind) : null;
+      if (cached) {
+        setData(cached);
+        setCategoryKey(cached.categories[0]?.key ?? "");
+        setLoading(false);
+        setError(null);
+        prefetchArtistMediaTab(bandId, kind, { force: true })
+          .then((payload) => {
+            setData(payload);
+            setCategoryKey((prev) => prev || payload.categories[0]?.key || "");
+          })
+          .catch(() => {});
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const payload = await prefetchArtistMediaTab(bandId, kind, { force: true });
+        setData(payload);
+        setCategoryKey(payload.categories[0]?.key ?? "");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [bandId, kind]
+  );
 
   useEffect(() => {
     if (!enabled) {
       setData(null);
+      setLoading(false);
       return;
     }
     void load();
@@ -48,13 +72,10 @@ export function useArtistMediaTab(bandId: number, kind: "video" | "library", ena
 }
 
 export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
-  const { loading, error, category, categories, categoryKey, setCategoryKey } = useArtistMediaTab(
-    bandId,
-    kind,
-    true
-  );
+  const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
+    useArtistMediaTab(bandId, kind, true);
 
-  if (loading && !category) {
+  if (loading && !data) {
     return <p className="muted artist-section-empty">Loading…</p>;
   }
   if (error) {

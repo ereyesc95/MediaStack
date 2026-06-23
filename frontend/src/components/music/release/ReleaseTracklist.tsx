@@ -9,11 +9,15 @@ import {
   type CSSProperties,
 } from "react";
 import {
-  fetchReleaseTracklist,
   fetchTrackLyrics,
   fetchTrackVersions,
 } from "../../../api";
 import { prefetchReleaseTrackCredits } from "../../../releaseTrackCreditsCache";
+import {
+  clearReleaseTracklistCache as clearTracklistCache,
+  getCachedReleaseTracklist,
+  prefetchReleaseTracklist as prefetchTracklist,
+} from "../../../releaseTracklistCache";
 import type {
   ReleaseEdition,
   ReleaseTrackGroup,
@@ -26,14 +30,14 @@ import { ReleaseTrackTitle } from "./releaseTrackTitle";
 import ReleaseAddToPlaylistModal from "./ReleaseAddToPlaylistModal";
 import ReleaseInlineLyrics from "./ReleaseInlineLyrics";
 import ReleaseLyricsEditModal from "./ReleaseLyricsEditModal";
+import LyricsStatusBadge from "./LyricsStatusBadge";
 import { ChevronIcon, parseTrackPanelMeta, trackDisplayTitle, trackMainTitle } from "./releaseTrackPanelMeta";
 import { TrackActionEditIcon, TrackActionRetryIcon } from "./releaseTrackActionIcons";
 
-const tracklistCache = new Map<string, ReleaseTracklist>();
-
-function tracklistCacheKey(bandId: number, releaseId: string) {
-  return `v11:${bandId}:${releaseId}`;
-}
+export {
+  clearReleaseTracklistCache,
+  prefetchReleaseTracklist,
+} from "../../../releaseTracklistCache";
 
 function groupBsideGroups(groups: ReleaseTrackGroup[]) {
   const order: string[] = [];
@@ -51,22 +55,6 @@ function groupBsideGroups(groups: ReleaseTrackGroup[]) {
     groups: map.get(singleTitle)!,
     showSingleHeader: (map.get(singleTitle)?.length ?? 0) > 1,
   }));
-}
-
-export function clearReleaseTracklistCache(bandId?: number, releaseId?: string) {
-  if (bandId != null && releaseId) {
-    tracklistCache.delete(tracklistCacheKey(bandId, releaseId));
-    return;
-  }
-  tracklistCache.clear();
-}
-
-export function prefetchReleaseTracklist(bandId: number, releaseId: string) {
-  const cacheKey = tracklistCacheKey(bandId, releaseId);
-  if (tracklistCache.has(cacheKey)) return Promise.resolve();
-  return fetchReleaseTracklist(bandId, releaseId).then((payload) => {
-    tracklistCache.set(cacheKey, payload);
-  });
 }
 
 export type ReleasePlaybackArt = {
@@ -168,6 +156,7 @@ type Props = {
   artistName: string;
   releaseTitle: string;
   stacked: boolean;
+  compactLyricsHead?: boolean;
   playingPath: string | null;
   playbackProgress?: number;
   mobileView: ReleaseMobileTrackView;
@@ -281,6 +270,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     artistName,
     releaseTitle,
     stacked,
+    compactLyricsHead = false,
     playingPath,
     playbackProgress = 0,
     mobileView,
@@ -297,15 +287,16 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   },
   ref
 ) {
-  const cacheKey = tracklistCacheKey(bandId, releaseId);
   const onActiveTrackChangeRef = useRef(onActiveTrackChange);
   const onPanelActionsChangeRef = useRef(onPanelActionsChange);
   onActiveTrackChangeRef.current = onActiveTrackChange;
   onPanelActionsChangeRef.current = onPanelActionsChange;
-  const [data, setData] = useState<ReleaseTracklist | null>(
-    () => tracklistCache.get(cacheKey) ?? null
+  const [data, setData] = useState<ReleaseTracklist | null>(() =>
+    getCachedReleaseTracklist(bandId, releaseId)
   );
-  const [loading, setLoading] = useState(() => !tracklistCache.has(cacheKey));
+  const [loading, setLoading] = useState(
+    () => !getCachedReleaseTracklist(bandId, releaseId)
+  );
   const [error, setError] = useState<string | null>(null);
   const [rightView, setRightView] = useState<ReleaseRightView>("tracks");
   const [lyricsTrack, setLyricsTrack] = useState<ReleaseTrackItem | null>(null);
@@ -334,35 +325,43 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     [onRightViewChange]
   );
 
-  const load = useCallback(async () => {
-    const cached = tracklistCache.get(cacheKey);
-    if (cached) {
-      setData(cached);
-      setView("tracks");
-      setLoading(false);
+  const load = useCallback(
+    async (force = false) => {
+      const cached = !force ? getCachedReleaseTracklist(bandId, releaseId) : null;
+      if (cached) {
+        setData(cached);
+        setView("tracks");
+        setLoading(false);
+        setError(null);
+        prefetchTracklist(bandId, releaseId, { force: true })
+          .then((fresh) => {
+            setData(fresh);
+            setView("tracks");
+          })
+          .catch(() => {});
+        return;
+      }
+      setLoading(true);
       setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const payload = await fetchReleaseTracklist(bandId, releaseId);
-      tracklistCache.set(cacheKey, payload);
-      setData(payload);
-      setView("tracks");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [bandId, releaseId, cacheKey, setView]);
+      try {
+        const payload = await prefetchTracklist(bandId, releaseId, { force: true });
+        setData(payload);
+        setView("tracks");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [bandId, releaseId, setView]
+  );
 
   useEffect(() => {
     if (reloadKey > 0) {
-      tracklistCache.delete(cacheKey);
+      clearTracklistCache(bandId, releaseId);
     }
-    void load();
-  }, [load, reloadKey, cacheKey]);
+    void load(reloadKey > 0);
+  }, [load, reloadKey, bandId, releaseId]);
 
   useEffect(() => {
     if (!data) return;
@@ -552,11 +551,17 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       void (async () => {
         try {
           const lyricsTitle = trackMainTitle(track.title);
-          let res = await fetchTrackLyrics(artistName, lyricsTitle, track.play_path);
+          let res = await fetchTrackLyrics(artistName, lyricsTitle, track.play_path, {
+            bandId,
+            releaseId,
+          });
           if (!res.lyrics && !options?.retry) {
             await new Promise((resolve) => window.setTimeout(resolve, 700));
             if (requestId !== lyricsRequestRef.current) return;
-            res = await fetchTrackLyrics(artistName, lyricsTitle, track.play_path);
+            res = await fetchTrackLyrics(artistName, lyricsTitle, track.play_path, {
+              bandId,
+              releaseId,
+            });
           }
           applyResult(res);
         } catch {
@@ -567,7 +572,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         }
       })();
     },
-    [artistName, setView]
+    [artistName, bandId, releaseId, setView]
   );
 
   const openLyrics = (track: ReleaseTrackItem) => {
@@ -796,7 +801,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   );
 
   const lyricsHead = lyricsTrack ? (
-    <div className="release-tracklist__subview-head">
+    <div className="release-tracklist__subview-head release-tracklist__subview-head--lyrics">
       <button
         type="button"
         className="release-tracklist__back"
@@ -824,31 +829,25 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           </button>
         )}
         {!lyricsLoading && syncedLyrics && (
-          <span
-            className="lyrics-status-badge lyrics-status-badge--synced"
+          <LyricsStatusBadge
+            synced
+            iconOnly={compactLyricsHead}
             title="Timestamped synced lyrics"
-          >
-            Synced
-          </span>
+          />
         )}
-        {!lyricsLoading && lyricsText && !syncedLyrics &&
-          (isAdmin && onOpenLyricsSet ? (
-            <button
-              type="button"
-              className="lyrics-status-badge lyrics-status-badge--plain lyrics-status-badge--action"
-              title="Upload synced lyrics"
-              onClick={onOpenLyricsSet}
-            >
-              Not synced
-            </button>
-          ) : (
-            <span
-              className="lyrics-status-badge lyrics-status-badge--plain"
-              title="Lyrics without timestamps"
-            >
-              Not synced
-            </span>
-          ))}
+        {!lyricsLoading && lyricsText && !syncedLyrics && (
+          <LyricsStatusBadge
+            synced={false}
+            iconOnly={compactLyricsHead}
+            actionable={Boolean(isAdmin && onOpenLyricsSet)}
+            onClick={onOpenLyricsSet}
+            title={
+              isAdmin && onOpenLyricsSet
+                ? "Upload synced lyrics"
+                : "Lyrics without timestamps"
+            }
+          />
+        )}
         {isAdmin && !lyricsLoading && (
           <button
             type="button"

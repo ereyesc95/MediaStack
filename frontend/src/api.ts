@@ -449,6 +449,7 @@ export async function fetchTrackSourceArt(
   play_path: string;
   playback: import("./types").ReleasePlaybackArt;
   artwork: import("./types").ReleaseGalleryItem[];
+  photocards?: import("./types").ReleaseOverview["photocards"] | null;
 }> {
   const q = new URLSearchParams({ play_path: playPath });
   return request(
@@ -526,10 +527,13 @@ export async function patchReleaseOverview(
 export async function fetchTrackLyrics(
   artist: string,
   title: string,
-  playPath?: string
+  playPath?: string,
+  options?: { bandId?: number; releaseId?: string }
 ) {
   const q = new URLSearchParams({ artist, title });
   if (playPath) q.set("play_path", playPath);
+  if (options?.bandId != null) q.set("band_id", String(options.bandId));
+  if (options?.releaseId) q.set("release_id", options.releaseId);
   return request<{
     artist: string;
     title: string;
@@ -795,6 +799,17 @@ export async function refreshBandLinks(
 ): Promise<{ ok: boolean; added?: number; error?: string }> {
   return request(
     `${API}/music/bands/${id}/refresh-links`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function resolveVaContributorPhotos(
+  id: number,
+  orientation: "landscape" | "portrait" = "landscape"
+) {
+  return request<{ ok: boolean; resolved?: number }>(
+    `${API}/music/bands/${id}/resolve-va-contributor-photos?orientation=${orientation}`,
     { method: "POST" },
     LONG_RUNNING_TIMEOUT_MS
   );

@@ -467,13 +467,13 @@ export default function App() {
 
             onTab={(tab: MusicTab) => openMusic({ tab, bandId: undefined, playlistId: undefined })}
 
-            onBand={(id) =>
+            onBand={(id, artistSection = "overview") =>
               openMusic(
                 id !== undefined
                   ? {
                       bandId: id,
                       tab: "artists",
-                      artistSection: "overview",
+                      artistSection,
                       artistOverviewTab: "about",
                       releaseId: undefined,
                       releaseTab: undefined,

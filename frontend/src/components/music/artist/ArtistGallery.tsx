@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBandGalleryIndex } from "../../../api";
+import {
+  getCachedArtistGallery,
+  prefetchArtistGallery,
+} from "../../../artistGalleryCache";
 import type {
   GalleryBrandItem,
   GalleryIndexPayload,
@@ -60,10 +63,25 @@ export function useArtistGallery(
   bandId: number,
   enabled: boolean
 ): ArtistGalleryState {
-  const [index, setIndex] = useState<GalleryIndexPayload | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [index, setIndex] = useState<GalleryIndexPayload | null>(
+    () => getCachedArtistGallery(bandId)
+  );
+  const [loading, setLoading] = useState(
+    () => enabled && !getCachedArtistGallery(bandId)
+  );
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<GalleryTab>("photos");
+  const [tab, setTab] = useState<GalleryTab>(() => {
+    const cached = getCachedArtistGallery(bandId);
+    if (!cached) return "photos";
+    const hasBranding =
+      (cached.branding?.length ?? 0) > 0 ||
+      cached.logos.length + cached.icons.length > 0;
+    return cached.photos.length > 0
+      ? "photos"
+      : hasBranding
+        ? "logos"
+        : "photos";
+  });
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -75,9 +93,34 @@ export function useArtistGallery(
       return;
     }
     let cancelled = false;
+    const cached = getCachedArtistGallery(bandId);
+    if (cached) {
+      setIndex(cached);
+      setLoading(false);
+      setError(null);
+      prefetchArtistGallery(bandId, { force: true })
+        .then((payload) => {
+          if (cancelled) return;
+          setIndex(payload);
+          const hasBranding =
+            (payload.branding?.length ?? 0) > 0 ||
+            payload.logos.length + payload.icons.length > 0;
+          const first =
+            payload.photos.length > 0
+              ? "photos"
+              : hasBranding
+                ? "logos"
+                : "photos";
+          setTab(first);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
     setLoading(true);
     setError(null);
-    fetchBandGalleryIndex(bandId)
+    prefetchArtistGallery(bandId, { force: true })
       .then((payload) => {
         if (cancelled) return;
         setIndex(payload);

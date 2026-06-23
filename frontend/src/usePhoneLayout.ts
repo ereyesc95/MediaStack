@@ -70,6 +70,11 @@ export function isStackedArtistLayout(layout?: DeviceLayout): boolean {
   return l === "mobile-portrait" || l === "tablet-portrait";
 }
 
+export function isTabletLayout(layout?: DeviceLayout): boolean {
+  const l = layout ?? resolveDeviceLayout();
+  return l === "tablet-portrait" || l === "tablet-landscape";
+}
+
 export function isMobilePortraitLayout(layout?: DeviceLayout): boolean {
   return (layout ?? resolveDeviceLayout()) === "mobile-portrait";
 }

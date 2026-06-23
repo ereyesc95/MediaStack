@@ -32,6 +32,7 @@ const OVERVIEW_TABS: ArtistOverviewTab[] = [
   "lineup",
   "links",
   "related",
+  "artists",
 ];
 const RELEASE_TABS: ReleaseTab[] = ["overview", "tracklist", "gallery"];
 
@@ -39,11 +40,15 @@ const RELEASE_ID_RE = /^rel_[0-9a-f]{12}$/;
 const MEDIA_ITEM_ID_RE = /^(vid|lib)_[0-9a-f]{12}$/;
 
 const REFERRER_KEY = "mediastack_release_referrer";
+const AUDIO_CATEGORY_KEY = "mediastack_audio_category";
+
+let audioCategoryIntent: { bandId: number; category: string } | null = null;
 
 export type ReleaseReferrer = {
   bandId: number;
   section: ArtistSection;
   category?: string;
+  artistName?: string;
 };
 
 export function saveReleaseReferrer(ref: ReleaseReferrer) {
@@ -69,6 +74,67 @@ export function clearReleaseReferrer() {
     sessionStorage.removeItem(REFERRER_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+export function savePendingAudioCategory(bandId: number, category: string) {
+  if (!category) return;
+  audioCategoryIntent = { bandId, category };
+  try {
+    sessionStorage.setItem(
+      AUDIO_CATEGORY_KEY,
+      JSON.stringify({ bandId, category })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function pendingAudioCategoryFor(bandId: number): string | null {
+  if (audioCategoryIntent?.bandId === bandId) {
+    return audioCategoryIntent.category;
+  }
+  return peekPendingAudioCategory(bandId);
+}
+
+export function clearPendingAudioCategory(bandId: number) {
+  if (audioCategoryIntent?.bandId === bandId) {
+    audioCategoryIntent = null;
+  }
+  try {
+    const raw = sessionStorage.getItem(AUDIO_CATEGORY_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { bandId?: number; category?: string };
+    if (parsed.bandId === bandId) {
+      sessionStorage.removeItem(AUDIO_CATEGORY_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekPendingAudioCategory(bandId: number): string | null {
+  try {
+    const raw = sessionStorage.getItem(AUDIO_CATEGORY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { bandId?: number; category?: string };
+    if (parsed.bandId !== bandId || !parsed.category) return null;
+    return parsed.category;
+  } catch {
+    return null;
+  }
+}
+
+export function consumePendingAudioCategory(bandId: number): string | null {
+  try {
+    const raw = sessionStorage.getItem(AUDIO_CATEGORY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { bandId?: number; category?: string };
+    if (parsed.bandId !== bandId || !parsed.category) return null;
+    sessionStorage.removeItem(AUDIO_CATEGORY_KEY);
+    return parsed.category;
+  } catch {
+    return null;
   }
 }
 

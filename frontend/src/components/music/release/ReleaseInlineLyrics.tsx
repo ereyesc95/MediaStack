@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type LrcLine = { time: number; text: string };
 
 const LRC_TIME_RE = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+const AUTO_SCROLL_PAUSE_MS = 1000;
+const PROGRAMMATIC_SCROLL_MS = 700;
 
 function parseLrc(raw: string): LrcLine[] {
   const lines: LrcLine[] = [];
@@ -70,6 +72,28 @@ export default function ReleaseInlineLyrics({
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastScrolledIdx = useRef(-1);
+  const autoScrollPausedUntil = useRef(0);
+  const programmaticScrollRef = useRef(false);
+  const pauseTimerRef = useRef<number | null>(null);
+  const [autoScrollResumeKey, setAutoScrollResumeKey] = useState(0);
+
+  const pauseAutoScroll = useCallback(() => {
+    autoScrollPausedUntil.current = Date.now() + AUTO_SCROLL_PAUSE_MS;
+    if (pauseTimerRef.current !== null) {
+      window.clearTimeout(pauseTimerRef.current);
+    }
+    pauseTimerRef.current = window.setTimeout(() => {
+      setAutoScrollResumeKey((key) => key + 1);
+    }, AUTO_SCROLL_PAUSE_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pauseTimerRef.current !== null) {
+        window.clearTimeout(pauseTimerRef.current);
+      }
+    };
+  }, []);
 
   const lrcLines = useMemo(
     () => (syncedLyrics ? parseLrc(syncedLyrics) : []),
@@ -89,20 +113,48 @@ export default function ReleaseInlineLyrics({
   useEffect(() => {
     lineRefs.current.length = lrcLines.length;
     lastScrolledIdx.current = -1;
+    autoScrollPausedUntil.current = 0;
   }, [lrcLines.length, syncedLyrics]);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      if (programmaticScrollRef.current) return;
+      pauseAutoScroll();
+    };
+
+    el.addEventListener("wheel", pauseAutoScroll, { passive: true });
+    el.addEventListener("touchstart", pauseAutoScroll, { passive: true });
+    el.addEventListener("touchmove", pauseAutoScroll, { passive: true });
+    el.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      el.removeEventListener("wheel", pauseAutoScroll);
+      el.removeEventListener("touchstart", pauseAutoScroll);
+      el.removeEventListener("touchmove", pauseAutoScroll);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [lrcLines.length, syncedLyrics, pauseAutoScroll]);
+
+  useEffect(() => {
     if (activeIdx < 0) return;
+    if (Date.now() < autoScrollPausedUntil.current) return;
     if (activeIdx === lastScrolledIdx.current) return;
     const line = lineRefs.current[activeIdx];
     if (!line) return;
 
     const frame = window.requestAnimationFrame(() => {
+      programmaticScrollRef.current = true;
       scrollLineIntoView(line, scrollRef.current);
       lastScrolledIdx.current = activeIdx;
+      window.setTimeout(() => {
+        programmaticScrollRef.current = false;
+      }, PROGRAMMATIC_SCROLL_MS);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeIdx, syncedLyrics]);
+  }, [activeIdx, syncedLyrics, autoScrollResumeKey]);
 
   return (
     <div className="release-tracklist__inline release-tracklist__inline--lyrics">

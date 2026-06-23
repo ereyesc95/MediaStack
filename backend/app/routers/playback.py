@@ -64,11 +64,22 @@ async def track_lyrics(
     artist: str = Query(...),
     title: str = Query(...),
     play_path: str | None = Query(None),
+    band_id: int | None = Query(None),
+    release_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    from app.release_lyrics_shared import find_release_synced_lrc
     from app.services.lyrics import _read_raw_lrc_file, resolve_lyrics
 
     synced = _read_raw_lrc_file(play_path, db=db) if play_path else None
+    if not synced and band_id is not None and release_id:
+        synced = find_release_synced_lrc(
+            db,
+            band_id=band_id,
+            release_id=release_id,
+            track_title=title,
+            play_path=play_path,
+        )
     lyrics, source = await resolve_lyrics(artist, title, play_path=play_path, db=db)
     return LyricsOut(
         artist=artist,

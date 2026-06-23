@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchArtistCards,
   fetchFilterOptions,
-  fetchMusicDashboard,
   fetchPlaylistTracks,
   fetchUserPlaylists,
   playTrack,
@@ -21,6 +20,15 @@ import { EMPTY_DASHBOARD } from "../../types";
 import { clearMediaTheme, beginArtistPageSession, colorsFromImageUrl, applyMediaTheme, applyPlaybackThemeFromCover, endPlaybackThemeSession, onPlaybackPaused, onPlaybackResumed, setPlaybackPlaying } from "../../mediaTheme";
 import { prefetchBandOverview } from "../../overviewCache";
 import { prefetchReleaseOverview } from "../../releaseOverviewCache";
+import { prefetchReleaseTracklist } from "../../releaseTracklistCache";
+import { prefetchArtistAudio } from "../../artistAudioCache";
+import { prefetchArtistGallery } from "../../artistGalleryCache";
+import { prefetchArtistMediaTab } from "../../artistMediaTabCache";
+import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
+import {
+  getCachedMusicDashboard,
+  prefetchMusicDashboard,
+} from "../../musicDashboardCache";
 import AppMenu from "../AppMenu";
 import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
@@ -30,6 +38,7 @@ import ArtistPage from "./artist/ArtistPage";
 import MediaItemPage from "./media/MediaItemPage";
 import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
+import { pushArtistRoute, savePendingAudioCategory, clearPendingAudioCategory } from "../../musicRoute";
 import ArtistBrowse from "./ArtistBrowse";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -65,7 +74,7 @@ type Props = {
   onToggleOrientation: () => void;
   onSelectMedia: (opt: MediaOption) => void;
   onTab: (tab: MusicTab) => void;
-  onBand: (id?: number) => void;
+  onBand: (id?: number, artistSection?: ArtistSection) => void;
   onArtistNavigate: (
     section: ArtistSection,
     overviewTab?: ArtistOverviewTab
@@ -118,7 +127,9 @@ export default function MusicModule({
   onCountryFilter,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
-  const [dashboard, setDashboard] = useState<MusicDashboard>(EMPTY_DASHBOARD);
+  const [dashboard, setDashboard] = useState<MusicDashboard>(
+    () => getCachedMusicDashboard() ?? EMPTY_DASHBOARD
+  );
   const [dashLoading, setDashLoading] = useState(false);
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [artistTotal, setArtistTotal] = useState(0);
@@ -158,7 +169,7 @@ export default function MusicModule({
     [artists, dashboard.top_artists]
   );
 
-  const openArtist = useCallback(
+  const primeArtistShell = useCallback(
     (id: number, shellHint?: ArtistCard | null) => {
       const card = shellHint ?? resolveArtistShell(id);
       if (card) setArtistShell(card);
@@ -169,11 +180,36 @@ export default function MusicModule({
           if (c) applyMediaTheme(c, userId);
         });
       }
+      return card;
+    },
+    [resolveArtistShell, userId]
+  );
+
+  const openArtist = useCallback(
+    (id: number, shellHint?: ArtistCard | null) => {
+      clearPendingAudioCategory(id);
+      primeArtistShell(id, shellHint);
       void prefetchBandOverview(id, cardOrientation);
       onArtistNavigate("overview", "about");
       onBand(id);
     },
-    [cardOrientation, onArtistNavigate, onBand, resolveArtistShell, userId]
+    [cardOrientation, onArtistNavigate, onBand, primeArtistShell]
+  );
+
+  const openArtistAudio = useCallback(
+    (id: number, category: string) => {
+      savePendingAudioCategory(id, category);
+      primeArtistShell(id);
+      void prefetchArtistAudio(id);
+      onReleaseNavigate?.(undefined, undefined);
+      onBand(id, "audio");
+      pushArtistRoute({
+        bandId: id,
+        section: "audio",
+        overviewTab: "about",
+      });
+    },
+    [onBand, onReleaseNavigate, primeArtistShell]
   );
 
   const homeBeatActive = Boolean(!bandId && homeAudio.src);
@@ -200,17 +236,47 @@ export default function MusicModule({
   useEffect(() => {
     if (bandId && releaseId) {
       void prefetchReleaseOverview(bandId, releaseId);
+      void prefetchReleaseTracklist(bandId, releaseId);
     }
   }, [bandId, releaseId]);
 
   useEffect(() => {
-    if (tab === "home") {
-      setDashLoading(true);
-      fetchMusicDashboard()
-        .then(setDashboard)
-        .catch(() => setDashboard(EMPTY_DASHBOARD))
-        .finally(() => setDashLoading(false));
+    if (!bandId) return;
+    switch (artistSection) {
+      case "audio":
+        void prefetchArtistAudio(bandId);
+        break;
+      case "gallery":
+        void prefetchArtistGallery(bandId);
+        break;
+      case "video":
+        void prefetchArtistMediaTab(bandId, "video");
+        break;
+      case "library":
+        void prefetchArtistMediaTab(bandId, "library");
+        break;
     }
+    if (
+      mediaItemId &&
+      (artistSection === "video" || artistSection === "library")
+    ) {
+      void prefetchMediaItemOverview(bandId, artistSection, mediaItemId);
+    }
+  }, [bandId, artistSection, mediaItemId]);
+
+  useEffect(() => {
+    if (tab !== "home") return;
+    const cached = getCachedMusicDashboard();
+    if (cached) {
+      setDashboard(cached);
+      setDashLoading(false);
+      void prefetchMusicDashboard({ force: true }).then(setDashboard);
+      return;
+    }
+    setDashLoading(true);
+    void prefetchMusicDashboard({ force: true })
+      .then(setDashboard)
+      .finally(() => setDashLoading(false));
   }, [tab]);
 
   useEffect(() => {
@@ -729,6 +795,9 @@ export default function MusicModule({
           onOpenArtist={(id) => {
             onReleaseNavigate?.(undefined, undefined);
             openArtist(id);
+          }}
+          onBrowseArtistAudio={(id, category) => {
+            openArtistAudio(id, category);
           }}
           onOpenRelease={(bid, rid) => {
             void prefetchReleaseOverview(bid, rid);

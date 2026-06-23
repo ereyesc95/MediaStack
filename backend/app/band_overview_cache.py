@@ -7,6 +7,7 @@ from pathlib import Path
 from app.paths import DATA_DIR
 
 CACHE_DIR = DATA_DIR / "overview_cache"
+OVERVIEW_CACHE_VERSION = 5
 
 
 def _cache_path(band_id: int, orientation: str) -> Path:
@@ -25,6 +26,7 @@ def cache_fingerprint(
 ) -> str:
     return "|".join(
         [
+            str(OVERVIEW_CACHE_VERSION),
             library_scanned_at or "",
             metadata_refreshed_at or "",
             lineup_imported_at or "",

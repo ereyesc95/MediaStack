@@ -85,7 +85,12 @@ def _edition_folder_for_audio(audio_file: Path) -> Path:
         visited.add(key)
         if _find_artwork_subdir(folder):
             return folder
-        name_low = folder.name.casefold()
+        if _is_group_subdir_name(folder.name):
+            parent = folder.parent
+            if parent == folder:
+                break
+            folder = parent
+            continue
         if _is_edition_folder(folder.name) or _is_edition_dir(folder):
             return folder
         parent = folder.parent

@@ -12,6 +12,7 @@ from app.band_library import (
     AUDIO_EXTS,
     DATE_PREFIX_RE,
     _audio_root,
+    _collect_audio_files,
     _find_artwork_subdir,
     _parse_folder_date,
     _track_title_from_filename,
@@ -41,12 +42,14 @@ from app.media_index import (
     DISC_DIR_RE,
     STANDARD_EDITION,
     _artwork_file,
+    _band_id_for_artist_name,
     _child_release_folders,
     _disc_sort_key,
     _is_edition_content_dir,
     _is_edition_folder,
     format_display_date,
     get_audio_index,
+    is_box_set_name,
     parse_bracket_tags,
     release_id_from_path,
 )
@@ -252,9 +255,7 @@ def _photocards(artwork: Path | None, media_root: Path) -> dict[str, str | None]
 def _is_box_set(content: Path) -> bool:
     if not content.is_dir():
         return False
-    lnk = sum(1 for c in content.iterdir() if c.suffix.casefold() == ".lnk")
-    dirs = sum(1 for c in content.iterdir() if c.is_dir())
-    return lnk > 0 and lnk >= max(dirs, 1)
+    return is_box_set_name(entry_display_name(content))
 
 
 def _release_type_label(category: str, content: Path) -> str:
@@ -394,6 +395,70 @@ def _singles_from_parent(parent: Path, media_root: Path) -> list[dict]:
             seen.add(card["id"])
             out.append(card)
     return out
+
+
+def _collect_release_audio_files(root: Path) -> list[Path]:
+    """Collect audio files under a release folder tree (not artist Audio root)."""
+    files: list[Path] = []
+    if not root.is_dir():
+        return files
+    for path in root.rglob("*"):
+        if path.is_file() and path.suffix.lower() in AUDIO_EXTS:
+            files.append(path)
+    return files
+
+
+def _featured_artists_for_release(
+    db: Session,
+    media_root: Path,
+    content: Path,
+    *,
+    orientation: str = "landscape",
+) -> list[dict]:
+    from app.artist_details import _band_in_library
+    from app.gallery import resolve_artist_card
+    from app.various_artists_hub import _cached_va_photo, _load_va_photo_cache
+
+    edition = _resolve_standard_edition(content)
+    audio_files = _collect_release_audio_files(edition)
+    if not audio_files:
+        audio_files = _collect_release_audio_files(content)
+
+    by_name: dict[str, dict] = {}
+    va_photo_cache = _load_va_photo_cache()
+
+    for audio_file in sorted(audio_files, key=lambda p: p.name.casefold()):
+        _clean, tags = parse_bracket_tags(audio_file.stem)
+        source_name = tags.get("source_artist")
+        if not source_name:
+            continue
+        key = source_name.casefold()
+        if key in by_name:
+            by_name[key]["track_count"] += 1
+            continue
+        band_id = _band_id_for_artist_name(db, source_name)
+        src = db.get(Band, band_id) if band_id else None
+        display_name = (
+            src.bnd_name.replace("█", "'") if src and src.bnd_name else source_name
+        )
+        card = resolve_artist_card(display_name, orientation=orientation)
+        photo_url = card.photo_url or _cached_va_photo(band_id, va_photo_cache)
+        in_library = bool(src and _band_in_library(db, src, media_root))
+        by_name[key] = {
+            "band_id": band_id,
+            "name": display_name,
+            "photo_url": photo_url,
+            "icon_url": card.icon_url,
+            "logo_url": card.logo_url,
+            "in_library": in_library,
+            "track_count": 1,
+        }
+
+    artists = sorted(
+        by_name.values(),
+        key=lambda a: (-a["track_count"], a["name"].casefold()),
+    )
+    return artists
 
 
 def _singles_for_release(
@@ -574,6 +639,8 @@ def build_release_overview(
     if not band:
         return None
 
+    from app.various_artists_hub import is_various_artists_release
+
     if not settings.media_root:
         return None
     media_root = Path(settings.media_root)
@@ -593,10 +660,30 @@ def build_release_overview(
     if not content or not content.is_dir():
         return None
 
+    folder_name = entry_display_name(display_entry)
+    _, folder_tags = parse_bracket_tags(folder_name)
+    is_various_artists = is_various_artists_release(
+        band_id,
+        source_artist_name=card.get("source_artist_name"),
+        folder_source_artist=folder_tags.get("source_artist"),
+    )
+
     edition = _resolve_standard_edition(content)
     artwork = _standard_artwork_dir(edition)
     urls = _artwork_urls(artwork, media_root)
-    photocards = _photocards(artwork, media_root)
+    from app.release_photocards import resolve_overview_photocards
+
+    photocards = resolve_overview_photocards(
+        db,
+        band_id,
+        release_id,
+        band_name=band.bnd_name,
+        category=card.get("category"),
+        date_iso=card.get("date_iso"),
+        content=content,
+        media_root=media_root,
+        is_various_artists=is_various_artists,
+    )
 
     bg_layers = [
         u
@@ -636,7 +723,7 @@ def build_release_overview(
 
     lineup_full = _build_lineup(db, band, media_root)
     solo = _is_solo(db, band)
-    show_lineup = not solo
+    show_lineup = not solo and not is_various_artists
     solo_performer = _solo_performer(db, band, media_root) if solo else None
     lineup_members = (
         [solo_performer]
@@ -644,17 +731,37 @@ def build_release_overview(
         else _filter_lineup(lineup_full, release_year)
     )
 
+    featured_artists: list[dict] = []
+    if is_various_artists:
+        featured_artists = _featured_artists_for_release(
+            db,
+            media_root,
+            content,
+            orientation=card_orientation,
+        )
+
     prev_r, next_r = _prev_next_neighbors(audio_data.get("releases") or [], card)
     type_label = _release_type_label(card.get("category") or "", content)
     artist_name = _display_name(band.bnd_name)
 
-    source_artist: str | None = None
-    folder_name = entry_display_name(display_entry)
-    _, tags = parse_bracket_tags(folder_name)
-    if tags.get("source_artist"):
-        source_artist = tags["source_artist"]
+    source_artist: str | None = folder_tags.get("source_artist")
 
     release_title = card.get("title") or ""
+
+    from app.release_single_overview import (
+        find_appears_on_releases,
+        find_taken_from_release,
+    )
+
+    appears_on: list[dict] = []
+    taken_from: dict | None = None
+    if card.get("category") == "singles":
+        try:
+            appears_on = find_appears_on_releases(db, band_id, release_id, limit=5)
+            taken_from = find_taken_from_release(db, band_id, release_id)
+        except Exception:
+            appears_on = []
+            taken_from = None
 
     payload: dict = {
         "id": card["id"],
@@ -695,7 +802,11 @@ def build_release_overview(
         "lineup": lineup_members,
         "show_lineup": show_lineup,
         "is_solo": solo,
+        "is_various_artists": is_various_artists,
+        "featured_artists": featured_artists,
         "singles": _singles_for_release(band, content, media_root, release_title),
+        "appears_on": appears_on,
+        "taken_from": taken_from,
         "prev": prev_r,
         "next": next_r,
         "navigate_band_id": card.get("navigate_band_id") or band_id,

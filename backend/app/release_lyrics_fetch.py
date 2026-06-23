@@ -7,6 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.lyrics_storage import lrclib_title_variants
 from app.media_paths import path_to_local_file
+from app.release_lyrics_shared import (
+    propagate_synced_lrc_to_siblings,
+    release_paths_by_main_key,
+    release_track_main_key,
+    synced_lrc_for_path,
+)
 from app.release_tracklist import build_release_tracklist
 from app.services.lyrics import _strip_lrc_tags, _write_cache, fetch_lrclib_synced
 from app.track_overrides import read_lyrics_lrc, save_lyrics
@@ -28,6 +34,8 @@ async def fetch_release_lyrics(
     album = (payload.get("title") or "").strip()
     if not artist:
         return {"ok": False, "error": "Missing artist name"}
+
+    paths_by_key = release_paths_by_main_key(payload)
 
     fetched = 0
     skipped = 0
@@ -53,6 +61,43 @@ async def fetch_release_lyrics(
 
                 existing = read_lyrics_lrc(db, play_path)
                 if existing and not force:
+                    plain = _strip_lrc_tags(existing).strip()
+                    propagate_synced_lrc_to_siblings(
+                        db,
+                        payload,
+                        track_title=title,
+                        synced_lrc=existing,
+                        plain=plain or None,
+                        band_id=band_id,
+                        source_path=play_path,
+                    )
+                    skipped += 1
+                    items.append(
+                        {
+                            "title": title,
+                            "status": "skipped",
+                            "path": play_path,
+                        }
+                    )
+                    continue
+
+                main_key = release_track_main_key(title)
+                sibling_synced: str | None = None
+                for sibling_path in paths_by_key.get(main_key, []):
+                    sibling_synced = synced_lrc_for_path(db, sibling_path)
+                    if sibling_synced:
+                        break
+
+                if sibling_synced and not force:
+                    plain = _strip_lrc_tags(sibling_synced).strip()
+                    propagate_synced_lrc_to_siblings(
+                        db,
+                        payload,
+                        track_title=title,
+                        synced_lrc=sibling_synced,
+                        plain=plain or None,
+                        band_id=band_id,
+                    )
                     skipped += 1
                     items.append(
                         {
@@ -108,6 +153,16 @@ async def fetch_release_lyrics(
 
                 if plain:
                     _write_cache(artist, title, lyrics=plain, source="lrclib-lrc")
+
+                propagate_synced_lrc_to_siblings(
+                    db,
+                    payload,
+                    track_title=title,
+                    synced_lrc=synced,
+                    plain=plain or None,
+                    band_id=band_id,
+                    source_path=play_path,
+                )
 
                 fetched += 1
                 items.append(

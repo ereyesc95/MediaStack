@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBandAudioIndex, fetchBandPlaylistIndex, resolveArtistName } from "../../../api";
+import { resolveArtistName } from "../../../api";
+import {
+  getCachedArtistAudio,
+  prefetchArtistAudio,
+} from "../../../artistAudioCache";
 import { prefetchReleaseOverview } from "../../../releaseOverviewCache";
-import { pushArtistRoute, saveReleaseReferrer } from "../../../musicRoute";
+import {
+  clearPendingAudioCategory,
+  pendingAudioCategoryFor,
+  pushArtistRoute,
+  saveReleaseReferrer,
+} from "../../../musicRoute";
 import { writerSearchUrl } from "../release/releaseTrackPanelMeta";
 import type {
   ArtistPlaylistCard,
@@ -32,6 +41,17 @@ const PLAYLISTS_META = {
   mobile: "LISTS",
 };
 
+function pickAudioCategory(
+  bandId: number,
+  index: AudioIndexPayload | null,
+  current: string
+): string {
+  const pending = pendingAudioCategoryFor(bandId);
+  if (pending && index?.categories.includes(pending)) return pending;
+  if (current && index?.categories.includes(current)) return current;
+  return index?.categories[0] ?? "";
+}
+
 export type ArtistAudioState = {
   index: AudioIndexPayload | null;
   playlists: ArtistPlaylistCard[];
@@ -41,8 +61,11 @@ export type ArtistAudioState = {
   setCategory: (key: string) => void;
   officialOnly: boolean;
   setOfficialOnly: (value: boolean) => void;
+  compilationBoxSetsOnly: boolean;
+  setCompilationBoxSetsOnly: (value: boolean) => void;
   visibleCategories: typeof AUDIO_CATEGORY_META;
   showUnofficialBar: boolean;
+  showCompilationEditionBar: boolean;
   releases: AudioReleaseCard[];
   selectedPlaylist: string | null;
   setSelectedPlaylist: (slug: string | null) => void;
@@ -51,14 +74,28 @@ export type ArtistAudioState = {
 export function useArtistAudio(
   bandId: number,
   refreshKey: number,
-  enabled: boolean
+  enabled: boolean,
+  options?: { hidePlaylists?: boolean }
 ): ArtistAudioState {
-  const [index, setIndex] = useState<AudioIndexPayload | null>(null);
-  const [playlists, setPlaylists] = useState<ArtistPlaylistCard[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [index, setIndex] = useState<AudioIndexPayload | null>(
+    () => getCachedArtistAudio(bandId)?.audio ?? null
+  );
+  const [playlists, setPlaylists] = useState<ArtistPlaylistCard[]>(
+    () => getCachedArtistAudio(bandId)?.playlists ?? []
+  );
+  const [loading, setLoading] = useState(
+    () => enabled && !getCachedArtistAudio(bandId)
+  );
   const [error, setError] = useState<string | null>(null);
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(() =>
+    pickAudioCategory(
+      bandId,
+      getCachedArtistAudio(bandId)?.audio ?? null,
+      ""
+    )
+  );
   const [officialOnly, setOfficialOnly] = useState(true);
+  const [compilationBoxSetsOnly, setCompilationBoxSetsOnly] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,25 +108,51 @@ export function useArtistAudio(
       return;
     }
     let cancelled = false;
+    const cached = refreshKey > 0 ? null : getCachedArtistAudio(bandId);
+    if (cached) {
+      setIndex(cached.audio);
+      setPlaylists(cached.playlists);
+      setCategory((prev) => pickAudioCategory(bandId, cached.audio, prev));
+      setOfficialOnly(true);
+      setCompilationBoxSetsOnly(false);
+      setSelectedPlaylist(null);
+      setLoading(false);
+      setError(null);
+      prefetchArtistAudio(bandId, { force: true })
+        .then((entry) => {
+          if (cancelled) return;
+          setIndex(entry.audio);
+          setPlaylists(entry.playlists);
+          if (entry.audio.stale) {
+            window.setTimeout(() => {
+              prefetchArtistAudio(bandId, { force: true })
+                .then((fresh) => {
+                  if (!cancelled && !fresh.audio.stale) setIndex(fresh.audio);
+                })
+                .catch(() => {});
+            }, 2500);
+          }
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
     setLoading(true);
     setError(null);
-    Promise.all([
-      fetchBandAudioIndex(bandId),
-      fetchBandPlaylistIndex(bandId),
-    ])
-      .then(([audioPayload, playlistPayload]) => {
+    prefetchArtistAudio(bandId, { force: true })
+      .then((entry) => {
         if (cancelled) return;
-        setIndex(audioPayload);
-        setPlaylists(playlistPayload.playlists);
-        const first = audioPayload.categories[0] ?? "";
-        setCategory(first);
+        setIndex(entry.audio);
+        setPlaylists(entry.playlists);
+        setCategory((prev) => pickAudioCategory(bandId, entry.audio, prev));
         setOfficialOnly(true);
         setSelectedPlaylist(null);
-        if (audioPayload.stale) {
+        if (entry.audio.stale) {
           window.setTimeout(() => {
-            fetchBandAudioIndex(bandId)
+            prefetchArtistAudio(bandId, { force: true })
               .then((fresh) => {
-                if (!cancelled && !fresh.stale) setIndex(fresh);
+                if (!cancelled && !fresh.audio.stale) setIndex(fresh.audio);
               })
               .catch(() => {});
           }, 2500);
@@ -112,11 +175,11 @@ export function useArtistAudio(
     const releaseCats = AUDIO_CATEGORY_META.filter((c) =>
       index?.categories.includes(c.key)
     );
-    if (playlists.length > 0) {
+    if (!options?.hidePlaylists && playlists.length > 0) {
       return [...releaseCats, PLAYLISTS_META];
     }
     return releaseCats;
-  }, [index?.categories, playlists.length]);
+  }, [index?.categories, playlists.length, options?.hidePlaylists]);
 
   const showUnofficialBar = Boolean(
     category &&
@@ -124,21 +187,35 @@ export function useArtistAudio(
       index?.unofficial_by_category?.[category]
   );
 
+  const showCompilationEditionBar = Boolean(
+    category === "compilations" &&
+      index?.box_sets_by_category?.compilations &&
+      index?.standard_compilations_by_category?.compilations
+  );
+
   const releases = useMemo(() => {
     if (!index || !category || category === "playlists") return [];
     return index.releases.filter(
       (r) =>
         r.category === category &&
-        (officialOnly ? r.official : !r.official)
+        (officialOnly ? r.official : !r.official) &&
+        (!showCompilationEditionBar ||
+          category !== "compilations" ||
+          (compilationBoxSetsOnly ? r.is_box_set : !r.is_box_set))
     );
-  }, [index, category, officialOnly]);
+  }, [
+    index,
+    category,
+    officialOnly,
+    compilationBoxSetsOnly,
+    showCompilationEditionBar,
+  ]);
 
   useEffect(() => {
-    if (!visibleCategories.length) return;
-    if (!visibleCategories.some((c) => c.key === category)) {
-      setCategory(visibleCategories[0].key);
-    }
-  }, [visibleCategories, category]);
+    if (!index || !visibleCategories.length) return;
+    if (category && visibleCategories.some((c) => c.key === category)) return;
+    setCategory((prev) => pickAudioCategory(bandId, index, prev));
+  }, [visibleCategories, category, index, bandId]);
 
   return {
     index,
@@ -147,14 +224,19 @@ export function useArtistAudio(
     error,
     category,
     setCategory: (key: string) => {
+      clearPendingAudioCategory(bandId);
       setCategory(key);
       setOfficialOnly(true);
+      setCompilationBoxSetsOnly(false);
       setSelectedPlaylist(null);
     },
     officialOnly,
     setOfficialOnly,
+    compilationBoxSetsOnly,
+    setCompilationBoxSetsOnly,
     visibleCategories,
     showUnofficialBar,
+    showCompilationEditionBar,
     releases,
     selectedPlaylist,
     setSelectedPlaylist,
@@ -174,8 +256,11 @@ export function ArtistAudioBars({ state, mobilePortrait }: BarsProps) {
     setCategory,
     officialOnly,
     setOfficialOnly,
+    compilationBoxSetsOnly,
+    setCompilationBoxSetsOnly,
     visibleCategories,
     showUnofficialBar,
+    showCompilationEditionBar,
     selectedPlaylist,
   } = state;
 
@@ -216,6 +301,24 @@ export function ArtistAudioBars({ state, mobilePortrait }: BarsProps) {
           </button>
         </nav>
       )}
+      {showCompilationEditionBar && (
+        <nav className="artist-page__subtabs artist-audio__compilation-bar">
+          <button
+            type="button"
+            className={!compilationBoxSetsOnly ? "active" : ""}
+            onClick={() => setCompilationBoxSetsOnly(false)}
+          >
+            <span>RELEASES</span>
+          </button>
+          <button
+            type="button"
+            className={compilationBoxSetsOnly ? "active" : ""}
+            onClick={() => setCompilationBoxSetsOnly(true)}
+          >
+            <span>BOX SETS</span>
+          </button>
+        </nav>
+      )}
     </>
   );
 }
@@ -224,12 +327,14 @@ function ReleaseCard({
   release,
   bandId,
   category,
+  referrerArtistName,
   onOpenReleaseNavigate,
   onOpenArtist,
 }: {
   release: AudioReleaseCard;
   bandId: number;
   category: string;
+  referrerArtistName?: string;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 }) {
@@ -237,7 +342,12 @@ function ReleaseCard({
     const targetBand = release.navigate_band_id;
     const targetRelease = release.navigate_release_id;
     if (targetBand !== bandId) {
-      saveReleaseReferrer({ bandId, section: "audio", category });
+      saveReleaseReferrer({
+        bandId,
+        section: "audio",
+        category,
+        artistName: referrerArtistName,
+      });
     }
     void prefetchReleaseOverview(targetBand, targetRelease);
     if (onOpenReleaseNavigate) {
@@ -352,6 +462,7 @@ type Props = {
   state: ArtistAudioState;
   onPlayTrack?: (path: string, title: string) => void;
   bandId: number;
+  referrerArtistName?: string;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 };
@@ -360,6 +471,7 @@ export default function ArtistAudio({
   state,
   onPlayTrack,
   bandId,
+  referrerArtistName,
   onOpenReleaseNavigate,
   onOpenArtist,
 }: Props) {
@@ -428,6 +540,7 @@ export default function ArtistAudio({
               release={release}
               bandId={bandId}
               category={category}
+              referrerArtistName={referrerArtistName}
               onOpenReleaseNavigate={onOpenReleaseNavigate}
               onOpenArtist={onOpenArtist}
             />

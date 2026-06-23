@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.band_library import match_top_tracks
 from app.media_index import media_visibility_flags
+from app.media_index import VARIOUS_ARTISTS_DEFAULT_ID
 from app.config import settings
 from app.gallery import (
     EraBrand,
@@ -440,10 +441,11 @@ def build_band_overview(
 
     lineup = _build_lineup(db, band, root)
     solo = _is_solo(db, band)
+    is_various = band_id == VARIOUS_ARTISTS_DEFAULT_ID
     needs_lineup_import = bool(
-        band.bnd_code and not band.bnd_lineup_imported_at and not solo
+        band.bnd_code and not band.bnd_lineup_imported_at and not solo and not is_various
     )
-    show_lineup = not solo and (
+    show_lineup = not solo and not is_various and (
         bool(lineup.get("all")) or needs_lineup_import
     )
     solo_performer = _solo_performer(db, band, root) if solo else None
@@ -461,6 +463,19 @@ def build_band_overview(
         solo_artist_id=solo_artist_id,
         orientation=card_orientation,
     )
+
+    various_artists_hub = None
+    if is_various and root:
+        from app.various_artists_hub import (
+            VARIOUS_ARTISTS_BIO,
+            build_various_artists_hub,
+        )
+
+        various_artists_hub = build_various_artists_hub(
+            db, band, root, orientation=card_orientation
+        )
+        if not (band.bnd_bio_manual or 0):
+            bio = VARIOUS_ARTISTS_BIO
 
     aliases = [
         a.strip()
@@ -493,6 +508,8 @@ def build_band_overview(
         "show_lineup": show_lineup,
         "solo_performer": solo_performer,
         "is_solo": solo,
+        "is_various_artists": is_various,
+        "various_artists_hub": various_artists_hub,
         "related": related,
         "media": media,
         "metadata_refreshed_at": band.bnd_metadata_refreshed_at,

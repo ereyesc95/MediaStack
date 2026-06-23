@@ -18,7 +18,7 @@ from app.band_library import (
     _track_title_from_filename,
 )
 from app.config import settings
-from app.media_index import DISC_DIR_RE, _disc_sort_key, _is_edition_folder, _is_edition_content_dir, _is_group_subdir_name, format_display_date, release_id_from_path
+from app.media_index import DISC_DIR_RE, _disc_sort_key, _is_edition_folder, _is_edition_content_dir, _is_group_subdir_name, format_display_date, parse_bracket_tags, release_id_from_path
 from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
 from app.models import Track
 from app.gallery import IMAGE_EXTS, _media_url
@@ -182,27 +182,32 @@ def _group_kind(name: str) -> str:
     return "disc"
 
 
+def _synced_lrc_for_path(db: Session, play_path: str) -> str | None:
+    from app.release_lyrics_shared import synced_lrc_for_path
+
+    return synced_lrc_for_path(db, play_path)
+
+
 def _attach_has_lrc(db: Session, editions: list[dict]) -> None:
     from app.media_paths import path_to_local_file
-    from app.track_overrides import read_lyrics_lrc
+
+    synced_keys: set[str] = set()
+    entries: list[tuple[dict, str]] = []
 
     for edition in editions:
         for group in edition.get("groups") or []:
             for track in group.get("tracks") or []:
                 play_path = (track.get("play_path") or "").strip()
+                title = (track.get("title") or "").strip()
+                main_key = _normalize_title(title)
                 local = path_to_local_file(play_path) if play_path else None
                 track["has_lrc"] = bool(local and has_stored_lyrics(db, local))
-                synced = read_lyrics_lrc(db, play_path) if play_path else None
-                if not synced and local:
-                    from app.lyrics_storage import find_lrc_path
+                entries.append((track, main_key))
+                if play_path and _synced_lrc_for_path(db, play_path):
+                    synced_keys.add(main_key)
 
-                    lrc_path = find_lrc_path(local)
-                    if lrc_path and lrc_path.is_file():
-                        try:
-                            synced = lrc_path.read_text(encoding="utf-8", errors="replace").strip()
-                        except OSError:
-                            synced = None
-                track["has_synced_lrc"] = bool(synced and "[" in synced)
+    for track, main_key in entries:
+        track["has_synced_lrc"] = main_key in synced_keys
 
 
 def _track_number(filename: str, fallback: int) -> int:
@@ -813,10 +818,12 @@ def build_release_tracklist(
             continue
         groups = _dedupe_tracks(lnk_group.get("groups") or [])
         if groups:
+            lnk_name = entry_display_name(child)
+            lnk_label, _ = parse_bracket_tags(lnk_name)
             editions_out.append(
                 {
-                    "id": _edition_id(entry_display_name(child)),
-                    "label": entry_display_name(child),
+                    "id": _edition_id(lnk_name),
+                    "label": lnk_label,
                     "date_iso": None,
                     "groups": groups,
                     "is_link": True,

@@ -267,6 +267,11 @@ export function writerSearchUrl(name: string): string {
 
 export const DEFAULT_DISC_URL = "/api/assets/system/default/disc.png";
 export const DEFAULT_LABEL_URL = "/api/assets/system/default/label.png";
+export const DEFAULT_ARTIST_PHOTO_URL =
+  "/api/assets/system/default/artists.png";
+/** @deprecated use DEFAULT_ARTIST_PHOTO_URL */
+export const VARIOUS_ARTISTS_PHOTO_URL = DEFAULT_ARTIST_PHOTO_URL;
+export const VARIOUS_ARTISTS_BAND_ID = 120;
 
 export function ChevronIcon({ direction }: { direction: "left" | "right" }) {
   return (

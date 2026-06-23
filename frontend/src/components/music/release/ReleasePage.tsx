@@ -36,6 +36,11 @@ import {
   getCachedReleaseOverview,
   setCachedReleaseOverview,
 } from "../../../releaseOverviewCache";
+import { getCachedReleaseTracklist } from "../../../releaseTracklistCache";
+import {
+  getCachedReleaseGallery,
+  prefetchReleaseGallery,
+} from "../../../releaseGalleryCache";
 import {
   getCachedTrackCredits,
   prefetchTrackCredits,
@@ -44,6 +49,7 @@ import {
   isMobileLandscapeLayout,
   isMobilePortraitLayout,
   useDeviceLayout,
+  isTabletLayout,
 } from "../../../usePhoneLayout";
 import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
@@ -66,7 +72,11 @@ import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { useBeatPulse } from "../../../useBeatPulse";
 import ReleaseGallery, { type ReleaseGalleryTab } from "./ReleaseGallery";
-import ReleasePhotocard from "./ReleasePhotocard";
+import {
+  ReleasePhotocardGroup,
+  type ReleasePhotocardSet,
+} from "./ReleasePhotocard";
+import { openArtistByName } from "../artist/openArtistByName";
 import ReleaseTracklist, {
   type ReleaseMobileTrackView,
   type ReleasePlaybackArt,
@@ -78,6 +88,7 @@ import {
   ChevronIcon,
   DEFAULT_DISC_URL,
   DEFAULT_LABEL_URL,
+  VARIOUS_ARTISTS_BAND_ID,
   parseTrackPanelMeta,
   isAdaptationLine,
   writerSearchUrl,
@@ -114,6 +125,7 @@ type Props = {
   userId?: number;
   onBack: () => void;
   onOpenArtist: (id: number) => void;
+  onBrowseArtistAudio: (id: number, category: string) => void;
   onOpenRelease: (bandId: number, releaseId: string) => void;
   onOpenCatalogProducer?: (producerName: string) => void;
   onOpenCatalogLabel?: (labelName: string) => void;
@@ -161,6 +173,36 @@ function ReleaseNeighborLink({
           <ChevronIcon direction="right" />
         </span>
       )}
+    </button>
+  );
+}
+
+function FeaturedArtistCard({
+  artist,
+  onSelect,
+}: {
+  artist: NonNullable<ReleaseOverview["featured_artists"]>[number];
+  onSelect: () => void;
+}) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photoUrl = artist.photo_url ?? artist.icon_url ?? artist.logo_url;
+  const showPhoto = photoUrl && !photoFailed;
+  return (
+    <button
+      type="button"
+      className="release-lineup-card release-lineup-card--featured-artist"
+      onClick={onSelect}
+    >
+      <span className="release-lineup-card__photo">
+        {showPhoto ? (
+          <img src={photoUrl!} alt="" onError={() => setPhotoFailed(true)} />
+        ) : (
+          <span className="release-lineup-card__initials">
+            {artist.name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </span>
+      <span className="release-lineup-card__name">{artist.name}</span>
     </button>
   );
 }
@@ -259,6 +301,7 @@ export default function ReleasePage({
   userId,
   onBack,
   onOpenArtist,
+  onBrowseArtistAudio,
   onOpenRelease,
   onOpenCatalogProducer,
   onOpenCatalogLabel,
@@ -273,6 +316,7 @@ export default function ReleasePage({
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isMobilePortraitLayout(layout);
+  const tabletPortrait = layout === "tablet-portrait";
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const [data, setData] = useState<ReleaseOverview | null>(() =>
     getCachedReleaseOverview(bandId, releaseId)
@@ -295,6 +339,9 @@ export default function ReleasePage({
   const [busy, setBusy] = useState("");
   const [refreshWiki, setRefreshWiki] = useState(true);
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
+  const [trackPhotocards, setTrackPhotocards] = useState<
+    ReleaseOverview["photocards"] | null
+  >(null);
   const [trackWriters, setTrackWriters] = useState<string[]>([]);
   const [, setActiveTrack] = useState<ReleaseTrackItem | null>(null);
   const [panelActionTrack, setPanelActionTrack] = useState<ReleaseTrackItem | null>(null);
@@ -315,7 +362,15 @@ export default function ReleasePage({
     urls: Record<string, string>;
   } | null>(null);
   const tracklistRef = useRef<ReleaseTracklistHandle>(null);
-  const sourceArtCacheRef = useRef<Map<string, ReleasePlaybackArt>>(new Map());
+  const sourceArtCacheRef = useRef<
+    Map<
+      string,
+      {
+        playback: ReleasePlaybackArt;
+        photocards: ReleaseOverview["photocards"] | null;
+      }
+    >
+  >(new Map());
   const canvasVideoRef = useRef<HTMLVideoElement>(null);
   const overviewTopRef = useRef<HTMLDivElement>(null);
   const overviewDescRef = useRef<HTMLDivElement>(null);
@@ -330,6 +385,81 @@ export default function ReleasePage({
   const miniAudio = useMiniAudio();
   const clearMiniAudio = miniAudio.clear;
   const isPlaying = Boolean(playingPath && miniAudio.playing);
+  const displayPhotocards =
+    isPlaying && trackPhotocards
+      ? trackPhotocards
+      : data?.photocards ?? {
+          portrait_front: null,
+          portrait_back: null,
+          landscape_front: null,
+          landscape_back: null,
+        };
+  const activePhotocards =
+    isPlaying && trackPhotocards ? trackPhotocards : data?.photocards;
+  const sharedCoverUrls = Boolean(
+    displayPhotocards.portrait_front &&
+      displayPhotocards.portrait_front === displayPhotocards.landscape_front &&
+      (displayPhotocards.portrait_back ?? displayPhotocards.portrait_front) ===
+        (displayPhotocards.landscape_back ?? displayPhotocards.landscape_front)
+  );
+  const looksLikeCoverArt = /cover/i.test(
+    decodeURIComponent(displayPhotocards.portrait_front ?? "")
+  );
+  const photocardsCoverOnly = Boolean(
+    activePhotocards?.cover_only || (sharedCoverUrls && looksLikeCoverArt)
+  );
+  const overviewPhotocards: ReleasePhotocardSet = {
+    ...displayPhotocards,
+    cover_only: photocardsCoverOnly || undefined,
+  };
+  const hasOverviewBottomSection = Boolean(
+    data &&
+      !data.is_various_artists &&
+      (data.singles.length > 0 || (data.appears_on?.length ?? 0) > 0)
+  );
+  const isVaRelease = Boolean(
+    data?.is_various_artists ||
+      data?.band_id === VARIOUS_ARTISTS_BAND_ID ||
+      data?.artist_name?.toLowerCase() === "various artists" ||
+      data?.source_artist?.toLowerCase() === "various artists"
+  );
+  const vaFeaturedArtists = data?.featured_artists ?? [];
+  const showVaFeaturedArtists = isVaRelease && vaFeaturedArtists.length > 0;
+  const vaFeaturedRow1 = vaFeaturedArtists.slice(0, 5);
+  const vaFeaturedRow2 =
+    showVaFeaturedArtists && (data?.singles.length ?? 0) === 0
+      ? vaFeaturedArtists.slice(5, 10)
+      : [];
+  const showBandLineup = Boolean(
+    !isVaRelease && data?.show_lineup && (data?.lineup.length ?? 0) > 0
+  );
+  const showSoloLineup = Boolean(
+    !isVaRelease && data?.is_solo && data?.lineup.length === 1
+  );
+  const showOverviewLineup = showBandLineup || showSoloLineup;
+  const showOverviewPhotocards = Boolean(
+    displayPhotocards.portrait_front || displayPhotocards.landscape_front
+  );
+  const vaHasDescription = Boolean(data?.description);
+  const showVaPhotocardsBesideDesc =
+    isVaRelease && showOverviewPhotocards && vaHasDescription;
+  const showVaPhotocardsInStack =
+    isVaRelease && showOverviewPhotocards && !vaHasDescription;
+  const showOverviewSide =
+    showVaPhotocardsBesideDesc ||
+    (!isVaRelease && showOverviewPhotocards);
+  const vaOverviewNoSingles = isVaRelease && (data?.singles.length ?? 0) === 0;
+
+  const openFeaturedArtist = useCallback(
+    (artist: NonNullable<ReleaseOverview["featured_artists"]>[number]) => {
+      if (artist.band_id && artist.in_library) {
+        onOpenArtist(artist.band_id);
+        return;
+      }
+      void openArtistByName(artist.name, onOpenArtist);
+    },
+    [onOpenArtist]
+  );
   const beatActive = Boolean(playingPath && miniAudio.src);
   useBeatPulse(miniAudio.audioRef, beatActive, miniAudio.playing);
   const [bgLayers, setBgLayers] = useState<{
@@ -378,6 +508,7 @@ export default function ReleasePage({
     setPlayingPath(null);
     setNowPlayingTitle(null);
     setPlaybackArt(null);
+    setTrackPhotocards(null);
     setVersionSource(null);
     setPanelDateIso(null);
     setPanelActionTrack(null);
@@ -392,6 +523,7 @@ export default function ReleasePage({
       cached?.background_layers?.[0] ?? cached?.cover_url ?? undefined;
     prevBgRef.current = url;
     setBgLayers(url ? { current: url } : {});
+    void prefetchReleaseTracklist(bandId, releaseId);
     load({ silent: Boolean(cached) });
   }, [bandId, releaseId, load, clearMiniAudio, miniAudio.audioRef]);
 
@@ -408,14 +540,23 @@ export default function ReleasePage({
   }, [data?.needs_metadata_fetch, load]);
 
   useLayoutEffect(() => {
-    if (stacked || mobileLandscape || tab !== "overview") return;
     const top = overviewTopRef.current;
+
+    const clearScale = () => {
+      top?.style.removeProperty("--overview-photocard-scale");
+    };
+
+    if (stacked || mobileLandscape || tab !== "overview" || showVaPhotocardsInStack) {
+      clearScale();
+      return;
+    }
+
     const desc = overviewDescRef.current;
     const cards = overviewPhotocardsRef.current;
     if (!top) return;
 
     const measure = () => {
-      top.style.removeProperty("--overview-photocard-scale");
+      clearScale();
       if (!desc || !cards) return;
 
       const descH = desc.scrollHeight;
@@ -435,6 +576,14 @@ export default function ReleasePage({
       if (slack > 24) {
         scale = Math.max(scale, 1 + Math.min(0.35, (slack / topH) * 0.55));
       }
+
+      if (cardsH > 0 && topH > 0) {
+        const maxFit = topH * 0.98;
+        if (cardsH * scale > maxFit) {
+          scale = Math.max(0.75, maxFit / cardsH);
+        }
+      }
+
       scale = Math.min(1.5, Math.max(1, scale));
       if (scale > 1.02) {
         top.style.setProperty("--overview-photocard-scale", scale.toFixed(3));
@@ -446,14 +595,34 @@ export default function ReleasePage({
     ro.observe(top);
     if (desc) ro.observe(desc);
     if (cards) ro.observe(cards);
-    return () => ro.disconnect();
+
+    const scheduleMeasure = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(measure);
+      });
+    };
+
+    window.addEventListener("resize", scheduleMeasure);
+    window.addEventListener("orientationchange", scheduleMeasure);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", scheduleMeasure);
+      window.removeEventListener("orientationchange", scheduleMeasure);
+      clearScale();
+    };
   }, [
     stacked,
     mobileLandscape,
     tab,
+    layout,
+    isVaRelease,
+    showVaPhotocardsInStack,
     data?.description,
     data?.photocards?.portrait_front,
     data?.photocards?.landscape_front,
+    displayPhotocards.portrait_front,
+    displayPhotocards.landscape_front,
   ]);
 
   useLayoutEffect(() => {
@@ -517,7 +686,7 @@ export default function ReleasePage({
   ]);
 
   useEffect(() => {
-    if (tab !== "tracklist" || !nowPlayingTitle) {
+    if (!nowPlayingTitle) {
       setTrackWriters([]);
       return;
     }
@@ -533,7 +702,7 @@ export default function ReleasePage({
     return () => {
       cancelled = true;
     };
-  }, [bandId, releaseId, tab, nowPlayingTitle]);
+  }, [bandId, releaseId, nowPlayingTitle]);
 
   useEffect(() => {
     beginArtistPageSession(userId);
@@ -557,27 +726,54 @@ export default function ReleasePage({
     );
   }, [bandId, releaseId, tab]);
 
-  const resolvePlaybackArt = useCallback(
-    async (path: string): Promise<ReleasePlaybackArt | null> => {
+  const resolveTrackSource = useCallback(
+    async (
+      path: string
+    ): Promise<{
+      playback: ReleasePlaybackArt;
+      photocards: ReleaseOverview["photocards"] | null;
+    } | null> => {
       const cached = sourceArtCacheRef.current.get(path);
       if (cached) return cached;
       try {
         const res = await fetchTrackSourceArt(bandId, releaseId, path);
-        const normalized = normalizePlaybackArt(res.playback);
-        sourceArtCacheRef.current.set(path, normalized);
-        return normalized;
+        const entry = {
+          playback: normalizePlaybackArt(res.playback),
+          photocards:
+            res.photocards &&
+            (res.photocards.portrait_front || res.photocards.landscape_front)
+              ? res.photocards
+              : null,
+        };
+        sourceArtCacheRef.current.set(path, entry);
+        return entry;
       } catch {
         const ctx = tracklistRef.current?.findTrackContext(path);
-        return ctx?.art ? normalizePlaybackArt(ctx.art) : null;
+        if (!ctx?.art) return null;
+        const entry = {
+          playback: normalizePlaybackArt(ctx.art),
+          photocards: null,
+        };
+        sourceArtCacheRef.current.set(path, entry);
+        return entry;
       }
     },
     [bandId, releaseId]
   );
 
+  const resolvePlaybackArt = useCallback(
+    async (path: string): Promise<ReleasePlaybackArt | null> => {
+      const source = await resolveTrackSource(path);
+      return source?.playback ?? null;
+    },
+    [resolveTrackSource]
+  );
+
   useEffect(() => {
-    if (!data) return;
-    void prefetchReleaseTracklist(bandId, releaseId);
-  }, [bandId, releaseId, data]);
+    if (tab === "gallery") {
+      void prefetchReleaseGallery(bandId, releaseId);
+    }
+  }, [bandId, releaseId, tab]);
 
   const hasActiveTrack = Boolean(playingPath);
   const showPlaybackMotion = hasActiveTrack && isPlaying;
@@ -650,13 +846,26 @@ export default function ReleasePage({
     else el.pause();
   }, [displayCanvas, showPanelCanvas, isPlaying]);
 
-  const backLabel = data?.artist_name ?? "Artist";
+  const releaseReferrer = getReleaseReferrer();
+  const referrerOverview = releaseReferrer
+    ? getCachedOverview(releaseReferrer.bandId, "landscape")
+    : null;
+  const backLabel =
+    releaseReferrer && releaseReferrer.bandId !== bandId
+      ? (releaseReferrer.artistName ??
+          referrerOverview?.name ??
+          "Artist")
+      : (data?.artist_name ?? "Artist");
 
   const handleBack = () => {
-    const ref = getReleaseReferrer();
+    const ref = releaseReferrer;
     clearReleaseReferrer();
     if (ref && ref.bandId !== bandId) {
-      onOpenArtist(ref.bandId);
+      if (ref.section === "audio" && ref.category) {
+        onBrowseArtistAudio(ref.bandId, ref.category);
+      } else {
+        onOpenArtist(ref.bandId);
+      }
       return;
     }
     onBack();
@@ -878,9 +1087,10 @@ export default function ReleasePage({
       if (_art) {
         setPlaybackArt(normalizePlaybackArt(_art));
       }
-      let resolvedArt = await resolvePlaybackArt(path);
-      if (resolvedArt) {
-        setPlaybackArt(resolvedArt);
+      let resolved = await resolveTrackSource(path);
+      if (resolved?.playback) {
+        setPlaybackArt(resolved.playback);
+        setTrackPhotocards(resolved.photocards);
       } else if (!_art && data) {
         setPlaybackArt({
           cover_url: data.cover_url,
@@ -889,6 +1099,7 @@ export default function ReleasePage({
           disc_url: data.disc_url,
           background_layers: data.background_layers,
         });
+        setTrackPhotocards(null);
       }
       const cachedCredits = getCachedTrackCredits(bandId, releaseId, title);
       if (cachedCredits) {
@@ -909,7 +1120,7 @@ export default function ReleasePage({
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [bandId, data, miniAudio, playingPath, releaseId, resolvePlaybackArt]
+    [bandId, data, miniAudio, playingPath, releaseId, resolveTrackSource]
   );
 
   const playAdjacentTrack = useCallback(
@@ -971,13 +1182,13 @@ export default function ReleasePage({
     const el = miniAudio.audioRef.current;
     if (!el) return;
     const onEnded = () => {
-      if (playingPath && tab === "tracklist") {
+      if (playingPath) {
         playAdjacentTrack("next");
       }
     };
     el.addEventListener("ended", onEnded);
     return () => el.removeEventListener("ended", onEnded);
-  }, [miniAudio.audioRef, playAdjacentTrack, playingPath, tab]);
+  }, [miniAudio.audioRef, playAdjacentTrack, playingPath]);
 
   useEffect(() => {
     if (!playingPath) return;
@@ -998,11 +1209,15 @@ export default function ReleasePage({
     }
   }, [tab]);
 
+  const tabletLayout = isTabletLayout(layout);
+
   const pageClass = [
     "release-page",
     stacked ? "release-page--stacked" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
+    tabletLayout ? "release-page--tablet" : "",
     layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
+    layout === "tablet-landscape" ? "release-page--tablet-landscape" : "",
     tab === "overview" ? "release-page--overview" : "",
     scrollBody ? "release-page--scroll" : "",
     tab === "tracklist" && stacked && mobileTrackView === "player"
@@ -1023,7 +1238,6 @@ export default function ReleasePage({
     .join(" ");
 
   const showTrackPanel =
-    tab === "tracklist" &&
     Boolean(nowPlayingTitle) &&
     (isPlaying || Boolean(versionSource));
   const panelFadedCover = displayCover ?? data?.cover_url ?? null;
@@ -1041,8 +1255,21 @@ export default function ReleasePage({
     tab === "tracklist" &&
     mobileTrackView === "player" &&
     !showTrackPanel;
-  const showPanelReleaseMeta = tab !== "tracklist" || showMobilePlayerMeta;
+  const showPanelReleaseMeta =
+    !showTrackPanel && (tab !== "tracklist" || showMobilePlayerMeta);
   const mountTracklist = tab === "tracklist" || Boolean(playingPath);
+  const cachedTracklist = getCachedReleaseTracklist(bandId, releaseId);
+  const cachedGallery = getCachedReleaseGallery(bandId, releaseId);
+  const showPageBody = Boolean(
+    data ||
+      (tab === "tracklist" && cachedTracklist) ||
+      (tab === "gallery" && (data || cachedGallery))
+  );
+  const tracklistMeta = {
+    releaseNavigateId: data?.navigate_release_id ?? releaseId,
+    artistName: data?.artist_name ?? cachedTracklist?.artist_name ?? "",
+    releaseTitle: data?.title ?? cachedTracklist?.title ?? "",
+  };
 
   const panelAside = data ? (
     <aside
@@ -1161,7 +1388,7 @@ export default function ReleasePage({
             )}
           </div>
 
-          {tab === "tracklist" && showTrackPanel && trackPanelMeta ? (
+          {showTrackPanel && trackPanelMeta ? (
               <div className="release-page__track-panel">
                 <h2 className="release-page__track-panel-title">
                   {trackPanelMeta.mainTitle}
@@ -1286,7 +1513,18 @@ export default function ReleasePage({
                   <p className="release-page__date">{data.display_date}</p>
                 )}
                 <p className="release-page__type-line">
-                  {data.release_type} by{" "}
+                  {data.category ? (
+                    <button
+                      type="button"
+                      className="release-page__type-link"
+                      onClick={() => onBrowseArtistAudio(bandId, data.category)}
+                    >
+                      {data.release_type}
+                    </button>
+                  ) : (
+                    data.release_type
+                  )}{" "}
+                  by{" "}
                   <button
                     type="button"
                     className="release-page__artist-link release-page__artist-link--inline"
@@ -1297,6 +1535,24 @@ export default function ReleasePage({
                 </p>
                 {data.source_artist && (
                   <p className="release-page__source">Source: {data.source_artist}</p>
+                )}
+                {data.taken_from && (
+                  <p className="release-page__track-panel-source">
+                    Taken from{data.taken_from.is_single ? " the " : " "}
+                    <button
+                      type="button"
+                      className="release-page__release-link"
+                      onClick={() =>
+                        onOpenRelease(
+                          data.taken_from!.navigate_band_id ?? bandId,
+                          data.taken_from!.navigate_release_id
+                        )
+                      }
+                    >
+                      {data.taken_from.album_title}
+                    </button>
+                    {data.taken_from.is_single ? " single" : ""}
+                  </p>
                 )}
               </div>
             </>
@@ -1539,6 +1795,7 @@ export default function ReleasePage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
+              artistThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
@@ -1590,7 +1847,7 @@ export default function ReleasePage({
           </nav>
         )}
 
-        {(stacked || mobileLandscape) && tab === "gallery" && galleryTabsMeta.length > 0 && (
+        {(stacked || mobileLandscape) && tab === "gallery" && galleryTabsMeta.length > 1 && (
           <nav className="release-page__subtabs" aria-label="Gallery sections">
             {galleryTabsMeta.map((t) => (
               <button
@@ -1598,7 +1855,6 @@ export default function ReleasePage({
                 type="button"
                 className={galleryTab === t.id ? "active" : ""}
                 onClick={() => setGalleryTab(t.id)}
-                disabled={t.count === 0}
               >
                 <span>{t.label}</span>
               </button>
@@ -1618,74 +1874,164 @@ export default function ReleasePage({
         </p>
       )}
 
-      {data && (
+      {showPageBody && (
         <div className="release-page__body">
           {panelAside}
 
           <main className="release-page__main">
-            {tab === "overview" && (
+            {tab === "overview" && data && (
               <div
                 className={[
                   "release-page__overview",
-                  data.singles.length === 0 ? "release-page__overview--no-singles" : "",
+                  isVaRelease ? "release-page__overview--va" : "",
+                  isVaRelease && vaOverviewNoSingles
+                    ? "release-page__overview--no-singles"
+                    : "",
+                  hasOverviewBottomSection ? "" : "release-page__overview--compact-lineup",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
                 <div className="release-page__overview-top" ref={overviewTopRef}>
-                  <div className="release-page__desc-block">
-                    <div
-                      className={`release-page__desc-scroll${
-                        stacked
-                          ? overviewDescExpanded
-                            ? " release-page__desc-scroll--expanded"
-                            : " release-page__desc-scroll--collapsed"
-                          : ""
-                      }`}
-                      ref={overviewDescRef}
-                    >
-                      {data.description ? (
-                        <>
-                          {data.description.split(/\n+/).map((p, i) => (
-                            <p key={i} className="release-page__desc-para">
-                              {p}
-                            </p>
-                          ))}
-                        </>
-                      ) : data.needs_metadata_fetch || data.needs_description_fetch ? (
-                        <p className="muted">Loading description…</p>
-                      ) : (
-                        <p className="muted">No description available.</p>
+                  {(data.description ||
+                    data.needs_metadata_fetch ||
+                    data.needs_description_fetch) && (
+                    <div className="release-page__desc-block">
+                      <div
+                        className={`release-page__desc-scroll${
+                          stacked
+                            ? overviewDescExpanded
+                              ? " release-page__desc-scroll--expanded"
+                              : " release-page__desc-scroll--collapsed"
+                            : ""
+                        }`}
+                        ref={overviewDescRef}
+                      >
+                        {data.description ? (
+                          <>
+                            {data.description.split(/\n+/).map((p, i) => (
+                              <p key={i} className="release-page__desc-para">
+                                {p}
+                              </p>
+                            ))}
+                          </>
+                        ) : data.needs_metadata_fetch ||
+                          data.needs_description_fetch ? (
+                          <p className="muted">Loading description…</p>
+                        ) : null}
+                      </div>
+                      {stacked && data.description && (
+                        <button
+                          type="button"
+                          className="release-page__desc-toggle"
+                          onClick={() => setOverviewDescExpanded((o) => !o)}
+                        >
+                          {overviewDescExpanded ? "Show less" : "Read more"}
+                        </button>
                       )}
                     </div>
-                    {stacked && data.description && (
-                      <button
-                        type="button"
-                        className="release-page__desc-toggle"
-                        onClick={() => setOverviewDescExpanded((o) => !o)}
-                      >
-                        {overviewDescExpanded ? "Show less" : "Read more"}
-                      </button>
-                    )}
-                  </div>
+                  )}
 
-                  {(data.photocards.portrait_front || data.photocards.landscape_front) && (
-                    <div className="release-page__photocards" ref={overviewPhotocardsRef}>
-                      <ReleasePhotocard
-                        variant="portrait"
-                        frontUrl={data.photocards.portrait_front}
-                        backUrl={data.photocards.portrait_back}
-                      />
-                      <ReleasePhotocard
-                        variant="landscape"
-                        frontUrl={data.photocards.landscape_front}
-                        backUrl={data.photocards.landscape_back}
-                      />
+                  {showOverviewSide && (
+                    <div className="release-page__overview-side">
+                      {showOverviewPhotocards &&
+                        (!isVaRelease || vaHasDescription) && (
+                        <div
+                          className={`release-page__photocards${
+                            photocardsCoverOnly
+                              ? " release-page__photocards--cover-only"
+                              : ""
+                          }`}
+                          ref={overviewPhotocardsRef}
+                        >
+                          <ReleasePhotocardGroup cards={overviewPhotocards} />
+                        </div>
+                      )}
+
                     </div>
                   )}
                 </div>
 
-                {data.show_lineup && data.lineup.length > 0 && (
+                {showVaPhotocardsInStack && showVaFeaturedArtists && (
+                  <div className="release-page__va-stack">
+                    <div
+                      className={`release-page__va-photocards-row release-page__va-photocards-row--inline${
+                        photocardsCoverOnly
+                          ? " release-page__va-photocards-row--cover-only"
+                          : ""
+                      }`}
+                      ref={overviewPhotocardsRef}
+                    >
+                      <ReleasePhotocardGroup cards={overviewPhotocards} />
+                    </div>
+
+                    <section className="release-page__section-glass release-page__lineup release-page__featured-artists release-page__va-panel">
+                      <div className="release-page__featured-artists-rows">
+                        <div
+                          className="release-page__featured-artists-grid"
+                          data-count={String(vaFeaturedRow1.length)}
+                        >
+                          {vaFeaturedRow1.map((artist) => (
+                            <FeaturedArtistCard
+                              key={artist.band_id ?? artist.name}
+                              artist={artist}
+                              onSelect={() => openFeaturedArtist(artist)}
+                            />
+                          ))}
+                        </div>
+                        {vaFeaturedRow2.length > 0 && (
+                          <div
+                            className="release-page__featured-artists-grid"
+                            data-count={String(vaFeaturedRow2.length)}
+                          >
+                            {vaFeaturedRow2.map((artist) => (
+                              <FeaturedArtistCard
+                                key={artist.band_id ?? artist.name}
+                                artist={artist}
+                                onSelect={() => openFeaturedArtist(artist)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {showVaFeaturedArtists && !showVaPhotocardsInStack && (
+                  <section className="release-page__section-glass release-page__lineup release-page__featured-artists release-page__va-panel">
+                    <div className="release-page__featured-artists-rows">
+                      <div
+                        className="release-page__featured-artists-grid"
+                        data-count={String(vaFeaturedRow1.length)}
+                      >
+                        {vaFeaturedRow1.map((artist) => (
+                          <FeaturedArtistCard
+                            key={artist.band_id ?? artist.name}
+                            artist={artist}
+                            onSelect={() => openFeaturedArtist(artist)}
+                          />
+                        ))}
+                      </div>
+                      {vaFeaturedRow2.length > 0 && (
+                        <div
+                          className="release-page__featured-artists-grid"
+                          data-count={String(vaFeaturedRow2.length)}
+                        >
+                          {vaFeaturedRow2.map((artist) => (
+                            <FeaturedArtistCard
+                              key={artist.band_id ?? artist.name}
+                              artist={artist}
+                              onSelect={() => openFeaturedArtist(artist)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {showOverviewLineup && showBandLineup && (
                   <section className="release-page__section-glass release-page__lineup">
                     <div className="release-page__lineup-grid">
                       {data.lineup.map((m) => (
@@ -1699,7 +2045,7 @@ export default function ReleasePage({
                   </section>
                 )}
 
-                {data.is_solo && data.lineup.length === 1 && (
+                {showOverviewLineup && showSoloLineup && (
                   <section className="release-page__section-glass release-page__lineup">
                     <div className="release-page__lineup-grid">
                       <LineupMiniCard
@@ -1741,10 +2087,41 @@ export default function ReleasePage({
                   </section>
                 )}
 
+                {(data.appears_on?.length ?? 0) > 0 && (
+                  <section className="release-page__section-glass release-page__singles release-page__appears-on">
+                    <div className="release-page__singles-grid">
+                      {data.appears_on!.map((s) => {
+                        const dateLabel = formatTrackDate(
+                          s.date_iso ?? s.display_date
+                        );
+                        const targetId = s.navigate_release_id ?? s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className="release-page__single"
+                            onClick={() => onOpenRelease(bandId, targetId)}
+                          >
+                            {s.cover_url && (
+                              <span className="release-page__single-cover">
+                                <img src={s.cover_url} alt="" draggable={false} />
+                              </span>
+                            )}
+                            <span className="release-page__single-title">{s.title}</span>
+                            {dateLabel && (
+                              <span className="release-page__single-date">{dateLabel}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
               </div>
             )}
 
-            {data && mountTracklist && (
+            {(data || cachedTracklist) && mountTracklist && (
               <div
                 className={
                   tab === "tracklist"
@@ -1756,10 +2133,11 @@ export default function ReleasePage({
                   ref={tracklistRef}
                   bandId={bandId}
                   releaseId={releaseId}
-                  releaseNavigateId={data.navigate_release_id}
-                  artistName={data.artist_name}
-                  releaseTitle={data.title}
+                  releaseNavigateId={tracklistMeta.releaseNavigateId}
+                  artistName={tracklistMeta.artistName}
+                  releaseTitle={tracklistMeta.releaseTitle}
                   stacked={stacked}
+                  compactLyricsHead={stacked || tabletPortrait}
                   playingPath={playingPath}
                   playbackProgress={tab === "tracklist" ? miniAudio.progress : 0}
                   mobileView={mobileTrackView}

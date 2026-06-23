@@ -1,7 +1,13 @@
 import type { CardOrientation, ReleaseOverview } from "./types";
 import { fetchReleaseOverview } from "./api";
+import {
+  readSessionEntry,
+  sessionCacheKey,
+  writeSessionEntry,
+} from "./sessionCache";
 
 const MAX_ENTRIES = 32;
+const NAMESPACE = "release-overview-v12";
 
 type CacheKey = `${number}:${string}:${CardOrientation}`;
 
@@ -16,12 +22,30 @@ function cacheKey(
   return `${bandId}:${releaseId}:${orientation}`;
 }
 
+function sessionKey(
+  bandId: number,
+  releaseId: string,
+  orientation: CardOrientation
+): string {
+  return sessionCacheKey(NAMESPACE, cacheKey(bandId, releaseId, orientation));
+}
+
 export function getCachedReleaseOverview(
   bandId: number,
   releaseId: string,
   orientation: CardOrientation = "landscape"
 ): ReleaseOverview | null {
-  return store.get(cacheKey(bandId, releaseId, orientation)) ?? null;
+  const key = cacheKey(bandId, releaseId, orientation);
+  const mem = store.get(key);
+  if (mem) return mem;
+  const fromSession = readSessionEntry<ReleaseOverview>(
+    sessionKey(bandId, releaseId, orientation)
+  );
+  if (fromSession) {
+    store.set(key, fromSession);
+    return fromSession;
+  }
+  return null;
 }
 
 export function setCachedReleaseOverview(
@@ -39,6 +63,7 @@ export function setCachedReleaseOverview(
     const oldest = store.keys().next().value;
     if (oldest) store.delete(oldest);
   }
+  writeSessionEntry(sessionKey(bandId, releaseId, orientation), data);
 }
 
 export function prefetchReleaseOverview(
@@ -47,7 +72,7 @@ export function prefetchReleaseOverview(
   orientation: CardOrientation = "landscape"
 ): Promise<ReleaseOverview> {
   const key = cacheKey(bandId, releaseId, orientation);
-  const cached = store.get(key);
+  const cached = getCachedReleaseOverview(bandId, releaseId, orientation);
   if (cached) return Promise.resolve(cached);
 
   const existing = inflight.get(key);

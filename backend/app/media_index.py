@@ -44,7 +44,7 @@ BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
 STANDARD_EDITION = "standard edition"
 VARIOUS_ARTISTS_DEFAULT_ID = 120
 
-AUDIO_INDEX_VERSION = 3
+AUDIO_INDEX_VERSION = 4
 
 CATEGORY_ORDER = list(AUDIO_CATEGORIES.keys())
 
@@ -104,6 +104,8 @@ def parse_bracket_tags(name: str) -> tuple[str, dict]:
         low = piece.casefold()
         if low == "unofficial":
             tags["unofficial"] = True
+        elif low == "box set":
+            tags["box_set"] = True
         elif low.startswith("by "):
             tags["source_artist"] = piece[3:].strip()
         elif low.startswith("with "):
@@ -111,6 +113,11 @@ def parse_bracket_tags(name: str) -> tuple[str, dict]:
         elif low.startswith("of "):
             tags["of_title"] = piece[3:].strip()
     return clean, tags
+
+
+def is_box_set_name(name: str) -> bool:
+    _, tags = parse_bracket_tags(name)
+    return bool(tags.get("box_set"))
 
 
 def release_id_from_path(rel_path: str) -> str:
@@ -466,6 +473,7 @@ def _build_release_card(
         "navigate_release_id": navigate_release_id,
         "source_band_id": source_band_id,
         "source_artist_name": source_artist_name,
+        "is_box_set": bool(tags.get("box_set")) if category_key == "compilations" else False,
     }
 
 
@@ -674,22 +682,33 @@ def invalidate_media_cache(band_id: int) -> None:
     invalidate_playlist_cache(band_id)
 
 
-def _audio_index_from_releases(releases: list[dict]) -> tuple[list[str], dict[str, bool]]:
+def _audio_index_from_releases(
+    releases: list[dict],
+) -> tuple[list[str], dict[str, bool], dict[str, bool], dict[str, bool]]:
     unofficial: dict[str, bool] = {}
+    box_sets: dict[str, bool] = {}
+    standard_compilations: dict[str, bool] = {}
     by_cat: dict[str, list[dict]] = {k: [] for k in CATEGORY_ORDER}
     for r in releases:
         by_cat.setdefault(r["category"], []).append(r)
         if not r.get("official"):
             unofficial[r["category"]] = True
+        if r.get("category") == "compilations":
+            if r.get("is_box_set"):
+                box_sets["compilations"] = True
+            else:
+                standard_compilations["compilations"] = True
     categories = [key for key in CATEGORY_ORDER if by_cat.get(key)]
-    return categories, unofficial
+    return categories, unofficial, box_sets, standard_compilations
 
 
 def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> dict:
     artist_dir = _artist_dir(media_root, band.bnd_name)
     mtime = _audio_mtime(artist_dir) if artist_dir else 0.0
     releases = scan_audio_releases(db, band, media_root)
-    categories, unofficial = _audio_index_from_releases(releases)
+    categories, unofficial, box_sets, standard_compilations = _audio_index_from_releases(
+        releases
+    )
     payload = {
         "band_id": band.bnd_id,
         "index_version": AUDIO_INDEX_VERSION,
@@ -698,6 +717,8 @@ def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> d
         "releases": releases,
         "categories": categories,
         "unofficial_by_category": unofficial,
+        "box_sets_by_category": box_sets,
+        "standard_compilations_by_category": standard_compilations,
     }
     try:
         _cache_path(band.bnd_id).write_text(json.dumps(payload), encoding="utf-8")
@@ -707,6 +728,8 @@ def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> d
         "releases": releases,
         "categories": categories,
         "unofficial_by_category": unofficial,
+        "box_sets_by_category": box_sets,
+        "standard_compilations_by_category": standard_compilations,
         "scanned_at": payload["scanned_at"],
         "cached": False,
         "stale": False,
@@ -714,16 +737,28 @@ def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> d
 
 
 def _cached_audio_response(cached: dict, *, stale: bool) -> dict:
+    releases = cached.get("releases") or []
     unofficial = cached.get("unofficial_by_category")
-    if unofficial is None:
+    box_sets = cached.get("box_sets_by_category")
+    standard_compilations = cached.get("standard_compilations_by_category")
+    if unofficial is None or box_sets is None or standard_compilations is None:
         unofficial = {}
-        for r in cached.get("releases") or []:
+        box_sets = {}
+        standard_compilations = {}
+        for r in releases:
             if not r.get("official"):
                 unofficial[r["category"]] = True
+            if r.get("category") == "compilations":
+                if r.get("is_box_set"):
+                    box_sets["compilations"] = True
+                else:
+                    standard_compilations["compilations"] = True
     return {
-        "releases": cached.get("releases") or [],
+        "releases": releases,
         "categories": cached.get("categories") or [],
         "unofficial_by_category": unofficial,
+        "box_sets_by_category": box_sets,
+        "standard_compilations_by_category": standard_compilations,
         "scanned_at": cached.get("scanned_at"),
         "cached": True,
         "stale": stale,
@@ -752,6 +787,8 @@ def get_audio_index(
             "releases": [],
             "categories": [],
             "unofficial_by_category": {},
+            "box_sets_by_category": {},
+            "standard_compilations_by_category": {},
             "scanned_at": None,
             "cached": False,
             "stale": False,
@@ -763,6 +800,8 @@ def get_audio_index(
             "releases": [],
             "categories": [],
             "unofficial_by_category": {},
+            "box_sets_by_category": {},
+            "standard_compilations_by_category": {},
             "scanned_at": None,
             "cached": False,
             "stale": False,
