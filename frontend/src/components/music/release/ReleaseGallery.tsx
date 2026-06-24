@@ -192,6 +192,10 @@ export default function ReleaseGallery({
     return <p className="muted release-gallery__empty">No gallery items found.</p>;
   }
 
+  if (visibleTabs.length === 0) {
+    return <p className="muted release-gallery__empty">No gallery items found.</p>;
+  }
+
   const activeArtworkResolved =
     playingPath && playingArtwork && playingArtwork.length > 0
       ? playingArtwork

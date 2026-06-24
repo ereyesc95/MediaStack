@@ -9,23 +9,42 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.band_library import (
+    AUDIO_CATEGORIES,
     AUDIO_EXTS,
     DATE_PREFIX_RE,
     TRACK_PREFIX_RE,
     _album_title_from_folder,
+    _audio_root,
+    _find_audio_by_title,
     _parse_folder_date,
+    _resolve_child_dir,
     display_track_title_from_path,
     _track_title_from_filename,
 )
 from app.config import settings
-from app.media_index import DISC_DIR_RE, _disc_sort_key, _is_edition_folder, _is_edition_content_dir, _is_group_subdir_name, format_display_date, parse_bracket_tags, release_id_from_path
+from app.media_index import (
+    DISC_DIR_RE,
+    _disc_sort_key,
+    _find_release_under_artist,
+    _is_edition_dir,
+    _is_edition_folder,
+    _is_edition_content_dir,
+    _is_group_subdir_name,
+    _release_dir_from_content_folder,
+    format_display_date,
+    get_audio_index,
+    is_box_set_name,
+    parse_bracket_tags,
+    release_id_from_path,
+)
 from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
-from app.models import Track
-from app.gallery import IMAGE_EXTS, _media_url
+from app.models import Band, Track
+from app.gallery import IMAGE_EXTS, _artist_dir, _media_url
 from app.release_overview import (
     _artwork_urls,
     _find_artwork_subdir,
     _find_singles_parent_folder,
+    _normalize_release_match,
     _resolve_standard_edition,
     _singles_category_dir,
     _single_title_from_folder,
@@ -46,6 +65,14 @@ DISC_LOOSE_RE = re.compile(r"^Disc\s+(\d+)", re.I)
 SIDE_LOOSE_RE = re.compile(r"^Side\s+[A-Z]\b", re.I)
 TAPE_LOOSE_RE = re.compile(r"^Tape\s+[A-Z]\b", re.I)
 CASSETTE_LOOSE_RE = re.compile(r"^Cassette\s+[A-Z]\b", re.I)
+BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
+LNK_LOOKUP_CATEGORIES = (
+    "albums",
+    "extended_plays",
+    "singles",
+    "compilations",
+    "live_albums",
+)
 
 
 def _group_sort_key(folder: Path) -> tuple[int, str]:
@@ -350,6 +377,7 @@ def _build_track(
         "has_lrc": False,
         "has_synced_lrc": False,
         "is_link": False,
+        "is_exclusive": False,
         "cover_url": art.get("cover_url"),
         "cover_animation_url": art.get("cover_animation_url"),
         "canvas_url": art.get("canvas_url"),
@@ -501,13 +529,554 @@ def _edition_label(folder: Path) -> str:
     return name
 
 
+def _content_has_top_lnks(content: Path) -> bool:
+    return any(c.suffix.casefold() == ".lnk" for c in content.iterdir())
+
+
+def _edition_hint_from_bracket(raw: str) -> str | None:
+    low = raw.casefold().strip()
+    if low in ("box set", "unofficial"):
+        return None
+    if low.startswith("by ") or low.startswith("with ") or low.startswith("of "):
+        return None
+    if "cover" in low and "edition" not in low:
+        return None
+    if re.search(r"\bedition\b|\bstandard\b|\bdeluxe\b|\blimited\b|\bremaster\b", low):
+        return raw.strip()
+    return None
+
+
+def _parse_lnk_track_lookup_title(lnk_stem: str) -> str:
+    name = lnk_stem.strip()
+    rest = TRACK_PREFIX_RE.sub("", name).strip()
+    bm = BRACKET_SUFFIX_RE.search(rest)
+    if bm:
+        rest = rest[: bm.start()].strip()
+    return rest.strip() or name
+
+
+def _audio_files_under_release(release_dir: Path) -> list[Path]:
+    files: list[Path] = []
+    if not release_dir.is_dir():
+        return files
+    for path in release_dir.rglob("*"):
+        if _is_audio_file(path):
+            files.append(path)
+    return files
+
+
+def _find_track_audio_by_title(
+    db: Session,
+    band_id: int,
+    media_root: Path,
+    track_title: str,
+) -> Path | None:
+    if not track_title.strip():
+        return None
+    band = db.get(Band, band_id)
+    if not band:
+        return None
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return None
+    audio_root = _audio_root(artist_dir)
+    if not audio_root.is_dir():
+        return None
+
+    for cat_key in LNK_LOOKUP_CATEGORIES:
+        folder_name = AUDIO_CATEGORIES.get(cat_key)
+        if not folder_name:
+            continue
+        cat_dir = _resolve_child_dir(audio_root, folder_name)
+        if not cat_dir.is_dir():
+            continue
+        for release_dir in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold()):
+            if not release_dir.is_dir():
+                continue
+            matched = _find_audio_by_title(
+                _audio_files_under_release(release_dir), track_title
+            )
+            if matched:
+                return matched
+
+    from app.band_library import _collect_audio_files
+
+    return _find_audio_by_title(_collect_audio_files(artist_dir), track_title)
+
+
+def _is_standard_edition_label(label: str) -> bool:
+    low = label.casefold().strip()
+    return low in ("standard edition", "standard")
+
+
+def _source_album_display(release_dir: Path, edition_dir: Path) -> tuple[str, str, str | None]:
+    release_title = _album_title_from_folder(entry_display_name(release_dir))
+    edition_core = _edition_label_core(edition_dir)
+    if edition_dir.resolve() == release_dir.resolve():
+        return release_title, release_title, None
+    if edition_core.casefold() == release_title.casefold():
+        return release_title, release_title, None
+    if _is_standard_edition_label(edition_core):
+        return release_title, release_title, edition_core
+    return f"{release_title}: {edition_core}", release_title, edition_core
+
+
+def _source_metadata_from_audio(
+    band_id: int,
+    media_root: Path,
+    audio_file: Path,
+) -> dict:
+    edition_dir = audio_file.parent
+    release_dir = _release_dir_from_content_folder(edition_dir)
+    if _is_edition_dir(edition_dir):
+        album_display, release_title, edition_title = _source_album_display(
+            release_dir, edition_dir
+        )
+    else:
+        album_display, release_title, edition_title = _source_album_display(
+            release_dir, release_dir
+        )
+    release_rel = safe_relative(release_dir, media_root)
+    navigate_id = release_id_from_path(release_rel) if release_rel else ""
+    date_iso = _parse_folder_date(release_dir.name) or _parse_folder_date(edition_dir.name)
+    return {
+        "source_album_title": album_display,
+        "source_release_title": release_title,
+        "source_edition_title": edition_title,
+        "navigate_release_id": navigate_id,
+        "navigate_band_id": band_id,
+        "source_date_iso": date_iso,
+        "source_display_date": format_display_date(date_iso),
+    }
+
+
+def _build_link_track(
+    *,
+    lnk_stem: str,
+    audio_file: Path,
+    media_root: Path,
+    band_name: str,
+    band_id: int,
+    db_durations: dict[str, float],
+    index: int,
+) -> dict | None:
+    edition_dir = audio_file.parent
+    release_dir = _release_dir_from_content_folder(edition_dir)
+    source_meta = _source_metadata_from_audio(band_id, media_root, audio_file)
+    source_ctx = PlaybackArtContext(
+        release_content=release_dir,
+        release_title=source_meta["source_release_title"],
+        band_name=band_name,
+    )
+    track = _build_track(
+        audio_file,
+        media_root,
+        db_durations=db_durations,
+        index=index,
+        art_ctx=source_ctx,
+    )
+    if not track:
+        return None
+    track["is_link"] = True
+    track.update(source_meta)
+    return track
+
+
+def _resolve_lnk_audio_file(
+    db: Session,
+    band_id: int,
+    media_root: Path,
+    lnk: Path,
+    lnk_stem: str,
+) -> Path | None:
+    target = resolve_media_entry(lnk)
+    if target and _is_audio_file(target):
+        return target
+    track_title = _parse_lnk_track_lookup_title(lnk_stem)
+    return _find_track_audio_by_title(db, band_id, media_root, track_title)
+
+
+def _single_track_link_edition(
+    *,
+    lnk_stem: str,
+    section_label: str,
+    audio_file: Path,
+    media_root: Path,
+    band_name: str,
+    band_id: int,
+    db_durations: dict[str, float],
+) -> dict | None:
+    edition_dir = audio_file.parent
+    edition_artwork = _find_artwork_subdir(edition_dir) or _find_artwork_subdir(
+        _release_dir_from_content_folder(edition_dir)
+    )
+    urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+    track = _build_link_track(
+        lnk_stem=lnk_stem,
+        audio_file=audio_file,
+        media_root=media_root,
+        band_name=band_name,
+        band_id=band_id,
+        db_durations=db_durations,
+        index=_track_number(lnk_stem, 1),
+    )
+    if not track:
+        return None
+    bg_layers = [
+        u
+        for u in (
+            urls.get("cover_inner_url"),
+            urls.get("cover_back_url"),
+            urls.get("cover_front_url"),
+        )
+        if u
+    ]
+    return {
+        "id": _edition_id(lnk_stem),
+        "label": section_label,
+        "kind": "link",
+        "date_iso": track.get("source_date_iso"),
+        "display_date": track.get("source_display_date"),
+        "is_link": True,
+        "unresolved": False,
+        "cover_url": urls.get("cover_front_url"),
+        "cover_animation_url": urls.get("cover_animation_url"),
+        "canvas_url": urls.get("canvas_url"),
+        "disc_url": urls.get("disc_url"),
+        "background_layers": bg_layers,
+        "groups": [
+            {
+                "id": _edition_id(f"{lnk_stem}:flat"),
+                "kind": "flat",
+                "label": None,
+                "tracks": [track],
+            }
+        ],
+    }
+
+
+def _parse_lnk_label(lnk_stem: str) -> tuple[str, str | None, str]:
+    name = lnk_stem.strip()
+    m = TRACK_PREFIX_RE.match(name)
+    order_prefix = name[: m.end()] if m else ""
+    rest = name[m.end() :].strip() if m else name
+    bm = BRACKET_SUFFIX_RE.search(rest)
+    edition_hint: str | None = None
+    main = rest
+    if bm:
+        main = rest[: bm.start()].strip()
+        edition_hint = _edition_hint_from_bracket(bm.group(1))
+    release_title = _album_title_from_folder(main)
+    if edition_hint:
+        section_label = f"{order_prefix}{main}: {edition_hint}"
+    else:
+        section_label = f"{order_prefix}{main}" if order_prefix else main
+    return section_label, edition_hint, release_title
+
+
+def _edition_label_core(folder: Path) -> str:
+    label = _edition_label(folder)
+    m = DATE_PREFIX_RE.match(label.strip())
+    if m:
+        return label[m.end() :].lstrip(". ").strip()
+    clean, _ = parse_bracket_tags(label)
+    return clean
+
+
+def _resolve_named_edition(release_content: Path, edition_hint: str | None) -> Path | None:
+    if not release_content.is_dir():
+        return None
+    if not edition_hint or edition_hint.casefold() in ("standard edition", "standard"):
+        return _resolve_standard_edition(release_content)
+    hint = edition_hint.casefold()
+    matches: list[Path] = []
+    for child in sorted(release_content.iterdir(), key=lambda p: p.name.casefold()):
+        if not child.is_dir() or child.name.casefold() == ARTWORK_DIR:
+            continue
+        if not (
+            _is_edition_content_dir(child)
+            or DATE_PREFIX_RE.match(entry_display_name(child).strip())
+        ):
+            continue
+        core = _edition_label_core(child).casefold()
+        if hint in core or core.endswith(hint) or hint in child.name.casefold():
+            matches.append(child)
+    if matches:
+        return matches[0]
+    return None
+
+
+def _find_release_content_by_title(
+    db: Session,
+    band_id: int,
+    media_root: Path,
+    title: str,
+) -> Path | None:
+    target = _normalize_release_match(title)
+    if not target:
+        return None
+    band = db.get(Band, band_id)
+    if not band:
+        return None
+    index = get_audio_index(db, band, force=False)
+    matches: list[tuple[int, dict]] = []
+    for row in index.get("releases") or []:
+        cat = row.get("category") or ""
+        if cat not in LNK_LOOKUP_CATEGORIES:
+            continue
+        if _normalize_release_match(row.get("title") or "") != target:
+            continue
+        matches.append((LNK_LOOKUP_CATEGORIES.index(cat), row))
+    if matches:
+        matches.sort(key=lambda x: x[0])
+        card = matches[0][1]
+        rid = card.get("navigate_release_id") or card.get("id")
+        nav_band = card.get("navigate_band_id") or band_id
+        resolved = resolve_release_content(db, nav_band, rid)
+        if resolved:
+            return resolved[3]
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if artist_dir:
+        found = _find_release_under_artist(artist_dir, title, media_root=media_root)
+        if found and found.is_dir():
+            return found
+    return None
+
+
+def _build_flat_compilation_edition(
+    db: Session,
+    band: Band,
+    band_id: int,
+    content: Path,
+    media_root: Path,
+    *,
+    db_durations: dict[str, float],
+    art_ctx: PlaybackArtContext,
+) -> dict | None:
+    """One ordered tracklist from top-level audio + track .lnk files (non-box-set compilations)."""
+    tracks: list[dict] = []
+    rel = safe_relative(content, media_root) or content.name
+    edition_artwork = _find_artwork_subdir(content)
+    urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+    index = 0
+
+    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
+        if child.name.casefold() == ARTWORK_DIR or child.is_dir():
+            continue
+        if _is_audio_file(child):
+            index += 1
+            track = _build_track(
+                child,
+                media_root,
+                db_durations=db_durations,
+                index=index,
+                art_ctx=art_ctx,
+            )
+            if track:
+                tracks.append(track)
+            continue
+        if child.suffix.casefold() != ".lnk":
+            continue
+        lnk_stem = entry_display_name(child)
+        audio_file = _resolve_lnk_audio_file(db, band_id, media_root, child, lnk_stem)
+        if not audio_file:
+            continue
+        index += 1
+        track = _build_link_track(
+            lnk_stem=lnk_stem,
+            audio_file=audio_file,
+            media_root=media_root,
+            band_name=band.bnd_name,
+            band_id=band_id,
+            db_durations=db_durations,
+            index=index,
+        )
+        if track:
+            tracks.append(track)
+
+    link_count = sum(1 for t in tracks if t.get("is_link"))
+    local_count = len(tracks) - link_count
+    mark_exclusive = link_count > local_count and local_count > 0
+    for track in tracks:
+        track["is_exclusive"] = bool(mark_exclusive and not track.get("is_link"))
+
+    for i, track in enumerate(tracks, 1):
+        track["number"] = i
+
+    if not tracks:
+        return None
+
+    bg_layers = [
+        u
+        for u in (
+            urls.get("cover_inner_url"),
+            urls.get("cover_back_url"),
+            urls.get("cover_front_url"),
+        )
+        if u
+    ]
+    return {
+        "id": _edition_id(rel),
+        "label": _edition_label(content),
+        "kind": "edition",
+        "date_iso": _parse_folder_date(content.name),
+        "display_date": format_display_date(_parse_folder_date(content.name)),
+        "cover_url": urls.get("cover_front_url"),
+        "cover_animation_url": urls.get("cover_animation_url"),
+        "canvas_url": urls.get("canvas_url"),
+        "disc_url": urls.get("disc_url"),
+        "background_layers": bg_layers,
+        "groups": [
+            {
+                "id": _edition_id(f"{rel}:flat"),
+                "kind": "flat",
+                "label": None,
+                "tracks": tracks,
+            }
+        ],
+    }
+
+
+def _is_flat_compilation(content: Path, category: str | None) -> bool:
+    if category != "compilations":
+        return False
+    if is_box_set_name(entry_display_name(content)):
+        return False
+    return _content_has_top_lnks(content)
+
+
+def _append_lnk_editions(
+    db: Session,
+    band: Band,
+    band_id: int,
+    content: Path,
+    media_root: Path,
+    *,
+    db_durations: dict[str, float],
+    art_ctx: PlaybackArtContext,
+    editions_out: list[dict],
+) -> None:
+    content_name = entry_display_name(content)
+    is_box_set = is_box_set_name(content_name)
+    if not is_box_set:
+        return
+
+    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
+        if child.suffix.casefold() != ".lnk":
+            continue
+        lnk_stem = entry_display_name(child)
+        section_label, edition_hint, lookup_title = _parse_lnk_label(lnk_stem)
+        target = resolve_media_entry(child)
+        groups: list[dict] = []
+        urls: dict[str, str | None] = {}
+        edition_dir: Path | None = None
+
+        if target and _is_audio_file(target):
+            edition = _single_track_link_edition(
+                lnk_stem=lnk_stem,
+                section_label=section_label,
+                audio_file=target,
+                media_root=media_root,
+                band_name=band.bnd_name,
+                band_id=band_id,
+                db_durations=db_durations,
+            )
+            if edition:
+                editions_out.append(edition)
+            else:
+                editions_out.append(
+                    {
+                        "id": _edition_id(lnk_stem),
+                        "label": section_label,
+                        "kind": "link",
+                        "date_iso": None,
+                        "is_link": True,
+                        "unresolved": True,
+                        "groups": [],
+                    }
+                )
+            continue
+
+        if is_box_set:
+            release_content = (
+                target
+                if target and target.is_dir()
+                else _find_release_content_by_title(
+                    db, band_id, media_root, lookup_title
+                )
+            )
+            edition_dir = (
+                _resolve_named_edition(release_content, edition_hint)
+                if release_content
+                else None
+            )
+            if edition_dir and release_content:
+                edition_artwork = _find_artwork_subdir(edition_dir)
+                urls = (
+                    _artwork_urls(edition_artwork, media_root)
+                    if edition_artwork
+                    else {}
+                )
+                source_ctx = PlaybackArtContext(
+                    release_content=release_content,
+                    release_title=_album_title_from_folder(
+                        entry_display_name(release_content)
+                    ),
+                    band_name=band.bnd_name,
+                )
+                scanned = _scan_resolved_folder(
+                    edition_dir,
+                    media_root,
+                    db_durations=db_durations,
+                    label=section_label,
+                    kind="link",
+                    edition_artwork=edition_artwork,
+                    art_ctx=source_ctx,
+                )
+                groups = _dedupe_tracks(scanned.get("groups") or [])
+                album_display, _, _ = _source_album_display(release_content, edition_dir)
+                release_rel = safe_relative(release_content, media_root)
+                navigate_id = release_id_from_path(release_rel) if release_rel else ""
+                date_iso = _parse_folder_date(release_content.name)
+                for group in groups:
+                    for track in group.get("tracks") or []:
+                        track["is_link"] = True
+                        track["source_album_title"] = album_display
+                        track["navigate_release_id"] = navigate_id
+                        track["navigate_band_id"] = band_id
+                        track["source_date_iso"] = date_iso
+                        track["source_display_date"] = format_display_date(date_iso)
+        bg_layers = [
+            u
+            for u in (
+                urls.get("cover_inner_url"),
+                urls.get("cover_back_url"),
+                urls.get("cover_front_url"),
+            )
+            if u
+        ]
+        editions_out.append(
+            {
+                "id": _edition_id(lnk_stem),
+                "label": section_label,
+                "kind": "link",
+                "date_iso": None,
+                "is_link": True,
+                "unresolved": edition_dir is None,
+                "cover_url": urls.get("cover_front_url"),
+                "cover_animation_url": urls.get("cover_animation_url"),
+                "canvas_url": urls.get("canvas_url"),
+                "disc_url": urls.get("disc_url"),
+                "background_layers": bg_layers,
+                "groups": groups,
+            }
+        )
+
+
 def _list_edition_dirs(content: Path) -> list[Path]:
     editions: list[Path] = []
     for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
         if child.suffix.casefold() == ".lnk":
-            resolved = resolve_media_entry(child)
-            if resolved and resolved.is_dir():
-                editions.append(resolved)
             continue
         if not child.is_dir() or child.name.casefold() == ARTWORK_DIR:
             continue
@@ -757,48 +1326,65 @@ def build_release_tracklist(
     )
 
     editions_out: list[dict] = []
-    edition_dirs = _list_edition_dirs(content)
+    category = card.get("category") or ""
+    flat_compilation = _is_flat_compilation(content, category)
 
-    for edition_dir in edition_dirs:
-        rel = safe_relative(edition_dir, media_root) or edition_dir.name
-        label = _edition_label(edition_dir)
-        edition_artwork = _find_artwork_subdir(edition_dir)
-        urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
-        scanned = _scan_resolved_folder(
-            edition_dir,
+    if flat_compilation:
+        flat = _build_flat_compilation_edition(
+            db,
+            band,
+            band_id,
+            content,
             media_root,
             db_durations=db_durations,
-            label=label,
-            kind="edition",
-            edition_artwork=edition_artwork,
             art_ctx=art_ctx,
         )
-        groups = _dedupe_tracks(scanned.get("groups") or [])
-        if groups:
-            bg_layers = [
-                u
-                for u in (
-                    urls.get("cover_inner_url"),
-                    urls.get("cover_back_url"),
-                    urls.get("cover_front_url"),
-                )
-                if u
-            ]
-            editions_out.append(
-                {
-                    "id": _edition_id(rel),
-                    "label": label,
-                    "kind": "edition",
-                    "date_iso": _parse_folder_date(edition_dir.name),
-                    "display_date": format_display_date(_parse_folder_date(edition_dir.name)),
-                    "cover_url": urls.get("cover_front_url"),
-                    "cover_animation_url": urls.get("cover_animation_url"),
-                    "canvas_url": urls.get("canvas_url"),
-                    "disc_url": urls.get("disc_url"),
-                    "background_layers": bg_layers,
-                    "groups": groups,
-                }
+        if flat:
+            editions_out.append(flat)
+    else:
+        edition_dirs = _list_edition_dirs(content)
+        for edition_dir in edition_dirs:
+            rel = safe_relative(edition_dir, media_root) or edition_dir.name
+            label = _edition_label(edition_dir)
+            edition_artwork = _find_artwork_subdir(edition_dir)
+            urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+            scanned = _scan_resolved_folder(
+                edition_dir,
+                media_root,
+                db_durations=db_durations,
+                label=label,
+                kind="edition",
+                edition_artwork=edition_artwork,
+                art_ctx=art_ctx,
             )
+            groups = _dedupe_tracks(scanned.get("groups") or [])
+            if groups:
+                bg_layers = [
+                    u
+                    for u in (
+                        urls.get("cover_inner_url"),
+                        urls.get("cover_back_url"),
+                        urls.get("cover_front_url"),
+                    )
+                    if u
+                ]
+                editions_out.append(
+                    {
+                        "id": _edition_id(rel),
+                        "label": label,
+                        "kind": "edition",
+                        "date_iso": _parse_folder_date(edition_dir.name),
+                        "display_date": format_display_date(
+                            _parse_folder_date(edition_dir.name)
+                        ),
+                        "cover_url": urls.get("cover_front_url"),
+                        "cover_animation_url": urls.get("cover_animation_url"),
+                        "canvas_url": urls.get("canvas_url"),
+                        "disc_url": urls.get("disc_url"),
+                        "background_layers": bg_layers,
+                        "groups": groups,
+                    }
+                )
 
     _append_bside_groups(
         db,
@@ -810,25 +1396,17 @@ def build_release_tracklist(
         editions_out=editions_out,
     )
 
-    for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
-        if child.suffix.casefold() != ".lnk":
-            continue
-        lnk_group = _scan_lnk_group(child, media_root, db_durations=db_durations)
-        if not lnk_group:
-            continue
-        groups = _dedupe_tracks(lnk_group.get("groups") or [])
-        if groups:
-            lnk_name = entry_display_name(child)
-            lnk_label, _ = parse_bracket_tags(lnk_name)
-            editions_out.append(
-                {
-                    "id": _edition_id(lnk_name),
-                    "label": lnk_label,
-                    "date_iso": None,
-                    "groups": groups,
-                    "is_link": True,
-                }
-            )
+    if _content_has_top_lnks(content) and not flat_compilation:
+        _append_lnk_editions(
+            db,
+            band,
+            band_id,
+            content,
+            media_root,
+            db_durations=db_durations,
+            art_ctx=art_ctx,
+            editions_out=editions_out,
+        )
 
     if not editions_out:
         return None

@@ -196,6 +196,7 @@ export default function ArtistPage({
   );
   const [error, setError] = useState<string | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
+  const [repeatOne, setRepeatOne] = useState(false);
   const [playerHost, setPlayerHost] = useState<HTMLDivElement | null>(null);
   const [playerBarHidden, setPlayerBarHidden] = useState(false);
   const playerFallbackRef = useRef<HTMLDivElement>(null);
@@ -605,6 +606,11 @@ export default function ArtistPage({
       }
     };
     const onEnded = () => {
+      if (repeatOne && playingPath) {
+        el.currentTime = 0;
+        void el.play().catch(() => {});
+        return;
+      }
       setPlaybackPlaying(false);
       endPlaybackThemeSession(userId);
       setPlayingPath(null);
@@ -617,7 +623,7 @@ export default function ArtistPage({
       el.removeEventListener("play", onPlay);
       el.removeEventListener("ended", onEnded);
     };
-  }, [audioRef, audioSrc, playingPath, playableTracks, userId]);
+  }, [audioRef, audioSrc, playingPath, playableTracks, userId, repeatOne]);
 
   const onAboutTab = section === "overview" && overviewTab === "about";
   const embedPlayerInAbout =
@@ -1103,6 +1109,8 @@ export default function ArtistPage({
                 seek={seek}
                 onPrev={() => stepTrack(-1)}
                 onNext={() => stepTrack(1)}
+                repeatOne={repeatOne}
+                onRepeatToggle={() => setRepeatOne((r) => !r)}
               />
               <button
                 type="button"
@@ -1123,6 +1131,8 @@ export default function ArtistPage({
               seek={seek}
               onPrev={() => stepTrack(-1)}
               onNext={() => stepTrack(1)}
+              repeatOne={repeatOne}
+              onRepeatToggle={() => setRepeatOne((r) => !r)}
             />
           ),
           playerPortalTarget

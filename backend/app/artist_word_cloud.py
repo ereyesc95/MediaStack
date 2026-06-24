@@ -1,18 +1,22 @@
 """Lyrics word cloud for artist About tab."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.band_library import _collect_audio_files, match_top_tracks
 from app.config import settings
 from app.gallery import _artist_dir
-from app.models import Band
+from app.models import Band, TrackOverride
 from app.services.lyrics import LYRICS_CACHE_DIR, _read_lrc_file, _strip_lrc_tags
+
+WORD_CLOUD_TERM_LIMIT = 50
 
 WORD_RE = re.compile(r"[a-z0-9']{2,}", re.IGNORECASE)
 LRC_TAG_RE = re.compile(r"\[[^\]]+\]")
@@ -71,27 +75,15 @@ def _lyrics_from_cache_file(path: Path) -> str | None:
     return lyrics or None
 
 
-def _collect_cached_lyrics(artist_name: str) -> list[str]:
-    if not LYRICS_CACHE_DIR.is_dir():
-        return []
-    needle = artist_name.casefold()
-    texts: list[str] = []
-    for path in LYRICS_CACHE_DIR.glob("*.json"):
-        text = _lyrics_from_cache_file(path)
-        if not text:
-            continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if (data.get("artist") or "").casefold() == needle:
-                texts.append(text)
-        except (json.JSONDecodeError, OSError):
-            continue
-    return texts
-
-
-def _collect_lrc_lyrics(artist_dir: Path, media_root: Path) -> list[str]:
-    texts: list[str] = []
-    seen: set[str] = set()
+def _collect_lrc_lyrics(
+    artist_dir: Path,
+    media_root: Path,
+    *,
+    db: Session | None = None,
+    seen_paths: set[str] | None = None,
+) -> list[tuple[str, str]]:
+    texts: list[tuple[str, str]] = []
+    seen = seen_paths if seen_paths is not None else set()
     for audio in _collect_audio_files(artist_dir):
         try:
             play_path = audio.relative_to(media_root).as_posix()
@@ -99,7 +91,7 @@ def _collect_lrc_lyrics(artist_dir: Path, media_root: Path) -> list[str]:
             continue
         if play_path in seen:
             continue
-        lrc = _read_lrc_file(play_path)
+        lrc = _read_lrc_file(play_path, db=db)
         if not lrc and audio.with_suffix(".lrc").is_file():
             try:
                 raw = audio.with_suffix(".lrc").read_text(encoding="utf-8", errors="replace")
@@ -108,7 +100,94 @@ def _collect_lrc_lyrics(artist_dir: Path, media_root: Path) -> list[str]:
                 lrc = None
         if lrc:
             seen.add(play_path)
-            texts.append(lrc)
+            texts.append((play_path, lrc))
+    return texts
+
+
+def _lyrics_text_from_override(row: TrackOverride) -> str | None:
+    lrc = (row.tro_lyrics_lrc or "").strip()
+    if lrc:
+        text = _strip_lrc_tags(lrc).strip()
+        if text:
+            return text
+    plain = (row.tro_lyrics_plain or "").strip()
+    return plain or None
+
+
+def _artist_path_prefix(band: Band, media_root: Path) -> str | None:
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return None
+    try:
+        rel = artist_dir.relative_to(media_root).as_posix().casefold()
+    except ValueError:
+        return None
+    return f"{rel}/" if rel else None
+
+
+def _collect_override_lyrics(
+    db: Session,
+    band: Band,
+    media_root: Path | None,
+) -> list[tuple[str, str]]:
+    band_id = band.bnd_id
+    rows: dict[str, TrackOverride] = {}
+    for row in db.scalars(
+        select(TrackOverride).where(TrackOverride.tro_band_id == band_id)
+    ).all():
+        path = (row.tro_play_path or "").strip()
+        if path:
+            rows[path.casefold()] = row
+
+    if media_root:
+        prefix = _artist_path_prefix(band, media_root)
+        if prefix:
+            for row in db.scalars(
+                select(TrackOverride).where(TrackOverride.tro_band_id.is_(None))
+            ).all():
+                path = (row.tro_play_path or "").strip()
+                if not path:
+                    continue
+                key = path.casefold()
+                if key in rows:
+                    continue
+                if path.casefold().startswith(prefix):
+                    rows[key] = row
+
+    out: list[tuple[str, str]] = []
+    for row in rows.values():
+        path = (row.tro_play_path or "").strip()
+        text = _lyrics_text_from_override(row)
+        if path and text:
+            out.append((path, text))
+    return out
+
+
+def _collect_cached_lyrics(
+    artist_name: str,
+    *,
+    seen_text_hashes: set[str] | None = None,
+) -> list[str]:
+    if not LYRICS_CACHE_DIR.is_dir():
+        return []
+    needle = artist_name.casefold()
+    seen = seen_text_hashes if seen_text_hashes is not None else set()
+    texts: list[str] = []
+    for path in LYRICS_CACHE_DIR.glob("*.json"):
+        text = _lyrics_from_cache_file(path)
+        if not text:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if (data.get("artist") or "").casefold() != needle:
+                continue
+        except (json.JSONDecodeError, OSError):
+            continue
+        digest = hashlib.sha256(text.casefold().encode("utf-8")).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        texts.append(text)
     return texts
 
 
@@ -116,23 +195,42 @@ def build_word_cloud(
     db: Session,
     band: Band,
     *,
-    limit: int = 48,
+    limit: int = WORD_CLOUD_TERM_LIMIT,
 ) -> dict:
     artist_name = (band.bnd_name or "").strip()
+    seen_paths: set[str] = set()
+    seen_text_hashes: set[str] = set()
     texts: list[str] = []
     sources = 0
 
-    cached_texts = _collect_cached_lyrics(artist_name)
-    texts.extend(cached_texts)
-    sources += len(cached_texts)
+    media_root = Path(settings.media_root) if settings.media_root else None
 
-    if settings.media_root:
-        media_root = Path(settings.media_root)
+    for play_path, text in _collect_override_lyrics(db, band, media_root):
+        key = play_path.casefold()
+        if key in seen_paths:
+            continue
+        seen_paths.add(key)
+        digest = hashlib.sha256(text.casefold().encode("utf-8")).hexdigest()
+        seen_text_hashes.add(digest)
+        texts.append(text)
+        sources += 1
+
+    if media_root:
         artist_dir = _artist_dir(media_root, band.bnd_name)
         if artist_dir:
-            lrc_texts = _collect_lrc_lyrics(artist_dir, media_root)
-            texts.extend(lrc_texts)
-            sources += len(lrc_texts)
+            for play_path, text in _collect_lrc_lyrics(
+                artist_dir, media_root, db=db, seen_paths=seen_paths
+            ):
+                digest = hashlib.sha256(text.casefold().encode("utf-8")).hexdigest()
+                seen_text_hashes.add(digest)
+                texts.append(text)
+                sources += 1
+
+    cached_texts = _collect_cached_lyrics(
+        artist_name, seen_text_hashes=seen_text_hashes
+    )
+    texts.extend(cached_texts)
+    sources += len(cached_texts)
 
     counter: Counter[str] = Counter()
     for text in texts:
@@ -209,7 +307,7 @@ async def prefetch_lyrics_for_cloud(db: Session, band: Band, *, max_tracks: int 
 
     cached = 0
     for title, path in candidates[:max_tracks]:
-        lyrics, _ = await resolve_lyrics(artist_name, title, play_path=path)
+        lyrics, _ = await resolve_lyrics(artist_name, title, play_path=path, db=db)
         if lyrics:
             cached += 1
     return cached

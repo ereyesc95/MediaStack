@@ -42,7 +42,11 @@ const MEDIA_ITEM_ID_RE = /^(vid|lib)_[0-9a-f]{12}$/;
 const REFERRER_KEY = "mediastack_release_referrer";
 const AUDIO_CATEGORY_KEY = "mediastack_audio_category";
 
-let audioCategoryIntent: { bandId: number; category: string } | null = null;
+let audioCategoryIntent: {
+  bandId: number;
+  category: string;
+  compilationBoxSetsOnly?: boolean;
+} | null = null;
 
 export type ReleaseReferrer = {
   bandId: number;
@@ -77,13 +81,25 @@ export function clearReleaseReferrer() {
   }
 }
 
-export function savePendingAudioCategory(bandId: number, category: string) {
+export function savePendingAudioCategory(
+  bandId: number,
+  category: string,
+  options?: { compilationBoxSetsOnly?: boolean }
+) {
   if (!category) return;
-  audioCategoryIntent = { bandId, category };
+  audioCategoryIntent = {
+    bandId,
+    category,
+    compilationBoxSetsOnly: options?.compilationBoxSetsOnly,
+  };
   try {
     sessionStorage.setItem(
       AUDIO_CATEGORY_KEY,
-      JSON.stringify({ bandId, category })
+      JSON.stringify({
+        bandId,
+        category,
+        compilationBoxSetsOnly: options?.compilationBoxSetsOnly,
+      })
     );
   } catch {
     /* ignore */
@@ -114,12 +130,32 @@ export function clearPendingAudioCategory(bandId: number) {
 }
 
 export function peekPendingAudioCategory(bandId: number): string | null {
+  const intent = peekPendingAudioIntent(bandId);
+  return intent?.category ?? null;
+}
+
+export function pendingCompilationBoxSetsOnlyFor(bandId: number): boolean {
+  const intent = peekPendingAudioIntent(bandId);
+  return Boolean(intent?.compilationBoxSetsOnly);
+}
+
+function peekPendingAudioIntent(bandId: number): {
+  category?: string;
+  compilationBoxSetsOnly?: boolean;
+} | null {
+  if (audioCategoryIntent?.bandId === bandId) {
+    return audioCategoryIntent;
+  }
   try {
     const raw = sessionStorage.getItem(AUDIO_CATEGORY_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { bandId?: number; category?: string };
-    if (parsed.bandId !== bandId || !parsed.category) return null;
-    return parsed.category;
+    const parsed = JSON.parse(raw) as {
+      bandId?: number;
+      category?: string;
+      compilationBoxSetsOnly?: boolean;
+    };
+    if (parsed.bandId !== bandId) return null;
+    return parsed;
   } catch {
     return null;
   }

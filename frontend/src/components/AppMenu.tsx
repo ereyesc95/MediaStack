@@ -45,6 +45,7 @@ type Props = {
   onSetLyrics?: () => void;
   onFetchVideos?: () => void;
   onSetVideo?: () => void;
+  onWriteFileTags?: () => void;
   onRefreshTracklist?: () => void;
   menuVariant?: "artist" | "release";
   onRescanLibrary?: () => void;
@@ -87,6 +88,7 @@ export default function AppMenu({
   onSetLyrics,
   onFetchVideos,
   onSetVideo,
+  onWriteFileTags,
   onRefreshTracklist,
   menuVariant = "artist",
   onRescanLibrary,
@@ -239,7 +241,12 @@ export default function AppMenu({
   const showTrackDataMenu =
     menuVariant === "release" &&
     (onRefreshTracklist ||
-      (isAdmin && (onFetchLyrics || onSetLyrics || onFetchVideos || onSetVideo)));
+      (isAdmin &&
+        (onFetchLyrics ||
+          onSetLyrics ||
+          onFetchVideos ||
+          onSetVideo ||
+          onWriteFileTags)));
 
   const showRefreshData =
     onEditAbout ||
@@ -378,6 +385,18 @@ export default function AppMenu({
                     >
                       <IconVideo className="menu-item-icon" />
                       Set videos
+                    </button>
+                  )}
+                  {onWriteFileTags && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onWriteFileTags();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconMetadata className="menu-item-icon" />
+                      Write file tags
                     </button>
                   )}
                 </div>

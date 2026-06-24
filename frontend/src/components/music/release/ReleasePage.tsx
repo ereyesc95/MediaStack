@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -60,6 +61,8 @@ import NotInLibraryDialog from "../artist/NotInLibraryDialog";
 import ReleaseAboutEditModal from "./ReleaseAboutEditModal";
 import ReleaseVideoSetModal from "./ReleaseVideoSetModal";
 import ReleaseLyricsSetModal from "./ReleaseLyricsSetModal";
+import ReleaseFileTagsModal from "./ReleaseFileTagsModal";
+import { invalidateWordCloud } from "../../../wordCloudInvalidation";
 import ReleaseVideoFetchModal, {
   type YoutubeFetchItem,
 } from "./ReleaseVideoFetchModal";
@@ -125,7 +128,11 @@ type Props = {
   userId?: number;
   onBack: () => void;
   onOpenArtist: (id: number) => void;
-  onBrowseArtistAudio: (id: number, category: string) => void;
+  onBrowseArtistAudio: (
+    id: number,
+    category: string,
+    options?: { compilationBoxSetsOnly?: boolean }
+  ) => void;
   onOpenRelease: (bandId: number, releaseId: string) => void;
   onOpenCatalogProducer?: (producerName: string) => void;
   onOpenCatalogLabel?: (labelName: string) => void;
@@ -331,9 +338,20 @@ export default function ReleasePage({
   const [galleryTabsMeta, setGalleryTabsMeta] = useState<
     { id: ReleaseGalleryTab; label: string; count: number }[]
   >([]);
+  const [showGalleryTab, setShowGalleryTab] = useState(() => {
+    const cached = getCachedReleaseGallery(bandId, releaseId);
+    return Boolean(
+      cached &&
+        (cached.artwork.length > 0 ||
+          cached.photos.length > 0 ||
+          cached.extras.length > 0)
+    );
+  });
+  const [repeatOne, setRepeatOne] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [videoSetOpen, setVideoSetOpen] = useState(false);
   const [lyricsSetOpen, setLyricsSetOpen] = useState(false);
+  const [fileTagsOpen, setFileTagsOpen] = useState(false);
   const [videoFetchOpen, setVideoFetchOpen] = useState(false);
   const [videoFetchItems, setVideoFetchItems] = useState<YoutubeFetchItem[]>([]);
   const [busy, setBusy] = useState("");
@@ -449,6 +467,14 @@ export default function ReleasePage({
     showVaPhotocardsBesideDesc ||
     (!isVaRelease && showOverviewPhotocards);
   const vaOverviewNoSingles = isVaRelease && (data?.singles.length ?? 0) === 0;
+  const showOverviewBottom = Boolean(
+    data &&
+      ((showVaPhotocardsInStack && showVaFeaturedArtists) ||
+        (showVaFeaturedArtists && !showVaPhotocardsInStack) ||
+        showOverviewLineup ||
+        data.singles.length > 0 ||
+        (data.appears_on?.length ?? 0) > 0)
+  );
 
   const openFeaturedArtist = useCallback(
     (artist: NonNullable<ReleaseOverview["featured_artists"]>[number]) => {
@@ -769,12 +795,6 @@ export default function ReleasePage({
     [resolveTrackSource]
   );
 
-  useEffect(() => {
-    if (tab === "gallery") {
-      void prefetchReleaseGallery(bandId, releaseId);
-    }
-  }, [bandId, releaseId, tab]);
-
   const hasActiveTrack = Boolean(playingPath);
   const showPlaybackMotion = hasActiveTrack && isPlaying;
   const displayCover = hasActiveTrack
@@ -948,6 +968,7 @@ export default function ReleasePage({
         `Lyrics fetched: ${res.fetched ?? 0} saved · ${res.skipped ?? 0} skipped · ${res.not_found ?? 0} not found`
       );
       setTracklistKey((k) => k + 1);
+      invalidateWordCloud(bandId);
       window.setTimeout(() => setBusy(""), 8000);
     } catch (e) {
       setBusy("");
@@ -1042,8 +1063,48 @@ export default function ReleasePage({
         }
         return tabs;
       });
+      setShowGalleryTab(tabs.length > 0);
     },
     []
+  );
+
+  const syncGalleryTabVisibility = useCallback(
+    (payload: { artwork: unknown[]; photos: unknown[]; extras: unknown[] }) => {
+      setShowGalleryTab(
+        Boolean(
+          payload.artwork.length > 0 ||
+            payload.photos.length > 0 ||
+            payload.extras.length > 0
+        )
+      );
+    },
+    []
+  );
+
+  useEffect(() => {
+    void prefetchReleaseGallery(bandId, releaseId).then(syncGalleryTabVisibility);
+  }, [bandId, releaseId, syncGalleryTabVisibility]);
+
+  useEffect(() => {
+    if (playingPath) {
+      void fetchTrackSourceArt(bandId, releaseId, playingPath).then((res) => {
+        if ((res.artwork?.length ?? 0) > 0) setShowGalleryTab(true);
+      });
+      return;
+    }
+    const cached = getCachedReleaseGallery(bandId, releaseId);
+    if (cached) syncGalleryTabVisibility(cached);
+  }, [playingPath, bandId, releaseId, syncGalleryTabVisibility]);
+
+  useEffect(() => {
+    if (!showGalleryTab && tab === "gallery") {
+      onTab("overview");
+    }
+  }, [showGalleryTab, tab, onTab]);
+
+  const pageTabs = useMemo(
+    () => TABS.filter((t) => t.id !== "gallery" || showGalleryTab),
+    [showGalleryTab]
   );
 
   const handleRefreshMetadata = async () => {
@@ -1182,13 +1243,20 @@ export default function ReleasePage({
     const el = miniAudio.audioRef.current;
     if (!el) return;
     const onEnded = () => {
-      if (playingPath) {
-        playAdjacentTrack("next");
+      if (!playingPath) return;
+      if (repeatOne) {
+        const audio = miniAudio.audioRef.current;
+        if (audio) {
+          audio.currentTime = 0;
+          void audio.play().catch(() => {});
+        }
+        return;
       }
+      playAdjacentTrack("next");
     };
     el.addEventListener("ended", onEnded);
     return () => el.removeEventListener("ended", onEnded);
-  }, [miniAudio.audioRef, playAdjacentTrack, playingPath]);
+  }, [miniAudio.audioRef, playAdjacentTrack, playingPath, repeatOne]);
 
   useEffect(() => {
     if (!playingPath) return;
@@ -1299,7 +1367,11 @@ export default function ReleasePage({
       )}
       <div className="release-page__panel-content">
       <div className="release-page__art">
-        <div className="release-page__art-stage">
+        <div className={`release-page__art-stage${
+          !panelCoverSrc && panelDiscSrc
+            ? " release-page__art-stage--disc-only"
+            : ""
+        }`}>
           {panelCoverSrc &&
             (panelCoverIsVideo ? (
               <span className="release-page__cover-wrap">
@@ -1517,7 +1589,13 @@ export default function ReleasePage({
                     <button
                       type="button"
                       className="release-page__type-link"
-                      onClick={() => onBrowseArtistAudio(bandId, data.category)}
+                      onClick={() =>
+                        onBrowseArtistAudio(bandId, data.category, {
+                          compilationBoxSetsOnly:
+                            data.category === "compilations" &&
+                            data.release_type === "Box set",
+                        })
+                      }
                     >
                       {data.release_type}
                     </button>
@@ -1704,6 +1782,8 @@ export default function ReleasePage({
               toggle={handlePanelPlayToggle}
               onPrev={() => playAdjacentTrack("prev")}
               onNext={() => playAdjacentTrack("next")}
+              repeatOne={repeatOne}
+              onRepeatToggle={() => setRepeatOne((r) => !r)}
             />
           </div>
           <div className="release-page__panel-bottom-bar">
@@ -1807,6 +1887,7 @@ export default function ReleasePage({
               onSetLyrics={isAdmin ? () => setLyricsSetOpen(true) : undefined}
               onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
               onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
+              onWriteFileTags={isAdmin ? () => setFileTagsOpen(true) : undefined}
               onRefreshTracklist={() => handleRefreshTracklist()}
               refreshIncludeBio={refreshWiki}
               onRefreshIncludeBioChange={setRefreshWiki}
@@ -1816,7 +1897,7 @@ export default function ReleasePage({
         </header>
 
         <nav className="release-page__tabs">
-          {TABS.map((t) => (
+          {pageTabs.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -1847,8 +1928,8 @@ export default function ReleasePage({
           </nav>
         )}
 
-        {(stacked || mobileLandscape) && tab === "gallery" && galleryTabsMeta.length > 1 && (
-          <nav className="release-page__subtabs" aria-label="Gallery sections">
+        {(tab === "gallery" && galleryTabsMeta.length > 1) && (
+          <nav className="release-page__subtabs release-page__subtabs--gallery" aria-label="Gallery sections">
             {galleryTabsMeta.map((t) => (
               <button
                 key={t.id}
@@ -1952,6 +2033,8 @@ export default function ReleasePage({
                   )}
                 </div>
 
+                {showOverviewBottom && (
+                  <div className="release-page__overview-bottom">
                 {showVaPhotocardsInStack && showVaFeaturedArtists && (
                   <div className="release-page__va-stack">
                     <div
@@ -2118,6 +2201,9 @@ export default function ReleasePage({
                   </section>
                 )}
 
+                  </div>
+                )}
+
               </div>
             )}
 
@@ -2165,10 +2251,10 @@ export default function ReleasePage({
                 bandId={bandId}
                 releaseId={releaseId}
                 playingPath={playingPath}
-                galleryTab={stacked || mobileLandscape ? galleryTab : undefined}
-                onGalleryTabChange={stacked || mobileLandscape ? setGalleryTab : undefined}
-                hideTabs={stacked || mobileLandscape}
-                onTabsMeta={stacked || mobileLandscape ? handleGalleryTabsMeta : undefined}
+                galleryTab={galleryTabsMeta.length > 1 ? galleryTab : undefined}
+                onGalleryTabChange={galleryTabsMeta.length > 1 ? setGalleryTab : undefined}
+                hideTabs={galleryTabsMeta.length > 1}
+                onTabsMeta={handleGalleryTabsMeta}
               />
             )}
           </main>
@@ -2204,6 +2290,21 @@ export default function ReleasePage({
           onSaved={() => {
             clearReleaseTracklistCache(bandId, releaseId);
             setTracklistKey((k) => k + 1);
+            invalidateWordCloud(bandId);
+          }}
+        />
+      )}
+
+      {fileTagsOpen && data && (
+        <ReleaseFileTagsModal
+          bandId={bandId}
+          releaseId={releaseId}
+          releaseTitle={data.title}
+          coverUrl={data.cover_url}
+          onClose={() => setFileTagsOpen(false)}
+          onDone={(message) => {
+            setBusy(message);
+            window.setTimeout(() => setBusy(""), 4000);
           }}
         />
       )}

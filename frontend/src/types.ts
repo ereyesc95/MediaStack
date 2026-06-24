@@ -515,7 +515,13 @@ export type ReleaseTrackItem = {
   has_lrc: boolean;
   has_synced_lrc?: boolean;
   is_link: boolean;
+  is_exclusive?: boolean;
   youtube_url?: string | null;
+  source_album_title?: string | null;
+  navigate_release_id?: string | null;
+  navigate_band_id?: number | null;
+  source_date_iso?: string | null;
+  source_display_date?: string | null;
   cover_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
@@ -580,6 +586,7 @@ export type ReleaseEdition = {
   display_date?: string | null;
   groups: ReleaseTrackGroup[];
   is_link?: boolean;
+  unresolved?: boolean;
   cover_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;

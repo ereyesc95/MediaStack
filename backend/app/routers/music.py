@@ -45,6 +45,32 @@ class RefreshReleaseMetadataBody(BaseModel):
     include_wikipedia: bool = True
 
 
+class FileTagValues(BaseModel):
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    albumartist: str | None = None
+    date: str | None = None
+    tracknumber: str | None = None
+    discnumber: str | None = None
+    genre: str | None = None
+
+
+class WriteFileTagsTrackIn(BaseModel):
+    play_path: str
+    selected: bool = True
+    include_lyrics: bool = False
+    tags: FileTagValues
+    writers: str | None = None
+
+
+class WriteFileTagsBody(BaseModel):
+    dry_run: bool = True
+    include_cover: bool = False
+    cover_path: str | None = None
+    tracks: list[WriteFileTagsTrackIn] | None = None
+
+
 class AddPlaylistTrackBody(BaseModel):
     title: str
     artist: str
@@ -517,6 +543,76 @@ async def release_refresh_metadata(
         release_id,
         include_wikipedia=body.include_wikipedia,
     )
+
+
+@router.post("/bands/{band_id}/releases/{release_id}/write-file-tags")
+def release_write_file_tags(
+    band_id: int,
+    release_id: str,
+    body: WriteFileTagsBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_tag_sync import sync_release_file_tags
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    result = sync_release_file_tags(
+        db,
+        band_id,
+        release_id,
+        dry_run=body.dry_run,
+        include_cover=body.include_cover,
+        cover_path=body.cover_path,
+        tracks_input=(
+            [t.model_dump() for t in body.tracks] if body.tracks else None
+        ),
+    )
+    if not result.get("ok"):
+        raise HTTPException(404, result.get("error") or "Release not found")
+    return result
+
+
+@router.post("/bands/{band_id}/releases/{release_id}/write-file-tags/pick-cover")
+def release_pick_cover_for_file_tags(
+    band_id: int,
+    release_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_tag_sync import pick_release_cover_file
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    result = pick_release_cover_file(db, band_id, release_id)
+    if not result.get("ok"):
+        raise HTTPException(404, result.get("error") or "Release not found")
+    return result
+
+
+@router.get("/bands/{band_id}/releases/{release_id}/write-file-tags/cover-preview")
+def release_cover_preview_for_file_tags(
+    band_id: int,
+    release_id: str,
+    token: str,
+    _admin: User = Depends(require_admin),
+):
+    from fastapi.responses import FileResponse
+
+    from app.release_tag_sync import cover_preview_file, _mime_for_image
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    try:
+        path = cover_preview_file(token)
+    except FileNotFoundError:
+        raise HTTPException(404, "Cover image not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return FileResponse(path, media_type=_mime_for_image(path))
 
 
 @router.patch("/bands/{band_id}/releases/{release_id}/overview")

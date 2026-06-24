@@ -10,7 +10,7 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 
 | Module   | Status |
 |----------|--------|
-| **Music** | Active development — artist pages, releases, tracklists, playback, lyrics, quizzes, playlists, gallery |
+| **Music** | Active development — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery |
 | Series   | API stubs / browse shell — full UI pending |
 | Movies   | API stubs / browse shell — full UI pending |
 | Books    | API stubs / browse shell — full UI pending |
@@ -234,7 +234,14 @@ A compilation is labeled **Box set** only when its folder name includes the brac
 
 Compilations **without** `[Box Set]` stay **Compilation**, even if they contain `.lnk` files, loose audio, or multiple editions.
 
-Inside a box set, each `.lnk` shortcut to another album folder becomes its own **edition group** in the tracklist. Bracket suffixes (including `[Box Set]`) are stripped from edition labels and from UI lines such as **Taken from …**.
+Inside a box set, each `.lnk` shortcut becomes its own **tracklist section**. The app resolves each link by **filename** (order prefix kept, bracket suffixes become `: Edition Name`):
+
+1. Look up the release title across **Studio Albums → EPs → Singles → Compilations → Live Albums**
+2. If the link has no edition bracket, use **Standard Edition** (or the first dated edition)
+3. If the link has `[Remastered Edition]` etc., match that edition folder on the found release
+4. If nothing matches, the section header still appears (dimmed) with no playable tracks
+
+Compilation folders with `.lnk` files follow the same rules. Local audio files in the compilation folder appear in their own section. `.lnk` targets are **not** scanned twice (no duplicate Standard Edition blocks).
 
 On the artist **Audio → Compilations** tab, when both regular compilations and box sets exist, a sub-bar appears (**RELEASES** / **BOX SETS**) — same pattern as **OFFICIAL** / **UNOFFICIAL** on live albums.
 
@@ -311,6 +318,28 @@ YouTube links are stored in **`track_overrides`** (`troYoutubeUrl`), keyed by `p
 4. Single inheritance — if the album track shares a title with a file under `Audio/Singles/`, the single’s link may apply
 
 Admins can bulk-fetch official videos from MusicBrainz (**Track data → Get videos**) or set links manually (**Set video**). Playback opens YouTube in a new tab (autoplay) and pauses local audio.
+
+### Write file tags (admin)
+
+Embed ID3/Vorbis/MP4 metadata into **local audio files** on disk from release and track data (**Track data → Write file tags** on a release page).
+
+**Always written:** title, artist, album artist, album, year, track number, disc number, genre.
+
+**Tag rules (defaults in the preview table, all editable before write):**
+
+- **Title** — bracket suffixes from filenames become parentheses, e.g. `Wicked Game [Chris Isaak cover]` → `Wicked Game (Chris Isaak cover)`. `feat.` tags are omitted from the title.
+- **Artist** — album artist plus featured guests, e.g. `HIM feat. Sanna-June Hyde`.
+- **Album** — includes edition when applicable, e.g. `Greatest Lovesongs Vol. 666: Deluxe Edition`.
+- **Writers** — pre-filled from track credits; editable per row and embedded as composer tags when present.
+- **Lyrics** — optional per track (checked by default when lyrics exist in the app); sourced from DB / shared release LRC / sidecar `.lrc` files.
+- **Cover art** — optional global embed; click the cover thumbnail to pick an image (native file dialog opens in the release `[Artwork]` folder, defaulting to **Cover - Front**).
+
+**Table controls:**
+
+- Left checkbox per row — include or skip that file on write (checked by default).
+- Only **direct audio tracks** from the release tracklist are listed (`.lnk` shortcut entries are excluded).
+
+**Supported write formats:** `.mp3`, `.flac`, `.ogg`, `.opus`, `.m4a`, `.mp4`, `.aac` (via Mutagen).
 
 ---
 
@@ -445,7 +474,7 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB; bulk fetch, manual set, open in new tab with autoplay
 - **Playlists** — user playlists (`plaType` 200) + suffix-based system templates (`plaType` 201: Remixes, Acoustic, …); add-to-playlist modal with create-and-add
-- **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
+- **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**, **Write file tags**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
 - **Search** — in-library media search per artist
 - **Playback** — play logging, auto-advance to next track, stream via local file or media server
 
@@ -492,6 +521,7 @@ Then `python run.py` serves the built UI from `frontend/dist` at port 8766.
 | Music | `/api/music` |
 | Playback / stream / lyrics | `/api/music/play`, `/stream`, `/lyrics` |
 | Track YouTube (get/set/fetch) | `/api/music/youtube`, `.../youtube/fetch` |
+| Write file tags (admin) | `POST /api/music/bands/{id}/releases/{id}/write-file-tags` (+ `pick-cover`, `cover-preview`) |
 | Series | `/api/series` |
 | Movies / Books / Games | `/api/movies`, `/api/books`, `/api/games` |
 | Import | `/api/import` |

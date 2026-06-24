@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchReleaseTracklist, saveTrackLyrics } from "../../../api";
 import type { ReleaseTrackItem } from "../../../types";
 import { trackDisplayTitle, trackMainTitle } from "./releaseTrackPanelMeta";
+import { invalidateWordCloud } from "../../../wordCloudInvalidation";
 import ModalPortal from "../../ModalPortal";
 
 type Props = {
@@ -153,6 +154,7 @@ export default function ReleaseLyricsSetModal({
         }
       }
       onSaved();
+      invalidateWordCloud(bandId);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

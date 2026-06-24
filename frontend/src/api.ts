@@ -504,6 +504,93 @@ export async function refreshReleaseMetadata(
   );
 }
 
+export type FileTagValues = {
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  albumartist?: string | null;
+  date?: string | null;
+  tracknumber?: string | null;
+  discnumber?: string | null;
+  genre?: string | null;
+};
+
+export type WriteFileTagsTrackIn = {
+  play_path: string;
+  selected: boolean;
+  include_lyrics: boolean;
+  tags: FileTagValues;
+  writers?: string | null;
+};
+
+export async function pickReleaseCoverForFileTags(
+  bandId: number,
+  releaseId: string
+): Promise<{
+  ok: boolean;
+  cancelled?: boolean;
+  cover_path?: string;
+  preview_url?: string;
+  error?: string;
+}> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/write-file-tags/pick-cover`,
+    { method: "POST" }
+  );
+}
+
+export async function syncReleaseFileTags(
+  bandId: number,
+  releaseId: string,
+  dryRun: boolean,
+  options?: {
+    includeCover?: boolean;
+    coverPath?: string | null;
+    tracks?: WriteFileTagsTrackIn[];
+  }
+): Promise<{
+  ok: boolean;
+  dry_run?: boolean;
+  include_cover?: boolean;
+  cover_url?: string | null;
+  cover_path?: string | null;
+  cover_artwork_dir?: string | null;
+  release_title?: string;
+  error?: string;
+  tracks?: {
+    play_path: string;
+    file_name: string | null;
+    tags: FileTagValues;
+    writers?: string | null;
+    has_lyrics?: boolean;
+    status: string;
+    message?: string | null;
+  }[];
+  summary?: {
+    total: number;
+    ready: number;
+    written: number;
+    skipped: number;
+    errors: number;
+  };
+  errors?: { play_path: string; error: string }[];
+}> {
+  return request(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/write-file-tags`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dry_run: dryRun,
+        include_cover: options?.includeCover ?? false,
+        cover_path: options?.coverPath ?? null,
+        tracks: options?.tracks,
+      }),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function patchReleaseOverview(
   bandId: number,
   releaseId: string,

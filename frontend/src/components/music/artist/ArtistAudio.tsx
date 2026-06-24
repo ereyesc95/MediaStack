@@ -8,6 +8,7 @@ import { prefetchReleaseOverview } from "../../../releaseOverviewCache";
 import {
   clearPendingAudioCategory,
   pendingAudioCategoryFor,
+  pendingCompilationBoxSetsOnlyFor,
   pushArtistRoute,
   saveReleaseReferrer,
 } from "../../../musicRoute";
@@ -71,6 +72,10 @@ export type ArtistAudioState = {
   setSelectedPlaylist: (slug: string | null) => void;
 };
 
+function compilationBoxSetsFromPending(bandId: number, categoryKey: string): boolean {
+  return categoryKey === "compilations" && pendingCompilationBoxSetsOnlyFor(bandId);
+}
+
 export function useArtistAudio(
   bandId: number,
   refreshKey: number,
@@ -95,7 +100,12 @@ export function useArtistAudio(
     )
   );
   const [officialOnly, setOfficialOnly] = useState(true);
-  const [compilationBoxSetsOnly, setCompilationBoxSetsOnly] = useState(false);
+  const [compilationBoxSetsOnly, setCompilationBoxSetsOnly] = useState(() =>
+    compilationBoxSetsFromPending(
+      bandId,
+      pickAudioCategory(bandId, getCachedArtistAudio(bandId)?.audio ?? null, "")
+    )
+  );
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,9 +122,15 @@ export function useArtistAudio(
     if (cached) {
       setIndex(cached.audio);
       setPlaylists(cached.playlists);
-      setCategory((prev) => pickAudioCategory(bandId, cached.audio, prev));
+      setCategory((prev) => {
+        const cat = pickAudioCategory(bandId, cached.audio, prev);
+        if (compilationBoxSetsFromPending(bandId, cat)) {
+          setCompilationBoxSetsOnly(true);
+        }
+        return cat;
+      });
+      clearPendingAudioCategory(bandId);
       setOfficialOnly(true);
-      setCompilationBoxSetsOnly(false);
       setSelectedPlaylist(null);
       setLoading(false);
       setError(null);
@@ -145,7 +161,14 @@ export function useArtistAudio(
         if (cancelled) return;
         setIndex(entry.audio);
         setPlaylists(entry.playlists);
-        setCategory((prev) => pickAudioCategory(bandId, entry.audio, prev));
+        setCategory((prev) => {
+          const cat = pickAudioCategory(bandId, entry.audio, prev);
+          if (compilationBoxSetsFromPending(bandId, cat)) {
+            setCompilationBoxSetsOnly(true);
+          }
+          return cat;
+        });
+        clearPendingAudioCategory(bandId);
         setOfficialOnly(true);
         setSelectedPlaylist(null);
         if (entry.audio.stale) {

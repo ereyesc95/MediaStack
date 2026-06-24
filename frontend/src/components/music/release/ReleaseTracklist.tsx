@@ -18,6 +18,7 @@ import {
   getCachedReleaseTracklist,
   prefetchReleaseTracklist as prefetchTracklist,
 } from "../../../releaseTracklistCache";
+import { invalidateWordCloud } from "../../../wordCloudInvalidation";
 import type {
   ReleaseEdition,
   ReleaseTrackGroup,
@@ -91,6 +92,37 @@ function stripBracketSuffix(text: string): string {
   return text.replace(/\s*\[[^\]]+\]\s*/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function isStandardEdition(label: string): boolean {
+  const low = label.toLowerCase().trim();
+  return low === "standard edition" || low === "standard";
+}
+
+function sourceAlbumDisplayTitle(title: string): string {
+  const trimmed = title.trim();
+  const sep = trimmed.lastIndexOf(": ");
+  if (sep < 0) return trimmed;
+  const edition = trimmed.slice(sep + 2).trim();
+  if (isStandardEdition(edition)) return trimmed.slice(0, sep).trim();
+  return trimmed;
+}
+
+function TrackExclusiveBadge() {
+  return (
+    <span
+      className="release-tracklist__badge release-tracklist__badge--exclusive"
+      title="Previously unreleased on this release"
+      aria-label="Previously unreleased on this release"
+    >
+      <span className="release-tracklist__badge-label release-tracklist__badge-label--full">
+        Exclusive
+      </span>
+      <span className="release-tracklist__badge-label release-tracklist__badge-label--short">
+        New
+      </span>
+    </span>
+  );
+}
+
 function bsideSourceFromGroup(
   group: ReleaseTrackGroup,
   bandId: number
@@ -115,6 +147,28 @@ function bsideSourceFromGroup(
   };
 }
 
+function linkSourceFromTrack(
+  track: ReleaseTrackItem | null | undefined
+): {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+} | null {
+  if (!track?.is_link) return null;
+  const title = sourceAlbumDisplayTitle(track.source_album_title?.trim() ?? "");
+  const navId = track.navigate_release_id?.trim();
+  if (!title || !navId) return null;
+  return {
+    album_title: title,
+    navigate_release_id: navId,
+    navigate_band_id: track.navigate_band_id ?? undefined,
+    date_iso: track.source_date_iso ?? null,
+    display_date: track.source_display_date ?? null,
+  };
+}
+
 function versionSourceFromItem(
   version: TrackVersionItem,
   releaseId: string,
@@ -133,12 +187,15 @@ function versionSourceFromItem(
 
   const editionTitle = stripBracketSuffix(version.edition_title?.trim() ?? "");
   const releaseTitle = stripBracketSuffix(version.album_title?.trim() ?? "");
-  const label =
-    editionTitle && editionTitle.toLowerCase() !== releaseTitle.toLowerCase()
-      ? releaseTitle
-        ? `${releaseTitle}: ${editionTitle}`
-        : editionTitle
-      : releaseTitle || null;
+  const showEdition =
+    Boolean(editionTitle) &&
+    editionTitle.toLowerCase() !== releaseTitle.toLowerCase() &&
+    !isStandardEdition(editionTitle);
+  const label = showEdition
+    ? releaseTitle
+      ? `${releaseTitle}: ${editionTitle}`
+      : editionTitle
+    : releaseTitle || null;
   if (!label) return null;
   return {
     album_title: label,
@@ -419,6 +476,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const shouldShowEditionHeader = (edition: ReleaseEdition) => {
     if (edition.kind === "bside") return true;
+    if (edition.unresolved || edition.is_link) return true;
     return data ? data.editions.length > 1 : false;
   };
 
@@ -473,7 +531,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         showLyrics: false,
         showVersions: true,
         panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
-        versionSource: bsideSource ?? versionSourceForPath(playingPath ?? null),
+        versionSource:
+          bsideSource ??
+          linkSourceFromTrack(lyricsTrack ?? ctx?.track) ??
+          versionSourceForPath(playingPath ?? null),
       });
       return;
     }
@@ -510,7 +571,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       showLyrics: true,
       showVersions: true,
       panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
-      versionSource: bsideSource,
+      versionSource:
+        bsideSource ??
+        linkSourceFromTrack(current?.track) ??
+        versionSourceForPath(playingPath ?? null),
     });
   }, [
     playingPath,
@@ -688,7 +752,19 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
             className="release-tracklist__edition-block"
           >
             {shouldShowEditionHeader(ed) && (
-              <h2 className="release-tracklist__edition-title">{editionSectionLabel(ed)}</h2>
+              <h2
+                className={`release-tracklist__edition-title${
+                  ed.unresolved ? " release-tracklist__edition-title--unresolved" : ""
+                }`}
+              >
+                {editionSectionLabel(ed)}
+              </h2>
+            )}
+
+            {ed.unresolved && ed.groups.length === 0 && (
+              <p className="release-tracklist__edition-empty muted">
+                Original release not found in library.
+              </p>
             )}
 
             {ed.kind === "bside"
@@ -722,12 +798,26 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                     onClick={() => {
                                       setPlayingVersionPath(null);
                                       setActiveVersionSource(null);
+                                      const linkSource = linkSourceFromTrack(track);
+                                      if (linkSource) setActiveVersionSource(linkSource);
                                       onPlay(track.play_path, track.title, art, ed.label);
+                                      onPanelActionsChange?.({
+                                        track,
+                                        showLyrics: true,
+                                        showVersions: true,
+                                        panelDateIso:
+                                          linkSource?.date_iso ??
+                                          resolvePanelDateIso(track.play_path),
+                                        versionSource: linkSource,
+                                      });
                                     }}
                                     aria-label={`Play ${track.title}`}
                                   >
                                     <span className="release-tracklist__num">{track.number}</span>
-                                    <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                    <span className="release-tracklist__title-wrap">
+                                      <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                      {track.is_exclusive && <TrackExclusiveBadge />}
+                                    </span>
                                     {track.duration && (
                                       <span className="release-tracklist__duration">{track.duration}</span>
                                     )}
@@ -765,12 +855,25 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           onClick={() => {
                             setPlayingVersionPath(null);
                             setActiveVersionSource(null);
+                            const linkSource = linkSourceFromTrack(track);
+                            if (linkSource) setActiveVersionSource(linkSource);
                             onPlay(track.play_path, track.title, art, ed.label);
+                            onPanelActionsChange?.({
+                              track,
+                              showLyrics: true,
+                              showVersions: true,
+                              panelDateIso:
+                                linkSource?.date_iso ?? resolvePanelDateIso(track.play_path),
+                              versionSource: linkSource,
+                            });
                           }}
                           aria-label={`Play ${track.title}`}
                         >
                           <span className="release-tracklist__num">{track.number}</span>
-                          <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                          <span className="release-tracklist__title-wrap">
+                            <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                            {track.is_exclusive && <TrackExclusiveBadge />}
+                          </span>
                           {track.duration && (
                             <span className="release-tracklist__duration">{track.duration}</span>
                           )}
@@ -793,6 +896,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const lyricsBody = lyricsTrack && (
     <ReleaseInlineLyrics
+      title={trackDisplayTitle(lyricsTrack.title)}
       lyrics={lyricsText}
       syncedLyrics={syncedLyrics}
       currentTime={playbackProgress}
@@ -800,8 +904,8 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     />
   );
 
-  const lyricsHead = lyricsTrack ? (
-    <div className="release-tracklist__subview-head release-tracklist__subview-head--lyrics">
+  const lyricsToolbar = lyricsTrack ? (
+    <div className="release-tracklist__lyrics-toolbar">
       <button
         type="button"
         className="release-tracklist__back"
@@ -810,9 +914,6 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       >
         <ChevronIcon direction="left" />
       </button>
-      <h2 className="release-tracklist__subview-title">
-        {trackDisplayTitle(lyricsTrack.title)}
-      </h2>
       <div className="release-tracklist__subview-actions">
         {!lyricsLoading && !lyricsText && !syncedLyrics && (
           <button
@@ -921,6 +1022,8 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   return (
     <div
       className={`release-tracklist${stacked ? " release-tracklist--stacked" : ""}${
+        rightView === "lyrics" ? " release-tracklist--lyrics" : ""
+      }${
         stacked && mobileView === "tracks" && mobileBackdropUrl
           ? " release-tracklist--mobile-canvas"
           : ""
@@ -933,10 +1036,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     >
       <div className="release-tracklist__body">
           {rightView === "lyrics" && lyricsTrack && (
-            <>
-              {lyricsHead}
+            <div className="release-tracklist__lyrics-view">
+              {lyricsToolbar}
               {lyricsBody}
-            </>
+            </div>
           )}
           {rightView === "tracks" && tracklistBody}
           {rightView === "versions" && (
@@ -977,6 +1080,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       {lyricsEditOpen && lyricsTrack && (
         <ReleaseLyricsEditModal
           artistName={artistName}
+          bandId={bandId}
           trackTitle={lyricsTrack.title}
           displayTitle={trackMainTitle(lyricsTrack.title)}
           playPath={lyricsTrack.play_path}
@@ -985,6 +1089,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           onSaved={(text, synced) => {
             setLyricsText(text);
             setSyncedLyrics(synced);
+            invalidateWordCloud(bandId);
           }}
         />
       )}

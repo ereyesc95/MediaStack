@@ -153,6 +153,7 @@ export default function MusicModule({
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
+  const [homeRepeatOne, setHomeRepeatOne] = useState(false);
   const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
   const homeAudio = useMiniAudio();
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
@@ -197,8 +198,12 @@ export default function MusicModule({
   );
 
   const openArtistAudio = useCallback(
-    (id: number, category: string) => {
-      savePendingAudioCategory(id, category);
+    (
+      id: number,
+      category: string,
+      options?: { compilationBoxSetsOnly?: boolean }
+    ) => {
+      savePendingAudioCategory(id, category, options);
       primeArtistShell(id);
       void prefetchArtistAudio(id);
       onReleaseNavigate?.(undefined, undefined);
@@ -606,6 +611,11 @@ export default function MusicModule({
       }
     };
     const onEnded = () => {
+      if (homeRepeatOne && homePlayingPath) {
+        el.currentTime = 0;
+        void el.play().catch(() => {});
+        return;
+      }
       setPlaybackPlaying(false);
       endPlaybackThemeSession(userId);
       setHomePlayingPath(null);
@@ -618,7 +628,7 @@ export default function MusicModule({
       el.removeEventListener("play", onPlay);
       el.removeEventListener("ended", onEnded);
     };
-  }, [bandId, homeAudio.audioRef, homeAudio.src, homePlayingPath, userId, resolveHomeTrackCover]);
+  }, [bandId, homeAudio.audioRef, homeAudio.src, homePlayingPath, homeRepeatOne, userId, resolveHomeTrackCover]);
 
   const showArtistTools = tab === "artists" && !bandId;
 
@@ -740,6 +750,10 @@ export default function MusicModule({
               seek={homeAudio.seek}
               onPrev={tab === "home" ? () => stepHomeTrack(-1) : undefined}
               onNext={tab === "home" ? () => stepHomeTrack(1) : undefined}
+              repeatOne={homeRepeatOne}
+              onRepeatToggle={
+                tab === "home" ? () => setHomeRepeatOne((r) => !r) : undefined
+              }
             />
             <button
               type="button"
@@ -796,8 +810,8 @@ export default function MusicModule({
             onReleaseNavigate?.(undefined, undefined);
             openArtist(id);
           }}
-          onBrowseArtistAudio={(id, category) => {
-            openArtistAudio(id, category);
+          onBrowseArtistAudio={(id, category, options) => {
+            openArtistAudio(id, category, options);
           }}
           onOpenRelease={(bid, rid) => {
             void prefetchReleaseOverview(bid, rid);

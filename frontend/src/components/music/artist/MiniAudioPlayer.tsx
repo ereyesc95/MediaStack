@@ -111,6 +111,8 @@ export function useMiniAudio() {
 type ControlsProps = MiniAudioControls & {
   onPrev?: () => void;
   onNext?: () => void;
+  repeatOne?: boolean;
+  onRepeatToggle?: () => void;
 };
 
 export function MiniAudioPlayerControls({
@@ -121,6 +123,8 @@ export function MiniAudioPlayerControls({
   seek,
   onPrev,
   onNext,
+  repeatOne = false,
+  onRepeatToggle,
 }: ControlsProps) {
   const pct = duration ? (progress / duration) * 100 : 0;
 
@@ -163,6 +167,19 @@ export function MiniAudioPlayerControls({
           onClick={onNext}
           aria-label="Next track"
         />
+      )}
+      {onRepeatToggle && (
+        <button
+          type="button"
+          className={`artist-mini-player__repeat${
+            repeatOne ? " artist-mini-player__repeat--active" : ""
+          }`}
+          onClick={onRepeatToggle}
+          aria-label={repeatOne ? "Disable repeat" : "Repeat track"}
+          aria-pressed={repeatOne}
+        >
+          ↻
+        </button>
       )}
     </div>
   );

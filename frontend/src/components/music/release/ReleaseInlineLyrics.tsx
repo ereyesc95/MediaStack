@@ -27,36 +27,27 @@ function scrollLineIntoView(
   line: HTMLElement,
   preferredScrollRoot?: HTMLElement | null
 ) {
-  const candidates: HTMLElement[] = [];
-  if (preferredScrollRoot) candidates.push(preferredScrollRoot);
-  let parent: HTMLElement | null = line.parentElement;
-  while (parent) {
-    if (!candidates.includes(parent)) candidates.push(parent);
-    parent = parent.parentElement;
-  }
-
-  for (const container of candidates) {
-    const style = getComputedStyle(container);
-    const canScrollY =
-      style.overflowY === "auto" ||
-      style.overflowY === "scroll" ||
-      style.overflowY === "overlay";
-    if (!canScrollY || container.scrollHeight <= container.clientHeight + 2) {
-      continue;
-    }
-    const lineRect = line.getBoundingClientRect();
-    const parentRect = container.getBoundingClientRect();
-    const offset =
-      lineRect.top -
-      parentRect.top -
-      container.clientHeight / 2 +
-      lineRect.height / 2;
-    container.scrollBy({ top: offset, behavior: "smooth" });
+  if (!preferredScrollRoot) return;
+  const style = getComputedStyle(preferredScrollRoot);
+  const canScrollY =
+    style.overflowY === "auto" ||
+    style.overflowY === "scroll" ||
+    style.overflowY === "overlay";
+  if (!canScrollY || preferredScrollRoot.scrollHeight <= preferredScrollRoot.clientHeight + 2) {
     return;
   }
+  const lineRect = line.getBoundingClientRect();
+  const parentRect = preferredScrollRoot.getBoundingClientRect();
+  const offset =
+    lineRect.top -
+    parentRect.top -
+    preferredScrollRoot.clientHeight / 2 +
+    lineRect.height / 2;
+  preferredScrollRoot.scrollBy({ top: offset, behavior: "smooth" });
 }
 
 type Props = {
+  title?: string;
   lyrics: string | null;
   syncedLyrics?: string | null;
   currentTime?: number;
@@ -64,6 +55,7 @@ type Props = {
 };
 
 export default function ReleaseInlineLyrics({
+  title,
   lyrics,
   syncedLyrics,
   currentTime = 0,
@@ -162,27 +154,39 @@ export default function ReleaseInlineLyrics({
       {!loading && lrcLines.length > 0 ? (
         <div
           ref={scrollRef}
-          className="release-tracklist__lyrics-sync ms-scrollbar"
+          className="release-tracklist__lyrics-scroll ms-scrollbar"
         >
-          {lrcLines.map((line, i) => (
-            <p
-              key={`${line.time}-${i}`}
-              ref={(el) => {
-                lineRefs.current[i] = el;
-              }}
-              className={
-                i === activeIdx
-                  ? "release-tracklist__lyrics-line active"
-                  : "release-tracklist__lyrics-line"
-              }
-            >
-              {line.text}
-            </p>
-          ))}
-          <div className="release-tracklist__lyrics-sync-edge" aria-hidden />
+          <div className="release-tracklist__lyrics-sync">
+            {title ? (
+              <h2 className="release-tracklist__lyrics-title">{title}</h2>
+            ) : null}
+            {lrcLines.map((line, i) => (
+              <p
+                key={`${line.time}-${i}`}
+                ref={(el) => {
+                  lineRefs.current[i] = el;
+                }}
+                className={
+                  i === activeIdx
+                    ? "release-tracklist__lyrics-line active"
+                    : "release-tracklist__lyrics-line"
+                }
+              >
+                {line.text}
+              </p>
+            ))}
+            <div className="release-tracklist__lyrics-sync-edge" aria-hidden />
+          </div>
         </div>
       ) : lyrics ? (
-        <pre className="release-tracklist__lyrics-plain">{lyrics}</pre>
+        <div className="release-tracklist__lyrics-scroll ms-scrollbar">
+          <div className="release-tracklist__lyrics-sync">
+            {title ? (
+              <h2 className="release-tracklist__lyrics-title">{title}</h2>
+            ) : null}
+            <pre className="release-tracklist__lyrics-plain">{lyrics}</pre>
+          </div>
+        </div>
       ) : (
         !loading && <p className="muted">No lyrics found for this track.</p>
       )}

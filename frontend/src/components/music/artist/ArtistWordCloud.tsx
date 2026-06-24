@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWordCloud, prefetchWordCloud } from "../../../api";
 import type { WordCloudPayload } from "../../../types";
+import {
+  WORD_CLOUD_INVALIDATE_EVENT,
+} from "../../../wordCloudInvalidation";
 
 type Props = {
   bandId: number;
@@ -37,6 +40,19 @@ export default function ArtistWordCloud({ bandId, embedded = false }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const onInvalidate = (event: Event) => {
+      const detail = (event as CustomEvent<{ bandId: number }>).detail;
+      if (detail?.bandId === bandId) {
+        void load();
+      }
+    };
+    window.addEventListener(WORD_CLOUD_INVALIDATE_EVENT, onInvalidate);
+    return () => {
+      window.removeEventListener(WORD_CLOUD_INVALIDATE_EVENT, onInvalidate);
+    };
+  }, [bandId, load]);
 
   const build = async () => {
     setBuilding(true);

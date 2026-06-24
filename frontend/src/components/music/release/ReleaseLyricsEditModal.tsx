@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { saveTrackLyrics } from "../../../api";
 import { trackDisplayTitle, trackMainTitle } from "./releaseTrackPanelMeta";
+import { invalidateWordCloud } from "../../../wordCloudInvalidation";
 import ModalPortal from "../../ModalPortal";
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
   trackTitle: string;
   displayTitle?: string;
   playPath?: string;
+  bandId?: number;
   initialLyrics: string;
   onClose: () => void;
   onSaved: (lyrics: string, syncedLyrics: string | null) => void;
@@ -18,6 +20,7 @@ export default function ReleaseLyricsEditModal({
   trackTitle,
   displayTitle,
   playPath,
+  bandId,
   initialLyrics,
   onClose,
   onSaved,
@@ -41,7 +44,9 @@ export default function ReleaseLyricsEditModal({
         title: trackMainTitle(trackTitle),
         play_path: playPath,
         lyrics: text,
+        band_id: bandId,
       });
+      if (bandId != null) invalidateWordCloud(bandId);
       onSaved(res.lyrics ?? text, res.synced_lyrics ?? null);
       onClose();
     } catch (e) {

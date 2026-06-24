@@ -155,6 +155,26 @@ function parseVersionToken(part: string): VersionToken | null {
   return null;
 }
 
+function parseVersionTokensFromPart(part: string): VersionToken[] | null {
+  const single = parseVersionToken(part);
+  if (single) return [single];
+  if (!part.includes(",")) return null;
+
+  const pieces = part
+    .split(/,\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (pieces.length < 2) return null;
+
+  const tokens: VersionToken[] = [];
+  for (const piece of pieces) {
+    const token = parseVersionToken(piece);
+    if (!token) return null;
+    tokens.push(token);
+  }
+  return tokens;
+}
+
 function combineVersionTokens(tokens: VersionToken[]): string | null {
   if (!tokens.length) return null;
 
@@ -191,6 +211,9 @@ function combineVersionTokens(tokens: VersionToken[]): string | null {
 
   const parts = [...languages, ...chunks];
   if (!parts.length) return null;
+  if (languages.length === 0 && chunks.length > 1) {
+    return parts.join(", ");
+  }
   return `${parts.join(" ")} Version`;
 }
 
@@ -213,9 +236,9 @@ export function parseTrackPanelMeta(title: string): TrackPanelMeta {
   const lines: TrackPanelLine[] = [];
   if (inner) {
     for (const part of splitSuffixParts(inner)) {
-      const version = parseVersionToken(part);
-      if (version) {
-        versionTokens.push(version);
+      const versionParts = parseVersionTokensFromPart(part);
+      if (versionParts?.length) {
+        versionTokens.push(...versionParts);
         continue;
       }
       const adaptation = adaptationLabel(part);
