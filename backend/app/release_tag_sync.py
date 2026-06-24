@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.band_library import (
     ARTWORK_DIR,
     COVER_FRONT_STEM,
+    DATE_PREFIX_RE,
     display_track_title_from_path,
 )
 from app.gallery import IMAGE_EXTS
@@ -50,6 +51,16 @@ def _parse_featuring(part: str) -> list[str] | None:
     return [n.strip() for n in re.split(r"[,;]+", m.group(1)) if n.strip()]
 
 
+def _edition_label_core(label: str) -> str:
+    text = (label or "").strip()
+    m = DATE_PREFIX_RE.match(text)
+    if m:
+        rest = text[m.end() :].lstrip(". ").strip()
+        if rest:
+            return rest
+    return text
+
+
 def _edition_album_title(
     release_title: str,
     edition_label: str | None,
@@ -58,12 +69,16 @@ def _edition_album_title(
     source = (track.get("source_album_title") or "").strip()
     if source:
         return source
-    label = (edition_label or "").strip()
-    if not label or label.casefold() == release_title.casefold():
+    core = _edition_label_core(edition_label or "")
+    if not core:
         return release_title
-    if label.casefold() in ("standard edition", "standard"):
+    core_fold = core.casefold()
+    release_fold = release_title.casefold()
+    if core_fold == release_fold:
         return release_title
-    return f"{release_title}: {label}"
+    if core_fold in ("standard edition", "standard"):
+        return release_title
+    return f"{release_title}: {core}"
 
 
 def _title_and_artist_for_tags(
@@ -343,6 +358,8 @@ def _collect_track_rows(
 
     rows: list[dict] = []
     for edition in tracklist.get("editions") or []:
+        if edition.get("kind") == "bside":
+            continue
         edition_date = edition.get("date_iso") or release_date
         year = _year_from_iso(edition_date)
         edition_label = edition.get("label")

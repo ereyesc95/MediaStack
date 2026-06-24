@@ -185,6 +185,21 @@ export function IconLinks({ className }: IconProps) {
   );
 }
 
+export function IconFileTags({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M20.59 12.59l-7.17 7.17a2 2 0 0 1-2.83 0L2 11.17V4h7.17a2 2 0 0 1 1.41.59l8.59 8.59a2 2 0 0 1 0 2.83zM5.5 5A1.5 1.5 0 1 0 5.5 8 1.5 1.5 0 0 0 5.5 5z"
+      />
+      <path
+        fill="currentColor"
+        d="M8 10h9v1.25H8V10zm0 2.75h6.5v1.25H8V12.75z"
+      />
+    </svg>
+  );
+}
+
 export function IconMetadata({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

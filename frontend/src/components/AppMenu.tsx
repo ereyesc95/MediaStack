@@ -17,6 +17,7 @@ import {
   IconCheck,
   IconEditProfile,
   IconEditRelease,
+  IconFileTags,
   IconFolder,
   IconLineup,
   IconLinks,
@@ -327,18 +328,6 @@ export default function AppMenu({
               </button>
               {trackDataOpen && (
                 <div className="app-menu-submenu">
-                  {onRefreshTracklist && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshTracklist();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconSync className="menu-item-icon" />
-                      Refresh tracklist
-                    </button>
-                  )}
                   {onFetchLyrics && (
                     <button
                       type="button"
@@ -387,6 +376,18 @@ export default function AppMenu({
                       Set videos
                     </button>
                   )}
+                  {onRefreshTracklist && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshTracklist();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Refresh tracklist
+                    </button>
+                  )}
                   {onWriteFileTags && (
                     <button
                       type="button"
@@ -395,7 +396,7 @@ export default function AppMenu({
                         setOpen(false);
                       }}
                     >
-                      <IconMetadata className="menu-item-icon" />
+                      <IconFileTags className="menu-item-icon" />
                       Write file tags
                     </button>
                   )}

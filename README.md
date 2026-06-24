@@ -329,7 +329,7 @@ Embed ID3/Vorbis/MP4 metadata into **local audio files** on disk from release an
 
 - **Title** — bracket suffixes from filenames become parentheses, e.g. `Wicked Game [Chris Isaak cover]` → `Wicked Game (Chris Isaak cover)`. `feat.` tags are omitted from the title.
 - **Artist** — album artist plus featured guests, e.g. `HIM feat. Sanna-June Hyde`.
-- **Album** — includes edition when applicable, e.g. `Greatest Lovesongs Vol. 666: Deluxe Edition`.
+- **Album** — release title only for **Standard Edition** or when the edition name matches the album title (date prefixes on edition folders are stripped). Non-standard editions append `: Edition Name` without the folder date, e.g. `Greatest Lovesongs Vol. 666: Remastered Edition`.
 - **Writers** — pre-filled from track credits; editable per row and embedded as composer tags when present.
 - **Lyrics** — optional per track (checked by default when lyrics exist in the app); sourced from DB / shared release LRC / sidecar `.lrc` files.
 - **Cover art** — optional global embed; click the cover thumbnail to pick an image (native file dialog opens in the release `[Artwork]` folder, defaulting to **Cover - Front**).
@@ -337,7 +337,8 @@ Embed ID3/Vorbis/MP4 metadata into **local audio files** on disk from release an
 **Table controls:**
 
 - Left checkbox per row — include or skip that file on write (checked by default).
-- Only **direct audio tracks** from the release tracklist are listed (`.lnk` shortcut entries are excluded).
+- Only **direct audio tracks** from the release tracklist are listed (`.lnk` shortcuts and **B-sides** sections are excluded — tag B-side files from their single release page).
+- **Write file tags** is available on tablet and desktop only (hidden on phones).
 
 **Supported write formats:** `.mp3`, `.flac`, `.ogg`, `.opus`, `.m4a`, `.mp4`, `.aac` (via Mutagen).
 

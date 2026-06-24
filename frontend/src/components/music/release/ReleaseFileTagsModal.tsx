@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   pickReleaseCoverForFileTags,
   syncReleaseFileTags,
@@ -65,23 +65,53 @@ function EditableCell({
   onChange,
   numeric,
   className,
+  wrap,
 }: {
   value: string;
   onChange: (value: string) => void;
   numeric?: boolean;
   className?: string;
+  wrap?: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        className={`release-file-tags-modal__cell-input${className ? ` ${className}` : ""}`}
+        value={value}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (numeric && next !== "" && !/^\d+$/.test(next)) return;
+          onChange(next);
+        }}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") {
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
   return (
-    <input
-      type="text"
-      className={`release-file-tags-modal__cell-input${className ? ` ${className}` : ""}`}
-      value={value}
-      onChange={(e) => {
-        const next = e.target.value;
-        if (numeric && next !== "" && !/^\d+$/.test(next)) return;
-        onChange(next);
-      }}
-    />
+    <button
+      type="button"
+      className={`release-file-tags-modal__cell-display${
+        wrap ? " release-file-tags-modal__cell-display--wrap" : ""
+      }${className ? ` ${className}` : ""}`}
+      onClick={() => setEditing(true)}
+    >
+      {value || "\u00a0"}
+    </button>
   );
 }
 
@@ -302,7 +332,7 @@ export default function ReleaseFileTagsModal({
                 />
               </div>
             </div>
-            {loading && <p className="muted">Loading preview…</p>}
+            {loading && <p className="muted">Loading tracks, please wait.</p>}
             {error && <p className="error">{error}</p>}
             {!loading && !error && (
               <>
@@ -354,6 +384,7 @@ export default function ReleaseFileTagsModal({
                               onChange={(v) =>
                                 updateRowTags(row.play_path, "title", v)
                               }
+                              wrap
                             />
                           </td>
                           <td>
@@ -362,6 +393,7 @@ export default function ReleaseFileTagsModal({
                               onChange={(v) =>
                                 updateRowTags(row.play_path, "artist", v)
                               }
+                              wrap
                             />
                           </td>
                           <td>
@@ -370,6 +402,7 @@ export default function ReleaseFileTagsModal({
                               onChange={(v) =>
                                 updateRowTags(row.play_path, "album", v)
                               }
+                              wrap
                             />
                           </td>
                           <td>
@@ -408,6 +441,7 @@ export default function ReleaseFileTagsModal({
                               onChange={(v) =>
                                 updateRowTags(row.play_path, "genre", v)
                               }
+                              wrap
                             />
                           </td>
                           <td>
@@ -416,6 +450,7 @@ export default function ReleaseFileTagsModal({
                               onChange={(v) =>
                                 updateRow(row.play_path, { writers: v })
                               }
+                              wrap
                             />
                           </td>
                           <td className="release-file-tags-modal__check-col">

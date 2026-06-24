@@ -49,6 +49,7 @@ import {
 import {
   isMobileLandscapeLayout,
   isMobilePortraitLayout,
+  isPhoneLayout,
   useDeviceLayout,
   isTabletLayout,
 } from "../../../usePhoneLayout";
@@ -325,6 +326,7 @@ export default function ReleasePage({
   const stacked = isMobilePortraitLayout(layout);
   const tabletPortrait = layout === "tablet-portrait";
   const mobileLandscape = isMobileLandscapeLayout(layout);
+  const isPhone = isPhoneLayout(layout);
   const [data, setData] = useState<ReleaseOverview | null>(() =>
     getCachedReleaseOverview(bandId, releaseId)
   );
@@ -1887,7 +1889,9 @@ export default function ReleasePage({
               onSetLyrics={isAdmin ? () => setLyricsSetOpen(true) : undefined}
               onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
               onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
-              onWriteFileTags={isAdmin ? () => setFileTagsOpen(true) : undefined}
+              onWriteFileTags={
+                isAdmin && !isPhone ? () => setFileTagsOpen(true) : undefined
+              }
               onRefreshTracklist={() => handleRefreshTracklist()}
               refreshIncludeBio={refreshWiki}
               onRefreshIncludeBioChange={setRefreshWiki}
