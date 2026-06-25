@@ -17,6 +17,7 @@ export type ArtistRoute = {
   releaseId?: string;
   releaseTab?: ReleaseTab;
   mediaItemId?: string;
+  playlistSlug?: string;
 };
 
 const SECTIONS: ArtistSection[] = [
@@ -185,8 +186,12 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
   let releaseId: string | undefined;
   let releaseTab: ReleaseTab = "overview";
   let mediaItemId: string | undefined;
+  let playlistSlug: string | undefined;
 
-  if (parts[0] === "audio" && parts[1] && RELEASE_ID_RE.test(parts[1])) {
+  if (parts[0] === "audio" && parts[1] === "playlist" && parts[2]) {
+    section = "audio";
+    playlistSlug = parts[2];
+  } else if (parts[0] === "audio" && parts[1] && RELEASE_ID_RE.test(parts[1])) {
     section = "audio";
     releaseId = parts[1];
     releaseTab = RELEASE_TABS.includes(parts[2] as ReleaseTab)
@@ -226,6 +231,7 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
     releaseId,
     releaseTab,
     mediaItemId,
+    playlistSlug,
   };
 }
 
@@ -235,11 +241,14 @@ export function artistPath(
   overviewTab: ArtistOverviewTab = "about",
   releaseId?: string,
   releaseTab: ReleaseTab = "overview",
-  mediaItemId?: string
+  mediaItemId?: string,
+  playlistSlug?: string
 ): string {
   let path = `/music/artist/${bandId}`;
   if (section === "overview") {
     path += `/overview/${overviewTab}`;
+  } else if (section === "audio" && playlistSlug) {
+    path += `/audio/playlist/${playlistSlug}`;
   } else if (section === "audio" && releaseId) {
     path += `/audio/${releaseId}`;
     if (releaseTab !== "overview") {
@@ -263,7 +272,8 @@ export function pushArtistRoute(route: ArtistRoute, replace = false) {
     route.overviewTab,
     route.releaseId,
     route.releaseTab ?? "overview",
-    route.mediaItemId
+    route.mediaItemId,
+    route.playlistSlug
   );
   if (replace) {
     window.history.replaceState(null, "", path);

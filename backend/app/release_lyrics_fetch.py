@@ -5,7 +5,7 @@ import asyncio
 
 from sqlalchemy.orm import Session
 
-from app.lyrics_storage import lrclib_title_variants
+from app.lyrics_artists import lyrics_artist_names
 from app.media_paths import path_to_local_file
 from app.release_lyrics_shared import (
     propagate_synced_lrc_to_siblings,
@@ -14,7 +14,7 @@ from app.release_lyrics_shared import (
     synced_lrc_for_path,
 )
 from app.release_tracklist import build_release_tracklist
-from app.services.lyrics import _strip_lrc_tags, _write_cache, fetch_lrclib_synced
+from app.services.lyrics import _strip_lrc_tags, _write_cache, fetch_lrclib_synced_resilient
 from app.track_overrides import read_lyrics_lrc, save_lyrics
 
 
@@ -30,7 +30,14 @@ async def fetch_release_lyrics(
     if not payload:
         return {"ok": False, "error": "Release tracklist not found"}
 
-    artist = (payload.get("artist_name") or "").strip()
+    from app import crud
+
+    band = crud.get_band(db, band_id)
+    if not band:
+        return {"ok": False, "error": "Band not found"}
+
+    artist_names = lyrics_artist_names(db, band)
+    artist = (artist_names[0] if artist_names else "").strip()
     album = (payload.get("title") or "").strip()
     if not artist:
         return {"ok": False, "error": "Missing artist name"}
@@ -112,18 +119,16 @@ async def fetch_release_lyrics(
                 synced: str | None = None
                 matched_title: str | None = None
                 try:
-                    for variant in lrclib_title_variants(title):
-                        synced = await fetch_lrclib_synced(
-                            artist,
-                            variant,
-                            album=album or None,
-                            duration=float(duration) if duration else None,
-                        )
-                        if synced:
-                            matched_title = variant
-                            break
-                        if delay_sec > 0:
-                            await asyncio.sleep(delay_sec)
+                    synced = await fetch_lrclib_synced_resilient(
+                        artist_names,
+                        title,
+                        album=album or None,
+                        duration=float(duration) if duration else None,
+                    )
+                    if synced:
+                        matched_title = title
+                    if delay_sec > 0 and not synced:
+                        await asyncio.sleep(delay_sec)
                 except Exception:
                     failed += 1
                     items.append({"title": title, "status": "error"})

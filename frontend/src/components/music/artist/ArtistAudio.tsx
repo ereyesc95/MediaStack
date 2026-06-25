@@ -487,6 +487,7 @@ type Props = {
   bandId: number;
   referrerArtistName?: string;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
+  onOpenPlaylist?: (slug: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 };
 
@@ -496,6 +497,7 @@ export default function ArtistAudio({
   bandId,
   referrerArtistName,
   onOpenReleaseNavigate,
+  onOpenPlaylist,
   onOpenArtist,
 }: Props) {
   const {
@@ -524,7 +526,7 @@ export default function ArtistAudio({
     );
   }
 
-  if (selectedPlaylist) {
+  if (selectedPlaylist && !onOpenPlaylist) {
     return (
       <div className="artist-audio">
         <ArtistPlaylistDetailView
@@ -542,7 +544,9 @@ export default function ArtistAudio({
       <div className="artist-audio">
         <ArtistPlaylistGrid
           playlists={playlists}
-          onSelect={(slug) => setSelectedPlaylist(slug)}
+          onSelect={(slug) =>
+            onOpenPlaylist ? onOpenPlaylist(slug) : setSelectedPlaylist(slug)
+          }
         />
       </div>
     );

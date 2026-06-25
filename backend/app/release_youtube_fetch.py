@@ -109,7 +109,7 @@ async def fetch_release_youtube_candidates(
                 title = (track.get("title") or "").strip()
                 if not play_path or not title:
                     continue
-                existing, _source = read_track_youtube(
+                existing, _videos, _source = read_track_youtube(
                     db,
                     band_id=band_id,
                     title=title,

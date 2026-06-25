@@ -35,6 +35,7 @@ import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import AddArtistModal from "./AddArtistModal";
 import ArtistPage from "./artist/ArtistPage";
+import SystemPlaylistPage from "./artist/SystemPlaylistPage";
 import MediaItemPage from "./media/MediaItemPage";
 import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
@@ -57,6 +58,7 @@ type Props = {
   releaseId?: string;
   releaseTab?: ReleaseTab;
   mediaItemId?: string;
+  playlistSlug?: string;
   playlistId?: number;
   genreFilterId?: number;
   countryFilterId?: number;
@@ -84,6 +86,7 @@ type Props = {
     releaseTab?: ReleaseTab,
     bandId?: number
   ) => void;
+  onPlaylistNavigate?: (slug?: string) => void;
   onMediaItemNavigate?: (
     itemId?: string,
     section?: ArtistSection
@@ -101,6 +104,7 @@ export default function MusicModule({
   releaseId,
   releaseTab = "overview",
   mediaItemId,
+  playlistSlug,
   playlistId,
   genreFilterId,
   countryFilterId,
@@ -121,6 +125,7 @@ export default function MusicModule({
   onBand,
   onArtistNavigate,
   onReleaseNavigate,
+  onPlaylistNavigate,
   onMediaItemNavigate,
   onPlaylist,
   onGenreFilter,
@@ -190,9 +195,9 @@ export default function MusicModule({
     (id: number, shellHint?: ArtistCard | null) => {
       clearPendingAudioCategory(id);
       primeArtistShell(id, shellHint);
-      void prefetchBandOverview(id, cardOrientation);
       onArtistNavigate("overview", "about");
       onBand(id);
+      void prefetchBandOverview(id, cardOrientation);
     },
     [cardOrientation, onArtistNavigate, onBand, primeArtistShell]
   );
@@ -795,6 +800,20 @@ export default function MusicModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
         />
+      ) : bandId && playlistSlug ? (
+        <SystemPlaylistPage
+          bandId={bandId}
+          slug={playlistSlug}
+          onBack={() => {
+            savePendingAudioCategory(bandId, "playlists");
+            pushArtistRoute({
+              bandId,
+              section: "audio",
+              overviewTab: artistOverviewTab,
+            });
+            onPlaylistNavigate?.(undefined);
+          }}
+        />
       ) : bandId && releaseId ? (
         <ReleasePage
           bandId={bandId}
@@ -888,6 +907,16 @@ export default function MusicModule({
               "overview",
               bid !== bandId ? bid : undefined
             );
+          }}
+          onOpenPlaylist={(slug) => {
+            savePendingAudioCategory(bandId, "playlists");
+            pushArtistRoute({
+              bandId,
+              section: "audio",
+              overviewTab: artistOverviewTab,
+              playlistSlug: slug,
+            });
+            onPlaylistNavigate?.(slug);
           }}
           onOpenMediaItem={(kind, itemId) =>
             onMediaItemNavigate?.(itemId, kind)

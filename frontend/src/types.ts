@@ -435,6 +435,8 @@ export type ArtistPlaylistTrack = {
   cover_url: string | null;
   play_path: string | null;
   album_folder: string | null;
+  album_title?: string | null;
+  play_count?: number | null;
 };
 
 export type ArtistPlaylistDetail = {
@@ -505,6 +507,12 @@ export type ReleaseNeighbor = {
   cover_url: string | null;
 };
 
+export type TrackYoutubeVideo = {
+  url: string;
+  label: string;
+  primary?: boolean;
+};
+
 export type ReleaseTrackItem = {
   id: string;
   number: number;
@@ -517,6 +525,7 @@ export type ReleaseTrackItem = {
   is_link: boolean;
   is_exclusive?: boolean;
   youtube_url?: string | null;
+  youtube_videos?: TrackYoutubeVideo[];
   source_album_title?: string | null;
   navigate_release_id?: string | null;
   navigate_band_id?: number | null;
@@ -796,6 +805,7 @@ export type View =
       releaseId?: string;
       releaseTab?: "overview" | "tracklist" | "gallery";
       mediaItemId?: string;
+      playlistSlug?: string;
       playlistId?: number;
       genreFilterId?: number;
       countryFilterId?: number;

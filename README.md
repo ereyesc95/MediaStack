@@ -256,10 +256,14 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 | File stem | Purpose |
 |-----------|---------|
 | `Cover - Front` | Main cover (playback, cards, gallery) |
+| `Cover - Album` | Alternate main cover stem (same role as `Cover - Front`) |
 | `Cover - Back` | Back cover (background layers) |
 | `Cover - Inner` | Inner sleeve (background layers) |
-| `Cover - Animation` | Animated cover (`.mp4`, `.webm`, …) |
+| `Animation - Album` | Animated album cover (`.mp4`, `.webm`, …); legacy `Cover - Animation` still supported |
 | `Canvas - Album` | Spotify-style canvas video |
+| `Cover - {Track Title}` | Track-specific static cover (overrides album front on that track) |
+| `Animation - {Track Title}` | Track-specific animated cover |
+| `Canvas - {Track Title}` | Track-specific canvas video |
 | `Disc`, `Disc 01`, `Disc 02`, `Vinyl`, `CD` | Rotating disc art |
 | `Logo`, `Icon` | Branding |
 | `Photocard - Portrait Front`, etc. | K-pop-style flip cards on the release overview |
@@ -387,7 +391,7 @@ Recognized for **system playlists** and **alternate versions**:
 | Tag | Effect |
 |-----|--------|
 | `Acoustic` | Acoustic playlist / version label |
-| `Remix` | Remixes playlist |
+| `Remix`, `Mix` | Remixes playlist (substring match on tag text) |
 | `Live` | Live version |
 | `Radio edit`, `Extended edit`, … | Treated like versions (shown under release date in the track panel) |
 | `Demo` | Demos playlist |
@@ -397,8 +401,29 @@ Recognized for **system playlists** and **alternate versions**:
 | `Cover` | Covers playlist (or `Artist Name cover`) |
 | `A Cappella` | A cappella playlist |
 | `Tribute` | Tributes playlist |
-| `feat. Artist` | Features / collaborations |
-| `with Artist` | Collaborations / appearances |
+| `feat. Artist` | Features playlist (own library) |
+| `with Artist` | Appearances on other artists’ releases |
+
+**Edition-only tags** (no bracket tag required):
+
+| Source | Playlist |
+|--------|----------|
+| Tracks in non-standard editions not on the standard edition | **Bonus Tracks** |
+| Non-A-side files under `Audio/Singles/` | **B-Sides** |
+| A-side singles whose title is not on any album/EP/compilation/soundtrack/live album | **Standalones** |
+
+**Cross-library playlists:**
+
+| Playlist | Rule |
+|----------|------|
+| **Appearances** | Other artists’ files whose `[…]` tags mention the band (incl. `feat.` / `with`) |
+| **Collaborations** | Appearances where the band is explicitly featured (`feat. …`) |
+| **Writing Credits** | Tracks on other artists/projects credited to band members (incl. solo monikers linked via lineup) |
+| **Most Played** | Local tracks sorted by play count for the current profile |
+| **Top Tracks** | From `bndTop100` / `bndTopTracks` matched to local files |
+| **Setlists** | setlist.fm (requires MusicBrainz ID + API key); year/show picker when opening |
+
+Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Route: `/music/artist/{id}/audio/playlist/{slug}`.
 
 ### Language adaptations
 
@@ -461,20 +486,31 @@ When a single is tied to an album, its tracks can appear under a **B-sides** sec
 
 **Playback artwork:** if an album track shares a title with a single, playback may use the single’s `[Artwork]` (e.g. `Wicked Game` on an album → single cover).
 
+**Track-specific `[Artwork]`** (when not playing from a single edition):
+
+1. `Cover - {Track Title}` — static cover (top tracks, tracklist thumbnails, playback)
+2. `Animation - {Track Title}` — animated cover; if missing but a track cover exists, album `Animation - Album` is suppressed
+3. `Canvas - {Track Title}` — canvas video; same suppression rule as animation
+
+Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `Cover - Animation` still read), `Canvas - Album`.
+
 ---
 
 ## Music module features
 
 - **Home dashboard** — recent plays, shortcuts; **cover-based theme** while a track plays (restores on pause/stop; menu theme choice is remembered)
-- **Artist page** — bio, lineup, discography, singles, playlists, gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
+- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions; left panel release date follows the playing track’s edition
-- **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]`; edition `Logo.png` in the top bar when applicable
+- **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]` (track-specific stems override album animation/canvas); edition `Logo.png` in the top bar when applicable
+- **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`
+- **Writer links** — “Written by” names open in-app when the artist has a local folder, matching **band aliases** (`bndOtherNames`, e.g. Ville Valo → VV)
 - **Playback themes** — home and artist top tracks sample cover colors while playing; changing theme via the menu while playing defers the visual switch until pause/stop, then resumes cover colors on play
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
-- **YouTube** — per-track official video links in DB; bulk fetch, manual set, open in new tab with autoplay
-- **Playlists** — user playlists (`plaType` 200) + suffix-based system templates (`plaType` 201: Remixes, Acoustic, …); add-to-playlist modal with create-and-add
+- **YouTube** — per-track official video links in DB (multiple URLs per track supported); bulk fetch, manual set, picker when several exist, open in new tab with autoplay
+- **Playlists** — user playlists (`plaType` 200) + **artist system playlists** scanned from disk (suffix tags, singles, editions, cross-library, play counts); alphabetical grid under Audio → Playlists; add-to-playlist modal with create-and-add
+- **Song quiz** — audio stops on score screen; page audio cleared when entering quiz; writer/artist name resolution uses same alias rules as release credits
 - **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**, **Write file tags**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
 - **Search** — in-library media search per artist
 - **Playback** — play logging, auto-advance to next track, stream via local file or media server

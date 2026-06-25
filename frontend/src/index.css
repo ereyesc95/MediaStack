@@ -2149,6 +2149,17 @@ input {
   margin-top: 1rem;
 }
 
+/* Footer / dismiss actions: match modal form copy (0.85rem), not browser-default button text. */
+.modal-actions-row .btn:not(.btn--small),
+.modal-panel:not(.modal-panel--welcome) > .btn.modal-close,
+.modal-panel:not(.modal-panel--welcome) .modal-search-row .btn,
+.modal-panel:not(.modal-panel--welcome) .profile-edit-upload,
+.release-add-playlist-modal__new .btn {
+  font-size: 0.85rem;
+  line-height: 1.25;
+  padding: 0.32rem 0.58rem;
+}
+
 .modal-panel--profile-edit {
   width: min(420px, 92vw);
 }
@@ -4915,19 +4926,26 @@ input {
 }
 
 .artist-about__performer {
-  margin-top: var(--artist-meta-gap, 0.6rem);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
 }
 
-.artist-about__performer-title {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin: 0 0 0.45rem;
+.artist-about__performer-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.artist-about__performer-grid .artist-about__performer-card {
+  grid-column: 3;
+  justify-self: center;
 }
 
 .artist-about__performer-card {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
@@ -4936,6 +4954,8 @@ input {
   color: var(--text);
   cursor: pointer;
   padding: 0;
+  min-width: 0;
+  text-align: center;
 }
 
 .artist-about__performer-card img,
@@ -6594,6 +6614,17 @@ input {
 
 .artist-page--mobile-landscape .artist-about__foot {
   flex-shrink: 0;
+}
+
+.artist-page--mobile-landscape .artist-about__performer-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.artist-about--flat-meta .artist-about__performer,
+.artist-page--mobile-landscape .artist-about__performer {
+  margin-top: 0;
+  padding-top: var(--artist-meta-gap);
 }
 
 .artist-about--flat-meta .artist-about__tracks,
@@ -10414,6 +10445,84 @@ button.lyrics-status-badge--icon-only {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
 
+.release-video-set-modal__videos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.release-video-set-modal__video-row {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 0.75fr) 1fr auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.release-video-set-modal__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.release-video-set-modal__label-input {
+  font-size: 0.76rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--radius);
+  padding: 0.28rem 0.5rem;
+  min-width: 0;
+}
+
+.release-video-set-modal__add,
+.release-video-set-modal__remove {
+  align-self: start;
+}
+
+.release-page__youtube-picker-wrap {
+  position: relative;
+}
+
+.release-page__youtube-picker {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.35rem);
+  z-index: 40;
+  min-width: 11rem;
+  max-width: 16rem;
+  padding: 0.35rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.release-page__youtube-picker-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  padding: 0.4rem 0.45rem;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+}
+
+.release-page__youtube-picker-item:hover,
+.release-page__youtube-picker-item:focus-visible {
+  background: var(--bg-hover);
+}
+
+.release-page__youtube-picker-label {
+  display: block;
+}
+
 .release-lyrics-set-modal {
   width: min(34rem, 92vw);
   max-height: min(78vh, 44rem);
@@ -10829,23 +10938,59 @@ button.lyrics-status-badge--icon-only {
   min-height: 0;
 }
 
-.release-file-tags-modal__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.release-file-tags-modal__intro-block {
-  flex: 1;
-  min-width: 0;
-}
-
 .release-file-tags-modal__intro {
   margin: 0;
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.45;
+}
+
+.release-file-tags-modal__cover-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.release-file-tags-modal__editions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.85rem 1.1rem;
+}
+
+.release-file-tags-modal__edition-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 6.5rem;
+}
+
+.release-file-tags-modal__edition-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.release-file-tags-modal__cover-thumb--loading {
+  animation: release-file-tags-cover-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes release-file-tags-cover-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.release-file-tags-modal__cover-toggle {
+  font-size: 0.72rem;
 }
 
 .release-file-tags-modal__intro-detail {
@@ -10856,11 +11001,7 @@ button.lyrics-status-badge--icon-only {
 }
 
 .release-file-tags-modal__cover-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.45rem;
-  flex-shrink: 0;
+  display: none;
 }
 
 .release-file-tags-modal__cover-btn {
@@ -10894,10 +11035,6 @@ button.lyrics-status-badge--icon-only {
 
 .release-file-tags-modal__cover-thumb--empty {
   background: rgba(255, 255, 255, 0.06);
-}
-
-.release-file-tags-modal__cover-toggle {
-  font-size: 0.72rem;
 }
 
 .release-file-tags-modal__summary {

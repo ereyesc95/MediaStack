@@ -59,6 +59,130 @@ def synced_lrc_for_path(db: Session, play_path: str) -> str | None:
     return raw if raw and "[" in raw else None
 
 
+def _sidecar_lrc_exists(play_path: str) -> bool:
+    local = path_to_local_file(play_path)
+    if not local:
+        return False
+    lrc_path = find_lrc_path(local)
+    return bool(lrc_path and lrc_path.is_file())
+
+
+class LyricsAvailabilityLookup:
+    """Batch lyrics availability for a release tracklist (one tracklist build)."""
+
+    __slots__ = (
+        "_paths_by_main_key",
+        "_main_keys_with_synced",
+        "_paths_with_lrc",
+        "_paths_with_plain",
+        "_sidecar_paths",
+    )
+
+    def __init__(
+        self,
+        *,
+        paths_by_main_key: dict[str, list[str]],
+        main_keys_with_synced: set[str],
+        paths_with_lrc: set[str],
+        paths_with_plain: set[str],
+        sidecar_paths: set[str],
+    ) -> None:
+        self._paths_by_main_key = paths_by_main_key
+        self._main_keys_with_synced = main_keys_with_synced
+        self._paths_with_lrc = paths_with_lrc
+        self._paths_with_plain = paths_with_plain
+        self._sidecar_paths = sidecar_paths
+
+    @classmethod
+    def build(cls, db: Session, tracklist: dict) -> LyricsAvailabilityLookup:
+        from sqlalchemy import select
+
+        from app.models import TrackOverride
+
+        paths_by_main_key = release_paths_by_main_key(tracklist)
+        all_paths: list[str] = []
+        seen_paths: set[str] = set()
+        for paths in paths_by_main_key.values():
+            for path in paths:
+                piece = path.strip()
+                if piece and piece not in seen_paths:
+                    seen_paths.add(piece)
+                    all_paths.append(piece)
+
+        paths_with_lrc: set[str] = set()
+        paths_with_plain: set[str] = set()
+        lrc_text_by_path: dict[str, str] = {}
+        if all_paths:
+            for row in db.scalars(
+                select(TrackOverride).where(
+                    TrackOverride.tro_play_path.in_(all_paths)
+                )
+            ).all():
+                path = (row.tro_play_path or "").strip()
+                if not path:
+                    continue
+                lrc = (row.tro_lyrics_lrc or "").strip()
+                if lrc:
+                    paths_with_lrc.add(path)
+                    lrc_text_by_path[path] = lrc
+                plain = (row.tro_lyrics_plain or "").strip()
+                if plain:
+                    paths_with_plain.add(path)
+
+        main_keys_with_synced: set[str] = set()
+        sidecar_paths: set[str] = set()
+        for key, paths in paths_by_main_key.items():
+            for path in paths:
+                text = lrc_text_by_path.get(path)
+                if text and "[" in text:
+                    main_keys_with_synced.add(key)
+                    break
+                if path in paths_with_lrc:
+                    continue
+                local = path_to_local_file(path)
+                if not local:
+                    continue
+                lrc_path = find_lrc_path(local)
+                if not lrc_path or not lrc_path.is_file():
+                    continue
+                try:
+                    raw = lrc_path.read_text(
+                        encoding="utf-8", errors="replace"
+                    ).strip()
+                except OSError:
+                    raw = ""
+                if raw and "[" in raw:
+                    main_keys_with_synced.add(key)
+                    break
+
+        for path in all_paths:
+            if path in paths_with_lrc or path in paths_with_plain:
+                continue
+            if _sidecar_lrc_exists(path):
+                sidecar_paths.add(path)
+
+        return cls(
+            paths_by_main_key=paths_by_main_key,
+            main_keys_with_synced=main_keys_with_synced,
+            paths_with_lrc=paths_with_lrc,
+            paths_with_plain=paths_with_plain,
+            sidecar_paths=sidecar_paths,
+        )
+
+    def has_lyrics(self, play_path: str, track_title: str) -> bool:
+        key = release_track_main_key(track_title)
+        if key in self._main_keys_with_synced:
+            return True
+        path = (play_path or "").strip()
+        if not path:
+            return False
+        if path in self._paths_with_lrc or path in self._paths_with_plain:
+            return True
+        if path in self._sidecar_paths:
+            return True
+        return False
+
+
 def find_release_synced_lrc(
     db: Session,
     *,
@@ -67,9 +191,11 @@ def find_release_synced_lrc(
     track_title: str,
     play_path: str | None = None,
     backfill: bool = True,
+    payload: dict | None = None,
 ) -> str | None:
     """Return synced LRC from any edition of the same song on this release."""
-    payload = build_release_tracklist(db, band_id, release_id)
+    if payload is None:
+        payload = build_release_tracklist(db, band_id, release_id)
     if not payload:
         return None
 

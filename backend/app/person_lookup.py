@@ -77,6 +77,10 @@ def _band_has_local_folder(media_root: Path, band: Band) -> bool:
     return bool(folder and folder.is_dir())
 
 
+def _band_other_name_pool(band: Band) -> set[str]:
+    return _name_pool(band.bnd_other_names)
+
+
 def find_local_band_for_person(db: Session, name: str) -> int | None:
     want = name.strip()
     if not want:
@@ -103,16 +107,11 @@ def find_local_band_for_person(db: Session, name: str) -> int | None:
             continue
         if _display_name(band.bnd_name or "").casefold() == norm:
             return band.bnd_id
+        if norm in _band_other_name_pool(band):
+            return band.bnd_id
         fk = band.bnd_fk_artists or ""
         for aid in matched_artist_ids:
             if str(aid) in fk or f"[{aid}]" in fk:
-                return band.bnd_id
-
-    for band in db.scalars(select(Band)).all():
-        if not _band_has_local_folder(media_root, band):
-            continue
-        for alias in _name_pool(band.bnd_name):
-            if alias == norm:
                 return band.bnd_id
 
     return None

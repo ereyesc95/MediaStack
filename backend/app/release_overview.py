@@ -57,13 +57,17 @@ from app.media_paths_util import entry_display_name, resolve_media_entry, safe_r
 from app.models import Artist, Band, Release, Subgenre
 from app.music_filters import _parse_ids
 
-COVER_INNER_STEM = "cover - inner"
-COVER_BACK_STEM = "cover - back"
-COVER_ANIMATION_STEM = "cover - animation"
-CANVAS_ALBUM_STEM = "canvas - album"
+from app.artwork_stems import (
+    COVER_BACK_STEM,
+    COVER_INNER_STEM,
+    VIDEO_EXTS,
+    resolve_animation_album_file,
+    resolve_canvas_album_file,
+    resolve_cover_front_file,
+)
+
 LOGO_STEM = "logo"
 ICON_STEM = "icon"
-VIDEO_EXTS = {".mp4", ".webm", ".mov", ".m4v"}
 TAPE_RE = re.compile(r"^\d+\.\s*(Tape|Cassette)\s+", re.I)
 
 PHOTOCARD_STEMS = {
@@ -199,13 +203,11 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
             "spotify_url": None,
             "qr_url": None,
         }
-    cover_front = _artwork_file(artwork, COVER_FRONT_STEM)
+    cover_front = resolve_cover_front_file(artwork)
     cover_back = _artwork_file(artwork, COVER_BACK_STEM)
     cover_inner = _artwork_file(artwork, COVER_INNER_STEM)
-    cover_animation = _artwork_media_file(
-        artwork, COVER_ANIMATION_STEM, allow_video=True
-    )
-    canvas = _artwork_media_file(artwork, CANVAS_ALBUM_STEM, allow_video=True)
+    cover_animation = resolve_animation_album_file(artwork)
+    canvas = resolve_canvas_album_file(artwork)
     logo = _artwork_file(artwork, LOGO_STEM)
     icon = _artwork_file(artwork, ICON_STEM)
     spotify = _artwork_file(artwork, "spotify")

@@ -196,6 +196,23 @@ def _read_lrc_file(play_path: str, db: Session | None = None) -> str | None:
         return None
 
 
+def _duration_lookup_values(duration: float | None) -> list[int | None]:
+    """LRCLIB exact match durations; retry ±1–2 s when the first attempt fails."""
+    if not duration or duration <= 0:
+        return [None]
+    base = int(round(duration))
+    seen: set[int | None] = set()
+    out: list[int | None] = []
+    for value in (base, base - 1, base + 1, base - 2, base + 2):
+        if value <= 0 or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    seen.add(None)
+    out.append(None)
+    return out
+
+
 async def fetch_lrclib_synced(
     artist: str,
     title: str,
@@ -224,6 +241,69 @@ async def fetch_lrclib_synced(
         return None
     synced = (data.get("syncedLyrics") or "").strip()
     return synced or None
+
+
+async def fetch_lrclib_synced_resilient(
+    artists: list[str],
+    title: str,
+    *,
+    album: str | None = None,
+    duration: float | None = None,
+) -> str | None:
+    """Try artist aliases, title variants, duration tolerance, and album-less fallback."""
+    from app.lyrics_storage import lrclib_title_variants
+
+    titles = _lyrics_title_variants(title)
+    seen_titles: set[str] = set()
+    ordered_titles: list[str] = []
+    for candidate in titles:
+        key = candidate.casefold()
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+        ordered_titles.append(candidate)
+    for candidate in lrclib_title_variants(title):
+        key = candidate.casefold()
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+        ordered_titles.append(candidate)
+
+    seen_artists: set[str] = set()
+    ordered_artists: list[str] = []
+    for artist in artists:
+        name = (artist or "").strip()
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen_artists:
+            continue
+        seen_artists.add(key)
+        ordered_artists.append(name)
+
+    album_clean = (album or "").strip() or None
+    for artist in ordered_artists:
+        for variant in ordered_titles:
+            for dur in _duration_lookup_values(duration):
+                synced = await fetch_lrclib_synced(
+                    artist,
+                    variant,
+                    album=album_clean,
+                    duration=float(dur) if dur is not None else None,
+                )
+                if synced:
+                    return synced
+            if album_clean:
+                for dur in _duration_lookup_values(duration):
+                    synced = await fetch_lrclib_synced(
+                        artist,
+                        variant,
+                        album=None,
+                        duration=float(dur) if dur is not None else None,
+                    )
+                    if synced:
+                        return synced
+    return None
 
 
 async def _fetch_lrclib(artist: str, title: str) -> str | None:

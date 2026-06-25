@@ -17,7 +17,7 @@ from app.band_library import (
 from app.gallery import _artist_dir
 from app.media_index import parse_bracket_tags
 from app.media_paths_util import safe_relative
-from app.models import ArtistParticipation, Band, Track
+from app.models import Artist, ArtistParticipation, Band, Track
 from app.music_filters import _parse_ids
 from app.system_playlists import _track_tags
 
@@ -58,6 +58,48 @@ def _track_entry(
         "album_title": album_title or _album_title_from_folder(album_dir.name),
         "cover_url": _find_cover_front_artwork(audio_file.parent, media_root),
     }
+
+
+def _member_artist_names(db: Session, band_id: int) -> dict[int, set[str]]:
+    from app.system_playlists import _name_pool
+
+    out: dict[int, set[str]] = {}
+    for arp in db.scalars(
+        select(ArtistParticipation).where(ArtistParticipation.arp_fk_bands == band_id)
+    ).all():
+        if not arp.arp_fk_artists:
+            continue
+        artist = db.get(Artist, int(arp.arp_fk_artists))
+        if not artist:
+            continue
+        names = _name_pool(artist.art_name) | _name_pool(artist.art_stage_name)
+        names |= _name_pool(artist.art_aliases)
+        if names:
+            out[int(arp.arp_fk_artists)] = names
+    return out
+
+
+def _bands_for_member_projects(db: Session, band: Band) -> list[Band]:
+    from app.system_playlists import _name_pool
+
+    own_id = band.bnd_id
+    member_names = _member_artist_names(db, own_id)
+    if not member_names:
+        return []
+    all_member_name_tokens: set[str] = set()
+    for names in member_names.values():
+        all_member_name_tokens |= names
+
+    matched: list[Band] = []
+    seen: set[int] = set()
+    for other in db.scalars(select(Band)).all():
+        if other.bnd_id == own_id or other.bnd_id in seen:
+            continue
+        band_names = _name_pool(other.bnd_name) | _name_pool(other.bnd_other_names)
+        if band_names & all_member_name_tokens:
+            matched.append(other)
+            seen.add(other.bnd_id)
+    return matched
 
 
 def scan_writing_credits(db: Session, band: Band, media_root: Path) -> list[dict]:
@@ -110,6 +152,31 @@ def scan_writing_credits(db: Session, band: Band, media_root: Path) -> list[dict
             out.append(entry)
 
     out.sort(key=lambda t: (t.get("album_title") or "", t.get("title") or ""))
+
+    if out:
+        return out
+
+    for other in _bands_for_member_projects(db, band):
+        if not other.bnd_name:
+            continue
+        artist_dir = _artist_dir(media_root, other.bnd_name)
+        if not artist_dir:
+            continue
+        for audio_file in _collect_audio_files(artist_dir):
+            entry = _track_entry(
+                audio_file,
+                media_root,
+                album_title=_album_title_from_folder(audio_file.parent.name),
+            )
+            if not entry:
+                continue
+            key = entry["play_path"]
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(entry)
+
+    out.sort(key=lambda t: (t.get("album_title") or "", t.get("title") or ""))
     return out
 
 
@@ -118,6 +185,10 @@ def _appearance_names(band: Band) -> list[str]:
     if band.bnd_name:
         names.append(band.bnd_name.strip())
     for part in (band.bnd_name or "").split(";"):
+        piece = part.strip()
+        if piece and piece not in names:
+            names.append(piece)
+    for part in (band.bnd_other_names or "").replace("█", "'").replace(";", ",").split(","):
         piece = part.strip()
         if piece and piece not in names:
             names.append(piece)

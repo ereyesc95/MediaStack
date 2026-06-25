@@ -87,11 +87,18 @@ def migrate_schema(eng: Engine) -> None:
                         "troLyricsLrc" TEXT,
                         "troLyricsPlain" TEXT,
                         "troYoutubeUrl" TEXT,
+                        "troYoutubeVideos" TEXT,
                         "troUpdatedAt" TEXT
                     )
                     """
                 )
             )
+        if "track_overrides" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("track_overrides")}
+            if "troYoutubeVideos" not in cols:
+                conn.execute(
+                    text('ALTER TABLE track_overrides ADD COLUMN "troYoutubeVideos" TEXT')
+                )
         if "artists" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("artists")}
             for col, typ in (

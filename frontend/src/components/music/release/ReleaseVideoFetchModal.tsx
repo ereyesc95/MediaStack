@@ -51,13 +51,22 @@ export default function ReleaseVideoFetchModal({
     setError(null);
     try {
       for (const item of reviewable) {
-        const url = selections[item.play_path];
-        if (!url) continue;
+        const primaryUrl = selections[item.play_path];
+        if (!primaryUrl) continue;
+        const videos = item.candidates.map((candidate) => ({
+          url: candidate.url,
+          label: candidate.label || "Video",
+          primary: candidate.url === primaryUrl,
+        }));
+        if (!videos.some((v) => v.primary) && videos[0]) {
+          videos[0] = { ...videos[0], primary: true };
+        }
         await saveTrackYoutube({
           artist: artistName,
           title: trackMainTitle(item.title),
           play_path: item.play_path,
-          youtube_url: url,
+          youtube_url: primaryUrl,
+          youtube_videos: videos,
           band_id: bandId,
         });
       }

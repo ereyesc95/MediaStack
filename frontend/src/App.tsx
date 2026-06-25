@@ -133,6 +133,7 @@ export default function App() {
         releaseId: route.releaseId,
         releaseTab: route.releaseTab,
         mediaItemId: route.mediaItemId,
+        playlistSlug: route.playlistSlug,
       });
     }
     init();
@@ -153,6 +154,7 @@ export default function App() {
                 releaseId: route.releaseId,
                 releaseTab: route.releaseTab,
                 mediaItemId: route.mediaItemId,
+                playlistSlug: route.playlistSlug,
               }
             : {
                 kind: "music",
@@ -163,6 +165,7 @@ export default function App() {
                 releaseId: route.releaseId,
                 releaseTab: route.releaseTab,
                 mediaItemId: route.mediaItemId,
+                playlistSlug: route.playlistSlug,
               }
         );
       } else if (window.location.pathname === "/" || window.location.pathname === "") {
@@ -445,6 +448,8 @@ export default function App() {
 
             mediaItemId={view.mediaItemId}
 
+            playlistSlug={view.playlistSlug}
+
             playlistId={view.playlistId}
 
             genreFilterId={view.genreFilterId}
@@ -493,6 +498,17 @@ export default function App() {
               openMusic({
                 artistSection: section,
                 artistOverviewTab: overviewTab,
+                releaseId: undefined,
+                releaseTab: undefined,
+                mediaItemId: undefined,
+                playlistSlug: undefined,
+              })
+            }
+
+            onPlaylistNavigate={(slug) =>
+              openMusic({
+                artistSection: "audio",
+                playlistSlug: slug,
                 releaseId: undefined,
                 releaseTab: undefined,
                 mediaItemId: undefined,

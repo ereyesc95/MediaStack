@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -263,6 +264,41 @@ def _era_lead_vocalist(
     return result
 
 
+def _release_year(card: dict) -> int | None:
+    date_iso = card.get("date_iso")
+    if not date_iso or len(date_iso) < 4:
+        return None
+    year = date_iso[:4]
+    return int(year) if year.isdigit() else None
+
+
+def _writers_map_from_release_field(db: Session, raw: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for match in TRACK_WRITERS_RE.finditer(raw or ""):
+        key = _normalize_credit_title(match.group(1).strip())
+        if key and key not in out:
+            out[key] = _parse_writer_refs(db, match.group(2))
+    return out
+
+
+def _band_track_writers_index(db: Session, band_id: int) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    needle = str(band_id)
+    for row in db.scalars(select(Track)).all():
+        bid = row.tra_band_id or ""
+        if bid != needle and needle not in _parse_ids(bid):
+            continue
+        if not row.tra_author_id:
+            continue
+        names = _artist_names(db, _parse_ids(row.tra_author_id))
+        if not names:
+            continue
+        key = _normalize_credit_title((row.tra_name or "").strip())
+        if key and key not in out:
+            out[key] = names
+    return out
+
+
 def _track_row(db: Session, band_id: int, title: str) -> Track | None:
     keys = _credit_title_keys(title)
     needle = str(band_id)
@@ -276,12 +312,175 @@ def _track_row(db: Session, band_id: int, title: str) -> Track | None:
     return None
 
 
-def _release_year(card: dict) -> int | None:
-    date_iso = card.get("date_iso")
-    if not date_iso or len(date_iso) < 4:
+def _catalog_writers_index(
+    db: Session,
+    band_id: int,
+    *,
+    skip_rel_id: int | None,
+) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for rel in _releases_for_band(db, band_id):
+        if skip_rel_id is not None and rel.rel_id == skip_rel_id:
+            continue
+        for match in TRACK_WRITERS_RE.finditer(rel.rel_fk_writers or ""):
+            key = _normalize_credit_title(match.group(1).strip())
+            if key and key not in out:
+                out[key] = _parse_writer_refs(db, match.group(2))
+    return out
+
+
+@dataclass
+class ReleaseWritersLookup:
+    """Batch writer resolution for all tracks on one release."""
+
+    band_track_writers: dict[str, list[str]] = field(default_factory=dict)
+    release_writers: dict[str, list[str]] = field(default_factory=dict)
+    catalog_writers: dict[str, list[str]] = field(default_factory=dict)
+    lead_vocalist: list[str] = field(default_factory=list)
+
+    @classmethod
+    def build(
+        cls,
+        db: Session,
+        band_id: int,
+        release_id: str,
+        overview: dict,
+    ) -> ReleaseWritersLookup | None:
+        resolved = resolve_release_content(db, band_id, release_id)
+        if not resolved:
+            return None
+        band, card, media_root, _ = resolved
+        album_title = (overview.get("title") or card.get("title") or "").strip()
+        rel = _match_db_release(db, band_id, album_title)
+        release_year = _release_year(card) or _release_year(overview)
+        return cls(
+            band_track_writers=_band_track_writers_index(db, band_id),
+            release_writers=_writers_map_from_release_field(
+                db, rel.rel_fk_writers or "" if rel else ""
+            ),
+            catalog_writers=_catalog_writers_index(
+                db,
+                band_id,
+                skip_rel_id=rel.rel_id if rel else None,
+            ),
+            lead_vocalist=_era_lead_vocalist(db, band, media_root, release_year),
+        )
+
+    def writers_for_title(self, title: str) -> list[str]:
+        keys = _credit_title_keys(title)
+        for key in keys:
+            names = self.band_track_writers.get(key)
+            if names:
+                return list(names)
+        for key in keys:
+            names = self.release_writers.get(key)
+            if names:
+                return list(names)
+        for key in keys:
+            names = self.catalog_writers.get(key)
+            if names:
+                return list(names)
+        cover = _cover_writers_from_title(title)
+        if cover:
+            return cover
+        if self.lead_vocalist:
+            return list(self.lead_vocalist)
+        return []
+
+    def writers_text_for_title(self, title: str) -> str | None:
+        names = self.writers_for_title(title)
+        cleaned = [n.strip() for n in names if n and str(n).strip()]
+        if not cleaned:
+            return None
+        return "; ".join(cleaned)
+
+
+def _lookup_artist_id_by_name(db: Session, name: str) -> int | None:
+    target = name.strip().casefold()
+    if not target:
         return None
-    year = date_iso[:4]
-    return int(year) if year.isdigit() else None
+    for row in db.scalars(select(Artist)).all():
+        if not row.art_name:
+            continue
+        if row.art_name.strip().casefold() == target:
+            return row.art_id
+        if row.art_stage_name and row.art_stage_name.strip().casefold() == target:
+            return row.art_id
+    return None
+
+
+def _names_to_writer_refs(db: Session, writers_text: str) -> str:
+    names = [n.strip() for n in writers_text.split(";") if n.strip()]
+    refs: list[str] = []
+    for name in names:
+        aid = _lookup_artist_id_by_name(db, name)
+        if aid is not None:
+            refs.append(f"{{{aid}}}")
+            continue
+        safe = name.replace("}", "").strip()
+        refs.append(f"{{{safe}_not_found}}")
+    return ";".join(refs)
+
+
+def _format_track_writer_entry(track_title: str, refs: str) -> str:
+    return f"~{track_title}~[{{{refs}}}]"
+
+
+def set_track_writers(
+    db: Session,
+    band_id: int,
+    release_id: str,
+    track_title: str,
+    writers_text: str,
+) -> bool:
+    """Persist track writers on the release relFKwriters field."""
+    resolved = resolve_release_content(db, band_id, release_id)
+    if not resolved:
+        return False
+    _band, card, _media_root, _ = resolved
+    album_title = card.get("title") or ""
+    rel = _match_db_release(db, band_id, album_title)
+    if not rel:
+        return False
+
+    title = (track_title or "").strip()
+    if not title:
+        return False
+
+    refs = _names_to_writer_refs(db, writers_text) if writers_text.strip() else ""
+    new_entry = _format_track_writer_entry(title, refs) if refs else None
+
+    raw = (rel.rel_fk_writers or "").strip()
+    parts = [p.strip() for p in raw.split(TRACK_WRITERS_SEP) if p.strip()] if raw else []
+
+    title_keys = _credit_title_keys(title)
+    kept: list[str] = []
+    replaced = False
+    for part in parts:
+        m = TRACK_WRITERS_RE.match(part)
+        if not m:
+            kept.append(part)
+            continue
+        track_part = m.group(1).strip()
+        if _normalize_credit_title(track_part) in title_keys:
+            replaced = True
+            if new_entry:
+                kept.append(new_entry)
+        else:
+            kept.append(part)
+
+    if not replaced and new_entry:
+        kept.append(new_entry)
+
+    new_raw = TRACK_WRITERS_SEP.join(kept) if kept else None
+    current = (rel.rel_fk_writers or "").strip() or None
+    if current == (new_raw or None):
+        return False
+
+    rel.rel_fk_writers = new_raw
+    db.commit()
+    _band_releases_cache.pop(band_id, None)
+    return True
 
 
 def get_track_credits(

@@ -523,20 +523,49 @@ export type WriteFileTagsTrackIn = {
   writers?: string | null;
 };
 
+export type FileTagEditionCover = {
+  edition_id: string;
+  cover_path?: string | null;
+};
+
 export async function pickReleaseCoverForFileTags(
   bandId: number,
-  releaseId: string
+  releaseId: string,
+  editionId?: string
 ): Promise<{
   ok: boolean;
   cancelled?: boolean;
+  edition_id?: string;
   cover_path?: string;
   preview_url?: string;
   error?: string;
 }> {
   return request(
     `${API}/music/bands/${bandId}/releases/${releaseId}/write-file-tags/pick-cover`,
-    { method: "POST" }
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        editionId ? { edition_id: editionId } : {}
+      ),
+    }
   );
+}
+
+/** Load cover preview with Bearer auth (img src cannot send Authorization). */
+export async function fetchFileTagsCoverPreviewUrl(
+  previewUrl: string
+): Promise<string> {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  const res = await fetch(previewUrl, { headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Cover preview failed");
+  }
+  return URL.createObjectURL(await res.blob());
 }
 
 export async function syncReleaseFileTags(
@@ -546,6 +575,7 @@ export async function syncReleaseFileTags(
   options?: {
     includeCover?: boolean;
     coverPath?: string | null;
+    editionCovers?: FileTagEditionCover[];
     tracks?: WriteFileTagsTrackIn[];
   }
 ): Promise<{
@@ -553,12 +583,18 @@ export async function syncReleaseFileTags(
   dry_run?: boolean;
   include_cover?: boolean;
   cover_url?: string | null;
-  cover_path?: string | null;
-  cover_artwork_dir?: string | null;
+  editions?: {
+    id: string;
+    label: string;
+    cover_path?: string | null;
+    artwork_dir?: string | null;
+    preview_url?: string | null;
+  }[];
   release_title?: string;
   error?: string;
   tracks?: {
     play_path: string;
+    edition_id?: string | null;
     file_name: string | null;
     tags: FileTagValues;
     writers?: string | null;
@@ -584,6 +620,7 @@ export async function syncReleaseFileTags(
         dry_run: dryRun,
         include_cover: options?.includeCover ?? false,
         cover_path: options?.coverPath ?? null,
+        edition_covers: options?.editionCovers,
         tracks: options?.tracks,
       }),
     },
@@ -664,6 +701,7 @@ export async function fetchTrackYoutube(
     artist: string;
     title: string;
     youtube_url: string | null;
+    youtube_videos?: import("./types").TrackYoutubeVideo[];
     source: string;
   }>(`${API}/music/youtube?${q}`);
 }
@@ -673,12 +711,14 @@ export async function saveTrackYoutube(body: {
   title: string;
   play_path?: string;
   youtube_url?: string | null;
+  youtube_videos?: import("./types").TrackYoutubeVideo[];
   band_id?: number;
 }) {
   return request<{
     artist: string;
     title: string;
     youtube_url: string | null;
+    youtube_videos?: import("./types").TrackYoutubeVideo[];
     source: string;
   }>(`${API}/music/youtube`, {
     method: "PUT",

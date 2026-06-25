@@ -64,11 +64,21 @@ class WriteFileTagsTrackIn(BaseModel):
     writers: str | None = None
 
 
+class EditionCoverIn(BaseModel):
+    edition_id: str
+    cover_path: str | None = None
+
+
 class WriteFileTagsBody(BaseModel):
     dry_run: bool = True
     include_cover: bool = False
     cover_path: str | None = None
+    edition_covers: list[EditionCoverIn] | None = None
     tracks: list[WriteFileTagsTrackIn] | None = None
+
+
+class PickCoverForFileTagsBody(BaseModel):
+    edition_id: str | None = None
 
 
 class AddPlaylistTrackBody(BaseModel):
@@ -565,6 +575,11 @@ def release_write_file_tags(
         dry_run=body.dry_run,
         include_cover=body.include_cover,
         cover_path=body.cover_path,
+        edition_covers=(
+            [e.model_dump() for e in body.edition_covers]
+            if body.edition_covers
+            else None
+        ),
         tracks_input=(
             [t.model_dump() for t in body.tracks] if body.tracks else None
         ),
@@ -578,6 +593,7 @@ def release_write_file_tags(
 def release_pick_cover_for_file_tags(
     band_id: int,
     release_id: str,
+    body: PickCoverForFileTagsBody | None = None,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
@@ -586,7 +602,10 @@ def release_pick_cover_for_file_tags(
     row = crud.get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
-    result = pick_release_cover_file(db, band_id, release_id)
+    edition_id = body.edition_id if body else None
+    result = pick_release_cover_file(
+        db, band_id, release_id, edition_id=edition_id
+    )
     if not result.get("ok"):
         raise HTTPException(404, result.get("error") or "Release not found")
     return result
@@ -597,6 +616,7 @@ def release_cover_preview_for_file_tags(
     band_id: int,
     release_id: str,
     token: str,
+    db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
     from fastapi.responses import FileResponse
@@ -775,6 +795,45 @@ async def band_word_cloud_prefetch(
     return {"cached_tracks": cached, **cloud}
 
 
+@router.get("/bands/{band_id}/media/playlists")
+def band_playlist_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+    user: User | None = Depends(get_optional_user),
+):
+    from app.playlist_index import get_playlist_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    user_id = user.usr_id if user else 1
+    return get_playlist_index(db, row, force=force, user_id=user_id)
+
+
+@router.get("/bands/{band_id}/media/playlists/{slug}")
+def band_playlist_detail(
+    band_id: int,
+    slug: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    from app.playlist_index import get_playlist_detail
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        raise HTTPException(404, "Playlist not found")
+
+    user_id = user.usr_id if user else 1
+    detail = get_playlist_detail(db, row, root, slug, user_id=user_id)
+    if not detail:
+        raise HTTPException(404, "Playlist not found")
+    return detail
+
+
 @router.get("/bands/{band_id}/media/{kind}/{item_id}")
 def band_media_item(
     band_id: int,
@@ -867,68 +926,6 @@ def quiz_save_score(
         total=body.total,
         time_ms=body.time_ms,
     )
-
-
-@router.get("/bands/{band_id}/media/playlists")
-def band_playlist_index(
-    band_id: int,
-    db: Session = Depends(get_db),
-    force: bool = Query(False),
-):
-    from app.playlist_index import get_playlist_index
-
-    row = crud.get_band(db, band_id)
-    if not row:
-        raise HTTPException(404, "Band not found")
-    return get_playlist_index(db, row, force=force)
-
-
-@router.get("/bands/{band_id}/media/playlists/{slug}")
-def band_playlist_detail(
-    band_id: int,
-    slug: str,
-    db: Session = Depends(get_db),
-):
-    from app.playlist_index import get_playlist_index, get_top_tracks_playlist_tracks
-
-    row = crud.get_band(db, band_id)
-    if not row:
-        raise HTTPException(404, "Band not found")
-    root = Path(settings.media_root) if settings.media_root else None
-    if not root or not root.is_dir():
-        raise HTTPException(404, "Playlist not found")
-
-    if slug == "top-tracks":
-        tracks = get_top_tracks_playlist_tracks(row, root)
-        if not tracks:
-            raise HTTPException(404, "Playlist not found")
-        return {"slug": slug, "name": "Top Tracks", "tracks": tracks}
-
-    if slug == "setlists":
-        from app.playlist_index import _build_setlists_detail
-
-        detail = _build_setlists_detail(db, row, root)
-        if not detail:
-            raise HTTPException(404, "Playlist not found")
-        return detail
-
-    from app.playlist_index import get_suffix_playlist_tracks
-
-    suffix_tracks = get_suffix_playlist_tracks(db, row, root, slug)
-    if suffix_tracks:
-        from app.cross_artist_playlists import CROSS_PLAYLIST_LABELS
-        from app.system_playlists import ORIGINALS_SLUG, PLAYLIST_RULES
-
-        name = CROSS_PLAYLIST_LABELS.get(slug)
-        if not name:
-            name = next((label for s, label, _ in PLAYLIST_RULES if s == slug), None)
-        if not name and slug == ORIGINALS_SLUG:
-            name = "Originals"
-        if not name:
-            name = slug
-        return {"slug": slug, "name": name, "tracks": suffix_tracks}
-
-    raise HTTPException(404, "Playlist not found")
 
 
 @router.get("/bands/{band_id}/overview")

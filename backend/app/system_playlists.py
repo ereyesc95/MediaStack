@@ -15,9 +15,12 @@ from app.gallery import _artist_dir
 from app.media_index import parse_bracket_tags
 from app.media_paths_util import safe_relative
 from app.models import Band
-from app.playlist_index import playlist_cover_url
 
 TRACK_BRACKET_RE = re.compile(r"\[([^\]]+)\]")
+
+
+def playlist_cover_url(slug: str) -> str:
+    return f"/api/assets/system/playlists/{slug}"
 
 ORIGINALS_SLUG = "originals"
 
@@ -31,7 +34,6 @@ PLAYLIST_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("b-sides", "B-Sides", ("b-side", "b side", "bside")),
     ("bonus-tracks", "Bonus Tracks", ("bonus",)),
     ("tributes", "Tributes", ("tribute",)),
-    ("collaborations", "Collaborations", ("with ",)),
     ("features", "Features", ("feat", "featuring")),
 )
 
@@ -46,6 +48,18 @@ EXCLUDE_ORIGINALS = (
     "edit",
     "version",
 )
+
+
+def _name_pool(raw: str | None) -> set[str]:
+    if not raw:
+        return set()
+    out: set[str] = set()
+    for part in raw.replace(";", ",").split(","):
+        for sub in part.split("/"):
+            text = sub.strip()
+            if text:
+                out.add(text.casefold())
+    return out
 
 
 def _track_tags(stem: str) -> list[str]:
@@ -63,6 +77,15 @@ def _matches_rule(tags: list[str], needles: tuple[str, ...]) -> bool:
         for needle in needles:
             if needle in tag:
                 return True
+    return False
+
+
+def _matches_remix(tags: list[str]) -> bool:
+    for tag in tags:
+        if "remix" in tag:
+            return True
+        if " mix" in tag or tag.endswith("mix"):
+            return True
     return False
 
 
@@ -116,7 +139,11 @@ def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]
             "cover_url": cover,
         }
         for slug, _, needles in PLAYLIST_RULES:
-            if not _matches_rule(combined_tags, needles):
+            if slug == "remixes":
+                matched = _matches_remix(combined_tags)
+            else:
+                matched = _matches_rule(combined_tags, needles)
+            if not matched:
                 continue
             key = _normalize_title_for_match(title)
             if key in seen[slug]:
@@ -142,7 +169,11 @@ def playlist_cards_from_buckets(
     all_slugs: list[tuple[str, str]] = [(s, l) for s, l, _ in PLAYLIST_RULES]
     all_slugs.append((ORIGINALS_SLUG, "Originals"))
     all_slugs.extend(extra)
+    seen_slugs: set[str] = set()
     for slug, label in all_slugs:
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
         tracks = buckets.get(slug) or []
         if not tracks:
             continue

@@ -89,15 +89,16 @@ def _find_artwork_subdir(folder: Path) -> Path | None:
 
 
 def _find_cover_front_artwork(track_dir: Path, media_root: Path) -> str | None:
-    """Cover - Front inside [Artwork] in track folder, else one level up."""
+    """Cover - Front / Cover - Album inside [Artwork] in track folder, else one level up."""
+    from app.artwork_stems import resolve_cover_front_file
+
     for base in (track_dir, track_dir.parent):
         artwork = _find_artwork_subdir(base)
         if not artwork:
             continue
-        for p in artwork.iterdir():
-            if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
-                if p.stem.casefold() == COVER_FRONT_STEM:
-                    return _media_url(p, media_root)
+        cover = resolve_cover_front_file(artwork)
+        if cover:
+            return _media_url(cover, media_root)
     return None
 
 
@@ -106,7 +107,8 @@ def title_from_track_path(path: str | None) -> str:
         return ""
     name = Path(path.replace("\\", "/")).name
     stem = Path(name).stem
-    return TRACK_PREFIX_RE.sub("", stem).strip()
+    raw = TRACK_PREFIX_RE.sub("", stem).strip()
+    return title_case_track_title(raw)
 
 
 def cover_url_for_track_path(path: str | None, media_root: Path) -> str | None:
@@ -170,6 +172,77 @@ def scan_audio_library(artist_name: str | None, media_root: Path) -> dict[str, l
 
 BRACKET_SUFFIX_RE = re.compile(r"\s*\[.*\]\s*$")
 
+TITLE_CASE_SMALL_WORDS = frozenset(
+    {
+        "and",
+        "of",
+        "from",
+        "the",
+        "a",
+        "an",
+        "in",
+        "but",
+        "nor",
+        "or",
+        "by",
+        "on",
+        "to",
+        "into",
+        "than",
+        "with",
+        "without",
+    }
+)
+
+
+def _word_core_for_title_case(word: str) -> str:
+    return word.strip(".,!?;:\"'()[]{}")
+
+
+def _capitalize_word(word: str) -> str:
+    for index, char in enumerate(word):
+        if char.isalpha():
+            return word[:index] + char.upper() + word[index + 1 :].lower()
+    return word
+
+
+def _lowercase_word(word: str) -> str:
+    return "".join(char.lower() if char.isalpha() else char for char in word)
+
+
+def _title_case_words(text: str) -> str:
+    words = text.split()
+    if not words:
+        return text
+    last_index = len(words) - 1
+    out: list[str] = []
+    for index, word in enumerate(words):
+        core = _word_core_for_title_case(word)
+        if (
+            core
+            and 0 < index < last_index
+            and core.casefold() in TITLE_CASE_SMALL_WORDS
+        ):
+            out.append(_lowercase_word(word))
+        else:
+            out.append(_capitalize_word(word))
+    return " ".join(out)
+
+
+def title_case_track_title(title: str) -> str:
+    """Title-case a track title; preserve trailing [bracket] suffixes unchanged."""
+    text = (title or "").strip()
+    if not text:
+        return text
+    bracket_match = BRACKET_SUFFIX_RE.search(text)
+    if bracket_match:
+        main = text[: bracket_match.start()].strip()
+        suffix = text[bracket_match.start() :]
+        if not main:
+            return text
+        return f"{_title_case_words(main)}{suffix}"
+    return _title_case_words(text)
+
 
 def _title_from_filename_stem(stem: str) -> str:
     return TRACK_PREFIX_RE.sub("", stem).strip()
@@ -195,8 +268,8 @@ def display_track_title_from_path(path: Path) -> str:
     if vinyl:
         rest = after_num[vinyl.end() :].lstrip(". ").strip()
         if rest:
-            return rest
-    return _track_title_from_filename(path)
+            return title_case_track_title(rest)
+    return title_case_track_title(_track_title_from_filename(path))
 
 
 def _titles_match(expected: str, filename_stem: str) -> bool:
@@ -291,6 +364,8 @@ def match_top_tracks(
     limit: int = 5,
 ) -> list[dict]:
     """Resolve top tracks by exact local title match under Audio/."""
+    from app.release_playback_art import resolve_display_cover_for_audio
+
     artist_dir = _artist_dir(media_root, artist_name)
     if not artist_dir:
         return []
@@ -324,23 +399,24 @@ def match_top_tracks(
             continue
 
         seen.add(key)
-        track_dir = matched.parent
-        album_dir = _album_dir_for_track(matched)
-        cover = _find_cover_front_artwork(track_dir, media_root)
         try:
             play_path = matched.relative_to(media_root).as_posix()
         except ValueError:
             play_path = matched.as_posix()
         try:
-            album_folder = album_dir.relative_to(media_root).as_posix()
+            album_folder = _album_dir_for_track(matched).relative_to(media_root).as_posix()
         except ValueError:
             album_folder = None
-
         items.append(
             {
                 "title": title,
                 "release_date": _release_date_for_track(matched),
-                "cover_url": cover,
+                "cover_url": resolve_display_cover_for_audio(
+                    matched,
+                    media_root,
+                    band_name=artist_name,
+                    track_title=title,
+                ),
                 "play_path": play_path,
                 "album_folder": album_folder,
             }

@@ -20,10 +20,7 @@ import {
   refreshBandRelatedSimilar,
   rescanBandLibrary,
 } from "../../../api";
-import {
-  getCachedOverview,
-  setCachedOverview,
-} from "../../../overviewCache";
+import { setCachedOverview } from "../../../overviewCache";
 import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
 import {
   getCachedArtistGallery,
@@ -153,6 +150,7 @@ type Props = {
   onChooseSource?: () => void;
   onToggleOrientation?: () => void;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
+  onOpenPlaylist?: (slug: string) => void;
   onOpenMediaItem?: (kind: "video" | "library", itemId: string) => void;
 };
 
@@ -186,14 +184,11 @@ export default function ArtistPage({
   onChooseSource,
   onToggleOrientation,
   onOpenReleaseNavigate,
+  onOpenPlaylist,
   onOpenMediaItem,
 }: Props) {
-  const [data, setData] = useState<BandOverview | null>(() =>
-    getCachedOverview(bandId, cardOrientation)
-  );
-  const [loading, setLoading] = useState(
-    () => !getCachedOverview(bandId, cardOrientation)
-  );
+  const [data, setData] = useState<BandOverview | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
@@ -296,13 +291,7 @@ export default function ArtistPage({
       const requestedBand = bandId;
       const requestedOrientation = cardOrientation;
       if (!silent) {
-        const cached = getCachedOverview(requestedBand, requestedOrientation);
-        if (cached) {
-          setData(cached);
-          setLoading(false);
-        } else {
-          setLoading(true);
-        }
+        setLoading(true);
         setError(null);
       }
       fetchBandOverview(requestedBand, requestedOrientation)
@@ -334,15 +323,8 @@ export default function ArtistPage({
 
   useEffect(() => {
     lineupImportStarted.current = false;
-    const cached = getCachedOverview(bandId, cardOrientation);
-    if (cached) {
-      setData(cached);
-      setLoading(false);
-      load({ silent: true });
-    } else {
-      setData(null);
-      load();
-    }
+    setData(null);
+    load();
   }, [bandId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -550,6 +532,12 @@ export default function ArtistPage({
     clear();
     endPlaybackThemeSession(userId);
   }, [audioRef, clear, userId]);
+
+  useEffect(() => {
+    if (section === "quiz") {
+      stopPageAudio();
+    }
+  }, [section, stopPageAudio]);
 
   const handlePlay = useCallback(
     async (path: string, title: string) => {
@@ -1306,6 +1294,7 @@ export default function ArtistPage({
             referrerArtistName={data?.name ?? shell?.name}
             onPlayTrack={(path, title) => void handlePlay(path, title)}
             onOpenReleaseNavigate={onOpenReleaseNavigate}
+            onOpenPlaylist={onOpenPlaylist}
             onOpenArtist={(id) => onOpenArtist(id)}
           />
         )}

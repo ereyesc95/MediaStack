@@ -328,6 +328,7 @@ export default function ArtistQuiz({
   const songCorrectRef = useRef(songCorrect);
   const songAdvanceRef = useRef<number | null>(null);
   const songAnsweringRef = useRef(false);
+  const playRequestRef = useRef(0);
   const guessInputRef = useRef<HTMLInputElement>(null);
   const discoScrollRef = useRef<HTMLDivElement>(null);
   const lineupScrollRef = useRef<HTMLDivElement>(null);
@@ -422,8 +423,10 @@ export default function ArtistQuiz({
 
   const playSnippet = useCallback(
     async (path: string) => {
+      const reqId = ++playRequestRef.current;
       try {
         const res = await playTrack({ path, artist_id: bandId, record: false });
+        if (reqId !== playRequestRef.current) return;
         quizAudio.loadSrc(res.stream_url, true);
       } catch {
         /* ignore */
@@ -432,7 +435,18 @@ export default function ArtistQuiz({
     [bandId, quizAudio.loadSrc]
   );
 
-  useEffect(() => () => quizAudio.clear(), [quizAudio.clear]);
+  const stopQuizAudio = useCallback(() => {
+    playRequestRef.current += 1;
+    quizAudio.clear();
+  }, [quizAudio.clear]);
+
+  useEffect(() => () => stopQuizAudio(), [stopQuizAudio]);
+
+  useEffect(() => {
+    if (phase === "finished" || phase === "ready") {
+      stopQuizAudio();
+    }
+  }, [phase, stopQuizAudio]);
 
   useEffect(() => {
     fetchQuizScores(bandId)
@@ -458,6 +472,7 @@ export default function ArtistQuiz({
         songAdvanceRef.current = null;
       }
       stopTimer();
+      stopQuizAudio();
 
       try {
         if (next === "discography") {
@@ -499,7 +514,7 @@ export default function ArtistQuiz({
         setPhase("ready");
       }
     },
-    [bandId, stopTimer]
+    [bandId, stopQuizAudio, stopTimer]
   );
 
   useEffect(() => {
@@ -559,6 +574,7 @@ export default function ArtistQuiz({
 
   const finishSongs = useCallback(async (overrideScore?: number) => {
     stopTimer();
+    stopQuizAudio();
     const score = overrideScore ?? songCorrect;
     const total = songQuestions.length;
     const timeMs = elapsedMs;
@@ -575,7 +591,7 @@ export default function ArtistQuiz({
     }
     setFinishState({ score, total, timeMs, label: "Songs" });
     setPhase("finished");
-  }, [bandId, elapsedMs, songCorrect, songQuestions.length, stopTimer]);
+  }, [bandId, elapsedMs, songCorrect, songQuestions.length, stopQuizAudio, stopTimer]);
 
   useEffect(() => {
     if (mode === "discography") finishRef.current = () => void finishDiscography();
@@ -691,6 +707,7 @@ export default function ArtistQuiz({
   const beginQuiz = () => {
     if (mode === "songs") {
       onStopPageAudio?.();
+      stopQuizAudio();
     }
     setPendingScrollTarget(null);
     setFinishState(null);
@@ -763,10 +780,13 @@ export default function ArtistQuiz({
 
         setSongRound(nextRound);
         const nextQ = questions[nextRound];
-        if (nextQ) void playSnippet(nextQ.play_path);
+        if (nextQ) {
+          stopQuizAudio();
+          void playSnippet(nextQ.play_path);
+        }
       }, SONG_ROUND_DELAY_MS);
     },
-    [songPicked, phase, clearSongAdvance, finishSongs, playSnippet]
+    [songPicked, phase, clearSongAdvance, finishSongs, playSnippet, stopQuizAudio]
   );
 
   const timerProgress =

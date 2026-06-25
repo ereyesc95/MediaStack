@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  fetchFileTagsCoverPreviewUrl,
   pickReleaseCoverForFileTags,
   syncReleaseFileTags,
+  type FileTagEditionCover,
   type FileTagValues,
   type WriteFileTagsTrackIn,
 } from "../../../api";
@@ -11,26 +13,33 @@ type Props = {
   bandId: number;
   releaseId: string;
   releaseTitle: string;
-  coverUrl?: string | null;
   onClose: () => void;
   onDone: (message: string) => void;
 };
 
+type EditionCoverState = {
+  id: string;
+  label: string;
+  coverPath: string | null;
+  previewUrl: string | null;
+  loadingPreview: boolean;
+};
+
 type EditableRow = {
   play_path: string;
+  edition_id: string;
   file_name: string | null;
   selected: boolean;
   includeLyrics: boolean;
   hasLyrics: boolean;
   tags: Required<{ [K in keyof FileTagValues]: string }>;
   writers: string;
-  status: string;
-  message?: string | null;
 };
 
 function MsCheckbox({
   checked,
   disabled,
+  indeterminate,
   onChange,
   label,
   title,
@@ -38,17 +47,27 @@ function MsCheckbox({
 }: {
   checked: boolean;
   disabled?: boolean;
+  indeterminate?: boolean;
   onChange?: (checked: boolean) => void;
   label?: string;
   title?: string;
   className?: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = Boolean(indeterminate);
+    }
+  }, [indeterminate]);
+
   return (
     <label
       className={`ms-checkbox${disabled ? " ms-checkbox--disabled" : ""}${className ? ` ${className}` : ""}`}
       title={title}
     >
       <input
+        ref={inputRef}
         type="checkbox"
         checked={checked}
         disabled={disabled}
@@ -117,16 +136,16 @@ function EditableCell({
 
 function mapApiTrack(track: {
   play_path: string;
+  edition_id?: string | null;
   file_name: string | null;
   tags: FileTagValues;
   writers?: string | null;
   has_lyrics?: boolean;
-  status: string;
-  message?: string | null;
 }): EditableRow {
   const tags = track.tags ?? {};
   return {
     play_path: track.play_path,
+    edition_id: track.edition_id ?? "",
     file_name: track.file_name,
     selected: true,
     includeLyrics: Boolean(track.has_lyrics),
@@ -142,8 +161,6 @@ function mapApiTrack(track: {
       genre: tags.genre ?? "",
     },
     writers: track.writers ?? "",
-    status: track.status,
-    message: track.message,
   };
 }
 
@@ -151,7 +168,6 @@ export default function ReleaseFileTagsModal({
   bandId,
   releaseId,
   releaseTitle,
-  coverUrl: coverUrlProp,
   onClose,
   onDone,
 }: Props) {
@@ -160,9 +176,59 @@ export default function ReleaseFileTagsModal({
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [includeCover, setIncludeCover] = useState(false);
-  const [coverUrl, setCoverUrl] = useState<string | null>(coverUrlProp ?? null);
-  const [coverPath, setCoverPath] = useState<string | null>(null);
-  const [pickingCover, setPickingCover] = useState(false);
+  const [editions, setEditions] = useState<EditionCoverState[]>([]);
+  const [pickingEditionId, setPickingEditionId] = useState<string | null>(null);
+  const coverBlobRefs = useRef<Map<string, string>>(new Map());
+
+  const revokeEditionBlob = (editionId: string) => {
+    const url = coverBlobRefs.current.get(editionId);
+    if (url) {
+      URL.revokeObjectURL(url);
+      coverBlobRefs.current.delete(editionId);
+    }
+  };
+
+  const revokeAllBlobs = () => {
+    for (const url of coverBlobRefs.current.values()) {
+      URL.revokeObjectURL(url);
+    }
+    coverBlobRefs.current.clear();
+  };
+
+  useEffect(() => {
+    return () => {
+      revokeAllBlobs();
+    };
+  }, []);
+
+  const loadEditionPreview = async (
+    editionId: string,
+    previewUrl: string
+  ) => {
+    setEditions((prev) =>
+      prev.map((ed) =>
+        ed.id === editionId ? { ...ed, loadingPreview: true } : ed
+      )
+    );
+    try {
+      revokeEditionBlob(editionId);
+      const blobUrl = await fetchFileTagsCoverPreviewUrl(previewUrl);
+      coverBlobRefs.current.set(editionId, blobUrl);
+      setEditions((prev) =>
+        prev.map((ed) =>
+          ed.id === editionId
+            ? { ...ed, previewUrl: blobUrl, loadingPreview: false }
+            : ed
+        )
+      );
+    } catch {
+      setEditions((prev) =>
+        prev.map((ed) =>
+          ed.id === editionId ? { ...ed, loadingPreview: false } : ed
+        )
+      );
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -176,8 +242,21 @@ export default function ReleaseFileTagsModal({
           return;
         }
         setRows((res.tracks ?? []).map(mapApiTrack));
-        if (res.cover_url) setCoverUrl(res.cover_url);
-        if (res.cover_path) setCoverPath(res.cover_path);
+        const editionList = (res.editions ?? []).map((ed) => ({
+          id: ed.id,
+          label: ed.label,
+          coverPath: ed.cover_path ?? null,
+          previewUrl: null as string | null,
+          loadingPreview: Boolean(ed.preview_url),
+        }));
+        setEditions(editionList);
+        const hasAnyCover = editionList.some((ed) => ed.coverPath);
+        setIncludeCover(hasAnyCover);
+        for (const ed of res.editions ?? []) {
+          if (ed.preview_url) {
+            void loadEditionPreview(ed.id, ed.preview_url);
+          }
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -214,28 +293,63 @@ export default function ReleaseFileTagsModal({
     );
   };
 
-  const handlePickCover = async () => {
-    setPickingCover(true);
+  const allSelected = rows.length > 0 && rows.every((r) => r.selected);
+  const someSelected = rows.some((r) => r.selected);
+
+  const setAllSelected = (checked: boolean) => {
+    setRows((prev) => prev.map((row) => ({ ...row, selected: checked })));
+  };
+
+  const handlePickCover = async (editionId: string) => {
+    setPickingEditionId(editionId);
     setError(null);
     try {
-      const res = await pickReleaseCoverForFileTags(bandId, releaseId);
+      const res = await pickReleaseCoverForFileTags(
+        bandId,
+        releaseId,
+        editionId
+      );
       if (!res.ok) {
         setError(res.error ?? "Could not open cover picker");
         return;
       }
       if (res.cancelled) return;
-      if (res.cover_path) setCoverPath(res.cover_path);
-      if (res.preview_url) setCoverUrl(res.preview_url);
+      if (res.cover_path) {
+        setEditions((prev) =>
+          prev.map((ed) =>
+            ed.id === editionId ? { ...ed, coverPath: res.cover_path! } : ed
+          )
+        );
+        setIncludeCover(true);
+      }
+      if (res.preview_url) {
+        await loadEditionPreview(editionId, res.preview_url);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setPickingCover(false);
+      setPickingEditionId(null);
     }
   };
 
   const handleWrite = async () => {
     setWriting(true);
     setError(null);
+    if (includeCover) {
+      const neededEditionIds = new Set(
+        rows.filter((r) => r.selected).map((r) => r.edition_id).filter(Boolean)
+      );
+      const missing = [...neededEditionIds].some(
+        (id) => !editions.find((ed) => ed.id === id)?.coverPath
+      );
+      if (missing) {
+        setError(
+          "Choose a cover for each edition with selected tracks, or uncheck Embed cover art."
+        );
+        setWriting(false);
+        return;
+      }
+    }
     const tracks: WriteFileTagsTrackIn[] = rows.map((row) => ({
       play_path: row.play_path,
       selected: row.selected,
@@ -243,10 +357,16 @@ export default function ReleaseFileTagsModal({
       writers: row.writers.trim() || null,
       tags: { ...row.tags },
     }));
+    const editionCovers: FileTagEditionCover[] | undefined = includeCover
+      ? editions.map((ed) => ({
+          edition_id: ed.id,
+          cover_path: ed.coverPath,
+        }))
+      : undefined;
     try {
       const res = await syncReleaseFileTags(bandId, releaseId, false, {
         includeCover,
-        coverPath,
+        editionCovers,
         tracks,
       });
       if (!res.ok) {
@@ -291,39 +411,45 @@ export default function ReleaseFileTagsModal({
             </button>
           </header>
           <div className="release-lyrics-modal__body release-file-tags-modal__body">
-            <div className="release-file-tags-modal__top">
-              <div className="release-file-tags-modal__intro-block">
-                <p className="release-file-tags-modal__intro">
-                  Embed metadata into local audio files for{" "}
-                  <strong>{releaseTitle}</strong>.
-                </p>
-                <p className="release-file-tags-modal__intro-detail">
-                  Tags always include title, artist, album artist, album, year,
-                  track number, disc number, and genre.
-                </p>
-              </div>
-              <div className="release-file-tags-modal__cover-block">
-                <button
-                  type="button"
-                  className="release-file-tags-modal__cover-btn"
-                  onClick={() => void handlePickCover()}
-                  disabled={pickingCover}
-                  title="Choose cover art image"
-                >
-                  {coverUrl ? (
-                    <img
-                      src={coverUrl}
-                      alt=""
-                      className="release-file-tags-modal__cover-thumb"
-                      draggable={false}
-                    />
-                  ) : (
+            <p className="release-file-tags-modal__intro">
+              Embed metadata into local audio files for{" "}
+              <strong>{releaseTitle}</strong>.
+            </p>
+            {!loading && editions.length > 0 && (
+              <div className="release-file-tags-modal__cover-section">
+                <div className="release-file-tags-modal__editions">
+                  {editions.map((edition) => (
                     <div
-                      className="release-file-tags-modal__cover-thumb release-file-tags-modal__cover-thumb--empty"
-                      aria-hidden
-                    />
-                  )}
-                </button>
+                      key={edition.id}
+                      className="release-file-tags-modal__edition-cover"
+                    >
+                      <button
+                        type="button"
+                        className="release-file-tags-modal__cover-btn"
+                        onClick={() => void handlePickCover(edition.id)}
+                        disabled={pickingEditionId === edition.id}
+                        title={`Choose cover for ${edition.label}`}
+                      >
+                        {edition.previewUrl ? (
+                          <img
+                            src={edition.previewUrl}
+                            alt=""
+                            className="release-file-tags-modal__cover-thumb"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div
+                            className={`release-file-tags-modal__cover-thumb release-file-tags-modal__cover-thumb--empty${edition.loadingPreview ? " release-file-tags-modal__cover-thumb--loading" : ""}`}
+                            aria-hidden
+                          />
+                        )}
+                      </button>
+                      <span className="release-file-tags-modal__edition-label">
+                        {edition.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
                 <MsCheckbox
                   checked={includeCover}
                   onChange={setIncludeCover}
@@ -331,7 +457,7 @@ export default function ReleaseFileTagsModal({
                   className="release-file-tags-modal__cover-toggle"
                 />
               </div>
-            </div>
+            )}
             {loading && <p className="muted">Loading tracks, please wait.</p>}
             {error && <p className="error">{error}</p>}
             {!loading && !error && (
@@ -343,7 +469,14 @@ export default function ReleaseFileTagsModal({
                   <table className="release-file-tags-modal__table">
                     <thead>
                       <tr>
-                        <th className="release-file-tags-modal__check-col" aria-label="Include" />
+                        <th className="release-file-tags-modal__check-col">
+                          <MsCheckbox
+                            checked={allSelected}
+                            indeterminate={someSelected && !allSelected}
+                            onChange={setAllSelected}
+                            title="Select all tracks"
+                          />
+                        </th>
                         <th>Track</th>
                         <th>Title</th>
                         <th>Artist</th>
@@ -354,7 +487,6 @@ export default function ReleaseFileTagsModal({
                         <th>Genre</th>
                         <th>Writers</th>
                         <th>Lyrics</th>
-                        <th>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -468,14 +600,6 @@ export default function ReleaseFileTagsModal({
                                   : "No lyrics stored for this track"
                               }
                             />
-                          </td>
-                          <td className="release-file-tags-modal__status">
-                            {row.status === "ready" && "Ready"}
-                            {row.status === "written" && "Written"}
-                            {row.status === "skipped" &&
-                              (row.message ?? "Skipped")}
-                            {row.status === "error" &&
-                              (row.message ?? "Error")}
                           </td>
                         </tr>
                       ))}

@@ -351,25 +351,69 @@ def _resolve_labels(db: Session, band_id: int) -> list[str]:
     return sorted(labels, key=str.lower)
 
 
+def _is_band_entity_artist(db: Session, artist: Artist, *, solo_band_id: int) -> bool:
+    """True when the artist row mirrors another band (e.g. HIM), not a person."""
+    code = (artist.art_code or "").strip()
+    if not code:
+        return False
+    return (
+        db.scalars(
+            select(Band).where(
+                Band.bnd_code == code,
+                Band.bnd_id != solo_band_id,
+            )
+        ).first()
+        is not None
+    )
+
+
 def _solo_performer(
     db: Session, band: Band, media_root: Path | None
 ) -> dict | None:
     if not _is_solo(db, band):
         return None
     artist: Artist | None = None
-    arp = db.scalars(
-        select(ArtistParticipation).where(ArtistParticipation.arp_fk_bands == band.bnd_id)
-    ).first()
-    if arp and arp.arp_fk_artists:
-        artist = db.get(Artist, arp.arp_fk_artists)
-    if not artist and band.bnd_code:
+    arp: ArtistParticipation | None = None
+    band_code = (band.bnd_code or "").strip()
+
+    if band_code:
         artist = db.scalars(
             select(Artist).where(Artist.art_code == band.bnd_code)
         ).first()
+        if artist:
+            arp = db.scalars(
+                select(ArtistParticipation).where(
+                    ArtistParticipation.arp_fk_bands == band.bnd_id,
+                    ArtistParticipation.arp_fk_artists == artist.art_id,
+                )
+            ).first()
+
+    if not artist:
+        for row in db.scalars(
+            select(ArtistParticipation)
+            .where(ArtistParticipation.arp_fk_bands == band.bnd_id)
+            .order_by(ArtistParticipation.arp_id)
+        ).all():
+            if not row.arp_fk_artists:
+                continue
+            candidate = db.get(Artist, row.arp_fk_artists)
+            if not candidate or _is_band_entity_artist(
+                db, candidate, solo_band_id=band.bnd_id
+            ):
+                continue
+            artist = candidate
+            arp = row
+            break
+
     if not artist:
         return None
-    start = (band.bnd_starting_dates or "").split(";")[0].strip() or None
-    end = (band.bnd_ending_dates or "").split(";")[0].strip() or None
+
+    if arp:
+        start = (arp.arp_start_dates or "").strip() or None
+        end = (arp.arp_end_dates or "").strip() or None
+    else:
+        start = (band.bnd_starting_dates or "").split(";")[0].strip() or None
+        end = (band.bnd_ending_dates or "").split(";")[0].strip() or None
     name = _display_name(artist.art_stage_name or artist.art_name)
     deceased = bool((artist.art_death_date or "").strip())
     return {

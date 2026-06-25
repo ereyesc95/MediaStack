@@ -7,7 +7,7 @@ from pathlib import Path
 from app.paths import DATA_DIR
 
 CACHE_DIR = DATA_DIR / "overview_cache"
-OVERVIEW_CACHE_VERSION = 5
+OVERVIEW_CACHE_VERSION = 7
 
 
 def _cache_path(band_id: int, orientation: str) -> Path:

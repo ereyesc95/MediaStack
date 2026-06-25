@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,7 @@ from app.band_library import (
     COVER_FRONT_STEM,
     DATE_PREFIX_RE,
     display_track_title_from_path,
+    title_case_track_title,
 )
 from app.gallery import IMAGE_EXTS
 from app.media_paths import path_to_local_file
@@ -20,6 +23,17 @@ from app.release_overview import build_release_overview
 from app.release_tracklist import DISC_LOOSE_RE, build_release_tracklist
 
 WRITABLE_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".mp4", ".aac"}
+
+TAG_KEYS = (
+    "title",
+    "artist",
+    "album",
+    "albumartist",
+    "date",
+    "tracknumber",
+    "discnumber",
+    "genre",
+)
 
 BY_RE = re.compile(r"^by\s+(.+)$", re.I)
 FEAT_RE = re.compile(r"^feat\.?\s*(.+)$", re.I)
@@ -31,6 +45,7 @@ class TagExtras:
     lyrics: str | None = None
     writers: str | None = None
     cover_path: Path | None = None
+    embed_cover: bool = False
 
 
 def _display_name(name: str) -> str:
@@ -88,6 +103,7 @@ def _title_and_artist_for_tags(
     is_va: bool = False,
     performer: str | None = None,
 ) -> tuple[str, str]:
+    track_title = title_case_track_title((track_title or "").strip())
     main, inner = _strip_outer_brackets(track_title)
     suffix_parts: list[str] = []
     feat_names: list[str] = []
@@ -208,13 +224,20 @@ def _find_cover_front_path(track_dir: Path) -> Path | None:
 
 def _resolve_cover_path(cover_override: str | None, track_dir: Path) -> Path | None:
     if cover_override:
-        override = Path(cover_override.replace("\\", "/"))
-        if not override.is_absolute():
-            local = path_to_local_file(cover_override)
-            if local and local.is_file():
-                return local
-        elif override.is_file():
-            return override
+        raw = cover_override.strip()
+        if raw:
+            candidate = Path(raw)
+            if not candidate.is_absolute():
+                from_media = path_to_local_file(raw)
+                if from_media and from_media.is_file():
+                    return from_media
+            else:
+                try:
+                    resolved = candidate.resolve()
+                except OSError:
+                    resolved = candidate
+                if resolved.is_file():
+                    return resolved
     return _find_cover_front_path(track_dir)
 
 
@@ -281,12 +304,344 @@ def pick_cover_image_dialog(initial_dir: Path | None) -> Path | None:
     return path if path.is_file() else None
 
 
+def _norm_tag(value: object | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return str(value[0]).strip() if value else ""
+    return str(value).strip()
+
+
+def _tags_changed(
+    desired: dict[str, str | None],
+    existing: dict[str, str | None],
+) -> dict[str, str | None]:
+    changed: dict[str, str | None] = {}
+    for key in TAG_KEYS:
+        new_val = _norm_tag(desired.get(key))
+        old_val = _norm_tag(existing.get(key))
+        if new_val != old_val:
+            changed[key] = new_val or None
+    return changed
+
+
+def _digest(data: bytes) -> bytes:
+    return hashlib.sha256(data).digest()
+
+
+def _cover_file_digest(path: Path) -> bytes:
+    return _digest(path.read_bytes())
+
+
+def _read_mp3_tags(path: Path) -> dict[str, str | None]:
+    from mutagen.easyid3 import EasyID3
+    from mutagen.id3 import ID3NoHeaderError
+
+    out = {k: None for k in TAG_KEYS}
+    try:
+        audio = EasyID3(path)
+    except (ID3NoHeaderError, Exception):
+        return out
+    mapping = {
+        "title": "title",
+        "artist": "artist",
+        "album": "album",
+        "albumartist": "albumartist",
+        "date": "date",
+        "tracknumber": "tracknumber",
+        "discnumber": "discnumber",
+        "genre": "genre",
+    }
+    for src, dst in mapping.items():
+        if dst in audio:
+            out[src] = _norm_tag(audio[dst]) or None
+    return out
+
+
+def _read_vorbis_tags(path: Path, flac: bool) -> dict[str, str | None]:
+    out = {k: None for k in TAG_KEYS}
+    try:
+        if flac:
+            from mutagen.flac import FLAC
+
+            audio = FLAC(path)
+        else:
+            from mutagen.oggvorbis import OggVorbis
+
+            audio = OggVorbis(path)
+    except Exception:
+        return out
+    mapping = {
+        "title": "TITLE",
+        "artist": "ARTIST",
+        "album": "ALBUM",
+        "albumartist": "ALBUMARTIST",
+        "date": "DATE",
+        "tracknumber": "TRACKNUMBER",
+        "discnumber": "DISCNUMBER",
+        "genre": "GENRE",
+    }
+    for src, dst in mapping.items():
+        if dst in audio:
+            out[src] = _norm_tag(audio[dst]) or None
+    return out
+
+
+def _read_mp4_tags(path: Path) -> dict[str, str | None]:
+    from mutagen.mp4 import MP4
+
+    out = {k: None for k in TAG_KEYS}
+    try:
+        audio = MP4(path)
+    except Exception:
+        return out
+    key_map = {
+        "title": "\xa9nam",
+        "artist": "\xa9ART",
+        "album": "\xa9alb",
+        "albumartist": "aART",
+        "date": "\xa9day",
+        "genre": "\xa9gen",
+    }
+    for src, atom in key_map.items():
+        if atom in audio:
+            out[src] = _norm_tag(audio[atom]) or None
+    if "trkn" in audio and audio["trkn"]:
+        out["tracknumber"] = str(audio["trkn"][0][0])
+    if "disk" in audio and audio["disk"]:
+        out["discnumber"] = str(audio["disk"][0][0])
+    return out
+
+
+def _read_tags_from_file(path: Path) -> dict[str, str | None]:
+    ext = path.suffix.lower()
+    if ext == ".mp3":
+        return _read_mp3_tags(path)
+    if ext == ".flac":
+        return _read_vorbis_tags(path, flac=True)
+    if ext in {".ogg", ".opus"}:
+        return _read_vorbis_tags(path, flac=False)
+    if ext in {".m4a", ".mp4", ".aac"}:
+        return _read_mp4_tags(path)
+    return {k: None for k in TAG_KEYS}
+
+
+def _read_file_lyrics(path: Path) -> str | None:
+    ext = path.suffix.lower()
+    if ext == ".mp3":
+        from mutagen.id3 import ID3, ID3NoHeaderError
+
+        try:
+            id3 = ID3(path)
+        except ID3NoHeaderError:
+            return None
+        frames = id3.getall("USLT")
+        if frames:
+            return (frames[0].text or "").strip() or None
+        return None
+    if ext == ".flac":
+        from mutagen.flac import FLAC
+
+        try:
+            audio = FLAC(path)
+        except Exception:
+            return None
+        vals = audio.get("LYRICS")
+        return _norm_tag(vals) or None if vals else None
+    if ext in {".ogg", ".opus"}:
+        from mutagen.oggvorbis import OggVorbis
+
+        try:
+            audio = OggVorbis(path)
+        except Exception:
+            return None
+        vals = audio.get("LYRICS")
+        return _norm_tag(vals) or None if vals else None
+    if ext in {".m4a", ".mp4", ".aac"}:
+        from mutagen.mp4 import MP4
+
+        try:
+            audio = MP4(path)
+        except Exception:
+            return None
+        vals = audio.get("\xa9lyr")
+        return _norm_tag(vals) or None if vals else None
+    return None
+
+
+def _read_file_writers(path: Path) -> str | None:
+    ext = path.suffix.lower()
+    if ext == ".mp3":
+        from mutagen.id3 import ID3, ID3NoHeaderError
+
+        try:
+            id3 = ID3(path)
+        except ID3NoHeaderError:
+            return None
+        names = [f.text.strip() for f in id3.getall("TCOM") if f.text and str(f.text).strip()]
+        return "; ".join(names) if names else None
+    if ext == ".flac":
+        from mutagen.flac import FLAC
+
+        try:
+            audio = FLAC(path)
+        except Exception:
+            return None
+        vals = audio.get("COMPOSER")
+        return _norm_tag(vals) or None if vals else None
+    if ext in {".ogg", ".opus"}:
+        from mutagen.oggvorbis import OggVorbis
+
+        try:
+            audio = OggVorbis(path)
+        except Exception:
+            return None
+        vals = audio.get("COMPOSER")
+        return _norm_tag(vals) or None if vals else None
+    if ext in {".m4a", ".mp4", ".aac"}:
+        from mutagen.mp4 import MP4
+
+        try:
+            audio = MP4(path)
+        except Exception:
+            return None
+        vals = audio.get("\xa9wrt")
+        return _norm_tag(vals) or None if vals else None
+    return None
+
+
+def _read_file_cover_digest(path: Path) -> bytes | None:
+    ext = path.suffix.lower()
+    try:
+        if ext == ".mp3":
+            from mutagen.id3 import ID3, ID3NoHeaderError
+
+            try:
+                id3 = ID3(path)
+            except ID3NoHeaderError:
+                return None
+            apics = id3.getall("APIC")
+            if apics:
+                return _digest(apics[0].data)
+            return None
+        if ext == ".flac":
+            from mutagen.flac import FLAC
+
+            audio = FLAC(path)
+            if audio.pictures:
+                return _digest(audio.pictures[0].data)
+            return None
+        if ext in {".ogg", ".opus"}:
+            from mutagen.oggvorbis import OggVorbis
+
+            audio = OggVorbis(path)
+            raw = audio.get("metadata_block_picture")
+            if raw:
+                from mutagen.flac import Picture
+
+                pic = Picture()
+                pic.parse(base64.b64decode(raw[0]))
+                return _digest(pic.data)
+            return None
+        if ext in {".m4a", ".mp4", ".aac"}:
+            from mutagen.mp4 import MP4
+
+            audio = MP4(path)
+            covr = audio.get("covr")
+            if covr:
+                return _digest(bytes(covr[0]))
+            return None
+    except Exception:
+        return None
+    return None
+
+
+def _edition_artwork_for_edition(
+    tracklist: dict,
+    edition_id: str,
+) -> tuple[Path | None, Path | None]:
+    """Return (Cover - Front, [Artwork] folder) for one edition."""
+    want = (edition_id or "").strip()
+    if not want:
+        return None, None
+    for edition in tracklist.get("editions") or []:
+        if edition.get("kind") == "bside":
+            continue
+        if (edition.get("id") or "").strip() != want:
+            continue
+        for group in edition.get("groups") or []:
+            for track in group.get("tracks") or []:
+                if not _track_eligible_for_file_tags(track):
+                    continue
+                play_path = (track.get("play_path") or "").strip()
+                local = path_to_local_file(play_path)
+                if not local:
+                    continue
+                cover = _find_cover_front_path(local.parent)
+                if cover:
+                    return cover, cover.parent
+                for base in (local.parent, local.parent.parent):
+                    artwork = _find_artwork_subdir(base)
+                    if artwork:
+                        return None, artwork
+        return None, None
+    return None, None
+
+
+def _collect_edition_covers(
+    tracklist: dict,
+    *,
+    band_id: int,
+    release_id: str,
+) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for edition in tracklist.get("editions") or []:
+        if edition.get("kind") == "bside":
+            continue
+        edition_id = (edition.get("id") or "").strip()
+        if not edition_id or edition_id in seen:
+            continue
+        seen.add(edition_id)
+        label_raw = edition.get("label") or ""
+        label = _edition_label_core(label_raw) or label_raw or "Edition"
+        cover_file, artwork_dir = _edition_artwork_for_edition(tracklist, edition_id)
+        cover_path = str(cover_file) if cover_file else None
+        preview_url = None
+        if cover_file and cover_file.is_file():
+            token = encode_cover_path(str(cover_file.resolve()))
+            preview_url = (
+                f"/api/music/bands/{band_id}/releases/{release_id}"
+                f"/write-file-tags/cover-preview?token={quote(token, safe='')}"
+            )
+        out.append(
+            {
+                "id": edition_id,
+                "label": label,
+                "cover_path": cover_path,
+                "artwork_dir": str(artwork_dir) if artwork_dir else None,
+                "preview_url": preview_url,
+            }
+        )
+    return out
+
+
+def encode_cover_path(path: str) -> str:
+    return base64.urlsafe_b64encode(path.encode("utf-8")).decode("ascii")
+
+
+def decode_cover_path(token: str) -> Path:
+    return Path(base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8"))
+
+
 def _lyrics_text_for_track(
     db: Session,
     band_id: int,
     release_id: str,
     play_path: str,
     track_title: str,
+    *,
+    tracklist: dict | None = None,
 ) -> str | None:
     from app.lyrics_storage import find_lrc_path
     from app.release_lyrics_shared import find_release_synced_lrc
@@ -299,6 +654,7 @@ def _lyrics_text_for_track(
         track_title=track_title,
         play_path=play_path,
         backfill=False,
+        payload=tracklist,
     )
     if synced:
         return synced
@@ -324,31 +680,25 @@ def _lyrics_text_for_track(
     return raw or None
 
 
-def _writers_text_for_track(
-    db: Session,
-    band_id: int,
-    release_id: str,
-    track_title: str,
-) -> str | None:
-    from app.release_track_credits import get_track_credits
-
-    credits = get_track_credits(
-        db, band_id, release_id, title=track_title.strip()
-    )
-    writers = credits.get("writers") or []
-    names = [w.strip() for w in writers if w and str(w).strip()]
-    if not names:
-        return None
-    return "; ".join(names)
-
-
 def _collect_track_rows(
     db: Session,
     band_id: int,
     release_id: str,
     tracklist: dict,
     overview: dict,
+    *,
+    lyrics_lookup=None,
+    writers_lookup=None,
 ) -> list[dict]:
+    from app.release_lyrics_shared import LyricsAvailabilityLookup
+    from app.release_track_credits import ReleaseWritersLookup
+
+    if lyrics_lookup is None:
+        lyrics_lookup = LyricsAvailabilityLookup.build(db, tracklist)
+    if writers_lookup is None:
+        writers_lookup = ReleaseWritersLookup.build(
+            db, band_id, release_id, overview
+        )
     album_artist = _display_name(overview.get("artist_name") or tracklist.get("artist_name") or "")
     album_title = (overview.get("title") or tracklist.get("title") or "").strip()
     release_date = overview.get("date_iso")
@@ -360,6 +710,7 @@ def _collect_track_rows(
     for edition in tracklist.get("editions") or []:
         if edition.get("kind") == "bside":
             continue
+        edition_id = (edition.get("id") or "").strip()
         edition_date = edition.get("date_iso") or release_date
         year = _year_from_iso(edition_date)
         edition_label = edition.get("label")
@@ -388,26 +739,25 @@ def _collect_track_rows(
                 )
                 album = _edition_album_title(album_title, edition_label, track)
                 track_no = track.get("number")
-                lyrics = _lyrics_text_for_track(
-                    db,
-                    band_id,
-                    release_id,
-                    play_path,
-                    track_title_raw,
+                has_lyrics = lyrics_lookup.has_lyrics(
+                    play_path, track_title_raw
                 )
-                writers = _writers_text_for_track(
-                    db, band_id, release_id, track_title_raw
+                writers = (
+                    writers_lookup.writers_text_for_title(track_title_raw)
+                    if writers_lookup
+                    else None
                 )
                 rows.append(
                     {
                         "play_path": play_path,
+                        "edition_id": edition_id,
                         "file_name": local.name if local else None,
                         "file_exists": bool(local and local.is_file()),
                         "supported": bool(
                             local and local.suffix.lower() in WRITABLE_EXTS
                         ),
                         "track_title": track_title_raw,
-                        "has_lyrics": bool(lyrics),
+                        "has_lyrics": has_lyrics,
                         "tags": {
                             "title": title,
                             "artist": track_artist,
@@ -436,6 +786,7 @@ def _extras_for_write(
     include_cover: bool,
     writers: str,
     cover_path_override: str | None = None,
+    resolved_cover: Path | None = None,
 ) -> TagExtras | None:
     lyrics = None
     cover_path = None
@@ -444,13 +795,19 @@ def _extras_for_write(
             db, band_id, release_id, play_path, track_title
         ) or ""
     if include_cover:
-        cover_path = _resolve_cover_path(cover_path_override, local.parent)
+        if resolved_cover is not None:
+            cover_path = resolved_cover if resolved_cover.is_file() else None
+        else:
+            cover_path = _resolve_cover_path(cover_path_override, local.parent)
+        if not cover_path or not cover_path.is_file():
+            raise ValueError("Cover art file not found")
     if not include_lyrics and not include_cover and not writers:
         return None
     return TagExtras(
         lyrics=lyrics,
         writers=writers or None,
         cover_path=cover_path,
+        embed_cover=include_cover,
     )
 
 
@@ -476,17 +833,23 @@ def _write_mp3(path: Path, tags: dict[str, str | None], extras: TagExtras | None
         "genre": "genre",
     }
     for src, dst in mapping.items():
+        if src not in tags:
+            continue
         value = tags.get(src)
         if value:
             audio[dst] = value
         elif dst in audio:
             del audio[dst]
-    audio.save()
+    if tags:
+        audio.save()
 
     if not extras:
         return
 
-    id3 = ID3(path)
+    try:
+        id3 = ID3(path)
+    except ID3NoHeaderError:
+        id3 = ID3()
     if extras.lyrics is not None:
         id3.delall("USLT")
         if extras.lyrics:
@@ -500,20 +863,21 @@ def _write_mp3(path: Path, tags: dict[str, str | None], extras: TagExtras | None
                 piece = name.strip()
                 if piece:
                     id3.add(TCOM(encoding=3, text=piece))
-    if extras.cover_path is not None:
+    if extras.embed_cover:
         id3.delall("APIC")
         cover = extras.cover_path
-        if cover and cover.is_file():
-            id3.add(
-                APIC(
-                    encoding=3,
-                    mime=_mime_for_image(cover),
-                    type=3,
-                    desc="Cover",
-                    data=cover.read_bytes(),
-                )
+        if not cover or not cover.is_file():
+            raise ValueError("Cover art file not found")
+        id3.add(
+            APIC(
+                encoding=3,
+                mime=_mime_for_image(cover),
+                type=3,
+                desc="Cover",
+                data=cover.read_bytes(),
             )
-    id3.save()
+        )
+    id3.save(path, v2_version=3)
 
 
 def _write_vorbis(
@@ -543,6 +907,8 @@ def _write_vorbis(
         "genre": "GENRE",
     }
     for src, dst in mapping.items():
+        if src not in tags:
+            continue
         value = tags.get(src)
         if value:
             audio[dst] = [value]
@@ -560,24 +926,25 @@ def _write_vorbis(
                 audio["COMPOSER"] = [extras.writers]
             elif "COMPOSER" in audio:
                 del audio["COMPOSER"]
-        if extras.cover_path is not None:
+        if extras.embed_cover:
             cover = extras.cover_path
             if flac:
                 audio.clear_pictures()
             elif "metadata_block_picture" in audio:
                 del audio["metadata_block_picture"]
-            if cover and cover.is_file():
-                pic = Picture()
-                pic.type = 3
-                pic.mime = _mime_for_image(cover)
-                pic.desc = "Cover"
-                pic.data = cover.read_bytes()
-                if flac:
-                    audio.add_picture(pic)
-                else:
-                    audio["metadata_block_picture"] = [
-                        base64.b64encode(pic.write()).decode("ascii")
-                    ]
+            if not cover or not cover.is_file():
+                raise ValueError("Cover art file not found")
+            pic = Picture()
+            pic.type = 3
+            pic.mime = _mime_for_image(cover)
+            pic.desc = "Cover"
+            pic.data = cover.read_bytes()
+            if flac:
+                audio.add_picture(pic)
+            else:
+                audio["metadata_block_picture"] = [
+                    base64.b64encode(pic.write()).decode("ascii")
+                ]
 
     audio.save()
 
@@ -600,12 +967,15 @@ def _write_mp4(path: Path, tags: dict[str, str | None], extras: TagExtras | None
             "genre": "genre",
         }
         for src, dst in mapping.items():
+            if src not in tags:
+                continue
             value = tags.get(src)
             if value:
                 audio[dst] = value
             elif dst in audio:
                 del audio[dst]
-        audio.save()
+        if tags:
+            audio.save()
     except ImportError:
         audio = MP4(path)
         key_map = {
@@ -617,22 +987,25 @@ def _write_mp4(path: Path, tags: dict[str, str | None], extras: TagExtras | None
             "genre": "\xa9gen",
         }
         for src, atom in key_map.items():
+            if src not in tags:
+                continue
             value = tags.get(src)
             if value:
                 audio[atom] = [value]
             elif atom in audio:
                 del audio[atom]
-        if tags.get("tracknumber"):
+        if "tracknumber" in tags and tags.get("tracknumber"):
             try:
                 audio["trkn"] = [(int(tags["tracknumber"]), 0)]
             except ValueError:
                 pass
-        if tags.get("discnumber"):
+        if "discnumber" in tags and tags.get("discnumber"):
             try:
                 audio["disk"] = [(int(tags["discnumber"]), 0)]
             except ValueError:
                 pass
-        audio.save()
+        if tags:
+            audio.save()
 
     if not extras:
         return
@@ -648,15 +1021,64 @@ def _write_mp4(path: Path, tags: dict[str, str | None], extras: TagExtras | None
             audio["\xa9wrt"] = [extras.writers]
         elif "\xa9wrt" in audio:
             del audio["\xa9wrt"]
-    if extras.cover_path is not None:
+    if extras.embed_cover:
         cover = extras.cover_path
-        if cover and cover.is_file():
-            ext = cover.suffix.lower()
-            fmt = MP4Cover.FORMAT_PNG if ext == ".png" else MP4Cover.FORMAT_JPEG
-            audio["covr"] = [MP4Cover(cover.read_bytes(), imageformat=fmt)]
-        elif "covr" in audio:
-            del audio["covr"]
+        if not cover or not cover.is_file():
+            raise ValueError("Cover art file not found")
+        ext = cover.suffix.lower()
+        fmt = MP4Cover.FORMAT_PNG if ext == ".png" else MP4Cover.FORMAT_JPEG
+        audio["covr"] = [MP4Cover(cover.read_bytes(), imageformat=fmt)]
     audio.save()
+
+
+def _prepare_file_write(
+    local: Path,
+    desired_tags: dict[str, str | None],
+    *,
+    include_lyrics: bool,
+    include_cover: bool,
+    writers: str,
+    cover_path: Path | None,
+    lyrics_text: str | None = None,
+) -> tuple[dict[str, str | None], TagExtras | None, bool]:
+    existing = _read_tags_from_file(local)
+    changed_tags = _tags_changed(desired_tags, existing)
+
+    lyrics: str | None = None
+    writers_out: str | None = None
+    embed_cover = False
+    cover_out: Path | None = None
+
+    if include_lyrics and lyrics_text is not None:
+        existing_lyrics = _read_file_lyrics(local) or ""
+        if lyrics_text != existing_lyrics:
+            lyrics = lyrics_text
+
+    writers_norm = (writers or "").strip()
+    if writers_norm:
+        existing_writers = _read_file_writers(local) or ""
+        if writers_norm != existing_writers:
+            writers_out = writers_norm
+
+    if include_cover and cover_path and cover_path.is_file():
+        new_digest = _cover_file_digest(cover_path)
+        old_digest = _read_file_cover_digest(local)
+        if new_digest != old_digest:
+            embed_cover = True
+            cover_out = cover_path
+
+    extras: TagExtras | None = None
+    if lyrics is not None or writers_out is not None or embed_cover:
+        extras = TagExtras(
+            lyrics=lyrics,
+            writers=writers_out,
+            cover_path=cover_out,
+            embed_cover=embed_cover,
+        )
+
+    if not changed_tags and not extras:
+        return {}, None, False
+    return changed_tags, extras, True
 
 
 def write_tags_to_file(
@@ -665,7 +1087,9 @@ def write_tags_to_file(
     extras: TagExtras | None = None,
 ) -> None:
     ext = path.suffix.lower()
-    clean = {k: v for k, v in tags.items() if v}
+    clean = {k: v for k, v in tags.items() if k in TAG_KEYS}
+    if not clean and not extras:
+        return
     if ext == ".mp3":
         _write_mp3(path, clean, extras)
         return
@@ -681,6 +1105,14 @@ def write_tags_to_file(
     raise ValueError(f"Unsupported format: {ext}")
 
 
+def _resolve_cover_path_str(path_str: str | None, track_dir: Path | None = None) -> Path | None:
+    if not path_str or not str(path_str).strip():
+        if track_dir:
+            return _find_cover_front_path(track_dir)
+        return None
+    return _resolve_cover_path(path_str, track_dir or Path("."))
+
+
 def sync_release_file_tags(
     db: Session,
     band_id: int,
@@ -689,6 +1121,7 @@ def sync_release_file_tags(
     dry_run: bool = True,
     include_cover: bool = False,
     cover_path: str | None = None,
+    edition_covers: list[dict] | None = None,
     tracks_input: list[dict] | None = None,
 ) -> dict:
     tracklist = build_release_tracklist(db, band_id, release_id)
@@ -699,11 +1132,56 @@ def sync_release_file_tags(
     if not overview:
         return {"ok": False, "error": "Release overview not found"}
 
-    default_rows = _collect_track_rows(db, band_id, release_id, tracklist, overview)
+    from app.release_lyrics_shared import LyricsAvailabilityLookup
+    from app.release_track_credits import ReleaseWritersLookup
+
+    lyrics_lookup = LyricsAvailabilityLookup.build(db, tracklist)
+    writers_lookup = ReleaseWritersLookup.build(
+        db, band_id, release_id, overview
+    )
+    default_rows = _collect_track_rows(
+        db,
+        band_id,
+        release_id,
+        tracklist,
+        overview,
+        lyrics_lookup=lyrics_lookup,
+        writers_lookup=writers_lookup,
+    )
     default_by_path = {row["play_path"]: row for row in default_rows}
-    cover_file, artwork_dir = _release_cover_locations(tracklist)
-    default_cover_path = str(cover_file) if cover_file else None
-    active_cover_path = cover_path or default_cover_path
+    editions = _collect_edition_covers(
+        tracklist, band_id=band_id, release_id=release_id
+    )
+    edition_defaults = {
+        e["id"]: e.get("cover_path") for e in editions if e.get("id")
+    }
+    edition_overrides: dict[str, str] = {}
+    if edition_covers:
+        for item in edition_covers:
+            eid = (item.get("edition_id") or "").strip()
+            cp = item.get("cover_path")
+            if eid and cp:
+                edition_overrides[eid] = cp
+    elif cover_path:
+        for eid in edition_defaults:
+            edition_overrides[eid] = cover_path
+
+    def cover_for_edition(edition_id: str, track_dir: Path | None) -> Path | None:
+        raw = edition_overrides.get(edition_id) or edition_defaults.get(edition_id)
+        return _resolve_cover_path_str(raw, track_dir)
+
+    if include_cover and not dry_run:
+        missing = False
+        for row in default_rows:
+            local = path_to_local_file(row["play_path"])
+            if not local:
+                continue
+            eid = row.get("edition_id") or ""
+            if not cover_for_edition(eid, local.parent):
+                missing = True
+                break
+        if missing and not edition_defaults and not edition_overrides:
+            return {"ok": False, "error": "Cover art file not found for embedding"}
 
     if dry_run:
         work_items = [
@@ -752,6 +1230,7 @@ def sync_release_file_tags(
 
         entry = {
             "play_path": play_path,
+            "edition_id": default.get("edition_id"),
             "file_name": default.get("file_name"),
             "tags": tags,
             "writers": writers,
@@ -791,19 +1270,55 @@ def sync_release_file_tags(
             writers_raw = item.get("writers")
             if writers_raw is None:
                 writers_raw = default.get("writers") or ""
-            extras = _extras_for_write(
-                db,
-                band_id,
-                release_id,
-                play_path,
-                track_title,
+            writers_raw_norm = str(writers_raw).strip()
+            default_writers = (default.get("writers") or "").strip()
+            writers_db_updated = False
+            if writers_raw_norm != default_writers:
+                from app.release_track_credits import set_track_writers
+
+                writers_db_updated = set_track_writers(
+                    db,
+                    band_id,
+                    release_id,
+                    track_title,
+                    writers_raw_norm,
+                )
+            edition_id = default.get("edition_id") or ""
+            track_cover = (
+                cover_for_edition(edition_id, local.parent) if include_cover else None
+            )
+            if include_cover and not track_cover:
+                raise ValueError("Cover art file not found for this edition")
+            lyrics_text = None
+            if include_lyrics:
+                lyrics_text = (
+                    _lyrics_text_for_track(
+                        db,
+                        band_id,
+                        release_id,
+                        play_path,
+                        track_title,
+                        tracklist=tracklist,
+                    )
+                    or ""
+                )
+            changed_tags, extras, has_changes = _prepare_file_write(
                 local,
+                tags,
                 include_lyrics=include_lyrics,
                 include_cover=include_cover,
-                writers=str(writers_raw).strip(),
-                cover_path_override=active_cover_path,
+                writers=writers_raw_norm,
+                cover_path=track_cover,
+                lyrics_text=lyrics_text,
             )
-            write_tags_to_file(local, tags, extras)
+            if not has_changes and not writers_db_updated:
+                entry["status"] = "skipped"
+                entry["message"] = "No changes"
+                skipped += 1
+                results.append(entry)
+                continue
+            if has_changes:
+                write_tags_to_file(local, changed_tags, extras)
             entry["status"] = "written"
             written += 1
         except Exception as exc:
@@ -819,8 +1334,7 @@ def sync_release_file_tags(
         "dry_run": dry_run,
         "include_cover": include_cover,
         "cover_url": overview.get("cover_url"),
-        "cover_path": active_cover_path,
-        "cover_artwork_dir": str(artwork_dir) if artwork_dir else None,
+        "editions": editions,
         "release_title": overview.get("title") or tracklist.get("title"),
         "tracks": results,
         "summary": {
@@ -834,20 +1348,21 @@ def sync_release_file_tags(
     }
 
 
-def encode_cover_path(path: str) -> str:
-    return base64.urlsafe_b64encode(path.encode("utf-8")).decode("ascii")
-
-
-def decode_cover_path(token: str) -> Path:
-    return Path(base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8"))
-
-
-def pick_release_cover_file(db: Session, band_id: int, release_id: str) -> dict:
+def pick_release_cover_file(
+    db: Session,
+    band_id: int,
+    release_id: str,
+    *,
+    edition_id: str | None = None,
+) -> dict:
     tracklist = build_release_tracklist(db, band_id, release_id)
     if not tracklist:
         return {"ok": False, "error": "Release tracklist not found"}
 
-    cover_file, artwork_dir = _release_cover_locations(tracklist)
+    if edition_id:
+        cover_file, artwork_dir = _edition_artwork_for_edition(tracklist, edition_id)
+    else:
+        cover_file, artwork_dir = _release_cover_locations(tracklist)
     initial = artwork_dir or (cover_file.parent if cover_file else None)
     picked = pick_cover_image_dialog(initial)
     if not picked:
@@ -855,15 +1370,16 @@ def pick_release_cover_file(db: Session, band_id: int, release_id: str) -> dict:
     if picked.suffix.lower() not in IMAGE_EXTS:
         return {"ok": False, "error": "Unsupported image format"}
 
-    resolved = str(picked.resolve())
-    token = encode_cover_path(resolved)
+    resolved = picked.resolve()
+    token = encode_cover_path(str(resolved))
     return {
         "ok": True,
         "cancelled": False,
-        "cover_path": resolved,
+        "edition_id": edition_id,
+        "cover_path": str(resolved),
         "preview_url": (
             f"/api/music/bands/{band_id}/releases/{release_id}"
-            f"/write-file-tags/cover-preview?token={token}"
+            f"/write-file-tags/cover-preview?token={quote(token, safe='')}"
         ),
     }
 

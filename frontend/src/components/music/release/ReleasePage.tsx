@@ -53,7 +53,7 @@ import {
   useDeviceLayout,
   isTabletLayout,
 } from "../../../usePhoneLayout";
-import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem } from "../../../types";
+import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem, TrackYoutubeVideo } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
 import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
@@ -271,6 +271,18 @@ function tracksEqual(
   return a.id === b.id && a.play_path === b.play_path;
 }
 
+function panelYoutubeVideos(track: ReleaseTrackItem | null): TrackYoutubeVideo[] {
+  if (!track) return [];
+  const fromList = (track.youtube_videos ?? []).filter((video) =>
+    youtubeVideoId(video.url)
+  );
+  if (fromList.length > 0) return fromList;
+  if (track.youtube_url && youtubeVideoId(track.youtube_url)) {
+    return [{ url: track.youtube_url, label: "Official video", primary: true }];
+  }
+  return [];
+}
+
 function versionSourcesEqual(
   a: PanelVersionSource | undefined,
   b: PanelVersionSource | undefined
@@ -365,6 +377,8 @@ export default function ReleasePage({
   const [trackWriters, setTrackWriters] = useState<string[]>([]);
   const [, setActiveTrack] = useState<ReleaseTrackItem | null>(null);
   const [panelActionTrack, setPanelActionTrack] = useState<ReleaseTrackItem | null>(null);
+  const [youtubePickerOpen, setYoutubePickerOpen] = useState(false);
+  const youtubePickerRef = useRef<HTMLDivElement>(null);
   const [showLyricsAction, setShowLyricsAction] = useState(true);
   const [showVersionsAction, setShowVersionsAction] = useState(true);
   const [panelDateIso, setPanelDateIso] = useState<string | null>(null);
@@ -1014,12 +1028,34 @@ export default function ReleasePage({
 
   const handleOpenYoutube = useCallback(
     (url: string) => {
+      setYoutubePickerOpen(false);
       openYoutubeFullscreen(url, () => {
         miniAudio.audioRef.current?.pause();
       });
     },
     [miniAudio.audioRef]
   );
+
+  const panelVideos = useMemo(
+    () => panelYoutubeVideos(panelActionTrack),
+    [panelActionTrack]
+  );
+
+  useEffect(() => {
+    setYoutubePickerOpen(false);
+  }, [panelActionTrack?.play_path]);
+
+  useEffect(() => {
+    if (!youtubePickerOpen) return;
+    function dismiss(event: PointerEvent) {
+      const target = event.target as Node;
+      if (youtubePickerRef.current && !youtubePickerRef.current.contains(target)) {
+        setYoutubePickerOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [youtubePickerOpen]);
 
   const handlePanelActionsChange = useCallback(
     ({
@@ -1762,17 +1798,50 @@ export default function ReleasePage({
               >
                 <TrackActionPlaylistIcon className="release-page__track-action-icon" />
               </button>
-              {panelActionTrack.youtube_url &&
-                youtubeVideoId(panelActionTrack.youtube_url) && (
-                <button
-                  type="button"
-                  className="release-page__track-action"
-                  data-tooltip="Official video"
-                  aria-label="Official video"
-                  onClick={() => handleOpenYoutube(panelActionTrack.youtube_url!)}
+              {panelVideos.length > 0 && (
+                <div
+                  ref={youtubePickerRef}
+                  className="release-page__youtube-picker-wrap"
                 >
-                  <TrackActionYoutubeIcon className="release-page__track-action-icon" />
-                </button>
+                  <button
+                    type="button"
+                    className="release-page__track-action"
+                    data-tooltip={
+                      panelVideos.length > 1 ? "Choose video" : "Official video"
+                    }
+                    aria-label={
+                      panelVideos.length > 1 ? "Choose video" : "Official video"
+                    }
+                    aria-expanded={panelVideos.length > 1 ? youtubePickerOpen : undefined}
+                    onClick={() => {
+                      if (panelVideos.length <= 1) {
+                        handleOpenYoutube(panelVideos[0]!.url);
+                        return;
+                      }
+                      setYoutubePickerOpen((open) => !open);
+                    }}
+                  >
+                    <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                  </button>
+                  {panelVideos.length > 1 && youtubePickerOpen && (
+                    <div className="release-page__youtube-picker" role="menu">
+                      {panelVideos.map((video) => (
+                        <button
+                          key={video.url}
+                          type="button"
+                          className="release-page__youtube-picker-item"
+                          role="menuitem"
+                          onClick={() => handleOpenYoutube(video.url)}
+                        >
+                          <span className="release-page__youtube-picker-label">
+                            {video.label}
+                            {video.primary ? " · Primary" : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -2304,7 +2373,6 @@ export default function ReleasePage({
           bandId={bandId}
           releaseId={releaseId}
           releaseTitle={data.title}
-          coverUrl={data.cover_url}
           onClose={() => setFileTagsOpen(false)}
           onDone={(message) => {
             setBusy(message);

@@ -387,44 +387,46 @@ export default function ArtistAbout({
           </div>
           {data.solo_performer && onOpenPerformer && (
             <section className="artist-about__performer">
-              <h3 className="artist-about__performer-title">Performer</h3>
-              <button
-                type="button"
-                className={`artist-about__performer-card${
-                  data.solo_performer.is_deceased
-                    ? " artist-about__performer-card--deceased"
-                    : ""
-                }`}
-                onClick={() => onOpenPerformer(data.solo_performer!.id)}
-              >
-                {data.solo_performer.photo_url ? (
-                  <img
-                    src={data.solo_performer.photo_url}
-                    alt=""
-                    className="media-beat-glow"
-                  />
-                ) : (
-                  <span className="artist-about__performer-ph">
-                    {data.solo_performer.name
-                      .split(/\s+/)
-                      .slice(0, 2)
-                      .map((w) => w[0])
-                      .join("")
-                      .toUpperCase()}
-                  </span>
-                )}
-                <span className="artist-about__performer-name">
-                  {data.solo_performer.name}
-                  {data.solo_performer.is_deceased && (
-                    <span title="Deceased"> †</span>
+              <h3 className="artist-about__tracks-title">Performer</h3>
+              <div className="artist-about__performer-grid">
+                <button
+                  type="button"
+                  className={`artist-about__performer-card${
+                    data.solo_performer.is_deceased
+                      ? " artist-about__performer-card--deceased"
+                      : ""
+                  }`}
+                  onClick={() => onOpenPerformer(data.solo_performer!.id)}
+                >
+                  {data.solo_performer.photo_url ? (
+                    <img
+                      src={data.solo_performer.photo_url}
+                      alt=""
+                      className="media-beat-glow"
+                    />
+                  ) : (
+                    <span className="artist-about__performer-ph">
+                      {data.solo_performer.name
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((w) => w[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
                   )}
-                </span>
-                {data.solo_performer.years && (
-                  <span className="artist-about__performer-years">
-                    {data.solo_performer.years}
+                  <span className="artist-about__performer-name">
+                    {data.solo_performer.name}
+                    {data.solo_performer.is_deceased && (
+                      <span title="Deceased"> †</span>
+                    )}
                   </span>
-                )}
-              </button>
+                  {data.solo_performer.years && (
+                    <span className="artist-about__performer-years">
+                      {data.solo_performer.years}
+                    </span>
+                  )}
+                </button>
+              </div>
             </section>
           )}
           {data.top_tracks.length > 0 && (

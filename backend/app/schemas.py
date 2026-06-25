@@ -215,6 +215,7 @@ class YouTubeOut(BaseModel):
     artist: str
     title: str
     youtube_url: str | None = None
+    youtube_videos: list[dict] = Field(default_factory=list)
     source: str = "none"
 
 
@@ -223,6 +224,7 @@ class YouTubeSaveIn(BaseModel):
     title: str
     play_path: str | None = None
     youtube_url: str | None = None
+    youtube_videos: list[dict] | None = None
     band_id: int | None = None
 
 

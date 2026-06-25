@@ -317,6 +317,13 @@ def _band_id_for_artist_name(db: Session, name: str) -> int | None:
     for band in db.scalars(select(Band)).all():
         if band.bnd_name and _display_name(band.bnd_name).casefold() == norm:
             return band.bnd_id
+    for band in db.scalars(select(Band)).all():
+        raw = band.bnd_other_names or ""
+        for part in raw.replace("█", "'").replace(";", ",").split(","):
+            for sub in part.split("/"):
+                text = sub.strip()
+                if text and _display_name(text).casefold() == norm:
+                    return band.bnd_id
     return None
 
 

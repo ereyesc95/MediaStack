@@ -138,13 +138,19 @@ def track_youtube(
         bid = find_local_band_for_person(db, artist)
     if not bid:
         return YouTubeOut(artist=artist, title=title, youtube_url=None, source="none")
-    url, source = read_track_youtube(
+    url, videos, source = read_track_youtube(
         db,
         band_id=bid,
         title=title,
         play_path=play_path,
     )
-    return YouTubeOut(artist=artist, title=title, youtube_url=url, source=source)
+    return YouTubeOut(
+        artist=artist,
+        title=title,
+        youtube_url=url,
+        youtube_videos=videos,
+        source=source,
+    )
 
 
 @router.put("/youtube", response_model=YouTubeOut)
@@ -162,12 +168,13 @@ def save_track_youtube_route(
     if not bid:
         raise HTTPException(400, "Could not resolve band for artist")
     try:
-        url = save_track_youtube(
+        url, videos = save_track_youtube(
             db,
             band_id=bid,
             title=body.title,
             play_path=body.play_path,
             youtube_url=body.youtube_url,
+            youtube_videos=body.youtube_videos,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -175,6 +182,7 @@ def save_track_youtube_route(
         artist=body.artist,
         title=body.title,
         youtube_url=url,
+        youtube_videos=videos,
         source="manual",
     )
 

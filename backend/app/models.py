@@ -117,6 +117,7 @@ class TrackOverride(Base):
     tro_lyrics_lrc: Mapped[str | None] = mapped_column("troLyricsLrc", Text)
     tro_lyrics_plain: Mapped[str | None] = mapped_column("troLyricsPlain", Text)
     tro_youtube_url: Mapped[str | None] = mapped_column("troYoutubeUrl", Text)
+    tro_youtube_videos: Mapped[str | None] = mapped_column("troYoutubeVideos", Text)
     tro_updated_at: Mapped[str | None] = mapped_column("troUpdatedAt", Text)
 
 
