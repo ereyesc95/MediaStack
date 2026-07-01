@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from pathlib import Path
 
 from app.band_library import (
+    AUDIO_CATEGORIES,
     _album_title_from_folder,
     _collect_audio_files,
+    display_track_title_from_path,
     _find_cover_front_artwork,
     _normalize_title_for_match,
     _track_title_from_filename,
@@ -15,8 +18,22 @@ from app.gallery import _artist_dir
 from app.media_index import parse_bracket_tags
 from app.media_paths_util import safe_relative
 from app.models import Band
+from app.release_track_extras import (
+    LANGUAGE_NAMES,
+    _of_title_from_parts,
+    _split_bracket_parts,
+)
 
 TRACK_BRACKET_RE = re.compile(r"\[([^\]]+)\]")
+
+COVER_CATEGORY_PRIORITY: dict[str, int] = {
+    "albums": 0,
+    "extended_plays": 1,
+    "soundtracks": 2,
+    "compilations": 3,
+    "singles": 4,
+    "live_albums": 5,
+}
 
 
 def playlist_cover_url(slug: str) -> str:
@@ -97,6 +114,80 @@ def _is_original_track(stem: str) -> bool:
     return True
 
 
+def _category_key_from_play_path(play_path: str) -> str:
+    parts = Path(play_path.replace("\\", "/")).parts
+    by_folder = {name.casefold(): key for key, name in AUDIO_CATEGORIES.items()}
+    for part in parts:
+        key = by_folder.get(part.casefold())
+        if key:
+            return key
+    return "unknown"
+
+
+def _is_language_adaptation_from_stem(stem: str) -> bool:
+    _, parts = _split_bracket_parts(stem)
+    for part in parts:
+        low = part.casefold().strip()
+        if low in LANGUAGE_NAMES:
+            return True
+        for lang in LANGUAGE_NAMES:
+            if low.startswith(f"{lang} of "):
+                return True
+    return False
+
+
+def _adaptation_of_key_from_stem(stem: str) -> str | None:
+    _, parts = _split_bracket_parts(stem)
+    return _of_title_from_parts(parts)
+
+
+def _cover_version_penalty(tags: list[str]) -> int:
+    penalty = 0
+    for tag in tags:
+        if "radio edit" in tag or "radio mix" in tag:
+            penalty += 100
+        elif " edit" in tag or tag.endswith("edit"):
+            penalty += 80
+        if "live at" in tag:
+            penalty += 90
+        elif tag == "live" or tag.endswith(" live"):
+            penalty += 70
+        if "remastered" in tag:
+            penalty += 10
+    return penalty
+
+
+def _cover_track_sort_key(entry: dict, audio_file: Path) -> tuple[int, int, str]:
+    tags = _track_tags(audio_file.stem)
+    category = _category_key_from_play_path(entry["play_path"])
+    return (
+        COVER_CATEGORY_PRIORITY.get(category, 99),
+        _cover_version_penalty(tags),
+        entry.get("title") or audio_file.name,
+    )
+
+
+def _pick_best_version_tracks(candidates: list[tuple[dict, Path]]) -> list[dict]:
+    """One track per underlying song — prefer studio album, then EP, …; skip language adaptations."""
+    grouped: dict[str, list[tuple[dict, Path, bool]]] = defaultdict(list)
+    for entry, audio_file in candidates:
+        stem = audio_file.stem
+        main_key = _normalize_title_for_match(entry["title"])
+        adapt_of = _adaptation_of_key_from_stem(stem)
+        group_key = adapt_of or main_key
+        is_adaptation = _is_language_adaptation_from_stem(stem)
+        grouped[group_key].append((entry, audio_file, is_adaptation))
+
+    out: list[dict] = []
+    for items in grouped.values():
+        non_adapt = [(entry, audio_file) for entry, audio_file, is_adapt in items if not is_adapt]
+        pool = non_adapt if non_adapt else [(entry, audio_file) for entry, audio_file, _ in items]
+        best_entry, _best_file = min(pool, key=lambda item: _cover_track_sort_key(item[0], item[1]))
+        out.append(best_entry)
+    out.sort(key=lambda entry: (entry.get("title") or "").casefold())
+    return out
+
+
 def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]:
     artist_dir = _artist_dir(media_root, band.bnd_name)
     empty = {slug: [] for slug, _, _ in PLAYLIST_RULES}
@@ -108,6 +199,8 @@ def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]
     buckets[ORIGINALS_SLUG] = []
     seen: dict[str, set[str]] = {slug: set() for slug, _, _ in PLAYLIST_RULES}
     seen[ORIGINALS_SLUG] = set()
+    cover_candidates: list[tuple[dict, Path]] = []
+    feature_candidates: list[tuple[dict, Path]] = []
 
     for audio_file in _collect_audio_files(artist_dir):
         stem = audio_file.stem
@@ -115,7 +208,7 @@ def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]
         play_path = safe_relative(audio_file, media_root)
         if not play_path:
             continue
-        title = _track_title_from_filename(audio_file)
+        title = display_track_title_from_path(audio_file)
         album_dir = audio_file.parent
         while album_dir.name.casefold() in (
             "standard edition",
@@ -141,9 +234,17 @@ def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]
         for slug, _, needles in PLAYLIST_RULES:
             if slug == "remixes":
                 matched = _matches_remix(combined_tags)
+            elif slug == "features":
+                matched = _matches_rule(combined_tags, needles)
             else:
                 matched = _matches_rule(combined_tags, needles)
             if not matched:
+                continue
+            if slug == "covers":
+                cover_candidates.append((entry, audio_file))
+                continue
+            if slug == "features":
+                feature_candidates.append((entry, audio_file))
                 continue
             key = _normalize_title_for_match(title)
             if key in seen[slug]:
@@ -156,6 +257,23 @@ def scan_suffix_playlists(band: Band, media_root: Path) -> dict[str, list[dict]]
             if key not in seen[ORIGINALS_SLUG]:
                 seen[ORIGINALS_SLUG].add(key)
                 buckets[ORIGINALS_SLUG].append(entry)
+
+    if cover_candidates:
+        buckets["covers"] = _pick_best_version_tracks(cover_candidates)
+
+    if feature_candidates:
+        from app.cross_artist_playlists import scan_feature_guests
+
+        for entry in scan_feature_guests(band, media_root):
+            play_path = entry.get("play_path")
+            if not play_path:
+                continue
+            audio_file = media_root / Path(play_path.replace("/", "\\"))
+            if not audio_file.is_file():
+                audio_file = media_root / Path(play_path)
+            if audio_file.is_file():
+                feature_candidates.append((entry, audio_file))
+        buckets["features"] = _pick_best_version_tracks(feature_candidates)
 
     return buckets
 

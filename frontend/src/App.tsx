@@ -531,6 +531,8 @@ export default function App() {
                 releaseTab: releaseTab ?? "overview",
                 artistSection: "audio",
                 tab: "artists",
+                playlistSlug: undefined,
+                mediaItemId: undefined,
                 ...(patchBandId !== undefined ? { bandId: patchBandId } : {}),
               })
             }

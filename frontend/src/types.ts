@@ -417,7 +417,7 @@ export type MediaFlags = {
 export type ArtistPlaylistCard = {
   slug: string;
   name: string;
-  track_count: number;
+  track_count?: number | null;
   cover_url: string | null;
   show_count?: number;
   years?: string[];
@@ -437,14 +437,61 @@ export type ArtistPlaylistTrack = {
   album_folder: string | null;
   album_title?: string | null;
   play_count?: number | null;
+  navigate_release_id?: string | null;
+  navigate_band_id?: number | null;
+  duration?: string | null;
+  duration_sec?: number | null;
+};
+
+export type ArtistPlaylistNeighbor = {
+  slug: string;
+  name: string;
 };
 
 export type ArtistPlaylistDetail = {
   slug: string;
   name: string;
+  description?: string | null;
+  cover_url?: string | null;
   tracks: ArtistPlaylistTrack[];
   years?: string[];
+  career_start_year?: number;
   show_count?: number;
+  prev?: ArtistPlaylistNeighbor | null;
+  next?: ArtistPlaylistNeighbor | null;
+};
+
+export type SetlistShowSummary = {
+  id: string;
+  event_date: string;
+  date_iso: string | null;
+  display_date: string;
+  year: string;
+  venue: string;
+  city: string;
+  country: string;
+  country_iso: string;
+  tour_name?: string | null;
+  label: string;
+};
+
+export type SetlistTrackItem = ReleaseTrackItem & {
+  is_tape?: boolean;
+  unavailable?: boolean;
+  youtube_query?: string;
+  setlist_title?: string;
+};
+
+export type SetlistTracklistPayload = {
+  setlist_id: string;
+  tour_name?: string | null;
+  show_date?: string | null;
+  display_date?: string | null;
+  venue?: string;
+  city?: string;
+  country?: string;
+  country_iso?: string;
+  editions: ReleaseEdition[];
 };
 
 export type AudioReleaseCard = {

@@ -24,6 +24,7 @@ AUDIO_CATEGORIES = {
 DATE_PREFIX_RE = re.compile(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?")
 TRACK_PREFIX_RE = re.compile(r"^\d+\.\s*")
 VINYL_TRACK_PREFIX_RE = re.compile(r"^[A-Z]\d+\.\s*", re.I)
+DOTTED_ACRONYM_RE = re.compile(r"^(?:[A-Za-z]\.)+[A-Za-z]\.?$")
 AUDIO_EXTS = {".mp3", ".wma", ".aac", ".wav", ".flac"}
 ARTWORK_DIR = "[artwork]"
 COVER_FRONT_STEM = "cover - front"
@@ -106,9 +107,7 @@ def title_from_track_path(path: str | None) -> str:
     if not path:
         return ""
     name = Path(path.replace("\\", "/")).name
-    stem = Path(name).stem
-    raw = TRACK_PREFIX_RE.sub("", stem).strip()
-    return title_case_track_title(raw)
+    return display_track_title_from_stem(Path(name).stem)
 
 
 def cover_url_for_track_path(path: str | None, media_root: Path) -> str | None:
@@ -200,6 +199,8 @@ def _word_core_for_title_case(word: str) -> str:
 
 
 def _capitalize_word(word: str) -> str:
+    if DOTTED_ACRONYM_RE.match(word.strip()):
+        return "".join(char.upper() if char.isalpha() else char for char in word)
     for index, char in enumerate(word):
         if char.isalpha():
             return word[:index] + char.upper() + word[index + 1 :].lower()
@@ -260,16 +261,19 @@ def _track_title_from_filename(path: Path) -> str:
     return _title_from_filename_stem(path.stem)
 
 
-def display_track_title_from_path(path: Path) -> str:
-    """UI title — strips numeric and vinyl side prefixes (e.g. A1.)."""
-    stem = path.stem.strip()
-    after_num = TRACK_PREFIX_RE.sub("", stem).strip()
+def display_track_title_from_stem(stem: str) -> str:
+    """UI title — strips numeric and vinyl/cassette side prefixes (e.g. A1., B6.)."""
+    after_num = TRACK_PREFIX_RE.sub("", stem.strip()).strip()
     vinyl = VINYL_TRACK_PREFIX_RE.match(after_num)
     if vinyl:
         rest = after_num[vinyl.end() :].lstrip(". ").strip()
         if rest:
             return title_case_track_title(rest)
-    return title_case_track_title(_track_title_from_filename(path))
+    return title_case_track_title(after_num)
+
+
+def display_track_title_from_path(path: Path) -> str:
+    return display_track_title_from_stem(path.stem)
 
 
 def _titles_match(expected: str, filename_stem: str) -> bool:
@@ -409,7 +413,7 @@ def match_top_tracks(
             album_folder = None
         items.append(
             {
-                "title": title,
+                "title": display_track_title_from_path(matched),
                 "release_date": _release_date_for_track(matched),
                 "cover_url": resolve_display_cover_for_audio(
                     matched,

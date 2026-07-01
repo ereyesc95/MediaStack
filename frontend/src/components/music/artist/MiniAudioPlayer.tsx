@@ -18,7 +18,8 @@ export function useMiniAudio() {
   const autoPlayRef = useRef(false);
   const srcRef = useRef<string | null>(null);
 
-  const loadSrc = useCallback((url: string | null, autoPlay = false) => {
+  const loadSrc = useCallback(
+    (url: string | null, autoPlay = false, options?: { restart?: boolean }) => {
     if (!url) {
       autoPlayRef.current = false;
       srcRef.current = null;
@@ -35,8 +36,12 @@ export function useMiniAudio() {
       return;
     }
     if (url === srcRef.current) {
+      const el = audioRef.current;
+      if (options?.restart && el) {
+        el.currentTime = 0;
+        setProgress(0);
+      }
       if (autoPlay) {
-        const el = audioRef.current;
         if (el) void el.play().catch(() => {});
       }
       return;
@@ -44,7 +49,9 @@ export function useMiniAudio() {
     autoPlayRef.current = autoPlay;
     srcRef.current = url;
     setSrc(url);
-  }, []);
+  },
+    []
+  );
 
   useEffect(() => {
     const el = audioRef.current;

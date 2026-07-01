@@ -811,6 +811,51 @@ def band_playlist_index(
     return get_playlist_index(db, row, force=force, user_id=user_id)
 
 
+@router.get("/bands/{band_id}/media/playlists/setlists/shows")
+def band_setlist_shows(
+    band_id: int,
+    year: str = Query(..., min_length=4, max_length=4),
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    from app.setlist_playlists import load_shows_for_year
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    api_key = crud.get_setlistfm_key(db)
+    if not api_key:
+        raise HTTPException(404, "Setlist.fm API key not configured")
+    mbid = (row.bnd_code or "").strip()
+    if not mbid:
+        raise HTTPException(404, "Artist MusicBrainz ID missing")
+    shows = load_shows_for_year(row, year, api_key=api_key, force=force)
+    return {"year": year, "shows": shows}
+
+
+@router.get("/bands/{band_id}/media/playlists/setlists/{setlist_id}")
+def band_setlist_tracks(
+    band_id: int,
+    setlist_id: str,
+    db: Session = Depends(get_db),
+):
+    from app.setlist_playlists import build_setlist_tracklist
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    api_key = crud.get_setlistfm_key(db)
+    if not api_key:
+        raise HTTPException(404, "Setlist.fm API key not configured")
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        raise HTTPException(404, "Media root not found")
+    payload = build_setlist_tracklist(db, row, root, setlist_id, api_key=api_key)
+    if not payload:
+        raise HTTPException(404, "Setlist not found")
+    return payload
+
+
 @router.get("/bands/{band_id}/media/playlists/{slug}")
 def band_playlist_detail(
     band_id: int,

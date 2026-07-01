@@ -1,5 +1,8 @@
 /** Parse track title for the release left-panel track view. */
 
+import { formatTrackDate } from "../../../formatDate";
+import type { TrackVersionItem } from "../../../types";
+
 export type TrackPanelLine =
   | { kind: "cover"; artist: string }
   | { kind: "featuring"; artists: string[] }
@@ -51,6 +54,14 @@ type VersionToken =
   | { kind: "remix"; detail?: string }
   | { kind: "mix"; detail?: string }
   | { kind: "edit"; detail?: string };
+
+/** Strip numeric (01.) and vinyl/cassette side prefixes (A1., B6., Z9.) from display titles. */
+export function stripFilenamePrefixes(title: string): string {
+  let t = title.trim();
+  t = t.replace(/^\d+\.\s*/, "");
+  t = t.replace(/^[A-Z]\d+\.\s*/i, "");
+  return t.trim();
+}
 
 function stripOuterBrackets(title: string): { main: string; inner: string | null } {
   const bracket = title.match(/^(.+?)\s*\[([^\]]+)\]\s*$/);
@@ -217,9 +228,26 @@ function combineVersionTokens(tokens: VersionToken[]): string | null {
   return `${parts.join(" ")} Version`;
 }
 
+function performerNamesMatch(left: string, right: string): boolean {
+  const a = left.trim().toLocaleLowerCase();
+  const b = right.trim().toLocaleLowerCase();
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 function parsePerformer(part: string): string | null {
   const m = part.match(/^by\s+(.+)$/i);
   return m ? m[1].trim() : null;
+}
+
+/** Primary credited artist — strips feat./featuring/with suffixes from performer strings. */
+export function primaryArtistName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  return trimmed
+    .split(/\s*,?\s+(?:feat\.?|featuring|with)\s+/i)[0]
+    .replace(/,\s*$/, "")
+    .trim();
 }
 
 function adaptationLabel(part: string): string | null {
@@ -230,8 +258,13 @@ function adaptationLabel(part: string): string | null {
   return null;
 }
 
-export function parseTrackPanelMeta(title: string): TrackPanelMeta {
-  const { main, inner } = stripOuterBrackets(title);
+export function parseTrackPanelMeta(
+  title: string,
+  options?: { hidePerformer?: string; hideCoverArtist?: string }
+): TrackPanelMeta {
+  const hidePerformer = options?.hidePerformer;
+  const hideCoverArtist = options?.hideCoverArtist;
+  const { main, inner } = stripOuterBrackets(stripFilenamePrefixes(title));
   const versionTokens: VersionToken[] = [];
   const lines: TrackPanelLine[] = [];
   if (inner) {
@@ -248,11 +281,17 @@ export function parseTrackPanelMeta(title: string): TrackPanelMeta {
       }
       const performer = parsePerformer(part);
       if (performer) {
+        if (hidePerformer && performerNamesMatch(performer, hidePerformer)) {
+          continue;
+        }
         lines.push({ kind: "performer", artist: performer });
         continue;
       }
       const cover = parseCoverArtist(part);
       if (cover) {
+        if (hideCoverArtist && performerNamesMatch(cover, hideCoverArtist)) {
+          continue;
+        }
         lines.push({ kind: "cover", artist: cover });
         continue;
       }
@@ -272,10 +311,13 @@ export function trackMainTitle(title: string): string {
   return parseTrackPanelMeta(title).mainTitle;
 }
 
-export function trackDisplayTitle(title: string): string {
-  const trimmed = title.trim();
+export function trackDisplayTitle(
+  title: string,
+  options?: { hidePerformer?: string; hideCoverArtist?: string }
+): string {
+  const trimmed = stripFilenamePrefixes(title);
   if (/\[[^\]]+\]\s*$/.test(trimmed)) {
-    return parseTrackPanelMeta(trimmed).mainTitle;
+    return parseTrackPanelMeta(trimmed, options).mainTitle;
   }
   return trimmed;
 }
@@ -286,6 +328,77 @@ export function isAdaptationLine(line: TrackPanelLine): boolean {
 
 export function writerSearchUrl(name: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+}
+
+function stripBracketSuffix(text: string): string {
+  return text.replace(/\s*\[[^\]]+\]\s*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isStandardEdition(label: string): boolean {
+  const low = label.toLowerCase().trim();
+  return low === "standard edition" || low === "standard";
+}
+
+export function versionSourceFromVersionItem(
+  version: TrackVersionItem,
+  anchorPath?: string | null
+): {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+} | null {
+  if (anchorPath && version.play_path === anchorPath) return null;
+  const navId = version.navigate_release_id?.trim();
+  if (!navId) return null;
+
+  const editionTitle = stripBracketSuffix(version.edition_title?.trim() ?? "");
+  const releaseTitle = stripBracketSuffix(version.album_title?.trim() ?? "");
+  const showEdition =
+    Boolean(editionTitle) &&
+    editionTitle.toLowerCase() !== releaseTitle.toLowerCase() &&
+    !isStandardEdition(editionTitle);
+  const label = showEdition
+    ? releaseTitle
+      ? `${releaseTitle}: ${editionTitle}`
+      : editionTitle
+    : releaseTitle || null;
+  if (!label) return null;
+  return {
+    album_title: label,
+    navigate_release_id: navId,
+    navigate_band_id: version.navigate_band_id ?? undefined,
+    date_iso: version.date_iso,
+    display_date: version.display_date ?? null,
+  };
+}
+
+export function playlistTrackVersionSource(
+  track: {
+    album_title?: string | null;
+    navigate_release_id?: string | null;
+    navigate_band_id?: number | null;
+    release_date?: string | null;
+  },
+  bandId: number
+): {
+  album_title: string;
+  navigate_release_id: string;
+  navigate_band_id?: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+} | null {
+  const navId = track.navigate_release_id?.trim();
+  const title = stripBracketSuffix(track.album_title?.trim() ?? "");
+  if (!navId || !title) return null;
+  return {
+    album_title: title,
+    navigate_release_id: navId,
+    navigate_band_id: track.navigate_band_id ?? bandId,
+    date_iso: track.release_date ?? null,
+    display_date: track.release_date ? formatTrackDate(track.release_date) : null,
+  };
 }
 
 export const DEFAULT_DISC_URL = "/api/assets/system/default/disc.png";

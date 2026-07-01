@@ -129,6 +129,8 @@ PLAYLISTS = {
     "collaborations": ((18, 42, 52), (40, 140, 170), "COL"),
     "features": ((42, 24, 58), (170, 90, 210), "FEAT"),
     "originals": ((26, 40, 34), (80, 150, 110), "ORG"),
+    "most-played": ((56, 32, 24), (220, 120, 60), "PLD"),
+    "standalones": ((48, 34, 18), (196, 142, 58), "STDL"),
     "writing-credits": ((30, 34, 48), (100, 120, 200), "WRT"),
     "appearances": ((34, 28, 44), (120, 90, 180), "APP"),
 }

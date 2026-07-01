@@ -34,7 +34,9 @@ function PlaylistCard({
         <span className="media-release-card__title-hover">{playlist.name}</span>
       </span>
       <span className="media-release-card__date">
-        {playlist.track_count} tracks
+        {playlist.slug === "setlists"
+          ? "Live shows"
+          : `${playlist.track_count ?? 0} tracks`}
       </span>
     </button>
   );

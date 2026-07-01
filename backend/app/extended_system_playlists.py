@@ -13,6 +13,7 @@ from app.band_library import (
     _album_title_from_folder,
     _audio_root,
     _collect_audio_files,
+    display_track_title_from_path,
     _find_cover_front_artwork,
     _normalize_title_for_match,
     _release_date_for_track,
@@ -30,6 +31,8 @@ MAIN_RELEASE_CATEGORIES = (
     "soundtracks",
     "live_albums",
 )
+
+BONUS_RELEASE_CATEGORIES = MAIN_RELEASE_CATEGORIES + ("singles",)
 
 BONUS_TRACKS_SLUG = "bonus-tracks"
 B_SIDES_SLUG = "b-sides"
@@ -101,7 +104,7 @@ def _track_entry(
     while album_dir.name.casefold() in ("standard edition", "deluxe edition", "bonus"):
         album_dir = album_dir.parent
     entry = {
-        "title": _track_title_from_filename(audio_file),
+        "title": display_track_title_from_path(audio_file),
         "play_path": play_path,
         "album_title": album_title or _album_title_from_folder(album_dir.name),
         "cover_url": _find_cover_front_artwork(audio_file.parent, media_root),
@@ -151,6 +154,28 @@ def _main_release_title_keys(band: Band, media_root: Path) -> set[str]:
     return keys
 
 
+def _append_bonus_from_release(
+    release_dir: Path,
+    media_root: Path,
+    out: list[dict],
+    seen_paths: set[str],
+) -> None:
+    """Collect every audio file from non-standard editions under a release."""
+    if not release_dir.is_dir():
+        return
+    standard_ed = _resolve_standard_edition(release_dir)
+    edition_dirs = _list_edition_dirs(release_dir) or [release_dir]
+    for edition in edition_dirs:
+        if edition.resolve() == standard_ed.resolve():
+            continue
+        for audio_file in _audio_files_in_dir(edition):
+            entry = _track_entry(audio_file, media_root)
+            if not entry or entry["play_path"] in seen_paths:
+                continue
+            seen_paths.add(entry["play_path"])
+            out.append(entry)
+
+
 def scan_bonus_tracks(band: Band, media_root: Path) -> list[dict]:
     artist_dir = _artist_dir(media_root, band.bnd_name)
     if not artist_dir:
@@ -159,36 +184,23 @@ def scan_bonus_tracks(band: Band, media_root: Path) -> list[dict]:
     out: list[dict] = []
     seen_paths: set[str] = set()
 
-    for cat in MAIN_RELEASE_CATEGORIES:
+    for cat in BONUS_RELEASE_CATEGORIES:
         folder_name = AUDIO_CATEGORIES.get(cat)
         if not folder_name:
             continue
         cat_dir = audio_root / folder_name
         if not cat_dir.is_dir():
             continue
-        for release_dir in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold()):
-            if not release_dir.is_dir():
-                continue
-            standard_ed = _resolve_standard_edition(release_dir)
-            standard_titles = {
-                _normalize_title_for_match(_track_title_from_filename(f))
-                for f in _audio_files_in_dir(standard_ed)
-            }
-            edition_dirs = _list_edition_dirs(release_dir) or [release_dir]
-            for edition in edition_dirs:
-                if edition.resolve() == standard_ed.resolve():
-                    continue
-                for audio_file in _audio_files_in_dir(edition):
-                    title_key = _normalize_title_for_match(
-                        _track_title_from_filename(audio_file)
-                    )
-                    if title_key in standard_titles:
-                        continue
-                    entry = _track_entry(audio_file, media_root)
-                    if not entry or entry["play_path"] in seen_paths:
-                        continue
-                    seen_paths.add(entry["play_path"])
-                    out.append(entry)
+        if cat == "singles":
+            release_roots = _iter_single_release_roots(cat_dir)
+        else:
+            release_roots = (
+                child
+                for child in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold())
+                if child.is_dir()
+            )
+        for release_dir in release_roots:
+            _append_bonus_from_release(release_dir, media_root, out, seen_paths)
 
     out.sort(key=lambda t: (t.get("album_title") or "", t.get("title") or ""))
     return out
@@ -218,9 +230,9 @@ def scan_b_sides(band: Band, media_root: Path) -> list[dict]:
                     _track_title_from_filename(audio_file)
                 )
                 track_num = _track_number(audio_file.name, index + 1)
+                # Skip only the A-side (track 1 with the lead title), not other
+                # tracks that share the same base title (e.g. alternate versions).
                 if lead_key and title_key == lead_key and track_num <= 1:
-                    continue
-                if lead_key and title_key == lead_key:
                     continue
                 entry = _track_entry(audio_file, media_root)
                 if not entry or entry["play_path"] in seen_paths:

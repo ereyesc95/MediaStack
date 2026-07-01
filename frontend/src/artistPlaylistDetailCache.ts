@@ -8,12 +8,39 @@ import {
 import type { ArtistPlaylistDetail } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "artist-playlist-detail";
+const NAMESPACE = "artist-playlist-detail-v10";
+const LEGACY_NAMESPACES = [
+  "artist-playlist-detail",
+  "artist-playlist-detail-v2",
+  "artist-playlist-detail-v3",
+  "artist-playlist-detail-v4",
+  "artist-playlist-detail-v5",
+  "artist-playlist-detail-v6",
+  "artist-playlist-detail-v7",
+  "artist-playlist-detail-v8",
+  "artist-playlist-detail-v9",
+];
 
 type CacheKey = `${number}:${string}`;
 
 const store = new Map<CacheKey, ArtistPlaylistDetail>();
 const inflight = new Map<CacheKey, Promise<ArtistPlaylistDetail>>();
+
+function purgeLegacyPlaylistDetailCaches(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (!key) continue;
+      if (LEGACY_NAMESPACES.some((ns) => key.includes(`:${ns}:`))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+purgeLegacyPlaylistDetailCaches();
 
 function cacheKey(bandId: number, slug: string): CacheKey {
   return `${bandId}:${slug}`;

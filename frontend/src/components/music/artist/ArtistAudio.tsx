@@ -19,7 +19,6 @@ import type {
   AudioReleaseCard,
 } from "../../../types";
 import {
-  ArtistPlaylistDetailView,
   ArtistPlaylistGrid,
 } from "./ArtistPlaylists";
 
@@ -48,8 +47,11 @@ function pickAudioCategory(
   current: string
 ): string {
   const pending = pendingAudioCategoryFor(bandId);
+  if (pending === "playlists") return "playlists";
   if (pending && index?.categories.includes(pending)) return pending;
-  if (current && index?.categories.includes(current)) return current;
+  if (current && (current === "playlists" || index?.categories.includes(current))) {
+    return current;
+  }
   return index?.categories[0] ?? "";
 }
 
@@ -529,12 +531,7 @@ export default function ArtistAudio({
   if (selectedPlaylist && !onOpenPlaylist) {
     return (
       <div className="artist-audio">
-        <ArtistPlaylistDetailView
-          bandId={bandId}
-          slug={selectedPlaylist}
-          onBack={() => setSelectedPlaylist(null)}
-          onPlay={onPlayTrack}
-        />
+        <p className="muted artist-section-empty">Open playlists from the artist audio tab.</p>
       </div>
     );
   }

@@ -425,6 +425,8 @@ Recognized for **system playlists** and **alternate versions**:
 
 Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Route: `/music/artist/{id}/audio/playlist/{slug}`.
 
+Default playlist card art lives in `assets/system/playlists/{slug}.png` (512×512 gradient tiles served at `/api/assets/system/playlists/{slug}`). Regenerate or add covers there when introducing new system playlist slugs.
+
 ### Language adaptations
 
 Link a translated title to its original song:

@@ -18,6 +18,7 @@ from app.band_library import (
     _find_audio_by_title,
     _parse_folder_date,
     _resolve_child_dir,
+    _strip_bracket_suffix,
     display_track_title_from_path,
     _track_title_from_filename,
 )
@@ -609,10 +610,34 @@ def _is_standard_edition_label(label: str) -> bool:
     return low in ("standard edition", "standard")
 
 
+def _is_disc_or_group_label(label: str) -> bool:
+    from app.media_index import _is_group_subdir_name
+
+    return _is_group_subdir_name(label.strip())
+
+
+def _source_edition_dir_for_audio(release_dir: Path, audio_file: Path) -> Path:
+    """Edition folder for source display — skips disc/side/tape group folders."""
+    cur = audio_file.parent
+    found = release_dir
+    while cur != release_dir and cur != cur.parent:
+        if _is_edition_dir(cur):
+            core = _edition_label_core(cur)
+            name = entry_display_name(cur)
+            if not _is_disc_or_group_label(core) and not _is_disc_or_group_label(name):
+                found = cur
+        cur = cur.parent
+    return found
+
+
 def _source_album_display(release_dir: Path, edition_dir: Path) -> tuple[str, str, str | None]:
-    release_title = _album_title_from_folder(entry_display_name(release_dir))
-    edition_core = _edition_label_core(edition_dir)
+    release_title = _strip_bracket_suffix(
+        _album_title_from_folder(entry_display_name(release_dir))
+    )
+    edition_core = _strip_bracket_suffix(_edition_label_core(edition_dir))
     if edition_dir.resolve() == release_dir.resolve():
+        return release_title, release_title, None
+    if _is_disc_or_group_label(edition_core):
         return release_title, release_title, None
     if edition_core.casefold() == release_title.casefold():
         return release_title, release_title, None
@@ -626,16 +651,11 @@ def _source_metadata_from_audio(
     media_root: Path,
     audio_file: Path,
 ) -> dict:
-    edition_dir = audio_file.parent
-    release_dir = _release_dir_from_content_folder(edition_dir)
-    if _is_edition_dir(edition_dir):
-        album_display, release_title, edition_title = _source_album_display(
-            release_dir, edition_dir
-        )
-    else:
-        album_display, release_title, edition_title = _source_album_display(
-            release_dir, release_dir
-        )
+    release_dir = _release_dir_from_content_folder(audio_file.parent)
+    edition_dir = _source_edition_dir_for_audio(release_dir, audio_file)
+    album_display, release_title, edition_title = _source_album_display(
+        release_dir, edition_dir
+    )
     release_rel = safe_relative(release_dir, media_root)
     navigate_id = release_id_from_path(release_rel) if release_rel else ""
     date_iso = _parse_folder_date(release_dir.name) or _parse_folder_date(edition_dir.name)

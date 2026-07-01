@@ -804,6 +804,8 @@ export default function MusicModule({
         <SystemPlaylistPage
           bandId={bandId}
           slug={playlistSlug}
+          userId={userId}
+          isAdmin={isAdmin}
           onBack={() => {
             savePendingAudioCategory(bandId, "playlists");
             pushArtistRoute({
@@ -813,6 +815,36 @@ export default function MusicModule({
             });
             onPlaylistNavigate?.(undefined);
           }}
+          onOpenPlaylist={(nextSlug) => {
+            savePendingAudioCategory(bandId, "playlists");
+            pushArtistRoute({
+              bandId,
+              section: "audio",
+              overviewTab: artistOverviewTab,
+              playlistSlug: nextSlug,
+            });
+            onPlaylistNavigate?.(nextSlug);
+          }}
+          onOpenRelease={(bid, rid) => {
+            void prefetchReleaseOverview(bid, rid);
+            pushArtistRoute({
+              bandId: bid,
+              section: "audio",
+              overviewTab: artistOverviewTab,
+              releaseId: rid,
+              releaseTab: "overview",
+            });
+            onReleaseNavigate?.(rid, "overview", bid !== bandId ? bid : undefined);
+          }}
+          onOpenArtist={(id) => {
+            onPlaylistNavigate?.(undefined);
+            openArtist(id);
+          }}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
         />
       ) : bandId && releaseId ? (
         <ReleasePage

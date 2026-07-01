@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 export type DropdownOption = {
   value: string;
@@ -19,6 +19,10 @@ type Props = {
   /** Load options asynchronously as the user types (e.g. members roster). */
   onSearch?: (query: string) => Promise<DropdownOption[]>;
   searchDebounceMs?: number;
+  /** Rich label for the closed/selected field (plain `label` is still used for search). */
+  renderSelectedLabel?: (option: DropdownOption) => ReactNode;
+  /** Rich label for each option in the dropdown list. */
+  renderOptionLabel?: (option: DropdownOption) => ReactNode;
 };
 
 export default function SearchableDropdown({
@@ -30,6 +34,8 @@ export default function SearchableDropdown({
   minQueryLength = 0,
   onSearch,
   searchDebounceMs = 280,
+  renderSelectedLabel,
+  renderOptionLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -37,10 +43,15 @@ export default function SearchableDropdown({
   const [searching, setSearching] = useState(false);
   const [pickedLabel, setPickedLabel] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const selected =
     options.find((o) => o.value === value) ??
     asyncOptions.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!value) setPickedLabel("");
@@ -111,19 +122,41 @@ export default function SearchableDropdown({
   const showHint =
     query.trim().length < minQueryLength && (onSearch || minQueryLength > 0);
 
+  function renderListLabel(option: DropdownOption) {
+    return renderOptionLabel ? renderOptionLabel(option) : option.label;
+  }
+
+  const showSelectedDisplay = !open && !!selected && !!renderSelectedLabel;
+
   return (
     <div className="search-dropdown" ref={ref}>
-      <input
-        type="text"
-        className="search-dropdown-input"
-        placeholder={selected?.label ?? pickedLabel ?? placeholder}
-        value={open ? query : selected?.label ?? pickedLabel ?? ""}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-      />
+      {showSelectedDisplay ? (
+        <button
+          type="button"
+          className="search-dropdown-input search-dropdown-selected"
+          onClick={() => setOpen(true)}
+        >
+          {selected.iso && (
+            <span className={`fi fi-${selected.iso} search-dropdown-flag`} aria-hidden />
+          )}
+          <span className="search-dropdown-selected-text">
+            {renderSelectedLabel!(selected)}
+          </span>
+        </button>
+      ) : (
+        <input
+          ref={inputRef}
+          type="text"
+          className="search-dropdown-input"
+          placeholder={selected?.label ?? pickedLabel ?? placeholder}
+          value={open ? query : selected?.label ?? pickedLabel ?? ""}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+        />
+      )}
       {open && (
         <ul
           className="search-dropdown-list"
@@ -158,7 +191,7 @@ export default function SearchableDropdown({
                             className={`fi fi-${o.iso} search-dropdown-flag`}
                           />
                         )}
-                        {o.label}
+                        {renderListLabel(o)}
                       </button>
                     </li>
                   ))}
@@ -174,7 +207,7 @@ export default function SearchableDropdown({
                   {o.iso && (
                     <span className={`fi fi-${o.iso} search-dropdown-flag`} />
                   )}
-                  {o.label}
+                  {renderListLabel(o)}
                 </button>
               </li>
             ))}

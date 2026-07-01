@@ -11,6 +11,7 @@ import {
 import { useBeatPulse } from "../../../useBeatPulse";
 import type { QuizScoreEntry, QuizScores } from "../../../types";
 import { useMiniAudio } from "./MiniAudioPlayer";
+import { stripFilenamePrefixes } from "../release/releaseTrackPanelMeta";
 
 export type QuizMode = "discography" | "lineup" | "songs";
 
@@ -91,13 +92,6 @@ function normalizeGuess(text: string): string {
 
 function stripBracketSuffixes(title: string): string {
   return title.replace(/\s*\[[^\]]*\]/g, "").trim();
-}
-
-function stripFilenamePrefixes(title: string): string {
-  let t = title.trim();
-  t = t.replace(/^\d+\.\s*/, "");
-  t = t.replace(/^[A-Z]\d+\.\s*/i, "");
-  return t.trim();
 }
 
 /** Title shown in quiz tables and song choices (no bracket suffixes). */

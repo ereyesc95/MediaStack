@@ -7,11 +7,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.band_library import (
-    _collect_audio_files,
-    _find_audio_by_title,
-    match_top_tracks,
-)
+from app.band_library import match_top_tracks
 from app.config import settings
 from app.cross_artist_playlists import CROSS_PLAYLIST_LABELS
 from app.extended_system_playlists import (
@@ -21,10 +17,13 @@ from app.extended_system_playlists import (
 from app.gallery import _artist_dir
 from app.models import Band
 from app.paths import DATA_DIR
-from app.services.setlistfm import fetch_artist_setlist_summaries, fetch_setlist_detail
 from app.system_playlists import ORIGINALS_SLUG, PLAYLIST_RULES, playlist_cards_from_buckets, playlist_cover_url
+from app.playlist_tracks import (
+    PLAYLIST_DESCRIPTIONS,
+    enrich_playlist_tracks,
+)
 
-PLAYLIST_INDEX_VERSION = 4
+PLAYLIST_INDEX_VERSION = 14
 
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",
@@ -93,20 +92,6 @@ def _build_top_tracks(band: Band, media_root: Path) -> dict | None:
     }
 
 
-def _setlist_song_names(detail: dict) -> list[str]:
-    names: list[str] = []
-    for block in detail.get("sets", {}).get("set") or []:
-        if isinstance(block, dict):
-            songs = block.get("song") or []
-            if isinstance(songs, dict):
-                songs = [songs]
-            for song in songs:
-                if isinstance(song, dict):
-                    name = (song.get("name") or "").strip()
-                    if name:
-                        names.append(name)
-    return names
-
 
 def _artist_has_audio_entries(artist_dir: Path) -> bool:
     from app.band_library import _audio_root
@@ -136,7 +121,6 @@ def _build_setlists(db: Session, band: Band, media_root: Path) -> dict | None:
     return {
         "slug": "setlists",
         "name": "Setlists",
-        "track_count": 1,
         "cover_url": playlist_cover_url("setlists"),
     }
 
@@ -145,66 +129,18 @@ def _build_setlists_detail(db: Session, band: Band, media_root: Path) -> dict | 
     mbid = (band.bnd_code or "").strip()
     if not mbid:
         return None
-    api_key = _get_setlistfm_key(db)
-    if not api_key:
+    if not _get_setlistfm_key(db):
         return None
 
     artist_dir = _artist_dir(media_root, band.bnd_name)
-    if not artist_dir:
-        return None
-    local_files = _collect_audio_files(artist_dir)
-    if not local_files:
+    if not artist_dir or not _artist_has_audio_entries(artist_dir):
         return None
 
-    try:
-        summaries = fetch_artist_setlist_summaries(mbid, api_key=api_key, max_pages=1)
-    except Exception:
-        return None
-    if not summaries:
-        return None
+    from app.setlist_playlists import build_setlists_playlist_detail, years_with_activity
 
-    tracks: list[dict] = []
-    years: set[str] = set()
-    show_count = len(summaries)
-    seen_titles: set[str] = set()
-
-    for summary in summaries[:2]:
-        event_date = (summary.get("eventDate") or "").strip()
-        if len(event_date) >= 4:
-            years.add(event_date[-4:])
-        setlist_id = summary.get("id")
-        if not setlist_id:
-            continue
-        try:
-            detail = fetch_setlist_detail(setlist_id, api_key=api_key)
-        except Exception:
-            continue
-        if not detail:
-            continue
-        for title in _setlist_song_names(detail):
-            key = title.casefold()
-            if key in seen_titles:
-                continue
-            matched = _find_audio_by_title(local_files, title)
-            if not matched:
-                continue
-            from app.extended_system_playlists import _track_entry
-
-            entry = _track_entry(matched, media_root)
-            if not entry:
-                continue
-            seen_titles.add(key)
-            tracks.append(entry)
-        if tracks:
-            break
-
-    return {
-        "slug": "setlists",
-        "name": "Setlists",
-        "years": sorted(years, reverse=True),
-        "show_count": show_count,
-        "tracks": tracks,
-    }
+    api_key = _get_setlistfm_key(db)
+    years = years_with_activity(band, api_key=api_key) if api_key else None
+    return build_setlists_playlist_detail(band, years=years)
 
 
 def _suffix_buckets(band: Band, media_root: Path) -> dict[str, list[dict]]:
@@ -237,6 +173,10 @@ def _all_track_buckets(
     merged["b-sides"] = _merge_track_lists(
         suffix.get("b-sides") or [],
         extended.get("b-sides") or [],
+    )
+    merged["tributes"] = _merge_track_lists(
+        suffix.get("tributes") or [],
+        cross.get("tributes") or [],
     )
     return merged
 
@@ -384,6 +324,47 @@ def _tracks_from_cache(
     return tracks if tracks else None
 
 
+def _playlist_neighbors(
+    playlists: list[dict], slug: str
+) -> tuple[dict | None, dict | None]:
+    ordered = sorted(playlists, key=lambda p: (p.get("name") or "").casefold())
+    slugs = [p.get("slug") for p in ordered if p.get("slug")]
+    if slug not in slugs or len(slugs) < 2:
+        return None, None
+    idx = slugs.index(slug)
+    prev = ordered[(idx - 1) % len(ordered)]
+    nxt = ordered[(idx + 1) % len(ordered)]
+    return (
+        {"slug": prev["slug"], "name": prev.get("name") or prev["slug"]},
+        {"slug": nxt["slug"], "name": nxt.get("name") or nxt["slug"]},
+    )
+
+
+def _finalize_playlist_detail(
+    db: Session,
+    band: Band,
+    media_root: Path,
+    slug: str,
+    detail: dict,
+    *,
+    user_id: int = 1,
+) -> dict:
+    index = get_playlist_index(db, band, user_id=user_id)
+    playlists = index.get("playlists") or []
+    prev, nxt = _playlist_neighbors(playlists, slug)
+    tracks = enrich_playlist_tracks(detail.get("tracks") or [], media_root, db=db)
+    return {
+        **detail,
+        "slug": slug,
+        "name": detail.get("name") or PLAYLIST_LABELS.get(slug, slug.replace("-", " ").title()),
+        "description": PLAYLIST_DESCRIPTIONS.get(slug, ""),
+        "cover_url": playlist_cover_url(slug),
+        "tracks": tracks,
+        "prev": prev,
+        "next": nxt,
+    }
+
+
 def get_playlist_detail(
     db: Session,
     band: Band,
@@ -396,24 +377,40 @@ def get_playlist_detail(
         tracks = get_top_tracks_playlist_tracks(band, media_root)
         if not tracks:
             return None
-        return {
-            "slug": slug,
-            "name": PLAYLIST_LABELS.get(slug, "Top Tracks"),
-            "tracks": tracks,
-        }
+        return _finalize_playlist_detail(
+            db,
+            band,
+            media_root,
+            slug,
+            {
+                "slug": slug,
+                "name": PLAYLIST_LABELS.get(slug, "Top Tracks"),
+                "tracks": tracks,
+            },
+            user_id=user_id,
+        )
 
     if slug == "setlists":
         detail = _build_setlists_detail(db, band, media_root)
-        return detail
+        if not detail:
+            return None
+        return _finalize_playlist_detail(db, band, media_root, slug, detail, user_id=user_id)
 
     tracks = _tracks_from_cache(db, band, media_root, slug, user_id=user_id)
     if not tracks:
         return None
-    return {
-        "slug": slug,
-        "name": PLAYLIST_LABELS.get(slug, slug.replace("-", " ").title()),
-        "tracks": tracks,
-    }
+    return _finalize_playlist_detail(
+        db,
+        band,
+        media_root,
+        slug,
+        {
+            "slug": slug,
+            "name": PLAYLIST_LABELS.get(slug, slug.replace("-", " ").title()),
+            "tracks": tracks,
+        },
+        user_id=user_id,
+    )
 
 
 def get_suffix_playlist_tracks(

@@ -1,6 +1,7 @@
 """Cross-artist system playlists (writing credits, guest appearances)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from sqlalchemy import select
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.band_library import (
     _album_title_from_folder,
     _collect_audio_files,
+    display_track_title_from_path,
     _find_audio_by_title,
     _find_cover_front_artwork,
     _normalize_title_for_match,
@@ -23,6 +25,7 @@ from app.system_playlists import _track_tags
 
 WRITING_CREDITS_SLUG = "writing-credits"
 APPEARANCES_SLUG = "appearances"
+TRIBUTES_SLUG = "tributes"
 
 CROSS_PLAYLIST_LABELS: dict[str, str] = {
     WRITING_CREDITS_SLUG: "Writing Credits",
@@ -53,7 +56,7 @@ def _track_entry(
     while album_dir.name.casefold() in ("standard edition", "deluxe edition", "bonus"):
         album_dir = album_dir.parent
     return {
-        "title": _track_title_from_filename(audio_file),
+        "title": display_track_title_from_path(audio_file),
         "play_path": play_path,
         "album_title": album_title or _album_title_from_folder(album_dir.name),
         "cover_url": _find_cover_front_artwork(audio_file.parent, media_root),
@@ -195,19 +198,91 @@ def _appearance_names(band: Band) -> list[str]:
     return [n.casefold() for n in names if n]
 
 
-def _mentions_artist(tags: list[str], names: list[str]) -> bool:
+def _name_matches(text: str, names: list[str]) -> bool:
+    token = text.casefold().strip()
+    if not token:
+        return False
+    return any(name == token or name in token or token in name for name in names)
+
+
+def _cover_of_band(tag: str, names: list[str]) -> bool:
+    match = re.match(r"^(.+?)\s+cover$", tag.strip(), re.IGNORECASE)
+    if not match:
+        return False
+    return _name_matches(match.group(1).strip(), names)
+
+
+def _performer_from_tag(tag: str) -> str | None:
+    match = re.match(r"^by\s+(.+)$", tag.strip(), re.IGNORECASE)
+    return match.group(1).strip() if match else None
+
+
+def _performers_from_tags(tags: list[str]) -> list[str]:
+    performers: list[str] = []
     for tag in tags:
+        performer = _performer_from_tag(tag)
+        if performer:
+            performers.append(performer)
+    return performers
+
+
+def _is_tribute_track(tags: list[str], names: list[str]) -> bool:
+    if not any(_cover_of_band(tag, names) for tag in tags):
+        return False
+    performers = _performers_from_tags(tags)
+    if performers:
+        return all(not _name_matches(performer, names) for performer in performers)
+    return True
+
+
+def _is_appearance_track(tags: list[str], names: list[str]) -> bool:
+    if any(_cover_of_band(tag, names) for tag in tags):
+        return False
+    performers = _performers_from_tags(tags)
+    if performers:
+        return any(_name_matches(performer, names) for performer in performers)
+    for tag in tags:
+        if _performer_from_tag(tag):
+            continue
         for name in names:
-            if name in tag:
+            if tag.startswith("with ") and _name_matches(tag[5:], names):
                 return True
-            if tag.startswith("with ") and name in tag[5:]:
-                return True
-            if "feat" in tag and name in tag:
+            if "feat" in tag and _name_matches(tag.split("feat", 1)[-1], names):
                 return True
     return False
 
 
-def scan_appearances(band: Band, media_root: Path) -> list[dict]:
+def _combined_tags_for_file(
+    audio_file: Path,
+    media_root: Path,
+) -> list[str]:
+    stem = audio_file.stem
+    file_tags = _track_tags(stem)
+    album_dir = audio_file.parent
+    while album_dir.name.casefold() in (
+        "standard edition",
+        "deluxe edition",
+        "bonus",
+    ):
+        album_dir = album_dir.parent
+    _, folder_tags = parse_bracket_tags(album_dir.name)
+    folder_tag_text = " ".join(
+        t.casefold()
+        for t in (
+            [folder_tags.get("with_artist", "")]
+            if folder_tags.get("with_artist")
+            else []
+        )
+    )
+    return file_tags + ([folder_tag_text] if folder_tag_text else [])
+
+
+def _scan_other_artist_audio(
+    band: Band,
+    media_root: Path,
+    *,
+    predicate,
+) -> list[dict]:
     names = _appearance_names(band)
     if not names:
         return []
@@ -229,26 +304,8 @@ def scan_appearances(band: Band, media_root: Path) -> list[dict]:
             if own_dir and artist_folder.resolve() == own_dir.resolve():
                 continue
             for audio_file in _collect_audio_files(artist_folder):
-                stem = audio_file.stem
-                file_tags = _track_tags(stem)
-                album_dir = audio_file.parent
-                while album_dir.name.casefold() in (
-                    "standard edition",
-                    "deluxe edition",
-                    "bonus",
-                ):
-                    album_dir = album_dir.parent
-                _, folder_tags = parse_bracket_tags(album_dir.name)
-                folder_tag_text = " ".join(
-                    t.casefold()
-                    for t in (
-                        [folder_tags.get("with_artist", "")]
-                        if folder_tags.get("with_artist")
-                        else []
-                    )
-                )
-                combined = file_tags + ([folder_tag_text] if folder_tag_text else [])
-                if not _mentions_artist(combined, names):
+                combined = _combined_tags_for_file(audio_file, media_root)
+                if not predicate(combined, names):
                     continue
                 entry = _track_entry(audio_file, media_root)
                 if not entry:
@@ -263,10 +320,47 @@ def scan_appearances(band: Band, media_root: Path) -> list[dict]:
     return out
 
 
+def _is_feature_guest_track(tags: list[str], names: list[str]) -> bool:
+    """Band performs the track and features a guest (e.g. By HIM; feat. Apocalyptica)."""
+    if not any("feat" in tag for tag in tags):
+        return False
+    if any(_cover_of_band(tag, names) for tag in tags):
+        return False
+    performers = _performers_from_tags(tags)
+    if not performers:
+        return False
+    return any(_name_matches(performer, names) for performer in performers)
+
+
+def scan_feature_guests(band: Band, media_root: Path) -> list[dict]:
+    return _scan_other_artist_audio(
+        band,
+        media_root,
+        predicate=lambda tags, names: _is_feature_guest_track(tags, names),
+    )
+
+
+def scan_appearances(band: Band, media_root: Path) -> list[dict]:
+    return _scan_other_artist_audio(
+        band,
+        media_root,
+        predicate=lambda tags, names: _is_appearance_track(tags, names),
+    )
+
+
+def scan_cross_tributes(band: Band, media_root: Path) -> list[dict]:
+    return _scan_other_artist_audio(
+        band,
+        media_root,
+        predicate=lambda tags, names: _is_tribute_track(tags, names),
+    )
+
+
 def scan_cross_artist_playlists(
     db: Session, band: Band, media_root: Path
 ) -> dict[str, list[dict]]:
     return {
         WRITING_CREDITS_SLUG: scan_writing_credits(db, band, media_root),
         APPEARANCES_SLUG: scan_appearances(band, media_root),
+        TRIBUTES_SLUG: scan_cross_tributes(band, media_root),
     }
