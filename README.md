@@ -18,6 +18,23 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 
 The **music module** is the reference implementation. Folder layout, naming rules, and artwork conventions below apply primarily to music today; other modules will follow similar patterns as they are built.
 
+### Cross-module library layout (all modules)
+
+Canonical paths for Movies, Series, Books, Games, and Music Video/Library categories are documented in:
+
+- **[docs/media_library_layout.md](docs/media_library_layout.md)** — on-disk folder patterns, categories, examples
+- **[docs/franchise_index.md](docs/franchise_index.md)** — cross-module **Related media** via shared `{Franchise}` folder names
+
+| Module | Path pattern |
+|--------|--------------|
+| **Music** | `Music/{Letter}/{Artist}/Audio\|Video\|Library\|Gallery/` |
+| **Movies** | `Movies/{Letter}/{Work}/{date}. {Film}/` |
+| **Series** | `Series/{Letter}/{Franchise}/[{date}. {Subseries}/]Seasons/…` |
+| **Books** | `Books/{Letter}/{Work}/{date}. {Volume or Edition}/` |
+| **Games** | `Games/{Platform}/{Letter}/{Franchise}/{date}. {Title}/` |
+
+**Related media** across modules is discovered automatically when the same franchise/work folder name appears under each module (e.g. `Dragon Ball` under `Series/D/`, `Movies/D/`, `Books/D/`, and `Games/*/D/Dragon Ball/`). Manual `.path` / symlink portals are optional exceptions (biopics, name collisions). See the design doc for implementation status and next steps.
+
 ---
 
 ## Requirements
@@ -116,7 +133,17 @@ Source dump: `data/databinger.sql` (legacy MediaBinger / DataBinger schema).
 
 ## Media library layout (music)
 
-All music paths are relative to **media root**.
+All music paths are relative to **media root**. For Movies, Series, Books, Games, and cross-module linking, see **[docs/media_library_layout.md](docs/media_library_layout.md)**.
+
+### Music Video and Library (categories)
+
+Under each artist, optional category folders (omit if unused — hidden in UI):
+
+| `Video/` (A–Z) | `Library/` (A–Z) |
+|----------------|------------------|
+| Documentaries, Interviews, Live, Movies, Music Videos, Promo Material, Series | Articles, Books, Interviews, Magazines, Reviews, Scans |
+
+Pattern: `{Category}/{date or title folder}/` with flexible filenames (not fixed names like `video.mp4`). Related films/series in other modules appear via the **franchise index**, not portal folders inside `Video/Movies/`.
 
 ```
 Media/
