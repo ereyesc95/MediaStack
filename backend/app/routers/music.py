@@ -1825,6 +1825,22 @@ async def create_playlist(
     return result
 
 
+@router.get("/playlists/search-tracks")
+def search_tracks_for_playlist(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(25, ge=1, le=50),
+    _user: User = Depends(get_current_user),
+):
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    media_root = Path(settings.media_root)
+    if not media_root.is_dir():
+        raise HTTPException(400, "Media root not configured")
+    from app.user_playlist import search_library_tracks
+
+    return {"items": search_library_tracks(media_root, q, limit=limit)}
+
+
 @router.get("/playlists/{playlist_id}/cover")
 def playlist_cover(playlist_id: int):
     from app.user_playlist import cover_file_for_playlist
@@ -1974,22 +1990,6 @@ class PlaylistUpdateBody(BaseModel):
 
 class PlaylistReorderBody(BaseModel):
     entry_ids: list[int]
-
-
-@router.get("/playlists/search-tracks")
-def search_tracks_for_playlist(
-    q: str = Query(..., min_length=1),
-    limit: int = Query(25, ge=1, le=50),
-    _user: User = Depends(get_current_user),
-):
-    if not settings.media_root:
-        raise HTTPException(400, "Media root not configured")
-    media_root = Path(settings.media_root)
-    if not media_root.is_dir():
-        raise HTTPException(400, "Media root not configured")
-    from app.user_playlist import search_library_tracks
-
-    return {"items": search_library_tracks(media_root, q, limit=limit)}
 
 
 @router.patch("/playlists/{playlist_id}")

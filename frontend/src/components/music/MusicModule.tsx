@@ -552,6 +552,18 @@ export default function MusicModule({
   useEffect(() => {
     if (tab !== "playlists") return;
 
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("spotify") === "ready") {
+      params.delete("spotify");
+      const qs = params.toString();
+      const clean = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+      window.history.replaceState(null, "", clean);
+      setSpotifyOAuthReturn(true);
+      setAddPlaylistInitialMode("spotify");
+      setShowAddPlaylist(true);
+      return;
+    }
+
     const spotifyError = readSpotifyOAuthError();
     if (spotifyError) {
       markSpotifyCredentialsRepair(spotifyError);

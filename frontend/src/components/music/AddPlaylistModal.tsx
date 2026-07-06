@@ -174,8 +174,10 @@ export default function AddPlaylistModal({
   useEffect(() => {
     if (!spotifyOAuthReturn || mode !== "spotify") return;
     void loadSpotify();
-    const retry = window.setTimeout(() => void loadSpotify(), 700);
-    return () => window.clearTimeout(retry);
+    const retries = [500, 1200, 2500].map((delay) =>
+      window.setTimeout(() => void loadSpotify(), delay)
+    );
+    return () => retries.forEach((id) => window.clearTimeout(id));
   }, [spotifyOAuthReturn, mode, loadSpotify]);
 
   const saveCredentials = async () => {
@@ -206,10 +208,12 @@ export default function AddPlaylistModal({
     setError(null);
     setSpotifyNotice(null);
     try {
-      await disconnectSpotify().catch(() => {});
-      setSpotifyConnected(false);
-      setSpotifyUser(null);
-      setSpotifyPlaylists([]);
+      if (options?.forceAccount) {
+        await disconnectSpotify().catch(() => {});
+        setSpotifyConnected(false);
+        setSpotifyUser(null);
+        setSpotifyPlaylists([]);
+      }
       markSpotifyOAuthAwaiting();
       const { url } = await startSpotifyAuth(SPOTIFY_RETURN_PATH, options);
       window.location.href = url;

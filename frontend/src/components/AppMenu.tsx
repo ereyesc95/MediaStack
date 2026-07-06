@@ -15,6 +15,7 @@ import {
   IconCamera,
   IconCards,
   IconCheck,
+  IconSquare,
   IconEditProfile,
   IconEditRelease,
   IconFileTags,
@@ -585,10 +586,12 @@ export default function AppMenu({
                 onEditPlaylistToggle();
               }}
             >
-              {editPlaylistActive && <IconCheck className="menu-item-icon" />}
-              <span className={editPlaylistActive ? "" : "menu-submenu-pad"}>
-                Edit playlist
-              </span>
+              {editPlaylistActive ? (
+                <IconCheck className="menu-item-icon" />
+              ) : (
+                <IconSquare className="menu-item-icon" />
+              )}
+              <span>Edit playlist</span>
             </button>
           )}
           <button

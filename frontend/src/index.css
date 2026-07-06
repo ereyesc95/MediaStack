@@ -9928,6 +9928,37 @@ input {
   min-width: 0;
 }
 
+.release-tracklist__title-wrap--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+.release-tracklist__title-wrap--stacked .release-tracklist__title {
+  width: 100%;
+}
+
+.release-tracklist__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.release-tracklist__play--edit,
+.release-tracklist__row--edit .release-tracklist__play {
+  grid-template-columns: auto 2rem minmax(0, 1fr) auto auto;
+  cursor: default;
+}
+
+.release-tracklist--edit-mode .release-tracklist__body {
+  overflow: visible;
+}
+
+.release-tracklist--edit-mode .release-tracklist__content {
+  overflow: visible;
+}
+
 .release-tracklist__title-wrap .release-tracklist__title {
   flex: 1;
   min-width: 0;
@@ -13117,11 +13148,8 @@ button.lyrics-status-badge--icon-only {
 }
 
 .user-playlist-edit__results {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% - 0.35rem);
-  z-index: 5;
+  position: static;
+  margin-top: 0.35rem;
   max-height: 12rem;
   overflow-y: auto;
   border-radius: var(--radius);
@@ -13213,6 +13241,77 @@ button.lyrics-status-badge--icon-only {
 .user-playlist-edit__panel-fields textarea {
   min-height: 3rem;
   resize: vertical;
+}
+
+.user-playlist-edit__meta-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0 0 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  margin-bottom: 0.75rem;
+}
+
+.user-playlist-edit__cover-btn {
+  flex-shrink: 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-playlist-edit__cover-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.user-playlist-edit__cover-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.user-playlist-edit__cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.user-playlist-edit__cover-placeholder {
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.user-playlist-edit__meta-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.user-playlist-edit__meta-fields input,
+.user-playlist-edit__meta-fields textarea {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text);
+}
+
+.user-playlist-edit__meta-fields textarea {
+  resize: vertical;
+  min-height: 2.75rem;
 }
 
 .release-tracklist__row-actions {
@@ -13313,8 +13412,8 @@ button.lyrics-status-badge--icon-only {
 
 .add-playlist-modal__cover-slot {
   position: relative;
-  flex: 1;
-  min-height: 5.5rem;
+  flex: none;
+  aspect-ratio: 1;
   width: 100%;
   border-radius: var(--radius);
   border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);

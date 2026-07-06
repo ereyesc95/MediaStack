@@ -15,6 +15,7 @@ from app.deps import get_current_user
 from app.models import User
 from app.spotify_auth import (
     _sanitize_return_path,
+    append_query_param,
     build_authorize_url,
     build_return_url,
     consume_oauth_state,
@@ -154,7 +155,8 @@ def spotify_auth_callback(
         exchange_code(db, user_id=user_id, code=code, redirect_uri=redirect_uri)
     except Exception as exc:
         return error_redirect(str(exc))
-    return RedirectResponse(return_url, status_code=302)
+    success_url = append_query_param(return_url, "spotify", "ready")
+    return RedirectResponse(success_url, status_code=302)
 
 
 @router.get("/playlists")

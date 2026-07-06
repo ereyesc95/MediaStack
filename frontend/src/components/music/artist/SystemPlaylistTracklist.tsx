@@ -497,6 +497,89 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               ) : meta ? (
                 <span className="release-tracklist__track-meta">{meta}</span>
               ) : null;
+            const titleWrapClass = `release-tracklist__title-wrap${
+              useMetaColumns ? " release-tracklist__title-wrap--stacked" : ""
+            }`;
+            const playClass = [
+              "release-tracklist__play",
+              editMode ? "release-tracklist__play--edit" : "",
+              unavailable ? "release-tracklist__play--static" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const lead = (
+              <span className="release-tracklist__lead">
+                {editMode && (
+                  <span className="release-tracklist__drag-handle" aria-hidden>
+                    ⠿
+                  </span>
+                )}
+                <span className="release-tracklist__num">{index + 1}</span>
+              </span>
+            );
+            const titleBlock = (
+              <span className={titleWrapClass}>
+                <ReleaseTrackTitle
+                  title={track.title}
+                  billboard={stacked}
+                  hidePerformer={hidePerformer}
+                  hideCoverArtist={hideCoverArtist}
+                />
+                {metaNode}
+              </span>
+            );
+            const trailing =
+              unavailable && !editMode ? (
+                <span className="release-tracklist__row-actions">
+                  {youtubeQuery ? (
+                    <a
+                      className="setlist-tracklist__youtube-link"
+                      href={youtubeSearchUrl(youtubeQuery)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Search ${trackDisplayTitle(track.title)} on YouTube`}
+                      title="Search on YouTube"
+                    >
+                      <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
+                    </a>
+                  ) : (
+                    <span className="release-tracklist__duration" aria-hidden />
+                  )}
+                  {userPlaylistId && track.entry_id ? (
+                    <button
+                      type="button"
+                      className="release-tracklist__find-disk"
+                      disabled={findingEntryId === track.entry_id}
+                      title="Find in disk"
+                      aria-label="Find in disk"
+                      onClick={() => void handleFindInDisk(track)}
+                    >
+                      {findingEntryId === track.entry_id ? "…" : "Find"}
+                    </button>
+                  ) : null}
+                </span>
+              ) : (
+                <>
+                  {track.duration ? (
+                    <span className="release-tracklist__duration">{track.duration}</span>
+                  ) : (
+                    <span className="release-tracklist__duration" aria-hidden />
+                  )}
+                  {editMode && track.entry_id ? (
+                    <button
+                      type="button"
+                      className="release-tracklist__remove-track"
+                      aria-label={`Remove ${track.title}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRemoveTrack(track.entry_id);
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </>
+              );
             return (
               <li
                 key={item.id}
@@ -512,102 +595,23 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                   void handleDrop(index);
                 }}
               >
-                {unavailable ? (
-                  <div className="release-tracklist__play release-tracklist__play--static">
-                    {editMode && (
-                      <span className="release-tracklist__drag-handle" aria-hidden>
-                        ⠿
-                      </span>
-                    )}
-                    <span className="release-tracklist__num">{index + 1}</span>
-                    <span className="release-tracklist__title-wrap">
-                      <ReleaseTrackTitle
-                        title={track.title}
-                        billboard={stacked}
-                        hidePerformer={hidePerformer}
-                        hideCoverArtist={hideCoverArtist}
-                      />
-                      {metaNode}
-                    </span>
-                    <span className="release-tracklist__row-actions">
-                      {editMode && track.entry_id ? (
-                        <button
-                          type="button"
-                          className="release-tracklist__remove-track"
-                          aria-label={`Remove ${track.title}`}
-                          onClick={() => void handleRemoveTrack(track.entry_id)}
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                      {!editMode && youtubeQuery ? (
-                        <a
-                          className="setlist-tracklist__youtube-link"
-                          href={youtubeSearchUrl(youtubeQuery)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`Search ${trackDisplayTitle(track.title)} on YouTube`}
-                          title="Search on YouTube"
-                        >
-                          <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
-                        </a>
-                      ) : (
-                        <span className="release-tracklist__duration" aria-hidden />
-                      )}
-                      {!editMode && userPlaylistId && track.entry_id ? (
-                        <button
-                          type="button"
-                          className="release-tracklist__find-disk"
-                          disabled={findingEntryId === track.entry_id}
-                          title="Find in disk"
-                          aria-label="Find in disk"
-                          onClick={() => void handleFindInDisk(track)}
-                        >
-                          {findingEntryId === track.entry_id ? "…" : "Find"}
-                        </button>
-                      ) : null}
-                    </span>
+                {unavailable || editMode ? (
+                  <div className={playClass}>
+                    {lead}
+                    {titleBlock}
+                    {trailing}
                   </div>
                 ) : (
                   <button
                     type="button"
-                    className="release-tracklist__play"
+                    className={playClass}
                     onClick={() => handlePlayRow(track, item)}
-                    disabled={!track.play_path || editMode}
+                    disabled={!track.play_path}
                     aria-label={`Play ${track.title}`}
                   >
-                    {editMode && (
-                      <span className="release-tracklist__drag-handle" aria-hidden>
-                        ⠿
-                      </span>
-                    )}
-                    <span className="release-tracklist__num">{index + 1}</span>
-                    <span className="release-tracklist__title-wrap">
-                      <ReleaseTrackTitle
-                        title={track.title}
-                        billboard={stacked}
-                        hidePerformer={hidePerformer}
-                        hideCoverArtist={hideCoverArtist}
-                      />
-                      {metaNode}
-                    </span>
-                    {editMode && track.entry_id ? (
-                      <span className="release-tracklist__edit-actions">
-                        <button
-                          type="button"
-                          className="release-tracklist__remove-track"
-                          aria-label={`Remove ${track.title}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleRemoveTrack(track.entry_id);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ) : track.duration ? (
-                      <span className="release-tracklist__duration">{track.duration}</span>
-                    ) : null}
+                    {lead}
+                    {titleBlock}
+                    {trailing}
                   </button>
                 )}
               </li>
@@ -668,6 +672,8 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       <div
         className={`release-tracklist${stacked ? " release-tracklist--stacked" : ""}${
           rightView === "lyrics" ? " release-tracklist--lyrics" : ""
+        }${
+          editMode ? " release-tracklist--edit-mode" : ""
         }${
           stacked && mobileView === "tracks" && mobileBackdropUrl
             ? " release-tracklist--mobile-canvas"

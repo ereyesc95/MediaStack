@@ -1611,7 +1611,44 @@ export default function SystemPlaylistPage({
                 }}
               />
             ) : (
-              <SystemPlaylistTracklist
+              <>
+                {isUserPlaylist && editPlaylist && detail?.editable !== false && (
+                  <div className="user-playlist-edit__meta-bar">
+                    <button
+                      type="button"
+                      className="user-playlist-edit__cover-btn"
+                      onClick={openCoverPicker}
+                      disabled={coverUploadBusy}
+                      title="Change cover"
+                      aria-label="Change playlist cover"
+                    >
+                      {coverUrl ? (
+                        <img src={coverUrl} alt="" className="user-playlist-edit__cover-img" />
+                      ) : (
+                        <span className="user-playlist-edit__cover-placeholder" aria-hidden>
+                          +
+                        </span>
+                      )}
+                    </button>
+                    <div className="user-playlist-edit__meta-fields">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Playlist name"
+                        aria-label="Playlist name"
+                      />
+                      <textarea
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="Short description"
+                        aria-label="Playlist description"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                )}
+                <SystemPlaylistTracklist
                 key={isUserPlaylist ? `user-${userPlaylistId}` : slug}
                 ref={tracklistRef}
                 bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
@@ -1636,6 +1673,7 @@ export default function SystemPlaylistPage({
                 hidePerformer={hidePerformerName}
                 hideCoverArtist={hideCoverArtist}
               />
+              </>
             )}
           </div>
         </main>

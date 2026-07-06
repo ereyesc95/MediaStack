@@ -119,6 +119,23 @@ export function IconCheck({ className }: IconProps) {
   );
 }
 
+export function IconSquare({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <rect
+        x="5"
+        y="5"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        rx="1"
+      />
+    </svg>
+  );
+}
+
 export function IconSwitchProfile({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

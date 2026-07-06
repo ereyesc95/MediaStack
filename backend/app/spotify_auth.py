@@ -139,6 +139,15 @@ def build_return_url(frontend_origin: str, return_path: str, hash_suffix: str = 
     return url
 
 
+def append_query_param(url: str, key: str, value: str) -> str:
+    from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    query[key] = [value]
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+
+
 def create_oauth_state(
     user_id: int,
     *,
@@ -285,9 +294,12 @@ def fetch_spotify_profile(db: Session, user_id: int) -> dict | None:
 def spotify_session_status(db: Session, user_id: int) -> dict:
     if not spotify_connected(db, user_id):
         return {"connected": False}
+    token = get_access_token(db, user_id)
+    if not token:
+        disconnect_spotify(db, user_id)
+        return {"connected": False, "session_expired": True}
     profile = fetch_spotify_profile(db, user_id)
     if not profile:
-        disconnect_spotify(db, user_id)
         return {"connected": False, "session_expired": True}
     return {"connected": True, "user": profile}
 
