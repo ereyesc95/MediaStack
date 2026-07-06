@@ -6,7 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover } from "../../../api";
+import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover, updateUserPlaylist } from "../../../api";
 import { getCachedOverview, prefetchBandOverview } from "../../../overviewCache";
 import {
   getCachedArtistPlaylistDetail,
@@ -231,6 +231,9 @@ export default function SystemPlaylistPage({
     return true;
   });
   const [error, setError] = useState<string | null>(null);
+  const [editPlaylist, setEditPlaylist] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [nowPlayingTitle, setNowPlayingTitle] = useState<string | null>(null);
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
@@ -417,7 +420,11 @@ export default function SystemPlaylistPage({
     (!isUserPlaylist && slug ? `/api/assets/system/playlists/${slug}` : undefined) ||
     coverUrlFallback(tracks) ||
     "";
-  const canEditPlaylistCover = isUserPlaylist && !playingPath && !coverUploadBusy;
+  const canEditPlaylistCover =
+    isUserPlaylist &&
+    detail?.editable !== false &&
+    (editPlaylist || !playingPath) &&
+    !coverUploadBusy;
 
   const openCoverPicker = useCallback(() => {
     if (!canEditPlaylistCover) return;
@@ -674,6 +681,41 @@ export default function SystemPlaylistPage({
     prefetchUserPlaylistDetail(userPlaylistId, { force: true })
       .then((d) => setDetail(d))
       .catch(() => {});
+  }, [isUserPlaylist, userPlaylistId]);
+
+  useEffect(() => {
+    if (!detail) return;
+    setEditName(detail.name);
+    setEditDescription(detail.description ?? "");
+  }, [detail?.name, detail?.description, detail]);
+
+  useEffect(() => {
+    if (!editPlaylist || !isUserPlaylist || userPlaylistId == null || detail?.editable === false) {
+      return;
+    }
+    const cleanName = editName.trim();
+    if (!cleanName) return;
+    const t = window.setTimeout(() => {
+      void updateUserPlaylist(userPlaylistId, {
+        name: cleanName,
+        description: editDescription.trim() || null,
+      })
+        .then(() => refreshUserPlaylist())
+        .catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [
+    editDescription,
+    editName,
+    editPlaylist,
+    isUserPlaylist,
+    detail?.editable,
+    refreshUserPlaylist,
+    userPlaylistId,
+  ]);
+
+  useEffect(() => {
+    if (!isUserPlaylist) setEditPlaylist(false);
   }, [isUserPlaylist, userPlaylistId]);
 
   useEffect(() => {
@@ -1062,6 +1104,9 @@ export default function SystemPlaylistPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
+              showEditPlaylist={isUserPlaylist && detail?.editable !== false}
+              editPlaylistActive={editPlaylist}
+              onEditPlaylistToggle={() => setEditPlaylist((v) => !v)}
             />
           </div>
         </header>
@@ -1372,16 +1417,40 @@ export default function SystemPlaylistPage({
                       </div>
                     ) : (
                       <div className="release-page__panel-head">
-                        <h1 className="release-page__album-title">{detail.name}</h1>
-                        <p className="release-page__type-line">
-                          {!isUserPlaylist && slug === "setlists"
-                            ? setlistTrackCount != null
-                              ? `Playlist · ${setlistTrackCount} track${setlistTrackCount === 1 ? "" : "s"}`
-                              : "Playlist"
-                            : `Playlist · ${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
-                        </p>
-                        {detail.description && (
-                          <p className="release-page__source">{detail.description}</p>
+                        {editPlaylist && isUserPlaylist && detail?.editable !== false ? (
+                          <div className="user-playlist-edit__panel-fields">
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              placeholder="Playlist name"
+                              aria-label="Playlist name"
+                            />
+                            <textarea
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              placeholder="Short description"
+                              aria-label="Playlist description"
+                              rows={2}
+                            />
+                            <p className="release-page__type-line">
+                              {`Playlist · ${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <h1 className="release-page__album-title">{detail.name}</h1>
+                            <p className="release-page__type-line">
+                              {!isUserPlaylist && slug === "setlists"
+                                ? setlistTrackCount != null
+                                  ? `Playlist · ${setlistTrackCount} track${setlistTrackCount === 1 ? "" : "s"}`
+                                  : "Playlist"
+                                : `Playlist · ${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
+                            </p>
+                            {detail.description && (
+                              <p className="release-page__source">{detail.description}</p>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -1552,6 +1621,7 @@ export default function SystemPlaylistPage({
                 showTrackMeta
                 userPlaylistId={isUserPlaylist ? userPlaylistId : undefined}
                 onTracksChanged={isUserPlaylist ? refreshUserPlaylist : undefined}
+                editMode={isUserPlaylist && editPlaylist && detail?.editable !== false}
                 stacked={stacked}
                 compactLyricsHead={stacked || tabletPortrait}
                 playingPath={playingPath}

@@ -7,7 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackLyrics, fetchTrackVersions, findPlaylistTrackInDisk } from "../../../api";
+import { fetchTrackLyrics, fetchTrackVersions, findPlaylistTrackInDisk, addTrackToPlaylist, removePlaylistTrack, reorderPlaylistTracks, searchLibraryTracks, type LibraryTrackSearchHit } from "../../../api";
 import { formatTrackDate } from "../../../formatDate";
 import type {
   ArtistPlaylistTrack,
@@ -46,6 +46,7 @@ type Props = {
   showTrackMeta?: boolean;
   userPlaylistId?: number;
   onTracksChanged?: () => void;
+  editMode?: boolean;
   stacked: boolean;
   compactLyricsHead?: boolean;
   playingPath: string | null;
@@ -97,6 +98,32 @@ function trackMetaLine(
   return parts.length ? parts.join(" · ") : null;
 }
 
+function UserPlaylistTrackMeta({
+  track,
+  showArtist,
+}: {
+  track: ArtistPlaylistTrack;
+  showArtist: boolean;
+}) {
+  const album = track.album_title?.trim() ?? "";
+  const year =
+    track.year?.trim() ||
+    (track.release_date && /^\d{4}/.test(track.release_date)
+      ? track.release_date.slice(0, 4)
+      : "");
+  return (
+    <span className="user-playlist-tracklist__meta">
+      <span className="user-playlist-tracklist__meta-col">
+        {showArtist ? track.artist_name?.trim() || "—" : ""}
+      </span>
+      <span className="user-playlist-tracklist__meta-col">{album || "—"}</span>
+      <span className="user-playlist-tracklist__meta-col user-playlist-tracklist__meta-col--year">
+        {year || "—"}
+      </span>
+    </span>
+  );
+}
+
 function toTrackItem(track: ArtistPlaylistTrack, index: number): ReleaseTrackItem {
   return {
     id: track.play_path ?? (track.entry_id != null ? `entry-${track.entry_id}` : `${track.title}-${index}`),
@@ -133,6 +160,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       showTrackMeta = false,
       userPlaylistId,
       onTracksChanged,
+      editMode = false,
       stacked,
       compactLyricsHead = false,
       playingPath,
@@ -170,6 +198,86 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
     const [versionsError, setVersionsError] = useState<string | null>(null);
     const [plusTrack, setPlusTrack] = useState<ReleaseTrackItem | null>(null);
     const [findingEntryId, setFindingEntryId] = useState<number | null>(null);
+    const [dragIndex, setDragIndex] = useState<number | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState<LibraryTrackSearchHit[]>([]);
+    const [searchBusy, setSearchBusy] = useState(false);
+    const [addingPath, setAddingPath] = useState<string | null>(null);
+
+    useEffect(() => {
+      if (!editMode || !searchQuery.trim()) {
+        setSearchResults([]);
+        return;
+      }
+      const q = searchQuery.trim();
+      const t = window.setTimeout(() => {
+        setSearchBusy(true);
+        void searchLibraryTracks(q)
+          .then((res) => setSearchResults(res.items))
+          .catch(() => setSearchResults([]))
+          .finally(() => setSearchBusy(false));
+      }, 280);
+      return () => window.clearTimeout(t);
+    }, [editMode, searchQuery]);
+
+    const handleRemoveTrack = useCallback(
+      async (entryId: number | undefined) => {
+        if (!userPlaylistId || !entryId) return;
+        try {
+          await removePlaylistTrack(userPlaylistId, entryId);
+          onTracksChanged?.();
+        } catch (e) {
+          window.alert(e instanceof Error ? e.message : String(e));
+        }
+      },
+      [onTracksChanged, userPlaylistId]
+    );
+
+    const handleAddSearchHit = useCallback(
+      async (hit: LibraryTrackSearchHit) => {
+        if (!userPlaylistId) return;
+        setAddingPath(hit.path);
+        try {
+          await addTrackToPlaylist(userPlaylistId, {
+            title: hit.title,
+            artist: hit.artist_name,
+            release: hit.album_title ?? "",
+            path: hit.path,
+          });
+          setSearchQuery("");
+          setSearchResults([]);
+          onTracksChanged?.();
+        } catch (e) {
+          window.alert(e instanceof Error ? e.message : String(e));
+        } finally {
+          setAddingPath(null);
+        }
+      },
+      [onTracksChanged, userPlaylistId]
+    );
+
+    const handleDrop = useCallback(
+      async (targetIndex: number) => {
+        if (dragIndex == null || dragIndex === targetIndex || !userPlaylistId) return;
+        const reordered = [...tracks];
+        const [moved] = reordered.splice(dragIndex, 1);
+        if (!moved) return;
+        reordered.splice(targetIndex, 0, moved);
+        const entryIds = reordered
+          .map((t) => t.entry_id)
+          .filter((id): id is number => id != null);
+        if (entryIds.length !== reordered.length) return;
+        try {
+          await reorderPlaylistTracks(userPlaylistId, entryIds);
+          onTracksChanged?.();
+        } catch (e) {
+          window.alert(e instanceof Error ? e.message : String(e));
+        } finally {
+          setDragIndex(null);
+        }
+      },
+      [dragIndex, onTracksChanged, tracks, userPlaylistId]
+    );
 
     const handleFindInDisk = useCallback(
       async (track: ArtistPlaylistTrack) => {
@@ -326,28 +434,91 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       });
     };
 
+    const useMetaColumns = Boolean(showTrackMeta && userPlaylistId);
+
     const tracklistBody = (
       <div className="release-tracklist__content">
+        {editMode && userPlaylistId && (
+          <div className="user-playlist-edit__search-wrap">
+            <input
+              type="search"
+              className="user-playlist-edit__search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search library to add tracks…"
+              autoComplete="off"
+            />
+            {searchBusy && searchQuery.trim() && (
+              <p className="muted user-playlist-edit__result-meta" style={{ padding: "0.35rem 0" }}>
+                Searching…
+              </p>
+            )}
+            {!searchBusy && searchResults.length > 0 && (
+              <div className="user-playlist-edit__results ms-scrollbar">
+                {searchResults.map((hit) => (
+                  <button
+                    key={hit.path}
+                    type="button"
+                    className="user-playlist-edit__result"
+                    disabled={addingPath === hit.path}
+                    onClick={() => void handleAddSearchHit(hit)}
+                  >
+                    {hit.title}
+                    <span className="user-playlist-edit__result-meta">
+                      {hit.artist_name}
+                      {hit.album_title ? ` · ${hit.album_title}` : ""}
+                      {hit.year ? ` · ${hit.year}` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <ol className="release-tracklist__tracks">
           {tracks.map((track, index) => {
             const item = trackItems[index]!;
             const active = Boolean(track.play_path && playingPath === track.play_path);
             const unavailable = Boolean(track.unavailable || !track.play_path);
-            const meta = showTrackMeta ? trackMetaLine(track, multiArtist) : null;
+            const meta = showTrackMeta && !useMetaColumns ? trackMetaLine(track, multiArtist) : null;
             const youtubeQuery = track.youtube_query ?? null;
+            const rowClass = [
+              "release-tracklist__row",
+              active ? "active" : "",
+              unavailable ? "release-tracklist__row--unavailable" : "",
+              editMode ? "release-tracklist__row--edit" : "",
+              dragIndex === index ? "dragging" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const metaNode =
+              showTrackMeta && useMetaColumns ? (
+                <UserPlaylistTrackMeta track={track} showArtist={multiArtist} />
+              ) : meta ? (
+                <span className="release-tracklist__track-meta">{meta}</span>
+              ) : null;
             return (
               <li
                 key={item.id}
-                className={[
-                  "release-tracklist__row",
-                  active ? "active" : "",
-                  unavailable ? "release-tracklist__row--unavailable" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={rowClass}
+                draggable={editMode && Boolean(track.entry_id)}
+                onDragStart={() => setDragIndex(index)}
+                onDragEnd={() => setDragIndex(null)}
+                onDragOver={(e) => {
+                  if (editMode) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  void handleDrop(index);
+                }}
               >
                 {unavailable ? (
                   <div className="release-tracklist__play release-tracklist__play--static">
+                    {editMode && (
+                      <span className="release-tracklist__drag-handle" aria-hidden>
+                        ⠿
+                      </span>
+                    )}
                     <span className="release-tracklist__num">{index + 1}</span>
                     <span className="release-tracklist__title-wrap">
                       <ReleaseTrackTitle
@@ -356,10 +527,20 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                         hidePerformer={hidePerformer}
                         hideCoverArtist={hideCoverArtist}
                       />
-                      {meta && <span className="release-tracklist__track-meta">{meta}</span>}
+                      {metaNode}
                     </span>
                     <span className="release-tracklist__row-actions">
-                      {youtubeQuery ? (
+                      {editMode && track.entry_id ? (
+                        <button
+                          type="button"
+                          className="release-tracklist__remove-track"
+                          aria-label={`Remove ${track.title}`}
+                          onClick={() => void handleRemoveTrack(track.entry_id)}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                      {!editMode && youtubeQuery ? (
                         <a
                           className="setlist-tracklist__youtube-link"
                           href={youtubeSearchUrl(youtubeQuery)}
@@ -373,7 +554,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       ) : (
                         <span className="release-tracklist__duration" aria-hidden />
                       )}
-                      {userPlaylistId && track.entry_id ? (
+                      {!editMode && userPlaylistId && track.entry_id ? (
                         <button
                           type="button"
                           className="release-tracklist__find-disk"
@@ -392,9 +573,14 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                     type="button"
                     className="release-tracklist__play"
                     onClick={() => handlePlayRow(track, item)}
-                    disabled={!track.play_path}
+                    disabled={!track.play_path || editMode}
                     aria-label={`Play ${track.title}`}
                   >
+                    {editMode && (
+                      <span className="release-tracklist__drag-handle" aria-hidden>
+                        ⠿
+                      </span>
+                    )}
                     <span className="release-tracklist__num">{index + 1}</span>
                     <span className="release-tracklist__title-wrap">
                       <ReleaseTrackTitle
@@ -403,9 +589,23 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                         hidePerformer={hidePerformer}
                         hideCoverArtist={hideCoverArtist}
                       />
-                      {meta && <span className="release-tracklist__track-meta">{meta}</span>}
+                      {metaNode}
                     </span>
-                    {track.duration ? (
+                    {editMode && track.entry_id ? (
+                      <span className="release-tracklist__edit-actions">
+                        <button
+                          type="button"
+                          className="release-tracklist__remove-track"
+                          aria-label={`Remove ${track.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleRemoveTrack(track.entry_id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : track.duration ? (
                       <span className="release-tracklist__duration">{track.duration}</span>
                     ) : null}
                   </button>

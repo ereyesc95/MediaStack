@@ -137,6 +137,7 @@ export default function MusicModule({
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
+  const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<MusicDashboard>(
@@ -561,6 +562,7 @@ export default function MusicModule({
     }
 
     if (consumeSpotifyOAuthAwaiting()) {
+      setSpotifyOAuthReturn(true);
       setAddPlaylistInitialMode("spotify");
       setShowAddPlaylist(true);
     }
@@ -1140,9 +1142,14 @@ export default function MusicModule({
       {showAddPlaylist && (
         <AddPlaylistModal
           initialMode={addPlaylistInitialMode}
-          onClose={() => setShowAddPlaylist(false)}
+          spotifyOAuthReturn={spotifyOAuthReturn}
+          onClose={() => {
+            setShowAddPlaylist(false);
+            setSpotifyOAuthReturn(false);
+          }}
           onCreated={(message) => {
             setShowAddPlaylist(false);
+            setSpotifyOAuthReturn(false);
             setPlaylistToast(message);
             reloadPlaylists();
           }}

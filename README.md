@@ -544,7 +544,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB (multiple URLs per track supported); bulk fetch, manual set, picker when several exist, open in new tab with autoplay
 - **Playlists** — user playlists (`plaType` 200) + **artist system playlists** scanned from disk (suffix tags, singles, editions, cross-library, play counts); alphabetical grid under **Music → Playlists** (`/music/playlists`); add-to-playlist modal on release pages; **Add playlist** from the hamburger menu on the Playlists grid (create local playlist with optional cover, or **import from Spotify**)
-- **User playlist pages** — Ballads-style layout with artist/album/year on rows, unavailable tracks (Spotify imports), YouTube links, and **Find in disk** for unmatched files; click the cover to replace artwork (Most Played uses a default system cover)
+- **User playlist pages** — Ballads-style layout with artist, album, and year in evenly spaced columns on each row; unavailable tracks (Spotify imports), YouTube links, and **Find in disk** for unmatched files; click the cover to replace artwork (Most Played uses a default system cover). Hamburger **Edit playlist** toggles reorder (drag-and-drop), remove, library search to add tracks, and inline edit of name, description, and cover.
 - **Spotify import** — per-profile OAuth; credentials read from `apiauth` (or env); browse owned/collaborative playlists after connect; imports a snapshot matched to your library by title/album (bracket suffixes accepted); unmatched tracks stored as unavailable until added to disk
 - **Song quiz** — audio stops on score screen; page audio cleared when entering quiz; writer/artist name resolution uses same alias rules as release credits
 - **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**, **Write file tags**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
@@ -651,7 +651,7 @@ python run.py --no-browser
    - Production (single host): same path on your API origin
 2. Store **Client ID** and **Client Secret** in the database (`apiauth`, service name `Spotify`) or set `MEDIASTACK_SPOTIFY_CLIENT_ID` / `MEDIASTACK_SPOTIFY_CLIENT_SECRET`.
 3. After OAuth, the app returns to **`/music/playlists`** with the Add playlist modal open — not the profile picker.
-4. If tokens are stale (403 from Spotify), use **Not you?** in the modal to reconnect, or open **Import from Spotify** again to get the Connect flow.
+4. If tokens are stale, use **Not you?** in the modal to reconnect. The session notice is neutral text (not an error banner).
 5. On a NAS or split UI/API setup, set `MEDIASTACK_PUBLIC_URL` to the URL where users open the web UI.
 
 ---

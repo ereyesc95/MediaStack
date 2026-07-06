@@ -166,6 +166,37 @@ class LibraryTrackIndex:
         best = scored[0][1]
         return self._to_matched(best)
 
+    def search(self, query: str, *, limit: int = 25) -> list[MatchedTrack]:
+        q = query.strip().casefold()
+        if not q:
+            return []
+        results: list[MatchedTrack] = []
+        seen: set[str] = set()
+        for paths in self._by_title.values():
+            for audio in paths:
+                matched = self._to_matched(audio)
+                if matched.path in seen:
+                    continue
+                hay = " ".join(
+                    filter(
+                        None,
+                        [matched.title, matched.artist_name, matched.album_title],
+                    )
+                ).casefold()
+                if q not in hay:
+                    continue
+                seen.add(matched.path)
+                results.append(matched)
+                if len(results) >= limit:
+                    return results
+        results.sort(
+            key=lambda m: (
+                m.title.casefold(),
+                (m.artist_name or "").casefold(),
+            )
+        )
+        return results
+
     def find_candidates(
         self, *, title: str, artist: str | None = None, album: str | None = None, limit: int = 12
     ) -> list[MatchedTrack]:

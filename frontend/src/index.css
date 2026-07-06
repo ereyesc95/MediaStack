@@ -13080,6 +13080,141 @@ button.lyrics-status-badge--icon-only {
   line-height: 1.25;
 }
 
+.user-playlist-tracklist__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.65fr);
+  gap: 0.75rem;
+  width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.user-playlist-tracklist__meta-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-playlist-tracklist__meta-col--year {
+  text-align: right;
+}
+
+.user-playlist-edit__search-wrap {
+  position: relative;
+  padding: 0 0 0.75rem;
+}
+
+.user-playlist-edit__search {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text);
+}
+
+.user-playlist-edit__results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 0.35rem);
+  z-index: 5;
+  max-height: 12rem;
+  overflow-y: auto;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.user-playlist-edit__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.user-playlist-edit__result:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.user-playlist-edit__result-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.release-tracklist__row--edit {
+  cursor: grab;
+}
+
+.release-tracklist__row--edit.dragging {
+  opacity: 0.55;
+}
+
+.release-tracklist__edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.release-tracklist__remove-track {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.release-tracklist__remove-track:hover {
+  color: var(--text);
+}
+
+.release-tracklist__drag-handle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: grab;
+  user-select: none;
+  padding-right: 0.25rem;
+}
+
+.user-playlist-edit__panel-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.user-playlist-edit__panel-fields input,
+.user-playlist-edit__panel-fields textarea {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text);
+}
+
+.user-playlist-edit__panel-fields textarea {
+  min-height: 3rem;
+  resize: vertical;
+}
+
 .release-tracklist__row-actions {
   display: inline-flex;
   align-items: center;
@@ -13160,14 +13295,27 @@ button.lyrics-status-badge--icon-only {
 .add-playlist-modal__local-row {
   display: flex;
   gap: 0.85rem;
-  align-items: flex-start;
+  align-items: stretch;
+}
+
+.add-playlist-modal__cover-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  width: 5.5rem;
+}
+
+.add-playlist-modal__field-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .add-playlist-modal__cover-slot {
   position: relative;
-  flex-shrink: 0;
-  width: 5.5rem;
-  height: 5.5rem;
+  flex: 1;
+  min-height: 5.5rem;
+  width: 100%;
   border-radius: var(--radius);
   border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -13176,6 +13324,10 @@ button.lyrics-status-badge--icon-only {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.add-playlist-modal__cover-slot--readonly {
+  cursor: default;
 }
 
 .add-playlist-modal__cover-slot:hover {
@@ -13210,6 +13362,17 @@ button.lyrics-status-badge--icon-only {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+}
+
+.add-playlist-modal__field-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.add-playlist-modal__field-grow .add-playlist-modal__textarea {
+  flex: 1;
+  min-height: 3.5rem;
 }
 
 .add-playlist-modal .release-edit-modal__field span {
@@ -13286,6 +13449,13 @@ button.lyrics-status-badge--icon-only {
 
 .add-playlist-modal__error {
   margin: 0 1rem 0.5rem;
+}
+
+.add-playlist-modal__notice {
+  margin: 0 1rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .add-playlist-modal__spotify-setup {

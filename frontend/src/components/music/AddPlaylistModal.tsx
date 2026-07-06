@@ -44,26 +44,28 @@ function readSpotifyRepairMessage(): string | null {
   }
 }
 
+const SPOTIFY_SESSION_NOTICE = "Session expired. Please log in again.";
+
 function friendlyError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
   try {
     const parsed = JSON.parse(raw) as { detail?: string };
     const detail = parsed.detail ?? raw;
     if (/403|401|session expired|not connected/i.test(detail)) {
-      return "Spotify session expired. Connect again or choose another account.";
+      return SPOTIFY_SESSION_NOTICE;
     }
     const spotifyMatch = detail.match(/Spotify API error:\s*(.+)/);
     if (spotifyMatch?.[1]) {
       const line = spotifyMatch[1].split("\n")[0] ?? detail;
       if (/403|401/.test(line)) {
-        return "Spotify session expired. Connect again or choose another account.";
+        return SPOTIFY_SESSION_NOTICE;
       }
       return line;
     }
     return detail;
   } catch {
     if (/403|401/.test(raw)) {
-      return "Spotify session expired. Connect again or choose another account.";
+      return SPOTIFY_SESSION_NOTICE;
     }
     return raw;
   }
@@ -73,6 +75,7 @@ type Props = {
   onClose: () => void;
   onCreated: (message: string) => void;
   initialMode?: "local" | "spotify";
+  spotifyOAuthReturn?: boolean;
 };
 
 type Mode = "local" | "spotify";
@@ -81,6 +84,7 @@ export default function AddPlaylistModal({
   onClose,
   onCreated,
   initialMode = "local",
+  spotifyOAuthReturn = false,
 }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState("");
@@ -90,6 +94,7 @@ export default function AddPlaylistModal({
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [spotifyNotice, setSpotifyNotice] = useState<string | null>(null);
 
   const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
   const [spotifyUser, setSpotifyUser] = useState<SpotifyUser | null>(null);
@@ -114,6 +119,7 @@ export default function AddPlaylistModal({
   const loadSpotify = useCallback(async () => {
     setSpotifyLoading(true);
     setError(null);
+    setSpotifyNotice(null);
     try {
       const [setup, status] = await Promise.all([
         fetchSpotifySetup(),
@@ -123,12 +129,13 @@ export default function AddPlaylistModal({
       setSpotifyConnected(status.connected);
       setSpotifyUser(status.user ?? null);
       if (status.session_expired) {
-        setError("Spotify session expired. Connect again or choose another account.");
+        setSpotifyNotice(SPOTIFY_SESSION_NOTICE);
       }
       if (status.connected) {
         clearSpotifyCredentialsRepair();
         setShowCredentialRepair(false);
         setRepairMessage(null);
+        setSpotifyNotice(null);
         const res = await fetchSpotifyPlaylists();
         setSpotifyPlaylists(res.items);
         if (res.items.length && !selectedSpotifyId) {
@@ -138,17 +145,22 @@ export default function AddPlaylistModal({
       } else {
         setSpotifyPlaylists([]);
         setSelectedSpotifyId("");
+        if (status.session_expired) {
+          setSpotifyNotice(SPOTIFY_SESSION_NOTICE);
+        }
       }
     } catch (e) {
       const msg = friendlyError(e);
-      setError(msg);
-      if (/403|401|session expired|client|credential|invalid|spotify/i.test(msg)) {
+      if (/403|401|session expired/i.test(msg)) {
+        setSpotifyNotice(msg);
         setSpotifyConnected(false);
         setSpotifyUser(null);
-        if (/client|credential|invalid/i.test(msg)) {
-          setShowCredentialRepair(true);
-          setRepairMessage(msg);
-        }
+      } else {
+        setError(msg);
+      }
+      if (/client|credential|invalid/i.test(msg)) {
+        setShowCredentialRepair(true);
+        setRepairMessage(msg);
       }
     } finally {
       setSpotifyLoading(false);
@@ -158,6 +170,13 @@ export default function AddPlaylistModal({
   useEffect(() => {
     if (mode === "spotify") void loadSpotify();
   }, [mode, loadSpotify]);
+
+  useEffect(() => {
+    if (!spotifyOAuthReturn || mode !== "spotify") return;
+    void loadSpotify();
+    const retry = window.setTimeout(() => void loadSpotify(), 700);
+    return () => window.clearTimeout(retry);
+  }, [spotifyOAuthReturn, mode, loadSpotify]);
 
   const saveCredentials = async () => {
     const clientId = spotifyClientId.trim();
@@ -185,13 +204,12 @@ export default function AddPlaylistModal({
 
   const connectSpotify = async (options?: { forceAccount?: boolean }) => {
     setError(null);
+    setSpotifyNotice(null);
     try {
-      if (options?.forceAccount) {
-        await disconnectSpotify();
-        setSpotifyConnected(false);
-        setSpotifyUser(null);
-        setSpotifyPlaylists([]);
-      }
+      await disconnectSpotify().catch(() => {});
+      setSpotifyConnected(false);
+      setSpotifyUser(null);
+      setSpotifyPlaylists([]);
       markSpotifyOAuthAwaiting();
       const { url } = await startSpotifyAuth(SPOTIFY_RETURN_PATH, options);
       window.location.href = url;
@@ -308,26 +326,32 @@ export default function AddPlaylistModal({
         </div>
 
         {error && <p className="error add-playlist-modal__error">{error}</p>}
+        {spotifyNotice && mode === "spotify" && !spotifyConnected && (
+          <p className="add-playlist-modal__notice">{spotifyNotice}</p>
+        )}
 
         {mode === "local" ? (
           <div className="add-playlist-modal__form">
             <div className="add-playlist-modal__local-row">
-              <label className="add-playlist-modal__cover-slot" title="Choose cover image">
-                {coverPreview ? (
-                  <img src={coverPreview} alt="" className="add-playlist-modal__cover-slot-img" />
-                ) : (
-                  <span className="add-playlist-modal__cover-slot-placeholder" aria-hidden>
-                    +
-                  </span>
-                )}
-                <input
-                  ref={coverInputRef}
-                  type="file"
-                  className="add-playlist-modal__cover-slot-input"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => onPickCover(e.target.files?.[0] ?? null)}
-                />
-              </label>
+              <div className="add-playlist-modal__cover-col">
+                <span className="add-playlist-modal__field-label">Cover</span>
+                <label className="add-playlist-modal__cover-slot" title="Choose cover image">
+                  {coverPreview ? (
+                    <img src={coverPreview} alt="" className="add-playlist-modal__cover-slot-img" />
+                  ) : (
+                    <span className="add-playlist-modal__cover-slot-placeholder" aria-hidden>
+                      +
+                    </span>
+                  )}
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    className="add-playlist-modal__cover-slot-input"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => onPickCover(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
               <div className="add-playlist-modal__local-fields">
                 <label className="release-edit-modal__field">
                   <span>Name</span>
@@ -452,53 +476,67 @@ export default function AddPlaylistModal({
                     </p>
                   </div>
                 )}
-                <label className="release-edit-modal__field">
-                  <span>Spotify playlist</span>
-                  <select
-                    className="release-add-playlist-modal__input"
-                    value={selectedSpotifyId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setSelectedSpotifyId(id);
-                      const item = spotifyPlaylists.find((p) => p.id === id);
-                      if (item && !name.trim()) setName(item.name);
-                    }}
-                  >
-                    {spotifyPlaylists.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.track_count} tracks)
-                        {p.collaborative ? " · collaborative" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedSpotify?.cover_url && (
-                  <img
-                    src={selectedSpotify.cover_url}
-                    alt=""
-                    className="add-playlist-modal__cover-preview"
-                  />
-                )}
-                <label className="release-edit-modal__field">
-                  <span>MediaStack playlist name</span>
-                  <input
-                    type="text"
-                    className="release-add-playlist-modal__input"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Name for the new playlist"
-                  />
-                </label>
-                <label className="release-edit-modal__field">
-                  <span>Short description</span>
-                  <textarea
-                    className="release-about-edit-modal__textarea add-playlist-modal__textarea"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional description"
-                    rows={2}
-                  />
-                </label>
+                <div className="add-playlist-modal__local-row">
+                  <div className="add-playlist-modal__cover-col">
+                    <span className="add-playlist-modal__field-label">Cover</span>
+                    <div
+                      className="add-playlist-modal__cover-slot add-playlist-modal__cover-slot--readonly"
+                      aria-hidden
+                    >
+                      {selectedSpotify?.cover_url ? (
+                        <img
+                          src={selectedSpotify.cover_url}
+                          alt=""
+                          className="add-playlist-modal__cover-slot-img"
+                        />
+                      ) : (
+                        <span className="add-playlist-modal__cover-slot-placeholder">+</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="add-playlist-modal__local-fields">
+                    <label className="release-edit-modal__field">
+                      <span>Spotify playlist</span>
+                      <select
+                        className="release-add-playlist-modal__input"
+                        value={selectedSpotifyId}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setSelectedSpotifyId(id);
+                          const item = spotifyPlaylists.find((p) => p.id === id);
+                          if (item) setName(item.name);
+                        }}
+                      >
+                        {spotifyPlaylists.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.track_count} tracks)
+                            {p.collaborative ? " · collaborative" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="release-edit-modal__field">
+                      <span>MediaStack playlist name</span>
+                      <input
+                        type="text"
+                        className="release-add-playlist-modal__input"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Name for the new playlist"
+                      />
+                    </label>
+                    <label className="release-edit-modal__field add-playlist-modal__field-grow">
+                      <span>Short description</span>
+                      <textarea
+                        className="release-about-edit-modal__textarea add-playlist-modal__textarea"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Optional description"
+                        rows={2}
+                      />
+                    </label>
+                  </div>
+                </div>
                 <p className="muted add-playlist-modal__hint">
                   Creates a new MediaStack playlist with a snapshot of the Spotify tracklist.
                   Unmatched tracks are kept as unavailable until you add them to your library.

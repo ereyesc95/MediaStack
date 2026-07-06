@@ -1965,3 +1965,78 @@ def get_playlist_tracks(
         if not db.get(Playlist, playlist_id):
             raise HTTPException(404, "Playlist not found")
     return {"items": items}
+
+
+class PlaylistUpdateBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class PlaylistReorderBody(BaseModel):
+    entry_ids: list[int]
+
+
+@router.get("/playlists/search-tracks")
+def search_tracks_for_playlist(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(25, ge=1, le=50),
+    _user: User = Depends(get_current_user),
+):
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    media_root = Path(settings.media_root)
+    if not media_root.is_dir():
+        raise HTTPException(400, "Media root not configured")
+    from app.user_playlist import search_library_tracks
+
+    return {"items": search_library_tracks(media_root, q, limit=limit)}
+
+
+@router.patch("/playlists/{playlist_id}")
+def patch_user_playlist(
+    playlist_id: int,
+    body: PlaylistUpdateBody,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import update_user_playlist
+
+    result = update_user_playlist(
+        db,
+        playlist_id,
+        name=body.name,
+        description=body.description,
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Update failed")
+    return result
+
+
+@router.delete("/playlists/{playlist_id}/tracks/{entry_id}")
+def delete_playlist_track(
+    playlist_id: int,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import remove_playlist_entry
+
+    result = remove_playlist_entry(db, playlist_id, entry_id)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Remove failed")
+    return result
+
+
+@router.put("/playlists/{playlist_id}/tracks/order")
+def reorder_playlist_tracks_route(
+    playlist_id: int,
+    body: PlaylistReorderBody,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import reorder_playlist_entries
+
+    result = reorder_playlist_entries(db, playlist_id, body.entry_ids)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Reorder failed")
+    return result

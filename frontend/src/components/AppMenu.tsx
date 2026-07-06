@@ -39,6 +39,9 @@ type Props = {
   showAddArtist?: boolean;
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
+  showEditPlaylist?: boolean;
+  editPlaylistActive?: boolean;
+  onEditPlaylistToggle?: () => void;
   isAdmin?: boolean;
   userId?: number;
   onSwitchProfile?: () => void;
@@ -84,6 +87,9 @@ export default function AppMenu({
   showAddArtist,
   onAddPlaylist,
   showAddPlaylist,
+  showEditPlaylist,
+  editPlaylistActive,
+  onEditPlaylistToggle,
   isAdmin = false,
   userId,
   onSwitchProfile,
@@ -569,6 +575,20 @@ export default function AppMenu({
             >
               <IconCards className="menu-item-icon" />
               Add playlist
+            </button>
+          )}
+          {showEditPlaylist && onEditPlaylistToggle && (
+            <button
+              type="button"
+              className={editPlaylistActive ? "active" : ""}
+              onClick={() => {
+                onEditPlaylistToggle();
+              }}
+            >
+              {editPlaylistActive && <IconCheck className="menu-item-icon" />}
+              <span className={editPlaylistActive ? "" : "menu-submenu-pad"}>
+                Edit playlist
+              </span>
             </button>
           )}
           <button

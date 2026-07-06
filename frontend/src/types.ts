@@ -458,6 +458,7 @@ export type ArtistPlaylistNeighbor = {
 export type ArtistPlaylistDetail = {
   slug: string;
   name: string;
+  editable?: boolean;
   description?: string | null;
   cover_url?: string | null;
   source?: string | null;

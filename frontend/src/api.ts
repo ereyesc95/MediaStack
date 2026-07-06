@@ -335,6 +335,55 @@ export async function addTrackToPlaylist(
   );
 }
 
+export type LibraryTrackSearchHit = {
+  path: string;
+  title: string;
+  artist_name: string;
+  album_title?: string | null;
+  year?: string | null;
+  cover_url?: string | null;
+  navigate_band_id?: number | null;
+  navigate_release_id?: string | null;
+};
+
+export async function searchLibraryTracks(
+  q: string
+): Promise<{ items: LibraryTrackSearchHit[] }> {
+  const params = new URLSearchParams({ q });
+  return request(`${API}/music/playlists/search-tracks?${params}`);
+}
+
+export async function updateUserPlaylist(
+  playlistId: number,
+  body: { name?: string; description?: string | null }
+): Promise<{ ok: boolean; name?: string; description?: string | null; cover_url?: string | null }> {
+  return request(`${API}/music/playlists/${playlistId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function removePlaylistTrack(
+  playlistId: number,
+  entryId: number
+): Promise<{ ok: boolean }> {
+  return request(`${API}/music/playlists/${playlistId}/tracks/${entryId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderPlaylistTracks(
+  playlistId: number,
+  entryIds: number[]
+): Promise<{ ok: boolean }> {
+  return request(`${API}/music/playlists/${playlistId}/tracks/order`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entry_ids: entryIds }),
+  });
+}
+
 export async function fetchBandVideoIndex(
   bandId: number
 ): Promise<import("./types").MediaTabIndexPayload> {

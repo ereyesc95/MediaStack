@@ -356,3 +356,82 @@ def link_entry_to_path(
         return {"ok": True, "linked": True}
 
     return {"ok": False, "error": "File not found on disk"}
+
+
+def _is_editable_user_playlist(playlist: Playlist) -> bool:
+    if playlist.pla_type != 200:
+        return False
+    return (playlist.pla_name or "").strip().casefold() != "most played"
+
+
+def update_user_playlist(
+    db: Session,
+    playlist_id: int,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+) -> dict:
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or not _is_editable_user_playlist(playlist):
+        return {"ok": False, "error": "Playlist not found or not editable"}
+    if name is not None:
+        clean = name.strip()
+        if not clean:
+            return {"ok": False, "error": "Playlist name is required"}
+        playlist.pla_name = clean
+    if description is not None:
+        playlist.pla_description = description.strip() or None
+    db.commit()
+    db.refresh(playlist)
+    return {
+        "ok": True,
+        "id": playlist.pla_id,
+        "name": playlist.pla_name,
+        "description": playlist.pla_description,
+        "cover_url": resolve_playlist_cover_url(playlist),
+    }
+
+
+def remove_playlist_entry(db: Session, playlist_id: int, entry_id: int) -> dict:
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or not _is_editable_user_playlist(playlist):
+        return {"ok": False, "error": "Playlist not found or not editable"}
+    row = db.get(PlaylistData, entry_id)
+    if not row or row.pld_playlist != playlist_id:
+        return {"ok": False, "error": "Track not found"}
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+def reorder_playlist_entries(
+    db: Session, playlist_id: int, entry_ids: list[int]
+) -> dict:
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or not _is_editable_user_playlist(playlist):
+        return {"ok": False, "error": "Playlist not found or not editable"}
+    for order, entry_id in enumerate(entry_ids):
+        row = db.get(PlaylistData, entry_id)
+        if row and row.pld_playlist == playlist_id:
+            row.pld_sort_order = order
+    db.commit()
+    return {"ok": True}
+
+
+def search_library_tracks(media_root: Path, query: str, *, limit: int = 25) -> list[dict]:
+    index = LibraryTrackIndex(media_root)
+    items: list[dict] = []
+    for matched in index.search(query, limit=limit):
+        items.append(
+            {
+                "path": matched.path,
+                "title": matched.title,
+                "artist_name": matched.artist_name,
+                "album_title": matched.album_title,
+                "year": matched.year,
+                "cover_url": matched.cover_url,
+                "navigate_band_id": matched.navigate_band_id,
+                "navigate_release_id": matched.navigate_release_id,
+            }
+        )
+    return items
