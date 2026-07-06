@@ -317,7 +317,13 @@ export async function resolveArtistName(name: string): Promise<{
 
 export async function addTrackToPlaylist(
   playlistId: number,
-  body: { title: string; artist: string; release: string; path: string }
+  body: {
+    title: string;
+    artist: string;
+    release: string;
+    path: string;
+    allow_duplicate?: boolean;
+  }
 ) {
   return request<{ ok: boolean; id?: number; duplicate?: boolean }>(
     `${API}/music/playlists/${playlistId}/tracks`,
@@ -1094,21 +1100,179 @@ export async function uploadEntityLinkLogo(
   return res.json();
 }
 
+export async function fetchUserPlaylistDetail(
+  playlistId: number
+): Promise<import("./types").ArtistPlaylistDetail> {
+  return request(`${API}/music/playlists/${playlistId}`);
+}
+
+export async function uploadUserPlaylistCover(
+  playlistId: number,
+  file: File
+): Promise<{ ok: boolean; cover_url: string }> {
+  const form = new FormData();
+  form.append("cover", file);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${API}/music/playlists/${playlistId}/cover`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
 export async function fetchUserPlaylists(): Promise<{ items: UserPlaylist[] }> {
   return request(`${API}/music/playlists`);
 }
 
-export async function createUserPlaylist(name: string): Promise<{
+export async function createUserPlaylist(body: {
+  name: string;
+  description?: string;
+  cover?: File | null;
+}): Promise<{
   ok: boolean;
   id: number;
   name?: string;
+  description?: string | null;
+  cover_url?: string | null;
   duplicate?: boolean;
   error?: string;
 }> {
+  const form = new FormData();
+  form.append("name", body.name);
+  form.append("description", body.description ?? "");
+  if (body.cover) form.append("cover", body.cover);
   return request(`${API}/music/playlists`, {
     method: "POST",
+    body: form,
+  });
+}
+
+export type SpotifyPlaylistItem = {
+  id: string;
+  name: string;
+  track_count: number;
+  collaborative?: boolean;
+  owner?: string;
+  cover_url?: string | null;
+};
+
+export type SpotifyUser = {
+  id?: string;
+  display_name: string;
+  image_url?: string | null;
+};
+
+export async function fetchSpotifyStatus(): Promise<{
+  connected: boolean;
+  session_expired?: boolean;
+  user?: SpotifyUser;
+}> {
+  return request(`${API}/spotify/status`);
+}
+
+export async function disconnectSpotify(): Promise<{ ok: boolean }> {
+  return request(`${API}/spotify/disconnect`, { method: "POST" });
+}
+
+export async function fetchSpotifySetup(): Promise<{
+  configured: boolean;
+  client_id_hint: string | null;
+  redirect_uri: string;
+}> {
+  return request(`${API}/spotify/setup`);
+}
+
+export async function saveSpotifyCredentials(body: {
+  client_id: string;
+  client_secret: string;
+}): Promise<{ ok: boolean }> {
+  return request(`${API}/spotify/credentials`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function startSpotifyAuth(
+  returnPath = "/music/playlists",
+  options?: { forceAccount?: boolean }
+): Promise<{ url: string; redirect_uri: string; return_path: string }> {
+  const q = new URLSearchParams({
+    return_path: returnPath,
+    frontend_origin: window.location.origin,
+  });
+  if (options?.forceAccount) {
+    q.set("force_account", "true");
+  }
+  return request(`${API}/spotify/auth/start?${q}`);
+}
+
+export async function fetchSpotifyPlaylists(): Promise<{ items: SpotifyPlaylistItem[] }> {
+  return request(`${API}/spotify/playlists`);
+}
+
+export async function importSpotifyPlaylist(body: {
+  spotify_playlist_id: string;
+  name?: string;
+  description?: string;
+}): Promise<{
+  ok: boolean;
+  playlist_id: number;
+  name?: string;
+  cover_url?: string | null;
+  matched?: number;
+  unavailable?: number;
+  total?: number;
+}> {
+  return request(`${API}/spotify/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function findPlaylistTrackInDisk(
+  playlistId: number,
+  entryId: number
+): Promise<{
+  ok: boolean;
+  found?: boolean;
+  path?: string;
+  title?: string;
+  artist_name?: string;
+  album_title?: string;
+  year?: string;
+  cover_url?: string | null;
+  candidates?: {
+    path: string;
+    title: string;
+    artist_name: string;
+    album_title?: string | null;
+    year?: string | null;
+    cover_url?: string | null;
+  }[];
+  error?: string;
+}> {
+  return request(`${API}/music/playlists/${playlistId}/tracks/find-in-disk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entry_id: entryId }),
   });
 }
 

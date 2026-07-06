@@ -142,6 +142,8 @@ export type UserPlaylist = {
   description: string | null;
   cover_url: string | null;
   track_count: number;
+  source?: string | null;
+  spotify_id?: string | null;
 };
 
 export type PlaylistTrack = {
@@ -430,17 +432,22 @@ export type PlaylistIndexPayload = {
 };
 
 export type ArtistPlaylistTrack = {
+  entry_id?: number;
   title: string;
   release_date: string | null;
   cover_url: string | null;
   play_path: string | null;
   album_folder: string | null;
   album_title?: string | null;
+  artist_name?: string | null;
+  year?: string | null;
   play_count?: number | null;
   navigate_release_id?: string | null;
   navigate_band_id?: number | null;
   duration?: string | null;
   duration_sec?: number | null;
+  unavailable?: boolean;
+  youtube_query?: string | null;
 };
 
 export type ArtistPlaylistNeighbor = {
@@ -453,6 +460,8 @@ export type ArtistPlaylistDetail = {
   name: string;
   description?: string | null;
   cover_url?: string | null;
+  source?: string | null;
+  spotify_id?: string | null;
   tracks: ArtistPlaylistTrack[];
   years?: string[];
   career_start_year?: number;

@@ -37,6 +37,8 @@ type Props = {
   onChooseSource?: () => void;
   onAddArtist?: () => void;
   showAddArtist?: boolean;
+  onAddPlaylist?: () => void;
+  showAddPlaylist?: boolean;
   isAdmin?: boolean;
   userId?: number;
   onSwitchProfile?: () => void;
@@ -80,6 +82,8 @@ export default function AppMenu({
   onChooseSource,
   onAddArtist,
   showAddArtist,
+  onAddPlaylist,
+  showAddPlaylist,
   isAdmin = false,
   userId,
   onSwitchProfile,
@@ -553,6 +557,18 @@ export default function AppMenu({
             >
               <IconAddArtist className="menu-item-icon" />
               Add artist
+            </button>
+          )}
+          {showAddPlaylist && onAddPlaylist && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddPlaylist();
+                setOpen(false);
+              }}
+            >
+              <IconCards className="menu-item-icon" />
+              Add playlist
             </button>
           )}
           <button

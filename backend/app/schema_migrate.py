@@ -114,3 +114,36 @@ def migrate_schema(eng: Engine) -> None:
             ):
                 if col not in cols:
                     conn.execute(text(f'ALTER TABLE artists ADD COLUMN "{col}" {typ}'))
+        if "playlists" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("playlists")}
+            for col, typ in (
+                ("plaCoverPath", "TEXT"),
+                ("plaSpotifyId", "TEXT"),
+                ("plaSource", "TEXT"),
+            ):
+                if col not in cols:
+                    conn.execute(text(f'ALTER TABLE playlists ADD COLUMN "{col}" {typ}'))
+        if "playlistdata" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("playlistdata")}
+            for col, typ in (
+                ("pldAlbum", "TEXT"),
+                ("pldYear", "TEXT"),
+                ("pldSortOrder", "INTEGER"),
+                ("pldUnavailable", "INTEGER"),
+            ):
+                if col not in cols:
+                    conn.execute(text(f'ALTER TABLE playlistdata ADD COLUMN "{col}" {typ}'))
+        if "spotify_profile_auth" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE spotify_profile_auth (
+                        "spaUserID" INTEGER NOT NULL PRIMARY KEY,
+                        "spaAccessToken" TEXT,
+                        "spaRefreshToken" TEXT,
+                        "spaExpiresAt" TEXT,
+                        "spaUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )

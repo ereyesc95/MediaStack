@@ -128,6 +128,19 @@ class Playlist(Base):
     pla_name: Mapped[str | None] = mapped_column("plaName", Text)
     pla_type: Mapped[int] = mapped_column("plaType", Integer)
     pla_description: Mapped[str | None] = mapped_column("plaDescription", Text)
+    pla_cover_path: Mapped[str | None] = mapped_column("plaCoverPath", Text)
+    pla_spotify_id: Mapped[str | None] = mapped_column("plaSpotifyId", Text)
+    pla_source: Mapped[str | None] = mapped_column("plaSource", Text)
+
+
+class SpotifyProfileAuth(Base):
+    __tablename__ = "spotify_profile_auth"
+
+    spa_user_id: Mapped[int] = mapped_column("spaUserID", Integer, primary_key=True)
+    spa_access_token: Mapped[str | None] = mapped_column("spaAccessToken", Text)
+    spa_refresh_token: Mapped[str | None] = mapped_column("spaRefreshToken", Text)
+    spa_expires_at: Mapped[str | None] = mapped_column("spaExpiresAt", Text)
+    spa_updated_at: Mapped[str | None] = mapped_column("spaUpdatedAt", Text)
 
 
 class Series(Base):
@@ -200,6 +213,10 @@ class PlaylistData(Base):
     pld_release: Mapped[str] = mapped_column("pldRelease", Text)
     pld_path: Mapped[str] = mapped_column("pldPath", Text)
     pld_playlist: Mapped[int] = mapped_column("pldPlaylist", Integer)
+    pld_album: Mapped[str | None] = mapped_column("pldAlbum", Text)
+    pld_year: Mapped[str | None] = mapped_column("pldYear", Text)
+    pld_sort_order: Mapped[int | None] = mapped_column("pldSortOrder", Integer)
+    pld_unavailable: Mapped[int | None] = mapped_column("pldUnavailable", Integer)
 
 
 class Reproduction(Base):

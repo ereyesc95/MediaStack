@@ -7,7 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackLyrics, fetchTrackVersions } from "../../../api";
+import { fetchTrackLyrics, fetchTrackVersions, findPlaylistTrackInDisk } from "../../../api";
 import { formatTrackDate } from "../../../formatDate";
 import type {
   ArtistPlaylistTrack,
@@ -24,7 +24,7 @@ import {
   trackDisplayTitle,
   versionSourceFromVersionItem,
 } from "../release/releaseTrackPanelMeta";
-import { TrackActionEditIcon, TrackActionRetryIcon } from "../release/releaseTrackActionIcons";
+import { TrackActionEditIcon, TrackActionRetryIcon, TrackActionYoutubeIcon } from "../release/releaseTrackActionIcons";
 import type { ReleaseMobileTrackView, ReleasePlaybackArt } from "../release/ReleaseTracklist";
 
 export type SystemPlaylistTracklistHandle = {
@@ -42,6 +42,10 @@ type Props = {
   bandId: number;
   artistName: string;
   tracks: ArtistPlaylistTrack[];
+  multiArtist?: boolean;
+  showTrackMeta?: boolean;
+  userPlaylistId?: number;
+  onTracksChanged?: () => void;
   stacked: boolean;
   compactLyricsHead?: boolean;
   playingPath: string | null;
@@ -72,9 +76,30 @@ type Props = {
   hideCoverArtist?: string;
 };
 
+function youtubeSearchUrl(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+function trackMetaLine(
+  track: ArtistPlaylistTrack,
+  showArtist: boolean
+): string | null {
+  const parts: string[] = [];
+  if (showArtist && track.artist_name?.trim()) parts.push(track.artist_name.trim());
+  const album = track.album_title?.trim();
+  if (album) parts.push(album);
+  const year =
+    track.year?.trim() ||
+    (track.release_date && /^\d{4}/.test(track.release_date)
+      ? track.release_date.slice(0, 4)
+      : "");
+  if (year) parts.push(year);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 function toTrackItem(track: ArtistPlaylistTrack, index: number): ReleaseTrackItem {
   return {
-    id: track.play_path ?? `${track.title}-${index}`,
+    id: track.play_path ?? (track.entry_id != null ? `entry-${track.entry_id}` : `${track.title}-${index}`),
     number: index + 1,
     title: track.title,
     play_path: track.play_path,
@@ -104,6 +129,10 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       bandId,
       artistName,
       tracks,
+      multiArtist = false,
+      showTrackMeta = false,
+      userPlaylistId,
+      onTracksChanged,
       stacked,
       compactLyricsHead = false,
       playingPath,
@@ -140,6 +169,35 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
     const [versionsLoading, setVersionsLoading] = useState(false);
     const [versionsError, setVersionsError] = useState<string | null>(null);
     const [plusTrack, setPlusTrack] = useState<ReleaseTrackItem | null>(null);
+    const [findingEntryId, setFindingEntryId] = useState<number | null>(null);
+
+    const handleFindInDisk = useCallback(
+      async (track: ArtistPlaylistTrack) => {
+        if (!userPlaylistId || !track.entry_id) return;
+        setFindingEntryId(track.entry_id);
+        try {
+          const result = await findPlaylistTrackInDisk(userPlaylistId, track.entry_id);
+          if (result.found) {
+            onTracksChanged?.();
+            return;
+          }
+          if (result.candidates?.length) {
+            const list = result.candidates
+              .slice(0, 5)
+              .map((c) => `${c.title} — ${c.artist_name}${c.album_title ? ` (${c.album_title})` : ""}`)
+              .join("\n");
+            window.alert(`No exact match found. Possible matches:\n\n${list}`);
+          } else {
+            window.alert("No matching track found on disk.");
+          }
+        } catch (e) {
+          window.alert(e instanceof Error ? e.message : String(e));
+        } finally {
+          setFindingEntryId(null);
+        }
+      },
+      [onTracksChanged, userPlaylistId]
+    );
 
     const loadLyricsForTrack = useCallback(
       async (track: ReleaseTrackItem, opts?: { switchView?: boolean; retry?: boolean }) => {
@@ -148,11 +206,21 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
         setLyricsLoading(true);
         setLyricsText(null);
         setSyncedLyrics(null);
+        const sourceTrack = tracks.find((t) => t.play_path === track.play_path);
+        const lyricsArtist = multiArtist
+          ? (sourceTrack?.artist_name ?? artistName)
+          : artistName;
+        const lyricsBandId = track.navigate_band_id ?? bandId;
         try {
-          const res = await fetchTrackLyrics(artistName, trackDisplayTitle(track.title), track.play_path ?? undefined, {
-            bandId,
-            releaseId: track.navigate_release_id ?? undefined,
-          });
+          const res = await fetchTrackLyrics(
+            lyricsArtist,
+            trackDisplayTitle(track.title),
+            track.play_path ?? undefined,
+            {
+              bandId: lyricsBandId,
+              releaseId: track.navigate_release_id ?? undefined,
+            }
+          );
           setLyricsText(res.lyrics);
           setSyncedLyrics(res.synced_lyrics ?? null);
         } catch {
@@ -164,7 +232,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           setLyricsLoading(false);
         }
       },
-      [artistName, bandId]
+      [artistName, bandId, multiArtist, tracks]
     );
 
     const openLyrics = useCallback(
@@ -186,7 +254,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
         setVersionsLoading(true);
         try {
           const res = await fetchTrackVersions(
-            bandId,
+            track.navigate_band_id ?? bandId,
             releaseId,
             trackDisplayTitle(track.title),
             track.play_path
@@ -243,7 +311,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           ? {
               album_title: track.album_title,
               navigate_release_id: track.navigate_release_id,
-              navigate_band_id: bandId,
+              navigate_band_id: track.navigate_band_id ?? bandId,
               date_iso: track.release_date,
               display_date: formattedDate,
             }
@@ -263,32 +331,85 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
         <ol className="release-tracklist__tracks">
           {tracks.map((track, index) => {
             const item = trackItems[index]!;
-            const active = playingPath === track.play_path;
+            const active = Boolean(track.play_path && playingPath === track.play_path);
+            const unavailable = Boolean(track.unavailable || !track.play_path);
+            const meta = showTrackMeta ? trackMetaLine(track, multiArtist) : null;
+            const youtubeQuery = track.youtube_query ?? null;
             return (
               <li
                 key={item.id}
-                className={active ? "release-tracklist__row active" : "release-tracklist__row"}
+                className={[
+                  "release-tracklist__row",
+                  active ? "active" : "",
+                  unavailable ? "release-tracklist__row--unavailable" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
-                <button
-                  type="button"
-                  className="release-tracklist__play"
-                  onClick={() => handlePlayRow(track, item)}
-                  disabled={!track.play_path}
-                  aria-label={`Play ${track.title}`}
-                >
-                  <span className="release-tracklist__num">{index + 1}</span>
-                  <span className="release-tracklist__title-wrap">
-                    <ReleaseTrackTitle
-                      title={track.title}
-                      billboard={stacked}
-                      hidePerformer={hidePerformer}
-                      hideCoverArtist={hideCoverArtist}
-                    />
-                  </span>
-                  {track.duration ? (
-                    <span className="release-tracklist__duration">{track.duration}</span>
-                  ) : null}
-                </button>
+                {unavailable ? (
+                  <div className="release-tracklist__play release-tracklist__play--static">
+                    <span className="release-tracklist__num">{index + 1}</span>
+                    <span className="release-tracklist__title-wrap">
+                      <ReleaseTrackTitle
+                        title={track.title}
+                        billboard={stacked}
+                        hidePerformer={hidePerformer}
+                        hideCoverArtist={hideCoverArtist}
+                      />
+                      {meta && <span className="release-tracklist__track-meta">{meta}</span>}
+                    </span>
+                    <span className="release-tracklist__row-actions">
+                      {youtubeQuery ? (
+                        <a
+                          className="setlist-tracklist__youtube-link"
+                          href={youtubeSearchUrl(youtubeQuery)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Search ${trackDisplayTitle(track.title)} on YouTube`}
+                          title="Search on YouTube"
+                        >
+                          <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
+                        </a>
+                      ) : (
+                        <span className="release-tracklist__duration" aria-hidden />
+                      )}
+                      {userPlaylistId && track.entry_id ? (
+                        <button
+                          type="button"
+                          className="release-tracklist__find-disk"
+                          disabled={findingEntryId === track.entry_id}
+                          title="Find in disk"
+                          aria-label="Find in disk"
+                          onClick={() => void handleFindInDisk(track)}
+                        >
+                          {findingEntryId === track.entry_id ? "…" : "Find"}
+                        </button>
+                      ) : null}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="release-tracklist__play"
+                    onClick={() => handlePlayRow(track, item)}
+                    disabled={!track.play_path}
+                    aria-label={`Play ${track.title}`}
+                  >
+                    <span className="release-tracklist__num">{index + 1}</span>
+                    <span className="release-tracklist__title-wrap">
+                      <ReleaseTrackTitle
+                        title={track.title}
+                        billboard={stacked}
+                        hidePerformer={hidePerformer}
+                        hideCoverArtist={hideCoverArtist}
+                      />
+                      {meta && <span className="release-tracklist__track-meta">{meta}</span>}
+                    </span>
+                    {track.duration ? (
+                      <span className="release-tracklist__duration">{track.duration}</span>
+                    ) : null}
+                  </button>
+                )}
               </li>
             );
           })}
@@ -457,9 +578,13 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
 
         {plusTrack && (
           <ReleaseAddToPlaylistModal
-            bandId={bandId}
-            trackTitle={plusTrack.title}
-            playPath={plusTrack.play_path ?? undefined}
+            track={plusTrack}
+            artistName={
+              plusTrack.play_path
+                ? (trackByPath.get(plusTrack.play_path)?.artist_name ?? artistName)
+                : artistName
+            }
+            releaseTitle={plusTrack.source_album_title ?? ""}
             onClose={() => setPlusTrack(null)}
           />
         )}

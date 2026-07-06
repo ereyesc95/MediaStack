@@ -34,23 +34,17 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 |------|--------|
 | Music Audio | Done |
 | Music Video/Library tabs | Category scan only; no `.path`/symlink resolution |
-| `backend/app/franchise_index.py` | **Phase 1 done:** `build_franchise_index()`, save/load cache, `related_for_path()` |
-| Franchise API | **Not started** — need `GET /api/media/related?path=…` + sync hook |
+| `backend/app/franchise_index.py` | **Phase 1–2:** scan/save/load + `GET /api/media/related` |
+| `backend/app/routers/media.py` | Related media API |
+| `backend/app/routers/sync.py` | `POST /api/sync/franchise-index` |
 | Related media UI | **Not started** |
 | Series folder sync | Still expects flat `Series/{Show}/` — **must update** for `Series/{Letter}/{Franchise}/` |
 | Movies/Series/Books/Games UI | API stubs only |
 
 ## Next work (in order)
 
-1. **Wire franchise index to sync**
-   - Add `POST /api/sync/franchise-index?force=true` (or hook into existing folder sync)
-   - Call `build_franchise_index(media_root)` → `save_franchise_index()`
-   - Invalidate/rebuild when media root mtime changes
-
-2. **Related media API**
-   - `GET /api/media/related?path=…` using `load_franchise_index()` + `related_for_path()`
-   - Optional: `GET /api/media/franchise/{slug}/related`
-   - Enrich response with cover URLs when module scanners exist
+1. **Wire franchise index to sync** — `POST /api/sync/franchise-index` (done); hook into folder sync pipeline on media scan
+2. **Related media API** — `GET /api/media/related?path=…` (done); enrich with cover URLs when module scanners exist
 
 3. **UI panel**
    - "Related media" on Series/Movie/Book/Game pages (when built)

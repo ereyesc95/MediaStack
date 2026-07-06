@@ -6,14 +6,19 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube } from "../../../api";
+import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover } from "../../../api";
 import { getCachedOverview, prefetchBandOverview } from "../../../overviewCache";
 import {
   getCachedArtistPlaylistDetail,
   prefetchArtistPlaylistDetail,
 } from "../../../artistPlaylistDetailCache";
+import {
+  getCachedUserPlaylistDetail,
+  prefetchUserPlaylistDetail,
+  clearUserPlaylistDetailCache,
+} from "../../../userPlaylistDetailCache";
 import { prefetchTrackCredits, getCachedTrackCredits } from "../../../releaseTrackCreditsCache";
-import { pushArtistRoute } from "../../../musicRoute";
+import { pushArtistRoute, pushUserPlaylistRoute } from "../../../musicRoute";
 import {
   applyAlbumTheme,
   beginAlbumPageSession,
@@ -97,12 +102,13 @@ function eraBrandingFromOverview(
 }
 
 type Props = {
-  bandId: number;
-  slug: string;
+  bandId?: number;
+  slug?: string;
+  userPlaylistId?: number;
   userId?: number;
   isAdmin?: boolean;
   onBack: () => void;
-  onOpenPlaylist: (slug: string) => void;
+  onOpenPlaylist: (key: string) => void;
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
   onImport: () => void;
@@ -111,6 +117,18 @@ type Props = {
   onSwitchProfile: () => void;
   onEditProfile: () => void;
 };
+
+function coverUrlFallback(tracks: ArtistPlaylistTrack[]): string | undefined {
+  return tracks.find((t) => t.cover_url)?.cover_url ?? undefined;
+}
+
+const MULTI_ARTIST_PLAYLIST_SLUGS = new Set([
+  "tributes",
+  "appearances",
+  "features",
+  "collaborations",
+  "writing-credits",
+]);
 
 function parseApiError(message: string): string {
   try {
@@ -174,6 +192,7 @@ function PlaylistNeighborLink({
 export default function SystemPlaylistPage({
   bandId,
   slug,
+  userPlaylistId,
   userId,
   isAdmin = false,
   onBack,
@@ -186,18 +205,31 @@ export default function SystemPlaylistPage({
   onSwitchProfile,
   onEditProfile,
 }: Props) {
+  const isUserPlaylist = userPlaylistId != null;
   const layout = useDeviceLayout();
   const stacked = isMobilePortraitLayout(layout);
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const tabletLayout = isTabletLayout(layout);
   const tabletPortrait = layout === "tablet-portrait";
 
-  const [detail, setDetail] = useState<ArtistPlaylistDetail | null>(
-    () => getCachedArtistPlaylistDetail(bandId, slug)
-  );
-  const [loading, setLoading] = useState(
-    () => !getCachedArtistPlaylistDetail(bandId, slug)
-  );
+  const [detail, setDetail] = useState<ArtistPlaylistDetail | null>(() => {
+    if (isUserPlaylist && userPlaylistId != null) {
+      return getCachedUserPlaylistDetail(userPlaylistId);
+    }
+    if (bandId != null && slug) {
+      return getCachedArtistPlaylistDetail(bandId, slug);
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (isUserPlaylist && userPlaylistId != null) {
+      return !getCachedUserPlaylistDetail(userPlaylistId);
+    }
+    if (bandId != null && slug) {
+      return !getCachedArtistPlaylistDetail(bandId, slug);
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [nowPlayingTitle, setNowPlayingTitle] = useState<string | null>(null);
@@ -224,6 +256,9 @@ export default function SystemPlaylistPage({
   const [setlistTourName, setSetlistTourName] = useState<string | null>(null);
   const [setlistTrackCount, setSetlistTrackCount] = useState<number | null>(null);
   const [setlistPlaybackKey, setSetlistPlaybackKey] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverRevision, setCoverRevision] = useState(0);
+  const [coverUploadBusy, setCoverUploadBusy] = useState(false);
 
   const tracklistRef = useRef<SystemPlaylistTracklistHandle>(null);
   const setlistRef = useRef<SetlistsPlaylistHandle>(null);
@@ -236,8 +271,7 @@ export default function SystemPlaylistPage({
   const beatActive = Boolean(playingPath && miniAudio.src);
   useBeatPulse(miniAudio.audioRef, beatActive, miniAudio.playing);
 
-  const overview = getCachedOverview(bandId, "landscape");
-  const artistName = overview?.name ?? panelBrand?.name ?? "Artist";
+  const overview = bandId != null ? getCachedOverview(bandId, "landscape") : null;
 
   const openPersonName = useCallback(
     async (name: string) => {
@@ -264,7 +298,7 @@ export default function SystemPlaylistPage({
   );
 
   useEffect(() => {
-    void prefetchBandOverview(bandId, "landscape");
+    if (bandId != null) void prefetchBandOverview(bandId, "landscape");
   }, [bandId]);
 
   useEffect(() => {
@@ -276,20 +310,51 @@ export default function SystemPlaylistPage({
   }, [userId]);
 
   useEffect(() => {
-    pushArtistRoute(
-      {
-        bandId,
-        section: "audio",
-        overviewTab: "about",
-        playlistSlug: slug,
-      },
-      true
-    );
-  }, [bandId, slug]);
+    if (isUserPlaylist && userPlaylistId != null) {
+      pushUserPlaylistRoute(userPlaylistId, true);
+      return;
+    }
+    if (bandId != null && slug) {
+      pushArtistRoute(
+        {
+          bandId,
+          section: "audio",
+          overviewTab: "about",
+          playlistSlug: slug,
+        },
+        true
+      );
+    }
+  }, [bandId, isUserPlaylist, slug, userPlaylistId]);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
+    if (isUserPlaylist && userPlaylistId != null) {
+      const cached = getCachedUserPlaylistDetail(userPlaylistId);
+      if (cached) {
+        setDetail(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+      prefetchUserPlaylistDetail(userPlaylistId, { force: true })
+        .then((d) => {
+          if (!cancelled) setDetail(d);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setError(parseApiError(e instanceof Error ? e.message : String(e)));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (bandId == null || !slug) return;
     const cached = getCachedArtistPlaylistDetail(bandId, slug);
     if (cached) {
       setDetail(cached);
@@ -312,7 +377,7 @@ export default function SystemPlaylistPage({
     return () => {
       cancelled = true;
     };
-  }, [bandId, slug]);
+  }, [bandId, isUserPlaylist, slug, userPlaylistId]);
 
   useEffect(() => {
     miniAudio.clear();
@@ -331,12 +396,54 @@ export default function SystemPlaylistPage({
     setMobileTrackView("tracks");
     sourceArtCacheRef.current.clear();
     prevBgRef.current = undefined;
-  }, [slug, miniAudio.clear]);
+  }, [slug, userPlaylistId, miniAudio.clear]);
 
   useEffect(() => () => miniAudio.clear(), [miniAudio.clear]);
 
   const tracks = detail?.tracks ?? [];
-  const coverUrl = detail?.cover_url ?? `/api/assets/system/playlists/${slug}`;
+  const bustCoverUrl = useCallback(
+    (url: string | undefined | null) => {
+      if (!url) return "";
+      if (/\/playlists\/\d+\/cover/.test(url)) {
+        const base = url.split("?")[0]!;
+        return `${base}?v=${coverRevision}`;
+      }
+      return url;
+    },
+    [coverRevision]
+  );
+  const coverUrl =
+    bustCoverUrl(detail?.cover_url) ||
+    (!isUserPlaylist && slug ? `/api/assets/system/playlists/${slug}` : undefined) ||
+    coverUrlFallback(tracks) ||
+    "";
+  const canEditPlaylistCover = isUserPlaylist && !playingPath && !coverUploadBusy;
+
+  const openCoverPicker = useCallback(() => {
+    if (!canEditPlaylistCover) return;
+    coverInputRef.current?.click();
+  }, [canEditPlaylistCover]);
+
+  const onCoverFileChange = useCallback(
+    async (file: File | null) => {
+      if (!file || userPlaylistId == null) return;
+      setCoverUploadBusy(true);
+      setError(null);
+      try {
+        const res = await uploadUserPlaylistCover(userPlaylistId, file);
+        setCoverRevision((v) => v + 1);
+        clearUserPlaylistDetailCache(userPlaylistId);
+        const updated = await prefetchUserPlaylistDetail(userPlaylistId, { force: true });
+        setDetail({ ...updated, cover_url: res.cover_url });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCoverUploadBusy(false);
+        if (coverInputRef.current) coverInputRef.current.value = "";
+      }
+    },
+    [userPlaylistId]
+  );
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const hasActiveTrack = Boolean(playingPath);
   const showTrackPanel = Boolean(nowPlayingTitle) && (isPlaying || Boolean(versionSource));
@@ -399,12 +506,17 @@ export default function SystemPlaylistPage({
   }, [displayCanvas, showPanelCanvas, isPlaying]);
 
   const resolvePlaybackArt = useCallback(
-    async (path: string, releaseId?: string | null): Promise<ReleasePlaybackArt | null> => {
+    async (
+      path: string,
+      releaseId?: string | null,
+      navBandId?: number | null
+    ): Promise<ReleasePlaybackArt | null> => {
       const cached = sourceArtCacheRef.current.get(path);
       if (cached) return cached;
-      if (!releaseId) return null;
+      const bid = navBandId ?? bandId;
+      if (!bid || !releaseId) return null;
       try {
-        const res = await fetchTrackSourceArt(bandId, releaseId, path);
+        const res = await fetchTrackSourceArt(bid, releaseId, path);
         const art = normalizePlaybackArt(res.playback);
         sourceArtCacheRef.current.set(path, art);
         return art;
@@ -419,7 +531,7 @@ export default function SystemPlaylistPage({
     (direction: "prev" | "next") => {
       if (!playingPath) return;
       const adj =
-        slug === "setlists" && setlistRef.current
+        !isUserPlaylist && slug === "setlists" && setlistRef.current
           ? setlistRef.current.adjacentTracks(playingPath)
           : tracklistRef.current?.adjacentTracks(playingPath);
       if (!adj) return;
@@ -431,13 +543,14 @@ export default function SystemPlaylistPage({
         setNowPlayingTitle(target.title);
         const art = await resolvePlaybackArt(
           target.play_path!,
-          target.navigate_release_id ?? source?.navigate_release_id
+          target.navigate_release_id ?? source?.navigate_release_id,
+          target.navigate_band_id ?? source?.navigate_band_id ?? bandId
         );
         if (art) setPlaybackArt(art);
         try {
           const res = await playTrack({
             path: target.play_path!,
-            artist_id: bandId,
+            artist_id: target.navigate_band_id ?? source?.navigate_band_id ?? bandId ?? undefined,
             title: target.title,
           });
           miniAudio.loadSrc(res.stream_url, true);
@@ -446,7 +559,7 @@ export default function SystemPlaylistPage({
         }
       })();
     },
-    [bandId, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
+    [bandId, isUserPlaylist, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
   );
 
   const handlePlayTrack = useCallback(
@@ -458,10 +571,15 @@ export default function SystemPlaylistPage({
       playbackKey?: string
     ) => {
       const sameSetlistPlayback =
+        !isUserPlaylist &&
         slug === "setlists" &&
         playbackKey != null &&
         setlistPlaybackKey === playbackKey;
-      if (playingPath === path && miniAudio.src && (slug !== "setlists" || sameSetlistPlayback)) {
+      if (
+        playingPath === path &&
+        miniAudio.src &&
+        (isUserPlaylist || slug !== "setlists" || sameSetlistPlayback)
+      ) {
         if (!miniAudio.playing) {
           miniAudio.toggle();
           return;
@@ -480,20 +598,25 @@ export default function SystemPlaylistPage({
       } else {
         const resolved = await resolvePlaybackArt(
           path,
-          source?.navigate_release_id ?? panelActionTrack?.navigate_release_id
+          source?.navigate_release_id ?? panelActionTrack?.navigate_release_id,
+          source?.navigate_band_id ?? bandId
         );
         if (resolved) setPlaybackArt(resolved);
       }
       try {
-        const res = await playTrack({ path, artist_id: bandId, title });
+        const res = await playTrack({
+          path,
+          artist_id: source?.navigate_band_id ?? bandId ?? undefined,
+          title,
+        });
         const restart =
-          slug === "setlists" && playingPath === path && !sameSetlistPlayback;
+          !isUserPlaylist && slug === "setlists" && playingPath === path && !sameSetlistPlayback;
         miniAudio.loadSrc(res.stream_url, true, { restart });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
       void prefetchTrackCredits(
-        source?.navigate_band_id ?? bandId,
+        source?.navigate_band_id ?? bandId ?? 0,
         source?.navigate_release_id ?? "",
         title
       ).then((res) => {
@@ -502,6 +625,7 @@ export default function SystemPlaylistPage({
     },
     [
       bandId,
+      isUserPlaylist,
       miniAudio,
       panelActionTrack?.navigate_release_id,
       playingPath,
@@ -515,18 +639,42 @@ export default function SystemPlaylistPage({
   useEffect(() => {
     if (!playingPath) return;
     const source = tracks.find((t) => t.play_path === playingPath);
-    void resolvePlaybackArt(playingPath, source?.navigate_release_id).then((resolved) => {
+    void resolvePlaybackArt(
+      playingPath,
+      source?.navigate_release_id,
+      source?.navigate_band_id ?? bandId
+    ).then((resolved) => {
       if (resolved) setPlaybackArt(resolved);
     });
   }, [playingPath, resolvePlaybackArt, tracks]);
 
   const playingTrack = useMemo(() => {
-    if (playingPath && slug === "setlists" && panelActionTrack?.play_path === playingPath) {
+    if (
+      playingPath &&
+      !isUserPlaylist &&
+      slug === "setlists" &&
+      panelActionTrack?.play_path === playingPath
+    ) {
       return panelActionTrack;
     }
     return playingPath ? (tracks.find((track) => track.play_path === playingPath) ?? null) : null;
-  }, [panelActionTrack, playingPath, slug, tracks]);
-  const creditsBandId = playingTrack?.navigate_band_id ?? bandId;
+  }, [isUserPlaylist, panelActionTrack, playingPath, slug, tracks]);
+  const creditsBandId = playingTrack?.navigate_band_id ?? bandId ?? 0;
+
+  const artistName = isUserPlaylist
+    ? ((playingTrack as ArtistPlaylistTrack | null)?.artist_name ??
+      panelBrand?.name ??
+      detail?.name ??
+      "Playlist")
+    : (overview?.name ?? panelBrand?.name ?? "Artist");
+
+  const showArtistInMeta = isUserPlaylist || Boolean(slug && MULTI_ARTIST_PLAYLIST_SLUGS.has(slug));
+  const refreshUserPlaylist = useCallback(() => {
+    if (!isUserPlaylist || userPlaylistId == null) return;
+    prefetchUserPlaylistDetail(userPlaylistId, { force: true })
+      .then((d) => setDetail(d))
+      .catch(() => {});
+  }, [isUserPlaylist, userPlaylistId]);
 
   useEffect(() => {
     if (!nowPlayingTitle || !panelActionTrack?.navigate_release_id) {
@@ -558,7 +706,7 @@ export default function SystemPlaylistPage({
       artistName,
       trackDisplayTitle(nowPlayingTitle),
       panelActionTrack.play_path,
-      bandId
+      creditsBandId || bandId
     ).then((res) => {
       if (cancelled) return;
       const fromList = (res.youtube_videos ?? []).filter((video) =>
@@ -616,8 +764,8 @@ export default function SystemPlaylistPage({
   const panelVideos = panelYoutubeVideos;
 
   const hidePerformerName =
-    slug === "appearances" || slug === "features" ? artistName : undefined;
-  const hideCoverArtist = slug === "tributes" ? artistName : undefined;
+    !isUserPlaylist && (slug === "appearances" || slug === "features") ? artistName : undefined;
+  const hideCoverArtist = !isUserPlaylist && slug === "tributes" ? artistName : undefined;
   const trackPanelMeta = nowPlayingTitle
     ? parseTrackPanelMeta(nowPlayingTitle, {
         hidePerformer: hidePerformerName,
@@ -626,9 +774,9 @@ export default function SystemPlaylistPage({
     : null;
   const panelWriters = useMemo(() => {
     if (trackWriters.length > 0) return trackWriters;
-    if (slug === "writing-credits" && nowPlayingTitle) return [artistName];
+    if (!isUserPlaylist && slug === "writing-credits" && nowPlayingTitle) return [artistName];
     return [];
-  }, [artistName, nowPlayingTitle, slug, trackWriters]);
+  }, [artistName, isUserPlaylist, nowPlayingTitle, slug, trackWriters]);
   const brandDateIso =
     panelDateIso ?? versionSource?.date_iso ?? playingTrack?.release_date ?? null;
   const trackPerformerName = useMemo(() => {
@@ -641,6 +789,11 @@ export default function SystemPlaylistPage({
     let cancelled = false;
 
     async function loadPanelBrand() {
+      if (isUserPlaylist && !showTrackPanel) {
+        setPanelBrand(null);
+        return;
+      }
+
       const applyOverview = (
         targetBandId: number,
         name: string,
@@ -674,7 +827,7 @@ export default function SystemPlaylistPage({
             return;
           }
           setPanelBrand({
-            bandId,
+            bandId: bandId ?? 0,
             name: performerName,
             iconUrl: null,
             logoUrl: null,
@@ -683,7 +836,7 @@ export default function SystemPlaylistPage({
         } catch {
           if (!cancelled) {
             setPanelBrand({
-              bandId,
+              bandId: bandId ?? 0,
               name: performerName,
               iconUrl: null,
               logoUrl: null,
@@ -691,6 +844,11 @@ export default function SystemPlaylistPage({
             });
           }
         }
+        return;
+      }
+
+      if (isUserPlaylist || bandId == null) {
+        setPanelBrand(null);
         return;
       }
 
@@ -721,13 +879,18 @@ export default function SystemPlaylistPage({
     artistName,
     bandId,
     brandDateIso,
+    isUserPlaylist,
     showTrackPanel,
     trackPerformerName,
   ]);
 
   const panelBrandName =
     panelBrand?.name ??
-    (trackPerformerName && showTrackPanel ? trackPerformerName : artistName);
+    (trackPerformerName && showTrackPanel
+      ? trackPerformerName
+      : isUserPlaylist
+        ? (detail?.name ?? "Playlist")
+        : artistName);
   const panelBrandIconUrl = panelBrand?.iconUrl ?? null;
   const panelBrandLogoUrl = panelBrand?.logoUrl ?? null;
 
@@ -743,7 +906,7 @@ export default function SystemPlaylistPage({
   const trackPanelReleaseDate =
     versionSource?.display_date ??
     (versionSource?.date_iso ? formatTrackDate(versionSource.date_iso) : null) ??
-    (slug !== "setlists" && panelDateIso ? formatTrackDate(panelDateIso) : null) ??
+    (!isUserPlaylist && slug !== "setlists" && panelDateIso ? formatTrackDate(panelDateIso) : null) ??
     ((playingTrack as ArtistPlaylistTrack | null)?.release_date
       ? formatTrackDate((playingTrack as ArtistPlaylistTrack).release_date!)
       : null) ??
@@ -879,14 +1042,16 @@ export default function SystemPlaylistPage({
             </span>
           </div>
           <div className="release-page__top-right">
-            <MediaInlineSearch
-              mode="artist-releases"
-              bandId={bandId}
-              onSelectRelease={(releaseId) => onOpenRelease?.(bandId, releaseId)}
-              onSelectTrack={(path, title) => {
-                void handlePlayTrack(path, title);
-              }}
-            />
+            {!isUserPlaylist && bandId != null && (
+              <MediaInlineSearch
+                mode="artist-releases"
+                bandId={bandId}
+                onSelectRelease={(releaseId) => onOpenRelease?.(bandId, releaseId)}
+                onSelectTrack={(path, title) => {
+                  void handlePlayTrack(path, title);
+                }}
+              />
+            )}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -964,7 +1129,22 @@ export default function SystemPlaylistPage({
               >
                 {panelCoverSrc &&
                   (panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying ? (
-                    <span className="release-page__cover-wrap">
+                    <span
+                      className={`release-page__cover-wrap${
+                        canEditPlaylistCover ? " release-page__cover-wrap--editable" : ""
+                      }`}
+                      onClick={canEditPlaylistCover ? openCoverPicker : undefined}
+                      onKeyDown={
+                        canEditPlaylistCover
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") openCoverPicker();
+                            }
+                          : undefined
+                      }
+                      role={canEditPlaylistCover ? "button" : undefined}
+                      tabIndex={canEditPlaylistCover ? 0 : undefined}
+                      title={canEditPlaylistCover ? "Change playlist cover" : undefined}
+                    >
                       <video
                         key={panelCoverSrc}
                         src={panelCoverSrc}
@@ -976,7 +1156,22 @@ export default function SystemPlaylistPage({
                       />
                     </span>
                   ) : (
-                    <span className="release-page__cover-wrap">
+                    <span
+                      className={`release-page__cover-wrap${
+                        canEditPlaylistCover ? " release-page__cover-wrap--editable" : ""
+                      }`}
+                      onClick={canEditPlaylistCover ? openCoverPicker : undefined}
+                      onKeyDown={
+                        canEditPlaylistCover
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") openCoverPicker();
+                            }
+                          : undefined
+                      }
+                      role={canEditPlaylistCover ? "button" : undefined}
+                      tabIndex={canEditPlaylistCover ? 0 : undefined}
+                      title={canEditPlaylistCover ? "Change playlist cover" : undefined}
+                    >
                       <img
                         src={panelCoverSrc}
                         alt=""
@@ -1054,7 +1249,7 @@ export default function SystemPlaylistPage({
                             Released on {trackPanelReleaseDate}
                           </p>
                         )}
-                        {slug === "setlists" && setlistTourName && showTrackPanel && (
+                        {!isUserPlaylist && slug === "setlists" && setlistTourName && showTrackPanel && (
                           <p className="release-page__track-panel-line">{setlistTourName}</p>
                         )}
                         {trackPanelMeta.versionLabel && (
@@ -1078,7 +1273,7 @@ export default function SystemPlaylistPage({
                                 className="release-page__release-link"
                                 onClick={() =>
                                   onOpenRelease(
-                                    versionSource.navigate_band_id ?? bandId,
+                                    versionSource.navigate_band_id ?? bandId ?? 0,
                                     versionSource.navigate_release_id
                                   )
                                 }
@@ -1179,7 +1374,7 @@ export default function SystemPlaylistPage({
                       <div className="release-page__panel-head">
                         <h1 className="release-page__album-title">{detail.name}</h1>
                         <p className="release-page__type-line">
-                          {slug === "setlists"
+                          {!isUserPlaylist && slug === "setlists"
                             ? setlistTrackCount != null
                               ? `Playlist · ${setlistTrackCount} track${setlistTrackCount === 1 ? "" : "s"}`
                               : "Playlist"
@@ -1321,10 +1516,10 @@ export default function SystemPlaylistPage({
 
         <main className="release-page__main">
           <div className="release-page__tracklist-pane">
-            {slug === "setlists" ? (
+            {!isUserPlaylist && slug === "setlists" ? (
               <SetlistsPlaylistContent
                 ref={setlistRef}
-                bandId={bandId}
+                bandId={bandId!}
                 years={detail.years ?? []}
                 playingPath={playingPath}
                 onPlay={(path, title, playbackKey, track) => {
@@ -1348,11 +1543,15 @@ export default function SystemPlaylistPage({
               />
             ) : (
               <SystemPlaylistTracklist
-                key={slug}
+                key={isUserPlaylist ? `user-${userPlaylistId}` : slug}
                 ref={tracklistRef}
-                bandId={bandId}
+                bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
                 artistName={artistName}
                 tracks={tracks}
+                multiArtist={showArtistInMeta}
+                showTrackMeta
+                userPlaylistId={isUserPlaylist ? userPlaylistId : undefined}
+                onTracksChanged={isUserPlaylist ? refreshUserPlaylist : undefined}
                 stacked={stacked}
                 compactLyricsHead={stacked || tabletPortrait}
                 playingPath={playingPath}
@@ -1373,6 +1572,15 @@ export default function SystemPlaylistPage({
       </div>
 
       <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+      {isUserPlaylist && (
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          hidden
+          onChange={(e) => void onCoverFileChange(e.target.files?.[0] ?? null)}
+        />
+      )}
     </div>
   );
 }

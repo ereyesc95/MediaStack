@@ -1,44 +1,11 @@
-import type { PlaylistTrack, UserPlaylist } from "../../types";
+import type { UserPlaylist } from "../../types";
 
 type Props = {
   playlists: UserPlaylist[];
-  selectedId: number | null;
-  tracks: PlaylistTrack[];
   onOpen: (id: number) => void;
-  onBack: () => void;
-  onPlay: (path: string, title: string) => void;
 };
 
-export default function PlaylistsView({
-  playlists,
-  selectedId,
-  tracks,
-  onOpen,
-  onBack,
-  onPlay,
-}: Props) {
-  if (selectedId != null) {
-    return (
-      <div className="playlist-detail">
-        <button type="button" className="btn" onClick={onBack}>
-          ← Playlists
-        </button>
-        <ul className="playlist-tracks">
-          {tracks.map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                onClick={() => onPlay(t.path, t.title)}
-              >
-                {t.title} — {t.artist}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
+export default function PlaylistsView({ playlists, onOpen }: Props) {
   return (
     <div className="playlist-grid">
       {playlists.map((p) => (

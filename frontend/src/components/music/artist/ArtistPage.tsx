@@ -429,18 +429,19 @@ export default function ArtistPage({
   }, [data?.is_various_artists, data?.various_artists_hub, data?.top_tracks]);
 
   const bgUrl = useMemo(() => {
+    const eraBg =
+      pageBgUrl(era, stacked) ?? shell?.photo_url ?? DEFAULT_ARTIST_PHOTO_URL;
+
+    if (playing && playingPath) {
+      const track = playableTracks.find((t) => t.play_path === playingPath);
+      if (track?.cover_url) return track.cover_url;
+    }
+
     if (data?.is_various_artists) {
-      if (playing && playingPath) {
-        const track = playableTracks.find((t) => t.play_path === playingPath);
-        if (track?.cover_url) return track.cover_url;
-      }
       return DEFAULT_ARTIST_PHOTO_URL;
     }
-    return (
-      pageBgUrl(era, stacked) ??
-      shell?.photo_url ??
-      DEFAULT_ARTIST_PHOTO_URL
-    );
+
+    return eraBg;
   }, [
     data?.is_various_artists,
     playing,

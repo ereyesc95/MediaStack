@@ -10,10 +10,98 @@ from sqlalchemy.orm import Session
 from app.band_library import cover_url_for_track_path, title_from_track_path
 from app.config import settings
 from app.gallery import pick_playlist_cover, resolve_artist_card
+from app.user_playlist import resolve_playlist_cover_url
 from app.models import Band, Country, Genre, Playlist, PlaylistData, Reproduction, Subgenre
 from app.play_stats import is_quiz_play_title, subgenre_image_url
 
 FEAT_RE = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?|featuring)[^\)\]]*[\)\]]", re.I)
+
+LIBRARY_MOST_PLAYED_NAME = "Most Played"
+LIBRARY_MOST_PLAYED_LIMIT = 100
+LIBRARY_MOST_PLAYED_DEFAULT_COVER = "/api/assets/system/playlists/most-played"
+
+
+def _is_library_most_played(playlist: Playlist) -> bool:
+    return (playlist.pla_name or "").strip().casefold() == LIBRARY_MOST_PLAYED_NAME.casefold()
+
+
+def _library_most_played_paths(db: Session, user_id: int) -> list[tuple[str, int]]:
+    """Return (path, play_count) sorted most-to-least, up to LIBRARY_MOST_PLAYED_LIMIT."""
+    from app.profile_scope import rep_user_filter
+
+    path_counts: Counter[str] = Counter()
+    for row in db.scalars(
+        select(Reproduction).where(
+            Reproduction.rep_media_type == 200,
+            rep_user_filter(user_id),
+        )
+    ).all():
+        path = (row.rep_path or "").strip().replace("\\", "/")
+        if not path or is_quiz_play_title(row.rep_title):
+            continue
+        weight = _dashboard_rep_weight(row)
+        if weight > 0:
+            path_counts[path] += weight
+    return path_counts.most_common(LIBRARY_MOST_PLAYED_LIMIT)
+
+
+def build_library_most_played_tracks(
+    db: Session,
+    media_root: Path,
+    *,
+    user_id: int,
+) -> list[dict]:
+    from app.playlist_tracks import enrich_playlist_tracks
+    from app.profile_scope import rep_user_filter
+
+    ranked = _library_most_played_paths(db, user_id)
+    if not ranked:
+        return []
+
+    path_meta: dict[str, dict] = {}
+    for row in db.scalars(
+        select(Reproduction).where(
+            Reproduction.rep_media_type == 200,
+            rep_user_filter(user_id),
+        )
+    ).all():
+        path = (row.rep_path or "").strip().replace("\\", "/")
+        if not path or path in path_meta:
+            continue
+        artist_name = "Unknown"
+        if row.rep_artist_id:
+            band = db.get(Band, row.rep_artist_id)
+            if band and band.bnd_name:
+                artist_name = band.bnd_name
+        path_meta[path] = {
+            "title": _clean_track_title(_effective_track_title(row)),
+            "artist_name": artist_name,
+            "release": (row.rep_release or "").strip(),
+        }
+
+    raw_tracks: list[dict] = []
+    for path, count in ranked:
+        candidate = media_root / Path(path.replace("/", "\\"))
+        if not candidate.is_file():
+            candidate = media_root / Path(path)
+        if not candidate.is_file():
+            continue
+        meta = path_meta.get(path, {})
+        raw_tracks.append(
+            {
+                "title": meta.get("title") or title_from_track_path(path),
+                "play_path": path,
+                "artist_name": meta.get("artist_name") or "Unknown",
+                "cover_url": cover_url_for_track_path(path, media_root),
+                "play_count": count,
+            }
+        )
+
+    tracks = enrich_playlist_tracks(raw_tracks, media_root, db=db)
+    for i, raw in enumerate(raw_tracks):
+        if i < len(tracks) and raw.get("play_count") is not None:
+            tracks[i]["play_count"] = raw["play_count"]
+    return tracks
 
 
 def _clean_track_title(title: str | None) -> str:
@@ -285,7 +373,8 @@ def list_artist_cards(
 
 
 def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[dict]:
-    del user_id, is_admin
+    del is_admin
+    media_root = Path(settings.media_root) if settings.media_root else None
     rows = db.scalars(
         select(Playlist)
         .where(Playlist.pla_type == 200)
@@ -293,16 +382,30 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
     ).all()
     out = []
     for p in rows:
-        first = db.scalars(
-            select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id).limit(1)
-        ).first()
-        artist = (first.pld_artist.strip() if first else "") or None
-        cover = pick_playlist_cover(artist, first.pld_release if first else None)
-        track_count = len(
-            db.scalars(
-                select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id)
-            ).all()
-        )
+        custom_cover = resolve_playlist_cover_url(p)
+        if _is_library_most_played(p) and media_root:
+            mp_tracks = build_library_most_played_tracks(
+                db, media_root, user_id=user_id
+            )
+            track_count = len(mp_tracks)
+            cover = (
+                custom_cover
+                or (mp_tracks[0].get("cover_url") if mp_tracks else None)
+                or LIBRARY_MOST_PLAYED_DEFAULT_COVER
+            )
+        else:
+            first = db.scalars(
+                select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id).limit(1)
+            ).first()
+            artist = (first.pld_artist.strip() if first else "") or None
+            cover = custom_cover or pick_playlist_cover(
+                artist, first.pld_release if first else None
+            )
+            track_count = len(
+                db.scalars(
+                    select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id)
+                ).all()
+            )
         out.append(
             {
                 "id": p.pla_id,
@@ -311,16 +414,41 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
                 "description": p.pla_description,
                 "cover_url": cover,
                 "track_count": track_count,
+                "source": p.pla_source,
+                "spotify_id": p.pla_spotify_id,
             }
         )
     return out
 
 
-def playlist_tracks(db: Session, playlist_id: int) -> list[dict]:
+def playlist_tracks(
+    db: Session, playlist_id: int, *, user_id: int | None = None
+) -> list[dict]:
+    playlist = db.get(Playlist, playlist_id)
+    if (
+        playlist
+        and _is_library_most_played(playlist)
+        and user_id is not None
+        and settings.media_root
+    ):
+        tracks = build_library_most_played_tracks(
+            db, Path(settings.media_root), user_id=user_id
+        )
+        return [
+            {
+                "id": i + 1,
+                "title": t.get("title") or "",
+                "artist": t.get("artist_name") or "Unknown",
+                "release": t.get("album_title") or "",
+                "path": t.get("play_path") or "",
+            }
+            for i, t in enumerate(tracks)
+        ]
+
     rows = db.scalars(
         select(PlaylistData)
         .where(PlaylistData.pld_playlist == playlist_id)
-        .order_by(PlaylistData.pld_id)
+        .order_by(PlaylistData.pld_sort_order, PlaylistData.pld_id)
     ).all()
     return [
         {
@@ -329,9 +457,156 @@ def playlist_tracks(db: Session, playlist_id: int) -> list[dict]:
             "artist": r.pld_artist.strip(),
             "release": r.pld_release.strip(),
             "path": r.pld_path.strip(),
+            "album": (r.pld_album or "").strip() or None,
+            "year": (r.pld_year or "").strip() or None,
+            "unavailable": bool(r.pld_unavailable),
         }
         for r in rows
     ]
+
+
+def _playlist_neighbors(
+    playlists: list[dict], playlist_id: int
+) -> tuple[dict | None, dict | None]:
+    ordered = sorted(playlists, key=lambda p: (p.get("name") or "").casefold())
+    ids = [p["id"] for p in ordered]
+    if playlist_id not in ids or len(ids) < 2:
+        return None, None
+    idx = ids.index(playlist_id)
+    prev = ordered[(idx - 1) % len(ordered)]
+    nxt = ordered[(idx + 1) % len(ordered)]
+    return (
+        {"slug": str(prev["id"]), "name": prev.get("name") or str(prev["id"])},
+        {"slug": str(nxt["id"]), "name": nxt.get("name") or str(nxt["id"])},
+    )
+
+
+def get_user_playlist_detail(
+    db: Session,
+    media_root: Path,
+    playlist_id: int,
+    *,
+    user_id: int,
+    is_admin: bool,
+) -> dict | None:
+    from app.playlist_tracks import enrich_playlist_tracks
+
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or playlist.pla_type != 200:
+        return None
+
+    if _is_library_most_played(playlist):
+        tracks = build_library_most_played_tracks(db, media_root, user_id=user_id)
+        all_playlists = list_user_playlists(db, user_id=user_id, is_admin=is_admin)
+        prev, nxt = _playlist_neighbors(all_playlists, playlist_id)
+        custom_cover = resolve_playlist_cover_url(playlist)
+        cover = (
+            custom_cover
+            or (tracks[0].get("cover_url") if tracks else None)
+            or LIBRARY_MOST_PLAYED_DEFAULT_COVER
+        )
+        return {
+            "id": playlist.pla_id,
+            "slug": str(playlist.pla_id),
+            "name": playlist.pla_name or LIBRARY_MOST_PLAYED_NAME,
+            "description": playlist.pla_description,
+            "cover_url": cover,
+            "tracks": tracks,
+            "prev": prev,
+            "next": nxt,
+        }
+
+    rows = db.scalars(
+        select(PlaylistData)
+        .where(PlaylistData.pld_playlist == playlist_id)
+        .order_by(PlaylistData.pld_sort_order, PlaylistData.pld_id)
+    ).all()
+
+    from app.user_playlist import _youtube_query
+
+    raw_tracks: list[dict] = []
+    for r in rows:
+        path = (r.pld_path or "").strip()
+        unavailable = bool(r.pld_unavailable) or not path
+        if unavailable:
+            raw_tracks.append(
+                {
+                    "entry_id": r.pld_id,
+                    "title": (r.pld_title or "").strip() or "Unknown",
+                    "play_path": None,
+                    "artist_name": (r.pld_artist or "").strip() or None,
+                    "album_title": (r.pld_album or r.pld_release or "").strip() or None,
+                    "release_date": f"{r.pld_year}-01-01" if r.pld_year and r.pld_year.isdigit() else None,
+                    "cover_url": None,
+                    "unavailable": True,
+                    "youtube_query": _youtube_query(
+                        r.pld_title or "",
+                        r.pld_artist,
+                        r.pld_album or r.pld_release,
+                    ),
+                }
+            )
+            continue
+        cover = cover_url_for_track_path(path, media_root)
+        raw_tracks.append(
+            {
+                "entry_id": r.pld_id,
+                "title": (r.pld_title or "").strip() or title_from_track_path(path),
+                "play_path": path,
+                "artist_name": (r.pld_artist or "").strip() or None,
+                "album_title": (r.pld_album or r.pld_release or "").strip() or None,
+                "release_date": f"{r.pld_year}-01-01" if r.pld_year and r.pld_year.isdigit() else None,
+                "cover_url": cover,
+                "unavailable": False,
+            }
+        )
+
+    available_raw = [t for t in raw_tracks if not t.get("unavailable")]
+    enriched = enrich_playlist_tracks(available_raw, media_root, db=db)
+    enriched_by_path = {t.get("play_path"): t for t in enriched if t.get("play_path")}
+
+    tracks: list[dict] = []
+    for raw in raw_tracks:
+        if raw.get("unavailable"):
+            tracks.append(raw)
+            continue
+        path = raw.get("play_path")
+        merged = dict(enriched_by_path.get(path) or raw)
+        merged["entry_id"] = raw.get("entry_id")
+        merged["unavailable"] = False
+        if raw.get("artist_name"):
+            merged["artist_name"] = raw["artist_name"]
+        if raw.get("album_title"):
+            merged["album_title"] = raw["album_title"]
+        if raw.get("release_date") and not merged.get("release_date"):
+            merged["release_date"] = raw["release_date"]
+        tracks.append(merged)
+
+    all_playlists = list_user_playlists(db, user_id=user_id, is_admin=is_admin)
+    prev, nxt = _playlist_neighbors(all_playlists, playlist_id)
+
+    custom_cover = resolve_playlist_cover_url(playlist)
+    first = rows[0] if rows else None
+    artist = (first.pld_artist.strip() if first else "") or None
+    cover = custom_cover or pick_playlist_cover(artist, first.pld_release if first else None)
+    if not cover:
+        for t in tracks:
+            if t.get("cover_url"):
+                cover = t["cover_url"]
+                break
+
+    return {
+        "id": playlist.pla_id,
+        "slug": str(playlist.pla_id),
+        "name": playlist.pla_name or "Playlist",
+        "description": playlist.pla_description,
+        "cover_url": cover,
+        "source": playlist.pla_source,
+        "spotify_id": playlist.pla_spotify_id,
+        "tracks": tracks,
+        "prev": prev,
+        "next": nxt,
+    }
 
 
 def artists_by_genre(db: Session, genre_name: str, limit: int = 48) -> list[dict]:

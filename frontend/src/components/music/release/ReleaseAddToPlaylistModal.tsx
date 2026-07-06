@@ -36,16 +36,26 @@ export default function ReleaseAddToPlaylistModal({
       .finally(() => setLoading(false));
   }, []);
 
-  const add = async (playlistId: number) => {
+  const add = async (playlistId: number, allowDuplicate = false) => {
     setBusyId(playlistId);
     setError(null);
     try {
-      await addTrackToPlaylist(playlistId, {
+      const result = await addTrackToPlaylist(playlistId, {
         title: track.title,
         artist: artistName,
         release: releaseTitle,
-        path: track.play_path,
+        path: track.play_path ?? "",
+        allow_duplicate: allowDuplicate,
       });
+      if (result.duplicate && !allowDuplicate) {
+        setBusyId(null);
+        const proceed = window.confirm(
+          "This track already exists in the playlist. Proceed?"
+        );
+        if (!proceed) return;
+        await add(playlistId, true);
+        return;
+      }
       setDoneId(playlistId);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -63,7 +73,7 @@ export default function ReleaseAddToPlaylistModal({
     setCreating(true);
     setError(null);
     try {
-      const created = await createUserPlaylist(name);
+      const created = await createUserPlaylist({ name });
       const playlist: UserPlaylist = {
         id: created.id,
         name: created.name ?? name,

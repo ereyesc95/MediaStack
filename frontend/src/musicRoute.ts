@@ -281,3 +281,38 @@ export function pushArtistRoute(route: ArtistRoute, replace = false) {
     window.history.pushState(null, "", path);
   }
 }
+
+export function userPlaylistPath(playlistId: number): string {
+  return `/music/playlists/${playlistId}`;
+}
+
+export const PLAYLISTS_GRID_PATH = "/music/playlists";
+
+export function parsePlaylistsGridPath(pathname: string): boolean {
+  return /^\/music\/playlists\/?$/.test(pathname);
+}
+
+export function pushPlaylistsGridRoute(replace = false) {
+  const path = PLAYLISTS_GRID_PATH;
+  if (replace) {
+    window.history.replaceState(null, "", path);
+  } else {
+    window.history.pushState(null, "", path);
+  }
+}
+
+export function pushUserPlaylistRoute(playlistId: number, replace = false) {
+  const path = userPlaylistPath(playlistId);
+  if (replace) {
+    window.history.replaceState(null, "", path);
+  } else {
+    window.history.pushState(null, "", path);
+  }
+}
+
+export function parseUserPlaylistPath(pathname: string): number | null {
+  const m = pathname.match(/^\/music\/playlists\/(\d+)\/?$/);
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isFinite(id) ? id : null;
+}

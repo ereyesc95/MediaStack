@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatTrackDate } from "../../../formatDate";
 import type { BandOverview } from "../../../types";
-import { DEFAULT_ARTIST_PHOTO_URL } from "../release/releaseTrackPanelMeta";
+import { DEFAULT_ARTIST_PHOTO_URL, trackDisplayTitle } from "../release/releaseTrackPanelMeta";
 import ArtistWordCloud from "./ArtistWordCloud";
 
 type Era = BandOverview["eras"][number];
@@ -455,7 +455,9 @@ export default function ArtistAbout({
                           }
                         />
                       </span>
-                      <span className="artist-about__track-title">{t.title}</span>
+                      <span className="artist-about__track-title">
+                        {trackDisplayTitle(t.title)}
+                      </span>
                       {t.release_date && (
                         <span className="artist-about__track-date">
                           {formatTrackDate(t.release_date)}

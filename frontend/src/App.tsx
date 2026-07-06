@@ -33,7 +33,7 @@ import {
   getStoredOrientation,
   saveOrientation,
 } from "./themes";
-import { parseArtistPath } from "./musicRoute";
+import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushPlaylistsGridRoute } from "./musicRoute";
 import type { CardOrientation, MusicTab, View } from "./types";
 
 
@@ -122,25 +122,64 @@ export default function App() {
         setSourceModal("welcome");
       }
     }
-    const route = parseArtistPath(window.location.pathname);
-    if (route) {
+    const userPlaylistId = parseUserPlaylistPath(window.location.pathname);
+    if (userPlaylistId != null) {
       setView({
         kind: "music",
-        tab: "artists",
-        bandId: route.bandId,
-        artistSection: route.section,
-        artistOverviewTab: route.overviewTab,
-        releaseId: route.releaseId,
-        releaseTab: route.releaseTab,
-        mediaItemId: route.mediaItemId,
-        playlistSlug: route.playlistSlug,
+        tab: "playlists",
+        playlistId: userPlaylistId,
       });
+    } else if (parsePlaylistsGridPath(window.location.pathname)) {
+      setView({
+        kind: "music",
+        tab: "playlists",
+      });
+    } else {
+      const route = parseArtistPath(window.location.pathname);
+      if (route) {
+        setView({
+          kind: "music",
+          tab: "artists",
+          bandId: route.bandId,
+          artistSection: route.section,
+          artistOverviewTab: route.overviewTab,
+          releaseId: route.releaseId,
+          releaseTab: route.releaseTab,
+          mediaItemId: route.mediaItemId,
+          playlistSlug: route.playlistSlug,
+        });
+      }
     }
     init();
   }, []);
 
   useEffect(() => {
     function onPopState() {
+      const userPlaylistId = parseUserPlaylistPath(window.location.pathname);
+      if (userPlaylistId != null) {
+        setView({
+          kind: "music",
+          tab: "playlists",
+          playlistId: userPlaylistId,
+          bandId: undefined,
+          playlistSlug: undefined,
+        });
+        return;
+      }
+      if (parsePlaylistsGridPath(window.location.pathname)) {
+        setView((v) =>
+          v.kind === "music"
+            ? {
+                ...v,
+                tab: "playlists",
+                playlistId: undefined,
+                bandId: undefined,
+                playlistSlug: undefined,
+              }
+            : { kind: "music", tab: "playlists" }
+        );
+        return;
+      }
       const route = parseArtistPath(window.location.pathname);
       if (route) {
         setView((v) =>
@@ -182,7 +221,17 @@ export default function App() {
     saveProfile(user, token);
     setProfile(user);
     setHighlightProfileId(null);
-    setView({ kind: "hub" });
+    if (parsePlaylistsGridPath(window.location.pathname)) {
+      setView({ kind: "music", tab: "playlists" });
+    } else if (parseUserPlaylistPath(window.location.pathname) != null) {
+      setView({
+        kind: "music",
+        tab: "playlists",
+        playlistId: parseUserPlaylistPath(window.location.pathname) ?? undefined,
+      });
+    } else {
+      setView({ kind: "hub" });
+    }
   }
 
   function handleProfileUpdated(user: ProfileUser) {
@@ -470,7 +519,12 @@ export default function App() {
 
             onToggleOrientation={toggleOrientation}
 
-            onTab={(tab: MusicTab) => openMusic({ tab, bandId: undefined, playlistId: undefined })}
+            onTab={(tab: MusicTab) => {
+              if (tab === "playlists") {
+                pushPlaylistsGridRoute();
+              }
+              openMusic({ tab, bandId: undefined, playlistId: undefined });
+            }}
 
             onBand={(id, artistSection = "overview") =>
               openMusic(
@@ -537,7 +591,14 @@ export default function App() {
               })
             }
 
-            onPlaylist={(id) => openMusic({ playlistId: id, tab: "playlists" })}
+            onPlaylist={(id) => {
+              if (id != null) {
+                window.history.pushState(null, "", `/music/playlists/${id}`);
+              } else if (window.location.pathname.startsWith("/music/playlists/")) {
+                window.history.pushState(null, "", "/");
+              }
+              openMusic({ playlistId: id, tab: "playlists", bandId: undefined });
+            }}
 
             onGenreFilter={(id) =>
               openMusic(

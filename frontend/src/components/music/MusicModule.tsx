@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchArtistCards,
   fetchFilterOptions,
-  fetchPlaylistTracks,
   fetchUserPlaylists,
   playTrack,
 } from "../../api";
@@ -13,7 +12,6 @@ import type {
   FilterOptions,
   MusicDashboard,
   MusicTab,
-  PlaylistTrack,
   UserPlaylist,
 } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
@@ -34,12 +32,18 @@ import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import AddArtistModal from "./AddArtistModal";
+import AddPlaylistModal, { markSpotifyCredentialsRepair } from "./AddPlaylistModal";
 import ArtistPage from "./artist/ArtistPage";
 import SystemPlaylistPage from "./artist/SystemPlaylistPage";
 import MediaItemPage from "./media/MediaItemPage";
 import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
-import { pushArtistRoute, savePendingAudioCategory, clearPendingAudioCategory } from "../../musicRoute";
+import { pushArtistRoute, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory } from "../../musicRoute";
+import {
+  clearSpotifyOAuthErrorHash,
+  consumeSpotifyOAuthAwaiting,
+  readSpotifyOAuthError,
+} from "../../spotifyOAuth";
 import ArtistBrowse from "./ArtistBrowse";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -132,6 +136,9 @@ export default function MusicModule({
   onCountryFilter,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
+  const [showAddPlaylist, setShowAddPlaylist] = useState(false);
+  const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
+  const [playlistToast, setPlaylistToast] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<MusicDashboard>(
     () => getCachedMusicDashboard() ?? EMPTY_DASHBOARD
   );
@@ -155,7 +162,6 @@ export default function MusicModule({
   const [label, setLabel] = useState("");
   const [producer, setProducer] = useState("");
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
-  const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
@@ -537,10 +543,37 @@ export default function MusicModule({
   }, [tab]);
 
   useEffect(() => {
-    if (playlistId != null) {
-      fetchPlaylistTracks(playlistId).then((d) => setPlaylistTracks(d.items));
+    if (!playlistToast) return;
+    const t = window.setTimeout(() => setPlaylistToast(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [playlistToast]);
+
+  useEffect(() => {
+    if (tab !== "playlists") return;
+
+    const spotifyError = readSpotifyOAuthError();
+    if (spotifyError) {
+      markSpotifyCredentialsRepair(spotifyError);
+      setAddPlaylistInitialMode("spotify");
+      setShowAddPlaylist(true);
+      clearSpotifyOAuthErrorHash();
+      return;
     }
-  }, [playlistId]);
+
+    if (consumeSpotifyOAuthAwaiting()) {
+      setAddPlaylistInitialMode("spotify");
+      setShowAddPlaylist(true);
+    }
+  }, [tab]);
+
+  const reloadPlaylists = useCallback(() => {
+    fetchUserPlaylists()
+      .then((d) => setPlaylists(d.items))
+      .catch(() => {});
+  }, []);
+
+  const userPlaylistOpen = tab === "playlists" && playlistId != null;
+  const showModuleChrome = !bandId && !userPlaylistOpen;
 
 
   const homeTracks = dashboard.top_tracks;
@@ -648,7 +681,7 @@ export default function MusicModule({
         homeBeatPlaying ? " music-module--playing" : ""
       }`}
     >
-      {!bandId && homeBeatActive && <MediaBeatFx />}
+      {!showModuleChrome && homeBeatActive && <MediaBeatFx />}
       {moduleBackdrop && (
         <div className="music-module__backdrop" aria-hidden>
           {backgroundIso ? (
@@ -664,7 +697,7 @@ export default function MusicModule({
           <div className="music-module__backdrop-overlay" />
         </div>
       )}
-      {!bandId && (
+      {showModuleChrome && (
         <ModuleTopBar
           media={mediaOptions.find((m) => m.kind === "music") ?? mediaOptions[0]}
           mediaOptions={mediaOptions}
@@ -736,13 +769,18 @@ export default function MusicModule({
                 onEditProfile={onEditProfile}
                 showAddArtist={showArtistTools && isAdmin}
                 onAddArtist={() => setShowAddArtist(true)}
+                showAddPlaylist={tab === "playlists" && !userPlaylistOpen}
+                onAddPlaylist={() => {
+                  setAddPlaylistInitialMode("local");
+                  setShowAddPlaylist(true);
+                }}
               />
             </>
           }
         />
       )}
 
-      {error && !bandId && <div className="error">{error}</div>}
+      {error && showModuleChrome && <div className="error">{error}</div>}
 
       {showHomePlayer && (
         <div className="artist-page__player-bar artist-page__player-bar--visible music-module__player-bar">
@@ -772,7 +810,7 @@ export default function MusicModule({
           </div>
         </div>
       )}
-      {!bandId && (tab === "home" || tab === "artists" || tab === "playlists") && (
+      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "playlists") && (
         <audio
           ref={homeAudio.audioRef}
           src={homeAudio.src ?? undefined}
@@ -780,7 +818,36 @@ export default function MusicModule({
         />
       )}
 
-      {bandId &&
+      {userPlaylistOpen ? (
+        <SystemPlaylistPage
+          userPlaylistId={playlistId!}
+          userId={userId}
+          isAdmin={isAdmin}
+          onBack={() => onPlaylist(undefined)}
+          onOpenPlaylist={(key) => {
+            const nextId = Number(key);
+            if (Number.isFinite(nextId)) {
+              pushUserPlaylistRoute(nextId);
+              onPlaylist(nextId);
+            }
+          }}
+          onOpenRelease={(bid, rid) => {
+            void prefetchReleaseOverview(bid, rid);
+            onPlaylist(undefined);
+            onBand(bid, "audio");
+            onReleaseNavigate?.(rid, "overview", bid);
+          }}
+          onOpenArtist={(id) => {
+            onPlaylist(undefined);
+            openArtist(id);
+          }}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={() => onChooseSource?.()}
+          onSwitchProfile={() => onSwitchProfile?.()}
+          onEditProfile={() => onEditProfile?.()}
+        />
+      ) : bandId &&
       mediaItemId &&
       (artistSection === "video" || artistSection === "library") ? (
         <MediaItemPage
@@ -1056,13 +1123,29 @@ export default function MusicModule({
           loading={artistsLoading}
         />
       ) : (
-        <PlaylistsView
-          playlists={playlists}
-          selectedId={playlistId ?? null}
-          tracks={playlistTracks}
-          onOpen={(id) => onPlaylist(id)}
-          onBack={() => onPlaylist(undefined)}
-          onPlay={(path, title) => handlePlay(path, null, title)}
+        <>
+          {playlistToast && (
+            <p className="status-bar module-top-bar__status playlist-toast">{playlistToast}</p>
+          )}
+          <PlaylistsView
+            playlists={playlists}
+            onOpen={(id) => {
+              pushUserPlaylistRoute(id);
+              onPlaylist(id);
+            }}
+          />
+        </>
+      )}
+
+      {showAddPlaylist && (
+        <AddPlaylistModal
+          initialMode={addPlaylistInitialMode}
+          onClose={() => setShowAddPlaylist(false)}
+          onCreated={(message) => {
+            setShowAddPlaylist(false);
+            setPlaylistToast(message);
+            reloadPlaylists();
+          }}
         />
       )}
 

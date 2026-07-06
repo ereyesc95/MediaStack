@@ -13072,6 +13072,325 @@ button.lyrics-status-badge--icon-only {
   height: 1rem;
 }
 
+.release-tracklist__track-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.release-tracklist__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.release-tracklist__find-disk {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.release-tracklist__find-disk:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.add-playlist-modal {
+  width: min(36rem, 92vw);
+  max-height: min(86vh, 40rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.add-playlist-modal__tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 1rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.add-playlist-modal__tabs button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--text-muted);
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.add-playlist-modal__tab-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.add-playlist-modal__tabs button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.add-playlist-modal__form {
+  padding: 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.add-playlist-modal__form .release-edit-modal__field {
+  margin-bottom: 0;
+}
+
+.add-playlist-modal__local-row {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.add-playlist-modal__cover-slot {
+  position: relative;
+  flex-shrink: 0;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: var(--radius);
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-playlist-modal__cover-slot:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.add-playlist-modal__cover-slot-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.add-playlist-modal__cover-slot-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.add-playlist-modal__cover-slot-placeholder {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--text-muted);
+  font-weight: 300;
+  user-select: none;
+}
+
+.add-playlist-modal__local-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.add-playlist-modal .release-edit-modal__field span {
+  font-size: 0.78rem;
+}
+
+.add-playlist-modal .release-add-playlist-modal__input,
+.add-playlist-modal .release-about-edit-modal__textarea,
+.add-playlist-modal select.release-add-playlist-modal__input {
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.add-playlist-modal .release-add-playlist-modal__input::placeholder,
+.add-playlist-modal .release-about-edit-modal__textarea::placeholder {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.add-playlist-modal__textarea {
+  min-height: 4.5rem;
+  max-height: 8rem;
+  resize: vertical;
+}
+
+.add-playlist-modal__file {
+  position: relative;
+  display: block;
+}
+
+.add-playlist-modal__file-label {
+  display: block;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.add-playlist-modal__file:hover .add-playlist-modal__file-label {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+
+.add-playlist-modal__file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.add-playlist-modal__cover-preview {
+  width: 6rem;
+  height: 6rem;
+  object-fit: cover;
+  border-radius: var(--radius);
+  margin-top: 0.25rem;
+}
+
+.add-playlist-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+.add-playlist-modal__hint {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.add-playlist-modal__error {
+  margin: 0 1rem 0.5rem;
+}
+
+.add-playlist-modal__spotify-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.add-playlist-modal__redirect {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.add-playlist-modal__spotify-connect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 0 0.25rem;
+  text-align: center;
+}
+
+.add-playlist-modal__spotify-connect .btn {
+  min-width: 10rem;
+}
+
+.add-playlist-modal__spotify-user {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.add-playlist-modal__spotify-user-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.add-playlist-modal__spotify-user-avatar--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  color: var(--text-muted);
+}
+
+.add-playlist-modal__spotify-user-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.add-playlist-modal__spotify-user-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.add-playlist-modal__spotify-switch {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.add-playlist-modal__spotify-switch:hover {
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
+
+.add-playlist-modal select.release-add-playlist-modal__input {
+  appearance: none;
+  cursor: pointer;
+}
+
+.playlist-toast {
+  margin: 0 0 0.75rem;
+}
+
+.release-page__cover-wrap--editable {
+  cursor: pointer;
+}
+
+.release-page__cover-wrap--editable:hover .release-page__cover {
+  filter: brightness(1.08);
+}
+
 @media (max-width: 720px) {
   .setlists-playlist__controls {
     grid-template-columns: 1fr;

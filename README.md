@@ -119,6 +119,11 @@ Environment variables use the `MEDIASTACK_` prefix (`.env` at project root is su
 | `MEDIASTACK_MUSICBRAINZ_USER_AGENT` | MusicBrainz user-agent for folder sync |
 | `MEDIASTACK_LASTFM_API_KEY` | Last.fm (optional) |
 | `MEDIASTACK_SETLISTFM_API_KEY` | Setlist.fm (optional) |
+| `MEDIASTACK_SPOTIFY_CLIENT_ID` | Spotify app Client ID (optional; can store in `apiauth` instead) |
+| `MEDIASTACK_SPOTIFY_CLIENT_SECRET` | Spotify app Client Secret (optional; can store in `apiauth` instead) |
+| `MEDIASTACK_SPOTIFY_REDIRECT_URI` | Override OAuth callback URL (default: `{API}/api/spotify/auth/callback` on `127.0.0.1`, not `localhost`) |
+| `MEDIASTACK_PUBLIC_URL` | Public base URL for OAuth return redirects when UI and API run on different hosts (e.g. NAS) |
+| `MEDIASTACK_ADMIN_PASSWORD` | Admin profile password (default `mediastack`) |
 
 ### Database import
 
@@ -538,7 +543,9 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB (multiple URLs per track supported); bulk fetch, manual set, picker when several exist, open in new tab with autoplay
-- **Playlists** — user playlists (`plaType` 200) + **artist system playlists** scanned from disk (suffix tags, singles, editions, cross-library, play counts); alphabetical grid under Audio → Playlists; add-to-playlist modal with create-and-add
+- **Playlists** — user playlists (`plaType` 200) + **artist system playlists** scanned from disk (suffix tags, singles, editions, cross-library, play counts); alphabetical grid under **Music → Playlists** (`/music/playlists`); add-to-playlist modal on release pages; **Add playlist** from the hamburger menu on the Playlists grid (create local playlist with optional cover, or **import from Spotify**)
+- **User playlist pages** — Ballads-style layout with artist/album/year on rows, unavailable tracks (Spotify imports), YouTube links, and **Find in disk** for unmatched files; click the cover to replace artwork (Most Played uses a default system cover)
+- **Spotify import** — per-profile OAuth; credentials read from `apiauth` (or env); browse owned/collaborative playlists after connect; imports a snapshot matched to your library by title/album (bracket suffixes accepted); unmatched tracks stored as unavailable until added to disk
 - **Song quiz** — audio stops on score screen; page audio cleared when entering quiz; writer/artist name resolution uses same alias rules as release credits
 - **Release admin menu** — Track data (**Fetch lyrics**, **Set lyrics**, **Fetch videos**, **Set Official Videos**, **Write file tags**), Edit release (About, metadata, description), styled modals with inner-only scrollbars
 - **Search** — in-library media search per artist
@@ -585,6 +592,7 @@ Then `python run.py` serves the built UI from `frontend/dist` at port 8766.
 | Auth / profiles | `/api/auth` |
 | Settings | `/api/settings` |
 | Music | `/api/music` |
+| Spotify (OAuth, import) | `/api/spotify` |
 | Playback / stream / lyrics | `/api/music/play`, `/stream`, `/lyrics` |
 | Track YouTube (get/set/fetch) | `/api/music/youtube`, `.../youtube/fetch` |
 | Write file tags (admin) | `POST /api/music/bands/{id}/releases/{id}/write-file-tags` (+ `pick-cover`, `cover-preview`) |
@@ -635,6 +643,16 @@ $p = (Get-NetTCPConnection -LocalPort 8766 -State Listen).OwningProcess | Select
 $p | ForEach-Object { Stop-Process -Id $_ -Force }
 python run.py --no-browser
 ```
+
+### Spotify import fails or shows “session expired”
+
+1. Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard) and add a **Redirect URI**:
+   - Dev: `http://127.0.0.1:8766/api/spotify/auth/callback` (use `127.0.0.1`, not `localhost`)
+   - Production (single host): same path on your API origin
+2. Store **Client ID** and **Client Secret** in the database (`apiauth`, service name `Spotify`) or set `MEDIASTACK_SPOTIFY_CLIENT_ID` / `MEDIASTACK_SPOTIFY_CLIENT_SECRET`.
+3. After OAuth, the app returns to **`/music/playlists`** with the Add playlist modal open — not the profile picker.
+4. If tokens are stale (403 from Spotify), use **Not you?** in the modal to reconnect, or open **Import from Spotify** again to get the Connect flow.
+5. On a NAS or split UI/API setup, set `MEDIASTACK_PUBLIC_URL` to the URL where users open the web UI.
 
 ---
 

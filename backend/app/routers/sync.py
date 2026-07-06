@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -70,6 +70,24 @@ def sync_folders_background(
     return {"status": "started", "module": body.module}
 
 
-@router.get("/jobs")
-def list_jobs():
-    return {"jobs": _jobs[-10:]}
+@router.post("/franchise-index")
+def sync_franchise_index(
+    force: bool = Query(False),
+    _admin: User = Depends(require_admin),
+):
+    from pathlib import Path
+
+    from app.franchise_index import build_franchise_index, save_franchise_index
+
+    root = settings.media_root
+    if not root:
+        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT")
+    index = build_franchise_index(Path(root))
+    path = save_franchise_index(index)
+    return {
+        "status": "completed",
+        "path": str(path),
+        "franchise_count": len(index.franchises),
+        "scanned_at": index.scanned_at,
+        "force": force,
+    }

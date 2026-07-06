@@ -239,7 +239,9 @@ Manual **`.path`** files remain valid; scanner resolves target and registers an 
 
 ### Phase 2 — API + cache invalidation
 
-- [ ] `GET /api/media/related?path=…`
+- [x] `GET /api/media/related?path=…`
+- [x] `GET /api/media/franchise/{slug}/related`
+- [x] `POST /api/sync/franchise-index` (manual rebuild)
 - [ ] Hook rebuild into folder sync / media scan pipeline
 - [ ] Expose slug on series/movie/book/game overview payloads
 

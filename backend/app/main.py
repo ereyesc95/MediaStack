@@ -15,12 +15,14 @@ from app.routers import (
     books,
     games,
     import_router,
+    media,
     metadata,
     movies,
     music,
     playback,
     series,
     settings as settings_router,
+    spotify,
     sync,
 )
 
@@ -57,6 +59,7 @@ app.include_router(assets.router)
 app.include_router(auth.router)
 app.include_router(metadata.router)
 app.include_router(music.router)
+app.include_router(spotify.router)
 app.include_router(playback.router)
 app.include_router(series.router)
 app.include_router(movies.router)
@@ -64,6 +67,7 @@ app.include_router(books.router)
 app.include_router(games.router)
 app.include_router(import_router.router)
 app.include_router(sync.router)
+app.include_router(media.router)
 app.include_router(settings_router.router)
 
 

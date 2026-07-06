@@ -265,3 +265,22 @@ export function IconEditRelease({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconPlus({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z" />
+    </svg>
+  );
+}
+
+export function IconSpotify({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.17 14.27c-.16.26-.5.34-.76.18-2.09-1.28-4.72-1.57-7.82-.86-.3.07-.59-.12-.66-.41a.553.553 0 0 1 .41-.66c3.41-.78 6.36-.45 8.74 1.01.26.16.34.5.18.76l-.09.08zm1.11-2.47c-.2.32-.62.42-.94.22-2.39-1.46-6.03-1.88-8.86-1.03-.36.11-.74-.09-.85-.45a.748.748 0 0 1 .45-.85c3.22-.98 7.21-.51 9.96 1.12.31.19.41.62.22.94l-.08.05zm.09-2.58C14.07 9.24 9.06 9.07 6.2 9.96c-.43.13-.89-.11-1.02-.54a.816.816 0 0 1 .54-1.02c3.32-1.01 8.84-.82 12.23 1.27.39.24.51.74.27 1.13-.24.39-.74.51-1.13.27l-.05-.04z"
+      />
+    </svg>
+  );
+}

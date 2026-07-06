@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,11 +17,13 @@ from app.models import (
     Continent,
     EntityLink,
     EntityRelated,
+    Playlist,
     User,
 )
 from app.music_dashboard import (
     artists_by_genre,
     build_dashboard,
+    get_user_playlist_detail,
     list_artist_cards,
     list_user_playlists,
     playlist_tracks,
@@ -86,10 +88,21 @@ class AddPlaylistTrackBody(BaseModel):
     artist: str
     release: str = ""
     path: str
+    allow_duplicate: bool = False
 
 
 class CreatePlaylistBody(BaseModel):
     name: str
+    description: str | None = None
+
+
+class FindInDiskBody(BaseModel):
+    entry_id: int
+
+
+class LinkPlaylistEntryBody(BaseModel):
+    entry_id: int
+    path: str
 
 
 class QuizScoreBody(BaseModel):
@@ -1775,17 +1788,81 @@ def user_playlists(
 
 
 @router.post("/playlists")
-def create_playlist(
-    body: CreatePlaylistBody,
+async def create_playlist(
+    name: str = Form(...),
+    description: str = Form(""),
+    cover: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    from app.user_playlist import create_user_playlist
+    from app.user_playlist import create_user_playlist, save_playlist_cover_file
 
-    result = create_user_playlist(db, name=body.name)
+    result = create_user_playlist(
+        db,
+        name=name,
+        description=description or None,
+        source="local",
+    )
     if not result.get("ok"):
         raise HTTPException(400, result.get("error") or "Failed")
+
+    playlist_id = int(result["id"])
+    if cover and cover.filename:
+        raw = await cover.read()
+        if raw and len(raw) <= 5_000_000:
+            content_type = (cover.content_type or "").lower()
+            ext = ".jpg"
+            if "png" in content_type:
+                ext = ".png"
+            elif "webp" in content_type:
+                ext = ".webp"
+            url = save_playlist_cover_file(playlist_id, raw, ext)
+            playlist = db.get(Playlist, playlist_id)
+            if playlist:
+                playlist.pla_cover_path = url
+                db.commit()
+                result["cover_url"] = url
     return result
+
+
+@router.get("/playlists/{playlist_id}/cover")
+def playlist_cover(playlist_id: int):
+    from app.user_playlist import cover_file_for_playlist
+    from fastapi.responses import FileResponse
+
+    path = cover_file_for_playlist(playlist_id)
+    if not path:
+        raise HTTPException(404, "Cover not found")
+    return FileResponse(path)
+
+
+@router.post("/playlists/{playlist_id}/cover")
+async def upload_playlist_cover(
+    playlist_id: int,
+    cover: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import save_playlist_cover_file
+
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or playlist.pla_type != 200:
+        raise HTTPException(404, "Playlist not found")
+    raw = await cover.read()
+    if not raw or len(raw) > 5_000_000:
+        raise HTTPException(400, "Image must be under 5 MB")
+    content_type = (cover.content_type or "").lower()
+    ext = ".jpg"
+    if "png" in content_type:
+        ext = ".png"
+    elif "webp" in content_type:
+        ext = ".webp"
+    elif "jpeg" in content_type:
+        ext = ".jpeg"
+    url = save_playlist_cover_file(playlist_id, raw, ext)
+    playlist.pla_cover_path = url
+    db.commit()
+    return {"ok": True, "cover_url": url}
 
 
 @router.post("/playlists/{playlist_id}/tracks")
@@ -1804,15 +1881,84 @@ def add_playlist_track(
         artist=body.artist,
         release=body.release,
         path=body.path,
+        allow_duplicate=body.allow_duplicate,
     )
     if not result.get("ok"):
         raise HTTPException(404, result.get("error") or "Failed")
     return result
 
 
+@router.get("/playlists/{playlist_id}")
+def user_playlist_detail(
+    playlist_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    media_root = Path(settings.media_root)
+    detail = get_user_playlist_detail(
+        db,
+        media_root,
+        playlist_id,
+        user_id=user.usr_id,
+        is_admin=is_admin_role(user.usr_role_id),
+    )
+    if not detail:
+        raise HTTPException(404, "Playlist not found")
+    return detail
+
+
+@router.post("/playlists/{playlist_id}/tracks/find-in-disk")
+def find_playlist_track_in_disk(
+    playlist_id: int,
+    body: FindInDiskBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.user_playlist import find_track_in_disk
+
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    result = find_track_in_disk(
+        db,
+        Path(settings.media_root),
+        playlist_id=playlist_id,
+        entry_id=body.entry_id,
+    )
+    if not result.get("ok"):
+        raise HTTPException(404, result.get("error") or "Failed")
+    return result
+
+
+@router.post("/playlists/{playlist_id}/tracks/link")
+def link_playlist_track(
+    playlist_id: int,
+    body: LinkPlaylistEntryBody,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import link_entry_to_path
+
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    result = link_entry_to_path(
+        db,
+        playlist_id=playlist_id,
+        entry_id=body.entry_id,
+        path=body.path,
+        media_root=Path(settings.media_root),
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Failed")
+    return result
+
+
 @router.get("/playlists/{playlist_id}/tracks")
-def get_playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
-    items = playlist_tracks(db, playlist_id)
+def get_playlist_tracks(
+    playlist_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    items = playlist_tracks(db, playlist_id, user_id=user.usr_id)
     if not items:
         from app.models import Playlist
 
