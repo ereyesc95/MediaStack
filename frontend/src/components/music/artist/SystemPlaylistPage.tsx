@@ -6,7 +6,17 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover, updateUserPlaylist, fetchPlaylistSubgenres, fetchFilterOptions } from "../../../api";
+import {
+  fetchTrackSourceArt,
+  playTrack,
+  resolveArtistName,
+  fetchTrackYoutube,
+  uploadUserPlaylistCover,
+  updateUserPlaylist,
+  deleteUserPlaylist,
+  fetchPlaylistSubgenres,
+  fetchFilterOptions,
+} from "../../../api";
 import { getCachedOverview, prefetchBandOverview } from "../../../overviewCache";
 import {
   getCachedArtistPlaylistDetail,
@@ -118,6 +128,7 @@ type Props = {
   userId?: number;
   isAdmin?: boolean;
   onBack: () => void;
+  onPlaylistDeleted?: () => void;
   onOpenPlaylist: (key: string) => void;
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
@@ -264,6 +275,7 @@ export default function SystemPlaylistPage({
   userId,
   isAdmin = false,
   onBack,
+  onPlaylistDeleted,
   onOpenPlaylist,
   onOpenRelease,
   onOpenArtist,
@@ -869,6 +881,29 @@ export default function SystemPlaylistPage({
       .catch(() => {});
   }, [isUserPlaylist, userPlaylistId]);
 
+  const handleDeletePlaylist = useCallback(() => {
+    if (!isUserPlaylist || userPlaylistId == null || detail?.editable === false) return;
+    const name = detail?.name?.trim() || "this playlist";
+    if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+    void deleteUserPlaylist(userPlaylistId)
+      .then(() => {
+        clearUserPlaylistDetailCache(userPlaylistId);
+        onPlaylistDeleted?.();
+        onBack();
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : "Failed to delete playlist";
+        window.alert(message);
+      });
+  }, [
+    detail?.editable,
+    detail?.name,
+    isUserPlaylist,
+    onBack,
+    onPlaylistDeleted,
+    userPlaylistId,
+  ]);
+
   useEffect(() => {
     if (!detail) return;
     setEditName(detail.name);
@@ -1296,6 +1331,8 @@ export default function SystemPlaylistPage({
               showEditPlaylist={isUserPlaylist && detail?.editable !== false}
               editPlaylistActive={editPlaylist}
               onEditPlaylistToggle={() => setEditPlaylist((v) => !v)}
+              showDeletePlaylist={isUserPlaylist && detail?.editable !== false}
+              onDeletePlaylist={handleDeletePlaylist}
             />
           </div>
         </header>

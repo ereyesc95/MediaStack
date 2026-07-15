@@ -29,6 +29,7 @@ import {
   IconSync,
   IconTheme,
   IconTrackData,
+  IconTrash,
   IconVideo,
 } from "./MenuIcons";
 
@@ -43,6 +44,8 @@ type Props = {
   showEditPlaylist?: boolean;
   editPlaylistActive?: boolean;
   onEditPlaylistToggle?: () => void;
+  showDeletePlaylist?: boolean;
+  onDeletePlaylist?: () => void;
   isAdmin?: boolean;
   userId?: number;
   onSwitchProfile?: () => void;
@@ -91,6 +94,8 @@ export default function AppMenu({
   showEditPlaylist,
   editPlaylistActive,
   onEditPlaylistToggle,
+  showDeletePlaylist,
+  onDeletePlaylist,
   isAdmin = false,
   userId,
   onSwitchProfile,
@@ -592,6 +597,18 @@ export default function AppMenu({
                 <IconSquare className="menu-item-icon" />
               )}
               <span>Edit playlist</span>
+            </button>
+          )}
+          {showDeletePlaylist && onDeletePlaylist && (
+            <button
+              type="button"
+              onClick={() => {
+                onDeletePlaylist();
+                setOpen(false);
+              }}
+            >
+              <IconTrash className="menu-item-icon" />
+              <span>Delete playlist</span>
             </button>
           )}
           <button

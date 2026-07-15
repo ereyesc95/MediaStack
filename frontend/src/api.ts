@@ -365,6 +365,14 @@ export async function updateUserPlaylist(
   });
 }
 
+export async function deleteUserPlaylist(
+  playlistId: number
+): Promise<{ ok: boolean; id?: number }> {
+  return request(`${API}/music/playlists/${playlistId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function removePlaylistTrack(
   playlistId: number,
   entryId: number

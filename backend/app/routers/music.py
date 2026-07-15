@@ -2123,6 +2123,20 @@ def patch_user_playlist(
     return result
 
 
+@router.delete("/playlists/{playlist_id}")
+def delete_user_playlist_route(
+    playlist_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.user_playlist import delete_user_playlist
+
+    result = delete_user_playlist(db, playlist_id)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Delete failed")
+    return result
+
+
 @router.delete("/playlists/{playlist_id}/tracks/{entry_id}")
 def delete_playlist_track(
     playlist_id: int,

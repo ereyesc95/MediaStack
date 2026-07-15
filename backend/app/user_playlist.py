@@ -380,6 +380,30 @@ def update_user_playlist(
     }
 
 
+def delete_user_playlist(db: Session, playlist_id: int) -> dict:
+    """Delete a user/local/snapshot playlist and its entries (not Most Played)."""
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or playlist.pla_type != USER_PLAYLIST_TYPE:
+        return {"ok": False, "error": "Playlist not found"}
+    if not _is_editable_user_playlist(playlist):
+        return {"ok": False, "error": "This playlist cannot be deleted"}
+
+    from app.playlist_snapshot import delete_snapshots_for_playlist
+
+    delete_snapshots_for_playlist(db, playlist_id)
+    rows = db.scalars(
+        select(PlaylistData).where(PlaylistData.pld_playlist == playlist_id)
+    ).all()
+    for row in rows:
+        db.delete(row)
+    if PLAYLIST_COVERS_DIR.is_dir():
+        for old in PLAYLIST_COVERS_DIR.glob(f"{playlist_id}.*"):
+            old.unlink(missing_ok=True)
+    db.delete(playlist)
+    db.commit()
+    return {"ok": True, "id": playlist_id}
+
+
 def remove_playlist_entry(db: Session, playlist_id: int, entry_id: int) -> dict:
     playlist = db.get(Playlist, playlist_id)
     if not playlist or not _is_editable_user_playlist(playlist):

@@ -846,6 +846,7 @@ export default function MusicModule({
           userId={userId}
           isAdmin={isAdmin}
           onBack={() => onPlaylist(undefined)}
+          onPlaylistDeleted={reloadPlaylists}
           onOpenPlaylist={(key) => {
             const nextId = Number(key);
             if (Number.isFinite(nextId)) {

@@ -537,9 +537,11 @@ def get_user_playlist_detail(
     snapshots = load_snapshots_for_entries(db, entry_ids)
     is_snapshot = is_snapshot_playlist(playlist)
 
+    from app.library_track_match import normalize_play_path
+
     match_index = None
     if is_snapshot:
-        from app.library_track_match import LibraryTrackIndex, normalize_play_path
+        from app.library_track_match import LibraryTrackIndex
         from app.playlist_snapshot import snapshot_match_fields
 
         match_index = LibraryTrackIndex(media_root, db=db)
