@@ -84,7 +84,14 @@ export function trackDurationSec(track: ArtistPlaylistTrack): number | null {
   return null;
 }
 
+/** Duration used for Length sorting — only on-disk / playable rows participate. */
+export function trackDurationSecForSort(track: ArtistPlaylistTrack): number | null {
+  if (track.unavailable || !track.play_path?.trim()) return null;
+  return trackDurationSec(track);
+}
+
 export function formatTrackDuration(track: ArtistPlaylistTrack): string | null {
+  if (track.unavailable || !track.play_path?.trim()) return null;
   if (track.duration?.trim()) return track.duration.trim();
   const sec = trackDurationSec(track);
   if (sec == null) return null;
@@ -107,6 +114,15 @@ export function applySnapshotFilters(
   });
 }
 
+function originalNumber(
+  track: ArtistPlaylistTrack,
+  originalNumbers: Map<number, number>
+): number {
+  return track.entry_id != null
+    ? (originalNumbers.get(track.entry_id) ?? track.entry_id)
+    : 0;
+}
+
 function sortValue(
   track: ArtistPlaylistTrack,
   key: PlaylistTrackSortKey,
@@ -115,7 +131,7 @@ function sortValue(
   const snap = track.snapshot;
   switch (key) {
     case "number":
-      return track.entry_id != null ? (originalNumbers.get(track.entry_id) ?? 0) : 0;
+      return originalNumber(track, originalNumbers);
     case "title":
       return (track.title || "").toLowerCase();
     case "artist":
@@ -124,8 +140,11 @@ function sortValue(
       return trackAlbumForFilter(track).toLowerCase();
     case "year":
       return trackYearForFilter(track);
-    case "duration":
-      return trackDurationSec(track) ?? -1;
+    case "duration": {
+      // Sentinel so unmatched rows cluster opposite the on-disk block when
+      // toggling asc/desc (asc: missing first; desc: on-disk first).
+      return trackDurationSecForSort(track) ?? -1;
+    }
     case "genres":
       return (snap?.genres ?? "").toLowerCase();
     case "label":
@@ -145,7 +164,7 @@ function sortValue(
     case "instrumentalness":
       return snap?.instrumentalness ?? -1;
     default:
-      return track.entry_id != null ? (originalNumbers.get(track.entry_id) ?? track.entry_id) : 0;
+      return originalNumber(track, originalNumbers);
   }
 }
 
@@ -164,6 +183,9 @@ export function applyTrackSort(
     let cmp = 0;
     if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
     else cmp = String(av).localeCompare(String(bv));
+    if (cmp === 0) {
+      cmp = originalNumber(a, originalNumbers) - originalNumber(b, originalNumbers);
+    }
     return desc ? -cmp : cmp;
   });
 }
