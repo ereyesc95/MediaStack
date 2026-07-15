@@ -496,7 +496,7 @@ def get_user_playlist_detail(
     user_id: int,
     is_admin: bool,
 ) -> dict | None:
-    from app.playlist_tracks import enrich_playlist_tracks
+    from app.playlist_tracks import apply_snapshot_duration, enrich_playlist_tracks
 
     playlist = db.get(Playlist, playlist_id)
     if not playlist or playlist.pla_type != 200:
@@ -637,7 +637,7 @@ def get_user_playlist_detail(
     tracks: list[dict] = []
     for raw in raw_tracks:
         if raw.get("unavailable"):
-            tracks.append(raw)
+            tracks.append(apply_snapshot_duration(raw))
             continue
         merged = dict(enriched_by_entry.get(raw.get("entry_id")) or raw)
         merged["entry_id"] = raw.get("entry_id")

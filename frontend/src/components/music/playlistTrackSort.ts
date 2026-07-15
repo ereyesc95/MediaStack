@@ -75,6 +75,23 @@ function trackYearForFilter(track: ArtistPlaylistTrack): string {
   return "";
 }
 
+export function trackDurationSec(track: ArtistPlaylistTrack): number | null {
+  if (track.duration_sec != null && Number.isFinite(track.duration_sec) && track.duration_sec > 0) {
+    return track.duration_sec;
+  }
+  const ms = track.snapshot?.duration_ms;
+  if (ms != null && Number.isFinite(ms) && ms > 0) return ms / 1000;
+  return null;
+}
+
+export function formatTrackDuration(track: ArtistPlaylistTrack): string | null {
+  if (track.duration?.trim()) return track.duration.trim();
+  const sec = trackDurationSec(track);
+  if (sec == null) return null;
+  const total = Math.round(sec);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 export function applySnapshotFilters(
   tracks: ArtistPlaylistTrack[],
   state: SnapshotFilterState
@@ -108,7 +125,7 @@ function sortValue(
     case "year":
       return trackYearForFilter(track);
     case "duration":
-      return track.duration_sec ?? -1;
+      return trackDurationSec(track) ?? -1;
     case "genres":
       return (snap?.genres ?? "").toLowerCase();
     case "label":

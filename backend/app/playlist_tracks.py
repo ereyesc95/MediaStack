@@ -95,12 +95,46 @@ def _resolve_track_release_date(play_path: str, media_root: Path) -> str | None:
     return _parse_folder_date(entry_display_name(release_dir))
 
 
+def _duration_fields_from_ms(duration_ms: int | float | None) -> tuple[float | None, str | None]:
+    from app.release_tracklist import _format_duration
+
+    if duration_ms is None:
+        return None, None
+    try:
+        ms = float(duration_ms)
+    except (TypeError, ValueError):
+        return None, None
+    if ms <= 0:
+        return None, None
+    duration_sec = ms / 1000.0
+    return duration_sec, _format_duration(duration_sec)
+
+
+def apply_snapshot_duration(track: dict) -> dict:
+    """Fill duration / duration_sec from snapshot ms when missing."""
+    if track.get("duration") and track.get("duration_sec") is not None:
+        return track
+    snap = track.get("snapshot") or {}
+    duration_ms = track.get("duration_ms")
+    if duration_ms is None:
+        duration_ms = snap.get("duration_ms") if isinstance(snap, dict) else None
+    duration_sec, duration = _duration_fields_from_ms(duration_ms)
+    if duration_sec is None:
+        return track
+    out = dict(track)
+    if out.get("duration_sec") is None:
+        out["duration_sec"] = duration_sec
+    if not out.get("duration"):
+        out["duration"] = duration
+    return out
+
+
 def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
     """Add release navigation and duration fields used by the release-style UI."""
     play_path = track.get("play_path")
     if not play_path:
-        return track
-    out = dict(track)
+        return apply_snapshot_duration(track)
+    out = apply_snapshot_duration(dict(track))
     album_title, release_rel = _resolve_track_source_labels(play_path, media_root)
     if album_title:
         out["album_title"] = album_title
@@ -134,7 +168,8 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
         from app.release_tracklist import _duration_from_file, _format_duration
 
         out["title"] = display_track_title_from_path(audio_file)
-        if not out.get("duration") and not out.get("duration_sec"):
+        # Prefer snapshot/API duration for large playlists; fall back to file tags.
+        if not out.get("duration") and out.get("duration_sec") is None:
             duration_sec = _duration_from_file(audio_file)
             if duration_sec is not None:
                 out["duration_sec"] = duration_sec

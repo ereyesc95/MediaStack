@@ -32,7 +32,13 @@ import { TrackActionRetryIcon, TrackActionSearchIcon, TrackActionYoutubeIcon } f
 import FindInDiskModal from "../FindInDiskModal";
 import SortChevron from "../SortChevron";
 import type { PlaylistTrackSortKey } from "../playlistTrackSort";
-import { filterGenresToKnown, formatArtistFeat, titleCaseWords } from "../playlistTrackSort";
+import {
+  filterGenresToKnown,
+  formatArtistFeat,
+  formatTrackDuration,
+  titleCaseWords,
+  trackDurationSec,
+} from "../playlistTrackSort";
 import type { ReleaseMobileTrackView, ReleasePlaybackArt } from "../release/ReleaseTracklist";
 
 export type SystemPlaylistTracklistHandle = {
@@ -133,8 +139,8 @@ function toTrackItem(track: ArtistPlaylistTrack, index: number): ReleaseTrackIte
     number: index + 1,
     title: track.title,
     play_path: track.play_path ?? "",
-    duration: track.duration ?? null,
-    duration_sec: track.duration_sec ?? null,
+    duration: formatTrackDuration(track),
+    duration_sec: trackDurationSec(track),
     has_lrc: false,
     has_synced_lrc: false,
     is_link: false,
@@ -890,13 +896,14 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 {userPlaylistTrackYear(track) || "—"}
               </span>
             ) : null;
+            const durationLabel = formatTrackDuration(track);
             const durationCell = (
               <span
                 className={`release-tracklist__duration${
-                  !track.duration ? " release-tracklist__duration--empty" : ""
+                  !durationLabel ? " release-tracklist__duration--empty" : ""
                 }`}
               >
-                {track.duration ?? ""}
+                {durationLabel ?? ""}
               </span>
             );
             const removeCell =
@@ -956,8 +963,8 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 rowActions
               ) : (
                 <span className="user-playlist-tracklist__trailing">
-                  {track.duration ? (
-                    <span className="release-tracklist__duration">{track.duration}</span>
+                  {durationLabel ? (
+                    <span className="release-tracklist__duration">{durationLabel}</span>
                   ) : null}
                 </span>
               );
