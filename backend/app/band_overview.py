@@ -562,24 +562,36 @@ def build_band_overview(
     }
 
 
-def _overview_media_mtimes(band: Band, root: Path | None) -> tuple[float, float]:
+def _dir_mtime(path: Path) -> float:
+    if not path.is_dir():
+        return 0.0
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _overview_media_mtimes(
+    band: Band, root: Path | None
+) -> tuple[float, float, float, float]:
     gallery_mtime = 0.0
     audio_mtime = 0.0
+    video_mtime = 0.0
+    library_mtime = 0.0
     if not root:
-        return gallery_mtime, audio_mtime
+        return gallery_mtime, audio_mtime, video_mtime, library_mtime
     artist_dir = _artist_dir(root, band.bnd_name)
     if not artist_dir:
-        return gallery_mtime, audio_mtime
+        return gallery_mtime, audio_mtime, video_mtime, library_mtime
+    from app.gallery import _resolve_child_dir
     from app.media_index import _audio_mtime
 
     audio_mtime = _audio_mtime(artist_dir)
     photos = _gallery_subdir(artist_dir, "Photos")
-    if photos.is_dir():
-        try:
-            gallery_mtime = photos.stat().st_mtime
-        except OSError:
-            pass
-    return gallery_mtime, audio_mtime
+    gallery_mtime = _dir_mtime(photos)
+    video_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Video"))
+    library_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Library"))
+    return gallery_mtime, audio_mtime, video_mtime, library_mtime
 
 
 def get_band_overview(
@@ -601,13 +613,17 @@ def get_band_overview(
 
     media_root = Path(settings.media_root) if settings.media_root else None
     root = media_root if media_root and media_root.is_dir() else None
-    gallery_mtime, audio_mtime = _overview_media_mtimes(band, root)
+    gallery_mtime, audio_mtime, video_mtime, library_mtime = _overview_media_mtimes(
+        band, root
+    )
     fingerprint = cache_fingerprint(
         library_scanned_at=band.bnd_library_scanned_at,
         metadata_refreshed_at=band.bnd_metadata_refreshed_at,
         lineup_imported_at=band.bnd_lineup_imported_at,
         gallery_mtime=gallery_mtime,
         audio_mtime=audio_mtime,
+        video_mtime=video_mtime,
+        library_mtime=library_mtime,
     )
 
     cached = load_cached_overview(
