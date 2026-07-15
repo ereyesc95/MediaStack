@@ -13271,18 +13271,18 @@ button.lyrics-status-badge--icon-only {
 /* Must follow base header-row so mobile compact columns win on equal specificity. */
 .user-playlist-tracklist__header-row.user-playlist-tracklist__header-row--compact {
   grid-template-columns:
-    1.65rem
+    1.5rem
     minmax(0, 1fr)
-    minmax(3.25rem, 3.75rem);
-  gap: 0.45rem;
+    1.7rem;
+  gap: 0.35rem;
 }
 
 .user-playlist-tracklist__play.user-playlist-tracklist__play--compact {
   grid-template-columns:
-    1.65rem
+    1.5rem
     minmax(0, 1fr)
-    minmax(3.25rem, 3.75rem);
-  gap: 0.45rem;
+    1.7rem;
+  gap: 0.35rem;
   align-items: center;
 }
 
@@ -13290,6 +13290,41 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   width: 100%;
   justify-content: flex-end;
+}
+
+/* Stack YouTube / Find in the Length column so Title can use the leftover width. */
+.user-playlist-tracklist__play--compact .release-tracklist__row-actions {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.user-playlist-tracklist__play--compact .setlist-tracklist__youtube-link,
+.user-playlist-tracklist__play--compact .release-tracklist__find-disk {
+  min-width: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  justify-content: center;
+}
+
+.user-playlist-tracklist__play--compact .setlist-tracklist__youtube-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.user-playlist-tracklist__play--compact .setlist-tracklist__youtube-link--empty,
+.user-playlist-tracklist__play--compact .release-tracklist__find-disk--empty {
+  display: none;
+}
+
+.user-playlist-tracklist__header-row--compact .user-playlist-tracklist__header-btn--trailing {
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  justify-content: center;
+  text-align: center;
 }
 
 .user-playlist-tracklist__header-btn {
