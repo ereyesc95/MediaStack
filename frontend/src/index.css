@@ -13271,25 +13271,31 @@ button.lyrics-status-badge--icon-only {
 /* Must follow base header-row so mobile compact columns win on equal specificity. */
 .user-playlist-tracklist__header-row.user-playlist-tracklist__header-row--compact {
   grid-template-columns:
-    1.5rem
+    1.45rem
     minmax(0, 1fr)
-    1.7rem;
-  gap: 0.35rem;
+    2.55rem;
+  gap: 0.3rem;
 }
 
 .user-playlist-tracklist__play.user-playlist-tracklist__play--compact {
   grid-template-columns:
-    1.5rem
+    1.45rem
     minmax(0, 1fr)
-    1.7rem;
-  gap: 0.35rem;
+    2.55rem;
+  gap: 0.3rem;
   align-items: center;
+  padding: 0.28rem 0.1rem;
 }
 
 .user-playlist-tracklist__play--compact .user-playlist-tracklist__trailing {
   min-width: 0;
   width: 100%;
-  justify-content: flex-end;
+  justify-content: center;
+}
+
+.user-playlist-tracklist__play--compact .release-tracklist__duration {
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 /* Stack YouTube / Find in the Length column so Title can use the leftover width. */
@@ -13297,7 +13303,7 @@ button.lyrics-status-badge--icon-only {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.05rem;
+  gap: 0;
   min-width: 0;
   width: 100%;
 }
@@ -13305,14 +13311,14 @@ button.lyrics-status-badge--icon-only {
 .user-playlist-tracklist__play--compact .setlist-tracklist__youtube-link,
 .user-playlist-tracklist__play--compact .release-tracklist__find-disk {
   min-width: 0;
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.2rem;
+  height: 1.15rem;
   justify-content: center;
 }
 
 .user-playlist-tracklist__play--compact .setlist-tracklist__youtube-icon {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
 .user-playlist-tracklist__play--compact .setlist-tracklist__youtube-link--empty,
@@ -13320,11 +13326,32 @@ button.lyrics-status-badge--icon-only {
   display: none;
 }
 
-.user-playlist-tracklist__header-row--compact .user-playlist-tracklist__header-btn--trailing {
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
-  justify-content: center;
-  text-align: center;
+.user-playlist-tracklist__play--compact .user-playlist-tracklist__title-col--stacked {
+  gap: 0.02rem;
+}
+
+.user-playlist-tracklist__play--compact .user-playlist-tracklist__title-main .release-tracklist__title,
+.user-playlist-tracklist__play--compact .release-tracklist__title {
+  font-size: 0.8rem;
+  line-height: 1.15;
+}
+
+.user-playlist-tracklist__play--compact .user-playlist-tracklist__title-artist {
+  font-size: 0.64rem;
+  line-height: 1.1;
+}
+
+.user-playlist-tracklist__play--compact .release-tracklist__num {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.user-playlist-tracklist__play--compact .release-tracklist__lead {
+  align-self: center;
+}
+
+.user-playlist-tracklist__row:has(.user-playlist-tracklist__play--compact) {
+  contain-intrinsic-size: auto 2.5rem;
 }
 
 .user-playlist-tracklist__header-btn {
@@ -13357,6 +13384,34 @@ button.lyrics-status-badge--icon-only {
 .user-playlist-tracklist__header-btn--trailing {
   justify-content: flex-end;
   text-align: right;
+}
+
+/* Mobile portrait: keep LENGTH + sort chevron inside the narrow column (chevron under label). */
+.user-playlist-tracklist__header-row--compact .user-playlist-tracklist__header-btn--trailing {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.user-playlist-tracklist__header-row--compact .user-playlist-tracklist__header-btn--trailing .user-playlist-tracklist__sort-chevron {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: 0;
+}
+
+.user-playlist-tracklist__header-row--compact {
+  padding: 0.08rem 0;
+}
+
+.user-playlist-tracklist__header-row--compact .user-playlist-tracklist__header-btn {
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
 }
 
 .user-playlist-tracklist__header-btn:hover,
