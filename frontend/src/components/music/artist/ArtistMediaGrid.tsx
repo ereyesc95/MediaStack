@@ -105,26 +105,32 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
           ))}
         </nav>
       )}
-      <div className="artist-media-grid__items">
+      <div className="artist-media-grid__items artist-media-grid__items--portrait">
         {(category?.items ?? []).map((item) => (
           <button
             key={item.id}
             type="button"
-            className="media-release-card artist-media-grid__card media-beat-frame media-beat-frame--cover"
+            className="media-release-card media-release-card--clickable artist-media-grid__card media-release-card--portrait media-beat-frame media-beat-frame--cover"
             onClick={() => onOpenItem?.(item.id)}
+            title={item.title}
           >
-            <div
-              className="media-release-card__art"
+            <span
+              className="media-release-card__cover"
               style={
                 item.cover_url
                   ? { backgroundImage: `url("${item.cover_url}")` }
                   : undefined
               }
             />
-            <span className="media-release-card__title">{item.title}</span>
-            {item.date_iso && (
-              <span className="media-release-card__date">{item.date_iso}</span>
-            )}
+            <span className="media-release-card__dim" aria-hidden />
+            <span className="media-release-card__hover">
+              <span className="media-release-card__title-hover">{item.title}</span>
+            </span>
+            {item.date_iso ? (
+              <span className="media-release-card__date">
+                <span className="media-release-card__date-label">{item.date_iso}</span>
+              </span>
+            ) : null}
           </button>
         ))}
       </div>

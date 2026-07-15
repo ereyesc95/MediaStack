@@ -10,13 +10,19 @@ from sqlalchemy.orm import Session
 
 from app.band_library import DATE_PREFIX_RE, _parse_folder_date
 from app.config import settings
+from app.franchise_index import MUSIC_LIBRARY_CATEGORIES, MUSIC_VIDEO_CATEGORIES
 from app.gallery import IMAGE_EXTS, _artist_dir, _media_url, _resolve_child_dir
-from app.media_paths_util import safe_relative
+from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
 from app.models import Band
 from app.paths import DATA_DIR
 
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
+# Bump when scan semantics change so disk caches refresh.
+MEDIA_TAB_SCAN_VERSION = 2
+
+_SKIP_NAMES = frozenset({"desktop.ini", "thumbs.db", ".ds_store"})
+_SKIP_ITEM_NAMES = frozenset({"[artwork]", "artwork"})
 
 
 def _now() -> str:
@@ -34,14 +40,47 @@ def _card_id(kind: str, rel_path: str) -> str:
     return f"{kind[:3]}_{digest}"
 
 
+def _known_categories(kind: str) -> set[str]:
+    names = MUSIC_VIDEO_CATEGORIES if kind == "video" else MUSIC_LIBRARY_CATEGORIES
+    return {n.casefold() for n in names}
+
+
 def _folder_cover(folder: Path, media_root: Path) -> str | None:
-    for pattern in ("cover*", "folder*", "front*", "poster*"):
-        for p in folder.glob(pattern):
-            if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
-                return _media_url(p, media_root)
-    for child in folder.iterdir():
-        if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
-            return _media_url(child, media_root)
+    search_dirs: list[Path] = []
+    try:
+        for child in folder.iterdir():
+            if child.is_dir() and child.name.casefold() in _SKIP_ITEM_NAMES:
+                search_dirs.append(child)
+                break
+    except OSError:
+        pass
+    search_dirs.append(folder)
+
+    preferred = (
+        "Cover - Front*",
+        "Cover - Album*",
+        "Poster*",
+        "cover*",
+        "folder*",
+        "front*",
+    )
+    for directory in search_dirs:
+        if not directory.is_dir():
+            continue
+        for pattern in preferred:
+            try:
+                matches = sorted(directory.glob(pattern), key=lambda p: p.name.casefold())
+            except OSError:
+                continue
+            for p in matches:
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+                    return _media_url(p, media_root)
+        try:
+            for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
+                if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
+                    return _media_url(child, media_root)
+        except OSError:
+            continue
     return None
 
 
@@ -53,37 +92,114 @@ def _title_from_folder(name: str) -> str:
     return name
 
 
+def _item_card(
+    kind: str,
+    *,
+    display_entry: Path,
+    resolved: Path,
+    media_root: Path,
+) -> dict | None:
+    display_name = entry_display_name(display_entry)
+    if display_name.casefold() in _SKIP_ITEM_NAMES or display_name.startswith("."):
+        return None
+    rel = safe_relative(resolved, media_root)
+    if not rel:
+        rel = safe_relative(display_entry, media_root)
+    if not rel:
+        return None
+    rel = rel.replace("\\", "/")
+    return {
+        "id": _card_id(kind, rel),
+        "title": _title_from_folder(display_name),
+        "date_iso": _parse_folder_date(display_name),
+        "cover_url": _folder_cover(resolved, media_root),
+        "folder_path": rel,
+    }
+
+
+def _scan_items_in_container(
+    container: Path, media_root: Path, kind: str
+) -> list[dict]:
+    items: list[dict] = []
+    try:
+        children = sorted(container.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return items
+    for entry in children:
+        if entry.name.casefold() in _SKIP_NAMES or entry.name.startswith("."):
+            continue
+        resolved = resolve_media_entry(entry, media_root=media_root)
+        if not resolved:
+            continue
+        card = _item_card(
+            kind, display_entry=entry, resolved=resolved, media_root=media_root
+        )
+        if card:
+            items.append(card)
+    return items
+
+
 def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]:
+    """Scan Video/ or Library/.
+
+    Pattern A: known category folders (Documentaries/, Articles/, …) each become a
+    sub-tab with item cards inside.
+
+    Flat layout (HIM today): dated folders and .lnk/.path shortcuts sit directly
+    under Video/Library and each becomes a portrait card — no fake category sub-bar.
+    """
     if not section.is_dir():
         return []
-    categories: list[dict] = []
-    for cat_dir in sorted(section.iterdir(), key=lambda p: p.name.casefold()):
-        if not cat_dir.is_dir() or cat_dir.name.startswith("."):
+
+    known = _known_categories(kind)
+    category_dirs: list[Path] = []
+    root_entries: list[tuple[Path, Path]] = []
+
+    try:
+        children = sorted(section.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return []
+
+    for entry in children:
+        if entry.name.casefold() in _SKIP_NAMES or entry.name.startswith("."):
             continue
+        if entry.is_dir() and entry.name.casefold() in known:
+            category_dirs.append(entry)
+            continue
+        resolved = resolve_media_entry(entry, media_root=media_root)
+        if resolved:
+            root_entries.append((entry, resolved))
+
+    categories: list[dict] = []
+    for cat_dir in category_dirs:
+        items = _scan_items_in_container(cat_dir, media_root, kind)
+        if not items:
+            continue
+        categories.append(
+            {
+                "key": cat_dir.name.casefold().replace(" ", "_"),
+                "label": cat_dir.name,
+                "items": items,
+            }
+        )
+
+    if root_entries:
         items: list[dict] = []
-        for entry in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold()):
-            if not entry.is_dir():
-                continue
-            rel = safe_relative(entry, media_root)
-            if not rel:
-                continue
-            items.append(
-                {
-                    "id": _card_id(kind, rel),
-                    "title": _title_from_folder(entry.name),
-                    "date_iso": _parse_folder_date(entry.name),
-                    "cover_url": _folder_cover(entry, media_root),
-                    "folder_path": rel,
-                }
+        for entry, resolved in root_entries:
+            card = _item_card(
+                kind, display_entry=entry, resolved=resolved, media_root=media_root
             )
+            if card:
+                items.append(card)
         if items:
-            categories.append(
-                {
-                    "key": cat_dir.name.casefold().replace(" ", "_"),
-                    "label": cat_dir.name,
-                    "items": items,
-                }
-            )
+            if categories:
+                categories.append(
+                    {"key": "other", "label": "Other", "items": items}
+                )
+            else:
+                # Single group — frontend hides the sub-tab row when len == 1.
+                categories.append({"key": "all", "label": "All", "items": items})
+
     return categories
 
 
@@ -95,7 +211,13 @@ def build_media_tab_index(
 ) -> dict:
     artist_dir = _artist_dir(media_root, band.bnd_name)
     if not artist_dir:
-        return {"categories": [], "scanned_at": _now()}
+        return {
+            "band_id": band.bnd_id,
+            "kind": kind,
+            "categories": [],
+            "scanned_at": _now(),
+            "scan_version": MEDIA_TAB_SCAN_VERSION,
+        }
     root_name = VIDEO_ROOT if kind == "video" else LIBRARY_ROOT
     section = _resolve_child_dir(artist_dir, root_name)
     return {
@@ -103,6 +225,7 @@ def build_media_tab_index(
         "kind": kind,
         "categories": _scan_section_root(section, media_root, kind),
         "scanned_at": _now(),
+        "scan_version": MEDIA_TAB_SCAN_VERSION,
     }
 
 
@@ -124,7 +247,10 @@ def get_media_tab_index(
     if not force and cache_file.is_file():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            if cached.get("categories") is not None:
+            if (
+                cached.get("categories") is not None
+                and cached.get("scan_version") == MEDIA_TAB_SCAN_VERSION
+            ):
                 cached["cached"] = True
                 return cached
         except (json.JSONDecodeError, OSError):

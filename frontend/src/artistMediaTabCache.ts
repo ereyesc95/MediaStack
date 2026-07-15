@@ -8,7 +8,7 @@ import {
 import type { MediaTabIndexPayload } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "artist-media-tab";
+const NAMESPACE = "artist-media-tab-v2";
 
 type CacheKey = `${number}:${"video" | "library"}`;
 
