@@ -170,6 +170,7 @@ def scan_audio_library(artist_name: str | None, media_root: Path) -> dict[str, l
 
 
 BRACKET_SUFFIX_RE = re.compile(r"\s*\[.*\]\s*$")
+PAREN_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
 
 TITLE_CASE_SMALL_WORDS = frozenset(
     {
@@ -253,8 +254,25 @@ def _strip_bracket_suffix(title: str) -> str:
     return BRACKET_SUFFIX_RE.sub("", title).strip()
 
 
+def _strip_title_match_suffixes(title: str) -> str:
+    """Strip [bracket] and (parenthetical) suffixes for matching Spotify ↔ disk titles."""
+    text = title.strip()
+    changed = True
+    while changed:
+        changed = False
+        nxt = BRACKET_SUFFIX_RE.sub("", text).strip()
+        if nxt != text:
+            text = nxt
+            changed = True
+        nxt = PAREN_SUFFIX_RE.sub("", text).strip()
+        if nxt != text:
+            text = nxt
+            changed = True
+    return text
+
+
 def _normalize_title_for_match(title: str) -> str:
-    return _strip_bracket_suffix(title.strip()).casefold()
+    return _strip_title_match_suffixes(title.strip()).casefold()
 
 
 def _track_title_from_filename(path: Path) -> str:

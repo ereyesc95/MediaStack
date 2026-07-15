@@ -553,11 +553,20 @@ export default function MusicModule({
     if (tab !== "playlists") return;
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("spotify") === "ready") {
+    const spotifyParam = params.get("spotify");
+    if (spotifyParam === "ready" || spotifyParam === "error") {
       params.delete("spotify");
+      const detail = params.get("detail");
+      params.delete("detail");
       const qs = params.toString();
       const clean = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
       window.history.replaceState(null, "", clean);
+      if (spotifyParam === "error") {
+        markSpotifyCredentialsRepair(detail || "Spotify connection failed");
+        setAddPlaylistInitialMode("spotify");
+        setShowAddPlaylist(true);
+        return;
+      }
       setSpotifyOAuthReturn(true);
       setAddPlaylistInitialMode("spotify");
       setShowAddPlaylist(true);
@@ -574,7 +583,6 @@ export default function MusicModule({
     }
 
     if (consumeSpotifyOAuthAwaiting()) {
-      setSpotifyOAuthReturn(true);
       setAddPlaylistInitialMode("spotify");
       setShowAddPlaylist(true);
     }
@@ -854,6 +862,28 @@ export default function MusicModule({
           onOpenArtist={(id) => {
             onPlaylist(undefined);
             openArtist(id);
+          }}
+          onOpenCatalogSubgenre={(id, subgenreName) => {
+            clearMediaTheme(userId);
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onPlaylist(undefined);
+            onTab("artists");
+            setFilterMode("genre");
+            void (async () => {
+              const opts = filterOptions ?? (await fetchFilterOptions());
+              if (!filterOptions) setFilterOptions(opts);
+              const items = opts.subgenre_groups.flatMap((g) => g.items);
+              const match = items.find(
+                (s) =>
+                  s.id === id ||
+                  (subgenreName &&
+                    s.name?.toLowerCase() === subgenreName.toLowerCase())
+              );
+              const resolvedId = match?.id ?? id;
+              setSubgenreId(resolvedId);
+              onGenreFilter(resolvedId);
+            })();
           }}
           onImport={onImport}
           onSync={onSync}
@@ -1155,6 +1185,7 @@ export default function MusicModule({
         <AddPlaylistModal
           initialMode={addPlaylistInitialMode}
           spotifyOAuthReturn={spotifyOAuthReturn}
+          onSpotifyOAuthHandled={() => setSpotifyOAuthReturn(false)}
           onClose={() => {
             setShowAddPlaylist(false);
             setSpotifyOAuthReturn(false);

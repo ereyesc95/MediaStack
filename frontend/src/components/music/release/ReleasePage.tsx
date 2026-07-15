@@ -371,6 +371,7 @@ export default function ReleasePage({
   const [busy, setBusy] = useState("");
   const [refreshWiki, setRefreshWiki] = useState(true);
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
+  const [coverFailed, setCoverFailed] = useState(false);
   const [trackPhotocards, setTrackPhotocards] = useState<
     ReleaseOverview["photocards"] | null
   >(null);
@@ -550,6 +551,7 @@ export default function ReleasePage({
     setPlayingPath(null);
     setNowPlayingTitle(null);
     setPlaybackArt(null);
+    setCoverFailed(false);
     setTrackPhotocards(null);
     setVersionSource(null);
     setPanelDateIso(null);
@@ -832,6 +834,7 @@ export default function ReleasePage({
       ? displayAnim
       : displayCover
     : albumCover;
+  const effectivePanelCover = coverFailed ? null : panelCoverSrc;
   const panelDiscSrc = hasActiveTrack ? displayDisc : albumDisc;
   const panelGroupKind = hasActiveTrack
     ? playbackArt?.group_kind ?? data?.playback_kind ?? "disc"
@@ -839,7 +842,7 @@ export default function ReleasePage({
   const isTapePlayback = panelGroupKind === "tape";
   const isVinylPlayback = panelGroupKind === "side" || panelGroupKind === "vinyl";
   const panelCoverIsVideo = Boolean(
-    panelCoverSrc && isVideoMedia(panelCoverSrc) && showPlaybackMotion
+    effectivePanelCover && isVideoMedia(effectivePanelCover) && showPlaybackMotion
   );
   const bgUrl =
     playingPath
@@ -1406,32 +1409,34 @@ export default function ReleasePage({
       <div className="release-page__panel-content">
       <div className="release-page__art">
         <div className={`release-page__art-stage${
-          !panelCoverSrc && panelDiscSrc
+          !effectivePanelCover && panelDiscSrc
             ? " release-page__art-stage--disc-only"
             : ""
         }`}>
-          {panelCoverSrc &&
+          {effectivePanelCover &&
             (panelCoverIsVideo ? (
               <span className="release-page__cover-wrap">
                 <video
-                  key={panelCoverSrc}
-                  src={panelCoverSrc!}
+                  key={effectivePanelCover}
+                  src={effectivePanelCover!}
                   className="release-page__cover release-page__cover--video"
                   autoPlay
                   loop
                   muted
                   playsInline
                   draggable={false}
+                  onError={() => setCoverFailed(true)}
                 />
               </span>
             ) : (
               <span className="release-page__cover-wrap">
                 <img
-                  key={panelCoverSrc}
-                  src={panelCoverSrc}
+                  key={effectivePanelCover}
+                  src={effectivePanelCover}
                   alt=""
                   className="release-page__cover"
                   draggable={false}
+                  onError={() => setCoverFailed(true)}
                 />
               </span>
             ))}

@@ -6,7 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover, updateUserPlaylist } from "../../../api";
+import { fetchTrackSourceArt, playTrack, resolveArtistName, fetchTrackYoutube, uploadUserPlaylistCover, updateUserPlaylist, fetchPlaylistSubgenres, fetchFilterOptions } from "../../../api";
 import { getCachedOverview, prefetchBandOverview } from "../../../overviewCache";
 import {
   getCachedArtistPlaylistDetail,
@@ -47,6 +47,15 @@ import MediaBeatFx from "../MediaBeatFx";
 import SystemPlaylistTracklist, {
   type SystemPlaylistTracklistHandle,
 } from "./SystemPlaylistTracklist";
+import SnapshotPlaylistFilterBar from "../SnapshotPlaylistFilterBar";
+import {
+  applySnapshotFilters,
+  applyTrackSort,
+  dedupeTracksByPlayPath,
+  titleCaseWords,
+  type PlaylistTrackSortKey,
+  type SnapshotFilterState,
+} from "../playlistTrackSort";
 import SetlistsPlaylistContent, {
   type SetlistsPlaylistHandle,
 } from "./SetlistsPlaylistContent";
@@ -54,6 +63,7 @@ import type { ReleaseMobileTrackView, ReleasePlaybackArt } from "../release/Rele
 import {
   ChevronIcon,
   DEFAULT_DISC_URL,
+  DEFAULT_LABEL_URL,
   isAdaptationLine,
   parseTrackPanelMeta,
   playlistTrackVersionSource,
@@ -111,6 +121,7 @@ type Props = {
   onOpenPlaylist: (key: string) => void;
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
+  onOpenCatalogSubgenre?: (subgenreId: number, subgenreName?: string) => void;
   onImport: () => void;
   onSync: () => void;
   onChooseSource: () => void;
@@ -120,6 +131,63 @@ type Props = {
 
 function coverUrlFallback(tracks: ArtistPlaylistTrack[]): string | undefined {
   return tracks.find((t) => t.cover_url)?.cover_url ?? undefined;
+}
+
+const DEFAULT_USER_PLAYLIST_COVER = "/api/assets/system/default/playlist";
+
+function splitSnapshotGenres(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split(",").map((g) => g.trim()).filter(Boolean);
+}
+
+function SnapshotStatsPanel({
+  snapshot,
+  mobile,
+}: {
+  snapshot: NonNullable<ArtistPlaylistTrack["snapshot"]>;
+  mobile?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rows: { label: string; value: string }[] = [];
+  if (snapshot.popularity != null) rows.push({ label: "Popularity", value: String(snapshot.popularity) });
+  if (snapshot.tempo != null) rows.push({ label: "Tempo", value: `${Math.round(snapshot.tempo)} BPM` });
+  if (snapshot.energy != null) rows.push({ label: "Energy", value: `${Math.round(snapshot.energy * 100)}%` });
+  if (snapshot.danceability != null) {
+    rows.push({ label: "Danceability", value: `${Math.round(snapshot.danceability * 100)}%` });
+  }
+  if (snapshot.valence != null) rows.push({ label: "Valence", value: `${Math.round(snapshot.valence * 100)}%` });
+  if (snapshot.acousticness != null) {
+    rows.push({ label: "Acousticness", value: `${Math.round(snapshot.acousticness * 100)}%` });
+  }
+  if (snapshot.instrumentalness != null) {
+    rows.push({ label: "Instrumentalness", value: `${Math.round(snapshot.instrumentalness * 100)}%` });
+  }
+  if (!rows.length) return null;
+  return (
+    <div className="release-page__snapshot-stats">
+      <button
+        type="button"
+        className="release-page__snapshot-stats-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {mobile ? "Stats" : "Statistics"}
+        <span className="release-page__snapshot-stats-chev" aria-hidden>
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+      {open && (
+        <ul className="release-page__snapshot-stats-list">
+          {rows.map((row) => (
+            <li key={row.label}>
+              <span>{row.label}</span>
+              <span>{row.value}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 const MULTI_ARTIST_PLAYLIST_SLUGS = new Set([
@@ -199,6 +267,7 @@ export default function SystemPlaylistPage({
   onOpenPlaylist,
   onOpenRelease,
   onOpenArtist,
+  onOpenCatalogSubgenre,
   onImport,
   onSync,
   onChooseSource,
@@ -262,6 +331,7 @@ export default function SystemPlaylistPage({
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverRevision, setCoverRevision] = useState(0);
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
 
   const tracklistRef = useRef<SystemPlaylistTracklistHandle>(null);
   const setlistRef = useRef<SetlistsPlaylistHandle>(null);
@@ -404,6 +474,85 @@ export default function SystemPlaylistPage({
   useEffect(() => () => miniAudio.clear(), [miniAudio.clear]);
 
   const tracks = detail?.tracks ?? [];
+  const isSnapshotPlaylist = detail?.snapshot_filters === true;
+  const [snapshotFilterState, setSnapshotFilterState] = useState<SnapshotFilterState>({
+    artists: [],
+    genres: [],
+  });
+  const [trackSort, setTrackSort] = useState<{ key: PlaylistTrackSortKey; desc: boolean }>({
+    key: "original",
+    desc: false,
+  });
+  const [subgenreNames, setSubgenreNames] = useState<string[]>([]);
+  const [subgenreIdByName, setSubgenreIdByName] = useState<Map<string, number>>(new Map());
+
+  const originalTrackNumbers = useMemo(() => {
+    const map = new Map<number, number>();
+    tracks.forEach((t, i) => {
+      if (t.entry_id != null) map.set(t.entry_id, i + 1);
+    });
+    return map;
+  }, [tracks]);
+
+  const filteredTracks = useMemo(() => {
+    if (!isSnapshotPlaylist) return tracks;
+    return applySnapshotFilters(tracks, snapshotFilterState);
+  }, [isSnapshotPlaylist, snapshotFilterState, tracks]);
+
+  const displayTracks = useMemo(() => {
+    const sorted = applyTrackSort(filteredTracks, trackSort.key, trackSort.desc, originalTrackNumbers);
+    return isSnapshotPlaylist ? dedupeTracksByPlayPath(sorted) : sorted;
+  }, [filteredTracks, isSnapshotPlaylist, originalTrackNumbers, trackSort.desc, trackSort.key]);
+
+  const handleSnapshotFilterStateChange = useCallback((state: SnapshotFilterState) => {
+    setSnapshotFilterState(state);
+  }, []);
+
+  const handleTrackSortChange = useCallback((key: PlaylistTrackSortKey, desc: boolean) => {
+    setTrackSort({ key, desc });
+  }, []);
+
+  const handleFilterReset = useCallback(() => {
+    setTrackSort({ key: "original", desc: false });
+  }, []);
+
+  const openSnapshotGenre = useCallback(
+    (genre: string) => {
+      if (!onOpenCatalogSubgenre) return;
+      const id = subgenreIdByName.get(genre.toLowerCase());
+      if (id != null) onOpenCatalogSubgenre(id, genre);
+    },
+    [onOpenCatalogSubgenre, subgenreIdByName]
+  );
+
+  useEffect(() => {
+    setTrackSort({ key: "original", desc: false });
+    setSnapshotFilterState({ artists: [], genres: [] });
+  }, [slug, userPlaylistId]);
+
+  useEffect(() => {
+    if (!isSnapshotPlaylist) return;
+    void fetchPlaylistSubgenres()
+      .then((res) => setSubgenreNames(res.items ?? []))
+      .catch(() => setSubgenreNames([]));
+    void fetchFilterOptions()
+      .then((opts) => {
+        const map = new Map<string, number>();
+        for (const group of opts.subgenre_groups) {
+          for (const item of group.items) {
+            if (item.name) map.set(item.name.toLowerCase(), item.id);
+          }
+        }
+        setSubgenreIdByName(map);
+      })
+      .catch(() => setSubgenreIdByName(new Map()));
+  }, [isSnapshotPlaylist]);
+
+  const activePlaylistTrack = useMemo(() => {
+    if (!playingPath) return null;
+    return tracks.find((t) => t.play_path === playingPath) ?? null;
+  }, [playingPath, tracks]);
+  const activeSnapshot = activePlaylistTrack?.snapshot ?? null;
   const bustCoverUrl = useCallback(
     (url: string | undefined | null) => {
       if (!url) return "";
@@ -418,13 +567,16 @@ export default function SystemPlaylistPage({
   const coverUrl =
     bustCoverUrl(detail?.cover_url) ||
     (!isUserPlaylist && slug ? `/api/assets/system/playlists/${slug}` : undefined) ||
+    (isUserPlaylist ? DEFAULT_USER_PLAYLIST_COVER : undefined) ||
     coverUrlFallback(tracks) ||
     "";
   const canEditPlaylistCover =
     isUserPlaylist &&
     detail?.editable !== false &&
-    (editPlaylist || !playingPath) &&
+    editPlaylist &&
     !coverUploadBusy;
+  const hasCustomCover = Boolean(detail?.has_custom_cover);
+  const showCoverPlaceholder = canEditPlaylistCover && !hasCustomCover;
 
   const openCoverPicker = useCallback(() => {
     if (!canEditPlaylistCover) return;
@@ -451,34 +603,60 @@ export default function SystemPlaylistPage({
     },
     [userPlaylistId]
   );
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverUrl, playingPath, editPlaylist, userPlaylistId, slug]);
+
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const hasActiveTrack = Boolean(playingPath);
   const showTrackPanel = Boolean(nowPlayingTitle) && (isPlaying || Boolean(versionSource));
+  // Idle / playlist-head mode: always show the playlist cover beside the disc.
+  const usePlaylistCoverArt = isUserPlaylist && !showTrackPanel;
 
-  const displayCover = hasActiveTrack
-    ? (playbackArt?.cover_url ?? coverUrl)
-    : coverUrl;
-  const displayAnim = isPlaying ? (playbackArt?.cover_animation_url ?? null) : null;
-  const displayCanvas = isPlaying ? (playbackArt?.canvas_url ?? null) : null;
-  const displayDisc = hasActiveTrack
-    ? (playbackArt?.disc_url ?? DEFAULT_DISC_URL)
-    : DEFAULT_DISC_URL;
+  const activeTrackCover = playingPath
+    ? tracks.find((track) => track.play_path === playingPath)?.cover_url ?? null
+    : null;
+  const displayCover = usePlaylistCoverArt
+    ? coverUrl
+    : hasActiveTrack
+      ? (playbackArt?.cover_url ?? activeTrackCover ?? coverUrl)
+      : coverUrl;
+  const displayAnim = isPlaying && !usePlaylistCoverArt
+    ? (playbackArt?.cover_animation_url ?? null)
+    : null;
+  const displayCanvas = isPlaying && !usePlaylistCoverArt
+    ? (playbackArt?.canvas_url ?? null)
+    : null;
+  const displayDisc = usePlaylistCoverArt
+    ? DEFAULT_DISC_URL
+    : hasActiveTrack
+      ? (playbackArt?.disc_url ?? activePlaylistTrack?.disc_url ?? DEFAULT_DISC_URL)
+      : DEFAULT_DISC_URL;
   const showPanelCanvas = Boolean(displayCanvas) && isVideoMedia(displayCanvas);
-  const panelCoverSrc = hasActiveTrack
-    ? displayAnim && isVideoMedia(displayAnim)
-      ? displayAnim
-      : displayCover
-    : coverUrl;
+  const panelCoverSrc = (() => {
+    // Idle playlist without a real uploaded cover → disc only (centered).
+    if (usePlaylistCoverArt && isUserPlaylist && !hasCustomCover) return "";
+    if (usePlaylistCoverArt) return coverUrl;
+    if (hasActiveTrack) {
+      return displayAnim && isVideoMedia(displayAnim) ? displayAnim : displayCover;
+    }
+    return coverUrl;
+  })();
+  const showPanelCover = Boolean(
+    showCoverPlaceholder || (panelCoverSrc && !coverFailed)
+  );
   const panelDiscSrc = displayDisc;
-  const panelGroupKind = playbackArt?.group_kind ?? "disc";
+  const panelGroupKind = usePlaylistCoverArt ? "disc" : (playbackArt?.group_kind ?? "disc");
   const isVinylPlayback = panelGroupKind === "side" || panelGroupKind === "vinyl";
 
-  const bgUrl = playingPath
-    ? (playbackArt?.background_layers?.[0] ??
-      playbackArt?.cover_url ??
-      displayCover ??
-      coverUrl)
-    : coverUrl;
+  const bgUrl = usePlaylistCoverArt
+    ? coverUrl
+    : playingPath
+      ? (playbackArt?.background_layers?.[0] ??
+        playbackArt?.cover_url ??
+        displayCover ??
+        coverUrl)
+      : coverUrl;
 
   useEffect(() => {
     if (!bgUrl) return;
@@ -598,17 +776,25 @@ export default function SystemPlaylistPage({
       setNowPlayingTitle(title);
       setVersionSource(null);
       if (stacked) setMobileTrackView("player");
-      if (art) {
-        const normalized = normalizePlaybackArt(art);
-        setPlaybackArt(normalized);
-        sourceArtCacheRef.current.set(path, normalized);
-      } else {
-        const resolved = await resolvePlaybackArt(
-          path,
-          source?.navigate_release_id ?? panelActionTrack?.navigate_release_id,
-          source?.navigate_band_id ?? bandId
-        );
-        if (resolved) setPlaybackArt(resolved);
+      const fallbackArt = normalizePlaybackArt(
+        art ?? {
+          cover_url: source?.cover_url ?? null,
+          disc_url: source?.disc_url ?? null,
+          background_layers: source?.cover_url ? [source.cover_url] : [],
+        }
+      );
+      setPlaybackArt(fallbackArt);
+      if (source?.cover_url) {
+        sourceArtCacheRef.current.set(path, fallbackArt);
+      }
+      const resolved = await resolvePlaybackArt(
+        path,
+        source?.navigate_release_id ?? panelActionTrack?.navigate_release_id,
+        source?.navigate_band_id ?? bandId
+      );
+      if (resolved) {
+        setPlaybackArt(resolved);
+        sourceArtCacheRef.current.set(path, resolved);
       }
       try {
         const res = await playTrack({
@@ -949,6 +1135,9 @@ export default function SystemPlaylistPage({
     versionSource?.display_date ??
     (versionSource?.date_iso ? formatTrackDate(versionSource.date_iso) : null) ??
     (!isUserPlaylist && slug !== "setlists" && panelDateIso ? formatTrackDate(panelDateIso) : null) ??
+    (isSnapshotPlaylist && activeSnapshot?.release_date
+      ? formatTrackDate(activeSnapshot.release_date)
+      : null) ??
     ((playingTrack as ArtistPlaylistTrack | null)?.release_date
       ? formatTrackDate((playingTrack as ArtistPlaylistTrack).release_date!)
       : null) ??
@@ -1170,13 +1359,34 @@ export default function SystemPlaylistPage({
                   panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying
                     ? " release-page__art-stage--video"
                     : ""
+                }${
+                  !showPanelCover && panelDiscSrc
+                    ? " release-page__art-stage--disc-only"
+                    : ""
                 }`}
               >
-                {panelCoverSrc &&
-                  (panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying ? (
+                {showCoverPlaceholder ? (
+                    <span
+                      className="release-page__cover-wrap release-page__cover-wrap--editable release-page__cover-wrap--placeholder"
+                      onClick={openCoverPicker}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") openCoverPicker();
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      title="Add playlist cover"
+                    >
+                      <span className="release-page__cover release-page__cover--placeholder">
+                        <span className="release-page__cover-placeholder-text">
+                          {coverUploadBusy ? "Uploading…" : "Click to add cover"}
+                        </span>
+                      </span>
+                    </span>
+                  ) : panelCoverSrc && !coverFailed ? (
+                  panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying ? (
                     <span
                       className={`release-page__cover-wrap${
-                        canEditPlaylistCover ? " release-page__cover-wrap--editable" : ""
+                        canEditPlaylistCover ? " release-page__cover-wrap--editable release-page__cover-wrap--edit-hint" : ""
                       }`}
                       onClick={canEditPlaylistCover ? openCoverPicker : undefined}
                       onKeyDown={
@@ -1198,12 +1408,13 @@ export default function SystemPlaylistPage({
                         loop
                         muted
                         playsInline
+                        onError={() => setCoverFailed(true)}
                       />
                     </span>
                   ) : (
                     <span
                       className={`release-page__cover-wrap${
-                        canEditPlaylistCover ? " release-page__cover-wrap--editable" : ""
+                        canEditPlaylistCover ? " release-page__cover-wrap--editable release-page__cover-wrap--edit-hint" : ""
                       }`}
                       onClick={canEditPlaylistCover ? openCoverPicker : undefined}
                       onKeyDown={
@@ -1222,9 +1433,11 @@ export default function SystemPlaylistPage({
                         alt=""
                         className="release-page__cover"
                         draggable={false}
+                        onError={() => setCoverFailed(true)}
                       />
                     </span>
-                  ))}
+                  )
+                  ) : null}
                 <img
                   src={panelDiscSrc}
                   alt=""
@@ -1284,7 +1497,7 @@ export default function SystemPlaylistPage({
                       )}
                     </div>
 
-                    {showTrackPanel && trackPanelMeta ? (
+                    {showTrackPanel && trackPanelMeta && !(editPlaylist && isSnapshotPlaylist) ? (
                       <div className="release-page__track-panel">
                         <h2 className="release-page__track-panel-title">
                           {trackPanelMeta.mainTitle}
@@ -1293,6 +1506,33 @@ export default function SystemPlaylistPage({
                           <p className="release-page__track-panel-date">
                             Released on {trackPanelReleaseDate}
                           </p>
+                        )}
+                        {isSnapshotPlaylist && activeSnapshot && (
+                          <>
+                            {splitSnapshotGenres(activeSnapshot.genres).length > 0 ? (
+                              <p className="release-page__subgenres">
+                                {splitSnapshotGenres(activeSnapshot.genres).map((genre, i) => (
+                                  <span key={genre}>
+                                    {i > 0 && " · "}
+                                    {onOpenCatalogSubgenre &&
+                                    subgenreIdByName.has(genre.toLowerCase()) ? (
+                                      <button
+                                        type="button"
+                                        className="release-page__genre-link"
+                                        onClick={() => openSnapshotGenre(genre)}
+                                      >
+                                        {titleCaseWords(genre)}
+                                      </button>
+                                    ) : (
+                                      <span className="release-page__genre-link">
+                                        {titleCaseWords(genre)}
+                                      </span>
+                                    )}
+                                  </span>
+                                ))}
+                              </p>
+                            ) : null}
+                          </>
                         )}
                         {!isUserPlaylist && slug === "setlists" && setlistTourName && showTrackPanel && (
                           <p className="release-page__track-panel-line">{setlistTourName}</p>
@@ -1414,6 +1654,9 @@ export default function SystemPlaylistPage({
                               {playingTrack.play_count === 1 ? "" : "s"}
                             </p>
                           )}
+                        {isSnapshotPlaylist && activeSnapshot ? (
+                          <SnapshotStatsPanel snapshot={activeSnapshot} mobile={stacked} />
+                        ) : null}
                       </div>
                     ) : (
                       <div className="release-page__panel-head">
@@ -1459,6 +1702,21 @@ export default function SystemPlaylistPage({
               </div>
 
               <div className="release-page__panel-bottom">
+                {isSnapshotPlaylist && activeSnapshot?.record_label && showTrackPanel ? (
+                  <div className="release-page__label">
+                    <img
+                      src={DEFAULT_LABEL_URL}
+                      alt=""
+                      className="release-page__label-logo"
+                    />
+                    <p className="release-page__label-name">
+                      Distributed by{" "}
+                      <span className="release-page__person-link">
+                        {activeSnapshot.record_label}
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
                 {panelActionTrack && (
                   <div className="release-page__track-actions release-page__track-actions--above-player">
                     {showLyricsAction && (
@@ -1562,7 +1820,10 @@ export default function SystemPlaylistPage({
                       <PlaylistNeighborLink
                         neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
                         direction="prev"
-                        onClick={() => onOpenPlaylist(detail.prev!.slug)}
+                        onClick={() => {
+                          if (editPlaylist) setEditPlaylist(false);
+                          onOpenPlaylist(detail.prev!.slug);
+                        }}
                       />
                     ) : (
                       <span className="release-page__neighbor-spacer" />
@@ -1571,7 +1832,10 @@ export default function SystemPlaylistPage({
                       <PlaylistNeighborLink
                         neighbor={{ id: detail.next.slug, title: detail.next.name }}
                         direction="next"
-                        onClick={() => onOpenPlaylist(detail.next!.slug)}
+                        onClick={() => {
+                          if (editPlaylist) setEditPlaylist(false);
+                          onOpenPlaylist(detail.next!.slug);
+                        }}
                       />
                     ) : (
                       <span className="release-page__neighbor-spacer" />
@@ -1612,53 +1876,44 @@ export default function SystemPlaylistPage({
               />
             ) : (
               <>
-                {isUserPlaylist && editPlaylist && detail?.editable !== false && (
-                  <div className="user-playlist-edit__meta-bar">
-                    <button
-                      type="button"
-                      className="user-playlist-edit__cover-btn"
-                      onClick={openCoverPicker}
-                      disabled={coverUploadBusy}
-                      title="Change cover"
-                      aria-label="Change playlist cover"
-                    >
-                      {coverUrl ? (
-                        <img src={coverUrl} alt="" className="user-playlist-edit__cover-img" />
-                      ) : (
-                        <span className="user-playlist-edit__cover-placeholder" aria-hidden>
-                          +
-                        </span>
-                      )}
-                    </button>
-                    <div className="user-playlist-edit__meta-fields">
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Playlist name"
-                        aria-label="Playlist name"
-                      />
-                      <textarea
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                        placeholder="Short description"
-                        aria-label="Playlist description"
-                        rows={2}
-                      />
-                    </div>
-                  </div>
+                {isSnapshotPlaylist && !editPlaylist && (
+                  <SnapshotPlaylistFilterBar
+                    tracks={tracks}
+                    onFilterStateChange={handleSnapshotFilterStateChange}
+                    sortKey={trackSort.key}
+                    sortDesc={trackSort.desc}
+                    onSortChange={handleTrackSortChange}
+                    onReset={handleFilterReset}
+                    knownGenres={subgenreNames}
+                  />
                 )}
                 <SystemPlaylistTracklist
                 key={isUserPlaylist ? `user-${userPlaylistId}` : slug}
                 ref={tracklistRef}
                 bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
                 artistName={artistName}
-                tracks={tracks}
+                tracks={displayTracks}
+                originalTrackNumbers={originalTrackNumbers}
+                sortKey={trackSort.key}
+                sortDesc={trackSort.desc}
+                onSortChange={handleTrackSortChange}
                 multiArtist={showArtistInMeta}
                 showTrackMeta
                 userPlaylistId={isUserPlaylist ? userPlaylistId : undefined}
                 onTracksChanged={isUserPlaylist ? refreshUserPlaylist : undefined}
-                editMode={isUserPlaylist && editPlaylist && detail?.editable !== false}
+                editMode={
+                  isUserPlaylist &&
+                  editPlaylist &&
+                  detail?.tracks_editable !== false &&
+                  detail?.editable !== false
+                }
+                snapshotMetadataMode={
+                  isUserPlaylist &&
+                  editPlaylist &&
+                  isSnapshotPlaylist &&
+                  detail?.editable !== false
+                }
+                subgenreNames={subgenreNames}
                 stacked={stacked}
                 compactLyricsHead={stacked || tabletPortrait}
                 playingPath={playingPath}

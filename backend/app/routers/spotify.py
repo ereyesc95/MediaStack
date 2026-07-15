@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -22,9 +21,11 @@ from app.spotify_auth import (
     disconnect_spotify,
     exchange_code,
     fetch_playlist_tracks_for_import,
+    get_access_token,
     list_user_playlists as spotify_list_playlists,
     redirect_uri_for_base,
     save_spotify_credentials,
+    spotify_connected,
     spotify_session_status,
     spotify_setup_info,
     _sanitize_frontend_origin,
@@ -112,6 +113,8 @@ def spotify_auth_start(
     )
     if force_account:
         disconnect_spotify(db, user.usr_id)
+    elif spotify_connected(db, user.usr_id) and not get_access_token(db, user.usr_id):
+        disconnect_spotify(db, user.usr_id)
     try:
         url = build_authorize_url(
             db,
@@ -136,15 +139,14 @@ def spotify_auth_callback(
     db: Session = Depends(get_db),
 ):
     public_base = _public_base(request)
-    user_id, return_path, frontend_origin = consume_oauth_state(state)
+    user_id, return_path, frontend_origin = consume_oauth_state(db, state)
     origin = frontend_origin or _sanitize_frontend_origin(None, fallback=public_base)
     return_url = build_return_url(origin, return_path)
 
     def error_redirect(message: str) -> RedirectResponse:
-        return RedirectResponse(
-            build_return_url(origin, return_path, f"spotify-error={quote(message)}"),
-            status_code=302,
-        )
+        url = append_query_param(return_url, "spotify", "error")
+        url = append_query_param(url, "detail", message)
+        return RedirectResponse(url, status_code=302)
 
     if error:
         return error_redirect(error)
@@ -170,11 +172,12 @@ def spotify_playlists(
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         detail = str(exc)
+        if "premium subscription" in detail.lower():
+            raise HTTPException(403, detail) from exc
         if "403" in detail or "401" in detail:
-            disconnect_spotify(db, user.usr_id)
             raise HTTPException(
-                401,
-                "Spotify session expired. Connect again or choose another account.",
+                403,
+                detail.split("\n")[0] if detail else "Spotify denied access to playlists.",
             ) from exc
         raise HTTPException(502, f"Spotify API error: {exc}") from exc
     return {"items": items}
@@ -218,6 +221,7 @@ def spotify_import(
         description=body.description,
         source="spotify",
         spotify_id=spotify_id,
+        kind="snapshot",
     )
     if not created.get("ok"):
         raise HTTPException(400, created.get("error") or "Failed to create playlist")

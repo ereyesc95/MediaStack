@@ -4,6 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+
+def normalize_play_path(path: str) -> str:
+    return path.strip().replace("\\", "/").casefold()
+
 from app.band_library import (
     _album_dir_for_track,
     _collect_audio_files,
@@ -122,6 +126,8 @@ class LibraryTrackIndex:
         title: str,
         artist: str | None = None,
         album: str | None = None,
+        year: str | None = None,
+        exclude_paths: set[str] | None = None,
     ) -> MatchedTrack | None:
         key = _normalize_title_for_match(title)
         if not key:
@@ -135,12 +141,72 @@ class LibraryTrackIndex:
             if not candidates:
                 return None
 
+        excluded = {normalize_play_path(p) for p in (exclude_paths or set()) if p}
+        if excluded:
+            filtered: list[Path] = []
+            for audio in candidates:
+                rel = safe_relative(audio, self.media_root)
+                if not rel:
+                    continue
+                if normalize_play_path(rel.replace("\\", "/")) in excluded:
+                    continue
+                filtered.append(audio)
+            candidates = filtered
+            if not candidates:
+                return None
+
         want_album = _normalize_album(album)
         want_artist = (artist or "").casefold()
+        # Primary artist before "feat." / ";" for scoring folder ownership.
+        primary_artist = want_artist
+        for sep in (";", ","):
+            if sep in primary_artist:
+                primary_artist = primary_artist.split(sep, 1)[0].strip()
+        for feat_tok in (" feat.", " featuring ", " ft."):
+            cut = primary_artist.find(feat_tok)
+            if cut > 0:
+                primary_artist = primary_artist[:cut].strip()
+                break
+        want_year = (year or "").strip()[:4]
+        if want_year and not want_year.isdigit():
+            want_year = ""
 
         scored: list[tuple[int, Path]] = []
         for audio in candidates:
             score = 0
+            folder = (_artist_folder_name(audio, self.media_root) or "").casefold()
+            stem_cf = audio.stem.casefold()
+            if want_artist:
+                if primary_artist and (
+                    primary_artist == folder
+                    or primary_artist in folder
+                    or folder in primary_artist
+                ):
+                    score += 8
+                elif want_artist in folder or folder in want_artist:
+                    score += 5
+                elif primary_artist and primary_artist in stem_cf:
+                    score += 4
+                elif any(
+                    part.strip() and part.strip() in stem_cf
+                    for part in want_artist.replace(",", ";").split(";")
+                ):
+                    score += 3
+                elif (
+                    primary_artist
+                    and folder
+                    and primary_artist not in folder
+                    and folder not in primary_artist
+                    and primary_artist not in stem_cf
+                    and folder not in ("various artists", "various")
+                ):
+                    score -= 4
+                if (
+                    folder in ("various artists", "various")
+                    and primary_artist
+                    and primary_artist in stem_cf
+                ):
+                    score += 3
             if want_album:
                 album_dir = _album_dir_for_track(audio)
                 rel_album = _normalize_album(album_dir.name)
@@ -156,14 +222,46 @@ class LibraryTrackIndex:
                     want_album in rel_album or rel_album in want_album
                 ):
                     score += 5
-            if want_artist:
-                folder = (_artist_folder_name(audio, self.media_root) or "").casefold()
-                if want_artist in folder or folder in want_artist:
-                    score += 3
+            if want_year:
+                file_year = (_year_from_date(_release_date_for_track(audio)) or "")
+                if file_year == want_year:
+                    score += 6
+                elif file_year and score >= 4:
+                    try:
+                        delta = abs(int(file_year) - int(want_year))
+                        score -= 1 if delta <= 5 else 2
+                    except ValueError:
+                        pass
             scored.append((score, audio))
 
         scored.sort(key=lambda x: (-x[0], x[1].as_posix().casefold()))
-        best = scored[0][1]
+        if want_year and scored:
+            top = scored[0][0]
+            year_hits = [
+                (s, p)
+                for s, p in scored
+                if s >= top - 2
+                and (_year_from_date(_release_date_for_track(p)) or "") == want_year
+            ]
+            if year_hits:
+                year_hits.sort(key=lambda x: (-x[0], x[1].as_posix().casefold()))
+                rest = [x for x in scored if x not in year_hits]
+                scored = year_hits + rest
+
+        best_score, best = scored[0][0], scored[0][1]
+
+        if want_artist or want_album or want_year:
+            if best_score <= 0:
+                return None
+            if want_artist and want_album and best_score < 4:
+                return None
+            if want_artist and not want_album and best_score < 3:
+                return None
+            if want_album and not want_artist and best_score < 5:
+                return None
+        elif len(candidates) > 1:
+            return None
+
         return self._to_matched(best)
 
     def search(self, query: str, *, limit: int = 25) -> list[MatchedTrack]:

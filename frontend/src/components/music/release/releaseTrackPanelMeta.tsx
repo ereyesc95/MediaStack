@@ -322,6 +322,39 @@ export function trackDisplayTitle(
   return trimmed;
 }
 
+/** Prefer disk-filename "By … / feat. …" credits over snapshot artist metadata. */
+export function diskCreditFromTitle(
+  title: string,
+  fallbackArtist?: string | null
+): { title: string; artist: string | null; usedDiskCredit: boolean } {
+  const meta = parseTrackPanelMeta(title);
+  const performer = meta.lines.find((line) => line.kind === "performer");
+  const featuring = meta.lines.find((line) => line.kind === "featuring");
+  if (performer && performer.kind === "performer") {
+    const featNames =
+      featuring && featuring.kind === "featuring" ? featuring.artists : [];
+    const artist = featNames.length
+      ? `${performer.artist} feat. ${featNames.join(", ")}`
+      : performer.artist;
+    return { title: meta.mainTitle, artist, usedDiskCredit: true };
+  }
+  if (featuring && featuring.kind === "featuring") {
+    const base = (fallbackArtist || "").trim();
+    if (base) {
+      return {
+        title: meta.mainTitle,
+        artist: `${base} feat. ${featuring.artists.join(", ")}`,
+        usedDiskCredit: true,
+      };
+    }
+  }
+  return {
+    title,
+    artist: (fallbackArtist || "").trim() || null,
+    usedDiskCredit: false,
+  };
+}
+
 export function isAdaptationLine(line: TrackPanelLine): boolean {
   return line.kind === "other" && /^Adaptation of /i.test(line.text);
 }

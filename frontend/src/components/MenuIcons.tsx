@@ -301,3 +301,14 @@ export function IconSpotify({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconFileImport({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2.5L18.5 9H13V4.5zM8 13h3v4h2v-4h3l-3.5-3.5L8 13z"
+      />
+    </svg>
+  );
+}

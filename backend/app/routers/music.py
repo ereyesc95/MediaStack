@@ -1825,6 +1825,90 @@ async def create_playlist(
     return result
 
 
+@router.get("/playlists/subgenres")
+def playlist_subgenres(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.playlist_snapshot import list_subgenre_names
+
+    return {"items": list_subgenre_names(db)}
+
+
+@router.post("/playlists/import-csv")
+async def import_playlist_csv(
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    description: str = Form(""),
+    cover: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.playlist_snapshot import (
+        import_snapshot_tracks,
+        parse_exportify_csv,
+        playlist_name_from_filename,
+    )
+    from app.user_playlist import create_user_playlist, save_playlist_cover_file
+
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    media_root = Path(settings.media_root)
+    if not media_root.is_dir():
+        raise HTTPException(400, "Media root not configured")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "CSV file is empty")
+    if len(raw) > 20_000_000:
+        raise HTTPException(400, "CSV file is too large")
+
+    tracks = parse_exportify_csv(raw)
+    if not tracks:
+        raise HTTPException(400, "No tracks found in CSV")
+
+    playlist_name = name.strip() or playlist_name_from_filename(file.filename or "playlist.csv")
+    created = create_user_playlist(
+        db,
+        name=playlist_name,
+        description=description or None,
+        source="file",
+        kind="snapshot",
+    )
+    if not created.get("ok"):
+        raise HTTPException(400, created.get("error") or "Failed to create playlist")
+
+    playlist_id = int(created["id"])
+    if cover and cover.filename:
+        cover_raw = await cover.read()
+        if cover_raw and len(cover_raw) <= 5_000_000:
+            content_type = (cover.content_type or "").lower()
+            ext = ".jpg"
+            if "png" in content_type:
+                ext = ".png"
+            elif "webp" in content_type:
+                ext = ".webp"
+            url = save_playlist_cover_file(playlist_id, cover_raw, ext)
+            playlist = db.get(Playlist, playlist_id)
+            if playlist:
+                playlist.pla_cover_path = url
+                db.commit()
+                created["cover_url"] = url
+
+    stats = import_snapshot_tracks(
+        db, media_root, playlist_id=playlist_id, tracks=tracks
+    )
+    if not stats.get("ok"):
+        raise HTTPException(400, stats.get("error") or "Import failed")
+    return {
+        "ok": True,
+        "playlist_id": playlist_id,
+        "name": created.get("name"),
+        "cover_url": created.get("cover_url"),
+        **stats,
+    }
+
+
 @router.get("/playlists/search-tracks")
 def search_tracks_for_playlist(
     q: str = Query(..., min_length=1),
@@ -1990,6 +2074,33 @@ class PlaylistUpdateBody(BaseModel):
 
 class PlaylistReorderBody(BaseModel):
     entry_ids: list[int]
+
+
+class SnapshotMetadataBody(BaseModel):
+    genres: str | None = None
+    record_label: str | None = None
+
+
+@router.patch("/playlists/{playlist_id}/tracks/{entry_id}/snapshot")
+def patch_snapshot_metadata(
+    playlist_id: int,
+    entry_id: int,
+    body: SnapshotMetadataBody,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.playlist_snapshot import update_snapshot_metadata
+
+    result = update_snapshot_metadata(
+        db,
+        playlist_id=playlist_id,
+        entry_id=entry_id,
+        genres=body.genres,
+        record_label=body.record_label,
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Update failed")
+    return result
 
 
 @router.patch("/playlists/{playlist_id}")

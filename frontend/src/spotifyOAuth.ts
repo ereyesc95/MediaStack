@@ -1,6 +1,23 @@
 export const SPOTIFY_AWAITING_KEY = "mediastack.spotify.awaiting";
 export const SPOTIFY_RETURN_PATH = "/music/playlists";
 
+export async function waitForProfileReady(timeoutMs = 8000): Promise<boolean> {
+  const { fetchSession } = await import("./api");
+  const { getProfileToken } = await import("./auth");
+  if (getProfileToken()) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const session = await fetchSession();
+      if (session.user && session.token) return true;
+    } catch {
+      /* profile may not be ready yet after OAuth redirect */
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+  }
+  return Boolean(getProfileToken());
+}
+
 export function markSpotifyOAuthAwaiting() {
   try {
     sessionStorage.setItem(SPOTIFY_AWAITING_KEY, "1");

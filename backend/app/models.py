@@ -131,6 +131,35 @@ class Playlist(Base):
     pla_cover_path: Mapped[str | None] = mapped_column("plaCoverPath", Text)
     pla_spotify_id: Mapped[str | None] = mapped_column("plaSpotifyId", Text)
     pla_source: Mapped[str | None] = mapped_column("plaSource", Text)
+    pla_kind: Mapped[str | None] = mapped_column("plaKind", Text)
+
+
+class PlaylistTrackSnapshot(Base):
+    __tablename__ = "playlist_track_snapshots"
+
+    pts_entry_id: Mapped[int] = mapped_column("ptsEntryID", Integer, primary_key=True)
+    pts_spotify_uri: Mapped[str | None] = mapped_column("ptsSpotifyUri", Text)
+    pts_snapshot_title: Mapped[str | None] = mapped_column("ptsSnapshotTitle", Text)
+    pts_snapshot_artist: Mapped[str | None] = mapped_column("ptsSnapshotArtist", Text)
+    pts_snapshot_album: Mapped[str | None] = mapped_column("ptsSnapshotAlbum", Text)
+    pts_release_date: Mapped[str | None] = mapped_column("ptsReleaseDate", Text)
+    pts_duration_ms: Mapped[int | None] = mapped_column("ptsDurationMs", Integer)
+    pts_popularity: Mapped[int | None] = mapped_column("ptsPopularity", Integer)
+    pts_explicit: Mapped[int | None] = mapped_column("ptsExplicit", Integer)
+    pts_genres: Mapped[str | None] = mapped_column("ptsGenres", Text)
+    pts_record_label: Mapped[str | None] = mapped_column("ptsRecordLabel", Text)
+    pts_danceability: Mapped[float | None] = mapped_column("ptsDanceability", Text)
+    pts_energy: Mapped[float | None] = mapped_column("ptsEnergy", Text)
+    pts_tempo: Mapped[float | None] = mapped_column("ptsTempo", Text)
+    pts_valence: Mapped[float | None] = mapped_column("ptsValence", Text)
+    pts_acousticness: Mapped[float | None] = mapped_column("ptsAcousticness", Text)
+    pts_instrumentalness: Mapped[float | None] = mapped_column("ptsInstrumentalness", Text)
+    pts_key: Mapped[int | None] = mapped_column("ptsKey", Integer)
+    pts_mode: Mapped[int | None] = mapped_column("ptsMode", Integer)
+    pts_loudness: Mapped[float | None] = mapped_column("ptsLoudness", Text)
+    pts_speechiness: Mapped[float | None] = mapped_column("ptsSpeechiness", Text)
+    pts_liveness: Mapped[float | None] = mapped_column("ptsLiveness", Text)
+    pts_time_signature: Mapped[int | None] = mapped_column("ptsTimeSignature", Integer)
 
 
 class SpotifyProfileAuth(Base):

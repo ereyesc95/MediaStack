@@ -119,11 +119,18 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
             nav_band_id = _band_id_from_content_path(db, media_root, audio_file.parent)
             if nav_band_id:
                 out["navigate_band_id"] = nav_band_id
-    if not out.get("release_date"):
-        out["release_date"] = _resolve_track_release_date(play_path, media_root)
+    disk_date = _resolve_track_release_date(play_path, media_root)
+    if disk_date:
+        out["release_date"] = disk_date
+        year = disk_date[:4]
+        if year.isdigit():
+            out["year"] = year
+    elif not out.get("release_date"):
+        out["release_date"] = None
     audio_file = _audio_file_for_play_path(play_path, media_root)
     if audio_file:
         from app.band_library import display_track_title_from_path
+        from app.release_playback_art import playback_art_for_play_path
         from app.release_tracklist import _duration_from_file, _format_duration
 
         out["title"] = display_track_title_from_path(audio_file)
@@ -132,6 +139,12 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
             if duration_sec is not None:
                 out["duration_sec"] = duration_sec
                 out["duration"] = _format_duration(duration_sec)
+        playback = playback_art_for_play_path(media_root, play_path)
+        if playback:
+            if playback.get("disc_url"):
+                out["disc_url"] = playback["disc_url"]
+            if not out.get("cover_url") and playback.get("cover_url"):
+                out["cover_url"] = playback["cover_url"]
     return out
 
 

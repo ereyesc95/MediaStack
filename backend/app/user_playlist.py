@@ -11,6 +11,8 @@ from app.models import Playlist, PlaylistData
 from app.paths import DATA_DIR
 
 USER_PLAYLIST_TYPE = 200
+PLA_KIND_LOCAL = "local"
+PLA_KIND_SNAPSHOT = "snapshot"
 PLAYLIST_COVERS_DIR = DATA_DIR / "playlist_covers"
 
 
@@ -38,11 +40,14 @@ def save_playlist_cover_file(playlist_id: int, raw: bytes, ext: str) -> str:
 
 
 def resolve_playlist_cover_url(playlist: Playlist) -> str | None:
-    if not playlist.pla_cover_path:
-        return None
-    if playlist.pla_cover_path.startswith("/"):
-        return playlist.pla_cover_path
-    return playlist_cover_url(playlist.pla_id)
+    if playlist.pla_cover_path:
+        if playlist.pla_cover_path.startswith("/"):
+            return playlist.pla_cover_path
+        return playlist_cover_url(playlist.pla_id)
+    # Recover cover URL when the file exists but DB path was never set.
+    if cover_file_for_playlist(playlist.pla_id):
+        return playlist_cover_url(playlist.pla_id)
+    return None
 
 
 def cover_file_for_playlist(playlist_id: int) -> Path | None:
@@ -87,6 +92,7 @@ def create_user_playlist(
     cover_path: str | None = None,
     source: str | None = None,
     spotify_id: str | None = None,
+    kind: str = PLA_KIND_LOCAL,
 ) -> dict:
     clean = name.strip()
     if not clean:
@@ -100,6 +106,7 @@ def create_user_playlist(
         pla_cover_path=cover_path,
         pla_source=source,
         pla_spotify_id=spotify_id,
+        pla_kind=kind,
     )
     db.add(row)
     db.commit()
@@ -112,6 +119,18 @@ def create_user_playlist(
         "cover_url": resolve_playlist_cover_url(row),
         "duplicate": False,
     }
+
+
+def _is_editable_user_playlist(playlist: Playlist) -> bool:
+    if playlist.pla_type != 200:
+        return False
+    return (playlist.pla_name or "").strip().casefold() != "most played"
+
+
+def _tracks_editable(playlist: Playlist) -> bool:
+    if not _is_editable_user_playlist(playlist):
+        return False
+    return (playlist.pla_kind or PLA_KIND_LOCAL) != PLA_KIND_SNAPSHOT
 
 
 def add_track_to_playlist(
@@ -131,6 +150,8 @@ def add_track_to_playlist(
     playlist = db.get(Playlist, playlist_id)
     if not playlist:
         return {"ok": False, "error": "Playlist not found"}
+    if not allow_duplicate and not _tracks_editable(playlist):
+        return {"ok": False, "error": "This playlist does not allow adding tracks"}
 
     clean_path = path.strip()
     if not unavailable and not clean_path:
@@ -217,43 +238,12 @@ def import_spotify_snapshot(
     playlist_id: int,
     tracks: list[dict],
 ) -> dict:
-    playlist = db.get(Playlist, playlist_id)
-    if not playlist:
-        return {"ok": False, "error": "Playlist not found"}
+    from app.playlist_snapshot import import_snapshot_tracks, snapshot_from_dict
 
-    index = LibraryTrackIndex(media_root, db=db)
-    matched_count = 0
-    unavailable_count = 0
-    for i, track in enumerate(tracks):
-        matched = index.match(
-            title=track.get("title") or "",
-            artist=track.get("artist_name"),
-            album=track.get("album_title"),
-        )
-        entry = _entry_from_match(track, matched, sort_order=i)
-        if entry["unavailable"]:
-            unavailable_count += 1
-        else:
-            matched_count += 1
-        add_track_to_playlist(
-            db,
-            playlist_id,
-            title=entry["title"],
-            artist=entry["artist"],
-            release=entry["release"],
-            path=entry["path"],
-            album=entry["album"],
-            year=entry["year"],
-            unavailable=entry["unavailable"],
-            allow_duplicate=True,
-            sort_order=entry["sort_order"],
-        )
-    return {
-        "ok": True,
-        "matched": matched_count,
-        "unavailable": unavailable_count,
-        "total": len(tracks),
-    }
+    normalized = [snapshot_from_dict(t) for t in tracks]
+    return import_snapshot_tracks(
+        db, media_root, playlist_id=playlist_id, tracks=normalized
+    )
 
 
 def find_track_in_disk(
@@ -269,17 +259,21 @@ def find_track_in_disk(
     if not row.pld_unavailable:
         return {"ok": False, "error": "Track is already available locally"}
 
+    from app.playlist_snapshot import snapshot_match_fields
+
+    match_title, match_artist, match_album = snapshot_match_fields(db, entry_id, row)
+
     index = LibraryTrackIndex(media_root, db=db)
     matched = index.match(
-        title=row.pld_title,
-        artist=row.pld_artist,
-        album=row.pld_album or row.pld_release,
+        title=match_title,
+        artist=match_artist,
+        album=match_album,
     )
     if not matched:
         candidates = index.find_candidates(
-            title=row.pld_title,
-            artist=row.pld_artist,
-            album=row.pld_album or row.pld_release,
+            title=match_title,
+            artist=match_artist,
+            album=match_album,
         )
         return {
             "ok": True,
@@ -358,12 +352,6 @@ def link_entry_to_path(
     return {"ok": False, "error": "File not found on disk"}
 
 
-def _is_editable_user_playlist(playlist: Playlist) -> bool:
-    if playlist.pla_type != 200:
-        return False
-    return (playlist.pla_name or "").strip().casefold() != "most played"
-
-
 def update_user_playlist(
     db: Session,
     playlist_id: int,
@@ -396,9 +384,16 @@ def remove_playlist_entry(db: Session, playlist_id: int, entry_id: int) -> dict:
     playlist = db.get(Playlist, playlist_id)
     if not playlist or not _is_editable_user_playlist(playlist):
         return {"ok": False, "error": "Playlist not found or not editable"}
+    if not _tracks_editable(playlist):
+        return {"ok": False, "error": "This playlist does not allow removing tracks"}
     row = db.get(PlaylistData, entry_id)
     if not row or row.pld_playlist != playlist_id:
         return {"ok": False, "error": "Track not found"}
+    from app.playlist_snapshot import get_snapshot_row
+
+    snap = get_snapshot_row(db, entry_id)
+    if snap:
+        db.delete(snap)
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -410,6 +405,8 @@ def reorder_playlist_entries(
     playlist = db.get(Playlist, playlist_id)
     if not playlist or not _is_editable_user_playlist(playlist):
         return {"ok": False, "error": "Playlist not found or not editable"}
+    if not _tracks_editable(playlist):
+        return {"ok": False, "error": "This playlist does not allow reordering tracks"}
     for order, entry_id in enumerate(entry_ids):
         row = db.get(PlaylistData, entry_id)
         if row and row.pld_playlist == playlist_id:

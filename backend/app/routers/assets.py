@@ -15,7 +15,7 @@ NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade")
 
 
 def _first_existing(base: Path, stem: str) -> Path | None:
-    for ext in (".png", ".jpg", ".webp"):
+    for ext in (".png", ".jpg", ".webp", ".svg"):
         path = base / f"{stem}{ext}"
         if path.is_file():
             return path

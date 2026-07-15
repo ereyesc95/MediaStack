@@ -120,9 +120,61 @@ def migrate_schema(eng: Engine) -> None:
                 ("plaCoverPath", "TEXT"),
                 ("plaSpotifyId", "TEXT"),
                 ("plaSource", "TEXT"),
+                ("plaKind", "TEXT"),
             ):
                 if col not in cols:
                     conn.execute(text(f'ALTER TABLE playlists ADD COLUMN "{col}" {typ}'))
+            conn.execute(
+                text(
+                    """
+                    UPDATE playlists
+                    SET "plaKind" = 'snapshot'
+                    WHERE "plaKind" IS NULL
+                      AND "plaSource" IN ('spotify', 'file')
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE playlists
+                    SET "plaKind" = 'local'
+                    WHERE "plaKind" IS NULL
+                    """
+                )
+            )
+        if "playlist_track_snapshots" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE playlist_track_snapshots (
+                        "ptsEntryID" INTEGER NOT NULL PRIMARY KEY,
+                        "ptsSpotifyUri" TEXT,
+                        "ptsSnapshotTitle" TEXT,
+                        "ptsSnapshotArtist" TEXT,
+                        "ptsSnapshotAlbum" TEXT,
+                        "ptsReleaseDate" TEXT,
+                        "ptsDurationMs" INTEGER,
+                        "ptsPopularity" INTEGER,
+                        "ptsExplicit" INTEGER,
+                        "ptsGenres" TEXT,
+                        "ptsRecordLabel" TEXT,
+                        "ptsDanceability" TEXT,
+                        "ptsEnergy" TEXT,
+                        "ptsTempo" TEXT,
+                        "ptsValence" TEXT,
+                        "ptsAcousticness" TEXT,
+                        "ptsInstrumentalness" TEXT,
+                        "ptsKey" INTEGER,
+                        "ptsMode" INTEGER,
+                        "ptsLoudness" TEXT,
+                        "ptsSpeechiness" TEXT,
+                        "ptsLiveness" TEXT,
+                        "ptsTimeSignature" INTEGER
+                    )
+                    """
+                )
+            )
         if "playlistdata" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("playlistdata")}
             for col, typ in (
@@ -143,6 +195,20 @@ def migrate_schema(eng: Engine) -> None:
                         "spaRefreshToken" TEXT,
                         "spaExpiresAt" TEXT,
                         "spaUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+        if "spotify_oauth_state" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE spotify_oauth_state (
+                        "sosState" TEXT NOT NULL PRIMARY KEY,
+                        "sosUserID" INTEGER NOT NULL,
+                        "sosExpiresAt" REAL NOT NULL,
+                        "sosReturnPath" TEXT NOT NULL,
+                        "sosFrontendOrigin" TEXT NOT NULL
                     )
                     """
                 )

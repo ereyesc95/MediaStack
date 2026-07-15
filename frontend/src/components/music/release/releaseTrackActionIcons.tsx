@@ -173,6 +173,28 @@ export function LyricsNotSyncedIcon({ className }: IconProps) {
   );
 }
 
+export function TrackActionSearchIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <circle
+        cx="11"
+        cy="11"
+        r="6.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M16.5 16.5L21 21"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function TrackActionYoutubeIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">

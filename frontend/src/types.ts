@@ -144,6 +144,32 @@ export type UserPlaylist = {
   track_count: number;
   source?: string | null;
   spotify_id?: string | null;
+  kind?: "local" | "snapshot" | string | null;
+};
+
+export type PlaylistSnapshotMeta = {
+  spotify_uri?: string | null;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  release_date?: string | null;
+  duration_ms?: number | null;
+  popularity?: number | null;
+  explicit?: boolean | null;
+  genres?: string | null;
+  record_label?: string | null;
+  danceability?: number | null;
+  energy?: number | null;
+  tempo?: number | null;
+  valence?: number | null;
+  acousticness?: number | null;
+  instrumentalness?: number | null;
+  key?: number | null;
+  mode?: number | null;
+  loudness?: number | null;
+  speechiness?: number | null;
+  liveness?: number | null;
+  time_signature?: number | null;
 };
 
 export type PlaylistTrack = {
@@ -444,10 +470,12 @@ export type ArtistPlaylistTrack = {
   play_count?: number | null;
   navigate_release_id?: string | null;
   navigate_band_id?: number | null;
+  disc_url?: string | null;
   duration?: string | null;
   duration_sec?: number | null;
   unavailable?: boolean;
   youtube_query?: string | null;
+  snapshot?: PlaylistSnapshotMeta | null;
 };
 
 export type ArtistPlaylistNeighbor = {
@@ -459,8 +487,12 @@ export type ArtistPlaylistDetail = {
   slug: string;
   name: string;
   editable?: boolean;
+  tracks_editable?: boolean;
+  snapshot_filters?: boolean;
+  kind?: "local" | "snapshot" | string | null;
   description?: string | null;
   cover_url?: string | null;
+  has_custom_cover?: boolean;
   source?: string | null;
   spotify_id?: string | null;
   tracks: ArtistPlaylistTrack[];

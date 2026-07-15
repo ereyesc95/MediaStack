@@ -7,6 +7,7 @@ import type {
   MbArtistMatch,
   MusicDashboard,
   PlaylistTrack,
+  PlaylistSnapshotMeta,
   UserPlaylist,
 } from "./types";
 import { EMPTY_DASHBOARD } from "./types";
@@ -1293,6 +1294,59 @@ export async function importSpotifyPlaylist(body: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+export async function importPlaylistCsv(body: {
+  file: File;
+  name?: string;
+  description?: string;
+  cover?: File | null;
+}): Promise<{
+  ok: boolean;
+  playlist_id: number;
+  name?: string;
+  cover_url?: string | null;
+  matched?: number;
+  unavailable?: number;
+  total?: number;
+}> {
+  const form = new FormData();
+  form.append("file", body.file);
+  if (body.name?.trim()) form.append("name", body.name.trim());
+  if (body.description?.trim()) form.append("description", body.description.trim());
+  if (body.cover) form.append("cover", body.cover);
+  return request(`${API}/music/playlists/import-csv`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+export async function fetchPlaylistSubgenres(): Promise<{ items: string[] }> {
+  return request(`${API}/music/playlists/subgenres`);
+}
+
+export async function updatePlaylistSnapshotMetadata(
+  playlistId: number,
+  entryId: number,
+  body: { genres?: string | null; record_label?: string | null }
+): Promise<{ ok: boolean; snapshot?: PlaylistSnapshotMeta }> {
+  return request(`${API}/music/playlists/${playlistId}/tracks/${entryId}/snapshot`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function linkPlaylistTrackEntry(
+  playlistId: number,
+  entryId: number,
+  path: string
+): Promise<{ ok: boolean }> {
+  return request(`${API}/music/playlists/${playlistId}/tracks/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entry_id: entryId, path }),
   });
 }
 

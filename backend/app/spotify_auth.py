@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -20,7 +20,19 @@ SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_API = "https://api.spotify.com/v1"
 SCOPES = "playlist-read-private playlist-read-collaborative user-read-private user-read-email"
 
-_oauth_states: dict[str, tuple[int, float, str, str]] = {}
+
+def _spotify_error_message(res: httpx.Response) -> str:
+    body = (res.text or "").strip()
+    if body:
+        return body.split("\n")[0].strip()
+    return res.reason_phrase or f"HTTP {res.status_code}"
+
+
+def _cleanup_oauth_states(db: Session) -> None:
+    db.execute(
+        text('DELETE FROM spotify_oauth_state WHERE "sosExpiresAt" < :now'),
+        {"now": time.time()},
+    )
 
 
 def _now_iso() -> str:
@@ -149,29 +161,61 @@ def append_query_param(url: str, key: str, value: str) -> str:
 
 
 def create_oauth_state(
+    db: Session,
     user_id: int,
     *,
     return_path: str = "/music/playlists",
     frontend_origin: str,
 ) -> str:
+    _cleanup_oauth_states(db)
     state = secrets.token_urlsafe(24)
-    _oauth_states[state] = (
-        user_id,
-        time.time() + 600,
-        _sanitize_return_path(return_path),
-        _sanitize_frontend_origin(frontend_origin, fallback=frontend_origin),
+    db.execute(
+        text(
+            """
+            INSERT INTO spotify_oauth_state
+                ("sosState", "sosUserID", "sosExpiresAt", "sosReturnPath", "sosFrontendOrigin")
+            VALUES (:state, :user_id, :expires_at, :return_path, :frontend_origin)
+            """
+        ),
+        {
+            "state": state,
+            "user_id": user_id,
+            "expires_at": time.time() + 600,
+            "return_path": _sanitize_return_path(return_path),
+            "frontend_origin": _sanitize_frontend_origin(
+                frontend_origin, fallback=frontend_origin
+            ),
+        },
     )
+    db.commit()
     return state
 
 
-def consume_oauth_state(state: str) -> tuple[int | None, str, str]:
-    entry = _oauth_states.pop(state, None)
-    if not entry:
+def consume_oauth_state(db: Session, state: str) -> tuple[int | None, str, str]:
+    clean = (state or "").strip()
+    if not clean:
         return None, "/music/playlists", ""
-    user_id, expires, return_path, frontend_origin = entry
-    if time.time() > expires:
-        return None, return_path, frontend_origin
-    return user_id, return_path, frontend_origin
+    row = db.execute(
+        text(
+            """
+            SELECT "sosUserID", "sosExpiresAt", "sosReturnPath", "sosFrontendOrigin"
+            FROM spotify_oauth_state
+            WHERE "sosState" = :state
+            """
+        ),
+        {"state": clean},
+    ).first()
+    db.execute(
+        text('DELETE FROM spotify_oauth_state WHERE "sosState" = :state'),
+        {"state": clean},
+    )
+    db.commit()
+    if not row:
+        return None, "/music/playlists", ""
+    user_id, expires_at, return_path, frontend_origin = row
+    if time.time() > float(expires_at or 0):
+        return None, return_path or "/music/playlists", frontend_origin or ""
+    return int(user_id), return_path or "/music/playlists", frontend_origin or ""
 
 
 def _save_tokens(
@@ -216,7 +260,9 @@ def exchange_code(
             data=data,
             headers={"Authorization": f"Basic {auth}"},
         )
-        res.raise_for_status()
+        if res.status_code >= 400:
+            detail = res.text.strip() or res.reason_phrase
+            raise RuntimeError(f"Spotify token exchange failed: {detail}")
         payload = res.json()
     _save_tokens(
         db,
@@ -273,35 +319,49 @@ def disconnect_spotify(db: Session, user_id: int) -> None:
 
 
 def fetch_spotify_profile(db: Session, user_id: int) -> dict | None:
-    try:
-        me = _api_get(db, user_id, "/me")
-    except Exception:
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            me = _api_get(db, user_id, "/me")
+            if not isinstance(me, dict):
+                return None
+            images = me.get("images") or []
+            image_url = None
+            if images and isinstance(images[0], dict):
+                image_url = images[0].get("url")
+            display = (me.get("display_name") or me.get("id") or "").strip()
+            return {
+                "id": me.get("id"),
+                "display_name": display or "Spotify user",
+                "image_url": image_url,
+            }
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(0.35)
+    if last_error:
         return None
-    if not isinstance(me, dict):
-        return None
-    images = me.get("images") or []
-    image_url = None
-    if images and isinstance(images[0], dict):
-        image_url = images[0].get("url")
-    display = (me.get("display_name") or me.get("id") or "").strip()
-    return {
-        "id": me.get("id"),
-        "display_name": display or "Spotify user",
-        "image_url": image_url,
-    }
+    return None
 
 
 def spotify_session_status(db: Session, user_id: int) -> dict:
-    if not spotify_connected(db, user_id):
+    row = _get_profile_auth(db, user_id)
+    if not row or not (row.spa_access_token or row.spa_refresh_token):
         return {"connected": False}
     token = get_access_token(db, user_id)
     if not token:
-        disconnect_spotify(db, user_id)
-        return {"connected": False, "session_expired": True}
+        return {"connected": False}
     profile = fetch_spotify_profile(db, user_id)
-    if not profile:
-        return {"connected": False, "session_expired": True}
-    return {"connected": True, "user": profile}
+    if profile:
+        return {"connected": True, "user": profile}
+    return {
+        "connected": True,
+        "user": {
+            "id": None,
+            "display_name": "Spotify",
+            "image_url": None,
+        },
+    }
 
 
 def spotify_connected(db: Session, user_id: int) -> bool:
@@ -322,6 +382,7 @@ def build_authorize_url(
     if not client_id:
         raise RuntimeError("Spotify API credentials not configured")
     state = create_oauth_state(
+        db,
         user_id,
         return_path=return_path,
         frontend_origin=frontend_origin,
@@ -350,13 +411,26 @@ def _api_get(db: Session, user_id: int, path: str, params: dict | None = None) -
             if profile and profile.spa_refresh_token:
                 token = _refresh_access_token(db, user_id, profile.spa_refresh_token)
                 res = client.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
-        res.raise_for_status()
+        if res.status_code >= 400:
+            raise RuntimeError(_spotify_error_message(res))
         return res.json()
 
 
+def _playlist_items_total(playlist: dict) -> int:
+    """Track/item count from playlist metadata (Feb 2026: tracks → items)."""
+    meta = playlist.get("items") or playlist.get("tracks") or {}
+    if not isinstance(meta, dict):
+        return 0
+    return int(meta.get("total") or 0)
+
+
+def _playlist_entry_media(entry: dict) -> dict | None:
+    """Extract track (or episode) object from a playlist page entry."""
+    media = entry.get("item") or entry.get("track")
+    return media if isinstance(media, dict) else None
+
+
 def list_user_playlists(db: Session, user_id: int) -> list[dict]:
-    me = _api_get(db, user_id, "/me")
-    my_id = me.get("id") if isinstance(me, dict) else None
     items: list[dict] = []
     offset = 0
     while True:
@@ -370,15 +444,12 @@ def list_user_playlists(db: Session, user_id: int) -> list[dict]:
             if not isinstance(item, dict):
                 continue
             owner = item.get("owner") or {}
-            owner_id = owner.get("id")
             collaborative = bool(item.get("collaborative"))
-            if my_id and owner_id != my_id and not collaborative:
-                continue
             items.append(
                 {
                     "id": item.get("id"),
                     "name": item.get("name") or "Playlist",
-                    "track_count": (item.get("tracks") or {}).get("total") or 0,
+                    "track_count": _playlist_items_total(item),
                     "collaborative": collaborative,
                     "owner": owner.get("display_name") or owner.get("id"),
                     "cover_url": (
@@ -400,14 +471,14 @@ def _playlist_tracks_raw(db: Session, user_id: int, playlist_id: str) -> list[di
         data = _api_get(
             db,
             user_id,
-            f"/playlists/{playlist_id}/tracks",
+            f"/playlists/{playlist_id}/items",
             {"limit": 100, "offset": offset, "market": "from_token"},
         )
-        for item in data.get("items") or []:
-            if not isinstance(item, dict):
+        for entry in data.get("items") or []:
+            if not isinstance(entry, dict):
                 continue
-            track = item.get("track")
-            if not isinstance(track, dict) or track.get("is_local"):
+            track = _playlist_entry_media(entry)
+            if not track or track.get("is_local"):
                 continue
             if track.get("type") != "track":
                 continue
@@ -419,13 +490,23 @@ def _playlist_tracks_raw(db: Session, user_id: int, playlist_id: str) -> list[di
             album_name = album.get("name") or ""
             release_date = album.get("release_date") or ""
             year = release_date[:4] if release_date else None
+            track_id = track.get("id") or ""
+            spotify_uri = track_id if str(track_id).startswith("spotify:") else (
+                f"spotify:track:{track_id}" if track_id else None
+            )
             tracks.append(
                 {
+                    "spotify_uri": spotify_uri,
                     "title": track.get("name") or "Unknown",
                     "artist_name": artist_name or "Unknown",
+                    "artist": artist_name or "Unknown",
                     "album_title": album_name,
+                    "album": album_name,
                     "year": year,
                     "release_date": release_date if len(release_date) >= 4 else None,
+                    "duration_ms": track.get("duration_ms"),
+                    "popularity": track.get("popularity"),
+                    "explicit": track.get("explicit"),
                 }
             )
         if not data.get("next"):

@@ -19,6 +19,7 @@ FEAT_RE = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?|featuring)[^\)\]]*[\)\]]", re.I
 LIBRARY_MOST_PLAYED_NAME = "Most Played"
 LIBRARY_MOST_PLAYED_LIMIT = 100
 LIBRARY_MOST_PLAYED_DEFAULT_COVER = "/api/assets/system/playlists/most-played"
+DEFAULT_USER_PLAYLIST_COVER = "/api/assets/system/default/playlist"
 
 
 def _is_library_most_played(playlist: Playlist) -> bool:
@@ -394,13 +395,18 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
                 or LIBRARY_MOST_PLAYED_DEFAULT_COVER
             )
         else:
+            from app.playlist_snapshot import is_snapshot_playlist
+
             first = db.scalars(
                 select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id).limit(1)
             ).first()
-            artist = (first.pld_artist.strip() if first else "") or None
-            cover = custom_cover or pick_playlist_cover(
-                artist, first.pld_release if first else None
-            )
+            if is_snapshot_playlist(p):
+                cover = custom_cover or DEFAULT_USER_PLAYLIST_COVER
+            else:
+                artist = (first.pld_artist.strip() if first else "") or None
+                cover = custom_cover or pick_playlist_cover(
+                    artist, first.pld_release if first else None
+                ) or DEFAULT_USER_PLAYLIST_COVER
             track_count = len(
                 db.scalars(
                     select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id)
@@ -416,6 +422,7 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
                 "track_count": track_count,
                 "source": p.pla_source,
                 "spotify_id": p.pla_spotify_id,
+                "kind": p.pla_kind or "local",
             }
         )
     return out
@@ -523,28 +530,86 @@ def get_user_playlist_detail(
         .order_by(PlaylistData.pld_sort_order, PlaylistData.pld_id)
     ).all()
 
-    from app.user_playlist import _youtube_query
+    from app.user_playlist import _youtube_query, _tracks_editable
+    from app.playlist_snapshot import is_snapshot_playlist, load_snapshots_for_entries, snapshot_to_api
 
+    entry_ids = [r.pld_id for r in rows]
+    snapshots = load_snapshots_for_entries(db, entry_ids)
+    is_snapshot = is_snapshot_playlist(playlist)
+
+    match_index = None
+    if is_snapshot:
+        from app.library_track_match import LibraryTrackIndex, normalize_play_path
+        from app.playlist_snapshot import snapshot_match_fields
+
+        match_index = LibraryTrackIndex(media_root, db=db)
+
+    used_paths: set[str] = set()
     raw_tracks: list[dict] = []
     for r in rows:
+        snap = snapshots.get(r.pld_id)
+        snap_api = snapshot_to_api(snap) if snap else None
         path = (r.pld_path or "").strip()
         unavailable = bool(r.pld_unavailable) or not path
+        norm_path = normalize_play_path(path) if path else ""
+
+        if is_snapshot and match_index:
+            match_title, match_artist, match_album = snapshot_match_fields(db, r.pld_id, r)
+            snap_year = None
+            if snap and snap.pts_release_date:
+                snap_year = str(snap.pts_release_date).strip()[:4]
+            elif r.pld_year and r.pld_year.isdigit():
+                snap_year = r.pld_year
+            rematched = match_index.match(
+                title=match_title,
+                artist=match_artist,
+                album=match_album,
+                year=snap_year,
+                exclude_paths=used_paths,
+            )
+            if rematched:
+                path = rematched.path
+                norm_path = normalize_play_path(path)
+                unavailable = False
+                used_paths.add(norm_path)
+            else:
+                # Rematch is authoritative for snapshot rows — do not keep a
+                # previously mis-assigned path (e.g. Fuel → Apocalyptica file).
+                unavailable = True
+                path = ""
+                norm_path = ""
+
+        release_date = None
+        if snap and snap.pts_release_date:
+            release_date = snap.pts_release_date
+        elif r.pld_year and r.pld_year.isdigit():
+            release_date = f"{r.pld_year}-01-01"
         if unavailable:
+            snap_title = (snap.pts_snapshot_title if snap else None) or ""
             raw_tracks.append(
                 {
                     "entry_id": r.pld_id,
-                    "title": (r.pld_title or "").strip() or "Unknown",
+                    "title": (snap_title or r.pld_title or "").strip() or "Unknown",
                     "play_path": None,
-                    "artist_name": (r.pld_artist or "").strip() or None,
-                    "album_title": (r.pld_album or r.pld_release or "").strip() or None,
-                    "release_date": f"{r.pld_year}-01-01" if r.pld_year and r.pld_year.isdigit() else None,
+                    "artist_name": (
+                        (snap.pts_snapshot_artist if snap else None)
+                        or (r.pld_artist or "").strip()
+                        or None
+                    ),
+                    "album_title": (
+                        (snap.pts_snapshot_album if snap else None)
+                        or (r.pld_album or r.pld_release or "").strip()
+                        or None
+                    ),
+                    "release_date": release_date,
                     "cover_url": None,
                     "unavailable": True,
                     "youtube_query": _youtube_query(
-                        r.pld_title or "",
-                        r.pld_artist,
-                        r.pld_album or r.pld_release,
+                        snap_title or r.pld_title or "",
+                        (snap.pts_snapshot_artist if snap else None) or r.pld_artist,
+                        (snap.pts_snapshot_album if snap else None) or r.pld_album or r.pld_release,
                     ),
+                    "snapshot": snap_api,
                 }
             )
             continue
@@ -556,45 +621,74 @@ def get_user_playlist_detail(
                 "play_path": path,
                 "artist_name": (r.pld_artist or "").strip() or None,
                 "album_title": (r.pld_album or r.pld_release or "").strip() or None,
-                "release_date": f"{r.pld_year}-01-01" if r.pld_year and r.pld_year.isdigit() else None,
+                "release_date": release_date,
                 "cover_url": cover,
                 "unavailable": False,
+                "snapshot": snap_api,
             }
         )
 
     available_raw = [t for t in raw_tracks if not t.get("unavailable")]
     enriched = enrich_playlist_tracks(available_raw, media_root, db=db)
-    enriched_by_path = {t.get("play_path"): t for t in enriched if t.get("play_path")}
+    enriched_by_entry = {
+        t.get("entry_id"): t for t in enriched if t.get("entry_id") is not None
+    }
 
     tracks: list[dict] = []
     for raw in raw_tracks:
         if raw.get("unavailable"):
             tracks.append(raw)
             continue
-        path = raw.get("play_path")
-        merged = dict(enriched_by_path.get(path) or raw)
+        merged = dict(enriched_by_entry.get(raw.get("entry_id")) or raw)
         merged["entry_id"] = raw.get("entry_id")
         merged["unavailable"] = False
         if raw.get("artist_name"):
             merged["artist_name"] = raw["artist_name"]
-        if raw.get("album_title"):
+        # Prefer disk-resolved edition album label over snapshot/DB album.
+        if not merged.get("album_title") and raw.get("album_title"):
             merged["album_title"] = raw["album_title"]
-        if raw.get("release_date") and not merged.get("release_date"):
+        # Prefer edition folder date when it matches (or is nearer); keep snapshot year only as fill.
+        if not merged.get("release_date") and raw.get("release_date"):
             merged["release_date"] = raw["release_date"]
+        if merged.get("year") is None and merged.get("release_date"):
+            yr = str(merged["release_date"])[:4]
+            if yr.isdigit():
+                merged["year"] = yr
         tracks.append(merged)
+
+    if is_snapshot:
+        seen_paths: set[str] = set()
+        deduped: list[dict] = []
+        for track in tracks:
+            if track.get("unavailable") or not track.get("play_path"):
+                deduped.append(track)
+                continue
+            norm = normalize_play_path(track["play_path"])
+            if norm in seen_paths:
+                continue
+            seen_paths.add(norm)
+            deduped.append(track)
+        tracks = deduped
 
     all_playlists = list_user_playlists(db, user_id=user_id, is_admin=is_admin)
     prev, nxt = _playlist_neighbors(all_playlists, playlist_id)
 
     custom_cover = resolve_playlist_cover_url(playlist)
-    first = rows[0] if rows else None
-    artist = (first.pld_artist.strip() if first else "") or None
-    cover = custom_cover or pick_playlist_cover(artist, first.pld_release if first else None)
-    if not cover:
-        for t in tracks:
-            if t.get("cover_url"):
-                cover = t["cover_url"]
-                break
+    from app.playlist_snapshot import is_snapshot_playlist
+
+    if is_snapshot_playlist(playlist):
+        cover = custom_cover or DEFAULT_USER_PLAYLIST_COVER
+    else:
+        first = rows[0] if rows else None
+        artist = (first.pld_artist.strip() if first else "") or None
+        cover = custom_cover or pick_playlist_cover(artist, first.pld_release if first else None)
+        if not cover:
+            for t in tracks:
+                if t.get("cover_url"):
+                    cover = t["cover_url"]
+                    break
+        if not cover:
+            cover = DEFAULT_USER_PLAYLIST_COVER
 
     return {
         "id": playlist.pla_id,
@@ -602,9 +696,13 @@ def get_user_playlist_detail(
         "name": playlist.pla_name or "Playlist",
         "description": playlist.pla_description,
         "cover_url": cover,
+        "has_custom_cover": bool(custom_cover),
         "source": playlist.pla_source,
         "spotify_id": playlist.pla_spotify_id,
+        "kind": playlist.pla_kind or "local",
         "editable": True,
+        "tracks_editable": _tracks_editable(playlist),
+        "snapshot_filters": is_snapshot,
         "tracks": tracks,
         "prev": prev,
         "next": nxt,
