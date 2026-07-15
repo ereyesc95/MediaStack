@@ -2388,6 +2388,21 @@ input {
   align-content: start;
 }
 
+/* Mobile portrait: 4 tiles per row, edge to edge */
+@media (max-width: 480px) and (orientation: portrait) {
+  .playlist-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .music-module > .playlist-grid,
+  .music-module--backdrop > .playlist-grid {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+  }
+}
+
 .playlist-card {
   position: relative;
   width: 100%;
