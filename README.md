@@ -533,7 +533,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 ## Music module features
 
 - **Home dashboard** — recent plays, shortcuts; **cover-based theme** while a track plays (restores on pause/stop; menu theme choice is remembered)
-- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — flat dated folders and `.lnk` shortcuts show as portrait cards (Pattern A category folders still use sub-tabs when present), gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
+- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — cards match Audio cover styling; flat folders/shortcuts or Pattern A categories are auto-detected. Opening a video item shows a release-style page grouped by disc; a library item with a single PDF/document opens in a new tab, otherwise volumes are listed. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions; left panel release date follows the playing track’s edition
 - **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]` (track-specific stems override album animation/canvas); edition `Logo.png` in the top bar when applicable
 - **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`

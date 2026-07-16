@@ -710,6 +710,12 @@ export type MediaItemFile = {
   path: string;
   kind: string;
   size: number;
+  url?: string | null;
+};
+
+export type MediaItemGroup = {
+  label: string;
+  files: MediaItemFile[];
 };
 
 export type MediaItemOverview = {
@@ -723,6 +729,8 @@ export type MediaItemOverview = {
   cover_url: string | null;
   description: string | null;
   files: MediaItemFile[];
+  groups?: MediaItemGroup[];
+  open_url?: string | null;
 };
 
 export type TrackCredits = {

@@ -203,6 +203,78 @@ def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]
     return categories
 
 
+def iter_resolved_media_items(
+    band: Band,
+    media_root: Path,
+    *,
+    kind: str,
+) -> list[tuple[dict, Path, Path]]:
+    """Return (card, display_entry, resolved_folder) for every Video/Library item."""
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return []
+    root_name = VIDEO_ROOT if kind == "video" else LIBRARY_ROOT
+    section = _resolve_child_dir(artist_dir, root_name)
+    if not section.is_dir():
+        return []
+
+    known = _known_categories(kind)
+    out: list[tuple[dict, Path, Path]] = []
+
+    try:
+        children = sorted(section.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return []
+
+    for entry in children:
+        if entry.name.casefold() in _SKIP_NAMES or entry.name.startswith("."):
+            continue
+        if entry.is_dir() and entry.name.casefold() in known:
+            try:
+                nested = sorted(entry.iterdir(), key=lambda p: p.name.casefold())
+            except OSError:
+                continue
+            for child in nested:
+                if child.name.casefold() in _SKIP_NAMES or child.name.startswith("."):
+                    continue
+                resolved = resolve_media_entry(child, media_root=media_root)
+                if not resolved:
+                    continue
+                card = _item_card(
+                    kind,
+                    display_entry=child,
+                    resolved=resolved,
+                    media_root=media_root,
+                )
+                if card:
+                    out.append((card, child, resolved))
+            continue
+        resolved = resolve_media_entry(entry, media_root=media_root)
+        if not resolved:
+            continue
+        card = _item_card(
+            kind, display_entry=entry, resolved=resolved, media_root=media_root
+        )
+        if card:
+            out.append((card, entry, resolved))
+    return out
+
+
+def find_resolved_media_item(
+    band: Band,
+    media_root: Path,
+    *,
+    kind: str,
+    item_id: str,
+) -> tuple[dict, Path, Path] | None:
+    for card, display_entry, resolved in iter_resolved_media_items(
+        band, media_root, kind=kind
+    ):
+        if card.get("id") == item_id:
+            return card, display_entry, resolved
+    return None
+
+
 def build_media_tab_index(
     band: Band,
     media_root: Path,

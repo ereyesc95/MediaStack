@@ -3,6 +3,7 @@ import {
   getCachedArtistMediaTab,
   prefetchArtistMediaTab,
 } from "../../../artistMediaTabCache";
+import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import type { MediaTabCategory, MediaTabIndexPayload } from "../../../types";
 
 type Props = {
@@ -74,6 +75,29 @@ export function useArtistMediaTab(bandId: number, kind: "video" | "library", ena
 export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
   const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
     useArtistMediaTab(bandId, kind, true);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
+  const handleOpen = useCallback(
+    async (itemId: string) => {
+      if (openingId) return;
+      setOpeningId(itemId);
+      try {
+        const overview = await prefetchMediaItemOverview(bandId, kind, itemId, {
+          force: true,
+        });
+        if (overview.open_url) {
+          window.open(overview.open_url, "_blank", "noopener,noreferrer");
+          return;
+        }
+        onOpenItem?.(itemId);
+      } catch {
+        onOpenItem?.(itemId);
+      } finally {
+        setOpeningId(null);
+      }
+    },
+    [bandId, kind, onOpenItem, openingId]
+  );
 
   if (loading && !data) {
     return <p className="muted artist-section-empty">Loading…</p>;
@@ -105,13 +129,21 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
           ))}
         </nav>
       )}
-      <div className="artist-media-grid__items artist-media-grid__items--portrait">
+      <div className="media-release-grid">
         {(category?.items ?? []).map((item) => (
-          <button
+          <article
             key={item.id}
-            type="button"
-            className="media-release-card media-release-card--clickable artist-media-grid__card media-release-card--portrait media-beat-frame media-beat-frame--cover"
-            onClick={() => onOpenItem?.(item.id)}
+            className="media-release-card media-release-card--clickable media-beat-frame media-beat-frame--cover"
+            role="button"
+            tabIndex={0}
+            aria-busy={openingId === item.id}
+            onClick={() => void handleOpen(item.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                void handleOpen(item.id);
+              }
+            }}
             title={item.title}
           >
             <span
@@ -131,7 +163,7 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
                 <span className="media-release-card__date-label">{item.date_iso}</span>
               </span>
             ) : null}
-          </button>
+          </article>
         ))}
       </div>
     </div>

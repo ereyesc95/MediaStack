@@ -8,7 +8,7 @@ import {
 import type { MediaItemOverview } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "media-item-overview";
+const NAMESPACE = "media-item-overview-v2";
 
 type CacheKey = `${number}:${"video" | "library"}:${string}`;
 

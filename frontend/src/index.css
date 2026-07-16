@@ -6034,6 +6034,7 @@ input {
   font-weight: 600;
   text-align: center;
   line-height: 1.2;
+  color: #fff;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75);
   padding: 0 0.35rem;
 }
@@ -11911,27 +11912,15 @@ button.lyrics-status-badge--icon-only {
 
 /* --- Artist video/library grid --- */
 .artist-media-grid {
-  padding: 0.75rem 1rem 1.5rem;
+  padding: 0 0 1.5rem;
 }
 
-.artist-media-grid__items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-  gap: 0.75rem;
+.artist-media-grid .media-release-grid {
+  gap: 0;
 }
 
-.artist-media-grid__items--portrait {
-  grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
-  gap: 0.85rem;
-}
-
-.artist-media-grid__card.media-release-card--portrait {
-  aspect-ratio: 2 / 3;
-}
-
-.artist-media-grid__card .media-release-card__date {
-  font-size: 0.68rem;
-  color: var(--text-muted);
+.artist-media-grid .media-release-card {
+  color: #fff;
 }
 
 /* --- Artist quiz --- */
@@ -12897,14 +12886,6 @@ button.lyrics-status-badge--icon-only {
   padding: 0.5rem;
 }
 
-.artist-media-grid__card {
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-}
-
 /* --- Video / Library item page --- */
 .media-item-page {
   min-height: 100%;
@@ -12971,11 +12952,39 @@ button.lyrics-status-badge--icon-only {
 }
 
 .media-item-page__files li {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.35rem 0;
+  padding: 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.82rem;
+}
+
+.media-item-page__group + .media-item-page__group {
+  margin-top: 1rem;
+}
+
+.media-item-page__group-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.media-item-page__file-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.media-item-page__file-btn:hover {
+  color: #fff;
 }
 
 .media-item-page__file-kind {
@@ -12983,6 +12992,13 @@ button.lyrics-status-badge--icon-only {
   color: var(--text-muted);
   text-transform: uppercase;
   font-size: 0.65rem;
+}
+
+.media-item-page__file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
