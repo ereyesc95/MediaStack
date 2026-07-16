@@ -835,18 +835,20 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                     <span className="release-tracklist__num">{track.number}</span>
                                     <span className="release-tracklist__title-wrap">
                                       <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                                      {track.is_video && (
-                                        <span
-                                          className="release-tracklist__video-badge"
-                                          title="Video"
-                                        >
-                                          <IconVideo />
-                                        </span>
-                                      )}
                                       {track.is_exclusive && <TrackExclusiveBadge />}
                                     </span>
-                                    {track.duration && (
-                                      <span className="release-tracklist__duration">{track.duration}</span>
+                                    {(track.is_video || track.duration) && (
+                                      <span className="release-tracklist__duration">
+                                        {track.is_video && (
+                                          <span
+                                            className="release-tracklist__video-badge"
+                                            title="Video"
+                                          >
+                                            <IconVideo />
+                                          </span>
+                                        )}
+                                        {track.duration ?? ""}
+                                      </span>
                                     )}
                                   </button>
                                 </li>
@@ -907,18 +909,20 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           <span className="release-tracklist__num">{track.number}</span>
                           <span className="release-tracklist__title-wrap">
                             <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                            {track.is_video && (
-                              <span
-                                className="release-tracklist__video-badge"
-                                title="Video"
-                              >
-                                <IconVideo />
-                              </span>
-                            )}
                             {track.is_exclusive && <TrackExclusiveBadge />}
                           </span>
-                          {track.duration && (
-                            <span className="release-tracklist__duration">{track.duration}</span>
+                          {(track.is_video || track.duration) && (
+                            <span className="release-tracklist__duration">
+                              {track.is_video && (
+                                <span
+                                  className="release-tracklist__video-badge"
+                                  title="Video"
+                                >
+                                  <IconVideo />
+                                </span>
+                              )}
+                              {track.duration ?? ""}
+                            </span>
                           )}
                         </button>
                       </li>

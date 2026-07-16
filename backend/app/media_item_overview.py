@@ -111,6 +111,17 @@ _SKIP_DIRS = frozenset(
         "thumbs.db",
     }
 )
+_SKIP_META_FILES = frozenset(
+    {
+        "description.txt",
+        "readme.txt",
+        "about.txt",
+        "info.txt",
+        "overview.txt",
+        "desktop.ini",
+        "thumbs.db",
+    }
+)
 _VOLUME_RE = re.compile(r"^(volume|vol)\.?\s*\d+", re.I)
 
 
@@ -232,8 +243,10 @@ def _collect_direct_files(folder: Path, media_root: Path) -> list[dict]:
             continue
         if child.name.casefold() in _SKIP_DIRS:
             continue
+        if child.name.casefold() in _SKIP_META_FILES:
+            continue
         entry = _file_entry(child, media_root)
-        if entry and entry["kind"] != "image":
+        if entry and entry["kind"] not in ("image", "text"):
             items.append(entry)
     return items
 
@@ -397,36 +410,6 @@ def _read_description(folder: Path) -> str | None:
     return None
 
 
-def patch_media_item_description(
-    db: Session,
-    band_id: int,
-    kind: str,
-    item_id: str,
-    description: str,
-) -> dict | None:
-    """Write description.txt beside the item and return a fresh overview."""
-    band = db.get(Band, band_id)
-    if not band or not settings.media_root:
-        return None
-    media_root = Path(settings.media_root)
-    found = find_resolved_media_item(
-        band, media_root, kind=kind, item_id=item_id
-    )
-    if not found:
-        return None
-    _card, _display_entry, folder = found
-    target = folder / "description.txt"
-    text = (description or "").strip()
-    try:
-        if text:
-            target.write_text(text + "\n", encoding="utf-8")
-        elif target.is_file():
-            target.unlink()
-    except OSError:
-        return None
-    return build_media_item_overview(db, band_id, kind, item_id)
-
-
 def build_media_item_overview(
     db: Session,
     band_id: int,
@@ -464,7 +447,11 @@ def build_media_item_overview(
         open_url = readable[0].get("url")
 
     cover_url = card.get("cover_url") or _folder_cover(folder, media_root)
-    disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
+    # Library items are books/docs — no disc art; video keeps default disc fallback
+    if kind == "library":
+        disc_url = None
+    else:
+        disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
     logo_url = _folder_logo(folder, media_root)
 
     payload = {
@@ -479,7 +466,7 @@ def build_media_item_overview(
         "cover_url": cover_url,
         "disc_url": disc_url,
         "logo_url": logo_url,
-        "description": _read_description(folder),
+        "description": None,
         "description_manual": False,
         "director": None,
         "author": None,
@@ -489,6 +476,6 @@ def build_media_item_overview(
         "files": flat_files,
         "open_url": open_url,
     }
-    from app.media_item_admin import apply_media_item_overrides
+    from app.media_item_admin import apply_media_item_meta
 
-    return apply_media_item_overrides(payload, band_id, kind, item_id)
+    return apply_media_item_meta(payload, db, band_id, kind, item_id)

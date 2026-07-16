@@ -439,6 +439,23 @@ class EntityRelated(Base):
     erl_sort_order: Mapped[int | None] = mapped_column("erlSortOrder", Integer, default=0)
 
 
+class MediaItemMeta(Base):
+    """Per-band Video/Library folder metadata (DB-only; no sidecar files)."""
+
+    __tablename__ = "media_item_meta"
+
+    mim_id: Mapped[int] = mapped_column("mimID", Integer, primary_key=True)
+    mim_band_id: Mapped[int] = mapped_column("mimBandID", Integer, index=True)
+    mim_kind: Mapped[str] = mapped_column("mimKind", String(16), index=True)
+    mim_item_id: Mapped[str] = mapped_column("mimItemID", String(64), index=True)
+    mim_description: Mapped[str | None] = mapped_column("mimDescription", Text)
+    mim_director: Mapped[str | None] = mapped_column("mimDirector", Text)
+    mim_author: Mapped[str | None] = mapped_column("mimAuthor", Text)
+    mim_publisher: Mapped[str | None] = mapped_column("mimPublisher", Text)
+    mim_genres: Mapped[str | None] = mapped_column("mimGenres", Text)
+    mim_updated_at: Mapped[str | None] = mapped_column("mimUpdatedAt", Text)
+
+
 class ApiAuth(Base):
     __tablename__ = "apiauth"
 

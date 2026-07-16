@@ -213,3 +213,23 @@ def migrate_schema(eng: Engine) -> None:
                     """
                 )
             )
+        if "media_item_meta" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE media_item_meta (
+                        "mimID" INTEGER NOT NULL PRIMARY KEY,
+                        "mimBandID" INTEGER NOT NULL,
+                        "mimKind" TEXT NOT NULL,
+                        "mimItemID" TEXT NOT NULL,
+                        "mimDescription" TEXT,
+                        "mimDirector" TEXT,
+                        "mimAuthor" TEXT,
+                        "mimPublisher" TEXT,
+                        "mimGenres" TEXT,
+                        "mimUpdatedAt" TEXT,
+                        UNIQUE ("mimBandID", "mimKind", "mimItemID")
+                    )
+                    """
+                )
+            )

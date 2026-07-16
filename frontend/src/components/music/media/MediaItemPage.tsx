@@ -216,6 +216,7 @@ export default function MediaItemPage({
   const pageClass = [
     "release-page",
     "media-item-page",
+    kind === "video" ? "media-item-page--video" : "media-item-page--library",
     tab === "overview" ? "release-page--overview" : "",
     tab === "gallery" ? "release-page--tab-gallery" : "",
     stacked ? "release-page--stacked" : "",
@@ -225,6 +226,13 @@ export default function MediaItemPage({
   ]
     .filter(Boolean)
     .join(" ");
+
+  const hasPanelCredits = Boolean(
+    data?.director ||
+      data?.author ||
+      data?.publisher ||
+      (data?.genres && data.genres.length > 0)
+  );
 
   return (
     <div className={pageClass}>
@@ -336,7 +344,14 @@ export default function MediaItemPage({
           <aside className="release-page__panel">
             <div className="release-page__panel-content">
               <div className="release-page__art">
-                <div className="release-page__art-stage">
+                <div
+                  className={[
+                    "release-page__art-stage",
+                    kind === "library" ? "release-page__art-stage--cover-only" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
                   {data.cover_url ? (
                     <div className="release-page__cover-wrap">
                       <img
@@ -347,12 +362,14 @@ export default function MediaItemPage({
                       />
                     </div>
                   ) : null}
-                  <img
-                    src={discUrl}
-                    alt=""
-                    className="release-page__disc"
-                    draggable={false}
-                  />
+                  {kind === "video" ? (
+                    <img
+                      src={discUrl}
+                      alt=""
+                      className="release-page__disc"
+                      draggable={false}
+                    />
+                  ) : null}
                 </div>
               </div>
               <div className="release-page__panel-meta">
@@ -375,6 +392,46 @@ export default function MediaItemPage({
                         ) : null}
                         <p className="release-page__type-line">{typeLine}</p>
                       </div>
+                      {hasPanelCredits ? (
+                        <div className="release-page__panel-credits media-item-page__panel-credits">
+                          {data.genres && data.genres.length > 0 ? (
+                            <p className="release-page__subgenres">
+                              {data.genres.map((name, i) => (
+                                <span key={`${name}-${i}`}>
+                                  {i > 0 && " · "}
+                                  <span className="release-page__genre-link">
+                                    {name}
+                                  </span>
+                                </span>
+                              ))}
+                            </p>
+                          ) : null}
+                          {data.director ? (
+                            <p className="release-page__producer">
+                              Directed by{" "}
+                              <span className="release-page__person-link">
+                                {data.director}
+                              </span>
+                            </p>
+                          ) : null}
+                          {data.author ? (
+                            <p className="release-page__producer">
+                              Written by{" "}
+                              <span className="release-page__person-link">
+                                {data.author}
+                              </span>
+                            </p>
+                          ) : null}
+                          {data.publisher ? (
+                            <p className="release-page__producer">
+                              Published by{" "}
+                              <span className="release-page__person-link">
+                                {data.publisher}
+                              </span>
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -386,34 +443,6 @@ export default function MediaItemPage({
           <main className="release-page__main">
             {tab === "overview" ? (
               <div className="release-page__overview">
-                {(data.director ||
-                  data.author ||
-                  data.publisher ||
-                  (data.genres && data.genres.length > 0)) && (
-                  <section className="release-page__meta-block media-item-page__meta">
-                    {data.director ? (
-                      <p>
-                        <span className="muted">Director</span> {data.director}
-                      </p>
-                    ) : null}
-                    {data.author ? (
-                      <p>
-                        <span className="muted">Author</span> {data.author}
-                      </p>
-                    ) : null}
-                    {data.publisher ? (
-                      <p>
-                        <span className="muted">Publisher</span> {data.publisher}
-                      </p>
-                    ) : null}
-                    {data.genres && data.genres.length > 0 ? (
-                      <p>
-                        <span className="muted">Genres</span>{" "}
-                        {data.genres.join(", ")}
-                      </p>
-                    ) : null}
-                  </section>
-                )}
                 {data.description ? (
                   <section className="release-page__desc-block">
                     <div className="release-page__desc-scroll">

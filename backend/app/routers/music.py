@@ -920,6 +920,16 @@ def band_media_item(
     return data
 
 
+@router.get("/media-genres")
+def media_genres_for_kind(
+    kind: str = Query(..., pattern="^(video|library)$"),
+    db: Session = Depends(get_db),
+):
+    from app.media_item_admin import list_genres_for_kind
+
+    return {"kind": kind, "genres": list_genres_for_kind(db, kind)}
+
+
 @router.get("/bands/{band_id}/media/{kind}/{item_id}/gallery")
 def band_media_item_gallery(
     band_id: int,
@@ -968,6 +978,8 @@ def patch_band_media_item(
         genres=body.genres,
     )
     if not data:
+        if body.genres is not None:
+            raise HTTPException(400, "One or more genres are not in the database")
         raise HTTPException(404, "Item not found")
     return data
 

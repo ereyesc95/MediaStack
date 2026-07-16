@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { patchMediaItemOverview } from "../../../api";
+import { useEffect, useState } from "react";
+import { fetchMediaGenres, patchMediaItemOverview } from "../../../api";
 import type { MediaItemOverview } from "../../../types";
 import ModalPortal from "../../ModalPortal";
+import GenreTagsInput from "./GenreTagsInput";
 
 type Props = {
   bandId: number;
@@ -11,6 +12,14 @@ type Props = {
   onClose: () => void;
   onSaved: (data: MediaItemOverview) => void;
 };
+
+function titleCaseWords(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 export default function MediaItemAboutEditModal({
   bandId,
@@ -24,9 +33,26 @@ export default function MediaItemAboutEditModal({
   const [director, setDirector] = useState(data.director ?? "");
   const [author, setAuthor] = useState(data.author ?? "");
   const [publisher, setPublisher] = useState(data.publisher ?? "");
-  const [genres, setGenres] = useState((data.genres ?? []).join("; "));
+  const [genres, setGenres] = useState<string[]>(data.genres ?? []);
+  const [genreOptions, setGenreOptions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMediaGenres(kind)
+      .then((res) => {
+        if (!cancelled) {
+          setGenreOptions(res.genres.map((g) => g.name).filter(Boolean));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGenreOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind]);
 
   async function handleSave() {
     setSaving(true);
@@ -34,13 +60,10 @@ export default function MediaItemAboutEditModal({
     try {
       const updated = await patchMediaItemOverview(bandId, kind, itemId, {
         description,
-        director: kind === "video" ? director : null,
-        author: kind === "library" ? author : null,
-        publisher,
-        genres: genres
-          .split(";")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        director: kind === "video" ? titleCaseWords(director.trim()) : null,
+        author: kind === "library" ? titleCaseWords(author.trim()) : null,
+        publisher: titleCaseWords(publisher.trim()),
+        genres,
       });
       onSaved(updated);
       onClose();
@@ -88,6 +111,7 @@ export default function MediaItemAboutEditModal({
                 type="text"
                 value={director}
                 onChange={(e) => setDirector(e.target.value)}
+                onBlur={() => setDirector(titleCaseWords(director.trim()))}
               />
             </label>
           ) : (
@@ -97,6 +121,7 @@ export default function MediaItemAboutEditModal({
                 type="text"
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
+                onBlur={() => setAuthor(titleCaseWords(author.trim()))}
               />
             </label>
           )}
@@ -106,16 +131,16 @@ export default function MediaItemAboutEditModal({
               type="text"
               value={publisher}
               onChange={(e) => setPublisher(e.target.value)}
+              onBlur={() => setPublisher(titleCaseWords(publisher.trim()))}
             />
           </label>
-          <label>
-            Genres (semicolon-separated)
-            <input
-              type="text"
-              value={genres}
-              onChange={(e) => setGenres(e.target.value)}
-            />
-          </label>
+          <GenreTagsInput
+            label="Genres"
+            options={genreOptions}
+            value={genres}
+            onChange={setGenres}
+            disabled={saving}
+          />
         </div>
 
         <div className="modal-actions-row">

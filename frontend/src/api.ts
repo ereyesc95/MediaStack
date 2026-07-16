@@ -484,6 +484,12 @@ export async function fetchMediaItemGallery(
   );
 }
 
+export async function fetchMediaGenres(kind: "video" | "library") {
+  return request<{ kind: string; genres: { id: number; name: string }[] }>(
+    `${API}/music/media-genres?kind=${encodeURIComponent(kind)}`
+  );
+}
+
 export async function patchMediaItemOverview(
   bandId: number,
   kind: "video" | "library",
