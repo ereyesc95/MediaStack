@@ -472,6 +472,40 @@ export async function fetchMediaItemOverview(
   );
 }
 
+export async function fetchMediaItemGallery(
+  bandId: number,
+  kind: "video" | "library",
+  itemId: string
+): Promise<import("./types").ReleaseGalleryPayload> {
+  return request(
+    `${API}/music/bands/${bandId}/media/${kind}/${itemId}/gallery`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function patchMediaItemOverview(
+  bandId: number,
+  kind: "video" | "library",
+  itemId: string,
+  body: {
+    description?: string | null;
+    director?: string | null;
+    author?: string | null;
+    publisher?: string | null;
+    genres?: string[] | null;
+  }
+) {
+  return request<import("./types").MediaItemOverview>(
+    `${API}/music/bands/${bandId}/media/${kind}/${itemId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
 export async function saveQuizScore(
   bandId: number,
   body: {

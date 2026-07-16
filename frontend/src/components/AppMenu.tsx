@@ -57,7 +57,7 @@ type Props = {
   onSetVideo?: () => void;
   onWriteFileTags?: () => void;
   onRefreshTracklist?: () => void;
-  menuVariant?: "artist" | "release";
+  menuVariant?: "artist" | "release" | "media-item";
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -266,15 +266,16 @@ export default function AppMenu({
           onWriteFileTags)));
 
   const showRefreshData =
-    onEditAbout ||
-    onRefreshMetadata ||
-    onRescanLibrary ||
-    onRefreshLineup ||
-    onRefreshPhotos ||
-    onRefreshLinks ||
-    onRefreshRelatedSimilar ||
-    onRefreshRelatedParticipations ||
-    onRefreshIncludeBioChange;
+    menuVariant !== "media-item" &&
+    (onEditAbout ||
+      onRefreshMetadata ||
+      onRescanLibrary ||
+      onRefreshLineup ||
+      onRefreshPhotos ||
+      onRefreshLinks ||
+      onRefreshRelatedSimilar ||
+      onRefreshRelatedParticipations ||
+      onRefreshIncludeBioChange);
 
   const refreshMenuLabel = menuVariant === "release" ? "Edit Release" : "Refresh data";
   const RefreshMenuIcon = menuVariant === "release" ? IconEditRelease : IconMetadata;
@@ -329,6 +330,30 @@ export default function AppMenu({
             >
               <IconAddArtist className="menu-item-icon" />
               Add similar artist
+            </button>
+          )}
+          {menuVariant === "media-item" && onRefreshTracklist && (
+            <button
+              type="button"
+              onClick={() => {
+                onRefreshTracklist();
+                setOpen(false);
+              }}
+            >
+              <IconSync className="menu-item-icon" />
+              Refresh list
+            </button>
+          )}
+          {menuVariant === "media-item" && isAdmin && onEditAbout && (
+            <button
+              type="button"
+              onClick={() => {
+                onEditAbout();
+                setOpen(false);
+              }}
+            >
+              <IconEditRelease className="menu-item-icon" />
+              Edit Release
             </button>
           )}
           {showTrackDataMenu && (

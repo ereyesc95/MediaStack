@@ -123,6 +123,14 @@ class PatchReleaseBody(BaseModel):
     subgenres: list[str] | None = None
 
 
+class PatchMediaItemBody(BaseModel):
+    description: str | None = None
+    director: str | None = None
+    author: str | None = None
+    publisher: str | None = None
+    genres: list[str] | None = None
+
+
 class PatchBandAboutBody(BaseModel):
     bio: str | None = None
     aliases: str | None = None
@@ -907,6 +915,58 @@ def band_media_item(
     if not row:
         raise HTTPException(404, "Band not found")
     data = build_media_item_overview(db, band_id, kind, item_id)
+    if not data:
+        raise HTTPException(404, "Item not found")
+    return data
+
+
+@router.get("/bands/{band_id}/media/{kind}/{item_id}/gallery")
+def band_media_item_gallery(
+    band_id: int,
+    kind: str,
+    item_id: str,
+    db: Session = Depends(get_db),
+):
+    from app.media_item_gallery import build_media_item_gallery
+
+    if kind not in ("video", "library"):
+        raise HTTPException(404, "Not found")
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = build_media_item_gallery(db, band_id, kind, item_id)
+    if not data:
+        raise HTTPException(404, "Gallery not found")
+    return data
+
+
+@router.patch("/bands/{band_id}/media/{kind}/{item_id}")
+def patch_band_media_item(
+    band_id: int,
+    kind: str,
+    item_id: str,
+    body: PatchMediaItemBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.media_item_admin import patch_media_item_overview
+
+    if kind not in ("video", "library"):
+        raise HTTPException(404, "Not found")
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = patch_media_item_overview(
+        db,
+        band_id,
+        kind,
+        item_id,
+        description=body.description,
+        director=body.director,
+        author=body.author,
+        publisher=body.publisher,
+        genres=body.genres,
+    )
     if not data:
         raise HTTPException(404, "Item not found")
     return data

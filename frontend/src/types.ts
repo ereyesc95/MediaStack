@@ -612,6 +612,8 @@ export type ReleaseTrackItem = {
   has_lrc: boolean;
   has_synced_lrc?: boolean;
   is_link: boolean;
+  is_video?: boolean;
+  open_url?: string | null;
   is_exclusive?: boolean;
   youtube_url?: string | null;
   youtube_videos?: TrackYoutubeVideo[];
@@ -717,6 +719,8 @@ export type MediaItemFile = {
   url?: string | null;
   duration?: string | null;
   duration_sec?: number | null;
+  page_count?: number | null;
+  pages?: string | null;
 };
 
 export type MediaItemGroup = {
@@ -737,6 +741,11 @@ export type MediaItemOverview = {
   disc_url?: string | null;
   logo_url?: string | null;
   description: string | null;
+  description_manual?: boolean;
+  director?: string | null;
+  author?: string | null;
+  publisher?: string | null;
+  genres?: string[];
   files: MediaItemFile[];
   groups?: MediaItemGroup[];
   open_url?: string | null;

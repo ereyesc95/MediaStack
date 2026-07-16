@@ -27,6 +27,7 @@ import type {
   TrackVersionItem,
 } from "../../../types";
 import BillboardText from "../../BillboardText";
+import { IconVideo } from "../../MenuIcons";
 import { ReleaseTrackTitle } from "./releaseTrackTitle";
 import ReleaseAddToPlaylistModal from "./ReleaseAddToPlaylistModal";
 import ReleaseInlineLyrics from "./ReleaseInlineLyrics";
@@ -34,6 +35,16 @@ import ReleaseLyricsEditModal from "./ReleaseLyricsEditModal";
 import LyricsStatusBadge from "./LyricsStatusBadge";
 import { ChevronIcon, parseTrackPanelMeta, trackDisplayTitle, trackMainTitle } from "./releaseTrackPanelMeta";
 import { TrackActionEditIcon, TrackActionRetryIcon } from "./releaseTrackActionIcons";
+
+function openVideoTrack(track: ReleaseTrackItem) {
+  const url =
+    track.open_url ||
+    (track.play_path
+      ? `/api/media/file?path=${encodeURIComponent(track.play_path)}`
+      : null);
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 export {
   clearReleaseTracklistCache,
@@ -710,7 +721,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const adjacentTracks = useCallback(
     (path: string) => {
-      const tracks = allTracksFlat;
+      const tracks = allTracksFlat.filter((t) => !t.is_video);
       const idx = tracks.findIndex((t) => t.play_path === path);
       if (idx < 0 || tracks.length === 0) return { prev: null, next: null };
       return {
@@ -796,6 +807,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                     type="button"
                                     className="release-tracklist__play"
                                     onClick={() => {
+                                      if (track.is_video) {
+                                        openVideoTrack(track);
+                                        return;
+                                      }
                                       setPlayingVersionPath(null);
                                       setActiveVersionSource(null);
                                       const linkSource = linkSourceFromTrack(track);
@@ -811,11 +826,23 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                         versionSource: linkSource,
                                       });
                                     }}
-                                    aria-label={`Play ${track.title}`}
+                                    aria-label={
+                                      track.is_video
+                                        ? `Open video ${track.title}`
+                                        : `Play ${track.title}`
+                                    }
                                   >
                                     <span className="release-tracklist__num">{track.number}</span>
                                     <span className="release-tracklist__title-wrap">
                                       <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                      {track.is_video && (
+                                        <span
+                                          className="release-tracklist__video-badge"
+                                          title="Video"
+                                        >
+                                          <IconVideo />
+                                        </span>
+                                      )}
                                       {track.is_exclusive && <TrackExclusiveBadge />}
                                     </span>
                                     {track.duration && (
@@ -853,6 +880,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           type="button"
                           className="release-tracklist__play"
                           onClick={() => {
+                            if (track.is_video) {
+                              openVideoTrack(track);
+                              return;
+                            }
                             setPlayingVersionPath(null);
                             setActiveVersionSource(null);
                             const linkSource = linkSourceFromTrack(track);
@@ -867,11 +898,23 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                               versionSource: linkSource,
                             });
                           }}
-                          aria-label={`Play ${track.title}`}
+                          aria-label={
+                            track.is_video
+                              ? `Open video ${track.title}`
+                              : `Play ${track.title}`
+                          }
                         >
                           <span className="release-tracklist__num">{track.number}</span>
                           <span className="release-tracklist__title-wrap">
                             <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                            {track.is_video && (
+                              <span
+                                className="release-tracklist__video-badge"
+                                title="Video"
+                              >
+                                <IconVideo />
+                              </span>
+                            )}
                             {track.is_exclusive && <TrackExclusiveBadge />}
                           </span>
                           {track.duration && (

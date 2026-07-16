@@ -33,6 +33,33 @@ READABLE_EXTS = DOC_EXTS | {".html", ".htm"}
 DEFAULT_DISC_URL = "/api/assets/system/default/disc.png"
 
 
+def _mp4_duration_from_mvhd(path: Path) -> float | None:
+    """Parse timescale/duration from the mvhd atom when mutagen reports 0."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    idx = data.find(b"mvhd")
+    if idx < 0 or idx + 24 > len(data):
+        return None
+    # Atom header is size(4)+type(4); version follows type.
+    ver = data[idx + 4]
+    try:
+        if ver == 1:
+            if idx + 32 > len(data):
+                return None
+            timescale = int.from_bytes(data[idx + 20 : idx + 24], "big")
+            duration = int.from_bytes(data[idx + 24 : idx + 32], "big")
+        else:
+            timescale = int.from_bytes(data[idx + 16 : idx + 20], "big")
+            duration = int.from_bytes(data[idx + 20 : idx + 24], "big")
+    except Exception:
+        return None
+    if timescale <= 0 or duration <= 0:
+        return None
+    return float(duration) / float(timescale)
+
+
 def _video_duration_sec(path: Path) -> float | None:
     """Best-effort video length; skip zero/invalid mutagen results."""
     try:
@@ -47,7 +74,29 @@ def _video_duration_sec(path: Path) -> float | None:
     length = _duration_from_file(path)
     if length and float(length) > 0:
         return float(length)
+    if path.suffix.casefold() in {".mp4", ".m4v", ".mov"}:
+        return _mp4_duration_from_mvhd(path)
     return None
+
+
+def _pdf_page_count(path: Path) -> int | None:
+    if path.suffix.casefold() != ".pdf":
+        return None
+    try:
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(str(path))
+        n = len(reader.pages)
+        return n if n > 0 else None
+    except Exception:
+        return None
+
+
+def _format_pages(page_count: int | None) -> str | None:
+    if not page_count or page_count <= 0:
+        return None
+    label = "page" if page_count == 1 else "pages"
+    return f"{page_count} {label}"
 
 _SKIP_DIRS = frozenset(
     {
@@ -116,9 +165,14 @@ def _file_entry(path: Path, media_root: Path, *, number: int | None = None) -> d
     title, date_iso, display_date = _stem_meta(path.name)
     duration_sec = None
     duration = None
+    page_count = None
+    pages = None
     if kind == "video":
         duration_sec = _video_duration_sec(path)
         duration = _format_duration(duration_sec)
+    elif kind == "document":
+        page_count = _pdf_page_count(path)
+        pages = _format_pages(page_count)
     return {
         "number": number,
         "name": path.name,
@@ -131,6 +185,8 @@ def _file_entry(path: Path, media_root: Path, *, number: int | None = None) -> d
         "url": _file_url(path, media_root),
         "duration_sec": duration_sec,
         "duration": duration,
+        "page_count": page_count,
+        "pages": pages,
     }
 
 
@@ -341,6 +397,36 @@ def _read_description(folder: Path) -> str | None:
     return None
 
 
+def patch_media_item_description(
+    db: Session,
+    band_id: int,
+    kind: str,
+    item_id: str,
+    description: str,
+) -> dict | None:
+    """Write description.txt beside the item and return a fresh overview."""
+    band = db.get(Band, band_id)
+    if not band or not settings.media_root:
+        return None
+    media_root = Path(settings.media_root)
+    found = find_resolved_media_item(
+        band, media_root, kind=kind, item_id=item_id
+    )
+    if not found:
+        return None
+    _card, _display_entry, folder = found
+    target = folder / "description.txt"
+    text = (description or "").strip()
+    try:
+        if text:
+            target.write_text(text + "\n", encoding="utf-8")
+        elif target.is_file():
+            target.unlink()
+    except OSError:
+        return None
+    return build_media_item_overview(db, band_id, kind, item_id)
+
+
 def build_media_item_overview(
     db: Session,
     band_id: int,
@@ -381,7 +467,7 @@ def build_media_item_overview(
     disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
     logo_url = _folder_logo(folder, media_root)
 
-    return {
+    payload = {
         "id": item_id,
         "kind": kind,
         "band_id": band_id,
@@ -394,7 +480,15 @@ def build_media_item_overview(
         "disc_url": disc_url,
         "logo_url": logo_url,
         "description": _read_description(folder),
+        "description_manual": False,
+        "director": None,
+        "author": None,
+        "publisher": None,
+        "genres": [],
         "groups": groups,
         "files": flat_files,
         "open_url": open_url,
     }
+    from app.media_item_admin import apply_media_item_overrides
+
+    return apply_media_item_overrides(payload, band_id, kind, item_id)

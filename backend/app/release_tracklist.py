@@ -16,10 +16,12 @@ from app.band_library import (
     _album_title_from_folder,
     _audio_root,
     _find_audio_by_title,
+    _normalize_title_for_match,
     _parse_folder_date,
     _resolve_child_dir,
     _strip_bracket_suffix,
     display_track_title_from_path,
+    title_case_track_title,
     _track_title_from_filename,
 )
 from app.config import settings
@@ -38,7 +40,12 @@ from app.media_index import (
     parse_bracket_tags,
     release_id_from_path,
 )
-from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
+from app.media_paths_util import (
+    entry_display_name,
+    read_windows_lnk_target,
+    resolve_media_entry,
+    safe_relative,
+)
 from app.models import Band, Track
 from app.gallery import IMAGE_EXTS, _artist_dir, _media_url
 from app.release_overview import (
@@ -153,6 +160,171 @@ def _db_duration_map(db: Session) -> dict[str, float]:
 
 def _is_audio_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in AUDIO_EXTS
+
+
+def _video_exts() -> set[str]:
+    from app.media_item_overview import VIDEO_EXTS
+
+    return VIDEO_EXTS
+
+
+def _is_video_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in _video_exts()
+
+
+def _lnk_has_video_suffix(lnk_stem: str) -> bool:
+    bm = BRACKET_SUFFIX_RE.search(lnk_stem.strip())
+    return bool(bm and bm.group(1).casefold().strip() == "video")
+
+
+def _first_video_in_folder(folder: Path) -> Path | None:
+    if not folder.is_dir():
+        return None
+    try:
+        children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return None
+    videos = [c for c in children if _is_video_file(c)]
+    if videos:
+        return videos[0]
+    for child in children:
+        if not child.is_dir() or child.name.casefold() == ARTWORK_DIR:
+            continue
+        nested = _first_video_in_folder(child)
+        if nested:
+            return nested
+    return None
+
+
+def _find_track_video_by_title(
+    db: Session,
+    band_id: int,
+    media_root: Path,
+    track_title: str,
+) -> Path | None:
+    """Locate a video file under the artist's Video folder by folder/file title."""
+    if not track_title.strip():
+        return None
+    band = db.get(Band, band_id)
+    if not band:
+        return None
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return None
+    video_root = _resolve_child_dir(artist_dir, "Video")
+    if not video_root.is_dir():
+        return None
+    from app.media_tabs_index import _title_from_folder
+
+    want = _normalize_title_for_match(track_title)
+    candidates: list[Path] = []
+    try:
+        children = list(video_root.iterdir())
+    except OSError:
+        return None
+    for child in children:
+        if child.name.casefold() == ARTWORK_DIR:
+            continue
+        if child.is_dir():
+            # Flat item or category folder
+            try:
+                nested = list(child.iterdir())
+            except OSError:
+                nested = []
+            has_video = any(_is_video_file(p) for p in nested) or any(
+                p.is_dir() and p.name.casefold() != ARTWORK_DIR for p in nested
+            )
+            # Prefer treating as item when it looks like a dated release folder
+            if DATE_PREFIX_RE.match(entry_display_name(child).strip()) or has_video:
+                candidates.append(child)
+            for sub in nested:
+                if sub.is_dir() and sub.name.casefold() != ARTWORK_DIR:
+                    candidates.append(sub)
+        elif _is_video_file(child):
+            if _normalize_title_for_match(
+                _parse_lnk_track_lookup_title(child.stem)
+            ) == want:
+                return child
+
+    for folder in candidates:
+        folder_title = _title_from_folder(entry_display_name(folder))
+        if _normalize_title_for_match(folder_title) != want:
+            continue
+        found = _first_video_in_folder(folder)
+        if found:
+            return found
+    return None
+
+
+def _resolve_lnk_video_file(
+    db: Session,
+    band_id: int,
+    media_root: Path,
+    lnk: Path,
+    lnk_stem: str,
+) -> Path | None:
+    target = read_windows_lnk_target(lnk)
+    if target:
+        try:
+            resolved = target.resolve()
+        except OSError:
+            resolved = target
+        if _is_video_file(resolved):
+            return resolved
+        if resolved.is_dir():
+            found = _first_video_in_folder(resolved)
+            if found:
+                return found
+        parent = resolved.parent if resolved.exists() else None
+        if parent and parent.is_dir():
+            found = _first_video_in_folder(parent)
+            if found:
+                return found
+    folder = resolve_media_entry(lnk, media_root=media_root)
+    if folder and folder.is_dir():
+        found = _first_video_in_folder(folder)
+        if found:
+            return found
+    return _find_track_video_by_title(
+        db, band_id, media_root, _parse_lnk_track_lookup_title(lnk_stem)
+    )
+
+
+def _build_video_track(
+    *,
+    lnk_stem: str,
+    video_file: Path,
+    media_root: Path,
+    index: int,
+) -> dict | None:
+    from app.media_item_overview import _file_url, _video_duration_sec
+
+    play_path = safe_relative(video_file, media_root)
+    if not play_path:
+        return None
+    play_path = play_path.replace("\\", "/")
+    title = title_case_track_title(_parse_lnk_track_lookup_title(lnk_stem))
+    duration_sec = _video_duration_sec(video_file)
+    open_url = _file_url(video_file, media_root)
+    return {
+        "id": _track_id(play_path),
+        "number": _track_number(lnk_stem, index),
+        "title": title or display_track_title_from_path(video_file),
+        "play_path": play_path,
+        "duration_sec": duration_sec,
+        "duration": _format_duration(duration_sec),
+        "has_lrc": False,
+        "has_synced_lrc": False,
+        "is_link": True,
+        "is_video": True,
+        "is_exclusive": False,
+        "open_url": open_url,
+        "cover_url": None,
+        "cover_animation_url": None,
+        "canvas_url": None,
+        "disc_url": None,
+        "background_layers": [],
+    }
 
 
 def _has_direct_audio(folder: Path) -> bool:
@@ -393,26 +565,58 @@ def _scan_tracks_in_dir(
     *,
     db_durations: dict[str, float],
     art_ctx: PlaybackArtContext | None = None,
+    db: Session | None = None,
+    band_id: int | None = None,
 ) -> list[dict]:
     tracks: list[dict] = []
     entries = sorted(directory.iterdir(), key=lambda p: p.name.casefold())
     index = 0
     for entry in entries:
-        audio_file: Path | None = None
-        if _is_audio_file(entry):
-            audio_file = entry
-        elif entry.suffix.casefold() == ".lnk":
+        if entry.suffix.casefold() == ".lnk":
+            lnk_stem = entry_display_name(entry)
+            if (
+                _lnk_has_video_suffix(lnk_stem)
+                and db is not None
+                and band_id is not None
+            ):
+                video_file = _resolve_lnk_video_file(
+                    db, band_id, media_root, entry, lnk_stem
+                )
+                if video_file:
+                    index += 1
+                    track = _build_video_track(
+                        lnk_stem=lnk_stem,
+                        video_file=video_file,
+                        media_root=media_root,
+                        index=index,
+                    )
+                    if track:
+                        tracks.append(track)
+                continue
             target = resolve_media_entry(entry)
             if target and _is_audio_file(target):
-                audio_file = target
-        if not audio_file:
+                index += 1
+                track = _build_track(
+                    target,
+                    media_root,
+                    db_durations=db_durations,
+                    index=index,
+                    art_ctx=art_ctx,
+                )
+                if track:
+                    tracks.append(track)
             continue
-        index += 1
-        track = _build_track(
-            audio_file, media_root, db_durations=db_durations, index=index, art_ctx=art_ctx
-        )
-        if track:
-            tracks.append(track)
+        if _is_audio_file(entry):
+            index += 1
+            track = _build_track(
+                entry,
+                media_root,
+                db_durations=db_durations,
+                index=index,
+                art_ctx=art_ctx,
+            )
+            if track:
+                tracks.append(track)
     return tracks
 
 
@@ -442,13 +646,20 @@ def _scan_resolved_folder(
     kind: str,
     edition_artwork: Path | None = None,
     art_ctx: PlaybackArtContext | None = None,
+    db: Session | None = None,
+    band_id: int | None = None,
 ) -> dict:
     if _has_group_subdirs(folder):
         groups: list[dict] = []
         subdirs = _group_subdirs(folder)
         for sub in subdirs:
             tracks = _scan_tracks_in_dir(
-                sub, media_root, db_durations=db_durations, art_ctx=art_ctx
+                sub,
+                media_root,
+                db_durations=db_durations,
+                art_ctx=art_ctx,
+                db=db,
+                band_id=band_id,
             )
             if tracks:
                 groups.append(
@@ -479,7 +690,12 @@ def _scan_resolved_folder(
         return {"kind": kind, "label": label, "groups": vinyl_groups}
 
     tracks = _scan_tracks_in_dir(
-        folder, media_root, db_durations=db_durations, art_ctx=art_ctx
+        folder,
+        media_root,
+        db_durations=db_durations,
+        art_ctx=art_ctx,
+        db=db,
+        band_id=band_id,
     )
     if tracks:
         return {
@@ -898,6 +1114,22 @@ def _build_flat_compilation_edition(
         if child.suffix.casefold() != ".lnk":
             continue
         lnk_stem = entry_display_name(child)
+        if _lnk_has_video_suffix(lnk_stem):
+            video_file = _resolve_lnk_video_file(
+                db, band_id, media_root, child, lnk_stem
+            )
+            if not video_file:
+                continue
+            index += 1
+            track = _build_video_track(
+                lnk_stem=lnk_stem,
+                video_file=video_file,
+                media_root=media_root,
+                index=index,
+            )
+            if track:
+                tracks.append(track)
+            continue
         audio_file = _resolve_lnk_audio_file(db, band_id, media_root, child, lnk_stem)
         if not audio_file:
             continue
@@ -914,11 +1146,13 @@ def _build_flat_compilation_edition(
         if track:
             tracks.append(track)
 
-    link_count = sum(1 for t in tracks if t.get("is_link"))
-    local_count = len(tracks) - link_count
+    link_count = sum(1 for t in tracks if t.get("is_link") and not t.get("is_video"))
+    local_count = len(tracks) - sum(1 for t in tracks if t.get("is_link"))
     mark_exclusive = link_count > local_count and local_count > 0
     for track in tracks:
-        track["is_exclusive"] = bool(mark_exclusive and not track.get("is_link"))
+        track["is_exclusive"] = bool(
+            mark_exclusive and not track.get("is_link") and not track.get("is_video")
+        )
 
     for i, track in enumerate(tracks, 1):
         track["number"] = i
@@ -985,6 +1219,37 @@ def _append_lnk_editions(
         if child.suffix.casefold() != ".lnk":
             continue
         lnk_stem = entry_display_name(child)
+        if _lnk_has_video_suffix(lnk_stem):
+            video_file = _resolve_lnk_video_file(
+                db, band_id, media_root, child, lnk_stem
+            )
+            if video_file:
+                track = _build_video_track(
+                    lnk_stem=lnk_stem,
+                    video_file=video_file,
+                    media_root=media_root,
+                    index=1,
+                )
+                if track:
+                    editions_out.append(
+                        {
+                            "id": _edition_id(lnk_stem),
+                            "label": _parse_lnk_track_lookup_title(lnk_stem),
+                            "kind": "link",
+                            "date_iso": None,
+                            "is_link": True,
+                            "unresolved": False,
+                            "groups": [
+                                {
+                                    "id": _edition_id(f"{lnk_stem}:video"),
+                                    "kind": "flat",
+                                    "label": None,
+                                    "tracks": [track],
+                                }
+                            ],
+                        }
+                    )
+                    continue
         section_label, edition_hint, lookup_title = _parse_lnk_label(lnk_stem)
         target = resolve_media_entry(child)
         groups: list[dict] = []
@@ -1052,6 +1317,8 @@ def _append_lnk_editions(
                     kind="link",
                     edition_artwork=edition_artwork,
                     art_ctx=source_ctx,
+                    db=db,
+                    band_id=band_id,
                 )
                 groups = _dedupe_tracks(scanned.get("groups") or [])
                 album_display, _, _ = _source_album_display(release_content, edition_dir)
@@ -1376,6 +1643,8 @@ def build_release_tracklist(
                 kind="edition",
                 edition_artwork=edition_artwork,
                 art_ctx=art_ctx,
+                db=db,
+                band_id=band_id,
             )
             groups = _dedupe_tracks(scanned.get("groups") or [])
             if groups:

@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchMediaItemGallery } from "../../../api";
 import { pushArtistRoute } from "../../../musicRoute";
 import {
+  clearMediaItemOverviewCache,
   getCachedMediaItemOverview,
   prefetchMediaItemOverview,
+  setCachedMediaItemOverview,
 } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
+import {
+  beginAlbumPageSession,
+  beginArtistPageSession,
+  clearAlbumTheme,
+  colorsFromImageUrl,
+  applyAlbumTheme,
+} from "../../../mediaTheme";
 import {
   isMobileLandscapeLayout,
   isMobilePortraitLayout,
@@ -15,6 +25,8 @@ import type { MediaItemFile, MediaItemOverview } from "../../../types";
 import AppMenu from "../../AppMenu";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
+import MediaItemAboutEditModal from "./MediaItemAboutEditModal";
+import MediaItemGallery from "./MediaItemGallery";
 
 type Props = {
   bandId: number;
@@ -31,7 +43,8 @@ type Props = {
   onEditProfile?: () => void;
 };
 
-type ItemTab = "overview" | "list";
+type ItemTab = "overview" | "list" | "gallery";
+type GalleryTab = "artwork" | "photos" | "extras";
 
 function openFile(file: MediaItemFile) {
   const url =
@@ -67,7 +80,13 @@ export default function MediaItemPage({
     () => !getCachedMediaItemOverview(bandId, kind, itemId)
   );
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<ItemTab>("list");
+  const [tab, setTab] = useState<ItemTab>("overview");
+  const [galleryTab, setGalleryTab] = useState<GalleryTab>("artwork");
+  const [galleryTabsMeta, setGalleryTabsMeta] = useState<
+    { id: GalleryTab; label: string; count: number }[]
+  >([]);
+  const [showGalleryTab, setShowGalleryTab] = useState(false);
+  const [aboutEditOpen, setAboutEditOpen] = useState(false);
 
   const load = useCallback(
     async (force = false) => {
@@ -86,7 +105,9 @@ export default function MediaItemPage({
       setLoading(true);
       setError(null);
       try {
-        setData(await prefetchMediaItemOverview(bandId, kind, itemId, { force: true }));
+        setData(
+          await prefetchMediaItemOverview(bandId, kind, itemId, { force: true })
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -107,6 +128,46 @@ export default function MediaItemPage({
     );
   }, [bandId, kind, itemId]);
 
+  useEffect(() => {
+    beginArtistPageSession(userId);
+    beginAlbumPageSession();
+  }, [userId]);
+
+  useEffect(() => {
+    return () => clearAlbumTheme(userId);
+  }, [userId]);
+
+  useEffect(() => {
+    const themeSampleUrl = data?.cover_url ?? undefined;
+    if (!themeSampleUrl) return;
+    void colorsFromImageUrl(themeSampleUrl).then((c) => {
+      if (c) applyAlbumTheme(c);
+    });
+  }, [data?.cover_url]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMediaItemGallery(bandId, kind, itemId)
+      .then((payload) => {
+        if (cancelled) return;
+        const show = Boolean(
+          payload.artwork.length ||
+            payload.photos.length ||
+            payload.extras.length
+        );
+        setShowGalleryTab(show);
+        if (!show) {
+          setTab((prev) => (prev === "gallery" ? "list" : prev));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setShowGalleryTab(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bandId, kind, itemId]);
+
   const groups = useMemo(() => {
     if (!data) return [];
     if (data.groups?.length) return data.groups;
@@ -115,12 +176,16 @@ export default function MediaItemPage({
   }, [data]);
 
   const hasDateColumn = useMemo(
-    () => groups.some((g) => g.files.some((f) => Boolean(f.display_date || f.date_iso))),
+    () =>
+      groups.some((g) => g.files.some((f) => Boolean(f.display_date || f.date_iso))),
     [groups]
   );
-  const hasDurationColumn = useMemo(
-    () => groups.some((g) => g.files.some((f) => Boolean(f.duration))),
-    [groups]
+  const showDurationColumn = kind === "video";
+  const showPagesColumn = useMemo(
+    () =>
+      kind === "library" &&
+      groups.some((g) => g.files.some((f) => Boolean(f.pages || f.page_count))),
+    [groups, kind]
   );
 
   const sectionLabel = kind === "video" ? "Video" : "Library";
@@ -134,10 +199,25 @@ export default function MediaItemPage({
   const discUrl = data?.disc_url || DEFAULT_DISC_URL;
   const topLogoUrl = data?.logo_url ?? null;
 
+  const pageTabs = useMemo(() => {
+    const tabs: { id: ItemTab; label: string }[] = [
+      { id: "overview", label: "OVERVIEW" },
+      { id: "list", label: listTabLabel },
+    ];
+    if (showGalleryTab) tabs.push({ id: "gallery", label: "GALLERY" });
+    return tabs;
+  }, [listTabLabel, showGalleryTab]);
+
+  const handleRefresh = useCallback(() => {
+    clearMediaItemOverviewCache(bandId, kind, itemId);
+    void load(true);
+  }, [bandId, kind, itemId, load]);
+
   const pageClass = [
     "release-page",
     "media-item-page",
-    "release-page--overview",
+    tab === "overview" ? "release-page--overview" : "",
+    tab === "gallery" ? "release-page--tab-gallery" : "",
     stacked ? "release-page--stacked" : "",
     tablet ? "release-page--tablet" : "",
     layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
@@ -206,60 +286,78 @@ export default function MediaItemPage({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
-              menuVariant="release"
+              menuVariant="media-item"
               artistThemeActive
+              onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
+              onRefreshTracklist={() => handleRefresh()}
             />
           </div>
         </header>
 
         <nav className="release-page__tabs" aria-label={`${sectionLabel} views`}>
-          <button
-            type="button"
-            className={tab === "overview" ? "active" : ""}
-            onClick={() => setTab("overview")}
-          >
-            OVERVIEW
-          </button>
-          <button
-            type="button"
-            className={tab === "list" ? "active" : ""}
-            onClick={() => setTab("list")}
-          >
-            {listTabLabel}
-          </button>
+          {pageTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={tab === t.id ? "active" : ""}
+              onClick={() => setTab(t.id)}
+            >
+              <span>{t.label}</span>
+            </button>
+          ))}
         </nav>
 
-        {loading && !data && (
-          <p className="muted artist-section-empty">Loading…</p>
+        {tab === "gallery" && galleryTabsMeta.length > 1 && (
+          <nav
+            className="release-page__subtabs release-page__subtabs--gallery"
+            aria-label="Gallery sections"
+          >
+            {galleryTabsMeta.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={galleryTab === t.id ? "active" : ""}
+                onClick={() => setGalleryTab(t.id)}
+              >
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </nav>
         )}
-        {error && <p className="error artist-section-empty">{error}</p>}
+      </div>
 
-        {data && (
-          <div className="release-page__body">
-            <aside className="release-page__panel">
-              <div className="release-page__panel-content">
-                <div className="release-page__art">
-                  <div className="release-page__art-stage">
-                    {data.cover_url ? (
-                      <div className="release-page__cover-wrap">
-                        <img
-                          src={data.cover_url}
-                          alt=""
-                          className="release-page__cover"
-                          draggable={false}
-                        />
-                      </div>
-                    ) : null}
-                    <img
-                      src={discUrl}
-                      alt=""
-                      className="release-page__disc"
-                      draggable={false}
-                    />
-                  </div>
+      {loading && !data && (
+        <p className="muted artist-section-empty">Loading…</p>
+      )}
+      {error && <p className="error artist-section-empty">{error}</p>}
+
+      {data && (
+        <div className="release-page__body">
+          <aside className="release-page__panel">
+            <div className="release-page__panel-content">
+              <div className="release-page__art">
+                <div className="release-page__art-stage">
+                  {data.cover_url ? (
+                    <div className="release-page__cover-wrap">
+                      <img
+                        src={data.cover_url}
+                        alt=""
+                        className="release-page__cover"
+                        draggable={false}
+                      />
+                    </div>
+                  ) : null}
+                  <img
+                    src={discUrl}
+                    alt=""
+                    className="release-page__disc"
+                    draggable={false}
+                  />
                 </div>
-                <div className="release-page__panel-meta">
-                  <div className="release-page__panel-fit">
+              </div>
+              <div className="release-page__panel-meta">
+                <div className="release-page__panel-fit">
+                  <div className="release-page__panel-fit-inner">
                     <div className="release-page__panel-body">
                       <button
                         type="button"
@@ -269,7 +367,9 @@ export default function MediaItemPage({
                         {data.artist_name}
                       </button>
                       <div className="release-page__panel-head">
-                        <h1 className="release-page__album-title">{data.title}</h1>
+                        <h1 className="release-page__album-title">
+                          {data.title}
+                        </h1>
                         {displayDate ? (
                           <p className="release-page__date">{displayDate}</p>
                         ) : null}
@@ -278,92 +378,162 @@ export default function MediaItemPage({
                     </div>
                   </div>
                 </div>
+                <div className="release-page__panel-bottom" />
               </div>
-            </aside>
+            </div>
+          </aside>
 
-            <main className="release-page__main">
-              {tab === "overview" ? (
-                <div className="release-page__overview">
-                  {data.description ? (
-                    <section className="release-page__desc-block">
-                      <h2>Overview</h2>
-                      <p>{data.description}</p>
-                    </section>
-                  ) : (
-                    <p className="muted">No description file in this folder.</p>
-                  )}
-                </div>
-              ) : groups.length > 0 ? (
-                <div className="release-tracklist__content media-item-tracklist">
-                  {groups.map((group) => (
-                    <div key={group.label} className="release-tracklist__group">
-                      {(groups.length > 1 || group.label !== "Contents") && (
-                        <h3 className="release-tracklist__group-label">
-                          {group.label}
-                        </h3>
-                      )}
-                      <ol className="release-tracklist__tracks">
-                        {group.files.map((file, index) => {
-                          const title = file.title?.trim() || file.name;
-                          const rowDate =
-                            file.display_date ||
-                            formatTrackDate(file.date_iso) ||
-                            "";
-                          const playClass = [
-                            "release-tracklist__play",
-                            "media-item-tracklist__play",
-                            hasDateColumn ? "media-item-tracklist__play--date" : "",
-                            hasDurationColumn
-                              ? "media-item-tracklist__play--duration"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
-                          return (
-                            <li
-                              key={file.path}
-                              className="release-tracklist__row"
-                            >
-                              <button
-                                type="button"
-                                className={playClass}
-                                onClick={() => openFile(file)}
-                              >
-                                <span className="release-tracklist__num">
-                                  {file.number ?? index + 1}
-                                </span>
-                                <span className="release-tracklist__title-wrap">
-                                  <span className="release-tracklist__title">
-                                    {title}
-                                  </span>
-                                </span>
-                                {hasDateColumn ? (
-                                  <span className="media-item-tracklist__date">
-                                    {rowDate}
-                                  </span>
-                                ) : null}
-                                {hasDurationColumn ? (
-                                  <span className="release-tracklist__duration">
-                                    {file.duration ?? ""}
-                                  </span>
-                                ) : null}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ol>
+          <main className="release-page__main">
+            {tab === "overview" ? (
+              <div className="release-page__overview">
+                {(data.director ||
+                  data.author ||
+                  data.publisher ||
+                  (data.genres && data.genres.length > 0)) && (
+                  <section className="release-page__meta-block media-item-page__meta">
+                    {data.director ? (
+                      <p>
+                        <span className="muted">Director</span> {data.director}
+                      </p>
+                    ) : null}
+                    {data.author ? (
+                      <p>
+                        <span className="muted">Author</span> {data.author}
+                      </p>
+                    ) : null}
+                    {data.publisher ? (
+                      <p>
+                        <span className="muted">Publisher</span> {data.publisher}
+                      </p>
+                    ) : null}
+                    {data.genres && data.genres.length > 0 ? (
+                      <p>
+                        <span className="muted">Genres</span>{" "}
+                        {data.genres.join(", ")}
+                      </p>
+                    ) : null}
+                  </section>
+                )}
+                {data.description ? (
+                  <section className="release-page__desc-block">
+                    <div className="release-page__desc-scroll">
+                      {data.description.split(/\n+/).map((p, i) => (
+                        <p key={i} className="release-page__desc-para">
+                          {p}
+                        </p>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted">
-                  No playable or readable files found in this folder.
-                </p>
-              )}
-            </main>
-          </div>
-        )}
-      </div>
+                  </section>
+                ) : null}
+              </div>
+            ) : tab === "gallery" ? (
+              <MediaItemGallery
+                bandId={bandId}
+                kind={kind}
+                itemId={itemId}
+                galleryTab={
+                  galleryTabsMeta.length > 1 ? galleryTab : undefined
+                }
+                onGalleryTabChange={setGalleryTab}
+                hideTabs={galleryTabsMeta.length > 1}
+                onTabsMeta={setGalleryTabsMeta}
+              />
+            ) : groups.length > 0 ? (
+              <div className="release-tracklist__content media-item-tracklist">
+                {groups.map((group) => (
+                  <div key={group.label} className="release-tracklist__group">
+                    {(groups.length > 1 || group.label !== "Contents") && (
+                      <h3 className="release-tracklist__group-label">
+                        {group.label}
+                      </h3>
+                    )}
+                    <ol className="release-tracklist__tracks">
+                      {group.files.map((file, index) => {
+                        const title = file.title?.trim() || file.name;
+                        const rowDate =
+                          file.display_date ||
+                          formatTrackDate(file.date_iso) ||
+                          "";
+                        const metaRight = showDurationColumn
+                          ? file.duration ?? ""
+                          : showPagesColumn
+                            ? file.pages ??
+                              (file.page_count
+                                ? `${file.page_count} ${
+                                    file.page_count === 1 ? "page" : "pages"
+                                  }`
+                                : "")
+                            : "";
+                        const playClass = [
+                          "release-tracklist__play",
+                          "media-item-tracklist__play",
+                          hasDateColumn
+                            ? "media-item-tracklist__play--date"
+                            : "",
+                          showDurationColumn || showPagesColumn
+                            ? "media-item-tracklist__play--duration"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <li
+                            key={file.path}
+                            className="release-tracklist__row"
+                          >
+                            <button
+                              type="button"
+                              className={playClass}
+                              onClick={() => openFile(file)}
+                            >
+                              <span className="release-tracklist__num">
+                                {file.number ?? index + 1}
+                              </span>
+                              <span className="release-tracklist__title-wrap">
+                                <span className="release-tracklist__title">
+                                  {title}
+                                </span>
+                              </span>
+                              {hasDateColumn ? (
+                                <span className="media-item-tracklist__date">
+                                  {rowDate}
+                                </span>
+                              ) : null}
+                              {showDurationColumn || showPagesColumn ? (
+                                <span className="release-tracklist__duration">
+                                  {metaRight}
+                                </span>
+                              ) : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">
+                No playable or readable files found in this folder.
+              </p>
+            )}
+          </main>
+        </div>
+      )}
+
+      {aboutEditOpen && data && (
+        <MediaItemAboutEditModal
+          bandId={bandId}
+          kind={kind}
+          itemId={itemId}
+          data={data}
+          onClose={() => setAboutEditOpen(false)}
+          onSaved={(updated) => {
+            setCachedMediaItemOverview(bandId, kind, itemId, updated);
+            setData(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

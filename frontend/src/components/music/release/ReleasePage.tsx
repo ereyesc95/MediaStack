@@ -1228,7 +1228,9 @@ export default function ReleasePage({
   const playAdjacentTrack = useCallback(
     (direction: "prev" | "next") => {
       if (!playingPath || !tracklistRef.current) return;
-      const tracks = tracklistRef.current.allTracks();
+      const tracks = tracklistRef.current
+        .allTracks()
+        .filter((t) => !t.is_video);
       if (!tracks.length) return;
       const idx = tracks.findIndex((t) => t.play_path === playingPath);
       if (idx < 0) return;
@@ -1256,11 +1258,15 @@ export default function ReleasePage({
       miniAudio.toggle();
       return;
     }
-    let tracks = tracklistRef.current?.allTracks() ?? [];
+    let tracks = (tracklistRef.current?.allTracks() ?? []).filter(
+      (t) => !t.is_video
+    );
     if (!tracks.length) {
       try {
         const payload = await fetchReleaseTracklist(bandId, releaseId);
-        tracks = payload.editions.flatMap((ed) => ed.groups.flatMap((g) => g.tracks));
+        tracks = payload.editions
+          .flatMap((ed) => ed.groups.flatMap((g) => g.tracks))
+          .filter((t) => !t.is_video);
       } catch {
         return;
       }

@@ -8,7 +8,7 @@ import {
 import type { MediaItemOverview } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "media-item-overview-v3";
+const NAMESPACE = "media-item-overview-v5";
 
 type CacheKey = `${number}:${"video" | "library"}:${string}`;
 
@@ -93,6 +93,15 @@ export function prefetchMediaItemOverview(
 
   inflight.set(key, pending);
   return pending;
+}
+
+export function setCachedMediaItemOverview(
+  bandId: number,
+  kind: "video" | "library",
+  itemId: string,
+  data: MediaItemOverview
+): void {
+  remember(bandId, kind, itemId, data);
 }
 
 export function clearMediaItemOverviewCache(

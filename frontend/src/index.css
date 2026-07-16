@@ -11918,6 +11918,22 @@ button.lyrics-status-badge--icon-only {
 .artist-media-grid .media-release-grid,
 .artist-media-grid__cards {
   gap: 0;
+  grid-template-columns: repeat(auto-fill, minmax(7.25rem, 8.75rem));
+  justify-content: start;
+}
+
+@media (min-width: 768px) {
+  .artist-media-grid .media-release-grid,
+  .artist-media-grid__cards {
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 9.5rem));
+  }
+}
+
+@media (min-width: 1200px) {
+  .artist-media-grid .media-release-grid,
+  .artist-media-grid__cards {
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 10rem));
+  }
 }
 
 .artist-media-grid .media-release-card {
@@ -11926,6 +11942,7 @@ button.lyrics-status-badge--icon-only {
 
 .artist-media-grid .media-release-card--portrait {
   aspect-ratio: 2 / 3;
+  width: 100%;
 }
 
 .artist-media-grid .media-release-card__cover {
@@ -11945,27 +11962,49 @@ button.lyrics-status-badge--icon-only {
 
 .release-page__title-center--lg {
   font-size: clamp(1.15rem, 3.2vw, 1.75rem);
-  font-weight: 700;
+  font-weight: 500;
+}
+
+.media-item-page:not(.release-page--stacked) .release-page__art-stage {
+  --release-cover-size: clamp(14.5rem, 22vw, 18rem);
+}
+
+.media-item-page:not(.release-page--stacked) .release-page__panel-meta {
+  flex: 1 1 auto;
+}
+
+.media-item-page__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.media-item-page__meta .muted {
+  margin-right: 0.45rem;
 }
 
 .media-item-tracklist__play {
   grid-template-columns: 2rem minmax(0, 1fr);
+  column-gap: 0.75rem;
 }
 
 .media-item-tracklist__play--date {
-  grid-template-columns: 2rem minmax(0, 1fr) minmax(6.5rem, 9rem);
+  grid-template-columns: 2rem minmax(0, 1fr) minmax(8rem, 11rem);
 }
 
 .media-item-tracklist__play--duration {
-  grid-template-columns: 2rem minmax(0, 1fr) minmax(3rem, 3.75rem);
+  grid-template-columns: 2rem minmax(0, 1fr) minmax(4rem, 5.5rem);
 }
 
 .media-item-tracklist__play--date.media-item-tracklist__play--duration {
   grid-template-columns:
     2rem
     minmax(0, 1fr)
-    minmax(6.5rem, 9rem)
-    minmax(3rem, 3.75rem);
+    minmax(8.5rem, 12rem)
+    minmax(4rem, 5.5rem);
+  column-gap: 1.35rem;
 }
 
 .media-item-tracklist__date {
@@ -11975,6 +12014,21 @@ button.lyrics-status-badge--icon-only {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-right: 0.35rem;
+}
+
+.release-tracklist__video-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+  vertical-align: middle;
+}
+
+.release-tracklist__video-badge svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 /* --- Artist quiz --- */
