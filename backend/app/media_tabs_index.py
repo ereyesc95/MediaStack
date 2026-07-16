@@ -12,6 +12,7 @@ from app.band_library import DATE_PREFIX_RE, _parse_folder_date
 from app.config import settings
 from app.franchise_index import MUSIC_LIBRARY_CATEGORIES, MUSIC_VIDEO_CATEGORIES
 from app.gallery import IMAGE_EXTS, _artist_dir, _media_url, _resolve_child_dir
+from app.media_index import format_display_date
 from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
 from app.models import Band
 from app.paths import DATA_DIR
@@ -19,7 +20,7 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 2
+MEDIA_TAB_SCAN_VERSION = 3
 
 _SKIP_NAMES = frozenset({"desktop.ini", "thumbs.db", ".ds_store"})
 _SKIP_ITEM_NAMES = frozenset({"[artwork]", "artwork"})
@@ -108,10 +109,12 @@ def _item_card(
     if not rel:
         return None
     rel = rel.replace("\\", "/")
+    date_iso = _parse_folder_date(display_name)
     return {
         "id": _card_id(kind, rel),
         "title": _title_from_folder(display_name),
-        "date_iso": _parse_folder_date(display_name),
+        "date_iso": date_iso,
+        "display_date": format_display_date(date_iso),
         "cover_url": _folder_cover(resolved, media_root),
         "folder_path": rel,
     }

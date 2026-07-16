@@ -4,6 +4,7 @@ import {
   prefetchArtistMediaTab,
 } from "../../../artistMediaTabCache";
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
+import { formatTrackDate } from "../../../formatDate";
 import type { MediaTabCategory, MediaTabIndexPayload } from "../../../types";
 
 type Props = {
@@ -129,42 +130,46 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
           ))}
         </nav>
       )}
-      <div className="media-release-grid">
-        {(category?.items ?? []).map((item) => (
-          <article
-            key={item.id}
-            className="media-release-card media-release-card--clickable media-beat-frame media-beat-frame--cover"
-            role="button"
-            tabIndex={0}
-            aria-busy={openingId === item.id}
-            onClick={() => void handleOpen(item.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                void handleOpen(item.id);
-              }
-            }}
-            title={item.title}
-          >
-            <span
-              className="media-release-card__cover"
-              style={
-                item.cover_url
-                  ? { backgroundImage: `url("${item.cover_url}")` }
-                  : undefined
-              }
-            />
-            <span className="media-release-card__dim" aria-hidden />
-            <span className="media-release-card__hover">
-              <span className="media-release-card__title-hover">{item.title}</span>
-            </span>
-            {item.date_iso ? (
-              <span className="media-release-card__date">
-                <span className="media-release-card__date-label">{item.date_iso}</span>
+      <div className="media-release-grid artist-media-grid__cards">
+        {(category?.items ?? []).map((item) => {
+          const hoverDate =
+            item.display_date || formatTrackDate(item.date_iso) || null;
+          return (
+            <article
+              key={item.id}
+              className="media-release-card media-release-card--portrait media-release-card--clickable media-beat-frame media-beat-frame--cover"
+              role="button"
+              tabIndex={0}
+              aria-busy={openingId === item.id}
+              onClick={() => void handleOpen(item.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void handleOpen(item.id);
+                }
+              }}
+              title={item.title}
+            >
+              <span
+                className="media-release-card__cover"
+                style={
+                  item.cover_url
+                    ? { backgroundImage: `url("${item.cover_url}")` }
+                    : undefined
+                }
+              />
+              <span className="media-release-card__dim" aria-hidden />
+              <span className="media-release-card__hover">
+                <span className="media-release-card__title-hover">{item.title}</span>
               </span>
-            ) : null}
-          </article>
-        ))}
+              {hoverDate ? (
+                <span className="media-release-card__date">
+                  <span className="media-release-card__date-label">{hoverDate}</span>
+                </span>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
     </div>
   );

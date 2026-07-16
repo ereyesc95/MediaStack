@@ -706,11 +706,17 @@ export type WordCloudPayload = {
 };
 
 export type MediaItemFile = {
+  number?: number | null;
   name: string;
+  title?: string | null;
+  date_iso?: string | null;
+  display_date?: string | null;
   path: string;
   kind: string;
   size: number;
   url?: string | null;
+  duration?: string | null;
+  duration_sec?: number | null;
 };
 
 export type MediaItemGroup = {
@@ -725,8 +731,11 @@ export type MediaItemOverview = {
   artist_name: string;
   title: string;
   date_iso: string | null;
+  display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  disc_url?: string | null;
+  logo_url?: string | null;
   description: string | null;
   files: MediaItemFile[];
   groups?: MediaItemGroup[];
@@ -745,6 +754,7 @@ export type MediaTabItem = {
   id: string;
   title: string;
   date_iso: string | null;
+  display_date?: string | null;
   cover_url: string | null;
   folder_path: string;
 };

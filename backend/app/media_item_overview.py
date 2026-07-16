@@ -7,10 +7,16 @@ from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
-from app.band_library import DATE_PREFIX_RE
+from app.band_library import DATE_PREFIX_RE, TRACK_PREFIX_RE
 from app.config import settings
 from app.gallery import IMAGE_EXTS, _media_url
-from app.media_index import DISC_DIR_RE, DISC_LOOSE_RE, SIDE_LOOSE_RE, SIDE_RE
+from app.media_index import (
+    DISC_DIR_RE,
+    DISC_LOOSE_RE,
+    SIDE_LOOSE_RE,
+    SIDE_RE,
+    format_display_date,
+)
 from app.media_paths_util import entry_display_name, safe_relative
 from app.media_tabs_index import (
     _folder_cover,
@@ -18,11 +24,30 @@ from app.media_tabs_index import (
     find_resolved_media_item,
 )
 from app.models import Band
+from app.release_tracklist import _duration_from_file, _format_duration
 
 TEXT_EXTS = {".txt", ".md", ".nfo"}
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm"}
 DOC_EXTS = {".pdf", ".epub", ".cbz", ".cbr", ".djvu"}
 READABLE_EXTS = DOC_EXTS | {".html", ".htm"}
+DEFAULT_DISC_URL = "/api/assets/system/default/disc.png"
+
+
+def _video_duration_sec(path: Path) -> float | None:
+    """Best-effort video length; skip zero/invalid mutagen results."""
+    try:
+        from mutagen.mp4 import MP4
+
+        mp4 = MP4(path)
+        length = getattr(getattr(mp4, "info", None), "length", None)
+        if length and float(length) > 0:
+            return float(length)
+    except Exception:
+        pass
+    length = _duration_from_file(path)
+    if length and float(length) > 0:
+        return float(length)
+    return None
 
 _SKIP_DIRS = frozenset(
     {
@@ -62,23 +87,50 @@ def _file_kind(ext: str) -> str:
     return "other"
 
 
-def _file_entry(path: Path, media_root: Path) -> dict | None:
+def _stem_meta(name: str) -> tuple[str, str | None, str | None]:
+    """Return (display_title, date_iso, display_date) from a filename stem/name."""
+    stem = Path(name).stem
+    date_iso = None
+    m = DATE_PREFIX_RE.match(stem.strip())
+    if m:
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        date_iso = f"{y}-{mo or '01'}-{d or '01'}"
+        title = _title_from_folder(stem)
+    else:
+        title = TRACK_PREFIX_RE.sub("", stem).strip() or stem
+    return title, date_iso, format_display_date(date_iso)
+
+
+def _file_entry(path: Path, media_root: Path, *, number: int | None = None) -> dict | None:
     if not path.is_file():
         return None
     rel = safe_relative(path, media_root)
     if not rel:
         return None
     ext = path.suffix.casefold()
+    kind = _file_kind(ext)
     try:
         size = path.stat().st_size
     except OSError:
         size = 0
+    title, date_iso, display_date = _stem_meta(path.name)
+    duration_sec = None
+    duration = None
+    if kind == "video":
+        duration_sec = _video_duration_sec(path)
+        duration = _format_duration(duration_sec)
     return {
+        "number": number,
         "name": path.name,
+        "title": title,
+        "date_iso": date_iso,
+        "display_date": display_date,
         "path": rel.replace("\\", "/"),
-        "kind": _file_kind(ext),
+        "kind": kind,
         "size": size,
         "url": _file_url(path, media_root),
+        "duration_sec": duration_sec,
+        "duration": duration,
     }
 
 
@@ -130,11 +182,20 @@ def _collect_direct_files(folder: Path, media_root: Path) -> list[dict]:
     return items
 
 
+def _number_files(files: list[dict]) -> list[dict]:
+    numbered: list[dict] = []
+    for i, entry in enumerate(files, start=1):
+        row = dict(entry)
+        row["number"] = i
+        numbered.append(row)
+    return numbered
+
+
 def _collect_group_files(folder: Path, media_root: Path) -> list[dict]:
     """Files in a disc/volume folder (non-recursive except ignoring artwork)."""
     items = _collect_direct_files(folder, media_root)
     if items:
-        return items
+        return _number_files(items)
     # One nesting level for wrappers like Disc/Title/file.mp4
     try:
         children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
@@ -144,7 +205,7 @@ def _collect_group_files(folder: Path, media_root: Path) -> list[dict]:
         if not child.is_dir() or child.name.casefold() in _SKIP_DIRS:
             continue
         items.extend(_collect_direct_files(child, media_root))
-    return items
+    return _number_files(items)
 
 
 def _build_groups(folder: Path, media_root: Path, *, kind: str) -> list[dict]:
@@ -184,7 +245,7 @@ def _build_groups(folder: Path, media_root: Path, *, kind: str) -> list[dict]:
             return groups
 
     # Flat files at item root (ignore portal/franchise helper folders)
-    root_files = _collect_direct_files(folder, media_root)
+    root_files = _number_files(_collect_direct_files(folder, media_root))
     if root_files:
         return [{"label": "Contents", "files": root_files}]
 
@@ -212,6 +273,50 @@ def _readable_files(groups: list[dict]) -> list[dict]:
             if f.get("kind") in ("document",) or Path(f.get("name") or "").suffix.casefold() in READABLE_EXTS:
                 out.append(f)
     return out
+
+
+def _folder_logo(folder: Path, media_root: Path) -> str | None:
+    search_dirs: list[Path] = [folder]
+    try:
+        for child in folder.iterdir():
+            if child.is_dir() and child.name.casefold() in ("[artwork]", "artwork"):
+                search_dirs.insert(0, child)
+                break
+    except OSError:
+        pass
+    for directory in search_dirs:
+        if not directory.is_dir():
+            continue
+        try:
+            matches = sorted(directory.glob("Logo*"), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        for path in matches:
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTS:
+                return _media_url(path, media_root)
+    return None
+
+
+def _folder_disc(folder: Path, media_root: Path) -> str | None:
+    search_dirs: list[Path] = [folder]
+    try:
+        for child in folder.iterdir():
+            if child.is_dir() and child.name.casefold() in ("[artwork]", "artwork"):
+                search_dirs.insert(0, child)
+                break
+    except OSError:
+        pass
+    for directory in search_dirs:
+        if not directory.is_dir():
+            continue
+        try:
+            matches = sorted(directory.glob("Disc*"), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        for path in matches:
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTS:
+                return _media_url(path, media_root)
+    return None
 
 
 def _read_description(folder: Path) -> str | None:
@@ -272,6 +377,10 @@ def build_media_item_overview(
     if kind == "library" and len(readable) == 1 and len(flat_files) <= 1:
         open_url = readable[0].get("url")
 
+    cover_url = card.get("cover_url") or _folder_cover(folder, media_root)
+    disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
+    logo_url = _folder_logo(folder, media_root)
+
     return {
         "id": item_id,
         "kind": kind,
@@ -279,8 +388,11 @@ def build_media_item_overview(
         "artist_name": band.bnd_name,
         "title": card.get("title") or _title_from_folder(display_name),
         "date_iso": date_iso,
+        "display_date": format_display_date(date_iso),
         "folder_path": rel,
-        "cover_url": card.get("cover_url") or _folder_cover(folder, media_root),
+        "cover_url": cover_url,
+        "disc_url": disc_url,
+        "logo_url": logo_url,
         "description": _read_description(folder),
         "groups": groups,
         "files": flat_files,

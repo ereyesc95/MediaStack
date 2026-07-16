@@ -11915,12 +11915,66 @@ button.lyrics-status-badge--icon-only {
   padding: 0 0 1.5rem;
 }
 
-.artist-media-grid .media-release-grid {
+.artist-media-grid .media-release-grid,
+.artist-media-grid__cards {
   gap: 0;
 }
 
 .artist-media-grid .media-release-card {
   color: #fff;
+}
+
+.artist-media-grid .media-release-card--portrait {
+  aspect-ratio: 2 / 3;
+}
+
+.artist-media-grid .media-release-card__cover {
+  background-position: top center;
+}
+
+.release-page__title-center {
+  font-size: clamp(0.95rem, 2.4vw, 1.35rem);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(42rem, 70vw);
+}
+
+.release-page__title-center--lg {
+  font-size: clamp(1.15rem, 3.2vw, 1.75rem);
+  font-weight: 700;
+}
+
+.media-item-tracklist__play {
+  grid-template-columns: 2rem minmax(0, 1fr);
+}
+
+.media-item-tracklist__play--date {
+  grid-template-columns: 2rem minmax(0, 1fr) minmax(6.5rem, 9rem);
+}
+
+.media-item-tracklist__play--duration {
+  grid-template-columns: 2rem minmax(0, 1fr) minmax(3rem, 3.75rem);
+}
+
+.media-item-tracklist__play--date.media-item-tracklist__play--duration {
+  grid-template-columns:
+    2rem
+    minmax(0, 1fr)
+    minmax(6.5rem, 9rem)
+    minmax(3rem, 3.75rem);
+}
+
+.media-item-tracklist__date {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- Artist quiz --- */
