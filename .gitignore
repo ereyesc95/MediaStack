@@ -15,7 +15,7 @@ data/quiz_scores/
 data/user_settings.json
 data/avatars/
 data/backups/
-Media/
+/Media/
 *.log
 .DS_Store
 TMDB key.txt
