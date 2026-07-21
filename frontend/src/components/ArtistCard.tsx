@@ -1,5 +1,4 @@
 import type { ArtistCard as ArtistCardType, CardOrientation } from "../types";
-import { useDeviceLayout, isMobilePortraitLayout } from "../usePhoneLayout";
 
 type Props = {
   artist: ArtistCardType;
@@ -16,9 +15,7 @@ export default function ArtistCard({
   tapReveal = false,
   revealed = false,
 }: Props) {
-  const layout = useDeviceLayout();
-  const preferCollapsed =
-    orientation === "banner" && !isMobilePortraitLayout(layout);
+  const preferCollapsed = orientation === "banner";
   const logoSrc =
     preferCollapsed && artist.logo_collapsed_url
       ? artist.logo_collapsed_url
