@@ -22,6 +22,7 @@ from app.media_tabs_index import (
     _folder_cover,
     _title_from_folder,
     find_resolved_media_item,
+    iter_resolved_media_items,
 )
 from app.models import Band
 from app.release_tracklist import _duration_from_file, _format_duration
@@ -410,6 +411,36 @@ def _read_description(folder: Path) -> str | None:
     return None
 
 
+def _prev_next_media_neighbors(
+    cards: list[dict],
+    item_id: str,
+) -> tuple[dict | None, dict | None]:
+    """Prev/next within the same kind, ordered by date then title (wraps)."""
+    if len(cards) < 2:
+        return None, None
+    pool = sorted(
+        cards,
+        key=lambda r: (r.get("date_iso") or "9999-12-31", (r.get("title") or "").casefold()),
+    )
+    idx = next((i for i, r in enumerate(pool) if r.get("id") == item_id), None)
+    if idx is None:
+        return None, None
+    prev_r = pool[(idx - 1) % len(pool)]
+    next_r = pool[(idx + 1) % len(pool)]
+    return (
+        {
+            "id": prev_r["id"],
+            "title": prev_r.get("title") or "Previous",
+            "cover_url": prev_r.get("cover_url"),
+        },
+        {
+            "id": next_r["id"],
+            "title": next_r.get("title") or "Next",
+            "cover_url": next_r.get("cover_url"),
+        },
+    )
+
+
 def build_media_item_overview(
     db: Session,
     band_id: int,
@@ -454,6 +485,11 @@ def build_media_item_overview(
         disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
     logo_url = _folder_logo(folder, media_root)
 
+    all_cards = [
+        c for c, _de, _res in iter_resolved_media_items(band, media_root, kind=kind)
+    ]
+    prev_r, next_r = _prev_next_media_neighbors(all_cards, item_id)
+
     payload = {
         "id": item_id,
         "kind": kind,
@@ -475,6 +511,8 @@ def build_media_item_overview(
         "groups": groups,
         "files": flat_files,
         "open_url": open_url,
+        "prev": prev_r,
+        "next": next_r,
     }
     from app.media_item_admin import apply_media_item_meta
 

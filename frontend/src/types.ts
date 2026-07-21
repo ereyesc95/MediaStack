@@ -760,6 +760,8 @@ export type MediaItemOverview = {
   files: MediaItemFile[];
   groups?: MediaItemGroup[];
   open_url?: string | null;
+  prev?: ReleaseNeighbor | null;
+  next?: ReleaseNeighbor | null;
 };
 
 export type TrackCredits = {

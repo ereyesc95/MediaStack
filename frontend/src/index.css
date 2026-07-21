@@ -6173,7 +6173,7 @@ input {
 }
 
 .artist-page--mobile-landscape .media-release-grid.media-release-grid--banner {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .artist-page--mobile-landscape .artist-gallery__photo-grid {
@@ -12535,6 +12535,11 @@ button.lyrics-status-badge--icon-only {
   .artist-media-grid__cards.media-release-grid--banner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.artist-page--mobile-landscape .artist-media-grid .media-release-grid.media-release-grid--banner,
+.artist-page--mobile-landscape .artist-media-grid__cards.media-release-grid--banner {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .artist-media-grid .media-release-card {

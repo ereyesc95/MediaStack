@@ -21,10 +21,13 @@ import {
   isTabletLayout,
   useDeviceLayout,
 } from "../../../usePhoneLayout";
-import type { MediaItemFile, MediaItemOverview } from "../../../types";
+import type { MediaItemFile, MediaItemOverview, ReleaseNeighbor } from "../../../types";
 import AppMenu from "../../AppMenu";
 import MediaBeatFrame from "../MediaBeatFrame";
-import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
+import {
+  ChevronIcon,
+  DEFAULT_DISC_URL,
+} from "../release/releaseTrackPanelMeta";
 import MediaItemAboutEditModal from "./MediaItemAboutEditModal";
 import MediaItemGallery from "./MediaItemGallery";
 
@@ -45,6 +48,40 @@ type Props = {
 
 type ItemTab = "overview" | "list" | "gallery";
 type GalleryTab = "artwork" | "photos" | "extras";
+
+function MediaNeighborLink({
+  neighbor,
+  direction,
+  onClick,
+}: {
+  neighbor: ReleaseNeighbor;
+  direction: "prev" | "next";
+  onClick: () => void;
+}) {
+  const compact = neighbor.title.length > 18;
+  return (
+    <button
+      type="button"
+      className={`release-page__neighbor release-page__neighbor--${direction}${
+        compact ? " release-page__neighbor--compact" : ""
+      }`}
+      onClick={onClick}
+      title={neighbor.title}
+    >
+      {direction === "prev" && (
+        <span className="release-page__neighbor-arrow" aria-hidden>
+          <ChevronIcon direction="left" />
+        </span>
+      )}
+      <span className="release-page__neighbor-text">{neighbor.title}</span>
+      {direction === "next" && (
+        <span className="release-page__neighbor-arrow" aria-hidden>
+          <ChevronIcon direction="right" />
+        </span>
+      )}
+    </button>
+  );
+}
 
 function openFile(file: MediaItemFile) {
   const url =
@@ -435,7 +472,40 @@ export default function MediaItemPage({
                     </div>
                   </div>
                 </div>
-                <div className="release-page__panel-bottom" />
+                <div className="release-page__panel-bottom">
+                  <div className="release-page__panel-bottom-bar">
+                    {data.prev ? (
+                      <MediaNeighborLink
+                        neighbor={data.prev}
+                        direction="prev"
+                        onClick={() =>
+                          pushArtistRoute({
+                            bandId,
+                            section: kind,
+                            mediaItemId: data.prev!.id,
+                          })
+                        }
+                      />
+                    ) : (
+                      <span className="release-page__neighbor-spacer" />
+                    )}
+                    {data.next ? (
+                      <MediaNeighborLink
+                        neighbor={data.next}
+                        direction="next"
+                        onClick={() =>
+                          pushArtistRoute({
+                            bandId,
+                            section: kind,
+                            mediaItemId: data.next!.id,
+                          })
+                        }
+                      />
+                    ) : (
+                      <span className="release-page__neighbor-spacer" />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </aside>
