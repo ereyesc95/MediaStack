@@ -180,7 +180,10 @@ export type PlaylistTrack = {
   path: string;
 };
 
-export type CardOrientation = "landscape" | "portrait";
+export type CardOrientation = "landscape" | "portrait" | "banner" | "icons";
+
+/** Cover vs banner layout for Audio / Video / Library release cards on artist pages. */
+export type ReleaseCardLayout = "cover" | "banner";
 
 export type MusicTab = "home" | "artists" | "playlists";
 
@@ -545,6 +548,9 @@ export type AudioReleaseCard = {
   official: boolean;
   cover_url: string | null;
   logo_url: string | null;
+  banner_url?: string | null;
+  era_logo_url?: string | null;
+  era_icon_url?: string | null;
   folder_path: string;
   navigate_band_id: number;
   navigate_release_id: string;
@@ -765,6 +771,9 @@ export type MediaTabItem = {
   date_iso: string | null;
   display_date?: string | null;
   cover_url: string | null;
+  banner_url?: string | null;
+  era_logo_url?: string | null;
+  era_icon_url?: string | null;
   folder_path: string;
 };
 

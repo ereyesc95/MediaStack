@@ -267,16 +267,11 @@ export default function App() {
 
 
 
-  const toggleOrientation = () => {
-
-    const next = cardOrientation === "landscape" ? "portrait" : "landscape";
-
+  const setOrientation = (next: CardOrientation) => {
     setCardOrientation(next);
-
     if (profile?.user_id) {
       saveOrientation(profile.user_id, next);
     }
-
   };
 
 
@@ -517,7 +512,7 @@ export default function App() {
 
             onSync={handleSync}
 
-            onToggleOrientation={toggleOrientation}
+            onSetOrientation={setOrientation}
 
             onTab={(tab: MusicTab) => {
               if (tab === "playlists") {

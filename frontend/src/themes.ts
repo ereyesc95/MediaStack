@@ -1,4 +1,5 @@
 import { updateFavicon } from "./favicon";
+import type { CardOrientation, ReleaseCardLayout } from "./types";
 
 export type ThemeId =
   | "dark"
@@ -178,16 +179,42 @@ export function orientationKey(userId: number) {
   return `music-card-orientation:${userId}`;
 }
 
+const CARD_ORIENTATIONS: CardOrientation[] = [
+  "landscape",
+  "portrait",
+  "banner",
+  "icons",
+];
+
 export function getStoredOrientation(
   userId: number,
-  fallback: "landscape" | "portrait" = "landscape"
-): "landscape" | "portrait" {
+  fallback: CardOrientation = "landscape"
+): CardOrientation {
   const raw = localStorage.getItem(orientationKey(userId));
-  return raw === "portrait" ? "portrait" : raw === "landscape" ? "landscape" : fallback;
+  if (raw && CARD_ORIENTATIONS.includes(raw as CardOrientation)) {
+    return raw as CardOrientation;
+  }
+  return fallback;
 }
 
-export function saveOrientation(userId: number, value: "landscape" | "portrait") {
+export function saveOrientation(userId: number, value: CardOrientation) {
   localStorage.setItem(orientationKey(userId), value);
+}
+
+export function releaseCardLayoutKey(userId: number) {
+  return `music-release-card-layout:${userId}`;
+}
+
+export function getStoredReleaseCardLayout(
+  userId: number,
+  fallback: ReleaseCardLayout = "cover"
+): ReleaseCardLayout {
+  const raw = localStorage.getItem(releaseCardLayoutKey(userId));
+  return raw === "banner" || raw === "cover" ? raw : fallback;
+}
+
+export function saveReleaseCardLayout(userId: number, value: ReleaseCardLayout) {
+  localStorage.setItem(releaseCardLayoutKey(userId), value);
 }
 
 export function applyProfilePreferences(userId: number) {

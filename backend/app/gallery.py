@@ -23,17 +23,23 @@ from app.config import settings
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 PHOTO_YEAR_RE = re.compile(r"^(\d{4})")
 ERA_RE = re.compile(
-    r"^(Icon|Logo)\s+(?:\[(\d{4})-(\d{4})\]|(\d{4})-(\d{4}))(?:\s+Current)?\.png$",
+    r"^(Icon|Logo)\s+(?:\[(\d{4})-(\d{4})\]|(\d{4})-(\d{4}))(?:\s+Current)?$",
     re.IGNORECASE,
 )
-ORIENTATION_RE = re.compile(r"(landscape|portrait)", re.IGNORECASE)
+ORIENTATION_RE = re.compile(r"(landscape|portrait|banner)", re.IGNORECASE)
+CARD_ORIENTATIONS = frozenset({"landscape", "portrait", "banner", "icons"})
+
+
+def normalize_card_orientation(orientation: str | None) -> str:
+    want = (orientation or "landscape").lower()
+    return want if want in CARD_ORIENTATIONS else "landscape"
 
 
 @dataclass
 class GalleryPhoto:
     path: Path
     year: int
-    orientation: str  # landscape | portrait | unknown
+    orientation: str  # landscape | portrait | banner | unknown
 
 
 @dataclass
@@ -131,9 +137,9 @@ def _list_era_brands(logos_dir: Path) -> list[EraBrand]:
         return []
     out: list[EraBrand] = []
     for p in logos_dir.iterdir():
-        if p.suffix.lower() != ".png":
+        if p.suffix.lower() not in IMAGE_EXTS:
             continue
-        m = ERA_RE.match(p.name)
+        m = ERA_RE.match(p.stem)
         if not m:
             continue
         start = m.group(2) or m.group(4)
@@ -165,7 +171,12 @@ def _media_url(rel_path: Path, media_root: Path) -> str:
 
 def _photo_pool(photos: list[GalleryPhoto], orientation: str) -> list[GalleryPhoto]:
     want = orientation.lower()
+    if want == "icons":
+        return []
     pool = [p for p in photos if p.orientation == want]
+    # Banner cards fall back to landscape photos (cropped in the UI)
+    if want == "banner" and not pool:
+        pool = [p for p in photos if p.orientation == "landscape"]
     if not pool:
         pool = [p for p in photos if p.orientation == "unknown"]
     if not pool:
@@ -200,7 +211,25 @@ def resolve_artist_card(
     photos = _list_photos(photos_dir)
     brands = _list_era_brands(logos_dir)
 
-    pool = _photo_pool(photos, orientation)
+    want = normalize_card_orientation(orientation)
+
+    # Icons mode: branding only (no photo background)
+    if want == "icons":
+        eras = sorted({b.start for b in brands} | {b.end for b in brands})
+        if not eras and photos:
+            eras = sorted({p.year for p in photos})
+        fallback_year = random.choice(eras) if eras else 2000
+        logo_only = _pick_brand_for_year(brands, fallback_year, "logo")
+        icon_only = _pick_brand_for_year(brands, fallback_year, "icon")
+        return ArtistCardAssets(
+            None,
+            _media_url(logo_only.path, root) if logo_only else None,
+            _media_url(icon_only.path, root) if icon_only else None,
+            fallback_year if logo_only or icon_only else None,
+            not (logo_only or icon_only),
+        )
+
+    pool = _photo_pool(photos, want)
     if not pool:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
         fallback_year = random.choice(eras) if eras else 2000

@@ -67,6 +67,70 @@ export function IconCardPortrait({ className }: IconProps) {
   );
 }
 
+export function IconCardBanner({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <rect
+        x="2"
+        y="8"
+        width="20"
+        height="8"
+        rx="1.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
+export function IconCardIcons({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <rect
+        x="4"
+        y="4"
+        width="7"
+        height="7"
+        rx="1.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <rect
+        x="13"
+        y="4"
+        width="7"
+        height="7"
+        rx="1.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <rect
+        x="4"
+        y="13"
+        width="7"
+        height="7"
+        rx="1.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <rect
+        x="13"
+        y="13"
+        width="7"
+        height="7"
+        rx="1.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
 export function IconFolder({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

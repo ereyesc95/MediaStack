@@ -5,11 +5,19 @@ import {
 } from "../../../artistMediaTabCache";
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
-import type { MediaTabCategory, MediaTabIndexPayload } from "../../../types";
+import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
+import type {
+  MediaTabCategory,
+  MediaTabIndexPayload,
+  MediaTabItem,
+  ReleaseCardLayout,
+} from "../../../types";
 
 type Props = {
   bandId: number;
   kind: "video" | "library";
+  cardLayout?: ReleaseCardLayout;
+  artistName?: string;
   onOpenItem?: (itemId: string) => void;
 };
 
@@ -27,32 +35,32 @@ export function useArtistMediaTab(bandId: number, kind: "video" | "library", ena
 
   const load = useCallback(
     async (force = false) => {
-      const cached = !force ? getCachedArtistMediaTab(bandId, kind) : null;
-      if (cached) {
-        setData(cached);
-        setCategoryKey(cached.categories[0]?.key ?? "");
-        setLoading(false);
-        setError(null);
-        prefetchArtistMediaTab(bandId, kind, { force: true })
-          .then((payload) => {
-            setData(payload);
-            setCategoryKey((prev) => prev || payload.categories[0]?.key || "");
-          })
-          .catch(() => {});
-        return;
-      }
-      setLoading(true);
+    const cached = !force ? getCachedArtistMediaTab(bandId, kind) : null;
+    if (cached) {
+      setData(cached);
+      setCategoryKey(cached.categories[0]?.key ?? "");
+      setLoading(false);
       setError(null);
-      try {
-        const payload = await prefetchArtistMediaTab(bandId, kind, { force: true });
-        setData(payload);
-        setCategoryKey(payload.categories[0]?.key ?? "");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
-    },
+      prefetchArtistMediaTab(bandId, kind, { force: true })
+        .then((payload) => {
+          setData(payload);
+          setCategoryKey((prev) => prev || payload.categories[0]?.key || "");
+        })
+        .catch(() => {});
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await prefetchArtistMediaTab(bandId, kind, { force: true });
+      setData(payload);
+      setCategoryKey(payload.categories[0]?.key ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  },
     [bandId, kind]
   );
 
@@ -73,7 +81,114 @@ export function useArtistMediaTab(bandId: number, kind: "video" | "library", ena
   return { data, loading, error, categoryKey, setCategoryKey, category, categories: data?.categories ?? [] };
 }
 
-export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
+function MediaItemCard({
+  item,
+  cardLayout,
+  artistName,
+  opening,
+  onOpen,
+}: {
+  item: MediaTabItem;
+  cardLayout: ReleaseCardLayout;
+  artistName?: string;
+  opening: boolean;
+  onOpen: () => void;
+}) {
+  const hoverDate = item.display_date || formatTrackDate(item.date_iso) || null;
+  const fullDate = formatTrackDate(item.date_iso) || item.display_date || null;
+  const coverUrl = item.cover_url || DEFAULT_DISC_URL;
+
+  if (cardLayout === "banner") {
+    const bannerBg = item.banner_url
+      ? `url("${item.banner_url}")`
+      : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+    return (
+      <article
+        className="media-release-card media-release-card--banner media-release-card--clickable media-beat-frame media-beat-frame--cover"
+        role="button"
+        tabIndex={0}
+        aria-busy={opening}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        title={item.title}
+      >
+        <span
+          className="media-release-card__banner-bg"
+          style={{ backgroundImage: bannerBg }}
+        />
+        <span className="media-release-card__banner-glass" aria-hidden />
+        <span
+          className="media-release-card__banner-cover"
+          style={{ backgroundImage: `url("${coverUrl}")` }}
+        />
+        <span className="media-release-card__banner-meta">
+          <span className="media-release-card__banner-title">{item.title}</span>
+          {item.era_logo_url ? (
+            <img
+              src={item.era_logo_url}
+              alt=""
+              className="media-release-card__banner-era-logo"
+              draggable={false}
+            />
+          ) : artistName ? (
+            <span className="media-release-card__banner-artist">{artistName}</span>
+          ) : null}
+          {fullDate ? (
+            <span className="media-release-card__banner-date">{fullDate}</span>
+          ) : null}
+        </span>
+      </article>
+    );
+  }
+
+  return (
+    <article
+      className="media-release-card media-release-card--portrait media-release-card--clickable media-beat-frame media-beat-frame--cover"
+      role="button"
+      tabIndex={0}
+      aria-busy={opening}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      title={item.title}
+    >
+      <span
+        className="media-release-card__cover"
+        style={
+          item.cover_url
+            ? { backgroundImage: `url("${item.cover_url}")` }
+            : undefined
+        }
+      />
+      <span className="media-release-card__dim" aria-hidden />
+      <span className="media-release-card__hover">
+        <span className="media-release-card__title-hover">{item.title}</span>
+      </span>
+      {hoverDate ? (
+        <span className="media-release-card__date">
+          <span className="media-release-card__date-label">{hoverDate}</span>
+        </span>
+      ) : null}
+    </article>
+  );
+}
+
+export default function ArtistMediaGrid({
+  bandId,
+  kind,
+  cardLayout = "cover",
+  artistName,
+  onOpenItem,
+}: Props) {
   const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
     useArtistMediaTab(bandId, kind, true);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -130,46 +245,21 @@ export default function ArtistMediaGrid({ bandId, kind, onOpenItem }: Props) {
           ))}
         </nav>
       )}
-      <div className="media-release-grid artist-media-grid__cards">
-        {(category?.items ?? []).map((item) => {
-          const hoverDate =
-            item.display_date || formatTrackDate(item.date_iso) || null;
-          return (
-            <article
-              key={item.id}
-              className="media-release-card media-release-card--portrait media-release-card--clickable media-beat-frame media-beat-frame--cover"
-              role="button"
-              tabIndex={0}
-              aria-busy={openingId === item.id}
-              onClick={() => void handleOpen(item.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  void handleOpen(item.id);
-                }
-              }}
-              title={item.title}
-            >
-              <span
-                className="media-release-card__cover"
-                style={
-                  item.cover_url
-                    ? { backgroundImage: `url("${item.cover_url}")` }
-                    : undefined
-                }
-              />
-              <span className="media-release-card__dim" aria-hidden />
-              <span className="media-release-card__hover">
-                <span className="media-release-card__title-hover">{item.title}</span>
-              </span>
-              {hoverDate ? (
-                <span className="media-release-card__date">
-                  <span className="media-release-card__date-label">{hoverDate}</span>
-                </span>
-              ) : null}
-            </article>
-          );
-        })}
+      <div
+        className={`media-release-grid artist-media-grid__cards${
+          cardLayout === "banner" ? " media-release-grid--banner" : ""
+        }`}
+      >
+        {(category?.items ?? []).map((item) => (
+          <MediaItemCard
+            key={item.id}
+            item={item}
+            cardLayout={cardLayout}
+            artistName={artistName}
+            opening={openingId === item.id}
+            onOpen={() => void handleOpen(item.id)}
+          />
+        ))}
       </div>
     </div>
   );

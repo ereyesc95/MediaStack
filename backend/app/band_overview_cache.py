@@ -7,12 +7,14 @@ from pathlib import Path
 from app.paths import DATA_DIR
 
 CACHE_DIR = DATA_DIR / "overview_cache"
-OVERVIEW_CACHE_VERSION = 8
+OVERVIEW_CACHE_VERSION = 9
 
 
 def _cache_path(band_id: int, orientation: str) -> Path:
+    from app.gallery import normalize_card_orientation
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    ori = "portrait" if orientation == "portrait" else "landscape"
+    ori = normalize_card_orientation(orientation)
     return CACHE_DIR / f"{band_id}_{ori}.json"
 
 

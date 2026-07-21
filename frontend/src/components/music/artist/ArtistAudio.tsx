@@ -12,11 +12,13 @@ import {
   pushArtistRoute,
   saveReleaseReferrer,
 } from "../../../musicRoute";
-import { writerSearchUrl } from "../release/releaseTrackPanelMeta";
+import { DEFAULT_DISC_URL, writerSearchUrl } from "../release/releaseTrackPanelMeta";
+import { formatTrackDate } from "../../../formatDate";
 import type {
   ArtistPlaylistCard,
   AudioIndexPayload,
   AudioReleaseCard,
+  ReleaseCardLayout,
 } from "../../../types";
 import {
   ArtistPlaylistGrid,
@@ -353,6 +355,8 @@ function ReleaseCard({
   bandId,
   category,
   referrerArtistName,
+  artistName,
+  cardLayout,
   onOpenReleaseNavigate,
   onOpenArtist,
 }: {
@@ -360,6 +364,8 @@ function ReleaseCard({
   bandId: number;
   category: string;
   referrerArtistName?: string;
+  artistName?: string;
+  cardLayout: ReleaseCardLayout;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 }) {
@@ -419,6 +425,80 @@ function ReleaseCard({
     }
   };
 
+  const fullDate =
+    formatTrackDate(release.date_iso) || release.display_date || null;
+  const coverUrl = release.cover_url || DEFAULT_DISC_URL;
+  const showSourceArtist =
+    Boolean(release.source_artist_name) &&
+    (release.navigate_band_id !== bandId ||
+      (release.source_band_id != null && release.source_band_id !== bandId));
+
+  if (cardLayout === "banner") {
+    const bannerBg = release.banner_url
+      ? `url("${release.banner_url}")`
+      : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+    return (
+      <article
+        className="media-release-card media-release-card--banner media-release-card--clickable media-beat-frame media-beat-frame--cover"
+        role="button"
+        tabIndex={0}
+        onClick={handleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleOpen();
+          }
+        }}
+      >
+        <span
+          className="media-release-card__banner-bg"
+          style={{ backgroundImage: bannerBg }}
+        />
+        <span className="media-release-card__banner-glass" aria-hidden />
+        <span
+          className="media-release-card__banner-cover"
+          style={{ backgroundImage: `url("${coverUrl}")` }}
+        />
+        <span className="media-release-card__banner-meta">
+          {release.logo_url ? (
+            <img
+              src={release.logo_url}
+              alt=""
+              className="media-release-card__banner-release-logo"
+              draggable={false}
+            />
+          ) : (
+            <span className="media-release-card__banner-title">
+              {release.title}
+            </span>
+          )}
+          {release.era_logo_url ? (
+            <img
+              src={release.era_logo_url}
+              alt=""
+              className="media-release-card__banner-era-logo"
+              draggable={false}
+            />
+          ) : artistName ? (
+            <span className="media-release-card__banner-artist">{artistName}</span>
+          ) : null}
+          {fullDate ? (
+            <span className="media-release-card__banner-date">{fullDate}</span>
+          ) : null}
+          {showSourceArtist ? (
+            <button
+              type="button"
+              className="media-release-card__source-artist-link"
+              onClick={(e) => void openSourceArtist(e)}
+            >
+              By {release.source_artist_name}
+            </button>
+          ) : null}
+        </span>
+      </article>
+    );
+  }
+
   const hoverLabel = release.logo_url ? (
     <img
       src={release.logo_url}
@@ -429,11 +509,6 @@ function ReleaseCard({
   ) : (
     <span className="media-release-card__title-hover">{release.title}</span>
   );
-
-  const showSourceArtist =
-    Boolean(release.source_artist_name) &&
-    (release.navigate_band_id !== bandId ||
-      (release.source_band_id != null && release.source_band_id !== bandId));
 
   return (
     <article
@@ -488,6 +563,8 @@ type Props = {
   onPlayTrack?: (path: string, title: string) => void;
   bandId: number;
   referrerArtistName?: string;
+  artistName?: string;
+  cardLayout?: ReleaseCardLayout;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenPlaylist?: (slug: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
@@ -495,9 +572,11 @@ type Props = {
 
 export default function ArtistAudio({
   state,
-  onPlayTrack,
+  onPlayTrack: _onPlayTrack,
   bandId,
   referrerArtistName,
+  artistName,
+  cardLayout = "cover",
   onOpenReleaseNavigate,
   onOpenPlaylist,
   onOpenArtist,
@@ -557,7 +636,11 @@ export default function ArtistAudio({
           category.
         </p>
       ) : (
-        <div className="media-release-grid">
+        <div
+          className={`media-release-grid${
+            cardLayout === "banner" ? " media-release-grid--banner" : ""
+          }`}
+        >
           {releases.map((release) => (
             <ReleaseCard
               key={release.id}
@@ -565,6 +648,8 @@ export default function ArtistAudio({
               bandId={bandId}
               category={category}
               referrerArtistName={referrerArtistName}
+              artistName={artistName}
+              cardLayout={cardLayout}
               onOpenReleaseNavigate={onOpenReleaseNavigate}
               onOpenArtist={onOpenArtist}
             />

@@ -258,7 +258,9 @@ def artist_cards(
     gender: str = "",
     label: str = "",
     producer: str = "",
-    orientation: str = Query("landscape", pattern="^(landscape|portrait)$"),
+    orientation: str = Query(
+        "landscape", pattern="^(landscape|portrait|banner|icons)$"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(48, ge=1, le=200),
 ):
@@ -388,6 +390,9 @@ def band_audio_index(
                 bg.close()
 
         background_tasks.add_task(_refresh)
+    from app.release_banner_photos import enrich_items_with_banners
+
+    enrich_items_with_banners(db, band_id, data.get("releases") or [])
     return data
 
 
@@ -405,7 +410,9 @@ async def release_overview(
     row = crud.get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
-    card_orientation = "portrait" if orientation == "portrait" else "landscape"
+    from app.gallery import normalize_card_orientation
+
+    card_orientation = normalize_card_orientation(orientation)
     data = build_release_overview(
         db, band_id, release_id, card_orientation=card_orientation
     )
@@ -756,6 +763,16 @@ async def resolve_artist_name(
     return await resolve_artist_name_navigation(db, name)
 
 
+def _enrich_media_tab_banners(db: Session, band_id: int, data: dict) -> dict:
+    from app.release_banner_photos import enrich_items_with_banners
+
+    items: list[dict] = []
+    for cat in data.get("categories") or []:
+        items.extend(cat.get("items") or [])
+    enrich_items_with_banners(db, band_id, items)
+    return data
+
+
 @router.get("/bands/{band_id}/media/video")
 def band_video_index(
     band_id: int,
@@ -770,7 +787,7 @@ def band_video_index(
     data = get_media_tab_index(db, band_id, kind="video", force=force)
     if not data:
         raise HTTPException(404, "Video not found")
-    return data
+    return _enrich_media_tab_banners(db, band_id, data)
 
 
 @router.get("/bands/{band_id}/media/library")
@@ -787,7 +804,7 @@ def band_library_index(
     data = get_media_tab_index(db, band_id, kind="library", force=force)
     if not data:
         raise HTTPException(404, "Library not found")
-    return data
+    return _enrich_media_tab_banners(db, band_id, data)
 
 
 @router.get("/bands/{band_id}/word-cloud")
@@ -1072,7 +1089,9 @@ def band_overview(
     if not row:
         raise HTTPException(404, "Band not found")
     admin = is_admin_role(user.usr_role_id) if user else False
-    card_orientation = "portrait" if orientation == "portrait" else "landscape"
+    from app.gallery import normalize_card_orientation
+
+    card_orientation = normalize_card_orientation(orientation)
     data = get_band_overview(
         db, band_id, is_admin=admin, card_orientation=card_orientation
     )
@@ -1582,6 +1601,7 @@ async def band_resolve_va_contributor_photos(
     user: User | None = Depends(get_optional_user),
 ):
     from app.band_overview_cache import invalidate_overview_cache
+    from app.gallery import normalize_card_orientation
     from app.various_artists_hub import is_various_artists_band, resolve_va_contributor_photos
 
     row = crud.get_band(db, band_id)
@@ -1595,7 +1615,7 @@ async def band_resolve_va_contributor_photos(
         db,
         row,
         media_root,
-        orientation="portrait" if orientation == "portrait" else "landscape",
+        orientation=normalize_card_orientation(orientation),
     )
     invalidate_overview_cache(band_id)
     return result

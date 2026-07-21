@@ -57,10 +57,16 @@ import type {
   CardOrientation,
   LinkCategory,
   RelatedTab,
+  ReleaseCardLayout,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
-import { IconCardLandscape, IconCardPortrait } from "../../MenuIcons";
+import CardOrientationPicker from "../../CardOrientationPicker";
+import ReleaseCardLayoutPicker from "../../ReleaseCardLayoutPicker";
+import {
+  getStoredReleaseCardLayout,
+  saveReleaseCardLayout,
+} from "../../../themes";
 import ArtistAbout from "./ArtistAbout";
 import ArtistVariousAbout from "./ArtistVariousAbout";
 import ArtistContributors from "./ArtistContributors";
@@ -148,7 +154,7 @@ type Props = {
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
-  onToggleOrientation?: () => void;
+  onSetOrientation?: (next: CardOrientation) => void;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenPlaylist?: (slug: string) => void;
   onOpenMediaItem?: (kind: "video" | "library", itemId: string) => void;
@@ -182,7 +188,7 @@ export default function ArtistPage({
   onImport,
   onSync,
   onChooseSource,
-  onToggleOrientation,
+  onSetOrientation,
   onOpenReleaseNavigate,
   onOpenPlaylist,
   onOpenMediaItem,
@@ -227,6 +233,19 @@ export default function ArtistPage({
     "tracks" | "compilations" | "name"
   >("tracks");
   const [eraIndex, setEraIndex] = useState(0);
+  const [releaseCardLayout, setReleaseCardLayout] = useState<ReleaseCardLayout>(
+    () => (userId ? getStoredReleaseCardLayout(userId) : "cover")
+  );
+  const setReleaseCardLayoutPersisted = useCallback(
+    (next: ReleaseCardLayout) => {
+      setReleaseCardLayout(next);
+      if (userId) saveReleaseCardLayout(userId, next);
+    },
+    [userId]
+  );
+  useEffect(() => {
+    if (userId) setReleaseCardLayout(getStoredReleaseCardLayout(userId));
+  }, [userId]);
   const deviceLayout = useDeviceLayout();
   const stacked = isStackedArtistLayout(deviceLayout);
   const mobilePortrait = isMobilePortraitLayout(deviceLayout);
@@ -803,19 +822,11 @@ export default function ArtistPage({
             {section === "overview" &&
               (overviewTab === "related" ||
                 (data?.is_various_artists && overviewTab === "artists")) &&
-              onToggleOrientation && (
-                <button
-                  type="button"
-                  className="card-orientation-toggle"
-                  aria-label={`Cards: ${cardOrientation}. Tap to switch layout.`}
-                  onClick={onToggleOrientation}
-                >
-                  {cardOrientation === "landscape" ? (
-                    <IconCardLandscape />
-                  ) : (
-                    <IconCardPortrait />
-                  )}
-                </button>
+              onSetOrientation && (
+                <CardOrientationPicker
+                  value={cardOrientation}
+                  onChange={onSetOrientation}
+                />
               )}
             {showPlayerRestore && (
               <button
@@ -918,6 +929,14 @@ export default function ArtistPage({
                   : undefined
               }
             />
+            {(section === "audio" ||
+              section === "video" ||
+              section === "library") && (
+              <ReleaseCardLayoutPicker
+                value={releaseCardLayout}
+                onChange={setReleaseCardLayoutPersisted}
+              />
+            )}
           </div>
         </header>
 
@@ -1292,7 +1311,9 @@ export default function ArtistPage({
           <ArtistAudio
             state={audioState}
             bandId={bandId}
-            referrerArtistName={data?.name ?? shell?.name}
+            referrerArtistName={data?.name ?? shell?.name ?? undefined}
+            artistName={data?.name ?? shell?.name ?? undefined}
+            cardLayout={releaseCardLayout}
             onPlayTrack={(path, title) => void handlePlay(path, title)}
             onOpenReleaseNavigate={onOpenReleaseNavigate}
             onOpenPlaylist={onOpenPlaylist}
@@ -1307,6 +1328,8 @@ export default function ArtistPage({
           <ArtistMediaGrid
             bandId={bandId}
             kind="video"
+            cardLayout={releaseCardLayout}
+            artistName={data?.name ?? shell?.name ?? undefined}
             onOpenItem={(id) => onOpenMediaItem?.("video", id)}
           />
         )}
@@ -1317,6 +1340,8 @@ export default function ArtistPage({
           <ArtistMediaGrid
             bandId={bandId}
             kind="library"
+            cardLayout={releaseCardLayout}
+            artistName={data?.name ?? shell?.name ?? undefined}
             onOpenItem={(id) => onOpenMediaItem?.("library", id)}
           />
         )}

@@ -28,7 +28,7 @@ import {
   prefetchMusicDashboard,
 } from "../../musicDashboardCache";
 import AppMenu from "../AppMenu";
-import { IconCardLandscape, IconCardPortrait } from "../MenuIcons";
+import CardOrientationPicker from "../CardOrientationPicker";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import AddArtistModal from "./AddArtistModal";
@@ -77,7 +77,7 @@ type Props = {
   userId?: number;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
-  onToggleOrientation: () => void;
+  onSetOrientation: (next: CardOrientation) => void;
   onSelectMedia: (opt: MediaOption) => void;
   onTab: (tab: MusicTab) => void;
   onBand: (id?: number, artistSection?: ArtistSection) => void;
@@ -123,7 +123,7 @@ export default function MusicModule({
   userId,
   onSwitchProfile,
   onEditProfile,
-  onToggleOrientation,
+  onSetOrientation,
   onSelectMedia,
   onTab,
   onBand,
@@ -750,18 +750,10 @@ export default function MusicModule({
                 <span className="status-bar module-top-bar__status">{busy}</span>
               )}
               {showArtistTools && (
-                <button
-                  type="button"
-                  className="card-orientation-toggle"
-                  aria-label={`Cards: ${cardOrientation}. Tap to switch layout.`}
-                  onClick={onToggleOrientation}
-                >
-                  {cardOrientation === "landscape" ? (
-                    <IconCardLandscape />
-                  ) : (
-                    <IconCardPortrait />
-                  )}
-                </button>
+                <CardOrientationPicker
+                  value={cardOrientation}
+                  onChange={onSetOrientation}
+                />
               )}
               {showHomePlayerRestore && (
                 <button
@@ -1102,7 +1094,7 @@ export default function MusicModule({
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource}
-          onToggleOrientation={onToggleOrientation}
+          onSetOrientation={onSetOrientation}
         />
       ) : tab === "home" ? (
         <div className="music-module__body music-module__body--home">

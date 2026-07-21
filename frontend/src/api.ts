@@ -182,7 +182,7 @@ export async function fetchBand(id: number): Promise<Band> {
 
 export async function fetchBandOverview(
   id: number,
-  orientation: "landscape" | "portrait" = "landscape"
+  orientation: import("./types").CardOrientation = "landscape"
 ) {
   return request<import("./types").BandOverview>(
     `${API}/music/bands/${id}/overview?orientation=${orientation}`,
@@ -245,7 +245,7 @@ export async function fetchBandAudioIndex(
 export async function fetchReleaseOverview(
   bandId: number,
   releaseId: string,
-  orientation: "landscape" | "portrait" = "landscape"
+  orientation: import("./types").CardOrientation = "landscape"
 ): Promise<import("./types").ReleaseOverview> {
   return request(
     `${API}/music/bands/${bandId}/releases/${releaseId}/overview?orientation=${orientation}`,
@@ -1051,7 +1051,7 @@ export async function refreshBandLinks(
 
 export async function resolveVaContributorPhotos(
   id: number,
-  orientation: "landscape" | "portrait" = "landscape"
+  orientation: import("./types").CardOrientation = "landscape"
 ) {
   return request<{ ok: boolean; resolved?: number }>(
     `${API}/music/bands/${id}/resolve-va-contributor-photos?orientation=${orientation}`,

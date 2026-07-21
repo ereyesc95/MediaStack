@@ -282,6 +282,56 @@ input {
   opacity: 0.85;
 }
 
+.card-orientation-picker,
+.release-card-layout-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.card-orientation-picker__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 10.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 220;
+}
+
+.card-orientation-picker__menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.85rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.card-orientation-picker__menu button:hover,
+.card-orientation-picker__menu button.active {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.release-card-layout-picker__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .app-menu-dropdown {
   position: absolute;
   top: 100%;
@@ -1284,6 +1334,73 @@ input {
   width: 100%;
   aspect-ratio: 2 / 3;
   min-height: 220px;
+}
+
+.artist-card--banner {
+  width: 100%;
+  aspect-ratio: 2160 / 600;
+  min-height: 100px;
+}
+
+.artist-card--banner .artist-card-bg {
+  background-position: center 12%;
+  background-size: cover;
+}
+
+.artist-card--banner .artist-card-footer {
+  justify-content: flex-start;
+  align-items: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  bottom: auto;
+  top: 0;
+  height: 100%;
+}
+
+.artist-card--icons {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 96px;
+}
+
+.artist-card--icons .artist-card-dim {
+  opacity: 0;
+}
+
+.artist-card--icons .artist-card-footer {
+  opacity: 1;
+  inset: 0;
+  bottom: 0;
+  top: 0;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem;
+  transition: transform 0.25s ease;
+}
+
+.artist-card--icons:not(.artist-card--tap-reveal):hover .artist-card-footer {
+  transform: scale(1.06);
+}
+
+.artist-card--icons .artist-card-icon {
+  width: 42%;
+  max-width: 4.5rem;
+  height: auto;
+}
+
+.artist-card--icons .artist-card-logo {
+  width: 72%;
+  max-width: 7rem;
+  height: auto;
+}
+
+.artist-card--icons .artist-card-name {
+  font-size: 0.72rem;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .artist-card-dim {
@@ -2361,6 +2478,26 @@ input {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
+.artist-grid--banner {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+}
+
+@media (min-width: 1100px) {
+  .artist-grid--banner {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.artist-grid--icons {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+@media (min-width: 1100px) {
+  .artist-grid--icons {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
 .filter-banner {
   display: flex;
   align-items: center;
@@ -2987,6 +3124,14 @@ input {
 
   .artist-grid--portrait {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .artist-grid--banner {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-grid--icons {
+    grid-template-columns: repeat(auto-fill, minmax(5.25rem, 1fr));
   }
 
   .music-module__body {
@@ -5943,6 +6088,16 @@ input {
   width: 100%;
 }
 
+.media-release-grid--banner {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 28rem), 1fr));
+}
+
+@media (min-width: 900px) {
+  .media-release-grid--banner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 768px) {
   .media-release-grid {
     grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
@@ -5957,6 +6112,10 @@ input {
 
 .artist-page--mobile-landscape .media-release-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.artist-page--mobile-landscape .media-release-grid--banner {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .artist-page--mobile-landscape .artist-gallery__photo-grid {
@@ -5974,6 +6133,100 @@ input {
   border-radius: 0;
   overflow: hidden;
   background: var(--bg-hover);
+}
+
+.media-release-card--banner {
+  aspect-ratio: 2160 / 600;
+  min-height: 7.5rem;
+}
+
+.media-release-card__banner-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover) center 12% / cover no-repeat;
+  transition: transform 0.4s ease, filter 0.2s ease;
+  z-index: 0;
+}
+
+.media-release-card--banner:hover .media-release-card__banner-bg {
+  transform: scale(1.03);
+  filter: brightness(0.92);
+}
+
+.media-release-card__banner-glass {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 52%;
+  max-width: 22rem;
+  background: rgba(12, 14, 18, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.media-release-card--banner:hover .media-release-card__banner-glass {
+  opacity: 1;
+}
+
+.media-release-card__banner-cover {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(28%, 7.5rem);
+  aspect-ratio: 1;
+  background: center / cover no-repeat;
+  z-index: 2;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+.media-release-card__banner-meta {
+  position: absolute;
+  left: calc(min(28%, 7.5rem) + 1.65rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: min(42%, 16rem);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 3;
+  pointer-events: none;
+  color: #f0f8ff;
+}
+
+.media-release-card--banner:hover .media-release-card__banner-meta {
+  opacity: 1;
+}
+
+.media-release-card__banner-release-logo,
+.media-release-card__banner-era-logo {
+  max-width: 100%;
+  max-height: 2.1rem;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.media-release-card__banner-title,
+.media-release-card__banner-artist {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
+.media-release-card__banner-date {
+  font-size: 0.72rem;
+  opacity: 0.92;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
 .media-release-card--clickable {
@@ -6222,6 +6475,7 @@ input {
   padding: 0.45rem 0.5rem;
   font-size: 0.68rem;
   text-align: center;
+  color: #f0f8ff;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -6276,6 +6530,7 @@ input {
   font-size: 0.72rem;
   text-align: center;
   line-height: 1.2;
+  color: #f0f8ff;
 }
 
 .artist-gallery__brand-kind {
@@ -11564,6 +11819,7 @@ button.lyrics-status-badge--icon-only {
   padding: 0.45rem 0.5rem;
   font-size: 0.68rem;
   text-align: center;
+  color: #f0f8ff;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -12034,6 +12290,7 @@ button.lyrics-status-badge--icon-only {
   color: var(--text-muted);
   opacity: 0.9;
   flex-shrink: 0;
+  margin-left: 0.15rem;
 }
 
 .release-tracklist__video-badge svg {
