@@ -894,6 +894,7 @@ export default function MusicModule({
           isAdmin={isAdmin}
           userId={userId}
           onBack={() => onMediaItemNavigate?.(undefined, artistSection)}
+          onOpenItem={(id) => onMediaItemNavigate?.(id, artistSection)}
           onOpenArtist={(id) => {
             onMediaItemNavigate?.(undefined);
             openArtist(id);

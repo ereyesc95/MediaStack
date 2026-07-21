@@ -37,6 +37,7 @@ type Props = {
   itemId: string;
   onBack: () => void;
   onOpenArtist: (id: number) => void;
+  onOpenItem?: (itemId: string) => void;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -97,6 +98,7 @@ export default function MediaItemPage({
   itemId,
   onBack,
   onOpenArtist,
+  onOpenItem,
   onImport,
   onSync,
   onChooseSource,
@@ -157,6 +159,25 @@ export default function MediaItemPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setTab("overview");
+    setGalleryTab("artwork");
+    setAboutEditOpen(false);
+  }, [itemId]);
+
+  const openNeighbor = (neighborId: string) => {
+    if (onOpenItem) {
+      onOpenItem(neighborId);
+      return;
+    }
+    pushArtistRoute({
+      bandId,
+      section: kind,
+      overviewTab: "about",
+      mediaItemId: neighborId,
+    });
+  };
 
   useEffect(() => {
     pushArtistRoute(
@@ -478,13 +499,7 @@ export default function MediaItemPage({
                       <MediaNeighborLink
                         neighbor={data.prev}
                         direction="prev"
-                        onClick={() =>
-                          pushArtistRoute({
-                            bandId,
-                            section: kind,
-                            mediaItemId: data.prev!.id,
-                          })
-                        }
+                        onClick={() => openNeighbor(data.prev!.id)}
                       />
                     ) : (
                       <span className="release-page__neighbor-spacer" />
@@ -493,13 +508,7 @@ export default function MediaItemPage({
                       <MediaNeighborLink
                         neighbor={data.next}
                         direction="next"
-                        onClick={() =>
-                          pushArtistRoute({
-                            bandId,
-                            section: kind,
-                            mediaItemId: data.next!.id,
-                          })
-                        }
+                        onClick={() => openNeighbor(data.next!.id)}
                       />
                     ) : (
                       <span className="release-page__neighbor-spacer" />

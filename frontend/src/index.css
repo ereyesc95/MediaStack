@@ -6482,8 +6482,9 @@ input {
   max-width: 100%;
 }
 
-/* Mobile portrait: glass + overlay full-bleed left→right */
-@media (max-width: 480px) and (orientation: portrait) {
+/* Phone: glass + overlay full-bleed on portrait and landscape (2-up banners) */
+@media (max-width: 480px) and (orientation: portrait),
+  (max-width: 900px) and (orientation: landscape) {
   .media-release-card__banner-overlay {
     width: 100%;
   }
