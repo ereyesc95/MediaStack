@@ -1499,6 +1499,29 @@ input {
   gap: 0.45rem;
 }
 
+/* Banner catalog: keep branding left on tap-reveal (portrait + landscape) */
+.artist-card--banner.artist-card--tap-reveal.artist-card--revealed .artist-card-footer {
+  align-items: flex-start;
+  justify-content: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  text-align: left;
+}
+
+.artist-card--banner.artist-card--tap-reveal.artist-card--revealed .artist-card-name {
+  text-align: left;
+}
+
+.artist-card--banner.artist-card--tap-reveal.artist-card--revealed .artist-card-icon {
+  max-width: min(22%, 3rem);
+  max-height: min(36%, 3rem);
+}
+
+.artist-card--banner.artist-card--tap-reveal.artist-card--revealed .artist-card-logo {
+  max-width: min(55%, 11rem);
+  max-height: min(42%, 3.25rem);
+}
+
 .artist-card--tap-reveal.artist-card--revealed .artist-card-icon {
   max-width: 88%;
   max-height: min(38%, 4.5rem);
@@ -3138,6 +3161,7 @@ input {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 
+  /* Portrait phones: one banner per row */
   .artist-grid--banner {
     grid-template-columns: 1fr;
   }
@@ -3151,7 +3175,16 @@ input {
     min-height: 0;
     flex: 1;
   }
+}
 
+/* Phone landscape catalog: two banners per row */
+@media (max-width: 900px) and (orientation: landscape) {
+  .artist-grid--banner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
   .music-dashboard {
     overflow: hidden;
     height: 100%;
@@ -6185,25 +6218,30 @@ input {
 
 .media-release-card__banner-overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  /* Match glass width so cover + logos stay inside the shade */
+  width: 50%;
+  right: auto;
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  /* Equal inset for idle cover (top / bottom / left) */
-  padding: 0.55rem 0.85rem 0.55rem 0.55rem;
+  padding: 0.55rem 0.75rem 0.55rem 0.55rem;
   z-index: 1;
   min-width: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .media-release-card__banner-glass {
   position: absolute;
-  /* Align to the hovered/tapped cover height (smaller) */
   top: 7%;
   bottom: 7%;
   left: 0;
-  width: 50%;
-  max-width: 50%;
+  right: 0;
+  width: 100%;
+  max-width: none;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -6226,6 +6264,7 @@ input {
   height: 100%;
   max-height: 100%;
   width: auto;
+  max-width: 42%;
   aspect-ratio: 1;
   background: center / cover no-repeat;
   z-index: 1;
@@ -6250,17 +6289,17 @@ input {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 0.85rem;
+  gap: 0.65rem;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   width: auto;
-  max-width: none;
+  max-width: 100%;
   opacity: 0;
   transition: opacity 0.28s ease;
   z-index: 1;
   pointer-events: none;
   color: #f0f8ff;
-  padding: 0.1rem 0.85rem 0.1rem 0;
+  padding: 0.1rem 0.15rem 0.1rem 0;
   overflow: hidden;
 }
 
@@ -6282,12 +6321,12 @@ input {
   }
 
   .media-release-card__banner-glass {
-    width: 88%;
-    max-width: 88%;
+    width: 100%;
+    max-width: none;
   }
 
   .media-release-card__banner-meta {
-    max-width: none;
+    max-width: 100%;
     gap: 0.35rem;
   }
 
@@ -6330,6 +6369,8 @@ input {
   align-items: center;
   gap: 0.45rem;
   max-width: 100%;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   pointer-events: auto;
 }
@@ -6339,19 +6380,19 @@ input {
   max-width: 100%;
   width: auto;
   height: auto;
-  max-height: clamp(2.6rem, 5.5vw, 4.35rem);
+  max-height: clamp(1.85rem, 3.8vw, 2.85rem);
   object-fit: contain;
   object-position: left center;
 }
 
 .media-release-card__banner-release-logo--collapsed {
-  max-height: clamp(3.1rem, 6.5vw, 5rem);
+  max-height: clamp(2.15rem, 4.4vw, 3.25rem);
   max-width: 100%;
 }
 
 .media-release-card__banner-era-icon {
-  max-height: clamp(1.35rem, 2.8vw, 2.15rem);
-  max-width: clamp(1.35rem, 2.8vw, 2.15rem);
+  max-height: clamp(1.15rem, 2.2vw, 1.75rem);
+  max-width: clamp(1.15rem, 2.2vw, 1.75rem);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -6360,7 +6401,7 @@ input {
 
 .media-release-card__banner-era-logo {
   max-width: 100%;
-  max-height: clamp(1.55rem, 3.4vw, 2.65rem);
+  max-height: clamp(1.25rem, 2.6vw, 2rem);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -6377,6 +6418,12 @@ input {
   cursor: pointer;
   pointer-events: auto;
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.media-release-card__banner-source-logo-btn .media-release-card__banner-era-logo {
+  max-width: 100%;
 }
 
 .media-release-card__banner-source-name {
@@ -6387,28 +6434,41 @@ input {
   cursor: pointer;
   pointer-events: auto;
   color: #f0f8ff;
-  font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+  font-size: clamp(0.72rem, 1.4vw, 0.9rem);
   font-weight: 600;
   text-align: left;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .media-release-card__banner-title,
 .media-release-card__banner-artist {
-  font-size: clamp(0.82rem, 1.8vw, 1.05rem);
+  font-size: clamp(0.75rem, 1.5vw, 0.95rem);
   font-weight: 600;
   line-height: 1.2;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .media-release-card__banner-date {
-  font-size: clamp(0.7rem, 1.35vw, 0.82rem);
+  font-size: clamp(0.66rem, 1.2vw, 0.78rem);
   opacity: 0.92;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  max-width: 100%;
 }
 
-/* Mobile portrait: glass full-bleed left→right so logos stay inside the shade */
+/* Mobile portrait: glass + overlay full-bleed left→right */
 @media (max-width: 480px) and (orientation: portrait) {
+  .media-release-card__banner-overlay {
+    width: 100%;
+  }
+
   .media-release-card__banner-glass {
     left: 0;
     right: 0;
@@ -6417,38 +6477,38 @@ input {
   }
 
   .media-release-card__banner-meta {
-    max-width: none;
-    flex: 1 1 auto;
+    max-width: 100%;
+    flex: 1 1 0;
     padding-right: 0.35rem;
   }
 }
 
 @media (max-width: 480px) {
   .media-release-card__banner-release-logo {
-    max-height: clamp(1.7rem, 8vw, 2.35rem);
+    max-height: clamp(1.45rem, 6.5vw, 2rem);
   }
 
   .media-release-card__banner-release-logo--collapsed {
-    max-height: clamp(2rem, 9vw, 2.75rem);
+    max-height: clamp(1.65rem, 7vw, 2.25rem);
   }
 
   .media-release-card__banner-era-logo {
-    max-height: clamp(1.05rem, 4.5vw, 1.45rem);
+    max-height: clamp(0.95rem, 3.8vw, 1.25rem);
   }
 
   .media-release-card__banner-era-icon {
-    max-height: 1.15rem;
-    max-width: 1.15rem;
+    max-height: 1.05rem;
+    max-width: 1.05rem;
   }
 
   .media-release-card__banner-title,
   .media-release-card__banner-artist,
   .media-release-card__banner-source-name {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
 
   .media-release-card__banner-date {
-    font-size: 0.64rem;
+    font-size: 0.62rem;
   }
 }
 
