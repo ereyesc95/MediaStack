@@ -14,7 +14,7 @@ import {
 } from "../../../musicRoute";
 import { DEFAULT_DISC_URL, writerSearchUrl } from "../release/releaseTrackPanelMeta";
 import { formatTrackDate } from "../../../formatDate";
-import { usePhoneLayout } from "../../../usePhoneLayout";
+import { usePhoneLayout, useDeviceLayout, isMobilePortraitLayout } from "../../../usePhoneLayout";
 import type {
   ArtistPlaylistCard,
   AudioIndexPayload,
@@ -376,6 +376,7 @@ function ReleaseCard({
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 }) {
+  const deviceLayout = useDeviceLayout();
   const handleOpen = () => {
     const targetBand = release.navigate_band_id;
     const targetRelease = release.navigate_release_id;
@@ -400,7 +401,7 @@ function ReleaseCard({
   };
 
   const handleActivate = () => {
-    if (tapReveal && cardLayout === "banner" && !revealed) {
+    if (tapReveal && !revealed) {
       onReveal?.();
       return;
     }
@@ -447,6 +448,15 @@ function ReleaseCard({
     Boolean(release.source_artist_name) &&
     (release.navigate_band_id !== bandId ||
       (release.source_band_id != null && release.source_band_id !== bandId));
+  const preferCollapsed = !isMobilePortraitLayout(deviceLayout);
+  const releaseLogoSrc =
+    preferCollapsed && release.logo_collapsed_url
+      ? release.logo_collapsed_url
+      : release.logo_url;
+  const eraLogoSrc =
+    preferCollapsed && release.era_logo_collapsed_url
+      ? release.era_logo_collapsed_url
+      : release.era_logo_url;
 
   if (cardLayout === "banner") {
     const bannerBg = release.banner_url
@@ -460,6 +470,7 @@ function ReleaseCard({
           "media-release-card--clickable",
           "media-beat-frame",
           "media-beat-frame--cover",
+          tapReveal ? "media-release-card--tap-reveal" : "",
           revealed ? "media-release-card--revealed" : "",
         ]
           .filter(Boolean)
@@ -485,12 +496,12 @@ function ReleaseCard({
             style={{ backgroundImage: `url("${coverUrl}")` }}
           />
           <span className="media-release-card__banner-meta">
-            {release.logo_collapsed_url || release.logo_url ? (
+            {releaseLogoSrc ? (
               <img
-                src={release.logo_collapsed_url || release.logo_url!}
+                src={releaseLogoSrc}
                 alt=""
                 className={
-                  release.logo_collapsed_url
+                  preferCollapsed && release.logo_collapsed_url
                     ? "media-release-card__banner-release-logo media-release-card__banner-release-logo--collapsed"
                     : "media-release-card__banner-release-logo"
                 }
@@ -501,7 +512,40 @@ function ReleaseCard({
                 {release.title}
               </span>
             )}
-            {(release.era_icon_url || release.era_logo_url) ? (
+            {showSourceArtist ? (
+              <span className="media-release-card__banner-artist-brand">
+                {release.source_icon_url ? (
+                  <img
+                    src={release.source_icon_url}
+                    alt=""
+                    className="media-release-card__banner-era-icon"
+                    draggable={false}
+                  />
+                ) : null}
+                {release.source_logo_url ? (
+                  <button
+                    type="button"
+                    className="media-release-card__banner-source-logo-btn"
+                    onClick={(e) => void openSourceArtist(e)}
+                  >
+                    <img
+                      src={release.source_logo_url}
+                      alt={release.source_artist_name || ""}
+                      className="media-release-card__banner-era-logo"
+                      draggable={false}
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="media-release-card__banner-source-name"
+                    onClick={(e) => void openSourceArtist(e)}
+                  >
+                    {release.source_artist_name}
+                  </button>
+                )}
+              </span>
+            ) : (eraLogoSrc || release.era_icon_url) ? (
               <span className="media-release-card__banner-artist-brand">
                 {release.era_icon_url ? (
                   <img
@@ -511,9 +555,9 @@ function ReleaseCard({
                     draggable={false}
                   />
                 ) : null}
-                {release.era_logo_url ? (
+                {eraLogoSrc ? (
                   <img
-                    src={release.era_logo_url}
+                    src={eraLogoSrc}
                     alt=""
                     className="media-release-card__banner-era-logo"
                     draggable={false}
@@ -525,15 +569,6 @@ function ReleaseCard({
             ) : null}
             {fullDate ? (
               <span className="media-release-card__banner-date">{fullDate}</span>
-            ) : null}
-            {showSourceArtist ? (
-              <button
-                type="button"
-                className="media-release-card__source-artist-link"
-                onClick={(e) => void openSourceArtist(e)}
-              >
-                By {release.source_artist_name}
-              </button>
             ) : null}
           </span>
         </span>
@@ -554,14 +589,23 @@ function ReleaseCard({
 
   return (
     <article
-      className="media-release-card media-release-card--clickable media-beat-frame media-beat-frame--cover"
+      className={[
+        "media-release-card",
+        "media-release-card--clickable",
+        "media-beat-frame",
+        "media-beat-frame--cover",
+        tapReveal ? "media-release-card--tap-reveal" : "",
+        revealed ? "media-release-card--revealed" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       role="button"
       tabIndex={0}
-      onClick={handleOpen}
+      onClick={handleActivate}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          handleOpen();
+          handleActivate();
         }
       }}
     >
@@ -645,7 +689,7 @@ export default function ArtistAudio({
     if (!isPhone || revealedId == null) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t?.closest?.(".media-release-card--banner")) return;
+      if (t?.closest?.(".media-release-card--tap-reveal")) return;
       setRevealedId(null);
     };
     document.addEventListener("mousedown", onDoc);
@@ -709,7 +753,7 @@ export default function ArtistAudio({
               referrerArtistName={referrerArtistName}
               artistName={artistName}
               cardLayout={cardLayout}
-              tapReveal={isPhone && cardLayout === "banner"}
+              tapReveal={isPhone}
               revealed={isPhone && revealedId === release.id}
               onReveal={() => setRevealedId(release.id)}
               onOpenReleaseNavigate={onOpenReleaseNavigate}

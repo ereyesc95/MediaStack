@@ -59,6 +59,22 @@ class ArtistCardAssets:
     icon_url: str | None
     era_year: int | None
     show_name_on_hover: bool
+    logo_collapsed_url: str | None = None
+
+
+def _brand_url(brand: EraBrand | None, root: Path) -> str | None:
+    return _media_url(brand.path, root) if brand else None
+
+
+def _collapsed_twin(
+    brands: list[EraBrand], normal: EraBrand | None, kind: str = "logo"
+) -> EraBrand | None:
+    if not normal:
+        return None
+    for b in _brands_of_kind(brands, kind, collapsed=True):
+        if b.start == normal.start and b.end == normal.end:
+            return b
+    return None
 
 
 def _display_name(name: str | None) -> str:
@@ -302,8 +318,27 @@ def resolve_artist_card(
     brands = _list_era_brands(logos_dir)
 
     want = normalize_card_orientation(orientation)
-    # Collapsed era logos are banner-only (catalog banner + release banner cards).
-    prefer_collapsed = want == "banner"
+    # Collapsed twin is returned separately; UI chooses it for banner (non–mobile-portrait).
+    want_collapsed_twin = want == "banner"
+
+    def _pack(
+        *,
+        photo_url: str | None,
+        year: int | None,
+        logo: EraBrand | None,
+        icon: EraBrand | None,
+    ) -> ArtistCardAssets:
+        collapsed = (
+            _collapsed_twin(brands, logo) if want_collapsed_twin and logo else None
+        )
+        return ArtistCardAssets(
+            photo_url=photo_url,
+            logo_url=_media_url(logo.path, root) if logo else None,
+            icon_url=_media_url(icon.path, root) if icon else None,
+            era_year=year,
+            show_name_on_hover=not (logo or icon),
+            logo_collapsed_url=_media_url(collapsed.path, root) if collapsed else None,
+        )
 
     # Icons mode: branding only (no photo background)
     if want == "icons":
@@ -311,51 +346,39 @@ def resolve_artist_card(
         if not eras and photos:
             eras = sorted({p.year for p in photos})
         fallback_year = random.choice(eras) if eras else 2000
-        logo_only = _pick_brand_for_year(
-            brands, fallback_year, "logo", prefer_collapsed=False
-        )
-        icon_only = _pick_brand_for_year(
-            brands, fallback_year, "icon", prefer_collapsed=False
-        )
-        return ArtistCardAssets(
-            None,
-            _media_url(logo_only.path, root) if logo_only else None,
-            _media_url(icon_only.path, root) if icon_only else None,
-            fallback_year if logo_only or icon_only else None,
-            not (logo_only or icon_only),
+        return _pack(
+            photo_url=None,
+            year=fallback_year,
+            logo=_pick_brand_for_year(
+                brands, fallback_year, "logo", prefer_collapsed=False
+            ),
+            icon=_pick_brand_for_year(
+                brands, fallback_year, "icon", prefer_collapsed=False
+            ),
         )
 
     pool = _photo_pool(photos, want)
     if not pool:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
         fallback_year = random.choice(eras) if eras else 2000
-        logo_only = _pick_brand_for_year(
-            brands, fallback_year, "logo", prefer_collapsed=prefer_collapsed
-        )
-        icon_only = _pick_brand_for_year(
-            brands, fallback_year, "icon", prefer_collapsed=False
-        )
-        return ArtistCardAssets(
-            None,
-            _media_url(logo_only.path, root) if logo_only else None,
-            _media_url(icon_only.path, root) if icon_only else None,
-            fallback_year if logo_only or icon_only else None,
-            not (logo_only or icon_only),
+        return _pack(
+            photo_url=None,
+            year=fallback_year,
+            logo=_pick_brand_for_year(
+                brands, fallback_year, "logo", prefer_collapsed=False
+            ),
+            icon=_pick_brand_for_year(
+                brands, fallback_year, "icon", prefer_collapsed=False
+            ),
         )
 
     photo = _pick_era_photo(pool)
     era_year = photo.year
-    logo = _pick_brand_for_year(
-        brands, era_year, "logo", prefer_collapsed=prefer_collapsed
-    )
-    icon = _pick_brand_for_year(brands, era_year, "icon", prefer_collapsed=False)
-    show_name = not (logo or icon)
-    return ArtistCardAssets(
+    return _pack(
         photo_url=_media_url(photo.path, root),
-        logo_url=_media_url(logo.path, root) if logo else None,
-        icon_url=_media_url(icon.path, root) if icon else None,
-        era_year=era_year,
-        show_name_on_hover=show_name,
+        year=era_year,
+        logo=_pick_brand_for_year(brands, era_year, "logo", prefer_collapsed=False),
+        icon=_pick_brand_for_year(brands, era_year, "icon", prefer_collapsed=False),
     )
 
 

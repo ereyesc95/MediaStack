@@ -1,4 +1,5 @@
 import type { ArtistCard as ArtistCardType, CardOrientation } from "../types";
+import { useDeviceLayout, isMobilePortraitLayout } from "../usePhoneLayout";
 
 type Props = {
   artist: ArtistCardType;
@@ -15,6 +16,14 @@ export default function ArtistCard({
   tapReveal = false,
   revealed = false,
 }: Props) {
+  const layout = useDeviceLayout();
+  const preferCollapsed =
+    orientation === "banner" && !isMobilePortraitLayout(layout);
+  const logoSrc =
+    preferCollapsed && artist.logo_collapsed_url
+      ? artist.logo_collapsed_url
+      : artist.logo_url;
+
   const isIcons = orientation === "icons";
   const hasPhoto = Boolean(artist.photo_url) && !isIcons;
   const bg = hasPhoto
@@ -24,7 +33,7 @@ export default function ArtistCard({
       : "linear-gradient(135deg, #1a1f2e, #2d3548)";
 
   const hasIcon = Boolean(artist.icon_url);
-  const hasLogo = Boolean(artist.logo_url);
+  const hasLogo = Boolean(logoSrc);
   const showName = !hasIcon && !hasLogo;
 
   const displayName = (artist.name ?? "Untitled")
@@ -53,7 +62,7 @@ export default function ArtistCard({
           <img src={artist.icon_url!} alt="" className="artist-card-icon" />
         )}
         {hasLogo && (
-          <img src={artist.logo_url!} alt="" className="artist-card-logo" />
+          <img src={logoSrc!} alt="" className="artist-card-logo" />
         )}
         {showName && (
           <span className="artist-card-name">{displayName}</span>

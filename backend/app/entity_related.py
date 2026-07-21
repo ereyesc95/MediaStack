@@ -938,6 +938,7 @@ def _serialize_card(
     code = row.erl_code
     photo_url: str | None = None
     logo_url: str | None = None
+    logo_collapsed_url: str | None = None
     icon_url: str | None = None
     era_year: int | None = None
     in_library = False
@@ -955,6 +956,7 @@ def _serialize_card(
                 card = resolve_artist_card(band.bnd_name, orientation=orientation)
                 photo_url = card.photo_url
                 logo_url = card.logo_url
+                logo_collapsed_url = card.logo_collapsed_url
                 icon_url = card.icon_url
                 era_year = card.era_year
 
@@ -978,6 +980,7 @@ def _serialize_card(
         "in_library": in_library,
         "photo_url": photo_url,
         "logo_url": logo_url,
+        "logo_collapsed_url": logo_collapsed_url,
         "icon_url": icon_url,
         "era_year": era_year,
         "show_name_on_hover": show_name_on_hover,

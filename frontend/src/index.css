@@ -6254,13 +6254,13 @@ input {
   min-width: 0;
   flex: 1 1 auto;
   width: auto;
-  max-width: min(11.5rem, calc(50% - 4.5rem));
+  max-width: none;
   opacity: 0;
   transition: opacity 0.28s ease;
   z-index: 1;
   pointer-events: none;
   color: #f0f8ff;
-  padding: 0.1rem 0.35rem 0.1rem 0;
+  padding: 0.1rem 0.85rem 0.1rem 0;
   overflow: hidden;
 }
 
@@ -6287,7 +6287,7 @@ input {
   }
 
   .media-release-card__banner-meta {
-    max-width: calc(88% - 3.4rem);
+    max-width: none;
     gap: 0.35rem;
   }
 
@@ -6331,6 +6331,7 @@ input {
   gap: 0.45rem;
   max-width: 100%;
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .media-release-card__banner-release-logo {
@@ -6338,19 +6339,19 @@ input {
   max-width: 100%;
   width: auto;
   height: auto;
-  max-height: 2.35rem;
+  max-height: clamp(2.6rem, 5.5vw, 4.35rem);
   object-fit: contain;
   object-position: left center;
 }
 
 .media-release-card__banner-release-logo--collapsed {
-  max-height: 3.35rem;
-  max-width: min(100%, 14rem);
+  max-height: clamp(3.1rem, 6.5vw, 5rem);
+  max-width: 100%;
 }
 
 .media-release-card__banner-era-icon {
-  max-height: 1.65rem;
-  max-width: 1.65rem;
+  max-height: clamp(1.35rem, 2.8vw, 2.15rem);
+  max-width: clamp(1.35rem, 2.8vw, 2.15rem);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -6358,24 +6359,50 @@ input {
 }
 
 .media-release-card__banner-era-logo {
-  max-width: min(100%, 8.5rem);
-  max-height: 1.85rem;
+  max-width: 100%;
+  max-height: clamp(1.55rem, 3.4vw, 2.65rem);
   width: auto;
   height: auto;
   object-fit: contain;
   object-position: left center;
 }
 
+.media-release-card__banner-source-logo-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  max-width: 100%;
+}
+
+.media-release-card__banner-source-name {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  color: #f0f8ff;
+  font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+  font-weight: 600;
+  text-align: left;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
 .media-release-card__banner-title,
 .media-release-card__banner-artist {
-  font-size: 0.95rem;
+  font-size: clamp(0.82rem, 1.8vw, 1.05rem);
   font-weight: 600;
   line-height: 1.2;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 
 .media-release-card__banner-date {
-  font-size: 0.78rem;
+  font-size: clamp(0.7rem, 1.35vw, 0.82rem);
   opacity: 0.92;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
@@ -6398,26 +6425,25 @@ input {
 
 @media (max-width: 480px) {
   .media-release-card__banner-release-logo {
-    max-height: 1.55rem;
+    max-height: clamp(1.7rem, 8vw, 2.35rem);
   }
 
   .media-release-card__banner-release-logo--collapsed {
-    max-height: 2.45rem;
-    max-width: min(100%, 11rem);
+    max-height: clamp(2rem, 9vw, 2.75rem);
   }
 
   .media-release-card__banner-era-logo {
-    max-width: min(100%, 6.5rem);
-    max-height: 1.15rem;
+    max-height: clamp(1.05rem, 4.5vw, 1.45rem);
   }
 
   .media-release-card__banner-era-icon {
-    max-height: 1.1rem;
-    max-width: 1.1rem;
+    max-height: 1.15rem;
+    max-width: 1.15rem;
   }
 
   .media-release-card__banner-title,
-  .media-release-card__banner-artist {
+  .media-release-card__banner-artist,
+  .media-release-card__banner-source-name {
     font-size: 0.72rem;
   }
 
@@ -6470,6 +6496,27 @@ input {
 
 .media-release-card:hover .media-release-card__hover {
   opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .media-release-card--tap-reveal:hover .media-release-card__dim {
+    opacity: 0;
+  }
+  .media-release-card--tap-reveal:hover .media-release-card__hover {
+    opacity: 0;
+  }
+  .media-release-card--tap-reveal:hover .media-release-card__date {
+    opacity: 0;
+  }
+  .media-release-card--tap-reveal.media-release-card--revealed .media-release-card__dim {
+    opacity: 1;
+  }
+  .media-release-card--tap-reveal.media-release-card--revealed .media-release-card__hover {
+    opacity: 1;
+  }
+  .media-release-card--tap-reveal.media-release-card--revealed .media-release-card__date {
+    opacity: 1;
+  }
 }
 
 .media-release-card__logo {
@@ -10455,8 +10502,9 @@ input {
 }
 
 .release-tracklist__title-wrap .release-tracklist__title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
 }
 
 .release-tracklist__badge {

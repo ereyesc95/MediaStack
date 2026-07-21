@@ -5,7 +5,7 @@ import {
 } from "../../../artistMediaTabCache";
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
-import { usePhoneLayout } from "../../../usePhoneLayout";
+import { usePhoneLayout, useDeviceLayout, isMobilePortraitLayout } from "../../../usePhoneLayout";
 import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
 import type {
   MediaTabCategory,
@@ -101,12 +101,18 @@ function MediaItemCard({
   onReveal: () => void;
   onOpen: () => void;
 }) {
+  const deviceLayout = useDeviceLayout();
+  const preferCollapsed = !isMobilePortraitLayout(deviceLayout);
   const hoverDate = item.display_date || formatTrackDate(item.date_iso) || null;
   const fullDate = formatTrackDate(item.date_iso) || item.display_date || null;
   const coverUrl = item.cover_url || DEFAULT_DISC_URL;
+  const eraLogoSrc =
+    preferCollapsed && item.era_logo_collapsed_url
+      ? item.era_logo_collapsed_url
+      : item.era_logo_url;
 
   const handleActivate = () => {
-    if (tapReveal && cardLayout === "banner" && !revealed) {
+    if (tapReveal && !revealed) {
       onReveal();
       return;
     }
@@ -126,6 +132,7 @@ function MediaItemCard({
           "media-release-card--clickable",
           "media-beat-frame",
           "media-beat-frame--cover",
+          tapReveal ? "media-release-card--tap-reveal" : "",
           revealed ? "media-release-card--revealed" : "",
         ]
           .filter(Boolean)
@@ -154,7 +161,7 @@ function MediaItemCard({
           />
           <span className="media-release-card__banner-meta">
             <span className="media-release-card__banner-title">{item.title}</span>
-            {(item.era_icon_url || item.era_logo_url) ? (
+            {(item.era_icon_url || eraLogoSrc) ? (
               <span className="media-release-card__banner-artist-brand">
                 {item.era_icon_url ? (
                   <img
@@ -164,9 +171,9 @@ function MediaItemCard({
                     draggable={false}
                   />
                 ) : null}
-                {item.era_logo_url ? (
+                {eraLogoSrc ? (
                   <img
-                    src={item.era_logo_url}
+                    src={eraLogoSrc}
                     alt=""
                     className="media-release-card__banner-era-logo"
                     draggable={false}
@@ -187,15 +194,25 @@ function MediaItemCard({
 
   return (
     <article
-      className="media-release-card media-release-card--portrait media-release-card--clickable media-beat-frame media-beat-frame--cover"
+      className={[
+        "media-release-card",
+        "media-release-card--portrait",
+        "media-release-card--clickable",
+        "media-beat-frame",
+        "media-beat-frame--cover",
+        tapReveal ? "media-release-card--tap-reveal" : "",
+        revealed ? "media-release-card--revealed" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       role="button"
       tabIndex={0}
       aria-busy={opening}
-      onClick={onOpen}
+      onClick={handleActivate}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpen();
+          handleActivate();
         }
       }}
       title={item.title}
@@ -242,7 +259,7 @@ export default function ArtistMediaGrid({
     if (!isPhone || revealedId == null) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t?.closest?.(".media-release-card--banner")) return;
+      if (t?.closest?.(".media-release-card--tap-reveal")) return;
       setRevealedId(null);
     };
     document.addEventListener("mousedown", onDoc);
@@ -313,7 +330,7 @@ export default function ArtistMediaGrid({
             cardLayout={cardLayout}
             artistName={artistName}
             opening={openingId === item.id}
-            tapReveal={isPhone && cardLayout === "banner"}
+            tapReveal={isPhone}
             revealed={isPhone && revealedId === item.id}
             onReveal={() => setRevealedId(item.id)}
             onOpen={() => void handleOpen(item.id)}

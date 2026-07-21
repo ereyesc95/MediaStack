@@ -10,6 +10,7 @@ from app.config import settings
 from app.gallery import (
     GalleryPhoto,
     _artist_dir,
+    _collapsed_twin,
     _gallery_subdir,
     _list_era_brands,
     _list_photos,
@@ -63,6 +64,29 @@ def _banner_candidate_groups(
     return groups
 
 
+def _source_branding(
+    root: Path,
+    source_name: str | None,
+    year: int | None,
+) -> tuple[str | None, str | None]:
+    """Logo/icon for an external source artist (e.g. Various Artists)."""
+    if not source_name:
+        return None, None
+    artist_dir = _artist_dir(root, source_name)
+    if not artist_dir:
+        return None, None
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    if not brands:
+        return None, None
+    y = year if year is not None else 2000
+    logo = pick_brand_closest_to_year(brands, y, "logo", prefer_collapsed=False)
+    icon = pick_brand_closest_to_year(brands, y, "icon", prefer_collapsed=False)
+    return (
+        _media_url(logo.path, root) if logo else None,
+        _media_url(icon.path, root) if icon else None,
+    )
+
+
 def enrich_items_with_banners(
     db: Session,
     band_id: int,
@@ -71,11 +95,14 @@ def enrich_items_with_banners(
     title_key: str = "title",
     date_key: str = "date_iso",
 ) -> None:
-    """Mutate items in place: banner_url, era_logo_url, era_icon_url."""
+    """Mutate items: banner_url, era logos (normal + collapsed), source branding."""
     for it in items:
         it.setdefault("banner_url", None)
         it.setdefault("era_logo_url", None)
+        it.setdefault("era_logo_collapsed_url", None)
         it.setdefault("era_icon_url", None)
+        it.setdefault("source_logo_url", None)
+        it.setdefault("source_icon_url", None)
 
     band = db.get(Band, band_id)
     if not band or not settings.media_root or not items:
@@ -126,6 +153,7 @@ def enrich_items_with_banners(
         return None
 
     usable = [p for p in photos if p.orientation in ("banner", "landscape")]
+    source_cache: dict[str, tuple[str | None, str | None]] = {}
 
     for it in items:
         title = (it.get(title_key) or "").strip()
@@ -143,7 +171,6 @@ def enrich_items_with_banners(
                     groups, title_key_norm=title_key_norm, allow_reuse=True
                 )
         elif usable:
-            # No date: prefer banners then landscapes, unique then reuse
             fallback_groups = [
                 sorted(
                     [p for p in usable if p.orientation == "banner"],
@@ -164,11 +191,12 @@ def enrich_items_with_banners(
         brand_year = year if year is not None else (chosen.year if chosen else None)
         logo = (
             pick_brand_closest_to_year(
-                brands, brand_year, "logo", prefer_collapsed=True
+                brands, brand_year, "logo", prefer_collapsed=False
             )
             if brand_year is not None
             else None
         )
+        collapsed = _collapsed_twin(brands, logo) if logo else None
         icon = (
             pick_brand_closest_to_year(
                 brands, brand_year, "icon", prefer_collapsed=False
@@ -179,4 +207,14 @@ def enrich_items_with_banners(
 
         it["banner_url"] = _media_url(chosen.path, root) if chosen else None
         it["era_logo_url"] = _media_url(logo.path, root) if logo else None
+        it["era_logo_collapsed_url"] = (
+            _media_url(collapsed.path, root) if collapsed else None
+        )
         it["era_icon_url"] = _media_url(icon.path, root) if icon else None
+
+        src_name = (it.get("source_artist_name") or "").strip() or None
+        if src_name:
+            key = src_name.casefold()
+            if key not in source_cache:
+                source_cache[key] = _source_branding(root, src_name, brand_year)
+            it["source_logo_url"], it["source_icon_url"] = source_cache[key]

@@ -44,6 +44,7 @@ export type ArtistCard = {
   name: string | null;
   photo_url: string | null;
   logo_url: string | null;
+  logo_collapsed_url?: string | null;
   icon_url: string | null;
   era_year: number | null;
   show_name_on_hover: boolean;
@@ -551,12 +552,15 @@ export type AudioReleaseCard = {
   logo_collapsed_url?: string | null;
   banner_url?: string | null;
   era_logo_url?: string | null;
+  era_logo_collapsed_url?: string | null;
   era_icon_url?: string | null;
   folder_path: string;
   navigate_band_id: number;
   navigate_release_id: string;
   source_band_id: number | null;
   source_artist_name?: string | null;
+  source_logo_url?: string | null;
+  source_icon_url?: string | null;
   is_box_set?: boolean;
 };
 
@@ -774,6 +778,7 @@ export type MediaTabItem = {
   cover_url: string | null;
   banner_url?: string | null;
   era_logo_url?: string | null;
+  era_logo_collapsed_url?: string | null;
   era_icon_url?: string | null;
   folder_path: string;
 };

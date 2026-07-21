@@ -364,6 +364,7 @@ def list_artist_cards(
                 "starting_dates": b.bnd_starting_dates,
                 "photo_url": card.photo_url,
                 "logo_url": card.logo_url,
+                "logo_collapsed_url": card.logo_collapsed_url,
                 "icon_url": card.icon_url,
                 "era_year": card.era_year,
                 "show_name_on_hover": card.show_name_on_hover or not card.photo_url,
