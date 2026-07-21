@@ -163,10 +163,14 @@ Media/
             │   ├── Live Albums/
             │   └── Singles/
             └── Gallery/
-                ├── Photos/
-                ├── Logos/
+                ├── Photos/           # `{YYYY}.…, Banner|Landscape|Portrait.jpg`
+                ├── Logos/            # `Logo|Icon [YYYY-YYYY].png` (+ optional `Collapsed`)
                 └── Covers/
 ```
+
+**Gallery Photos (banner cards):** release banner backgrounds prefer a **Banner** photo for the release year, then **Landscape** for that year, then the closest **past** era only (never future). Unique photos are preferred before reuse.
+
+**Gallery Logos:** `Logo [1997-2000].png` / `Icon [1998-2017].png`. Optional `Logo [1995-1996] Collapsed.png` is used only on **banner** hover/tap when that era matches the release (or catalog card era) — never a Collapsed logo from a different range.
 
 **Example artist path:**
 
@@ -297,7 +301,8 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 | `Animation - {Track Title}` | Track-specific animated cover |
 | `Canvas - {Track Title}` | Track-specific canvas video |
 | `Disc`, `Disc 01`, `Disc 02`, `Vinyl`, `CD` | Rotating disc art |
-| `Logo`, `Icon` | Branding |
+| `Logo`, `Icon` | Branding (cover-mode cards / release chrome) |
+| `Logo - Collapsed` | Wider logo for **banner** release cards (hover/tap) |
 | `Photocard - Portrait Front`, etc. | K-pop-style flip cards on the release overview |
 | `Photo - Portrait`, `Photo - Landscape` | Various Artists fallback when no photocards exist |
 | `Wallpaper - Portrait`, `Wallpaper - Landscape` | Photocard backs (VA) or era-gallery backs |
@@ -307,7 +312,9 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 
 **Supported video formats (animation/canvas):** `.mp4`, `.webm`, `.mov`, `.m4v`
 
-If no disc image exists, the app uses `assets/system/default/disc.png`.
+If no disc image exists, the app uses `assets/default/disc.png`.
+
+Static UI assets (icons, playlist tiles, default disc/label, genre/decade maps) live under project **`assets/`** (not inside the media library). Member photos and custom link logos live under **`data/people/`** and **`data/links/`** (complementary resources — not playable media).
 
 ### Release overview photocards
 
@@ -457,7 +464,7 @@ Recognized for **system playlists** and **alternate versions**:
 
 Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Route: `/music/artist/{id}/audio/playlist/{slug}`.
 
-Default playlist card art lives in `assets/system/playlists/{slug}.png` (512×512 gradient tiles served at `/api/assets/system/playlists/{slug}`). Regenerate or add covers there when introducing new system playlist slugs.
+Default playlist card art lives in `assets/playlists/{slug}.png` (512×512 gradient tiles served at `/api/assets/playlists/{slug}`). Regenerate or add covers there when introducing new system playlist slugs.
 
 ### Language adaptations
 
@@ -534,6 +541,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 
 - **Home dashboard** — recent plays, shortcuts; **cover-based theme** while a track plays (restores on pause/stop; menu theme choice is remembered)
 - **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
+- **Catalog & release card layouts** — Catalog/Related cards: **Landscape / Portrait / Banner / Icons**. Artist Audio/Video/Library: **Cover** or **Banner** (era photo background; hover/tap shows cover + release logo / era icon+logo + full date). Banner era logos use a matching-era **Collapsed** artist logo when present; release `[Artwork]/Logo - Collapsed` is shown larger on banner hover.
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery, credits, lyrics, versions; left panel release date follows the playing track’s edition
 - **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]` (track-specific stems override album animation/canvas); edition `Logo.png` in the top bar when applicable
 - **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`

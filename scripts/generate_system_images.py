@@ -14,7 +14,7 @@ except ImportError:
     from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "assets" / "system"
+OUT = ROOT / "assets"
 MEDIA_DIR = OUT / "media"
 ICONS_DIR = OUT / "icons"
 OUT.mkdir(parents=True, exist_ok=True)
@@ -39,7 +39,7 @@ def save_gradient(path: Path, c1: tuple[int, int, int], c2: tuple[int, int, int]
     print("wrote", path)
 
 
-# Hub panes → assets/system/media/
+# Hub panes → assets/media/
 HUB = {
     "music": ((20, 24, 42), (124, 92, 255)),
     "series": ((18, 28, 38), (0, 180, 200)),
@@ -50,7 +50,7 @@ HUB = {
 for slug, colors in HUB.items():
     save_gradient(MEDIA_DIR / f"{slug}.png", colors[0], colors[1], (480, 1080))
 
-# Dashboard pane logos → assets/system/icons/
+# Dashboard pane logos → assets/icons/
 PANES = {
     "pane-on-repeat": ((58, 42, 88), (140, 90, 220), "♪"),
     "pane-icons": ((30, 42, 62), (80, 120, 200), "★"),
@@ -64,7 +64,7 @@ for slug, (c1, c2, sym) in PANES.items():
     img.save(ICONS_DIR / f"{slug}.png", "PNG")
     print("wrote", ICONS_DIR / f"{slug}.png")
 
-# Continents → assets/system/continent/
+# Continents → assets/continent/
 CONTINENTS = {
     "africa": ((40, 90, 50), (200, 160, 40)),
     "asia": ((120, 40, 30), (255, 200, 80)),
@@ -78,8 +78,8 @@ cont_dir.mkdir(exist_ok=True)
 for slug, colors in CONTINENTS.items():
     save_gradient(cont_dir / f"{slug}.png", colors[0], colors[1])
 
-# Parent music genres → assets/system/genre/
-# Subgenre artwork (Music Vibes pane) → assets/system/subgenre/{slug}.png
+# Parent music genres → assets/genre/
+# Subgenre artwork (Music Vibes pane) → assets/subgenre/{slug}.png
 GENRES = {
     "blues": ((30, 40, 80), (80, 100, 200)),
     "classical": ((50, 35, 60), (160, 120, 180)),
@@ -103,7 +103,7 @@ genre_dir.mkdir(exist_ok=True)
 for slug, colors in GENRES.items():
     save_gradient(genre_dir / f"{slug}.png", colors[0], colors[1])
 
-# Decades → assets/system/decade/
+# Decades → assets/decade/
 dec_dir = OUT / "decade"
 dec_dir.mkdir(exist_ok=True)
 for decade in range(1950, 2030, 10):
@@ -113,7 +113,7 @@ for decade in range(1950, 2030, 10):
     slug = f"{decade}s"
     save_gradient(dec_dir / f"{slug}.png", c1, c2)
 
-# Artist playlists → assets/system/playlists/
+# Artist playlists → assets/playlists/
 PLAYLISTS = {
     "top-tracks": ((48, 28, 72), (160, 90, 220), "TOP"),
     "setlists": ((22, 42, 58), (0, 150, 170), "LIVE"),

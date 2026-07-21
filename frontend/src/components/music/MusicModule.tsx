@@ -377,7 +377,7 @@ export default function MusicModule({
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-      return slug ? `/api/assets/system/continent-${slug}` : null;
+      return slug ? `/api/assets/continent-${slug}` : null;
     }
     if (filterMode === "genre" && subgenreId !== "") {
       const item = filterOptions?.subgenre_groups
@@ -390,13 +390,13 @@ export default function MusicModule({
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-      return slug ? `/api/assets/system/genre-${slug}` : null;
+      return slug ? `/api/assets/genre-${slug}` : null;
     }
     if (filterMode === "start" && startDecade !== "") {
-      return `/api/assets/system/decade-${startDecade}s`;
+      return `/api/assets/decade-${startDecade}s`;
     }
     if (filterMode === "end" && endDecade !== "") {
-      return `/api/assets/system/decade-${endDecade}s`;
+      return `/api/assets/decade-${endDecade}s`;
     }
     return null;
   }, [

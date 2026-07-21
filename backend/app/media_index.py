@@ -33,6 +33,7 @@ from app.models import Band
 ARTWORK_DIR = "[artwork]"
 COVER_FRONT_STEM = "cover - front"
 LOGO_STEM = "logo"
+LOGO_COLLAPSED_STEM = "logo - collapsed"
 DISC_DIR_RE = re.compile(r"^\d+\.\s*Disc\s+\d+", re.I)
 DISC_LOOSE_RE = re.compile(r"^Disc\s+(\d+)", re.I)
 SIDE_RE = re.compile(r"^\d+\.\s*Side\s+", re.I)
@@ -44,7 +45,7 @@ BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
 STANDARD_EDITION = "standard edition"
 VARIOUS_ARTISTS_DEFAULT_ID = 120
 
-AUDIO_INDEX_VERSION = 4
+AUDIO_INDEX_VERSION = 5
 
 CATEGORY_ORDER = list(AUDIO_CATEGORIES.keys())
 
@@ -139,8 +140,10 @@ def _disc_sort_key(folder: Path) -> tuple[int, str]:
     return (int(m.group(1)) if m else 999, folder.name.casefold())
 
 
-def _find_release_artwork(root: Path) -> tuple[Path | None, Path | None]:
-    """Return (cover_path, logo_path) under a release folder tree."""
+def _find_release_artwork(
+    root: Path,
+) -> tuple[Path | None, Path | None, Path | None]:
+    """Return (cover_path, logo_path, logo_collapsed_path) under a release folder tree."""
     artwork_dirs: list[Path] = []
 
     def walk(directory: Path) -> None:
@@ -156,7 +159,7 @@ def _find_release_artwork(root: Path) -> tuple[Path | None, Path | None]:
 
     walk(root)
     if not artwork_dirs:
-        return None, None
+        return None, None, None
 
     disc_art = [a for a in artwork_dirs if DISC_DIR_RE.match(a.parent.name)]
     pick_from = sorted(disc_art, key=lambda a: _disc_sort_key(a.parent))[0:1]
@@ -166,7 +169,8 @@ def _find_release_artwork(root: Path) -> tuple[Path | None, Path | None]:
     art = pick_from[0]
     cover = _artwork_file(art, COVER_FRONT_STEM)
     logo = _artwork_file(art, LOGO_STEM)
-    return cover, logo
+    collapsed = _artwork_file(art, LOGO_COLLAPSED_STEM)
+    return cover, logo, collapsed
 
 
 def _is_audio_file(path: Path) -> bool:
@@ -455,7 +459,7 @@ def _build_release_card(
     if not rel_path:
         return None
 
-    cover_path, logo_path = _find_release_artwork(artwork_root)
+    cover_path, logo_path, logo_collapsed_path = _find_release_artwork(artwork_root)
     navigate_rel_path = safe_relative(artwork_root, media_root) or rel_path
     release_id = release_id_from_path(rel_path)
     navigate_release_id = release_id_from_path(navigate_rel_path)
@@ -475,6 +479,9 @@ def _build_release_card(
         "official": not tags.get("unofficial"),
         "cover_url": _media_url(cover_path, media_root) if cover_path else None,
         "logo_url": _media_url(logo_path, media_root) if logo_path else None,
+        "logo_collapsed_url": (
+            _media_url(logo_collapsed_path, media_root) if logo_collapsed_path else None
+        ),
         "folder_path": rel_path,
         "navigate_band_id": navigate_band_id,
         "navigate_release_id": navigate_release_id,

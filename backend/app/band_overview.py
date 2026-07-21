@@ -160,7 +160,13 @@ def _photo_for_orientation(photos: list[GalleryPhoto], year: int, want: str) -> 
 def _pick_brand_for_year_deterministic(
     brands: list[EraBrand], year: int, kind: str
 ) -> EraBrand | None:
-    matches = [b for b in brands if b.kind == kind and b.start <= year <= b.end]
+    from app.gallery import _brands_of_kind
+
+    matches = [
+        b
+        for b in _brands_of_kind(brands, kind, collapsed=False)
+        if b.start <= year <= b.end
+    ]
     if not matches:
         return None
     return sorted(matches, key=lambda b: (-b.end, b.path.name.lower()))[0]

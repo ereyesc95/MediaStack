@@ -1,4 +1,4 @@
-"""Resolve label logos from assets/system/labels/."""
+"""Resolve label logos from assets/labels/."""
 from __future__ import annotations
 
 import re
@@ -26,5 +26,5 @@ def label_logo_url(name: str | None) -> str | None:
     for ext in IMAGE_EXTS:
         path = LABELS_DIR / f"{slug}{ext}"
         if path.is_file():
-            return f"/api/assets/system/labels/{slug}{ext}"
-    return "/api/assets/system/default/label.png"
+            return f"/api/assets/labels/{slug}{ext}"
+    return "/api/assets/default/label.png"

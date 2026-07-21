@@ -27,5 +27,5 @@ def subgenre_image_url(name: str | None) -> str | None:
         return None
     for ext in _IMAGE_EXTS:
         if (_SUBGENRE_DIR / f"{slug}{ext}").is_file():
-            return f"/api/assets/system/subgenre-{slug}"
+            return f"/api/assets/subgenre-{slug}"
     return None

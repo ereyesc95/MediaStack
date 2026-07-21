@@ -230,7 +230,7 @@ export default function MusicHome({
 
       <section className="dash-row dash-row--tracks">
         <DashPaneLabel
-          logo="/api/assets/system/icons/pane-on-repeat"
+          logo="/api/assets/icons/pane-on-repeat"
           title="ON REPEAT"
           subtitle="Most played tracks"
         />
@@ -281,7 +281,7 @@ export default function MusicHome({
 
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
-          logo="/api/assets/system/icons/pane-icons"
+          logo="/api/assets/icons/pane-icons"
           title="ICONS"
           subtitle="Your top artists"
         />
@@ -302,7 +302,7 @@ export default function MusicHome({
 
       <section className="dash-row dash-row--genres">
         <DashPaneLabel
-          logo="/api/assets/system/icons/pane-vibes"
+          logo="/api/assets/icons/pane-vibes"
           title="MUSIC VIBES"
           subtitle="Genres on rotation"
         />
@@ -336,7 +336,7 @@ export default function MusicHome({
 
       <section className="dash-row dash-row--flags">
         <DashPaneLabel
-          logo="/api/assets/system/icons/pane-global"
+          logo="/api/assets/icons/pane-global"
           title="GLOBAL SOUND"
           subtitle="Origins of your music"
         />

@@ -37,7 +37,7 @@ COVER_CATEGORY_PRIORITY: dict[str, int] = {
 
 
 def playlist_cover_url(slug: str) -> str:
-    return f"/api/assets/system/playlists/{slug}"
+    return f"/api/assets/playlists/{slug}"
 
 ORIGINALS_SLUG = "originals"
 

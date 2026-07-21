@@ -53,10 +53,28 @@ def _parse_legacy_websites(raw: str | None) -> list[dict[str, str]]:
 
 
 def _logo_asset_url(logo_key: str | None, logo_path: str | None, media_root: Path | None) -> str:
-    if logo_path and media_root and media_root.is_dir():
-        full = media_root / logo_path
-        if full.is_file():
-            return _media_url(full, media_root)
+    from app.paths import DATA_DIR, links_dir
+    from urllib.parse import quote
+
+    if logo_path:
+        candidates: list[Path] = []
+        rel = Path(logo_path.replace("\\", "/"))
+        # New layout: relative to data/links (with or without Links/ prefix)
+        candidates.append(links_dir() / rel.name)
+        if rel.parts and rel.parts[0].casefold() != "links":
+            candidates.append(links_dir() / rel)
+        candidates.append(DATA_DIR / "links" / rel.name)
+        if media_root and media_root.is_dir():
+            candidates.append(media_root / logo_path)
+            candidates.append(media_root / "Links" / rel.name)
+        for full in candidates:
+            if full.is_file():
+                try:
+                    data_rel = full.relative_to(DATA_DIR).as_posix()
+                    return f"/api/data/file?path={quote(data_rel, safe='/')}"
+                except ValueError:
+                    if media_root:
+                        return _media_url(full, media_root)
     if logo_key:
         return f"/assets/links/{logo_key}.svg"
     return "/assets/links/link.svg"
@@ -296,9 +314,11 @@ def save_link_logo_file(
     raw: bytes,
     ext: str,
 ) -> str:
+    from app.paths import links_dir
+
     ext = ext.lower() if ext.lower() in ALLOWED_LOGO_EXT else ".png"
     slug = re.sub(r"[^\w-]+", "-", (link.lnk_label or "link").lower()).strip("-")[:40]
-    dest_dir = media_root / "Links"
+    dest_dir = links_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{slug}--{link.lnk_id}"
     dest = dest_dir / f"{stem}{ext}"
@@ -306,7 +326,8 @@ def save_link_logo_file(
         if old.suffix.lower() in ALLOWED_LOGO_EXT:
             old.unlink(missing_ok=True)
     dest.write_bytes(raw)
-    rel = dest.relative_to(media_root).as_posix()
+    # Store relative to data/links (not Media)
+    rel = dest.name
     link.lnk_logo_path = rel
     link.lnk_manual = 1
     return rel

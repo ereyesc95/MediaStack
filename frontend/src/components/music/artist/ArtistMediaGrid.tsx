@@ -5,6 +5,7 @@ import {
 } from "../../../artistMediaTabCache";
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
+import { usePhoneLayout } from "../../../usePhoneLayout";
 import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
 import type {
   MediaTabCategory,
@@ -86,17 +87,31 @@ function MediaItemCard({
   cardLayout,
   artistName,
   opening,
+  tapReveal,
+  revealed,
+  onReveal,
   onOpen,
 }: {
   item: MediaTabItem;
   cardLayout: ReleaseCardLayout;
   artistName?: string;
   opening: boolean;
+  tapReveal: boolean;
+  revealed: boolean;
+  onReveal: () => void;
   onOpen: () => void;
 }) {
   const hoverDate = item.display_date || formatTrackDate(item.date_iso) || null;
   const fullDate = formatTrackDate(item.date_iso) || item.display_date || null;
   const coverUrl = item.cover_url || DEFAULT_DISC_URL;
+
+  const handleActivate = () => {
+    if (tapReveal && cardLayout === "banner" && !revealed) {
+      onReveal();
+      return;
+    }
+    onOpen();
+  };
 
   if (cardLayout === "banner") {
     const bannerBg = item.banner_url
@@ -104,15 +119,25 @@ function MediaItemCard({
       : "linear-gradient(135deg, #1a1f2e, #2d3548)";
     return (
       <article
-        className="media-release-card media-release-card--banner media-release-card--clickable media-beat-frame media-beat-frame--cover"
+        className={[
+          "media-release-card",
+          "media-release-card--banner",
+          "media-release-card--banner-cover-portrait",
+          "media-release-card--clickable",
+          "media-beat-frame",
+          "media-beat-frame--cover",
+          revealed ? "media-release-card--revealed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         role="button"
         tabIndex={0}
         aria-busy={opening}
-        onClick={onOpen}
+        onClick={handleActivate}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onOpen();
+            handleActivate();
           }
         }}
         title={item.title}
@@ -121,26 +146,40 @@ function MediaItemCard({
           className="media-release-card__banner-bg"
           style={{ backgroundImage: bannerBg }}
         />
-        <span className="media-release-card__banner-glass" aria-hidden />
-        <span
-          className="media-release-card__banner-cover"
-          style={{ backgroundImage: `url("${coverUrl}")` }}
-        />
-        <span className="media-release-card__banner-meta">
-          <span className="media-release-card__banner-title">{item.title}</span>
-          {item.era_logo_url ? (
-            <img
-              src={item.era_logo_url}
-              alt=""
-              className="media-release-card__banner-era-logo"
-              draggable={false}
-            />
-          ) : artistName ? (
-            <span className="media-release-card__banner-artist">{artistName}</span>
-          ) : null}
-          {fullDate ? (
-            <span className="media-release-card__banner-date">{fullDate}</span>
-          ) : null}
+        <span className="media-release-card__banner-overlay">
+          <span className="media-release-card__banner-glass" aria-hidden />
+          <span
+            className="media-release-card__banner-cover"
+            style={{ backgroundImage: `url("${coverUrl}")` }}
+          />
+          <span className="media-release-card__banner-meta">
+            <span className="media-release-card__banner-title">{item.title}</span>
+            {(item.era_icon_url || item.era_logo_url) ? (
+              <span className="media-release-card__banner-artist-brand">
+                {item.era_icon_url ? (
+                  <img
+                    src={item.era_icon_url}
+                    alt=""
+                    className="media-release-card__banner-era-icon"
+                    draggable={false}
+                  />
+                ) : null}
+                {item.era_logo_url ? (
+                  <img
+                    src={item.era_logo_url}
+                    alt=""
+                    className="media-release-card__banner-era-logo"
+                    draggable={false}
+                  />
+                ) : null}
+              </span>
+            ) : artistName ? (
+              <span className="media-release-card__banner-artist">{artistName}</span>
+            ) : null}
+            {fullDate ? (
+              <span className="media-release-card__banner-date">{fullDate}</span>
+            ) : null}
+          </span>
         </span>
       </article>
     );
@@ -192,6 +231,23 @@ export default function ArtistMediaGrid({
   const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
     useArtistMediaTab(bandId, kind, true);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const isPhone = usePhoneLayout();
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRevealedId(null);
+  }, [categoryKey, cardLayout, bandId, kind]);
+
+  useEffect(() => {
+    if (!isPhone || revealedId == null) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".media-release-card--banner")) return;
+      setRevealedId(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [isPhone, revealedId]);
 
   const handleOpen = useCallback(
     async (itemId: string) => {
@@ -257,6 +313,9 @@ export default function ArtistMediaGrid({
             cardLayout={cardLayout}
             artistName={artistName}
             opening={openingId === item.id}
+            tapReveal={isPhone && cardLayout === "banner"}
+            revealed={isPhone && revealedId === item.id}
+            onReveal={() => setRevealedId(item.id)}
             onOpen={() => void handleOpen(item.id)}
           />
         ))}

@@ -171,7 +171,7 @@ def _disc_image_url(artwork: Path, media_root: Path) -> str | None:
         if "disc" in stem or "vinyl" in stem or "cd" in stem:
             candidates.append(p)
     if not candidates:
-        return "/api/assets/system/default/disc.png"
+        return "/api/assets/default/disc.png"
     candidates.sort(key=lambda p: (0 if p.stem.casefold().startswith("disc 1") else 1, p.name.casefold()))
     return _media_url(candidates[0], media_root)
 
@@ -199,7 +199,7 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
             "canvas_url": None,
             "icon_url": None,
             "logo_url": None,
-            "disc_url": "/api/assets/system/default/disc.png",
+            "disc_url": "/api/assets/default/disc.png",
             "spotify_url": None,
             "qr_url": None,
         }
@@ -267,11 +267,34 @@ def _release_type_label(category: str, content: Path) -> str:
 
 
 def _closest_gallery_photo(photos: list[GalleryPhoto], year: int | None) -> GalleryPhoto | None:
+    """Prefer banner then landscape for year; otherwise closest past year only."""
     if not photos:
         return None
+
+    def prefer_ori(pool: list[GalleryPhoto]) -> GalleryPhoto | None:
+        if not pool:
+            return None
+        banners = [p for p in pool if p.orientation == "banner"]
+        landscapes = [p for p in pool if p.orientation == "landscape"]
+        ordered = banners or landscapes or pool
+        return sorted(ordered, key=lambda p: p.path.name.lower())[0]
+
     if year is None:
-        return sorted(photos, key=lambda p: (p.year, p.path.name.lower()))[0]
-    return min(photos, key=lambda p: (abs(p.year - year), p.year, p.path.name.lower()))
+        return prefer_ori(photos) or sorted(
+            photos, key=lambda p: (p.year, p.path.name.lower())
+        )[0]
+
+    exact = [p for p in photos if p.year == year]
+    hit = prefer_ori(exact)
+    if hit:
+        return hit
+
+    past_years = sorted({p.year for p in photos if p.year < year}, reverse=True)
+    for y in past_years:
+        hit = prefer_ori([p for p in photos if p.year == y])
+        if hit:
+            return hit
+    return None
 
 
 def _member_active_at_year(member: dict, year: int | None) -> bool:
@@ -618,7 +641,9 @@ def _enrich_from_db(
 def _nearest_brand(
     brands: list[EraBrand], year: int, kind: str
 ) -> EraBrand | None:
-    pool = [b for b in brands if b.kind == kind]
+    from app.gallery import _brands_of_kind
+
+    pool = _brands_of_kind(brands, kind, collapsed=False)
     if not pool:
         return None
 

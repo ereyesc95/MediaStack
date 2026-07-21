@@ -19,7 +19,9 @@ export default function ArtistCard({
   const hasPhoto = Boolean(artist.photo_url) && !isIcons;
   const bg = hasPhoto
     ? `url("${artist.photo_url}")`
-    : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+    : isIcons
+      ? "none"
+      : "linear-gradient(135deg, #1a1f2e, #2d3548)";
 
   const hasIcon = Boolean(artist.icon_url);
   const hasLogo = Boolean(artist.logo_url);

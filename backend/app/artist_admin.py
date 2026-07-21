@@ -7,7 +7,6 @@ from pathlib import Path
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.gallery import _media_url
 from app.lineup_instruments import ATTR_TO_INSTRUMENT_ID, map_mb_attributes
 from app.models import Artist, ArtistParticipation, Band
 
@@ -70,12 +69,13 @@ def save_artist_photo_file(
     raw: bytes,
     ext: str,
 ) -> str:
-    from app.artist_photo import photo_file_stem
+    from app.artist_photo import _data_file_url, photo_file_stem
+    from app.paths import people_dir
 
     ext = ext.lower() if ext.lower() in ALLOWED_IMAGE_EXT else ".jpg"
     name = _display_name(artist.art_stage_name or artist.art_name)
     letter = name[0].upper() if name and name[0].isalpha() else "#"
-    dest_dir = media_root / "People" / letter
+    dest_dir = people_dir() / letter
     dest_dir.mkdir(parents=True, exist_ok=True)
     stem = photo_file_stem(artist)
     code = (artist.art_code or str(artist.art_id)).lower()
@@ -87,7 +87,7 @@ def save_artist_photo_file(
         if old_stem == stem or code in old_stem:
             old.unlink(missing_ok=True)
     dest.write_bytes(raw)
-    return _media_url(dest, media_root)
+    return _data_file_url(dest)
 
 
 def patch_artist(

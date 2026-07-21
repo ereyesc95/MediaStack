@@ -78,7 +78,7 @@ def is_various_artists_release(
     return False
 
 
-VARIOUS_ARTISTS_PHOTO_URL = "/api/assets/system/default/artists.png"
+VARIOUS_ARTISTS_PHOTO_URL = "/api/assets/default/artists.png"
 DEFAULT_ARTIST_PHOTO_URL = VARIOUS_ARTISTS_PHOTO_URL
 
 FEATURED_TRACK_LIMIT = 5

@@ -144,7 +144,7 @@ function coverUrlFallback(tracks: ArtistPlaylistTrack[]): string | undefined {
   return tracks.find((t) => t.cover_url)?.cover_url ?? undefined;
 }
 
-const DEFAULT_USER_PLAYLIST_COVER = "/api/assets/system/default/playlist";
+const DEFAULT_USER_PLAYLIST_COVER = "/api/assets/default/playlist";
 
 function splitSnapshotGenres(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return [];
@@ -578,7 +578,7 @@ export default function SystemPlaylistPage({
   );
   const coverUrl =
     bustCoverUrl(detail?.cover_url) ||
-    (!isUserPlaylist && slug ? `/api/assets/system/playlists/${slug}` : undefined) ||
+    (!isUserPlaylist && slug ? `/api/assets/playlists/${slug}` : undefined) ||
     (isUserPlaylist ? DEFAULT_USER_PLAYLIST_COVER : undefined) ||
     coverUrlFallback(tracks) ||
     "";

@@ -50,6 +50,23 @@ export function IconCardLandscape({ className }: IconProps) {
   );
 }
 
+export function IconCardCover({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <rect
+        x="5"
+        y="5"
+        width="14"
+        height="14"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
 export function IconCardPortrait({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>

@@ -18,7 +18,7 @@ function PlaylistCard({
 }) {
   const cover =
     playlist.cover_url ||
-    `/api/assets/system/playlists/${playlist.slug}`;
+    `/api/assets/playlists/${playlist.slug}`;
   return (
     <button
       type="button"

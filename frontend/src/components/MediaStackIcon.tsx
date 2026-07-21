@@ -9,7 +9,7 @@ type Props = {
   size?: number;
 };
 
-/** MediaStack mark from assets/system/icons/MediaStack.svg — uses currentColor. */
+/** MediaStack mark from assets/icons/MediaStack.svg — uses currentColor. */
 export default function MediaStackIcon({ className, size = 16 }: Props) {
   return (
     <svg

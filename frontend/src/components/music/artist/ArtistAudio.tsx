@@ -14,6 +14,7 @@ import {
 } from "../../../musicRoute";
 import { DEFAULT_DISC_URL, writerSearchUrl } from "../release/releaseTrackPanelMeta";
 import { formatTrackDate } from "../../../formatDate";
+import { usePhoneLayout } from "../../../usePhoneLayout";
 import type {
   ArtistPlaylistCard,
   AudioIndexPayload,
@@ -357,6 +358,9 @@ function ReleaseCard({
   referrerArtistName,
   artistName,
   cardLayout,
+  tapReveal = false,
+  revealed = false,
+  onReveal,
   onOpenReleaseNavigate,
   onOpenArtist,
 }: {
@@ -366,6 +370,9 @@ function ReleaseCard({
   referrerArtistName?: string;
   artistName?: string;
   cardLayout: ReleaseCardLayout;
+  tapReveal?: boolean;
+  revealed?: boolean;
+  onReveal?: () => void;
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenArtist?: (targetBandId: number) => void;
 }) {
@@ -390,6 +397,14 @@ function ReleaseCard({
       overviewTab: "about",
       releaseId: targetRelease,
     });
+  };
+
+  const handleActivate = () => {
+    if (tapReveal && cardLayout === "banner" && !revealed) {
+      onReveal?.();
+      return;
+    }
+    handleOpen();
   };
 
   const openSourceArtist = async (e: React.MouseEvent) => {
@@ -439,14 +454,23 @@ function ReleaseCard({
       : "linear-gradient(135deg, #1a1f2e, #2d3548)";
     return (
       <article
-        className="media-release-card media-release-card--banner media-release-card--clickable media-beat-frame media-beat-frame--cover"
+        className={[
+          "media-release-card",
+          "media-release-card--banner",
+          "media-release-card--clickable",
+          "media-beat-frame",
+          "media-beat-frame--cover",
+          revealed ? "media-release-card--revealed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         role="button"
         tabIndex={0}
-        onClick={handleOpen}
+        onClick={handleActivate}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            handleOpen();
+            handleActivate();
           }
         }}
       >
@@ -454,46 +478,64 @@ function ReleaseCard({
           className="media-release-card__banner-bg"
           style={{ backgroundImage: bannerBg }}
         />
-        <span className="media-release-card__banner-glass" aria-hidden />
-        <span
-          className="media-release-card__banner-cover"
-          style={{ backgroundImage: `url("${coverUrl}")` }}
-        />
-        <span className="media-release-card__banner-meta">
-          {release.logo_url ? (
-            <img
-              src={release.logo_url}
-              alt=""
-              className="media-release-card__banner-release-logo"
-              draggable={false}
-            />
-          ) : (
-            <span className="media-release-card__banner-title">
-              {release.title}
-            </span>
-          )}
-          {release.era_logo_url ? (
-            <img
-              src={release.era_logo_url}
-              alt=""
-              className="media-release-card__banner-era-logo"
-              draggable={false}
-            />
-          ) : artistName ? (
-            <span className="media-release-card__banner-artist">{artistName}</span>
-          ) : null}
-          {fullDate ? (
-            <span className="media-release-card__banner-date">{fullDate}</span>
-          ) : null}
-          {showSourceArtist ? (
-            <button
-              type="button"
-              className="media-release-card__source-artist-link"
-              onClick={(e) => void openSourceArtist(e)}
-            >
-              By {release.source_artist_name}
-            </button>
-          ) : null}
+        <span className="media-release-card__banner-overlay">
+          <span className="media-release-card__banner-glass" aria-hidden />
+          <span
+            className="media-release-card__banner-cover"
+            style={{ backgroundImage: `url("${coverUrl}")` }}
+          />
+          <span className="media-release-card__banner-meta">
+            {release.logo_collapsed_url || release.logo_url ? (
+              <img
+                src={release.logo_collapsed_url || release.logo_url!}
+                alt=""
+                className={
+                  release.logo_collapsed_url
+                    ? "media-release-card__banner-release-logo media-release-card__banner-release-logo--collapsed"
+                    : "media-release-card__banner-release-logo"
+                }
+                draggable={false}
+              />
+            ) : (
+              <span className="media-release-card__banner-title">
+                {release.title}
+              </span>
+            )}
+            {(release.era_icon_url || release.era_logo_url) ? (
+              <span className="media-release-card__banner-artist-brand">
+                {release.era_icon_url ? (
+                  <img
+                    src={release.era_icon_url}
+                    alt=""
+                    className="media-release-card__banner-era-icon"
+                    draggable={false}
+                  />
+                ) : null}
+                {release.era_logo_url ? (
+                  <img
+                    src={release.era_logo_url}
+                    alt=""
+                    className="media-release-card__banner-era-logo"
+                    draggable={false}
+                  />
+                ) : null}
+              </span>
+            ) : artistName ? (
+              <span className="media-release-card__banner-artist">{artistName}</span>
+            ) : null}
+            {fullDate ? (
+              <span className="media-release-card__banner-date">{fullDate}</span>
+            ) : null}
+            {showSourceArtist ? (
+              <button
+                type="button"
+                className="media-release-card__source-artist-link"
+                onClick={(e) => void openSourceArtist(e)}
+              >
+                By {release.source_artist_name}
+              </button>
+            ) : null}
+          </span>
         </span>
       </article>
     );
@@ -592,6 +634,23 @@ export default function ArtistAudio({
     selectedPlaylist,
     setSelectedPlaylist,
   } = state;
+  const isPhone = usePhoneLayout();
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRevealedId(null);
+  }, [category, cardLayout, bandId]);
+
+  useEffect(() => {
+    if (!isPhone || revealedId == null) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".media-release-card--banner")) return;
+      setRevealedId(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [isPhone, revealedId]);
 
   if (loading && !index) {
     return <p className="muted artist-section-empty">Loading audio…</p>;
@@ -650,6 +709,9 @@ export default function ArtistAudio({
               referrerArtistName={referrerArtistName}
               artistName={artistName}
               cardLayout={cardLayout}
+              tapReveal={isPhone && cardLayout === "banner"}
+              revealed={isPhone && revealedId === release.id}
+              onReveal={() => setRevealedId(release.id)}
               onOpenReleaseNavigate={onOpenReleaseNavigate}
               onOpenArtist={onOpenArtist}
             />

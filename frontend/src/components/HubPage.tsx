@@ -23,7 +23,7 @@ export default function HubPage({ onSelect }: Props) {
           <span
             className="hub-pane-bg card-bg-layer"
             style={{
-              backgroundImage: `url(/api/assets/system/media/${p.slug})`,
+              backgroundImage: `url(/api/assets/media/${p.slug})`,
             }}
           />
           <span className="hub-pane-overlay" />

@@ -434,10 +434,10 @@ export function playlistTrackVersionSource(
   };
 }
 
-export const DEFAULT_DISC_URL = "/api/assets/system/default/disc.png";
-export const DEFAULT_LABEL_URL = "/api/assets/system/default/label.png";
+export const DEFAULT_DISC_URL = "/api/assets/default/disc.png";
+export const DEFAULT_LABEL_URL = "/api/assets/default/label.png";
 export const DEFAULT_ARTIST_PHOTO_URL =
-  "/api/assets/system/default/artists.png";
+  "/api/assets/default/artists.png";
 /** @deprecated use DEFAULT_ARTIST_PHOTO_URL */
 export const VARIOUS_ARTISTS_PHOTO_URL = DEFAULT_ARTIST_PHOTO_URL;
 export const VARIOUS_ARTISTS_BAND_ID = 120;

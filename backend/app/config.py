@@ -42,5 +42,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 from app.user_settings import apply_saved_media_root  # noqa: E402
+from app.paths import migrate_people_links_from_media  # noqa: E402
 
 apply_saved_media_root(settings)
+migrate_people_links_from_media(settings.media_root)

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.gallery import _media_url
 from app.models import Artist
+from app.paths import DATA_DIR, people_dir
 from app.user_settings import get_member_photo_refresh_days
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
@@ -64,6 +65,11 @@ def photo_file_stem(artist: Artist) -> str:
     return f"{_name_slug(name)}--{code}"
 
 
+def _data_file_url(path: Path) -> str:
+    rel = path.relative_to(DATA_DIR).as_posix()
+    return f"/api/data/file?path={quote(rel, safe='/')}"
+
+
 def _path_from_media_url(url: str, media_root: Path) -> Path | None:
     if not url.startswith("/api/media/file?"):
         return None
@@ -76,16 +82,30 @@ def _path_from_media_url(url: str, media_root: Path) -> Path | None:
     return path if path.is_file() else None
 
 
+def _path_from_data_url(url: str) -> Path | None:
+    if not url.startswith("/api/data/file?"):
+        return None
+    from urllib.parse import parse_qs, urlparse
+
+    rel = parse_qs(urlparse(url).query).get("path", [None])[0]
+    if not rel:
+        return None
+    path = DATA_DIR / rel
+    return path if path.is_file() else None
+
+
 def member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
     """Resolved photo URL; omits stale local paths when the file was removed."""
-    if media_root and media_root.is_dir():
-        local = _local_people_photo(artist, media_root)
-        if local:
-            return local
+    local = _local_people_photo(artist, media_root)
+    if local:
+        return local
 
     stored = (artist.art_photo_url or "").strip()
     if not stored:
         return None
+
+    if stored.startswith("/api/data/file?"):
+        return stored if _path_from_data_url(stored) else None
 
     if stored.startswith("/api/media/file?"):
         if media_root and media_root.is_dir() and _path_from_media_url(stored, media_root):
@@ -98,24 +118,36 @@ def member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
     return None if artist.art_photo_manual else stored
 
 
-def _local_people_photo(artist: Artist, media_root: Path) -> str | None:
+def _local_people_photo(artist: Artist, media_root: Path | None) -> str | None:
     if not artist.art_code and not artist.art_id:
         return None
     name = _display_name(artist.art_stage_name or artist.art_name)
     letter = name[0].upper() if name and name[0].isalpha() else "#"
-    for base in (media_root / "People" / letter, media_root / "Music" / "People" / letter):
+    bases: list[tuple[Path, str]] = [(people_dir() / letter, "data")]
+    if media_root and media_root.is_dir():
+        # Legacy locations under Media (pre-migration)
+        bases.extend(
+            [
+                (media_root / "People" / letter, "media"),
+                (media_root / "Music" / "People" / letter, "media"),
+            ]
+        )
+    stems = []
+    if artist.art_code:
+        stems.append(artist.art_code.lower())
+    stems.append(str(artist.art_id))
+    for base, kind in bases:
         if not base.is_dir():
             continue
-        stems = []
-        if artist.art_code:
-            stems.append(artist.art_code.lower())
-        stems.append(str(artist.art_id))
         for p in base.iterdir():
             if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
                 continue
             stem = p.stem.lower()
             if any(s in stem for s in stems):
-                return _media_url(p, media_root)
+                if kind == "data":
+                    return _data_file_url(p)
+                if media_root:
+                    return _media_url(p, media_root)
     return None
 
 

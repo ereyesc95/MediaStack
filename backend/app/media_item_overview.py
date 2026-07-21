@@ -30,7 +30,7 @@ TEXT_EXTS = {".txt", ".md", ".nfo"}
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm"}
 DOC_EXTS = {".pdf", ".epub", ".cbz", ".cbr", ".djvu"}
 READABLE_EXTS = DOC_EXTS | {".html", ".htm"}
-DEFAULT_DISC_URL = "/api/assets/system/default/disc.png"
+DEFAULT_DISC_URL = "/api/assets/default/disc.png"
 
 
 def _mp4_duration_from_mvhd(path: Path) -> float | None:

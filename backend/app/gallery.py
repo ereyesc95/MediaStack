@@ -23,7 +23,8 @@ from app.config import settings
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 PHOTO_YEAR_RE = re.compile(r"^(\d{4})")
 ERA_RE = re.compile(
-    r"^(Icon|Logo)\s+(?:\[(\d{4})-(\d{4})\]|(\d{4})-(\d{4}))(?:\s+Current)?$",
+    r"^(Icon|Logo)\s+(?:\[(\d{4})\s*[-–]\s*(\d{4})\]|(\d{4})\s*[-–]\s*(\d{4}))"
+    r"(?:\s+Current)?(?:\s+Collapsed)?$",
     re.IGNORECASE,
 )
 ORIENTATION_RE = re.compile(r"(landscape|portrait|banner)", re.IGNORECASE)
@@ -48,6 +49,7 @@ class EraBrand:
     path: Path
     start: int
     end: int
+    collapsed: bool = False
 
 
 @dataclass
@@ -152,16 +154,104 @@ def _list_era_brands(logos_dir: Path) -> list[EraBrand]:
                 path=p,
                 start=int(start),
                 end=int(end),
+                collapsed=bool(re.search(r"\bcollapsed\b", p.stem, re.I)),
             )
         )
     return out
 
 
-def _pick_brand_for_year(brands: list[EraBrand], year: int, kind: str) -> EraBrand | None:
-    matches = [b for b in brands if b.kind == kind and b.start <= year <= b.end]
-    if not matches:
-        return None
-    return random.choice(matches)
+def _brands_of_kind(
+    brands: list[EraBrand],
+    kind: str,
+    *,
+    collapsed: bool | None = False,
+) -> list[EraBrand]:
+    """Filter brands by kind. collapsed=False excludes Collapsed; True only those; None=all."""
+    out = [b for b in brands if b.kind == kind]
+    if collapsed is True:
+        return [b for b in out if b.collapsed]
+    if collapsed is False:
+        return [b for b in out if not b.collapsed]
+    return out
+
+
+def _pick_brand_for_year(
+    brands: list[EraBrand],
+    year: int,
+    kind: str,
+    *,
+    prefer_collapsed: bool = False,
+) -> EraBrand | None:
+    """Pick a brand covering ``year``. Collapsed only when that same era has one."""
+    normal_matches = [
+        b
+        for b in _brands_of_kind(brands, kind, collapsed=False)
+        if b.start <= year <= b.end
+    ]
+    if prefer_collapsed and normal_matches:
+        # Prefer collapsed twin of an in-range normal logo
+        ranges = {(b.start, b.end) for b in normal_matches}
+        collapsed = [
+            b
+            for b in _brands_of_kind(brands, kind, collapsed=True)
+            if (b.start, b.end) in ranges
+        ]
+        if collapsed:
+            return random.choice(collapsed)
+    if normal_matches:
+        return random.choice(normal_matches)
+    if prefer_collapsed:
+        collapsed_only = [
+            b
+            for b in _brands_of_kind(brands, kind, collapsed=True)
+            if b.start <= year <= b.end
+        ]
+        if collapsed_only:
+            return random.choice(collapsed_only)
+    return None
+
+
+def pick_brand_closest_to_year(
+    brands: list[EraBrand],
+    year: int,
+    kind: str,
+    *,
+    prefer_collapsed: bool = False,
+) -> EraBrand | None:
+    """Prefer an era brand covering ``year``; otherwise the nearest range.
+
+    When ``prefer_collapsed``, use the Collapsed file for that same era range if
+    it exists — never substitute a Collapsed logo from a different era.
+    """
+
+    def _pick(pool: list[EraBrand]) -> EraBrand | None:
+        if not pool:
+            return None
+        in_range = [b for b in pool if b.start <= year <= b.end]
+        if in_range:
+            in_range.sort(key=lambda b: (b.end - b.start, b.path.name.casefold()))
+            return in_range[0]
+
+        def dist_key(b: EraBrand) -> tuple[int, int, str]:
+            if year < b.start:
+                d = b.start - year
+            else:
+                d = year - b.end
+            return (d, b.end - b.start, b.path.name.casefold())
+
+        return min(pool, key=dist_key)
+
+    normal = _pick(_brands_of_kind(brands, kind, collapsed=False))
+    if prefer_collapsed and normal:
+        for b in _brands_of_kind(brands, kind, collapsed=True):
+            if b.start == normal.start and b.end == normal.end:
+                return b
+    if normal:
+        return normal
+    # No normal logo for this kind — only use collapsed if it covers the year
+    if prefer_collapsed:
+        return _pick(_brands_of_kind(brands, kind, collapsed=True))
+    return None
 
 
 def _media_url(rel_path: Path, media_root: Path) -> str:
@@ -212,6 +302,8 @@ def resolve_artist_card(
     brands = _list_era_brands(logos_dir)
 
     want = normalize_card_orientation(orientation)
+    # Collapsed era logos are banner-only (catalog banner + release banner cards).
+    prefer_collapsed = want == "banner"
 
     # Icons mode: branding only (no photo background)
     if want == "icons":
@@ -219,8 +311,12 @@ def resolve_artist_card(
         if not eras and photos:
             eras = sorted({p.year for p in photos})
         fallback_year = random.choice(eras) if eras else 2000
-        logo_only = _pick_brand_for_year(brands, fallback_year, "logo")
-        icon_only = _pick_brand_for_year(brands, fallback_year, "icon")
+        logo_only = _pick_brand_for_year(
+            brands, fallback_year, "logo", prefer_collapsed=False
+        )
+        icon_only = _pick_brand_for_year(
+            brands, fallback_year, "icon", prefer_collapsed=False
+        )
         return ArtistCardAssets(
             None,
             _media_url(logo_only.path, root) if logo_only else None,
@@ -233,8 +329,12 @@ def resolve_artist_card(
     if not pool:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
         fallback_year = random.choice(eras) if eras else 2000
-        logo_only = _pick_brand_for_year(brands, fallback_year, "logo")
-        icon_only = _pick_brand_for_year(brands, fallback_year, "icon")
+        logo_only = _pick_brand_for_year(
+            brands, fallback_year, "logo", prefer_collapsed=prefer_collapsed
+        )
+        icon_only = _pick_brand_for_year(
+            brands, fallback_year, "icon", prefer_collapsed=False
+        )
         return ArtistCardAssets(
             None,
             _media_url(logo_only.path, root) if logo_only else None,
@@ -245,8 +345,10 @@ def resolve_artist_card(
 
     photo = _pick_era_photo(pool)
     era_year = photo.year
-    logo = _pick_brand_for_year(brands, era_year, "logo")
-    icon = _pick_brand_for_year(brands, era_year, "icon")
+    logo = _pick_brand_for_year(
+        brands, era_year, "logo", prefer_collapsed=prefer_collapsed
+    )
+    icon = _pick_brand_for_year(brands, era_year, "icon", prefer_collapsed=False)
     show_name = not (logo or icon)
     return ArtistCardAssets(
         photo_url=_media_url(photo.path, root),
@@ -309,6 +411,9 @@ def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
         key=_brand_sort_key,
     ):
         rel = brand.path.relative_to(media_root).as_posix()
+        label = f"{brand.start}–{brand.end}"
+        if brand.collapsed:
+            label = f"{label} Collapsed"
         branding_out.append(
             {
                 "id": _gallery_item_id(rel),
@@ -316,7 +421,8 @@ def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
                 "kind": brand.kind,
                 "start": brand.start,
                 "end": brand.end,
-                "label": f"{brand.start}–{brand.end}",
+                "collapsed": brand.collapsed,
+                "label": label,
                 "folder_path": rel,
             }
         )

@@ -548,6 +548,7 @@ export type AudioReleaseCard = {
   official: boolean;
   cover_url: string | null;
   logo_url: string | null;
+  logo_collapsed_url?: string | null;
   banner_url?: string | null;
   era_logo_url?: string | null;
   era_icon_url?: string | null;

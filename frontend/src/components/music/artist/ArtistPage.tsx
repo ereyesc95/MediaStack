@@ -850,6 +850,14 @@ export default function ArtistPage({
               mode="catalog"
               onSelectBand={(id) => onOpenArtist(id)}
             />
+            {(section === "audio" ||
+              section === "video" ||
+              section === "library") && (
+              <ReleaseCardLayoutPicker
+                value={releaseCardLayout}
+                onChange={setReleaseCardLayoutPersisted}
+              />
+            )}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -929,14 +937,6 @@ export default function ArtistPage({
                   : undefined
               }
             />
-            {(section === "audio" ||
-              section === "video" ||
-              section === "library") && (
-              <ReleaseCardLayoutPicker
-                value={releaseCardLayout}
-                onChange={setReleaseCardLayoutPersisted}
-              />
-            )}
           </div>
         </header>
 
