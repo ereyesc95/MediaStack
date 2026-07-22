@@ -410,8 +410,16 @@ export default function MediaItemPage({
   const showSoloLineup = Boolean(data?.is_solo && lineup.length > 0);
   const showOverviewLineup = showBandLineup || showSoloLineup;
   const franchiseArtist = data?.franchise_artist ?? null;
-  const franchiseItems = data?.franchise_items ?? [];
-  const showFranchise = Boolean(franchiseArtist || franchiseItems.length > 0);
+  const franchiseItems = (data?.franchise_items ?? []).filter((item) => {
+    if ((item.kind || "").toLowerCase() !== "series") return true;
+    const parts = (item.path || "").replace(/\\/g, "/").split("/").filter(Boolean);
+    // Drop Series/{Letter}/{Franchise} hub rows — show Anthology/Docuseries instead
+    return !(parts.length === 3 && !item.date_iso && !item.subseries);
+  });
+  // Franchise artist only when there is no related media to show
+  const showFranchiseArtist =
+    Boolean(franchiseArtist) && franchiseItems.length === 0;
+  const showFranchise = showFranchiseArtist || franchiseItems.length > 0;
   const hasOverviewBottom =
     showOverviewLineup || showFranchise;
 
@@ -826,7 +834,7 @@ export default function MediaItemPage({
 
                     {showFranchise ? (
                       <section className="release-page__section-glass release-page__singles release-page__franchise">
-                        {franchiseArtist ? (
+                        {showFranchiseArtist && franchiseArtist ? (
                           <div className="release-page__featured-artists-grid" data-count="1">
                             <FranchiseArtistCard
                               artist={franchiseArtist}
@@ -839,27 +847,30 @@ export default function MediaItemPage({
                           </div>
                         ) : null}
                         {franchiseItems.length > 0 ? (
-                          <div className="release-page__singles-grid">
+                          <div className="release-page__singles-grid release-page__franchise-items">
                             {franchiseItems.map((item) => {
                               const dateLabel = formatTrackDate(
                                 item.date_iso ?? null
                               );
+                              const cover = item.cover_url || DEFAULT_DISC_URL;
                               return (
                                 <div
                                   key={item.path ?? item.title}
                                   className="release-page__single release-page__single--static"
                                 >
+                                  <span className="release-page__single-cover">
+                                    <img
+                                      src={cover}
+                                      alt=""
+                                      draggable={false}
+                                    />
+                                  </span>
                                   <span className="release-page__single-title">
                                     {item.title}
                                   </span>
                                   {dateLabel ? (
                                     <span className="release-page__single-date">
                                       {dateLabel}
-                                    </span>
-                                  ) : null}
-                                  {item.kind ? (
-                                    <span className="release-page__single-date">
-                                      {item.kind}
                                     </span>
                                   ) : null}
                                 </div>

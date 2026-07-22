@@ -609,13 +609,22 @@ def _related_franchise_items(
         normalize_franchise_slug,
         related_for_path,
     )
+    from app.media_tabs_index import _folder_cover
 
     index = load_franchise_index()
-    if not index:
+    if not index or not settings.media_root:
         return []
 
+    media_root = Path(settings.media_root)
     seen: set[str] = set()
     out: list[dict] = []
+
+    def _is_series_franchise_root(path: str, date_iso: str | None, subseries: str | None) -> bool:
+        """True for Series/{Letter}/{Franchise} hub rows (not dated subseries)."""
+        if subseries or date_iso:
+            return False
+        parts = [p for p in path.replace("\\", "/").strip("/").split("/") if p]
+        return len(parts) == 3 and parts[0].casefold() == "series"
 
     def _add(
         *,
@@ -623,17 +632,29 @@ def _related_franchise_items(
         title: str | None,
         path: str | None,
         date_iso: str | None,
+        subseries: str | None = None,
     ) -> None:
         path_norm = (path or "").replace("\\", "/").casefold().rstrip("/")
         if not path_norm or path_norm in seen:
             return
+        if (kind or "").casefold() == "series" and _is_series_franchise_root(
+            path or "", date_iso, subseries
+        ):
+            return
         seen.add(path_norm)
+        cover_url = None
+        try:
+            cover_url = _folder_cover(media_root / (path or ""), media_root)
+        except OSError:
+            cover_url = None
         out.append(
             {
                 "kind": kind,
                 "title": title or path_norm,
                 "path": path,
                 "date_iso": date_iso,
+                "subseries": subseries,
+                "cover_url": cover_url,
             }
         )
 
@@ -644,6 +665,7 @@ def _related_franchise_items(
                 title=entry.get("title") or entry.get("display_name"),
                 path=entry.get("path"),
                 date_iso=entry.get("date_iso"),
+                subseries=entry.get("subseries"),
             )
 
     slug = normalize_franchise_slug(band_name or "")
@@ -659,6 +681,7 @@ def _related_franchise_items(
                 title=entry.title,
                 path=entry.path,
                 date_iso=entry.date_iso,
+                subseries=entry.subseries,
             )
 
     return out[:24]

@@ -208,8 +208,8 @@ def _folder_has_direct_artwork(folder: Path) -> bool:
 def refine_resolved_work_folder(display_entry: Path, resolved: Path) -> Path:
     """If a .lnk/.path points at a franchise hub, prefer the matching dated work folder.
 
-    Example: Video/2017.06.12. The HIM Docuseries.lnk → Series/T/The HIM Docuseries
-    while artwork lives in Series/T/The HIM Docuseries/2017.06.12. The HIM Docuseries/.
+    Example: Video/2017.06.12. The HIM Docuseries.lnk → Series/H/HIM
+    while artwork lives in Series/H/HIM/2017.06.12. The HIM Docuseries/.
     """
     if not resolved.is_dir():
         return resolved

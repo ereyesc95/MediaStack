@@ -46,6 +46,24 @@ def _card_id(kind: str, rel_path: str) -> str:
     return f"{kind[:3]}_{digest}"
 
 
+def _link_suffix_stripped(rel_path: str) -> str:
+    """Drop .lnk/.path so card ids stay stable across shortcut formats."""
+    rel = (rel_path or "").replace("\\", "/")
+    low = rel.casefold()
+    for suf in (".lnk", ".path"):
+        if low.endswith(suf):
+            return rel[: -len(suf)]
+    return rel
+
+
+def _card_id_candidates(kind: str, id_rel: str) -> set[str]:
+    """Primary + legacy ids (.lnk / .path / extensionless)."""
+    rel = (id_rel or "").replace("\\", "/")
+    stem = _link_suffix_stripped(rel)
+    keys = {rel, stem, f"{stem}.lnk", f"{stem}.path"}
+    return {_card_id(kind, k) for k in keys if k}
+
+
 def _known_categories(kind: str) -> set[str]:
     names = MUSIC_VIDEO_CATEGORIES if kind == "video" else MUSIC_LIBRARY_CATEGORIES
     return {n.casefold() for n in names}
@@ -286,7 +304,10 @@ def find_resolved_media_item(
     for card, display_entry, resolved in iter_resolved_media_items(
         band, media_root, kind=kind
     ):
-        if card.get("id") == item_id:
+        id_rel = safe_relative(display_entry, media_root) or ""
+        if card.get("id") == item_id or item_id in _card_id_candidates(
+            kind, id_rel
+        ):
             return card, display_entry, resolved
     return None
 

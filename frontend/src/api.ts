@@ -5,9 +5,16 @@ import type {
   FilterOptions,
   Health,
   MbArtistMatch,
+  MediaRelatedPayload,
   MusicDashboard,
   PlaylistTrack,
   PlaylistSnapshotMeta,
+  SeriesCatalogPayload,
+  SeriesDashboard,
+  SeriesFilterOptions,
+  SeriesFolderDetail,
+  SeriesFranchiseDetail,
+  SeriesGalleryPayload,
   UserPlaylist,
 } from "./types";
 import { EMPTY_DASHBOARD } from "./types";
@@ -1538,4 +1545,40 @@ export async function setMediaRoot(path: string): Promise<{
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path }),
   });
+}
+
+export async function fetchSeriesCatalog() {
+  return request<SeriesCatalogPayload>(`${API}/series/catalog`);
+}
+
+export async function fetchSeriesDashboard() {
+  return request<SeriesDashboard>(`${API}/series/dashboard`);
+}
+
+export async function fetchSeriesFilterOptions() {
+  return request<SeriesFilterOptions>(`${API}/series/filters/options`);
+}
+
+export async function fetchSeriesFranchise(franchiseId: string) {
+  return request<SeriesFranchiseDetail>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}`
+  );
+}
+
+export async function fetchSeriesFolder(path: string) {
+  return request<SeriesFolderDetail>(
+    `${API}/series/folder?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function fetchSeriesGallery(path: string) {
+  return request<SeriesGalleryPayload>(
+    `${API}/series/gallery?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function fetchMediaRelated(path: string) {
+  return request<MediaRelatedPayload>(
+    `${API}/media/related?path=${encodeURIComponent(path)}`
+  );
 }

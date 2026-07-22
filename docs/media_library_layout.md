@@ -22,8 +22,9 @@ Media/
 | **`{Letter}`** | First letter of the **grouping title** (artist, work, franchise, or game title). Use `#` for non-alpha. |
 | **Item folders** | `{YYYY.MM.DD}. {Title}` or `{YYYY}. {Title}`; bracket tags optional. |
 | **Filenames** | Flexible — numeric prefix (`01.`), date prefix, vinyl side (`A1.`), or title as filename (same rules as Audio). |
-| **`[Artwork]/`** | Inside each **item** folder (release edition, film, episode batch, book volume, game). Not beside `Seasons/` or at letter tier. |
-| **Categories** | Subfolders under `Video/` and `Library/` (Music only). **Omit** a category folder if unused — the app hides that sub-tab. |
+| **`[Artwork]`** | Inside franchise / subseries / item folders as needed (covers, posters, logos). Not at the letter tier. |
+| **Categories** | Subfolders under `Video/` and `Library/` (**Music only**). Omit unused categories. |
+| **`[Extras]`** | **Not used.** Cross-module media is never nested under Movies/Series/Books/Games. |
 
 ---
 
@@ -66,6 +67,8 @@ Music/H/HIM/Video/
     └── 01. EPK segment 1.mp4
 ```
 
+Optional: a `.lnk` / `.path` under Music Video may point at a Movies or Series work folder so the artist page can open that title. Prefer **Related media** (franchise index) when the franchise name already matches.
+
 Do **not** rely on fixed names like `video.mp4`.
 
 ### Library — Pattern A (category → item)
@@ -101,74 +104,110 @@ Music/H/HIM/Library/
 
 Middle folder **`{Work}`** groups sequels (movie “franchise”) or equals the film name for standalones.
 
+**Always nest each film** in its own `{date}. {Film Title}/` folder (even for single-film works). Do **not** leave the feature file loose under `{Work}/`.
+
 ```
 Movies/M/Mission Impossible/
+├── [Artwork]/…                    ← optional franchise-wide key art
 ├── 1996.05.22. Mission Impossible/
 │   ├── [Artwork]/…
 │   └── 1996.05.22. Mission Impossible.mkv
 ├── 2000.05.24. Mission Impossible II/
 └── 2023.07.12. Mission Impossible - Dead Reckoning Part One/
 
-Movies/P/Poison Arrow/
-└── 2000.01.01. Poison Arrow/
+Movies/H/HIM/
+└── 2005.11.05. Poison Arrow/
     ├── [Artwork]/…
-    └── 2000.01.01. Poison Arrow.mkv
+    └── 2005.11.05. Poison Arrow.mp4
+
+Movies/A/Austin Powers/
+├── [Artwork]/…
+├── 1997.05.02. Austin Powers - International Man of Mystery/
+│   ├── [Artwork]/…
+│   └── 1997.05.02. ….mp4
+└── 2002.07.26. Austin Powers in Goldmember/
+    ├── [Artwork]/…
+    └── 2002.07.26. ….mp4
 ```
 
-**Related media** (Audio soundtracks, Series tie-ins, Books novelizations, Games) is discovered via **franchise index** — no requirement for `Audio/`, `Series/`, or `Books/` subfolders on disk unless used as optional overrides.
+**Related media** (soundtracks, series, books, games) is discovered via the **franchise index** when `{Work}` names match across modules. Do **not** create `Audio/`, `Series/`, `Books/`, `Games/`, or `[Extras]/` siblings under a movie folder.
 
 ---
 
 ## Series — `Series/{Letter}/{Franchise}/…`
 
+### Season folders (required shape)
+
+Seasons are **dated folders** directly under the show or subseries (no `Seasons/` wrapper):
+
+```
+{YYYY.MM.DD}. Season 1/
+{YYYY.MM.DD}. Season 2/
+Specials/                         ← optional undated specials bucket
+```
+
+Episode files live inside each season folder (numeric or date prefixes allowed).
+
 ### Multi-subseries franchise
+
+Subseries folders are dated: `{YYYY.MM.DD}. {Subseries Title}/`.
 
 ```
 Series/D/Dragon Ball/
-├── [Artwork]/
+├── [Artwork]/                              ← franchise-wide logos / key art
 ├── 1986.02.26. Dragon Ball/
 │   ├── [Artwork]/
-│   ├── Seasons/Season 01/01. ….mkv
-│   ├── Specials/…
-│   └── (related Movies/Books/Games via franchise index)
-└── 1989.04.26. Dragon Ball Z/
-    ├── Seasons/Season 01/…
-    └── Specials/…
+│   ├── 1986.02.26. Season 1/
+│   │   └── 01. ….mkv
+│   └── 1987.04.15. Season 2/
+├── 1989.04.26. Dragon Ball Z/
+│   ├── [Artwork]/
+│   ├── 1989.04.26. Season 1/
+│   └── Specials/
+└── 1996.02.07. Dragon Ball GT/
+    ├── [Artwork]/
+    └── 1996.02.07. Season 1/
 ```
 
-Use **`Seasons/Season NN/`** consistently (avoid duplicate flat `Season 01/` at show root).
+Related movies / manga / games live under `Movies/`, `Books/`, and `Games/` with the same franchise folder name (`Dragon Ball`); the app shows them in **Related media**.
 
-### Single show / one season / miniseries
+### Single show / miniseries
 
-No `{date}. Subseries/` tier — seasons live directly under the show folder:
+No subseries tier — seasons sit directly under the franchise/show folder:
 
 ```
 Series/T/Twin Peaks/
 ├── [Artwork]/
-├── Seasons/
-│   ├── Season 01/01. Pilot.mkv
-│   └── Season 02/…
-└── Specials/…
+├── 1990.04.08. Season 1/
+│   └── 01. Pilot.mkv
+├── 1990.09.30. Season 2/
+└── Specials/
 ```
 
-Films tied to the show (e.g. *Fire Walk With Me*) are canonical under **`Movies/{Letter}/{Work}/…`** with the same **`{Work}`** franchise name; the franchise index links them.
+Films tied to the show are canonical under **`Movies/{Letter}/{Work}/…`** with the same franchise name.
 
 ---
 
 ## Books — `Books/{Letter}/{Work Title}/{date}. {Volume or Edition}/`
 
+(The Books **module** root is `Books/`, not `Library/`. Music’s `Library/` tab is artist ephemera only.)
+
 ```
 Books/D/Dragon Ball/
+├── [Artwork]/…
 ├── 1985.12.03. Vol. 01/
 │   ├── [Artwork]/…
 │   └── 01. Chapter 1.cbz
 └── 2022.01.01. Vol. 1-3 Omnibus/
 
-Books/H/HIM - Heartache and Ghosts/
-├── 2010. Heartache and Ghosts/
-│   └── book.pdf
-└── 2014.02.14. Remastered Edition/
-    └── book.pdf
+Books/H/Harry Potter/
+├── [Artwork]/…
+├── 1997.06.26. Philosopher's Stone/
+│   ├── [Artwork]/…
+│   └── 1997.06.26. Philosopher's Stone.epub
+└── 2016.07.31. Cursed Child/
+    ├── [Artwork]/…
+    └── 2016.07.31. Cursed Child.epub
 ```
 
 Magazine issues as catalog entries:
@@ -183,13 +222,16 @@ Books/K/Kerrang/2007.03.15. Issue 1234/
 
 Platform-first browsing; **`{Letter}`** = first letter of **game title** (or franchise when using four tiers).
 
+Use platform vocabulary names (e.g. `Nintendo Wii`, not `Wii`).
+
 ```
 Games/PlayStation 2/D/Dragon Ball/2002.11.10. Dragon Ball Z Budokai/
 ├── [Artwork]/Cover.jpg
 └── 2002.11.10. Dragon Ball Z Budokai.iso
 
-Games/Nintendo Entertainment System/S/Super Mario/1985.09.13. Super Mario Bros/
-└── 1985.09.13. Super Mario Bros.nes
+Games/Nintendo Wii/S/Super Mario/2010.05.23. Super Mario Galaxy 2/
+├── [Artwork]/…
+└── 2010.05.23. Super Mario Galaxy 2.wbfs
 ```
 
 **One-off games** (no meaningful franchise tier) — three-tier exception:
@@ -214,7 +256,7 @@ Use consistent display names:
 
 ### Default: franchise index (automatic)
 
-When `{Work}` / `{Franchise}` folder names match across modules (after normalization), the app shows **Related media** without `.lnk` / `.path` portal farms.
+When `{Work}` / `{Franchise}` folder names match across modules (after normalization), the app shows **Related media** without `.lnk` / `.path` portal farms and without nested `Audio/` / `Series/` / `Books/` / `Games/` / `[Extras]/` folders.
 
 Example: `Dragon Ball` under `Series/D/`, `Movies/D/`, `Books/D/`, and `Games/*/D/Dragon Ball/`.
 
@@ -227,14 +269,15 @@ Use **`.path`** sidecars (preferred on NAS/Linux) or **symlinks** when:
 - Franchise names differ but content is related
 - Biopics (`Music/H/HIM` ↔ `Movies/E/Elvis`) — use **subject** rules or overrides, not folder name alone
 - Subseries-specific film subsets need explicit curation
+- Music artist Video should deep-link a specific Movies/Series title
 
 `.path` file body = relative path from media root, e.g.:
 
 ```
-Movies/R/2019.05.22. Rocketman/
+Movies/H/HIM/2005.11.05. Poison Arrow/
 ```
 
-Windows **`.lnk`** is supported for Audio today; prefer `.path` for cross-module links on NAS.
+Windows **`.lnk`** is supported; prefer `.path` for cross-module links on NAS.
 
 ---
 
@@ -243,10 +286,10 @@ Windows **`.lnk`** is supported for Audio today; prefer `.path` for cross-module
 | Area | Scanner / UI status |
 |------|---------------------|
 | Music Audio | Implemented |
-| Music Video / Library tabs | Category grid; **directories only** (no `.path` yet) |
-| Franchise index | **Phase 1** — `build_franchise_index()` scans disk; cache at `data/franchise_index/index.json`; API/UI pending |
-| Movies / Series / Books / Games modules | API stubs; layout spec ahead of UI |
-| Series folder sync | Expects flat `Series/{Show}/` today — **needs update** for `Series/{Letter}/` |
+| Music Video / Library tabs | Category grid; `.lnk` / `.path` resolved for items |
+| Franchise index | Phase 1–2 — scan/save/load + related API; UI panel pending |
+| Movies / Series / Books / Games modules | Series module in progress; others API stubs |
+| Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` |
 
 ---
 
@@ -255,5 +298,6 @@ Windows **`.lnk`** is supported for Audio today; prefer `.path` for cross-module
 1. One **canonical spelling** per franchise (`Dragon Ball`, not mixed `DBZ` / `Dragonball` in the franchise tier).
 2. Register **aliases** in DB or `data/franchise_aliases.json` when needed (future).
 3. Disambiguate collisions in folder names: `Heat (1995)` vs `Heat (2013)`.
-4. **Music** uses **artist** names; link to films via subject/metadata, not artist folder name.
-5. Omit empty Video/Library categories — do not create placeholder folders.
+4. **Music** uses **artist** names; link to films via subject/metadata, not artist folder name alone.
+5. Omit empty Music Video/Library categories — do not create placeholder folders.
+6. Do **not** nest other modules’ catalogs under Movies/Series/Books/Games.

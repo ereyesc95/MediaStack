@@ -1,7 +1,6 @@
 """Filesystem folder scan — port of PrimaryPage.SyncFolders (bands + series)."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -9,8 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.models import Band, Series
 from app.services import musicbrainz, tmdb
-
-_GALLERY = re.compile(r"\\bGallery\\b|/Gallery/")
 
 
 def _normalize_folder_name(name: str) -> str:
@@ -66,6 +63,38 @@ async def sync_bands(
     return {"table": "bands", "added": added, "scanned": scanned}
 
 
+def _iter_series_franchise_dirs(series_root: Path) -> list[Path]:
+    """Yield franchise folders under Series/{Letter}/{Franchise}/ (or legacy flat Series/{Show}/)."""
+    out: list[Path] = []
+    try:
+        children = sorted(series_root.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return out
+
+    letter_dirs = [
+        p
+        for p in children
+        if p.is_dir() and (len(p.name) == 1 or p.name == "#")
+    ]
+    if letter_dirs:
+        for letter_dir in letter_dirs:
+            try:
+                for franchise_dir in sorted(
+                    letter_dir.iterdir(), key=lambda p: p.name.casefold()
+                ):
+                    if franchise_dir.is_dir() and not franchise_dir.name.startswith("["):
+                        out.append(franchise_dir)
+            except OSError:
+                continue
+        return out
+
+    # Legacy: Series/{Show}/ directly under Series/
+    for show_dir in children:
+        if show_dir.is_dir() and not show_dir.name.startswith("["):
+            out.append(show_dir)
+    return out
+
+
 async def sync_series(
     db: Session,
     root: Path,
@@ -79,19 +108,12 @@ async def sync_series(
     known = _existing_names(db, Series.ser_name, Series.ser_name)
     added = 0
     scanned = 0
-    for show_dir in sorted(series_root.iterdir()):
-        if not show_dir.is_dir():
-            continue
-        if _depth_under(series_root, show_dir) != 0:
-            continue
+    for franchise_dir in _iter_series_franchise_dirs(series_root):
         scanned += 1
-        folder_name = _normalize_folder_name(show_dir.name)
+        folder_name = _normalize_folder_name(franchise_dir.name)
         if folder_name in known:
             continue
-        subdirs = [p for p in show_dir.iterdir() if p.is_dir()]
-        has_gallery = any(_GALLERY.search(str(p)) for p in subdirs)
-        if not has_gallery and subdirs:
-            continue
+        # Skip empty scaffolding-only trees later if TMDb fails; still attempt lookup.
         tv_id, _ = await tmdb.search_tv_id(folder_name, tmdb_api_key)
         if not tv_id:
             continue

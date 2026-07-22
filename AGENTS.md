@@ -33,31 +33,39 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 | Area | Status |
 |------|--------|
 | Music Audio | Done |
-| Music Video/Library tabs | Category scan only; no `.path`/symlink resolution |
+| Music Video/Library tabs | Done (`.lnk` / `.path` resolved; Play/Read card actions) |
 | `backend/app/franchise_index.py` | **Phase 1–2:** scan/save/load + `GET /api/media/related` |
 | `backend/app/routers/media.py` | Related media API |
 | `backend/app/routers/sync.py` | `POST /api/sync/franchise-index` |
-| Related media UI | **Not started** |
-| Series folder sync | Still expects flat `Series/{Show}/` — **must update** for `Series/{Letter}/{Franchise}/` |
-| Movies/Series/Books/Games UI | API stubs only |
+| Related media UI | **Not started** (needed for Series v1) |
+| Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` (+ legacy flat) |
+| Layout docs | Updated: dated seasons, nested films, no `[Extras]` / portal farms |
+| Series module UI | Catalog → franchise/subseries → seasons → episodes (new tab); Gallery + Related |
+| Movies/Books/Games UI | Placeholders |
+
+## Series module files
+
+| File | Role |
+|------|------|
+| `backend/app/series_index.py` | Catalog + franchise/folder detail + gallery scan |
+| `backend/app/routers/series.py` | `/catalog`, `/franchises/{id}`, `/folder`, `/gallery` |
+| `frontend/src/components/series/SeriesModule.tsx` | Catalog shell |
+| `frontend/src/components/series/SeriesFranchisePage.tsx` | Overview / Gallery / Related |
+
+## Layout rules (locked 2026-07)
+
+- **Seasons:** `{YYYY.MM.DD}. Season N/` under show/subseries (no `Seasons/` wrapper)
+- **Movies:** always `{Work}/{date}. {Film}/` — never leave the feature file at work root
+- **Cross-media:** franchise index Related panel only — no nested `Audio/Series/Books/Games/[Extras]` under Movies/Series
+- **Golden path fixture:** `Series/D/Dragon Ball/` (+ Movies/Books/Games scaffolding)
 
 ## Next work (in order)
 
-1. **Wire franchise index to sync** — `POST /api/sync/franchise-index` (done); hook into folder sync pipeline on media scan
-2. **Related media API** — `GET /api/media/related?path=…` (done); enrich with cover URLs when module scanners exist
-
-3. **UI panel**
-   - "Related media" on Series/Movie/Book/Game pages (when built)
-   - Optional on Music artist when franchise/subject links exist
-
-4. **Scanner alignment**
-   - Video/Library: resolve `.path`/symlinks via `resolve_media_entry()` in `media_paths_util.py`
-   - Series sync: walk `Series/{Letter}/{Franchise}/`
-   - Export category constants from `franchise_index.py` (`MUSIC_VIDEO_CATEGORIES`, `MUSIC_LIBRARY_CATEGORIES`, `GAME_PLATFORMS`) into scanners
-
-5. **Phase 5**
-   - `data/franchise_aliases.json`, `data/franchise_overrides.json`
-   - Biopic/subject relations in DB
+1. **Series polish** — URL routes, cover enrichment on Related entries, TMDb metadata later
+2. Enrich related API with cover URLs when Series/Movies scanners exist
+3. Hook franchise-index rebuild into media scan pipeline
+4. **Phase 5** — aliases/overrides; biopic/subject DB links
+5. Movies / Books / Games modules (same patterns)
 
 ## Key code files
 
@@ -67,11 +75,11 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 | `backend/app/media_tabs_index.py` | Music Video/Library category scan |
 | `backend/app/media_paths_util.py` | `resolve_media_entry()` — symlinks, `.path`, `.lnk` |
 | `backend/app/media_index.py` | Music audio index |
-| `backend/app/services/sync_folders.py` | Band/Series folder sync (Series letter tier TBD) |
+| `backend/app/services/sync_folders.py` | Band/Series folder sync (letter-tier Series) |
 
 ## Conventions (do not change without updating docs)
 
-- **Letter tier:** first letter of grouping title (`P/` = Poison Arrow, not a misc bucket)
+- **Letter tier:** first letter of grouping title (`H/` = HIM, not a misc bucket)
 - **Games letter:** first letter of game title (or franchise when using 4 tiers)
 - **Books letter:** work title letter
 - **Date folders:** `{YYYY.MM.DD}. {Title}` or `{YYYY}. {Title}`

@@ -183,19 +183,24 @@ def _register_entry(
         group.entries.append(entry)
 
 
+def _is_meta_folder(name: str) -> bool:
+    low = name.casefold().strip()
+    return low.startswith("[") or low in {"artwork", "extras"} or name.startswith(".")
+
+
 def _scan_movies(media_root: Path, index: FranchiseIndex) -> None:
     root = media_root / "Movies"
     if not root.is_dir():
         return
     for letter_dir in sorted(root.iterdir()):
-        if not letter_dir.is_dir():
+        if not letter_dir.is_dir() or _is_meta_folder(letter_dir.name):
             continue
         for work_dir in sorted(letter_dir.iterdir()):
-            if not work_dir.is_dir():
+            if not work_dir.is_dir() or _is_meta_folder(work_dir.name):
                 continue
             slug = normalize_franchise_slug(work_dir.name)
             for item_dir in sorted(work_dir.iterdir()):
-                if not item_dir.is_dir():
+                if not item_dir.is_dir() or _is_meta_folder(item_dir.name):
                     continue
                 date_iso, title = parse_dated_folder_name(item_dir.name)
                 rel = item_dir.relative_to(media_root).as_posix()
@@ -220,14 +225,14 @@ def _scan_books(media_root: Path, index: FranchiseIndex) -> None:
     if not root.is_dir():
         return
     for letter_dir in sorted(root.iterdir()):
-        if not letter_dir.is_dir():
+        if not letter_dir.is_dir() or _is_meta_folder(letter_dir.name):
             continue
         for work_dir in sorted(letter_dir.iterdir()):
-            if not work_dir.is_dir():
+            if not work_dir.is_dir() or _is_meta_folder(work_dir.name):
                 continue
             slug = normalize_franchise_slug(work_dir.name)
             for item_dir in sorted(work_dir.iterdir()):
-                if not item_dir.is_dir():
+                if not item_dir.is_dir() or _is_meta_folder(item_dir.name):
                     continue
                 date_iso, title = parse_dated_folder_name(item_dir.name)
                 rel = item_dir.relative_to(media_root).as_posix()
@@ -252,10 +257,10 @@ def _scan_series(media_root: Path, index: FranchiseIndex) -> None:
     if not root.is_dir():
         return
     for letter_dir in sorted(root.iterdir()):
-        if not letter_dir.is_dir():
+        if not letter_dir.is_dir() or _is_meta_folder(letter_dir.name):
             continue
         for franchise_dir in sorted(letter_dir.iterdir()):
-            if not franchise_dir.is_dir():
+            if not franchise_dir.is_dir() or _is_meta_folder(franchise_dir.name):
                 continue
             slug = normalize_franchise_slug(franchise_dir.name)
             franchise_rel = franchise_dir.relative_to(media_root).as_posix()
@@ -273,7 +278,7 @@ def _scan_series(media_root: Path, index: FranchiseIndex) -> None:
                 ),
             )
             for child in sorted(franchise_dir.iterdir()):
-                if not child.is_dir():
+                if not child.is_dir() or _is_meta_folder(child.name):
                     continue
                 date_iso, sub_title = parse_dated_folder_name(child.name)
                 if not date_iso:
@@ -294,6 +299,36 @@ def _scan_series(media_root: Path, index: FranchiseIndex) -> None:
                         franchise_display=franchise_dir.name,
                     ),
                 )
+                # Nested dated shows under a hub (e.g. Docuseries containing both seasons)
+                for nested in sorted(child.iterdir()):
+                    if not nested.is_dir() or _is_meta_folder(nested.name):
+                        continue
+                    nested_date, nested_title = parse_dated_folder_name(nested.name)
+                    if not nested_date:
+                        continue
+                    # Skip pure season folders — those are episodes, not related titles
+                    rest = nested.name
+                    dm = DATE_PREFIX_RE.match(nested.name.strip())
+                    if dm:
+                        rest = nested.name[dm.end() :].lstrip(". ").strip()
+                    if rest.casefold().startswith("season") or rest.casefold() == "specials":
+                        continue
+                    nested_rel = nested.relative_to(media_root).as_posix()
+                    _register_entry(
+                        index,
+                        slug=slug,
+                        display_name=franchise_dir.name,
+                        letter=letter_dir.name,
+                        entry=FranchiseEntry(
+                            kind="series",
+                            path=nested_rel,
+                            title=nested_title,
+                            date_iso=nested_date,
+                            letter=letter_dir.name,
+                            subseries=nested_title,
+                            franchise_display=franchise_dir.name,
+                        ),
+                    )
 
 
 def _scan_games(media_root: Path, index: FranchiseIndex) -> None:

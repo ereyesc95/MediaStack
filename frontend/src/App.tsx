@@ -26,6 +26,7 @@ import HubPage from "./components/HubPage";
 import type { MediaOption } from "./components/ModuleTopBar";
 
 import MusicModule from "./components/music/MusicModule";
+import SeriesModule from "./components/series/SeriesModule";
 
 import { toStackName } from "./mediaStack";
 import {
@@ -644,7 +645,45 @@ export default function App() {
 
 
 
-        {appReady && view.kind !== "hub" && view.kind !== "music" && (
+        {appReady && view.kind === "series" && (
+          <SeriesModule
+            key={`series-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            busy={busy}
+            onImport={handleImport}
+            onSync={handleSync}
+            onSelectMedia={selectMedia}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            userId={profile?.user_id}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+            franchiseId={view.franchiseId}
+            subseriesId={view.subseriesId}
+            seasonId={view.seasonId}
+            section={view.section}
+            cardOrientation={cardOrientation}
+            onSetOrientation={setOrientation}
+            onNavigate={(patch) =>
+              setView({
+                kind: "series",
+                franchiseId:
+                  "franchiseId" in patch ? patch.franchiseId : view.franchiseId,
+                subseriesId:
+                  "subseriesId" in patch ? patch.subseriesId : view.subseriesId,
+                seasonId: "seasonId" in patch ? patch.seasonId : view.seasonId,
+                section: patch.section ?? view.section,
+              })
+            }
+          />
+        )}
+
+        {appReady &&
+          view.kind !== "hub" &&
+          view.kind !== "music" &&
+          view.kind !== "series" && (
 
           <>
 

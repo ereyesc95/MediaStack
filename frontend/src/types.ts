@@ -784,6 +784,8 @@ export type MediaItemOverview = {
     title: string;
     path?: string | null;
     date_iso?: string | null;
+    subseries?: string | null;
+    cover_url?: string | null;
   }[];
   files: MediaItemFile[];
   groups?: MediaItemGroup[];
@@ -957,6 +959,8 @@ export type AudioAlbum = {
   category: string;
 };
 
+export type SeriesSection = "overview" | "gallery" | "related";
+
 export type View =
   | { kind: "hub" }
   | {
@@ -974,10 +978,188 @@ export type View =
       countryFilterId?: number;
       countryFilterName?: string;
     }
-  | { kind: "series"; seriesId?: number }
+  | {
+      kind: "series";
+      seriesId?: number;
+      franchiseId?: string;
+      subseriesId?: string;
+      seasonId?: string;
+      section?: SeriesSection;
+    }
   | { kind: "movies" }
   | { kind: "books" }
   | { kind: "games" };
+
+export type SeriesSubseriesCard = {
+  id: string;
+  title: string;
+  date_iso: string | null;
+  display_date?: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  season_count: number;
+  has_gallery?: boolean;
+};
+
+export type SeriesSeasonCard = {
+  id: string;
+  title: string;
+  date_iso: string | null;
+  display_date?: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  episode_count: number;
+};
+
+export type SeriesEpisodeItem = {
+  id: string;
+  number: number | null;
+  title: string;
+  play_path: string;
+  open_url: string | null;
+};
+
+export type SeriesFranchiseCard = {
+  id: string;
+  name: string;
+  letter: string;
+  slug: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  subseries: SeriesSubseriesCard[];
+  season_count: number;
+  subseries_count: number;
+};
+
+export type SeriesFranchiseDetail = SeriesFranchiseCard & {
+  kind: "franchise";
+  seasons: SeriesSeasonCard[];
+  has_gallery: boolean;
+};
+
+export type SeriesFolderDetail = {
+  id: string;
+  title: string;
+  date_iso: string | null;
+  display_date?: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  has_gallery: boolean;
+  kind: "season" | "subseries" | "folder";
+  seasons: SeriesSeasonCard[];
+  subseries: SeriesSubseriesCard[];
+  episodes: SeriesEpisodeItem[];
+  episode_count?: number;
+  season_count?: number;
+};
+
+export type SeriesGalleryItem = {
+  id: string;
+  url: string;
+  title: string;
+  folder_path: string;
+  section: string;
+};
+
+export type SeriesGalleryPayload = {
+  folder_path: string;
+  items: SeriesGalleryItem[];
+};
+
+export type FranchiseMediaEntry = {
+  kind: string;
+  path: string;
+  title: string;
+  date_iso: string | null;
+  letter?: string | null;
+  platform?: string | null;
+  subseries?: string | null;
+  franchise_display?: string | null;
+};
+
+export type MediaRelatedPayload = {
+  franchise: { slug: string; display_name: string } | null;
+  from_path: string;
+  movies: FranchiseMediaEntry[];
+  series: FranchiseMediaEntry[];
+  books: FranchiseMediaEntry[];
+  games: FranchiseMediaEntry[];
+  music: FranchiseMediaEntry[];
+};
+
+export type SeriesCatalogPayload = {
+  franchises: SeriesFranchiseCard[];
+  scanned_at: string | null;
+};
+
+export type SeriesDashboard = {
+  top_episodes: {
+    id: number;
+    title: string;
+    title_full?: string | null;
+    franchise_id?: string | null;
+    franchise_name?: string | null;
+    play_count: number;
+    path?: string | null;
+    cover_url?: string | null;
+    open_url?: string | null;
+  }[];
+  top_series: {
+    id: string;
+    name: string;
+    play_count: number;
+    photo_url?: string | null;
+    cover_url?: string | null;
+    logo_url?: string | null;
+    icon_url?: string | null;
+    show_name_on_hover?: boolean;
+  }[];
+  top_genres: {
+    id: number | string;
+    name: string;
+    play_count: number;
+    image_url?: string | null;
+  }[];
+  top_countries: {
+    id?: number;
+    name: string;
+    play_count: number;
+    iso: string;
+  }[];
+};
+
+export const EMPTY_SERIES_DASHBOARD: SeriesDashboard = {
+  top_episodes: [],
+  top_series: [],
+  top_genres: [],
+  top_countries: [],
+};
+
+export type SeriesFilterMode =
+  | "name"
+  | "continent"
+  | "country"
+  | "start"
+  | "end"
+  | "genre"
+  | "publisher"
+  | "writer"
+  | "most_played";
+
+export type SeriesFilterOptions = {
+  continents: { id: number; name: string }[];
+  country_groups: {
+    continent: string;
+    items: { id: number; name: string; iso?: string | null }[];
+  }[];
+  subgenre_groups: {
+    genre: string;
+    items: { id: number; name: string }[];
+  }[];
+  decades: number[];
+  publishers: string[];
+  writers: string[];
+};
 
 export type Health = {
   status: string;
