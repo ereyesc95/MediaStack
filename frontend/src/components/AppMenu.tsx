@@ -24,6 +24,7 @@ import {
   IconLinks,
   IconLyrics,
   IconMetadata,
+  IconPlus,
   IconSettings,
   IconSwitchProfile,
   IconSync,
@@ -46,6 +47,8 @@ type Props = {
   onEditPlaylistToggle?: () => void;
   showDeletePlaylist?: boolean;
   onDeletePlaylist?: () => void;
+  showReimportCsv?: boolean;
+  onReimportCsv?: () => void;
   isAdmin?: boolean;
   userId?: number;
   onSwitchProfile?: () => void;
@@ -96,6 +99,8 @@ export default function AppMenu({
   onEditPlaylistToggle,
   showDeletePlaylist,
   onDeletePlaylist,
+  showReimportCsv,
+  onReimportCsv,
   isAdmin = false,
   userId,
   onSwitchProfile,
@@ -604,7 +609,7 @@ export default function AppMenu({
                 setOpen(false);
               }}
             >
-              <IconCards className="menu-item-icon" />
+              <IconPlus className="menu-item-icon" />
               Add playlist
             </button>
           )}
@@ -622,6 +627,18 @@ export default function AppMenu({
                 <IconSquare className="menu-item-icon" />
               )}
               <span>Edit playlist</span>
+            </button>
+          )}
+          {showReimportCsv && onReimportCsv && (
+            <button
+              type="button"
+              onClick={() => {
+                onReimportCsv();
+                setOpen(false);
+              }}
+            >
+              <IconSync className="menu-item-icon" />
+              <span>Refresh Playlist</span>
             </button>
           )}
           {showDeletePlaylist && onDeletePlaylist && (

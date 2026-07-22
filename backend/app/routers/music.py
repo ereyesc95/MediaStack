@@ -2001,6 +2001,58 @@ async def import_playlist_csv(
     }
 
 
+@router.post("/playlists/{playlist_id}/reimport-csv")
+async def reimport_playlist_csv(
+    playlist_id: int,
+    file: UploadFile = File(...),
+    mode: str = Form("append"),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Reimport Exportify CSV into an existing CSV snapshot playlist.
+
+    Filename stem must match the playlist name or the playlist is left unchanged.
+    mode=overwrite replaces all tracks; mode=append adds only new songs.
+    """
+    from app.playlist_snapshot import parse_exportify_csv, reimport_snapshot_csv
+    from app.user_playlist import _is_editable_user_playlist
+
+    if not settings.media_root:
+        raise HTTPException(400, "Media root not configured")
+    media_root = Path(settings.media_root)
+    if not media_root.is_dir():
+        raise HTTPException(400, "Media root not configured")
+
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or playlist.pla_type != 200:
+        raise HTTPException(404, "Playlist not found")
+    if not _is_editable_user_playlist(playlist):
+        raise HTTPException(400, "This playlist cannot be reimported")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "CSV file is empty")
+    if len(raw) > 20_000_000:
+        raise HTTPException(400, "CSV file is too large")
+
+    tracks = parse_exportify_csv(raw)
+    if not tracks:
+        raise HTTPException(400, "No tracks found in CSV")
+
+    result = reimport_snapshot_csv(
+        db,
+        media_root,
+        playlist_id=playlist_id,
+        tracks=tracks,
+        csv_filename=file.filename or "playlist.csv",
+        mode=mode,
+    )
+    if not result.get("ok"):
+        status = 400
+        raise HTTPException(status, result.get("error") or "Reimport failed")
+    return result
+
+
 @router.get("/playlists/search-tracks")
 def search_tracks_for_playlist(
     q: str = Query(..., min_length=1),

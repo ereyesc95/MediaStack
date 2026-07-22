@@ -538,10 +538,17 @@ export default function MusicModule({
   ]);
 
   useEffect(() => {
-    if (tab === "playlists") {
+    // Prefetch playlist grid so the first Playlists tab open is snappy.
+    fetchUserPlaylists()
+      .then((d) => setPlaylists(d.items))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (tab === "playlists" && playlists.length === 0) {
       fetchUserPlaylists().then((d) => setPlaylists(d.items)).catch(() => {});
     }
-  }, [tab]);
+  }, [tab, playlists.length]);
 
   useEffect(() => {
     if (!playlistToast) return;
@@ -1178,6 +1185,7 @@ export default function MusicModule({
       {showAddPlaylist && (
         <AddPlaylistModal
           initialMode={addPlaylistInitialMode}
+          showSpotifyImport={addPlaylistInitialMode === "spotify" || spotifyOAuthReturn}
           spotifyOAuthReturn={spotifyOAuthReturn}
           onSpotifyOAuthHandled={() => setSpotifyOAuthReturn(false)}
           onClose={() => {

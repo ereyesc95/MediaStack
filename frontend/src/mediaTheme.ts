@@ -346,7 +346,35 @@ export function applyAlbumTheme(colors: CustomThemeColors) {
 export function clearAlbumTheme(userId?: number) {
   if (!albumPageActive) return;
   albumPageActive = false;
-  applySavedArtistTheme(userId);
+  if (artistPageActive) {
+    const colors = getArtistThemeColors(userId);
+    if (colors) {
+      applyMediaCss(colors);
+      window.dispatchEvent(new CustomEvent("theme-changed"));
+      return;
+    }
+    clearMediaCss();
+    applyTheme("artist", userId);
+    window.dispatchEvent(new CustomEvent("theme-changed"));
+    return;
+  }
+  clearMediaCss();
+  applyTheme(readPersistedTheme(userId), userId);
+  window.dispatchEvent(new CustomEvent("theme-changed"));
+}
+
+/**
+ * Leave a user/local/snapshot playlist page back to Music module chrome.
+ * Always restores the user's menu theme (never leaves album/artist sampling active).
+ */
+export function clearUserPlaylistPageTheme(userId?: number) {
+  albumPageActive = false;
+  artistPageActive = false;
+  themeBeforeArtist = null;
+  clearArtistPageThemePin();
+  clearMediaCss();
+  applyTheme(readPersistedTheme(userId), userId);
+  window.dispatchEvent(new CustomEvent("theme-changed"));
 }
 
 export function applySavedArtistTheme(userId?: number) {

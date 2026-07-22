@@ -2,10 +2,14 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 
 type Props = {
   label: string;
-  options: string[];
+  options?: string[];
   value: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  placeholder?: string;
+  /** When true, typed values need not match `options` (directors/authors). */
+  allowCustom?: boolean;
+  hint?: string;
 };
 
 function titleCaseWord(word: string): string {
@@ -13,12 +17,35 @@ function titleCaseWord(word: string): string {
   return word[0].toUpperCase() + word.slice(1);
 }
 
+function titleCaseWords(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => titleCaseWord(w))
+    .join(" ");
+}
+
+export function splitSemicolonList(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function joinSemicolonList(parts: string[]): string {
+  return parts.map((p) => p.trim()).filter(Boolean).join("; ");
+}
+
 export default function GenreTagsInput({
   label,
-  options,
+  options = [],
   value,
   onChange,
   disabled,
+  placeholder = "Genres separated with ;",
+  allowCustom = false,
+  hint = "Genre must match an existing database entry.",
 }: Props) {
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
@@ -32,6 +59,7 @@ export default function GenreTagsInput({
   }, [options]);
 
   const suggestions = useMemo(() => {
+    if (!options.length) return [];
     const q = draft.trim().toLowerCase();
     if (!q) {
       return options.filter(
@@ -48,9 +76,12 @@ export default function GenreTagsInput({
   function commitToken(raw: string) {
     const typed = raw.trim();
     if (!typed) return false;
-    const canon = catalog.get(typed.toLowerCase());
-    if (!canon) return false;
-    if (value.some((v) => v.toLowerCase() === canon.toLowerCase())) {
+    let canon: string | undefined = catalog.get(typed.toLowerCase());
+    if (!canon) {
+      if (!allowCustom) return false;
+      canon = titleCaseWords(typed);
+    }
+    if (value.some((v) => v.toLowerCase() === canon!.toLowerCase())) {
       setDraft("");
       return true;
     }
@@ -63,7 +94,6 @@ export default function GenreTagsInput({
     if (e.key === ";" || e.key === "Enter") {
       e.preventDefault();
       if (!commitToken(draft)) {
-        // Keep draft so the user can pick a suggestion
         setOpen(true);
       }
       return;
@@ -94,7 +124,7 @@ export default function GenreTagsInput({
           className="genre-tags-input__field"
           value={draft}
           disabled={disabled}
-          placeholder={value.length ? "" : "Type a genre, then ;"}
+          placeholder={value.length ? "" : placeholder}
           onChange={(e) => {
             setDraft(e.target.value.replace(/;/g, ""));
             setOpen(true);
@@ -124,12 +154,11 @@ export default function GenreTagsInput({
           ))}
         </ul>
       )}
-      {draft.trim() &&
+      {!allowCustom &&
+        draft.trim() &&
         !catalog.has(draft.trim().toLowerCase()) &&
         suggestions.length === 0 && (
-          <p className="genre-tags-input__hint muted">
-            Genre must match an existing database entry.
-          </p>
+          <p className="genre-tags-input__hint muted">{hint}</p>
         )}
     </label>
   );

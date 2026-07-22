@@ -723,6 +723,7 @@ export default function ArtistAudio({
       <div className="artist-audio">
         <ArtistPlaylistGrid
           playlists={playlists}
+          cardLayout={cardLayout}
           onSelect={(slug) =>
             onOpenPlaylist ? onOpenPlaylist(slug) : setSelectedPlaylist(slug)
           }

@@ -104,6 +104,8 @@ type Props = {
   onClose: () => void;
   onCreated: (message: string) => void;
   initialMode?: "local" | "spotify" | "file";
+  /** When false, hide the Spotify Premium import tab (e.g. create-playlist flow). */
+  showSpotifyImport?: boolean;
   spotifyOAuthReturn?: boolean;
   onSpotifyOAuthHandled?: () => void;
 };
@@ -114,10 +116,13 @@ export default function AddPlaylistModal({
   onClose,
   onCreated,
   initialMode = "local",
+  showSpotifyImport = true,
   spotifyOAuthReturn = false,
   onSpotifyOAuthHandled,
 }: Props) {
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [mode, setMode] = useState<Mode>(
+    initialMode === "spotify" && !showSpotifyImport ? "local" : initialMode
+  );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<File | null>(null);
@@ -441,14 +446,16 @@ export default function AddPlaylistModal({
             <IconPlus className="add-playlist-modal__tab-icon" />
             New playlist
           </button>
-          <button
-            type="button"
-            className={mode === "spotify" ? "active" : ""}
-            onClick={() => setMode("spotify")}
-          >
-            <IconSpotify className="add-playlist-modal__tab-icon" />
-            Import from Spotify Premium
-          </button>
+          {showSpotifyImport && (
+            <button
+              type="button"
+              className={mode === "spotify" ? "active" : ""}
+              onClick={() => setMode("spotify")}
+            >
+              <IconSpotify className="add-playlist-modal__tab-icon" />
+              Import from Spotify Premium
+            </button>
+          )}
           <button
             type="button"
             className={mode === "file" ? "active" : ""}
@@ -466,16 +473,16 @@ export default function AddPlaylistModal({
 
         {mode === "local" ? (
           <div className="add-playlist-modal__form">
-            <div className="add-playlist-modal__local-row">
-              <div className="add-playlist-modal__cover-col">
-                <span className="add-playlist-modal__field-label">Cover</span>
-                <label className="add-playlist-modal__cover-slot" title="Choose cover image">
+            <div className="add-playlist-modal__local-row add-playlist-modal__local-row--form">
+              <div className="add-playlist-modal__cover-col add-playlist-modal__cover-col--form">
+                <label
+                  className="add-playlist-modal__cover-slot add-playlist-modal__cover-slot--fill"
+                  title="Choose cover image"
+                >
                   {coverPreview ? (
                     <img src={coverPreview} alt="" className="add-playlist-modal__cover-slot-img" />
                   ) : (
-                    <span className="add-playlist-modal__cover-slot-placeholder" aria-hidden>
-                      +
-                    </span>
+                    <span className="add-playlist-modal__cover-slot-text">Add cover</span>
                   )}
                   <input
                     ref={coverInputRef}
@@ -487,27 +494,23 @@ export default function AddPlaylistModal({
                 </label>
               </div>
               <div className="add-playlist-modal__local-fields">
-                <label className="release-edit-modal__field">
-                  <span>Name</span>
-                  <input
-                    type="text"
-                    className="release-add-playlist-modal__input"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Playlist name"
-                    autoFocus
-                  />
-                </label>
-                <label className="release-edit-modal__field">
-                  <span>Short description</span>
-                  <textarea
-                    className="release-about-edit-modal__textarea add-playlist-modal__textarea"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional description"
-                    rows={3}
-                  />
-                </label>
+                <input
+                  type="text"
+                  className="release-add-playlist-modal__input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Playlist name"
+                  aria-label="Playlist name"
+                  autoFocus
+                />
+                <textarea
+                  className="release-about-edit-modal__textarea add-playlist-modal__textarea add-playlist-modal__field-grow"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add description"
+                  aria-label="Add description"
+                  rows={3}
+                />
               </div>
             </div>
             <div className="add-playlist-modal__actions modal-actions-row">
@@ -525,16 +528,16 @@ export default function AddPlaylistModal({
               </a>
               .
             </p>
-            <div className="add-playlist-modal__local-row">
-              <div className="add-playlist-modal__cover-col">
-                <span className="add-playlist-modal__field-label">Cover</span>
-                <label className="add-playlist-modal__cover-slot" title="Choose cover image">
+            <div className="add-playlist-modal__local-row add-playlist-modal__local-row--form">
+              <div className="add-playlist-modal__cover-col add-playlist-modal__cover-col--form">
+                <label
+                  className="add-playlist-modal__cover-slot add-playlist-modal__cover-slot--fill"
+                  title="Choose cover image"
+                >
                   {coverPreview ? (
                     <img src={coverPreview} alt="" className="add-playlist-modal__cover-slot-img" />
                   ) : (
-                    <span className="add-playlist-modal__cover-slot-placeholder" aria-hidden>
-                      +
-                    </span>
+                    <span className="add-playlist-modal__cover-slot-text">Add cover</span>
                   )}
                   <input
                     ref={coverInputRef}
@@ -546,8 +549,7 @@ export default function AddPlaylistModal({
                 </label>
               </div>
               <div className="add-playlist-modal__local-fields">
-                <div className="release-edit-modal__field">
-                  <span>CSV file</span>
+                <div className="add-playlist-modal__csv-name-row">
                   <label className="add-playlist-modal__file">
                     <span className="add-playlist-modal__file-label">
                       {csvFile ? csvFile.name : "Choose CSV file"}
@@ -560,27 +562,23 @@ export default function AddPlaylistModal({
                       onChange={(e) => onPickCsv(e.target.files?.[0] ?? null)}
                     />
                   </label>
-                </div>
-                <label className="release-edit-modal__field">
-                  <span>Playlist name</span>
                   <input
                     type="text"
                     className="release-add-playlist-modal__input"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Defaults to CSV file name"
+                    placeholder="Playlist name"
+                    aria-label="Playlist name"
                   />
-                </label>
-                <label className="release-edit-modal__field add-playlist-modal__field-grow">
-                  <span>Short description</span>
-                  <textarea
-                    className="release-about-edit-modal__textarea add-playlist-modal__textarea"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional description"
-                    rows={2}
-                  />
-                </label>
+                </div>
+                <textarea
+                  className="release-about-edit-modal__textarea add-playlist-modal__textarea add-playlist-modal__field-grow"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add description"
+                  aria-label="Add description"
+                  rows={3}
+                />
               </div>
             </div>
             <div className="add-playlist-modal__actions modal-actions-row">

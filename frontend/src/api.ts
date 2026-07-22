@@ -1370,6 +1370,32 @@ export async function importPlaylistCsv(body: {
   });
 }
 
+export async function reimportPlaylistCsv(
+  playlistId: number,
+  body: {
+    file: File;
+    mode: "overwrite" | "append";
+  }
+): Promise<{
+  ok: boolean;
+  playlist_id?: number;
+  name?: string;
+  mode?: string;
+  matched?: number;
+  unavailable?: number;
+  total?: number;
+  skipped?: number;
+  added?: number;
+}> {
+  const form = new FormData();
+  form.append("file", body.file);
+  form.append("mode", body.mode);
+  return request(`${API}/music/playlists/${playlistId}/reimport-csv`, {
+    method: "POST",
+    body: form,
+  });
+}
+
 export async function fetchPlaylistSubgenres(): Promise<{ items: string[] }> {
   return request(`${API}/music/playlists/subgenres`);
 }

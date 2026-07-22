@@ -13,9 +13,9 @@ const OPTIONS: {
   label: string;
   Icon: (props: { className?: string }) => ReactElement;
 }[] = [
+  { id: "banner", label: "Banner", Icon: IconCardBanner },
   { id: "landscape", label: "Landscape", Icon: IconCardLandscape },
   { id: "portrait", label: "Portrait", Icon: IconCardPortrait },
-  { id: "banner", label: "Banner", Icon: IconCardBanner },
   { id: "icons", label: "Icons", Icon: IconCardIcons },
 ];
 

@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.band_library import cover_url_for_track_path, title_from_track_path
@@ -385,16 +385,10 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
     out = []
     for p in rows:
         custom_cover = resolve_playlist_cover_url(p)
-        if _is_library_most_played(p) and media_root:
-            mp_tracks = build_library_most_played_tracks(
-                db, media_root, user_id=user_id
-            )
-            track_count = len(mp_tracks)
-            cover = (
-                custom_cover
-                or (mp_tracks[0].get("cover_url") if mp_tracks else None)
-                or LIBRARY_MOST_PLAYED_DEFAULT_COVER
-            )
+        if _is_library_most_played(p):
+            # Lightweight list payload — do not rebuild/enrich the full track list here.
+            track_count = len(_library_most_played_paths(db, user_id)) if media_root else 0
+            cover = custom_cover or LIBRARY_MOST_PLAYED_DEFAULT_COVER
         else:
             from app.playlist_snapshot import is_snapshot_playlist
 
@@ -408,10 +402,13 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
                 cover = custom_cover or pick_playlist_cover(
                     artist, first.pld_release if first else None
                 ) or DEFAULT_USER_PLAYLIST_COVER
-            track_count = len(
-                db.scalars(
-                    select(PlaylistData).where(PlaylistData.pld_playlist == p.pla_id)
-                ).all()
+            track_count = int(
+                db.scalar(
+                    select(func.count())
+                    .select_from(PlaylistData)
+                    .where(PlaylistData.pld_playlist == p.pla_id)
+                )
+                or 0
             )
         out.append(
             {

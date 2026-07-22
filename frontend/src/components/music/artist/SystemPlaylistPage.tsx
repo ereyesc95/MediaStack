@@ -34,6 +34,7 @@ import {
   beginAlbumPageSession,
   beginArtistPageSession,
   clearAlbumTheme,
+  clearUserPlaylistPageTheme,
   colorsFromImageUrl,
 } from "../../../mediaTheme";
 import {
@@ -58,6 +59,7 @@ import SystemPlaylistTracklist, {
   type SystemPlaylistTracklistHandle,
 } from "./SystemPlaylistTracklist";
 import SnapshotPlaylistFilterBar from "../SnapshotPlaylistFilterBar";
+import ReimportCsvModal from "../ReimportCsvModal";
 import {
   applySnapshotFilters,
   applyTrackSort,
@@ -313,6 +315,8 @@ export default function SystemPlaylistPage({
   });
   const [error, setError] = useState<string | null>(null);
   const [editPlaylist, setEditPlaylist] = useState(false);
+  const [showReimportCsv, setShowReimportCsv] = useState(false);
+  const [reimportNotice, setReimportNotice] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [playingPath, setPlayingPath] = useState<string | null>(null);
@@ -387,12 +391,20 @@ export default function SystemPlaylistPage({
   }, [bandId]);
 
   useEffect(() => {
-    if (userId) beginArtistPageSession(userId);
+    // User playlists must not start an artist theme session — that leaves
+    // sampled cover colors stuck when returning to the Playlists grid.
+    if (!isUserPlaylist && userId) {
+      beginArtistPageSession(userId);
+    }
     beginAlbumPageSession();
     return () => {
-      if (userId) clearAlbumTheme(userId);
+      if (isUserPlaylist) {
+        clearUserPlaylistPageTheme(userId);
+      } else {
+        clearAlbumTheme(userId);
+      }
     };
-  }, [userId]);
+  }, [userId, isUserPlaylist]);
 
   useEffect(() => {
     if (isUserPlaylist && userPlaylistId != null) {
@@ -487,6 +499,17 @@ export default function SystemPlaylistPage({
 
   const tracks = detail?.tracks ?? [];
   const isSnapshotPlaylist = detail?.snapshot_filters === true;
+  const canReimportCsv =
+    isUserPlaylist &&
+    isSnapshotPlaylist &&
+    detail?.editable !== false &&
+    (detail?.source === "file" || detail?.source === "csv");
+
+  useEffect(() => {
+    if (!reimportNotice) return;
+    const t = window.setTimeout(() => setReimportNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [reimportNotice]);
   const [snapshotFilterState, setSnapshotFilterState] = useState<SnapshotFilterState>({
     artists: [],
     genres: [],
@@ -1331,11 +1354,32 @@ export default function SystemPlaylistPage({
               showEditPlaylist={isUserPlaylist && detail?.editable !== false}
               editPlaylistActive={editPlaylist}
               onEditPlaylistToggle={() => setEditPlaylist((v) => !v)}
+              showReimportCsv={canReimportCsv}
+              onReimportCsv={() => setShowReimportCsv(true)}
               showDeletePlaylist={isUserPlaylist && detail?.editable !== false}
               onDeletePlaylist={handleDeletePlaylist}
             />
           </div>
         </header>
+
+        {reimportNotice && (
+          <p className="release-page__status playlist-toast" role="status">
+            {reimportNotice}
+          </p>
+        )}
+
+        {showReimportCsv && isUserPlaylist && userPlaylistId != null && detail && (
+          <ReimportCsvModal
+            playlistId={userPlaylistId}
+            playlistName={detail.name}
+            onClose={() => setShowReimportCsv(false)}
+            onDone={(message) => {
+              setShowReimportCsv(false);
+              setReimportNotice(message);
+              refreshUserPlaylist();
+            }}
+          />
+        )}
 
         {stacked && (
           <nav className="release-page__subtabs" aria-label="Tracklist views">

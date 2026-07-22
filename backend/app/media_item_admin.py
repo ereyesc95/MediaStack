@@ -189,9 +189,19 @@ def save_media_item_meta(
     if description is not None:
         row.mim_description = description.strip() or None
     if director is not None:
-        row.mim_director = title_case_words(director.strip()) or None
+        parts = [
+            title_case_words(p.strip())
+            for p in director.replace(",", ";").split(";")
+            if p.strip()
+        ]
+        row.mim_director = "; ".join(parts) or None
     if author is not None:
-        row.mim_author = title_case_words(author.strip()) or None
+        parts = [
+            title_case_words(p.strip())
+            for p in author.replace(",", ";").split(";")
+            if p.strip()
+        ]
+        row.mim_author = "; ".join(parts) or None
     if publisher is not None:
         row.mim_publisher = title_case_words(publisher.strip()) or None
     if resolved_genres is not None:

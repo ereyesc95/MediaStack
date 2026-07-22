@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { fetchMediaGenres, patchMediaItemOverview } from "../../../api";
 import type { MediaItemOverview } from "../../../types";
 import ModalPortal from "../../ModalPortal";
-import GenreTagsInput from "./GenreTagsInput";
+import GenreTagsInput, {
+  joinSemicolonList,
+  splitSemicolonList,
+} from "./GenreTagsInput";
 
 type Props = {
   bandId: number;
@@ -30,8 +33,12 @@ export default function MediaItemAboutEditModal({
   onSaved,
 }: Props) {
   const [description, setDescription] = useState(data.description ?? "");
-  const [director, setDirector] = useState(data.director ?? "");
-  const [author, setAuthor] = useState(data.author ?? "");
+  const [directors, setDirectors] = useState<string[]>(() =>
+    splitSemicolonList(data.director)
+  );
+  const [authors, setAuthors] = useState<string[]>(() =>
+    splitSemicolonList(data.author)
+  );
   const [publisher, setPublisher] = useState(data.publisher ?? "");
   const [genres, setGenres] = useState<string[]>(data.genres ?? []);
   const [genreOptions, setGenreOptions] = useState<string[]>([]);
@@ -60,8 +67,8 @@ export default function MediaItemAboutEditModal({
     try {
       const updated = await patchMediaItemOverview(bandId, kind, itemId, {
         description,
-        director: kind === "video" ? titleCaseWords(director.trim()) : null,
-        author: kind === "library" ? titleCaseWords(author.trim()) : null,
+        director: kind === "video" ? joinSemicolonList(directors) : null,
+        author: kind === "library" ? joinSemicolonList(authors) : null,
         publisher: titleCaseWords(publisher.trim()),
         genres,
       });
@@ -105,25 +112,23 @@ export default function MediaItemAboutEditModal({
             />
           </label>
           {kind === "video" ? (
-            <label>
-              Director
-              <input
-                type="text"
-                value={director}
-                onChange={(e) => setDirector(e.target.value)}
-                onBlur={() => setDirector(titleCaseWords(director.trim()))}
-              />
-            </label>
+            <GenreTagsInput
+              label="Director"
+              value={directors}
+              onChange={setDirectors}
+              allowCustom
+              placeholder="Directors separated with ;"
+              disabled={saving}
+            />
           ) : (
-            <label>
-              Author
-              <input
-                type="text"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                onBlur={() => setAuthor(titleCaseWords(author.trim()))}
-              />
-            </label>
+            <GenreTagsInput
+              label="Author"
+              value={authors}
+              onChange={setAuthors}
+              allowCustom
+              placeholder="Authors separated with ;"
+              disabled={saving}
+            />
           )}
           <label>
             Publisher
@@ -139,6 +144,7 @@ export default function MediaItemAboutEditModal({
             options={genreOptions}
             value={genres}
             onChange={setGenres}
+            placeholder="Genres separated with ;"
             disabled={saving}
           />
         </div>

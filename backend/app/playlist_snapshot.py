@@ -15,6 +15,7 @@ from app.models import Playlist, PlaylistData, PlaylistTrackSnapshot, Subgenre
 from app.user_playlist import (
     PLA_KIND_SNAPSHOT,
     _entry_from_match,
+    _next_sort_order,
     add_track_to_playlist,
 )
 
@@ -275,6 +276,148 @@ def playlist_name_from_filename(filename: str) -> str:
     return stem or "Imported playlist"
 
 
+def playlist_names_match(existing: str | None, candidate: str | None) -> bool:
+    return (existing or "").strip().casefold() == (candidate or "").strip().casefold()
+
+
+def clear_playlist_entries(db: Session, playlist_id: int) -> None:
+    """Remove all tracks + snapshot rows for a playlist (keeps the playlist row)."""
+    delete_snapshots_for_playlist(db, playlist_id)
+    rows = db.scalars(
+        select(PlaylistData).where(PlaylistData.pld_playlist == playlist_id)
+    ).all()
+    for row in rows:
+        db.delete(row)
+    db.commit()
+
+
+def _existing_snapshot_keys(
+    db: Session, playlist_id: int
+) -> tuple[set[str], set[tuple[str, str]]]:
+    """Return (spotify_uris, (title, artist) pairs) already in the playlist."""
+    entries = db.scalars(
+        select(PlaylistData).where(PlaylistData.pld_playlist == playlist_id)
+    ).all()
+    uris: set[str] = set()
+    pairs: set[tuple[str, str]] = set()
+    for entry in entries:
+        snap = db.get(PlaylistTrackSnapshot, entry.pld_id)
+        uri = (snap.pts_spotify_uri if snap else None) or ""
+        uri = uri.strip()
+        if uri:
+            uris.add(uri)
+        title = (
+            (snap.pts_snapshot_title if snap else None) or entry.pld_title or ""
+        ).strip()
+        artist = (
+            (snap.pts_snapshot_artist if snap else None) or entry.pld_artist or ""
+        ).strip()
+        if title or artist:
+            pairs.add((title.casefold(), artist.casefold()))
+    return uris, pairs
+
+
+def filter_new_snapshot_tracks(
+    db: Session, playlist_id: int, tracks: list[SnapshotTrack]
+) -> list[SnapshotTrack]:
+    """Keep only tracks not already present (by Spotify URI, else title+artist)."""
+    uris, pairs = _existing_snapshot_keys(db, playlist_id)
+    out: list[SnapshotTrack] = []
+    for track in tracks:
+        uri = (track.spotify_uri or "").strip()
+        if uri and uri in uris:
+            continue
+        key = ((track.title or "").strip().casefold(), (track.artist or "").strip().casefold())
+        if key != ("", "") and key in pairs:
+            continue
+        out.append(track)
+        if uri:
+            uris.add(uri)
+        if key != ("", ""):
+            pairs.add(key)
+    return out
+
+
+def reimport_snapshot_csv(
+    db: Session,
+    media_root: Path,
+    *,
+    playlist_id: int,
+    tracks: list[SnapshotTrack],
+    csv_filename: str,
+    mode: str = "append",
+) -> dict:
+    """
+    Reimport CSV into an existing file-sourced snapshot playlist.
+
+    The CSV filename stem must match the playlist name (case-insensitive);
+    otherwise the playlist is left unchanged.
+    mode: \"overwrite\" clears all tracks first; \"append\" adds only new songs.
+    """
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist or playlist.pla_type != 200:
+        return {"ok": False, "error": "Playlist not found"}
+    if not is_snapshot_playlist(playlist):
+        return {"ok": False, "error": "Not a snapshot playlist"}
+    source = (playlist.pla_source or "").casefold()
+    if source not in {"file", "csv"}:
+        return {"ok": False, "error": "Only CSV-imported playlists can be reimported"}
+
+    csv_name = playlist_name_from_filename(csv_filename or "playlist.csv")
+    if not playlist_names_match(playlist.pla_name, csv_name):
+        return {
+            "ok": False,
+            "error": (
+                f"CSV name “{csv_name}” does not match playlist “{playlist.pla_name}”. "
+                "Nothing was changed."
+            ),
+            "name_mismatch": True,
+        }
+
+    mode_key = (mode or "append").strip().casefold()
+    if mode_key not in {"overwrite", "append"}:
+        return {"ok": False, "error": "mode must be overwrite or append"}
+
+    if mode_key == "overwrite":
+        clear_playlist_entries(db, playlist_id)
+        to_import = tracks
+        start_order = 0
+    else:
+        to_import = filter_new_snapshot_tracks(db, playlist_id, tracks)
+        start_order = _next_sort_order(db, playlist_id)
+
+    if not to_import:
+        return {
+            "ok": True,
+            "playlist_id": playlist_id,
+            "name": playlist.pla_name,
+            "mode": mode_key,
+            "matched": 0,
+            "unavailable": 0,
+            "total": 0,
+            "skipped": len(tracks),
+            "added": 0,
+        }
+
+    stats = import_snapshot_tracks(
+        db,
+        media_root,
+        playlist_id=playlist_id,
+        tracks=to_import,
+        start_sort_order=start_order,
+    )
+    if not stats.get("ok"):
+        return stats
+    return {
+        **stats,
+        "playlist_id": playlist_id,
+        "name": playlist.pla_name,
+        "mode": mode_key,
+        "skipped": len(tracks) - len(to_import),
+        "added": len(to_import),
+    }
+
+
 def is_snapshot_playlist(playlist: Playlist | None) -> bool:
     if not playlist:
         return False
@@ -357,6 +500,7 @@ def import_snapshot_tracks(
     *,
     playlist_id: int,
     tracks: list[SnapshotTrack | dict],
+    start_sort_order: int | None = None,
 ) -> dict:
     playlist = db.get(Playlist, playlist_id)
     if not playlist:
@@ -369,6 +513,7 @@ def import_snapshot_tracks(
     matched_count = 0
     unavailable_count = 0
     used_paths: set[str] = set()
+    base_order = int(start_sort_order) if start_sort_order is not None else 0
 
     for i, raw in enumerate(tracks):
         track = raw if isinstance(raw, SnapshotTrack) else snapshot_from_dict(raw)
@@ -387,7 +532,7 @@ def import_snapshot_tracks(
         )
         if matched:
             used_paths.add(matched.path)
-        entry = _entry_from_match(match_input, matched, sort_order=i)
+        entry = _entry_from_match(match_input, matched, sort_order=base_order + i)
         if entry["unavailable"]:
             unavailable_count += 1
         else:
