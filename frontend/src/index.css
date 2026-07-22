@@ -6743,6 +6743,7 @@ input {
   }
   .media-release-card--tap-reveal.media-release-card--revealed .media-release-card__date {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 
@@ -6776,11 +6777,48 @@ input {
   z-index: 2;
   pointer-events: none;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .media-release-card:hover .media-release-card__date {
   opacity: 1;
   pointer-events: auto;
+}
+
+.media-release-card__open-file {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.media-release-card__open-file:hover {
+  opacity: 0.9;
+}
+
+.media-release-card__banner-date-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  max-width: 100%;
+}
+
+.media-release-card__banner-date-row .media-release-card__open-file {
+  font-size: clamp(0.66rem, 1.2vw, 0.78rem);
+  text-align: left;
 }
 
 .media-release-card--button {
@@ -12732,6 +12770,11 @@ button.lyrics-status-badge--icon-only {
   width: calc(var(--release-disc-size) * 0.96);
 }
 
+.media-item-page--video .release-page__art-stage--disc-only .release-page__disc {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .media-item-page--library .release-page__art-stage--cover-only {
   justify-content: center;
 }
@@ -12876,6 +12919,38 @@ button.lyrics-status-badge--icon-only {
 .genre-tags-input__hint {
   margin: 0;
   font-size: 0.75rem;
+}
+
+.publisher-suggest__box {
+  display: flex;
+  align-items: center;
+  min-height: 2.4rem;
+}
+
+.release-page__overview-top--no-desc {
+  justify-content: center;
+}
+
+.release-page__overview-top--no-desc .release-page__overview-side {
+  align-self: center;
+}
+
+.release-page__single--static {
+  cursor: default;
+  pointer-events: none;
+}
+
+.release-page__franchise .release-page__featured-artists-grid {
+  margin-bottom: 0.75rem;
+}
+
+.release-page__franchise .release-lineup-card--franchise .release-lineup-card__photo {
+  border-radius: 0;
+}
+
+.release-page__franchise .release-lineup-card--franchise .release-lineup-card__photo img {
+  object-fit: cover;
+  object-position: center center;
 }
 
 /* --- Artist quiz --- */

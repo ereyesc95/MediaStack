@@ -46,6 +46,86 @@ def list_genres_for_kind(db: Session, kind: str) -> list[dict]:
     ]
 
 
+def list_publishers_for_kind(db: Session, kind: str) -> list[str]:
+    """Distinct publishers already stored for video/library items (canonical casing)."""
+    rows = db.scalars(
+        select(MediaItemMeta.mim_publisher)
+        .where(
+            MediaItemMeta.mim_kind == kind,
+            MediaItemMeta.mim_publisher.isnot(None),
+        )
+        .order_by(MediaItemMeta.mim_publisher)
+    ).all()
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in rows:
+        name = (raw or "").strip()
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+    return out
+
+
+def list_people_for_kind(db: Session, kind: str, role: str) -> list[str]:
+    """Distinct directors or authors already stored for this kind."""
+    col = MediaItemMeta.mim_director if role == "director" else MediaItemMeta.mim_author
+    rows = db.scalars(
+        select(col)
+        .where(
+            MediaItemMeta.mim_kind == kind,
+            col.isnot(None),
+        )
+        .order_by(col)
+    ).all()
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in rows:
+        for part in (raw or "").replace(",", ";").split(";"):
+            name = part.strip()
+            if not name:
+                continue
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+    out.sort(key=lambda s: s.casefold())
+    return out
+
+
+def resolve_person_list(db: Session, kind: str, role: str, raw: str | None) -> str | None:
+    """Title-case parts; prefer existing casing from the catalog."""
+    if raw is None:
+        return None
+    catalog = {p.casefold(): p for p in list_people_for_kind(db, kind, role)}
+    parts: list[str] = []
+    seen: set[str] = set()
+    for part in raw.replace(",", ";").split(";"):
+        typed = title_case_words(part.strip())
+        if not typed:
+            continue
+        canon = catalog.get(typed.casefold(), typed)
+        key = canon.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        parts.append(canon)
+    return "; ".join(parts) or None
+
+
+def resolve_publisher_name(db: Session, kind: str, raw: str | None) -> str | None:
+    """Prefer an existing publisher's casing when the typed name matches."""
+    typed = title_case_words((raw or "").strip())
+    if not typed:
+        return None
+    catalog = {p.casefold(): p for p in list_publishers_for_kind(db, kind)}
+    return catalog.get(typed.casefold(), typed)
+
+
 def resolve_genre_names(db: Session, kind: str, names: list[str]) -> list[str] | None:
     """Map typed names to canonical DB names; return None if any name is unknown."""
     catalog = {
@@ -189,21 +269,11 @@ def save_media_item_meta(
     if description is not None:
         row.mim_description = description.strip() or None
     if director is not None:
-        parts = [
-            title_case_words(p.strip())
-            for p in director.replace(",", ";").split(";")
-            if p.strip()
-        ]
-        row.mim_director = "; ".join(parts) or None
+        row.mim_director = resolve_person_list(db, kind, "director", director)
     if author is not None:
-        parts = [
-            title_case_words(p.strip())
-            for p in author.replace(",", ";").split(";")
-            if p.strip()
-        ]
-        row.mim_author = "; ".join(parts) or None
+        row.mim_author = resolve_person_list(db, kind, "author", author)
     if publisher is not None:
-        row.mim_publisher = title_case_words(publisher.strip()) or None
+        row.mim_publisher = resolve_publisher_name(db, kind, publisher)
     if resolved_genres is not None:
         row.mim_genres = ";".join(resolved_genres) or None
 

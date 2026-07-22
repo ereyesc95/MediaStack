@@ -13,14 +13,19 @@ from app.config import settings
 from app.franchise_index import MUSIC_LIBRARY_CATEGORIES, MUSIC_VIDEO_CATEGORIES
 from app.gallery import IMAGE_EXTS, _artist_dir, _media_url, _resolve_child_dir
 from app.media_index import format_display_date
-from app.media_paths_util import entry_display_name, resolve_media_entry, safe_relative
+from app.media_paths_util import (
+    entry_display_name,
+    refine_resolved_work_folder,
+    resolve_media_entry,
+    safe_relative,
+)
 from app.models import Band
 from app.paths import DATA_DIR
 
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 3
+MEDIA_TAB_SCAN_VERSION = 5
 
 _SKIP_NAMES = frozenset({"desktop.ini", "thumbs.db", ".ds_store"})
 _SKIP_ITEM_NAMES = frozenset({"[artwork]", "artwork"})
@@ -103,20 +108,26 @@ def _item_card(
     display_name = entry_display_name(display_entry)
     if display_name.casefold() in _SKIP_ITEM_NAMES or display_name.startswith("."):
         return None
-    rel = safe_relative(resolved, media_root)
-    if not rel:
-        rel = safe_relative(display_entry, media_root)
-    if not rel:
+    work = refine_resolved_work_folder(display_entry, resolved)
+    # Prefer the on-disk catalog entry for stable ids (distinct .lnk targets can
+    # share a franchise hub path).
+    id_rel = safe_relative(display_entry, media_root) or safe_relative(work, media_root)
+    folder_rel = safe_relative(work, media_root) or safe_relative(display_entry, media_root)
+    if not id_rel and not folder_rel:
         return None
-    rel = rel.replace("\\", "/")
+    rel = (folder_rel or id_rel or "").replace("\\", "/")
+    id_key = (id_rel or folder_rel or "").replace("\\", "/")
     date_iso = _parse_folder_date(display_name)
+    from app.media_item_overview import first_openable_file_url
+
     return {
-        "id": _card_id(kind, rel),
+        "id": _card_id(kind, id_key),
         "title": _title_from_folder(display_name),
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
-        "cover_url": _folder_cover(resolved, media_root),
+        "cover_url": _folder_cover(work, media_root),
         "folder_path": rel,
+        "open_url": first_openable_file_url(work, media_root, kind),
     }
 
 
@@ -243,6 +254,7 @@ def iter_resolved_media_items(
                 resolved = resolve_media_entry(child, media_root=media_root)
                 if not resolved:
                     continue
+                work = refine_resolved_work_folder(child, resolved)
                 card = _item_card(
                     kind,
                     display_entry=child,
@@ -250,16 +262,17 @@ def iter_resolved_media_items(
                     media_root=media_root,
                 )
                 if card:
-                    out.append((card, child, resolved))
+                    out.append((card, child, work))
             continue
         resolved = resolve_media_entry(entry, media_root=media_root)
         if not resolved:
             continue
+        work = refine_resolved_work_folder(entry, resolved)
         card = _item_card(
             kind, display_entry=entry, resolved=resolved, media_root=media_root
         )
         if card:
-            out.append((card, entry, resolved))
+            out.append((card, entry, work))
     return out
 
 

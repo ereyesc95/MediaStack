@@ -21,13 +21,25 @@ import {
   isTabletLayout,
   useDeviceLayout,
 } from "../../../usePhoneLayout";
-import type { MediaItemFile, MediaItemOverview, ReleaseNeighbor } from "../../../types";
+import { getCachedOverview } from "../../../overviewCache";
+import type {
+  LineupMember,
+  MediaItemFile,
+  MediaItemOverview,
+  ReleaseNeighbor,
+} from "../../../types";
 import AppMenu from "../../AppMenu";
 import MediaBeatFrame from "../MediaBeatFrame";
+import ArtistMemberModal from "../artist/ArtistMemberModal";
 import {
   ChevronIcon,
   DEFAULT_DISC_URL,
+  DEFAULT_LABEL_URL,
 } from "../release/releaseTrackPanelMeta";
+import {
+  ReleasePhotocardGroup,
+  type ReleasePhotocardSet,
+} from "../release/ReleasePhotocard";
 import MediaItemAboutEditModal from "./MediaItemAboutEditModal";
 import MediaItemGallery from "./MediaItemGallery";
 
@@ -49,6 +61,95 @@ type Props = {
 
 type ItemTab = "overview" | "list" | "gallery";
 type GalleryTab = "artwork" | "photos" | "extras";
+
+function splitCreditNames(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(/[;,]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+function CreditNameList({ names }: { names: string[] }) {
+  return (
+    <>
+      {names.map((name, i) => (
+        <span key={`${name}-${i}`}>
+          {i > 0 && (i === names.length - 1 ? " & " : ", ")}
+          <span className="release-page__person-link">{name}</span>
+        </span>
+      ))}
+    </>
+  );
+}
+
+function FranchiseArtistCard({
+  artist,
+  onSelect,
+}: {
+  artist: NonNullable<MediaItemOverview["franchise_artist"]>;
+  onSelect: () => void;
+}) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photoUrl = artist.photo_url ?? artist.icon_url ?? artist.logo_url;
+  const showPhoto = photoUrl && !photoFailed;
+  return (
+    <button
+      type="button"
+      className="release-lineup-card release-lineup-card--featured-artist release-lineup-card--franchise"
+      onClick={onSelect}
+    >
+      <span className="release-lineup-card__photo">
+        {showPhoto ? (
+          <img src={photoUrl!} alt="" onError={() => setPhotoFailed(true)} />
+        ) : (
+          <span className="release-lineup-card__initials">
+            {artist.name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </span>
+      <span className="release-lineup-card__name">{artist.name}</span>
+    </button>
+  );
+}
+
+function LineupMiniCard({
+  member,
+  onSelect,
+}: {
+  member: LineupMember;
+  onSelect: (id: number) => void;
+}) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = member.photo_url && !photoFailed;
+  return (
+    <button
+      type="button"
+      className="release-lineup-card"
+      onClick={() => onSelect(member.id)}
+    >
+      <span className="release-lineup-card__photo">
+        {showPhoto ? (
+          <img
+            src={member.photo_url!}
+            alt=""
+            onError={() => setPhotoFailed(true)}
+          />
+        ) : (
+          <span className="release-lineup-card__initials">
+            {member.name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </span>
+      <span className="release-lineup-card__name">{member.name}</span>
+      {member.roles?.length ? (
+        <span className="release-lineup-card__roles">
+          {member.roles.join(" · ")}
+        </span>
+      ) : null}
+    </button>
+  );
+}
 
 function MediaNeighborLink({
   neighbor,
@@ -126,6 +227,8 @@ export default function MediaItemPage({
   >([]);
   const [showGalleryTab, setShowGalleryTab] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
+  const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
 
   const load = useCallback(
     async (force = false) => {
@@ -164,6 +267,8 @@ export default function MediaItemPage({
     setTab("overview");
     setGalleryTab("artwork");
     setAboutEditOpen(false);
+    setLineupMemberId(null);
+    setOverviewDescExpanded(false);
   }, [itemId]);
 
   const openNeighbor = (neighborId: string) => {
@@ -248,14 +353,70 @@ export default function MediaItemPage({
 
   const sectionLabel = kind === "video" ? "Video" : "Library";
   const listTabLabel = kind === "video" ? "VIDEOS" : "VOLUMES";
-  const typeLine =
-    kind === "video"
-      ? `Video release by ${data?.artist_name ?? "Artist"}`
-      : `Library item by ${data?.artist_name ?? "Artist"}`;
+  const releaseTypeLabel =
+    data?.release_type ??
+    (kind === "video" ? "Video release" : "Library item");
   const displayDate =
     data?.display_date || formatTrackDate(data?.date_iso) || null;
   const discUrl = data?.disc_url || DEFAULT_DISC_URL;
   const topLogoUrl = data?.logo_url ?? null;
+  const publisherLogoSrc =
+    data?.publisher_logo_url || DEFAULT_LABEL_URL;
+
+  const year = Number((data?.date_iso ?? "").slice(0, 4));
+  const cachedArtist = getCachedOverview(bandId, "landscape");
+  const panelArtistIcon =
+    data?.era_icon_url ??
+    cachedArtist?.eras?.find((e) => e.year === year)?.icon_url ??
+    null;
+  const panelArtistLogo =
+    data?.era_logo_url ??
+    cachedArtist?.eras?.find((e) => e.year === year)?.logo_url ??
+    cachedArtist?.eras?.[0]?.logo_url ??
+    null;
+
+  const photocards = data?.photocards;
+  const sharedCoverUrls = Boolean(
+    photocards?.portrait_front &&
+      photocards.portrait_front === photocards.landscape_front &&
+      (photocards.portrait_back ?? photocards.portrait_front) ===
+        (photocards.landscape_back ?? photocards.landscape_front)
+  );
+  const looksLikeCoverArt = /cover/i.test(
+    decodeURIComponent(photocards?.portrait_front ?? "")
+  );
+  const photocardsCoverOnly = Boolean(
+    photocards?.cover_only || (sharedCoverUrls && looksLikeCoverArt)
+  );
+  const overviewPhotocards: ReleasePhotocardSet | null = photocards
+    ? {
+        portrait_front: photocards.portrait_front,
+        portrait_back: photocards.portrait_back,
+        landscape_front: photocards.landscape_front,
+        landscape_back: photocards.landscape_back,
+        cover_only: photocardsCoverOnly || undefined,
+      }
+    : null;
+  const showOverviewPhotocards = Boolean(
+    overviewPhotocards &&
+      (overviewPhotocards.portrait_front || overviewPhotocards.landscape_front)
+  );
+  const showOverviewSide = showOverviewPhotocards;
+
+  const lineup = data?.lineup ?? [];
+  const showBandLineup = Boolean(
+    data?.show_lineup && !data?.is_solo && lineup.length > 0
+  );
+  const showSoloLineup = Boolean(data?.is_solo && lineup.length > 0);
+  const showOverviewLineup = showBandLineup || showSoloLineup;
+  const franchiseArtist = data?.franchise_artist ?? null;
+  const franchiseItems = data?.franchise_items ?? [];
+  const showFranchise = Boolean(franchiseArtist || franchiseItems.length > 0);
+  const hasOverviewBottom =
+    showOverviewLineup || showFranchise;
+
+  const directorNames = splitCreditNames(data?.director);
+  const authorNames = splitCreditNames(data?.author);
 
   const pageTabs = useMemo(() => {
     const tabs: { id: ItemTab; label: string }[] = [
@@ -288,7 +449,6 @@ export default function MediaItemPage({
   const hasPanelCredits = Boolean(
     data?.director ||
       data?.author ||
-      data?.publisher ||
       (data?.genres && data.genres.length > 0)
   );
 
@@ -406,6 +566,9 @@ export default function MediaItemPage({
                   className={[
                     "release-page__art-stage",
                     kind === "library" ? "release-page__art-stage--cover-only" : "",
+                    kind === "video" && !data.cover_url
+                      ? "release-page__art-stage--disc-only"
+                      : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -434,13 +597,43 @@ export default function MediaItemPage({
                 <div className="release-page__panel-fit">
                   <div className="release-page__panel-fit-inner">
                     <div className="release-page__panel-body">
-                      <button
-                        type="button"
-                        className="release-page__artist-link release-page__artist-link--text"
-                        onClick={() => onOpenArtist(bandId)}
-                      >
-                        {data.artist_name}
-                      </button>
+                      <div className="release-page__brand-row">
+                        {panelArtistIcon || panelArtistLogo ? (
+                          <button
+                            type="button"
+                            className="release-page__artist-link release-page__brand-row-btn"
+                            onClick={() => onOpenArtist(bandId)}
+                            aria-label={`Open ${data.artist_name}`}
+                          >
+                            {panelArtistIcon && (
+                              <MediaBeatFrame variant="logo">
+                                <img
+                                  src={panelArtistIcon}
+                                  alt=""
+                                  className="release-page__meta-icon"
+                                />
+                              </MediaBeatFrame>
+                            )}
+                            {panelArtistLogo && (
+                              <MediaBeatFrame variant="logo">
+                                <img
+                                  src={panelArtistLogo}
+                                  alt=""
+                                  className="release-page__meta-logo"
+                                />
+                              </MediaBeatFrame>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="release-page__artist-link release-page__artist-link--text"
+                            onClick={() => onOpenArtist(bandId)}
+                          >
+                            {data.artist_name}
+                          </button>
+                        )}
+                      </div>
                       <div className="release-page__panel-head">
                         <h1 className="release-page__album-title">
                           {data.title}
@@ -448,7 +641,23 @@ export default function MediaItemPage({
                         {displayDate ? (
                           <p className="release-page__date">{displayDate}</p>
                         ) : null}
-                        <p className="release-page__type-line">{typeLine}</p>
+                        <p className="release-page__type-line">
+                          <button
+                            type="button"
+                            className="release-page__type-link"
+                            onClick={onBack}
+                          >
+                            {releaseTypeLabel}
+                          </button>{" "}
+                          by{" "}
+                          <button
+                            type="button"
+                            className="release-page__artist-link release-page__artist-link--inline"
+                            onClick={() => onOpenArtist(bandId)}
+                          >
+                            {data.artist_name}
+                          </button>
+                        </p>
                       </div>
                       {hasPanelCredits ? (
                         <div className="release-page__panel-credits media-item-page__panel-credits">
@@ -464,28 +673,16 @@ export default function MediaItemPage({
                               ))}
                             </p>
                           ) : null}
-                          {data.director ? (
+                          {directorNames.length > 0 ? (
                             <p className="release-page__producer">
                               Directed by{" "}
-                              <span className="release-page__person-link">
-                                {data.director}
-                              </span>
+                              <CreditNameList names={directorNames} />
                             </p>
                           ) : null}
-                          {data.author ? (
+                          {authorNames.length > 0 ? (
                             <p className="release-page__producer">
                               Written by{" "}
-                              <span className="release-page__person-link">
-                                {data.author}
-                              </span>
-                            </p>
-                          ) : null}
-                          {data.publisher ? (
-                            <p className="release-page__producer">
-                              Published by{" "}
-                              <span className="release-page__person-link">
-                                {data.publisher}
-                              </span>
+                              <CreditNameList names={authorNames} />
                             </p>
                           ) : null}
                         </div>
@@ -494,6 +691,23 @@ export default function MediaItemPage({
                   </div>
                 </div>
                 <div className="release-page__panel-bottom">
+                  {data.publisher ? (
+                    <div className="release-page__label">
+                      <span className="release-page__label-logo-btn">
+                        <img
+                          src={publisherLogoSrc}
+                          alt={data.publisher}
+                          className="release-page__label-logo"
+                        />
+                      </span>
+                      <p className="release-page__label-name">
+                        Published by{" "}
+                        <span className="release-page__person-link">
+                          {data.publisher}
+                        </span>
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="release-page__panel-bottom-bar">
                     {data.prev ? (
                       <MediaNeighborLink
@@ -521,17 +735,141 @@ export default function MediaItemPage({
 
           <main className="release-page__main">
             {tab === "overview" ? (
-              <div className="release-page__overview">
-                {data.description ? (
-                  <section className="release-page__desc-block">
-                    <div className="release-page__desc-scroll">
-                      {data.description.split(/\n+/).map((p, i) => (
-                        <p key={i} className="release-page__desc-para">
-                          {p}
-                        </p>
-                      ))}
+              <div
+                className={[
+                  "release-page__overview",
+                  hasOverviewBottom ? "" : "release-page__overview--compact-lineup",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <div
+                  className={[
+                    "release-page__overview-top",
+                    data.description ? "" : "release-page__overview-top--no-desc",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {data.description ? (
+                    <div className="release-page__desc-block">
+                      <div
+                        className={`release-page__desc-scroll${
+                          stacked
+                            ? overviewDescExpanded
+                              ? " release-page__desc-scroll--expanded"
+                              : " release-page__desc-scroll--collapsed"
+                            : ""
+                        }`}
+                      >
+                        {data.description.split(/\n+/).map((p, i) => (
+                          <p key={i} className="release-page__desc-para">
+                            {p}
+                          </p>
+                        ))}
+                      </div>
+                      {stacked && (
+                        <button
+                          type="button"
+                          className="release-page__desc-toggle"
+                          onClick={() =>
+                            setOverviewDescExpanded((o) => !o)
+                          }
+                        >
+                          {overviewDescExpanded ? "Show less" : "Read more"}
+                        </button>
+                      )}
                     </div>
-                  </section>
+                  ) : null}
+
+                  {showOverviewSide && overviewPhotocards ? (
+                    <div className="release-page__overview-side">
+                      <div
+                        className={`release-page__photocards${
+                          photocardsCoverOnly
+                            ? " release-page__photocards--cover-only"
+                            : ""
+                        }`}
+                      >
+                        <ReleasePhotocardGroup cards={overviewPhotocards} />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {hasOverviewBottom ? (
+                  <div className="release-page__overview-bottom">
+                    {showOverviewLineup && showBandLineup ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        <div className="release-page__lineup-grid">
+                          {lineup.map((m) => (
+                            <LineupMiniCard
+                              key={m.participation_id ?? m.id}
+                              member={m}
+                              onSelect={() => setLineupMemberId(m.id)}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {showOverviewLineup && showSoloLineup ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        <div className="release-page__lineup-grid">
+                          <LineupMiniCard
+                            member={lineup[0]}
+                            onSelect={() => setLineupMemberId(lineup[0].id)}
+                          />
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {showFranchise ? (
+                      <section className="release-page__section-glass release-page__singles release-page__franchise">
+                        {franchiseArtist ? (
+                          <div className="release-page__featured-artists-grid" data-count="1">
+                            <FranchiseArtistCard
+                              artist={franchiseArtist}
+                              onSelect={() => {
+                                if (franchiseArtist.band_id != null) {
+                                  onOpenArtist(franchiseArtist.band_id);
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                        {franchiseItems.length > 0 ? (
+                          <div className="release-page__singles-grid">
+                            {franchiseItems.map((item) => {
+                              const dateLabel = formatTrackDate(
+                                item.date_iso ?? null
+                              );
+                              return (
+                                <div
+                                  key={item.path ?? item.title}
+                                  className="release-page__single release-page__single--static"
+                                >
+                                  <span className="release-page__single-title">
+                                    {item.title}
+                                  </span>
+                                  {dateLabel ? (
+                                    <span className="release-page__single-date">
+                                      {dateLabel}
+                                    </span>
+                                  ) : null}
+                                  {item.kind ? (
+                                    <span className="release-page__single-date">
+                                      {item.kind}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </section>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             ) : tab === "gallery" ? (
@@ -640,6 +978,18 @@ export default function MediaItemPage({
             setCachedMediaItemOverview(bandId, kind, itemId, updated);
             setData(updated);
           }}
+        />
+      )}
+
+      {lineupMemberId != null && data && (
+        <ArtistMemberModal
+          artistId={lineupMemberId}
+          bandId={bandId}
+          bandName={data.artist_name}
+          isAdmin={isAdmin}
+          onClose={() => setLineupMemberId(null)}
+          onOpenArtist={onOpenArtist}
+          onDataChanged={() => void load()}
         />
       )}
     </div>

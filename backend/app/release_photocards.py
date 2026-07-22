@@ -108,6 +108,17 @@ def _cover_only_photocards(artwork: Path | None, media_root: Path) -> dict:
     return cards
 
 
+def _cover_only_from_url(cover_url: str, back_url: str | None = None) -> dict:
+    cards: dict = {k: None for k in PHOTOCARD_STEMS}
+    back = back_url or cover_url
+    cards["portrait_front"] = cover_url
+    cards["portrait_back"] = back
+    cards["landscape_front"] = cover_url
+    cards["landscape_back"] = back
+    cards["cover_only"] = True
+    return cards
+
+
 def _apply_wallpaper_backs(
     cards: dict[str, str | None],
     artwork_dirs: list[Path | None],
@@ -133,19 +144,22 @@ def _apply_cover_front_backs(
     cards: dict[str, str | None],
     artwork: Path | None,
     media_root: Path,
+    *,
+    cover_url: str | None = None,
 ) -> None:
     """When no wallpaper back exists, flip to cover front at the same card size."""
-    if not artwork or not artwork.is_dir():
+    resolved = cover_url
+    if not resolved and artwork and artwork.is_dir():
+        cover = _artwork_file(artwork, COVER_FRONT_STEM)
+        if cover:
+            resolved = _media_url(cover, media_root)
+    if not resolved:
         return
-    cover = _artwork_file(artwork, COVER_FRONT_STEM)
-    if not cover:
-        return
-    cover_url = _media_url(cover, media_root)
 
-    if cards.get("portrait_front") and not cards.get("portrait_back") and cover_url:
-        cards["portrait_back"] = cover_url
-    if cards.get("landscape_front") and not cards.get("landscape_back") and cover_url:
-        cards["landscape_back"] = cover_url
+    if cards.get("portrait_front") and not cards.get("portrait_back"):
+        cards["portrait_back"] = resolved
+    if cards.get("landscape_front") and not cards.get("landscape_back"):
+        cards["landscape_back"] = resolved
 
 
 def _ensure_flip_backs(cards: dict[str, str | None]) -> None:
@@ -216,11 +230,14 @@ def _finalize_photocard_backs(
     *,
     use_wallpaper_backs: bool = False,
     use_cover_backs: bool = False,
+    cover_url: str | None = None,
 ) -> None:
     if use_wallpaper_backs:
         _apply_wallpaper_backs(cards, artwork_dirs, media_root)
     if use_cover_backs:
-        _apply_cover_front_backs(cards, artwork, media_root)
+        _apply_cover_front_backs(
+            cards, artwork, media_root, cover_url=cover_url
+        )
     _ensure_flip_backs(cards)
 
 
@@ -279,6 +296,53 @@ def resolve_overview_photocards(
             media_root,
             use_wallpaper_backs=use_wallpaper_backs,
             use_cover_backs=use_cover_backs,
+        )
+    return cards
+
+
+def resolve_media_item_photocards(
+    *,
+    folder: Path,
+    band_name: str | None,
+    date_iso: str | None,
+    media_root: Path,
+) -> dict[str, str | None]:
+    """Same fallback chain as audio overview, for Video/Library item folders."""
+    from app.media_tabs_index import _folder_cover
+
+    edition = _resolve_standard_edition(folder)
+    artwork = _standard_artwork_dir(edition)
+    artwork_dirs: list[Path | None] = [artwork]
+    folder_cover_url = _folder_cover(folder, media_root)
+    cards = scan_photocards(artwork, media_root)
+    cards_source = "dedicated" if not _photocards_empty(cards) else "none"
+
+    if _photocards_empty(cards):
+        artist_dir = _artist_dir(media_root, band_name)
+        if artist_dir:
+            cards = _era_photocards(artist_dir, media_root, _release_year(date_iso))
+            if not _photocards_empty(cards):
+                cards_source = "era"
+
+    if _photocards_empty(cards):
+        cover_cards = _cover_only_photocards(artwork, media_root)
+        if _photocards_empty(cover_cards) and folder_cover_url:
+            cover_cards = _cover_only_from_url(folder_cover_url)
+        if not _photocards_empty(cover_cards):
+            cards = cover_cards
+            cards_source = "cover_only"
+
+    if cards_source != "cover_only":
+        use_wallpaper_backs = cards_source == "era"
+        use_cover_backs = cards_source == "era"
+        _finalize_photocard_backs(
+            cards,
+            artwork,
+            artwork_dirs,
+            media_root,
+            use_wallpaper_backs=use_wallpaper_backs,
+            use_cover_backs=use_cover_backs,
+            cover_url=folder_cover_url if use_cover_backs else None,
         )
     return cards
 

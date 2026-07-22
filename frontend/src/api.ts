@@ -490,6 +490,24 @@ export async function fetchMediaGenres(kind: "video" | "library") {
   );
 }
 
+export async function fetchMediaPublishers(kind: "video" | "library") {
+  return request<{ kind: string; publishers: string[] }>(
+    `${API}/music/media-publishers?kind=${encodeURIComponent(kind)}`
+  );
+}
+
+export async function fetchMediaDirectors(kind: "video" | "library") {
+  return request<{ kind: string; directors: string[] }>(
+    `${API}/music/media-directors?kind=${encodeURIComponent(kind)}`
+  );
+}
+
+export async function fetchMediaAuthors(kind: "video" | "library") {
+  return request<{ kind: string; authors: string[] }>(
+    `${API}/music/media-authors?kind=${encodeURIComponent(kind)}`
+  );
+}
+
 export async function patchMediaItemOverview(
   bandId: number,
   kind: "video" | "library",

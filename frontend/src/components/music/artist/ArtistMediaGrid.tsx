@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   getCachedArtistMediaTab,
   prefetchArtistMediaTab,
@@ -82,8 +82,13 @@ export function useArtistMediaTab(bandId: number, kind: "video" | "library", ena
   return { data, loading, error, categoryKey, setCategoryKey, category, categories: data?.categories ?? [] };
 }
 
+function openMediaFile(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 function MediaItemCard({
   item,
+  kind,
   cardLayout,
   artistName,
   opening,
@@ -93,6 +98,7 @@ function MediaItemCard({
   onOpen,
 }: {
   item: MediaTabItem;
+  kind: "video" | "library";
   cardLayout: ReleaseCardLayout;
   artistName?: string;
   opening: boolean;
@@ -110,6 +116,8 @@ function MediaItemCard({
     preferCollapsed && item.era_logo_collapsed_url
       ? item.era_logo_collapsed_url
       : item.era_logo_url;
+  const openLabel = kind === "video" ? "Play video" : "Read";
+  const openUrl = item.open_url?.trim() || null;
 
   const handleActivate = () => {
     if (tapReveal && !revealed) {
@@ -118,6 +126,23 @@ function MediaItemCard({
     }
     onOpen();
   };
+
+  const handleOpenFile = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!openUrl) return;
+    openMediaFile(openUrl);
+  };
+
+  const openFileControl = openUrl ? (
+    <button
+      type="button"
+      className="media-release-card__open-file"
+      onClick={handleOpenFile}
+    >
+      {openLabel}
+    </button>
+  ) : null;
 
   if (cardLayout === "banner") {
     const bannerBg = item.banner_url
@@ -183,8 +208,13 @@ function MediaItemCard({
             ) : artistName ? (
               <span className="media-release-card__banner-artist">{artistName}</span>
             ) : null}
-            {fullDate ? (
-              <span className="media-release-card__banner-date">{fullDate}</span>
+            {openFileControl || fullDate ? (
+              <span className="media-release-card__banner-date-row">
+                {openFileControl}
+                {fullDate ? (
+                  <span className="media-release-card__banner-date">{fullDate}</span>
+                ) : null}
+              </span>
             ) : null}
           </span>
         </span>
@@ -229,9 +259,12 @@ function MediaItemCard({
       <span className="media-release-card__hover">
         <span className="media-release-card__title-hover">{item.title}</span>
       </span>
-      {hoverDate ? (
+      {openFileControl || hoverDate ? (
         <span className="media-release-card__date">
-          <span className="media-release-card__date-label">{hoverDate}</span>
+          {openFileControl}
+          {hoverDate ? (
+            <span className="media-release-card__date-label">{hoverDate}</span>
+          ) : null}
         </span>
       ) : null}
     </article>
@@ -271,13 +304,9 @@ export default function ArtistMediaGrid({
       if (openingId) return;
       setOpeningId(itemId);
       try {
-        const overview = await prefetchMediaItemOverview(bandId, kind, itemId, {
+        await prefetchMediaItemOverview(bandId, kind, itemId, {
           force: true,
         });
-        if (overview.open_url) {
-          window.open(overview.open_url, "_blank", "noopener,noreferrer");
-          return;
-        }
         onOpenItem?.(itemId);
       } catch {
         onOpenItem?.(itemId);
@@ -327,6 +356,7 @@ export default function ArtistMediaGrid({
           <MediaItemCard
             key={item.id}
             item={item}
+            kind={kind}
             cardLayout={cardLayout}
             artistName={artistName}
             opening={openingId === item.id}

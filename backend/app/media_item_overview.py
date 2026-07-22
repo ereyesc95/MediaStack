@@ -336,13 +336,22 @@ def _build_groups(folder: Path, media_root: Path, *, kind: str) -> list[dict]:
     return groups
 
 
-def _readable_files(groups: list[dict]) -> list[dict]:
-    out: list[dict] = []
+def first_openable_file_url(folder: Path, media_root: Path, kind: str) -> str | None:
+    """URL of the first video (video) or readable document (library) in folder order."""
+    groups = _build_groups(folder, media_root, kind=kind)
+    if kind == "video":
+        for group in groups:
+            for f in group.get("files") or []:
+                if f.get("kind") == "video" and f.get("url"):
+                    return f["url"]
+        return None
     for group in groups:
         for f in group.get("files") or []:
-            if f.get("kind") in ("document",) or Path(f.get("name") or "").suffix.casefold() in READABLE_EXTS:
-                out.append(f)
-    return out
+            name = f.get("name") or ""
+            if f.get("kind") == "document" or Path(name).suffix.casefold() in READABLE_EXTS:
+                if f.get("url"):
+                    return f["url"]
+    return None
 
 
 def _folder_logo(folder: Path, media_root: Path) -> str | None:
@@ -441,12 +450,232 @@ def _prev_next_media_neighbors(
     )
 
 
+def _release_year(date_iso: str | None) -> int | None:
+    if not date_iso or len(date_iso) < 4:
+        return None
+    try:
+        return int(date_iso[:4])
+    except ValueError:
+        return None
+
+
+def _era_brand_urls(
+    band_name: str | None,
+    date_iso: str | None,
+    media_root: Path,
+) -> tuple[str | None, str | None]:
+    from app.gallery import (
+        _artist_dir,
+        _gallery_subdir,
+        _list_era_brands,
+        _media_url,
+    )
+    from app.band_overview import _pick_brand_for_year_deterministic
+    from app.release_overview import _nearest_brand
+
+    artist_dir = _artist_dir(media_root, band_name)
+    if not artist_dir:
+        return None, None
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    year = _release_year(date_iso)
+    era_icon_url: str | None = None
+    era_logo_url: str | None = None
+    if year:
+        icon = _pick_brand_for_year_deterministic(brands, year, "icon")
+        logo = _pick_brand_for_year_deterministic(brands, year, "logo")
+        if icon and not logo:
+            logo = _nearest_brand(brands, year, "logo")
+        if logo and not icon:
+            icon = _nearest_brand(brands, year, "icon")
+        if icon:
+            era_icon_url = _media_url(icon.path, media_root)
+        if logo:
+            era_logo_url = _media_url(logo.path, media_root)
+    return era_icon_url, era_logo_url
+
+
+def _franchise_photo_for_year(
+    photos: list,
+    year: int | None,
+) -> object | None:
+    """Prefer portrait → landscape → banner for the era closest to the release year."""
+    if not photos:
+        return None
+
+    def pick_for_year(y: int):
+        by_ori = {o: [] for o in ("portrait", "landscape", "banner")}
+        for p in photos:
+            if p.year != y:
+                continue
+            ori = (p.orientation or "unknown").casefold()
+            if ori in by_ori:
+                by_ori[ori].append(p)
+        for ori in ("portrait", "landscape", "banner"):
+            pool = by_ori[ori]
+            if pool:
+                return sorted(pool, key=lambda x: x.path.name.lower())[0]
+        return None
+
+    years = sorted({p.year for p in photos})
+    if not years:
+        return None
+    if year is None:
+        for y in sorted(years, reverse=True):
+            hit = pick_for_year(y)
+            if hit:
+                return hit
+        return None
+
+    # Prefer exact year, then nearest past, then nearest future.
+    ordered: list[int] = []
+    if year in years:
+        ordered.append(year)
+    ordered.extend(sorted((y for y in years if y < year), reverse=True))
+    ordered.extend(sorted(y for y in years if y > year))
+    for y in ordered:
+        hit = pick_for_year(y)
+        if hit:
+            return hit
+    return None
+
+
+def _franchise_artist_card(
+    band: Band,
+    *,
+    date_iso: str | None,
+    media_root: Path,
+) -> dict:
+    from app.band_overview import _display_name, _pick_brand_for_year_deterministic
+    from app.gallery import (
+        _artist_dir,
+        _gallery_subdir,
+        _list_era_brands,
+        _list_photos,
+        _media_url,
+        resolve_artist_card,
+    )
+    from app.release_overview import _nearest_brand
+
+    name = _display_name(band.bnd_name)
+    year = _release_year(date_iso)
+    photo_url: str | None = None
+    icon_url: str | None = None
+    logo_url: str | None = None
+
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if artist_dir:
+        photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
+        closest = _franchise_photo_for_year(photos, year)
+        if closest:
+            photo_url = _media_url(closest.path, media_root)
+
+        if year:
+            brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+            icon = _pick_brand_for_year_deterministic(brands, year, "icon")
+            logo = _pick_brand_for_year_deterministic(brands, year, "logo")
+            if icon and not logo:
+                logo = _nearest_brand(brands, year, "logo")
+            if logo and not icon:
+                icon = _nearest_brand(brands, year, "icon")
+            if icon:
+                icon_url = _media_url(icon.path, media_root)
+            if logo:
+                logo_url = _media_url(logo.path, media_root)
+
+    if not photo_url or not icon_url or not logo_url:
+        card = resolve_artist_card(band.bnd_name, orientation="portrait")
+        photo_url = photo_url or card.photo_url
+        icon_url = icon_url or card.icon_url
+        logo_url = logo_url or card.logo_url
+
+    return {
+        "band_id": band.bnd_id,
+        "name": name,
+        "photo_url": photo_url,
+        "icon_url": icon_url,
+        "logo_url": logo_url,
+        "in_library": True,
+    }
+
+
+def _related_franchise_items(
+    *,
+    band_name: str | None,
+    folder_path: str,
+) -> list[dict]:
+    """Cross-module franchise siblings (series/movies/…) when an index exists."""
+    from app.franchise_index import (
+        load_franchise_index,
+        normalize_franchise_slug,
+        related_for_path,
+    )
+
+    index = load_franchise_index()
+    if not index:
+        return []
+
+    seen: set[str] = set()
+    out: list[dict] = []
+
+    def _add(
+        *,
+        kind: str | None,
+        title: str | None,
+        path: str | None,
+        date_iso: str | None,
+    ) -> None:
+        path_norm = (path or "").replace("\\", "/").casefold().rstrip("/")
+        if not path_norm or path_norm in seen:
+            return
+        seen.add(path_norm)
+        out.append(
+            {
+                "kind": kind,
+                "title": title or path_norm,
+                "path": path,
+                "date_iso": date_iso,
+            }
+        )
+
+    for entries in related_for_path(index, folder_path).values():
+        for entry in entries:
+            _add(
+                kind=entry.get("kind"),
+                title=entry.get("title") or entry.get("display_name"),
+                path=entry.get("path"),
+                date_iso=entry.get("date_iso"),
+            )
+
+    slug = normalize_franchise_slug(band_name or "")
+    group = index.franchises.get(slug) if slug else None
+    if group:
+        folder_norm = folder_path.replace("\\", "/").casefold().rstrip("/")
+        for entry in group.entries:
+            ep = (entry.path or "").replace("\\", "/").casefold().rstrip("/")
+            if ep == folder_norm:
+                continue
+            _add(
+                kind=entry.kind,
+                title=entry.title,
+                path=entry.path,
+                date_iso=entry.date_iso,
+            )
+
+    return out[:24]
+
+
 def build_media_item_overview(
     db: Session,
     band_id: int,
     kind: str,
     item_id: str,
 ) -> dict | None:
+    from app.band_overview import _build_lineup, _display_name, _is_solo, _solo_performer
+    from app.label_assets import label_logo_url
+    from app.media_item_admin import apply_media_item_meta
+    from app.release_overview import _filter_lineup
+    from app.release_photocards import resolve_media_item_photocards
+
     band = db.get(Band, band_id)
     if not band or not settings.media_root:
         return None
@@ -471,11 +700,7 @@ def build_media_item_overview(
 
     groups = _build_groups(folder, media_root, kind=kind)
     flat_files = [f for g in groups for f in (g.get("files") or [])]
-    readable = _readable_files(groups)
-    open_url = None
-    # Library: a single readable document opens directly in a new tab
-    if kind == "library" and len(readable) == 1 and len(flat_files) <= 1:
-        open_url = readable[0].get("url")
+    open_url = first_openable_file_url(folder, media_root, kind)
 
     cover_url = card.get("cover_url") or _folder_cover(folder, media_root)
     # Library items are books/docs — no disc art; video keeps default disc fallback
@@ -490,11 +715,33 @@ def build_media_item_overview(
     ]
     prev_r, next_r = _prev_next_media_neighbors(all_cards, item_id)
 
+    photocards = resolve_media_item_photocards(
+        folder=folder,
+        band_name=band.bnd_name,
+        date_iso=date_iso,
+        media_root=media_root,
+    )
+    era_icon_url, era_logo_url = _era_brand_urls(band.bnd_name, date_iso, media_root)
+
+    release_year = _release_year(date_iso)
+    lineup_full = _build_lineup(db, band, media_root)
+    solo = _is_solo(db, band)
+    show_lineup = not solo
+    solo_performer = _solo_performer(db, band, media_root) if solo else None
+    lineup_members = (
+        [solo_performer]
+        if solo and solo_performer
+        else _filter_lineup(lineup_full, release_year)
+    )
+
+    release_type = "Video release" if kind == "video" else "Library item"
+    artist_name = _display_name(band.bnd_name)
+
     payload = {
         "id": item_id,
         "kind": kind,
         "band_id": band_id,
-        "artist_name": band.bnd_name,
+        "artist_name": artist_name,
         "title": card.get("title") or _title_from_folder(display_name),
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
@@ -502,18 +749,33 @@ def build_media_item_overview(
         "cover_url": cover_url,
         "disc_url": disc_url,
         "logo_url": logo_url,
+        "era_icon_url": era_icon_url,
+        "era_logo_url": era_logo_url,
+        "release_type": release_type,
         "description": None,
         "description_manual": False,
         "director": None,
         "author": None,
         "publisher": None,
+        "publisher_logo_url": None,
         "genres": [],
+        "photocards": photocards,
+        "lineup": lineup_members,
+        "show_lineup": show_lineup,
+        "is_solo": solo,
+        "franchise_artist": _franchise_artist_card(
+            band, date_iso=date_iso, media_root=media_root
+        ),
+        "franchise_items": _related_franchise_items(
+            band_name=band.bnd_name, folder_path=rel
+        ),
         "groups": groups,
         "files": flat_files,
         "open_url": open_url,
         "prev": prev_r,
         "next": next_r,
     }
-    from app.media_item_admin import apply_media_item_meta
-
-    return apply_media_item_meta(payload, db, band_id, kind, item_id)
+    payload = apply_media_item_meta(payload, db, band_id, kind, item_id)
+    if payload.get("publisher"):
+        payload["publisher_logo_url"] = label_logo_url(payload["publisher"])
+    return payload

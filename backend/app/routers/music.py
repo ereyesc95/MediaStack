@@ -947,6 +947,36 @@ def media_genres_for_kind(
     return {"kind": kind, "genres": list_genres_for_kind(db, kind)}
 
 
+@router.get("/media-publishers")
+def media_publishers_for_kind(
+    kind: str = Query(..., pattern="^(video|library)$"),
+    db: Session = Depends(get_db),
+):
+    from app.media_item_admin import list_publishers_for_kind
+
+    return {"kind": kind, "publishers": list_publishers_for_kind(db, kind)}
+
+
+@router.get("/media-directors")
+def media_directors_for_kind(
+    kind: str = Query(..., pattern="^(video|library)$"),
+    db: Session = Depends(get_db),
+):
+    from app.media_item_admin import list_people_for_kind
+
+    return {"kind": kind, "directors": list_people_for_kind(db, kind, "director")}
+
+
+@router.get("/media-authors")
+def media_authors_for_kind(
+    kind: str = Query(..., pattern="^(video|library)$"),
+    db: Session = Depends(get_db),
+):
+    from app.media_item_admin import list_people_for_kind
+
+    return {"kind": kind, "authors": list_people_for_kind(db, kind, "author")}
+
+
 @router.get("/bands/{band_id}/media/{kind}/{item_id}/gallery")
 def band_media_item_gallery(
     band_id: int,

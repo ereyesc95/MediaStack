@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import struct
 import sys
 from pathlib import Path
@@ -189,3 +190,54 @@ def entry_display_name(entry: Path) -> str:
     if low.endswith(".lnk") or low.endswith(".path"):
         name = Path(name).stem
     return name
+
+
+def _folder_has_direct_artwork(folder: Path) -> bool:
+    try:
+        for child in folder.iterdir():
+            low = child.name.casefold()
+            if child.is_dir() and low in ("[artwork]", "artwork"):
+                return True
+            if child.is_file() and low.startswith("cover"):
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def refine_resolved_work_folder(display_entry: Path, resolved: Path) -> Path:
+    """If a .lnk/.path points at a franchise hub, prefer the matching dated work folder.
+
+    Example: Video/2017.06.12. The HIM Docuseries.lnk → Series/T/The HIM Docuseries
+    while artwork lives in Series/T/The HIM Docuseries/2017.06.12. The HIM Docuseries/.
+    """
+    if not resolved.is_dir():
+        return resolved
+    if _folder_has_direct_artwork(resolved):
+        return resolved
+
+    want = entry_display_name(display_entry).casefold().strip()
+    if not want:
+        return resolved
+
+    try:
+        children = [c for c in resolved.iterdir() if c.is_dir()]
+    except OSError:
+        return resolved
+
+    for child in children:
+        child_name = entry_display_name(child).casefold().strip()
+        if child_name == want or child.name.casefold().strip() == want:
+            return child
+
+    date_re = re.compile(r"^\d{4}(?:\.\d{2}(?:\.\d{2})?)?\.\s*")
+    want_title = date_re.sub("", want).strip()
+    if want_title and want_title != want:
+        for child in children:
+            child_title = date_re.sub(
+                "", entry_display_name(child).casefold()
+            ).strip()
+            if child_title == want_title:
+                return child
+
+    return resolved

@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
-import { fetchMediaGenres, patchMediaItemOverview } from "../../../api";
+import {
+  fetchMediaAuthors,
+  fetchMediaDirectors,
+  fetchMediaGenres,
+  fetchMediaPublishers,
+  patchMediaItemOverview,
+} from "../../../api";
 import type { MediaItemOverview } from "../../../types";
 import ModalPortal from "../../ModalPortal";
 import GenreTagsInput, {
   joinSemicolonList,
   splitSemicolonList,
 } from "./GenreTagsInput";
+import PublisherSuggestInput from "./PublisherSuggestInput";
 
 type Props = {
   bandId: number;
@@ -22,6 +29,13 @@ function titleCaseWords(value: string): string {
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function normalizePublisher(raw: string, catalog: string[]): string {
+  const typed = titleCaseWords(raw.trim());
+  if (!typed) return "";
+  const match = catalog.find((p) => p.toLowerCase() === typed.toLowerCase());
+  return match ?? typed;
 }
 
 export default function MediaItemAboutEditModal({
@@ -42,19 +56,40 @@ export default function MediaItemAboutEditModal({
   const [publisher, setPublisher] = useState(data.publisher ?? "");
   const [genres, setGenres] = useState<string[]>(data.genres ?? []);
   const [genreOptions, setGenreOptions] = useState<string[]>([]);
+  const [publisherOptions, setPublisherOptions] = useState<string[]>([]);
+  const [directorOptions, setDirectorOptions] = useState<string[]>([]);
+  const [authorOptions, setAuthorOptions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchMediaGenres(kind)
-      .then((res) => {
-        if (!cancelled) {
-          setGenreOptions(res.genres.map((g) => g.name).filter(Boolean));
+    const peopleFetch =
+      kind === "video"
+        ? fetchMediaDirectors(kind).then((r) => r.directors)
+        : fetchMediaAuthors(kind).then((r) => r.authors);
+    void Promise.all([
+      fetchMediaGenres(kind),
+      fetchMediaPublishers(kind),
+      peopleFetch,
+    ])
+      .then(([genreRes, pubRes, people]) => {
+        if (cancelled) return;
+        setGenreOptions(genreRes.genres.map((g) => g.name).filter(Boolean));
+        setPublisherOptions(pubRes.publishers.filter(Boolean));
+        if (kind === "video") {
+          setDirectorOptions(people.filter(Boolean));
+        } else {
+          setAuthorOptions(people.filter(Boolean));
         }
       })
       .catch(() => {
-        if (!cancelled) setGenreOptions([]);
+        if (!cancelled) {
+          setGenreOptions([]);
+          setPublisherOptions([]);
+          setDirectorOptions([]);
+          setAuthorOptions([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -69,7 +104,7 @@ export default function MediaItemAboutEditModal({
         description,
         director: kind === "video" ? joinSemicolonList(directors) : null,
         author: kind === "library" ? joinSemicolonList(authors) : null,
-        publisher: titleCaseWords(publisher.trim()),
+        publisher: normalizePublisher(publisher, publisherOptions),
         genres,
       });
       onSaved(updated);
@@ -114,6 +149,7 @@ export default function MediaItemAboutEditModal({
           {kind === "video" ? (
             <GenreTagsInput
               label="Director"
+              options={directorOptions}
               value={directors}
               onChange={setDirectors}
               allowCustom
@@ -123,6 +159,7 @@ export default function MediaItemAboutEditModal({
           ) : (
             <GenreTagsInput
               label="Author"
+              options={authorOptions}
               value={authors}
               onChange={setAuthors}
               allowCustom
@@ -130,15 +167,17 @@ export default function MediaItemAboutEditModal({
               disabled={saving}
             />
           )}
-          <label>
-            Publisher
-            <input
-              type="text"
-              value={publisher}
-              onChange={(e) => setPublisher(e.target.value)}
-              onBlur={() => setPublisher(titleCaseWords(publisher.trim()))}
-            />
-          </label>
+          <PublisherSuggestInput
+            label="Publisher"
+            value={publisher}
+            options={publisherOptions}
+            onChange={setPublisher}
+            onCommit={(next) =>
+              setPublisher(normalizePublisher(next, publisherOptions))
+            }
+            disabled={saving}
+            placeholder="Type to search publishers…"
+          />
           <GenreTagsInput
             label="Genres"
             options={genreOptions}

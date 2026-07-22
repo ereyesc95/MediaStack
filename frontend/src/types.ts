@@ -751,12 +751,40 @@ export type MediaItemOverview = {
   cover_url: string | null;
   disc_url?: string | null;
   logo_url?: string | null;
+  era_icon_url?: string | null;
+  era_logo_url?: string | null;
+  release_type?: string;
   description: string | null;
   description_manual?: boolean;
   director?: string | null;
   author?: string | null;
   publisher?: string | null;
+  publisher_logo_url?: string | null;
   genres?: string[];
+  photocards?: {
+    portrait_front: string | null;
+    portrait_back: string | null;
+    landscape_front: string | null;
+    landscape_back: string | null;
+    cover_only?: boolean;
+  };
+  lineup?: LineupMember[];
+  show_lineup?: boolean;
+  is_solo?: boolean;
+  franchise_artist?: {
+    band_id: number | null;
+    name: string;
+    photo_url: string | null;
+    icon_url?: string | null;
+    logo_url?: string | null;
+    in_library?: boolean;
+  } | null;
+  franchise_items?: {
+    kind?: string | null;
+    title: string;
+    path?: string | null;
+    date_iso?: string | null;
+  }[];
   files: MediaItemFile[];
   groups?: MediaItemGroup[];
   open_url?: string | null;
@@ -783,6 +811,8 @@ export type MediaTabItem = {
   era_logo_collapsed_url?: string | null;
   era_icon_url?: string | null;
   folder_path: string;
+  /** First video or readable file — open in a new tab from the card hover action. */
+  open_url?: string | null;
 };
 
 export type MediaTabCategory = {
