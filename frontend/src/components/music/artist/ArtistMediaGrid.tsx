@@ -6,7 +6,7 @@ import {
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
 import { usePhoneLayout, useDeviceLayout, isMobilePortraitLayout } from "../../../usePhoneLayout";
-import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
+import { DEFAULT_DISC_URL, ChevronIcon } from "../release/releaseTrackPanelMeta";
 import type {
   MediaTabCategory,
   MediaTabIndexPayload,
@@ -138,9 +138,14 @@ function MediaItemCard({
     <button
       type="button"
       className="media-release-card__open-file"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       onClick={handleOpenFile}
     >
-      {openLabel}
+      <span className="media-release-card__open-file-label">{openLabel}</span>
+      <ChevronIcon direction="right" />
     </button>
   ) : null;
 

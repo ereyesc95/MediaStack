@@ -6456,6 +6456,7 @@ input {
 .media-release-card--banner:hover .media-release-card__banner-meta,
 .media-release-card--banner.media-release-card--revealed .media-release-card__banner-meta {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* Mobile / touch: shorter cards so banner photos show more horizontally */
@@ -6799,9 +6800,28 @@ input {
   font-weight: 600;
   color: #fff;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
+  text-decoration: none;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.media-release-card__open-file-label {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+  text-decoration-skip-ink: auto;
+}
+
+.media-release-card__open-file .release-page__chevron {
+  width: 0.85em;
+  height: 0.85em;
+  flex-shrink: 0;
+  display: block;
 }
 
 .media-release-card__open-file:hover {
