@@ -49,6 +49,14 @@ def _is_photocard_stem(stem: str) -> bool:
     return low.startswith("photocard")
 
 
+def _is_extras_artwork_stem(stem: str) -> bool:
+    """Logos (including Logo - Collapsed), Spotify, QR, photocards → Extras."""
+    low = stem.casefold().strip()
+    if _is_photocard_stem(low) or low in {"spotify", "qr"}:
+        return True
+    return low == "logo" or low.startswith("logo ") or low.startswith("logo-")
+
+
 def _is_excluded_artwork(stem: str) -> bool:
     low = stem.casefold()
     if low in EXCLUDED_ARTWORK_STEMS:
@@ -209,7 +217,7 @@ def build_release_gallery(
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
                 continue
             stem = path.stem.casefold()
-            if _is_photocard_stem(stem) or stem in {"spotify", "qr", "logo"}:
+            if _is_extras_artwork_stem(stem):
                 extras_items.append(_scan_artwork_file(path, media_root, section="extras"))
             elif _is_excluded_artwork(stem):
                 continue

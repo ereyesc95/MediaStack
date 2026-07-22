@@ -19,7 +19,7 @@ from app.media_paths_util import safe_relative
 from app.release_gallery import (
     _era_gallery_photos,
     _is_excluded_artwork,
-    _is_photocard_stem,
+    _is_extras_artwork_stem,
     _photo_display_title,
     _scan_artwork_file,
 )
@@ -92,7 +92,7 @@ def build_media_item_gallery(
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
                 continue
             stem = path.stem.casefold()
-            if _is_photocard_stem(stem) or stem in {"spotify", "qr", "logo"}:
+            if _is_extras_artwork_stem(stem):
                 extras_items.append(
                     _scan_artwork_file(path, media_root, section="extras")
                 )

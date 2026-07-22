@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import type { CardOrientation } from "../types";
+import { usePhoneLayout } from "../usePhoneLayout";
 import {
   IconCardBanner,
   IconCardIcons,
@@ -31,11 +32,12 @@ export default function CardOrientationPicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const isPhone = usePhoneLayout();
   const current = OPTIONS.find((o) => o.id === value) ?? OPTIONS[0];
   const CurrentIcon = current.Icon;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !isPhone) return;
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -48,12 +50,18 @@ export default function CardOrientationPicker({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isPhone]);
 
   return (
     <div
       ref={rootRef}
       className={`card-orientation-picker ${className}`.trim()}
+      onMouseEnter={() => {
+        if (!isPhone) setOpen(true);
+      }}
+      onMouseLeave={() => {
+        if (!isPhone) setOpen(false);
+      }}
     >
       <button
         type="button"
@@ -61,7 +69,9 @@ export default function CardOrientationPicker({
         aria-label={`Cards: ${current.label}. Choose layout.`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (isPhone) setOpen((v) => !v);
+        }}
       >
         <CurrentIcon />
       </button>

@@ -172,83 +172,89 @@ export default function LinkFormModal({
           </label>
 
           <span className="artist-admin-form__section">Logo</span>
-          <div className="artist-admin-form__checks link-form__logo-options">
-            <label>
-              <input
-                type="radio"
-                name="logoMode"
-                checked={logoMode === "auto"}
-                onChange={() => setLogoMode("auto")}
-              />
-              Auto-detect from URL
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="logoMode"
-                checked={logoMode === "catalog"}
-                onChange={() => setLogoMode("catalog")}
-              />
-              Pick from catalog
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="logoMode"
-                checked={logoMode === "upload"}
-                onChange={() => setLogoMode("upload")}
-              />
-              Upload image
-            </label>
+          <div className="link-form__logo-row">
+            <div className="link-form__logo-left">
+              <div className="artist-admin-form__checks link-form__logo-options">
+                <label>
+                  <input
+                    type="radio"
+                    name="logoMode"
+                    checked={logoMode === "auto"}
+                    onChange={() => setLogoMode("auto")}
+                  />
+                  Auto-detect from URL
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="logoMode"
+                    checked={logoMode === "catalog"}
+                    onChange={() => setLogoMode("catalog")}
+                  />
+                  Pick from catalog
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="logoMode"
+                    checked={logoMode === "upload"}
+                    onChange={() => setLogoMode("upload")}
+                  />
+                  Upload image
+                </label>
+              </div>
+
+              {logoMode === "catalog" && (
+                <label className="link-form__catalog">
+                  Catalog logo
+                  <select
+                    value={logoKey}
+                    onChange={(e) => setLogoKey(e.target.value)}
+                  >
+                    <option value="">Select logo…</option>
+                    {catalog.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {logoMode === "upload" && (
+                <div className="link-form__upload-row">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    hidden
+                    onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    Choose file…
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="link-form__preview" aria-hidden={!previewSrc}>
+              {previewSrc ? (
+                <img
+                  src={previewSrc}
+                  alt=""
+                  className={
+                    logoMode === "upload"
+                      ? "link-form__preview-img--upload"
+                      : undefined
+                  }
+                />
+              ) : null}
+            </div>
           </div>
-
-          {logoMode === "catalog" && (
-            <label>
-              Catalog logo
-              <select
-                value={logoKey}
-                onChange={(e) => setLogoKey(e.target.value)}
-              >
-                <option value="">Select logo…</option>
-                {catalog.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {logoMode === "upload" && (
-            <div className="link-form__upload-row">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                hidden
-                onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                className="btn btn--small"
-                onClick={() => fileRef.current?.click()}
-              >
-                Choose file…
-              </button>
-            </div>
-          )}
-
-          {previewSrc && (
-            <div className="link-form__preview">
-              <img
-                src={previewSrc}
-                alt=""
-                className={
-                  logoMode === "upload" ? "link-form__preview-img--upload" : undefined
-                }
-              />
-            </div>
-          )}
 
           <div className="modal-actions-row">
             {isEdit && (

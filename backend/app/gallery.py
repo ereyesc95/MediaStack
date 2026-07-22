@@ -435,8 +435,6 @@ def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
     ):
         rel = brand.path.relative_to(media_root).as_posix()
         label = f"{brand.start}–{brand.end}"
-        if brand.collapsed:
-            label = f"{label} Collapsed"
         branding_out.append(
             {
                 "id": _gallery_item_id(rel),
