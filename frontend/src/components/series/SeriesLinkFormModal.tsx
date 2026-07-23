@@ -170,7 +170,7 @@ export default function SeriesLinkFormModal({
             />
           </label>
 
-          <span className="artist-admin-form__section">Logo</span>
+          <span className="series-about-edit__label">Logo</span>
           <div className="link-form__logo-row">
             <div className="link-form__logo-left">
               <div className="artist-admin-form__checks link-form__logo-options">
@@ -264,15 +264,7 @@ export default function SeriesLinkFormModal({
             <span className="modal-actions__spacer" />
             <button
               type="button"
-              className="btn"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn"
+              className="btn btn--primary"
               onClick={() => void handleSave()}
               disabled={saving}
             >

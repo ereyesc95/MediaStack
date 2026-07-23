@@ -12899,6 +12899,11 @@ button.lyrics-status-badge--icon-only {
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
+.catalog-scope-toggle button.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .module-top-bar__menu .catalog-scope-toggle {
   flex-shrink: 0;
 }
@@ -12932,22 +12937,215 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-about__subseries-card {
-  width: 7.5rem;
-  max-width: 7.5rem;
+  width: auto;
+  min-width: 4.75rem;
+  max-width: none;
   flex: 0 0 auto;
+  align-items: center;
 }
 
 .series-about__subseries-cover {
-  width: 7.5rem !important;
-  height: 11rem !important;
+  width: 4.75rem !important;
+  height: 7rem !important;
   max-width: none !important;
   aspect-ratio: auto !important;
   border-radius: 2px;
 }
 
+.series-about__subseries-card .artist-about__track-title,
+.series-about__subseries-card .artist-about__track-date {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  width: max-content;
+  text-align: center;
+}
+
 .series-about__subseries-cover .artist-about__track-cover-bg {
   background-size: cover;
   background-position: center;
+}
+
+.series-about-edit__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.65rem;
+}
+
+.series-about-edit__label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.series-about-edit__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.series-about-edit__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.45rem 0.25rem 0.55rem;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.series-about-edit__chip-x {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+}
+
+.series-about-edit__chip-x:hover {
+  color: var(--text);
+}
+
+.series-about-edit__add-select {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  max-width: 9rem;
+}
+
+.series-about-edit__genre-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+}
+
+.series-about-edit__genre-item {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  width: auto !important;
+}
+
+.series-cast-card__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  width: 100%;
+}
+
+.series-cast .artist-lineup-card {
+  max-width: calc(var(--lineup-photo) + 4rem);
+  cursor: default;
+  gap: 0.3rem;
+}
+
+.series-cast-card__actors {
+  list-style: none;
+  margin: 0.05rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  line-height: 1.15;
+}
+
+.series-cast-card__actor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  cursor: pointer;
+  padding: 0;
+  max-width: 100%;
+}
+
+.series-about-edit__custom-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.series-about-edit__custom-lang input {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 8rem;
+}
+
+.series-cast-card__actor:hover,
+.series-cast-card__actor:focus-visible {
+  color: var(--text);
+}
+
+.series-cast-card__flag {
+  font-size: 0.7rem;
+  line-height: 1;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.series-cast-card__actor-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-cast-modal__actors {
+  list-style: none;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.series-cast-modal__actors .fi {
+  margin-right: 0.25rem;
+}
+
+.modal-panel-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0 0 0.25rem;
+}
+
+.modal-panel-actions--end {
+  justify-content: flex-end;
 }
 
 .artist-about__pill--static {
@@ -12969,98 +13167,106 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
 }
 
-.series-cast-card__photo--flip {
-  perspective: 1000px;
-}
-
-.series-cast-card__photo-inner {
+.series-cast-card__photo-layer {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.45s ease;
-}
-
-.series-cast-card:hover .series-cast-card__photo--flip .series-cast-card__photo-inner,
-.series-cast-card:focus-visible .series-cast-card__photo--flip .series-cast-card__photo-inner {
-  transform: rotateY(180deg);
-}
-
-.series-cast-card:hover .series-cast-card__photo img,
-.series-cast-card:hover .artist-lineup-card__photo img {
-  transform: none;
-}
-
-.series-cast-card__face {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.series-cast-card__face img,
-.series-cast-card__face .artist-lineup-card__ph {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   border-radius: 50%;
+  opacity: 1;
+  transition: opacity 0.22s ease;
 }
 
-.series-cast-card__face--back {
-  transform: rotateY(180deg);
+.series-cast-card__photo-layer--base.is-faded {
+  opacity: 0;
 }
 
-.series-cast-modal__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.5rem 0 1rem;
+.series-cast-card__photo-layer--hover {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.series-cast-modal__photo {
-  width: 8rem;
-  height: 8rem;
-  border-radius: 50%;
-  object-fit: cover;
-  align-self: center;
+.series-cast-card__photo-layer--hover.is-visible {
+  opacity: 1;
+}
+
+.search-dropdown-list--portal {
+  top: auto;
+  left: auto;
+  right: auto;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 .series-section-subbar {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.25rem;
-  padding: 0.35rem 1rem 0.55rem;
-  justify-content: space-evenly;
+  gap: 0;
+  padding: 0;
+  justify-content: stretch;
   align-items: stretch;
   width: 100%;
   box-sizing: border-box;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.series-section-subbar::-webkit-scrollbar {
+  display: none;
 }
 
 .series-section-subbar button {
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
   font: inherit;
   font-size: 0.72rem;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.55rem;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  flex: 1 1 0;
+  flex: 1;
+  min-width: max-content;
   text-align: center;
-  min-width: 0;
+  line-height: 1;
+  box-shadow: inset 0 -2px 0 transparent;
+  opacity: 0.88;
+}
+
+.series-section-subbar button:hover:not(.active) {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 .series-section-subbar button.active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+  opacity: 1;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.series-subseries-overview {
+  padding: 0.75rem 1rem 2rem;
+}
+
+.series-subseries-overview__grid {
+  margin-top: 0.75rem;
+}
+
+.series-subseries-page .release-page__album-title {
+  font-size: 1.35rem;
+  margin: 0.35rem 0 0.15rem;
+}
+
+.series-subseries-page .release-page__album-date,
+.series-subseries-page .release-page__album-type {
+  margin: 0.15rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 .series-franchise__drill-back {

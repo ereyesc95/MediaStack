@@ -31,9 +31,9 @@ export default function CatalogScopeToggle({
         className={value === "shows" ? "active" : ""}
         aria-pressed={value === "shows"}
         onClick={() => onChange("shows")}
-        title="Shows"
+        title="Series"
       >
-        SHOWS
+        SERIES
       </button>
     </div>
   );

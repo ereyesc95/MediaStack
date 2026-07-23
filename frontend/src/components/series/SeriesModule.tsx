@@ -29,6 +29,7 @@ import SeriesFranchisePage, {
   type SeriesFranchiseShell,
 } from "./SeriesFranchisePage";
 import SeriesHome from "./SeriesHome";
+import SeriesSubseriesPage from "./SeriesSubseriesPage";
 
 type SeriesTab = "home" | "catalog";
 
@@ -224,6 +225,47 @@ export default function SeriesModule({
       section: "overview",
     });
   };
+
+  if (!showModuleChrome && franchiseId && subseriesId) {
+    return (
+      <div className="series-module">
+        <SeriesSubseriesPage
+          franchiseId={franchiseId}
+          franchiseName={franchiseShell?.name}
+          subseriesId={subseriesId}
+          seasonId={seasonId}
+          section={section}
+          busy={busy}
+          isAdmin={isAdmin}
+          userId={userId}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
+          onBack={() =>
+            onNavigate({
+              franchiseId,
+              subseriesId: undefined,
+              seasonId: undefined,
+              section: "series",
+              overviewTab: "about",
+            })
+          }
+          onNavigate={(patch) =>
+            onNavigate({
+              franchiseId,
+              subseriesId:
+                "subseriesId" in patch ? patch.subseriesId : subseriesId,
+              seasonId: "seasonId" in patch ? patch.seasonId : seasonId,
+              section: patch.section ?? section,
+              overviewTab: overviewTab,
+            })
+          }
+        />
+      </div>
+    );
+  }
 
   if (!showModuleChrome && franchiseId) {
     return (

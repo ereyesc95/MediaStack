@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
 export type DropdownOption = {
   value: string;
@@ -23,6 +32,11 @@ type Props = {
   renderSelectedLabel?: (option: DropdownOption) => ReactNode;
   /** Rich label for each option in the dropdown list. */
   renderOptionLabel?: (option: DropdownOption) => ReactNode;
+  /**
+   * Render the open list in a portal with fixed positioning so it isn't
+   * clipped by scrollable modal panels.
+   */
+  portal?: boolean;
 };
 
 export default function SearchableDropdown({
@@ -36,13 +50,16 @@ export default function SearchableDropdown({
   searchDebounceMs = 280,
   renderSelectedLabel,
   renderOptionLabel,
+  portal = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [asyncOptions, setAsyncOptions] = useState<DropdownOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [pickedLabel, setPickedLabel] = useState("");
+  const [portalStyle, setPortalStyle] = useState<CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected =
@@ -60,7 +77,10 @@ export default function SearchableDropdown({
 
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (listRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", close, true);
     return () => document.removeEventListener("mousedown", close, true);
@@ -108,6 +128,39 @@ export default function SearchableDropdown({
 
   const hasGroups = groups.some(([g]) => g);
 
+  useLayoutEffect(() => {
+    if (!open || !portal || !ref.current) return;
+    const update = () => {
+      const rect = ref.current!.getBoundingClientRect();
+      const rowH = 2.15 * 16;
+      const listH = Math.min(
+        rowH * visibleRows,
+        Math.max(160, window.innerHeight * 0.45)
+      );
+      const spaceBelow = window.innerHeight - rect.bottom - 8;
+      const spaceAbove = rect.top - 8;
+      const openUp = spaceBelow < listH && spaceAbove > spaceBelow;
+      const maxH = Math.min(listH, openUp ? spaceAbove : spaceBelow);
+      setPortalStyle({
+        position: "fixed",
+        left: rect.left,
+        width: Math.max(rect.width, 200),
+        zIndex: 600,
+        maxHeight: maxH,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, portal, visibleRows, filtered.length, query]);
+
   function pick(opt: DropdownOption) {
     setPickedLabel(opt.label);
     onChange(opt.value);
@@ -117,6 +170,7 @@ export default function SearchableDropdown({
 
   const listStyle: CSSProperties = {
     ["--dropdown-visible-rows" as string]: String(visibleRows),
+    ...(portal ? portalStyle : {}),
   };
 
   const showHint =
@@ -128,6 +182,60 @@ export default function SearchableDropdown({
 
   const showSelectedDisplay = !open && !!selected && !!renderSelectedLabel;
 
+  const listEl = open ? (
+    <ul
+      ref={listRef}
+      className={`search-dropdown-list${
+        portal ? " search-dropdown-list--portal" : ""
+      }`}
+      role="listbox"
+      style={listStyle}
+    >
+      {showHint && (
+        <li className="search-dropdown-empty">
+          Type {minQueryLength}+ characters to search
+        </li>
+      )}
+      {searching && <li className="search-dropdown-empty">Searching…</li>}
+      {!showHint && !searching && filtered.length === 0 && (
+        <li className="search-dropdown-empty">No matches</li>
+      )}
+      {!showHint &&
+        !searching &&
+        hasGroups &&
+        groups.map(([group, items]) => (
+          <li key={group || "_"} className="search-dropdown-group-wrap">
+            {group && <span className="search-dropdown-group">{group}</span>}
+            <ul>
+              {items.map((o) => (
+                <li key={o.value}>
+                  <button type="button" onClick={() => pick(o)}>
+                    {o.iso && (
+                      <span className={`fi fi-${o.iso} search-dropdown-flag`} />
+                    )}
+                    {renderListLabel(o)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      {!showHint &&
+        !searching &&
+        !hasGroups &&
+        filtered.map((o) => (
+          <li key={o.value}>
+            <button type="button" onClick={() => pick(o)}>
+              {o.iso && (
+                <span className={`fi fi-${o.iso} search-dropdown-flag`} />
+              )}
+              {renderListLabel(o)}
+            </button>
+          </li>
+        ))}
+    </ul>
+  ) : null;
+
   return (
     <div className="search-dropdown" ref={ref}>
       {showSelectedDisplay ? (
@@ -137,7 +245,10 @@ export default function SearchableDropdown({
           onClick={() => setOpen(true)}
         >
           {selected.iso && (
-            <span className={`fi fi-${selected.iso} search-dropdown-flag`} aria-hidden />
+            <span
+              className={`fi fi-${selected.iso} search-dropdown-flag`}
+              aria-hidden
+            />
           )}
           <span className="search-dropdown-selected-text">
             {renderSelectedLabel!(selected)}
@@ -157,62 +268,9 @@ export default function SearchableDropdown({
           onFocus={() => setOpen(true)}
         />
       )}
-      {open && (
-        <ul
-          className="search-dropdown-list"
-          role="listbox"
-          style={listStyle}
-        >
-          {showHint && (
-            <li className="search-dropdown-empty">
-              Type {minQueryLength}+ characters to search
-            </li>
-          )}
-          {searching && (
-            <li className="search-dropdown-empty">Searching…</li>
-          )}
-          {!showHint && !searching && filtered.length === 0 && (
-            <li className="search-dropdown-empty">No matches</li>
-          )}
-          {!showHint &&
-            !searching &&
-            hasGroups &&
-            groups.map(([group, items]) => (
-              <li key={group || "_"} className="search-dropdown-group-wrap">
-                {group && (
-                  <span className="search-dropdown-group">{group}</span>
-                )}
-                <ul>
-                  {items.map((o) => (
-                    <li key={o.value}>
-                      <button type="button" onClick={() => pick(o)}>
-                        {o.iso && (
-                          <span
-                            className={`fi fi-${o.iso} search-dropdown-flag`}
-                          />
-                        )}
-                        {renderListLabel(o)}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          {!showHint &&
-            !searching &&
-            !hasGroups &&
-            filtered.map((o) => (
-              <li key={o.value}>
-                <button type="button" onClick={() => pick(o)}>
-                  {o.iso && (
-                    <span className={`fi fi-${o.iso} search-dropdown-flag`} />
-                  )}
-                  {renderListLabel(o)}
-                </button>
-              </li>
-            ))}
-        </ul>
-      )}
+      {portal && listEl
+        ? createPortal(listEl, document.body)
+        : listEl}
     </div>
   );
 }

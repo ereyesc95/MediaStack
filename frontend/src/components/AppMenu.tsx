@@ -69,6 +69,7 @@ type Props = {
   onAddMember?: () => void;
   onAddLink?: () => void;
   onAddSimilar?: () => void;
+  addSimilarLabel?: string;
   onRefreshRelatedSimilar?: () => void;
   onRefreshRelatedParticipations?: () => void;
   refreshIncludeBio?: boolean;
@@ -121,6 +122,7 @@ export default function AppMenu({
   onAddMember,
   onAddLink,
   onAddSimilar,
+  addSimilarLabel = "Add similar artist",
   onRefreshRelatedSimilar,
   onRefreshRelatedParticipations,
   refreshIncludeBio = false,
@@ -334,7 +336,7 @@ export default function AppMenu({
               }}
             >
               <IconAddArtist className="menu-item-icon" />
-              Add similar artist
+              {addSimilarLabel}
             </button>
           )}
           {menuVariant === "media-item" && onRefreshTracklist && (

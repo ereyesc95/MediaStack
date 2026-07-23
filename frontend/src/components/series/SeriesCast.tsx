@@ -4,7 +4,12 @@ import {
   patchSeriesCastMember,
   removeSeriesCastMember,
 } from "../../api";
-import type { SeriesCastMember, SeriesCastTab } from "../../types";
+import type {
+  SeriesCastMember,
+  SeriesCastPerformance,
+  SeriesCastTab,
+  SeriesLanguageOption,
+} from "../../types";
 import { useDeviceLayout } from "../../usePhoneLayout";
 import { IconEditProfile } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
@@ -18,11 +23,23 @@ type Props = {
     animated?: SeriesCastMember[];
     people?: SeriesCastMember[];
   };
+  /** Franchise-selected language codes (About). */
+  languages?: string[];
+  languageOptions?: SeriesLanguageOption[];
+  originLanguage?: string | null;
   tab: SeriesCastTab;
   isAdmin?: boolean;
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
+};
+
+/** Language code → flag-icons country ISO */
+const LANG_FLAG_ISO: Record<string, string> = {
+  ja: "jp",
+  en: "gb",
+  "es-ES": "es",
+  "es-419": "mx",
 };
 
 function initials(name: string): string {
@@ -42,84 +59,223 @@ function splitRows<T>(items: T[], perRow?: number): { top: T[]; bottom: T[] } {
   return { top: items.slice(0, topCount), bottom: items.slice(topCount) };
 }
 
-function actorNames(member: SeriesCastMember): string {
+function flagIso(lang: string): string {
+  return LANG_FLAG_ISO[lang] || lang.slice(0, 2).toLowerCase();
+}
+
+function performanceForLang(
+  member: SeriesCastMember,
+  lang: string | null
+): SeriesCastPerformance | null {
+  const perfs = member.performances || [];
+  if (!perfs.length) return null;
+  if (lang) {
+    const match = perfs.find(
+      (p) => (p.language || "").toLowerCase() === lang.toLowerCase()
+    );
+    if (match) return match;
+  }
+  return perfs[0];
+}
+
+function actorLabel(member: SeriesCastMember, lang: string | null): string {
+  const perf = performanceForLang(member, lang);
+  if (perf?.actor_name) return perf.actor_name;
   if (member.actors?.length) {
+    const byLang = lang
+      ? member.actors.find(
+          (a) => (a.language || "").toLowerCase() === lang.toLowerCase()
+        )
+      : null;
+    if (byLang?.name) return byLang.name;
     return member.actors.map((a) => a.name).filter(Boolean).join(" · ");
   }
   return (member.roles || []).filter(Boolean).join(" · ");
 }
 
+/** Actors to list under a character, ordered by franchise language list
+ *  (origin / first language first). */
+function actorsForDisplay(
+  member: SeriesCastMember,
+  franchiseLangs: string[],
+  originLanguage?: string | null
+): { language: string; name: string; photo_url?: string | null }[] {
+  const out: {
+    language: string;
+    name: string;
+    photo_url?: string | null;
+  }[] = [];
+  let langs =
+    franchiseLangs.length > 0
+      ? [...franchiseLangs]
+      : (member.performances || [])
+          .map((p) => p.language)
+          .filter(Boolean) as string[];
+
+  // Origin language first
+  if (originLanguage) {
+    langs = [
+      originLanguage,
+      ...langs.filter(
+        (l) => l.toLowerCase() !== originLanguage.toLowerCase()
+      ),
+    ];
+  }
+
+  for (const lang of langs) {
+    const perf = performanceForLang(member, lang);
+    if (perf?.actor_name) {
+      out.push({
+        language: lang,
+        name: perf.actor_name,
+        photo_url: perf.photo_url,
+      });
+      continue;
+    }
+    const actor = (member.actors || []).find(
+      (a) =>
+        a.name &&
+        (!a.language || a.language.toLowerCase() === lang.toLowerCase())
+    );
+    if (actor?.name && !out.some((o) => o.name === actor.name && o.language === lang)) {
+      if (!actor.language && out.length > 0) continue;
+      out.push({
+        language: lang,
+        name: actor.name,
+        photo_url: actor.photo_url,
+      });
+    }
+  }
+
+  if (!out.length && (member.roles?.length || member.actors?.length)) {
+    const name = member.actors?.[0]?.name || member.roles?.[0] || "";
+    if (name) {
+      out.push({
+        language: originLanguage || franchiseLangs[0] || "ja",
+        name,
+        photo_url:
+          member.actors?.[0]?.photo_url ||
+          member.actor_photo_url ||
+          member.character_photo_url,
+      });
+    }
+  }
+  return out;
+}
+
 function MemberCard({
   member,
   characterCentered,
+  franchiseLangs,
+  originLanguage,
   onSelect,
 }: {
   member: SeriesCastMember;
   characterCentered: boolean;
+  franchiseLangs: string[];
+  originLanguage?: string | null;
   onSelect: (m: SeriesCastMember) => void;
 }) {
-  const [frontFailed, setFrontFailed] = useState(false);
-  const [backFailed, setBackFailed] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const [hoverActorPhoto, setHoverActorPhoto] = useState<string | null>(null);
 
-  // Characters tab: front = character art, back = actor
-  // Staff tab: front = person only (no flip)
-  const frontUrl = member.photo_url;
-  const backUrl = characterCentered
-    ? member.actor_photo_url || member.character_photo_url || null
+  const characterUrl = member.photo_url;
+  const actors = characterCentered
+    ? actorsForDisplay(member, franchiseLangs, originLanguage)
+    : [];
+  const baseUrl = characterUrl && !photoFailed ? characterUrl : null;
+  const hoverUrl = hoverActorPhoto;
+  const staffSubtitle = !characterCentered
+    ? member.roles?.filter(Boolean).join(" · ")
     : null;
-  const front = frontUrl && !frontFailed ? frontUrl : null;
-  const back = backUrl && !backFailed && backUrl !== frontUrl ? backUrl : null;
-  const subtitle = characterCentered
-    ? actorNames(member)
-    : member.roles?.filter(Boolean).join(" · ");
 
   useEffect(() => {
-    setFrontFailed(false);
-    setBackFailed(false);
-  }, [member.photo_url, member.actor_photo_url, member.character_photo_url]);
+    setPhotoFailed(false);
+    setHoverActorPhoto(null);
+  }, [member.photo_url, member.id]);
 
   return (
-    <button
-      type="button"
+    <div
       className={`artist-lineup-card series-cast-card${
         member.is_deceased ? " artist-lineup-card--deceased" : ""
       }`}
-      onClick={() => onSelect(member)}
     >
-      <span
-        className={`artist-lineup-card__photo series-cast-card__photo${
-          back ? " series-cast-card__photo--flip" : ""
-        }`}
+      <button
+        type="button"
+        className="series-cast-card__main"
+        onClick={() => onSelect(member)}
       >
-        <span className="series-cast-card__photo-inner">
-          <span className="series-cast-card__face series-cast-card__face--front">
-            {front ? (
-              <img src={front} alt="" onError={() => setFrontFailed(true)} />
-            ) : (
-              <span className="artist-lineup-card__ph">
-                {initials(member.name)}
-              </span>
-            )}
-          </span>
-          {back ? (
-            <span className="series-cast-card__face series-cast-card__face--back">
-              <img src={back} alt="" onError={() => setBackFailed(true)} />
+        <span className="artist-lineup-card__photo series-cast-card__photo">
+          {baseUrl ? (
+            <img
+              src={baseUrl}
+              alt=""
+              className={`series-cast-card__photo-layer series-cast-card__photo-layer--base${
+                hoverUrl ? " is-faded" : ""
+              }`}
+              onError={() => setPhotoFailed(true)}
+            />
+          ) : (
+            <span
+              className={`artist-lineup-card__ph series-cast-card__photo-layer series-cast-card__photo-layer--base${
+                hoverUrl ? " is-faded" : ""
+              }`}
+            >
+              {initials(member.name)}
+            </span>
+          )}
+          {hoverUrl ? (
+            <img
+              key={hoverUrl}
+              src={hoverUrl}
+              alt=""
+              className="series-cast-card__photo-layer series-cast-card__photo-layer--hover is-visible"
+              onError={() => setHoverActorPhoto(null)}
+            />
+          ) : null}
+        </span>
+        <span className="artist-lineup-card__name">
+          {member.name}
+          {member.is_deceased ? (
+            <span className="artist-lineup-card__deceased" title="Deceased">
+              †
             </span>
           ) : null}
         </span>
-      </span>
-      <span className="artist-lineup-card__name">
-        {member.name}
-        {member.is_deceased ? (
-          <span className="artist-lineup-card__deceased" title="Deceased">
-            †
-          </span>
-        ) : null}
-      </span>
-      {subtitle ? (
-        <span className="artist-lineup-card__roles">{subtitle}</span>
+      </button>
+      {characterCentered && actors.length > 0 ? (
+        <ul className="series-cast-card__actors">
+          {actors.map((a) => (
+            <li key={`${a.language}-${a.name}`}>
+              <button
+                type="button"
+                className="series-cast-card__actor"
+                title={a.name}
+                onMouseEnter={() =>
+                  setHoverActorPhoto(a.photo_url || null)
+                }
+                onMouseLeave={() => setHoverActorPhoto(null)}
+                onFocus={() => setHoverActorPhoto(a.photo_url || null)}
+                onBlur={() => setHoverActorPhoto(null)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(member);
+                }}
+              >
+                <span
+                  className={`fi fi-${flagIso(a.language)} series-cast-card__flag`}
+                  aria-hidden
+                />
+                <span className="series-cast-card__actor-name">{a.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
-    </button>
+      {staffSubtitle ? (
+        <span className="artist-lineup-card__roles">{staffSubtitle}</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -129,6 +285,8 @@ function CastMemberModal({
   franchiseName,
   isAdmin,
   bucket,
+  franchiseLangs,
+  languageOptions,
   onClose,
   onDataChanged,
 }: {
@@ -137,6 +295,8 @@ function CastMemberModal({
   franchiseName: string;
   isAdmin?: boolean;
   bucket: SeriesCastTab;
+  franchiseLangs: string[];
+  languageOptions: SeriesLanguageOption[];
   onClose: () => void;
   onDataChanged: () => void;
 }) {
@@ -146,14 +306,29 @@ function CastMemberModal({
   const [error, setError] = useState<string | null>(null);
   const [photoFailed, setPhotoFailed] = useState(false);
 
+  const defaultLang =
+    franchiseLangs[0] || languageOptions[0]?.code || "en";
   const [charName, setCharName] = useState(
     member.character || member.name || ""
   );
-  const [actorsText, setActorsText] = useState(actorNames(member));
+  const [editLang, setEditLang] = useState(defaultLang);
+  const [actorsText, setActorsText] = useState(
+    actorLabel(member, defaultLang)
+  );
   const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
   const [actorPhotoUrl, setActorPhotoUrl] = useState(
-    member.actor_photo_url || member.character_photo_url || ""
+    performanceForLang(member, defaultLang)?.photo_url ||
+      member.actor_photo_url ||
+      member.character_photo_url ||
+      ""
   );
+
+  useEffect(() => {
+    setActorsText(actorLabel(member, editLang));
+    setActorPhotoUrl(
+      performanceForLang(member, editLang)?.photo_url || ""
+    );
+  }, [editLang, member]);
 
   const handleSave = async () => {
     if (member.id == null) return;
@@ -172,6 +347,7 @@ function CastMemberModal({
         actor_photo_url: actorPhotoUrl.trim() || null,
         actors: characterCentered ? actors : undefined,
         roles: actors,
+        language: characterCentered ? editLang : undefined,
       });
       onDataChanged();
       onClose();
@@ -199,7 +375,7 @@ function CastMemberModal({
   };
 
   const displayPhoto = member.photo_url;
-  const actorsLabel = actorNames(member);
+  const listed = actorsForDisplay(member, franchiseLangs, franchiseLangs[0]);
 
   return (
     <ModalPortal onClose={onClose}>
@@ -249,15 +425,23 @@ function CastMemberModal({
               </span>
               <div className="artist-member-modal__info">
                 <p className="artist-member-modal__title">{member.name}</p>
-                {characterCentered && actorsLabel ? (
-                  <p className="artist-member-modal__row">
+                {characterCentered && listed.length > 0 ? (
+                  <div className="artist-member-modal__row">
                     <span className="artist-member-modal__label">
                       Portrayed by:
                     </span>
-                    <span className="artist-member-modal__value">
-                      {actorsLabel}
-                    </span>
-                  </p>
+                    <ul className="series-cast-modal__actors">
+                      {listed.map((a) => (
+                        <li key={`${a.language}-${a.name}`}>
+                          <span
+                            className={`fi fi-${flagIso(a.language)}`}
+                            aria-hidden
+                          />{" "}
+                          {a.name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 {!characterCentered && member.roles?.length ? (
                   <p className="artist-member-modal__row">
@@ -293,14 +477,32 @@ function CastMemberModal({
               />
             </label>
             {characterCentered ? (
-              <label>
-                Actors (semicolon-separated)
-                <input
-                  value={actorsText}
-                  onChange={(e) => setActorsText(e.target.value)}
-                  placeholder="Actor one; Actor two"
-                />
-              </label>
+              <>
+                <label>
+                  Language
+                  <select
+                    value={editLang}
+                    onChange={(e) => setEditLang(e.target.value)}
+                  >
+                    {(languageOptions.length
+                      ? languageOptions
+                      : franchiseLangs.map((c) => ({ code: c, label: c }))
+                    ).map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Actor for this language
+                  <input
+                    value={actorsText}
+                    onChange={(e) => setActorsText(e.target.value)}
+                    placeholder="Actor name"
+                  />
+                </label>
+              </>
             ) : null}
             <label>
               {characterCentered ? "Character photo URL" : "Photo URL"}
@@ -311,7 +513,7 @@ function CastMemberModal({
             </label>
             {characterCentered ? (
               <label>
-                Actor photo URL (hover flip)
+                Actor photo URL
                 <input
                   value={actorPhotoUrl}
                   onChange={(e) => setActorPhotoUrl(e.target.value)}
@@ -331,14 +533,6 @@ function CastMemberModal({
               <span className="modal-actions__spacer" />
               <button
                 type="button"
-                className="btn"
-                onClick={() => setEditing(false)}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 className="btn btn--primary"
                 disabled={busy || !charName.trim()}
                 onClick={() => void handleSave()}
@@ -356,11 +550,15 @@ function CastMemberModal({
 function AddCastModal({
   franchiseId,
   bucket,
+  languageOptions,
+  defaultLanguage,
   onClose,
   onSaved,
 }: {
   franchiseId: string;
   bucket: SeriesCastTab;
+  languageOptions: SeriesLanguageOption[];
+  defaultLanguage: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -369,6 +567,9 @@ function AddCastModal({
   const [actorName, setActorName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [actorPhotoUrl, setActorPhotoUrl] = useState("");
+  const [lang, setLang] = useState(
+    defaultLanguage || languageOptions[0]?.code || "en"
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -390,6 +591,7 @@ function AddCastModal({
           ? photoUrl.trim() || undefined
           : undefined,
         roles: actorName.trim() ? [actorName.trim()] : undefined,
+        language: characterCentered ? lang : undefined,
       });
       onSaved();
       onClose();
@@ -427,6 +629,19 @@ function AddCastModal({
           {characterCentered ? (
             <>
               <label>
+                Language
+                <select value={lang} onChange={(e) => setLang(e.target.value)}>
+                  {(languageOptions.length
+                    ? languageOptions
+                    : [{ code: lang, label: lang }]
+                  ).map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
                 Actor / portrayed by (optional)
                 <input
                   value={actorName}
@@ -458,10 +673,7 @@ function AddCastModal({
             </label>
           )}
         </div>
-        <div className="modal-panel-actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
+        <div className="modal-panel-actions modal-panel-actions--end">
           <button
             type="button"
             className="btn btn--primary"
@@ -480,6 +692,9 @@ export default function SeriesCast({
   franchiseId,
   franchiseName,
   cast,
+  languages,
+  languageOptions,
+  originLanguage,
   tab,
   isAdmin,
   addOpen,
@@ -489,6 +704,23 @@ export default function SeriesCast({
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
   const characterCentered = tab === "characters";
+
+  const franchiseLangs = useMemo(() => {
+    const langs = languages?.length
+      ? [...languages]
+      : originLanguage
+        ? [originLanguage]
+        : [];
+    if (originLanguage && langs.length) {
+      return [
+        originLanguage,
+        ...langs.filter(
+          (l) => l.toLowerCase() !== originLanguage.toLowerCase()
+        ),
+      ];
+    }
+    return langs;
+  }, [languages, originLanguage]);
 
   const members = useMemo(() => {
     const list =
@@ -504,6 +736,16 @@ export default function SeriesCast({
     [members, deviceLayout]
   );
 
+  const allLangOptions = useMemo(() => {
+    if (languageOptions?.length) {
+      return languageOptions.map((o) => ({
+        ...o,
+        label: o.label.replace(/\s*\(origin\)\s*$/i, ""),
+      }));
+    }
+    return franchiseLangs.map((code) => ({ code, label: code }));
+  }, [languageOptions, franchiseLangs]);
+
   if (!members.length && !addOpen) {
     return (
       <div className="artist-lineup">
@@ -512,6 +754,16 @@ export default function SeriesCast({
           → <strong>Add member</strong>
           {isAdmin ? "" : " (admin)"}, or refresh metadata from TMDb.
         </p>
+        {addOpen && onAddClose ? (
+          <AddCastModal
+            franchiseId={franchiseId}
+            bucket={tab}
+            languageOptions={allLangOptions}
+            defaultLanguage={franchiseLangs[0] || null}
+            onClose={onAddClose}
+            onSaved={onDataChanged}
+          />
+        ) : null}
       </div>
     );
   }
@@ -531,6 +783,8 @@ export default function SeriesCast({
                 key={`${m.id ?? m.name}-t${i}`}
                 member={m}
                 characterCentered={characterCentered}
+                franchiseLangs={franchiseLangs}
+                originLanguage={originLanguage}
                 onSelect={setModalMember}
               />
             ))}
@@ -542,6 +796,8 @@ export default function SeriesCast({
                   key={`${m.id ?? m.name}-b${i}`}
                   member={m}
                   characterCentered={characterCentered}
+                  franchiseLangs={franchiseLangs}
+                  originLanguage={originLanguage}
                   onSelect={setModalMember}
                 />
               ))}
@@ -557,6 +813,8 @@ export default function SeriesCast({
           franchiseName={franchiseName}
           isAdmin={isAdmin}
           bucket={tab}
+          franchiseLangs={franchiseLangs}
+          languageOptions={allLangOptions}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />
@@ -566,6 +824,8 @@ export default function SeriesCast({
         <AddCastModal
           franchiseId={franchiseId}
           bucket={tab}
+          languageOptions={allLangOptions}
+          defaultLanguage={franchiseLangs[0] || null}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

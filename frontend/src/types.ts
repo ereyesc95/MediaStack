@@ -966,7 +966,8 @@ export type SeriesSection =
   | "audio"
   | "library"
   | "games"
-  | "gallery";
+  | "gallery"
+  | "episodes";
 
 export type SeriesOverviewTab = "about" | "cast" | "links" | "related";
 export type SeriesCastTab = "characters" | "staff";
@@ -1165,13 +1166,37 @@ export type SeriesFilterOptions = {
     continent: string;
     items: { id: number; name: string; iso?: string | null }[];
   }[];
+  /** Full country list for admin editors (Edit about). */
+  all_country_groups?: {
+    continent: string;
+    items: { id: number; name: string; iso?: string | null }[];
+  }[];
   subgenre_groups: {
     genre: string;
-    items: { id: number; name: string }[];
+    items: { id: number; name: string; genre_id?: number | null }[];
+  }[];
+  /** Full taxonomy for admin editors (Edit about). */
+  all_subgenre_groups?: {
+    genre: string;
+    items: { id: number; name: string; genre_id?: number | null }[];
   }[];
   decades: number[];
   publishers: string[];
   writers: string[];
+};
+
+export type SeriesCastPerformance = {
+  language: string;
+  actor_name?: string | null;
+  actor_id?: number | string | null;
+  photo_url?: string | null;
+};
+
+export type SeriesLanguageOption = {
+  code: string;
+  label: string;
+  is_origin?: boolean;
+  selected?: boolean;
 };
 
 export type SeriesCastMember = {
@@ -1183,7 +1208,13 @@ export type SeriesCastMember = {
   actor_photo_url?: string | null;
   character_photo_url?: string | null;
   tmdb_photo_url?: string | null;
-  actors?: { id?: number | string | null; name: string; photo_url?: string | null }[];
+  performances?: SeriesCastPerformance[];
+  actors?: {
+    id?: number | string | null;
+    name: string;
+    photo_url?: string | null;
+    language?: string | null;
+  }[];
   roles?: string[];
   is_deceased?: boolean;
   manual?: boolean;
@@ -1198,6 +1229,8 @@ export type SeriesRelatedShow = {
   poster_url?: string | null;
   cover_url?: string | null;
   overview?: string | null;
+  manual?: boolean;
+  hidden?: boolean;
 };
 
 export type SeriesOverviewEra = {
@@ -1224,6 +1257,10 @@ export type SeriesOverview = {
   aliases: string[];
   city?: string | null;
   country?: { id: number; name: string | null; iso?: string | null } | null;
+  languages?: string[];
+  origin_language?: string | null;
+  language_options?: SeriesLanguageOption[];
+  cast_languages?: SeriesLanguageOption[];
   activity_periods: { label: string; start?: string | null; end?: string | null }[];
   genres: { id: number | string; name: string }[];
   publishers: string[];

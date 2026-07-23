@@ -47,11 +47,8 @@ function eraHeroUrl(era: Era, stacked: boolean): string | undefined {
   return era.portrait_url ?? undefined;
 }
 
-function originLabel(
-  city: string | null | undefined,
-  country: string | null | undefined
-) {
-  return [city, country].filter(Boolean).join(", ");
+function originLabel(country: string | null | undefined) {
+  return country?.trim() || "";
 }
 
 function MetaValue({
@@ -152,7 +149,7 @@ export default function SeriesAbout({
     return () => window.clearTimeout(t);
   }, [heroUrl]);
 
-  const originText = originLabel(data.city, data.country?.name);
+  const originText = originLabel(data.country?.name);
   const hasBio = Boolean(data.bio);
   const writers =
     data.writers.length > 0 ? data.writers : data.aliases.length > 0
@@ -264,7 +261,7 @@ export default function SeriesAbout({
                   <dd>{writers.join(" • ")}</dd>
                 </div>
               )}
-              {(data.city || data.country) && (
+              {data.country && (
                 <div className="artist-about__meta-row">
                   <dt>Origin</dt>
                   <dd className="artist-about__origin">
@@ -274,6 +271,29 @@ export default function SeriesAbout({
                       </span>
                     )}
                     {originText && <span>{originText}</span>}
+                  </dd>
+                </div>
+              )}
+              {(data.languages?.length ||
+                data.origin_language ||
+                (data.language_options || []).some((o) => o.selected)) && (
+                <div className="artist-about__meta-row">
+                  <dt>Languages</dt>
+                  <dd>
+                    {(
+                      (data.language_options || []).filter((o) => o.selected)
+                        .length
+                        ? (data.language_options || []).filter((o) => o.selected)
+                        : (data.languages || []).map((code) => ({
+                            code,
+                            label: code,
+                            is_origin: code === data.origin_language,
+                          }))
+                    ).map((o) => (
+                      <MetaValue key={o.code}>
+                        {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                      </MetaValue>
+                    ))}
                   </dd>
                 </div>
               )}
@@ -319,7 +339,6 @@ export default function SeriesAbout({
           </div>
           {data.subseries.length > 0 && (
             <section className="artist-about__tracks series-about__subseries">
-              <h3 className="artist-about__tracks-title">Subseries</h3>
               <div className="artist-about__tracks-row series-about__subseries-row">
                 {data.subseries.map((s) => (
                   <button

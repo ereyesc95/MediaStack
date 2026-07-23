@@ -24,6 +24,7 @@ import {
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
   LinkCategory,
+  ReleaseCardLayout,
   SeriesCastTab,
   SeriesOverview,
   SeriesOverviewTab,
@@ -31,11 +32,16 @@ import type {
   SeriesSubseriesCard,
 } from "../../types";
 import {
+  getStoredReleaseCardLayout,
+  saveReleaseCardLayout,
+} from "../../themes";
+import {
   isMobilePortraitLayout,
   isStackedArtistLayout,
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import SeriesAbout from "./SeriesAbout";
@@ -142,6 +148,20 @@ export default function SeriesFranchisePage({
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [addRelatedOpen, setAddRelatedOpen] = useState(false);
+  const [releaseCardLayout, setReleaseCardLayout] = useState<ReleaseCardLayout>(
+    () => (userId ? getStoredReleaseCardLayout(userId) : "cover")
+  );
+  const setReleaseCardLayoutPersisted = useCallback(
+    (next: ReleaseCardLayout) => {
+      setReleaseCardLayout(next);
+      if (userId) saveReleaseCardLayout(userId, next);
+    },
+    [userId]
+  );
+  useEffect(() => {
+    if (userId) setReleaseCardLayout(getStoredReleaseCardLayout(userId));
+  }, [userId]);
   const [mediaSubFilter, setMediaSubFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [bgLayers, setBgLayers] = useState<{
@@ -576,6 +596,16 @@ export default function SeriesFranchisePage({
             {(busy || refreshing) && (
               <span className="muted">{refreshing ? "Refreshing…" : busy}</span>
             )}
+            {(section === "audio" ||
+              section === "movies" ||
+              section === "series" ||
+              section === "library" ||
+              section === "games") && (
+              <ReleaseCardLayoutPicker
+                value={releaseCardLayout}
+                onChange={setReleaseCardLayoutPersisted}
+              />
+            )}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -610,6 +640,16 @@ export default function SeriesFranchisePage({
                 isAdmin && section === "overview" && overviewTab === "links"
                   ? () => setAddLinkOpen(true)
                   : undefined
+              }
+              onAddSimilar={
+                isAdmin && section === "overview" && overviewTab === "related"
+                  ? () => setAddRelatedOpen(true)
+                  : undefined
+              }
+              addSimilarLabel={
+                relatedTab === "creator"
+                  ? "Add same author series"
+                  : "Add similar series"
               }
               onRefreshLineup={
                 isAdmin && section === "overview" && overviewTab === "cast"
@@ -722,8 +762,8 @@ export default function SeriesFranchisePage({
           <nav className="artist-page__subtabs artist-page__related-subtabs">
             {(
               [
-                ["creator", "SAME CREATOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
-                ["similar", "SIMILAR", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
+                ["creator", "SAME AUTHOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
+                ["similar", "SIMILAR SERIES", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
               ] as const
             ).map(([id, label, count]) => (
               <button
@@ -780,7 +820,7 @@ export default function SeriesFranchisePage({
             onEraChange={setEraIndex}
             onOpenSubseries={(sub: SeriesSubseriesCard) =>
               onNavigate({
-                section: "series",
+                section: "overview",
                 subseriesId: sub.id,
                 seasonId: undefined,
               })
@@ -793,6 +833,9 @@ export default function SeriesFranchisePage({
             franchiseId={franchiseId}
             franchiseName={data.name}
             cast={data.cast}
+            languages={data.languages}
+            languageOptions={data.language_options}
+            originLanguage={data.origin_language}
             tab={castTab}
             isAdmin={isAdmin}
             addOpen={addCastOpen}
@@ -815,9 +858,14 @@ export default function SeriesFranchisePage({
 
         {data && section === "overview" && overviewTab === "related" ? (
           <SeriesRelatedPanel
+            franchiseId={franchiseId}
             creator={data.related?.creator || []}
             similar={data.related?.similar || []}
             tab={relatedTab}
+            isAdmin={isAdmin}
+            addOpen={addRelatedOpen}
+            onAddClose={() => setAddRelatedOpen(false)}
+            onDataChanged={() => void load()}
           />
         ) : null}
 
@@ -826,6 +874,7 @@ export default function SeriesFranchisePage({
             items={filterBySubseries(audioCards)}
             loading={audioLoading}
             emptyMessage="No matching Music artist audio for this franchise."
+            cardLayout={releaseCardLayout}
           />
         ) : null}
 
@@ -834,6 +883,7 @@ export default function SeriesFranchisePage({
             items={filterBySubseries(movieCards)}
             loading={movieLoading}
             emptyMessage="No movies linked to this franchise yet."
+            cardLayout={releaseCardLayout}
           />
         ) : null}
 
@@ -842,9 +892,10 @@ export default function SeriesFranchisePage({
             items={showCards}
             loading={showLoading}
             emptyMessage="No subseries found."
+            cardLayout={releaseCardLayout}
             onOpen={(item) =>
               onNavigate({
-                section: "series",
+                section: "overview",
                 subseriesId: item.id,
                 seasonId: undefined,
               })
@@ -857,6 +908,7 @@ export default function SeriesFranchisePage({
             items={filterBySubseries(libCards)}
             loading={libLoading}
             emptyMessage="No books linked to this franchise yet."
+            cardLayout={releaseCardLayout}
           />
         ) : null}
 
@@ -865,6 +917,7 @@ export default function SeriesFranchisePage({
             items={filterGames(gameCards)}
             loading={gameLoading}
             emptyMessage="No games linked to this franchise yet."
+            cardLayout={releaseCardLayout}
           />
         ) : null}
 

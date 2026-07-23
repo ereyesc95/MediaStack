@@ -17,25 +17,32 @@ export default function SeriesEpisodeList({
   emptyLabel = "No episode video files in this season folder.",
 }: Props) {
   if (!episodes.length) {
-    return <p className="muted artist-section-empty">{emptyLabel}</p>;
+    return (
+      <p className="muted release-tracklist__edition-empty">{emptyLabel}</p>
+    );
   }
 
   return (
-    <div className="series-episode-list">
-      <ul className="series-episode-list__tracks">
+    <div className="release-tracklist__content series-episode-list">
+      <ul className="release-tracklist__tracks series-episode-list__tracks">
         {episodes.map((ep) => (
           <li key={ep.id}>
             <button
               type="button"
-              className="series-episode-list__row"
+              className="release-tracklist__row series-episode-list__row"
               onClick={() => openEpisode(ep)}
               title={`Open ${ep.title}`}
             >
-              <span className="series-episode-list__num">
+              <span className="release-tracklist__num series-episode-list__num">
                 {ep.number != null ? ep.number : "–"}
               </span>
-              <span className="series-episode-list__title">{ep.title}</span>
-              <span className="series-episode-list__open" aria-hidden>
+              <span className="release-tracklist__title series-episode-list__title">
+                {ep.title}
+              </span>
+              <span
+                className="release-tracklist__meta series-episode-list__open"
+                aria-hidden
+              >
                 ↗
               </span>
             </button>

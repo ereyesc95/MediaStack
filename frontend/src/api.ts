@@ -18,6 +18,7 @@ import type {
   SeriesGalleryPayload,
   SeriesOverview,
   SeriesCastMember,
+  SeriesRelatedShow,
   UserPlaylist,
 } from "./types";
 import { EMPTY_DASHBOARD } from "./types";
@@ -1593,11 +1594,12 @@ export async function patchSeriesAbout(
   body: {
     bio?: string;
     writers?: string;
-    origin_city?: string;
     country_id?: number | null;
     activity_start?: string;
     activity_end?: string;
     publishers?: string;
+    languages?: string[];
+    genres?: { id?: number | string | null; name: string }[];
   }
 ) {
   return request<{ ok: boolean }>(
@@ -1619,6 +1621,7 @@ export async function addSeriesCastMember(
     photo_url?: string;
     character_photo_url?: string;
     roles?: string[];
+    language?: string;
   }
 ) {
   return request<SeriesCastMember>(
@@ -1654,6 +1657,12 @@ export async function patchSeriesCastMember(
     actor_photo_url?: string | null;
     actors?: string[];
     roles?: string[];
+    language?: string;
+    performances?: {
+      language: string;
+      actor_name?: string | null;
+      photo_url?: string | null;
+    }[];
   }
 ) {
   return request<SeriesCastMember>(
@@ -1663,6 +1672,38 @@ export async function patchSeriesCastMember(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }
+  );
+}
+
+export async function addSeriesRelated(
+  franchiseId: string,
+  body: {
+    bucket: "creator" | "similar";
+    title: string;
+    tmdb_id?: number | string | null;
+    date_iso?: string | null;
+    poster_url?: string | null;
+    overview?: string | null;
+  }
+) {
+  return request<{ ok: boolean; item: SeriesRelatedShow }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/related`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function removeSeriesRelated(
+  franchiseId: string,
+  itemId: string | number,
+  bucket: "creator" | "similar" = "similar"
+) {
+  return request<{ ok: boolean }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/related/${encodeURIComponent(String(itemId))}?bucket=${encodeURIComponent(bucket)}`,
+    { method: "DELETE" }
   );
 }
 

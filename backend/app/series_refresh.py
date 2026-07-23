@@ -58,6 +58,55 @@ def _merge_unique(existing: list[str], extra: list[str]) -> list[str]:
     return out
 
 
+def _merge_related(existing: dict | list | None, fresh: dict) -> dict:
+    """Merge TMDb related with manual/hidden entries so refresh doesn't wipe edits."""
+    if not isinstance(existing, dict):
+        existing = {}
+    out: dict[str, list] = {}
+    for bucket in ("creator", "similar"):
+        prev = existing.get(bucket) or []
+        if not isinstance(prev, list):
+            prev = []
+        hidden_ids: set[str] = set()
+        manuals: list[dict] = []
+        for item in prev:
+            if not isinstance(item, dict):
+                continue
+            tid = str(item.get("tmdb_id") or item.get("id") or "")
+            if item.get("hidden"):
+                if tid:
+                    hidden_ids.add(tid)
+                manuals.append(dict(item))
+            elif item.get("manual"):
+                manuals.append(dict(item))
+        merged: list[dict] = []
+        seen: set[str] = set()
+        for item in fresh.get(bucket) or []:
+            if not isinstance(item, dict):
+                continue
+            tid = str(item.get("tmdb_id") or "")
+            if tid and tid in hidden_ids:
+                # Keep hidden marker so future refreshes stay suppressed
+                merged.append({**item, "hidden": True})
+                seen.add(tid)
+                continue
+            merged.append(dict(item))
+            if tid:
+                seen.add(tid)
+        for item in manuals:
+            tid = str(item.get("tmdb_id") or item.get("id") or "")
+            if tid and tid in seen and not item.get("hidden"):
+                continue
+            if tid and tid in seen and item.get("hidden"):
+                continue
+            if not tid or tid not in seen:
+                merged.append(item)
+                if tid:
+                    seen.add(tid)
+        out[bucket] = merged
+    return out
+
+
 async def refresh_series_metadata(
     db: Session,
     franchise_name: str,
@@ -157,8 +206,8 @@ async def refresh_series_metadata(
             row.ser_bio_source = "tmdb"
             row.ser_bio_manual = 0
 
-    if origin_place:
-        row.ser_origin_place = origin_place
+    # Prefer country ISO only — avoid "Japan, Japan" when place duplicates country
+    row.ser_origin_place = None
     if countries:
         row.ser_country_iso = str(countries[0]).lower()[:2]
 
@@ -214,6 +263,36 @@ async def refresh_series_metadata(
         self_id=int(tv_id) if str(tv_id).isdigit() else None,
     )
 
+    # Preserve manual + hidden related entries across TMDb refresh
+    existing_images: dict = {}
+    try:
+        existing_images = json.loads(row.ser_images_json or "{}")
+        if not isinstance(existing_images, dict):
+            existing_images = {}
+    except (json.JSONDecodeError, TypeError):
+        existing_images = {}
+    related = _merge_related(existing_images.get("related") or {}, related)
+
+    from app.series_languages import (
+        LANGUAGE_CATALOG,
+        normalize_lang_code,
+        origin_language_code,
+    )
+
+    origin_lang = origin_language_code(
+        tmdb_original_language=data.get("original_language"),
+        country_iso=row.ser_country_iso,
+    )
+    existing_langs = existing_images.get("languages")
+    if isinstance(existing_langs, list) and existing_langs:
+        languages = [
+            normalize_lang_code(c) or c
+            for c in existing_langs
+            if c
+        ]
+    else:
+        languages = [origin_lang] if origin_lang else [LANGUAGE_CATALOG[0]["code"]]
+
     links = data.get("links") or []
     # Ensure stable ids for edit/delete in the UI
     normalized_links = []
@@ -235,8 +314,10 @@ async def refresh_series_metadata(
     images_blob: dict = {
         "posters": data.get("posters") or [],
         "backdrops": data.get("backdrops") or [],
-        "activity_periods": [],
+        "activity_periods": existing_images.get("activity_periods") or [],
         "related": related,
+        "languages": languages,
+        "origin_language": origin_lang,
     }
     if first_air or last_air:
         images_blob["activity_periods"] = [

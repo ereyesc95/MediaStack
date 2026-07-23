@@ -20,12 +20,19 @@ def series_catalog():
 
 @router.get("/filters/options")
 def series_filter_options(db: Session = Depends(get_db)):
-    """Catalog filter options — decades ascending; genres from movies/series, not music."""
+    """Catalog filter options — used genres/countries for catalog; full lists for editors."""
+    import json
+    import re
+
     from sqlalchemy import select
 
     from app.media_item_admin import list_people_for_kind, list_publishers_for_kind
-    from app.models import Continent, Genre
-    from app.music_filters import all_country_groups, decade_options
+    from app.models import Continent, Country, Genre, Series, Subgenre
+    from app.music_filters import (
+        _country_groups_from_ids,
+        all_country_groups,
+        decade_options,
+    )
     from app.seed_music import ensure_music_lookup_data
     from app.series_index import build_series_catalog
 
@@ -36,22 +43,117 @@ def series_filter_options(db: Session = Depends(get_db)):
         if c.con_name and c.con_id != 1007
     ]
 
-    # Movies (300) + Series (400) genres — not music (200)
-    by_bucket: dict[str, list[dict]] = {"Movies": [], "Series": []}
-    for g in db.scalars(
-        select(Genre)
-        .where(Genre.gen_media_type_id.in_([300, 400]))
-        .order_by(Genre.gen_name)
+    # Full taxonomy (Movies 300 + Series 400) for Edit about
+    parent_genres = {
+        g.gen_id: g.gen_name
+        for g in db.scalars(
+            select(Genre).where(Genre.gen_media_type_id.in_([300, 400]))
+        ).all()
+        if g.gen_name and g.gen_name.strip()
+    }
+    all_by_parent: dict[str, list[dict]] = {}
+    for s in db.scalars(
+        select(Subgenre)
+        .where(Subgenre.sgn_media_type_id.in_([300, 400]))
+        .order_by(Subgenre.sgn_name)
     ).all():
-        if not g.gen_name or not g.gen_name.strip():
+        if not s.sgn_name or not s.sgn_name.strip():
             continue
-        bucket = "Series" if g.gen_media_type_id == 400 else "Movies"
-        by_bucket[bucket].append({"id": g.gen_id, "name": g.gen_name})
-    subgenre_groups = [
-        {"genre": label, "items": items}
-        for label, items in by_bucket.items()
-        if items
+        parent = parent_genres.get(s.sgn_genre_id or 0)
+        if not parent:
+            g = db.get(Genre, s.sgn_genre_id or 0)
+            parent = (g.gen_name if g and g.gen_name else None) or "Other"
+        all_by_parent.setdefault(parent, []).append(
+            {
+                "id": s.sgn_id,
+                "name": s.sgn_name,
+                "genre_id": s.sgn_genre_id,
+            }
+        )
+    for items in all_by_parent.values():
+        items.sort(key=lambda x: (x.get("name") or "").casefold())
+    all_subgenre_groups = [
+        {"genre": name, "items": items}
+        for name, items in sorted(
+            all_by_parent.items(), key=lambda x: x[0].casefold()
+        )
     ]
+
+    # Used genres / countries from Series rows already in the DB
+    used_isos: set[str] = set()
+    used_genre_entries: list[dict] = []
+    seen_genre_keys: set[str] = set()
+    for row in db.scalars(select(Series)).all():
+        iso = (row.ser_country_iso or "").strip().lower()
+        if iso:
+            used_isos.add(iso)
+        try:
+            raw = json.loads(row.ser_genres_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            raw = []
+        if not isinstance(raw, list):
+            continue
+        for g in raw:
+            if not isinstance(g, dict):
+                continue
+            name = (g.get("name") or "").strip()
+            if not name:
+                continue
+            key = name.casefold()
+            if key in seen_genre_keys:
+                continue
+            seen_genre_keys.add(key)
+            used_genre_entries.append(
+                {"id": g.get("id") or name, "name": name}
+            )
+
+    # Map used genre names onto parent buckets when possible
+    parent_by_name = {
+        (n or "").casefold(): n for n in parent_genres.values() if n
+    }
+    used_by_parent: dict[str, list[dict]] = {}
+    for entry in used_genre_entries:
+        name = entry["name"]
+        parent = parent_by_name.get(name.casefold())
+        if not parent:
+            # "Action & Adventure" → prefer first matching parent part
+            for part in re.split(r"\s*[&/|,]\s*", name):
+                part = part.strip()
+                if part.casefold() in parent_by_name:
+                    parent = parent_by_name[part.casefold()]
+                    break
+        if not parent:
+            parent = name
+        gid = entry["id"]
+        # Prefer matching subgenre id when name matches taxonomy
+        for items in all_by_parent.get(parent, []) or []:
+            if (items.get("name") or "").casefold() == name.casefold():
+                gid = items["id"]
+                break
+        used_by_parent.setdefault(parent, []).append(
+            {
+                "id": gid if isinstance(gid, int) or str(gid).isdigit() else hash(name) % 10_000_000,
+                "name": name,
+                "genre_id": None,
+            }
+        )
+    for items in used_by_parent.values():
+        items.sort(key=lambda x: (x.get("name") or "").casefold())
+    subgenre_groups = [
+        {"genre": name, "items": items}
+        for name, items in sorted(
+            used_by_parent.items(), key=lambda x: x[0].casefold()
+        )
+    ]
+
+    used_country_ids: set[int] = set()
+    if used_isos:
+        for c in db.scalars(select(Country)).all():
+            if (c.cou_iso or "").strip().lower() in used_isos:
+                used_country_ids.add(c.cou_id)
+    country_groups = _country_groups_from_ids(db, used_country_ids or None)
+    if not used_isos:
+        country_groups = []
 
     catalog = build_series_catalog()
     decades: set[int] = set(decade_options())
@@ -63,9 +165,11 @@ def series_filter_options(db: Session = Depends(get_db)):
 
     return {
         "continents": continents,
-        "country_groups": all_country_groups(db),
+        "country_groups": country_groups,
+        "all_country_groups": all_country_groups(db),
         "subgenre_groups": subgenre_groups,
-        "decades": sorted(decades),  # ascending: 1950s → …
+        "all_subgenre_groups": all_subgenre_groups,
+        "decades": sorted(decades),
         "publishers": list_publishers_for_kind(db, "video"),
         "writers": list_people_for_kind(db, "video", "author")
         or list_people_for_kind(db, "video", "director"),
@@ -168,11 +272,12 @@ def series_patch_about(
         franchise_dir.name,
         bio=body.get("bio"),
         writers=body.get("writers"),
-        origin_city=body.get("origin_city"),
         country_id=body.get("country_id"),
         activity_start=body.get("activity_start"),
         activity_end=body.get("activity_end"),
         publishers=body.get("publishers"),
+        languages=body.get("languages"),
+        genres=body.get("genres"),
     )
     return {"ok": True, "ser_id": row.ser_id}
 
@@ -202,6 +307,7 @@ def series_add_cast(
         photo_url=body.get("photo_url"),
         character_photo_url=body.get("character_photo_url"),
         roles=body.get("roles"),
+        language=body.get("language"),
     )
     return member
 
@@ -253,10 +359,63 @@ def series_patch_cast(
         actor_photo_url=body.get("actor_photo_url"),
         actors=body.get("actors"),
         roles=body.get("roles"),
+        language=body.get("language"),
+        performances=body.get("performances"),
     )
     if not member:
         raise HTTPException(404, "Cast member not found")
     return member
+
+
+@router.post("/franchises/{franchise_id}/related")
+def series_add_related(
+    franchise_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import add_series_related
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    item = add_series_related(
+        db,
+        found[0].name,
+        bucket=body.get("bucket") or "similar",
+        title=title,
+        tmdb_id=body.get("tmdb_id"),
+        date_iso=body.get("date_iso"),
+        poster_url=body.get("poster_url") or body.get("cover_url"),
+        overview=body.get("overview"),
+    )
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{franchise_id}/related/{item_id}")
+def series_remove_related(
+    franchise_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import remove_series_related
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    ok = remove_series_related(
+        db, found[0].name, bucket=bucket, item_id=item_id
+    )
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
 
 
 @router.post("/franchises/{franchise_id}/links")

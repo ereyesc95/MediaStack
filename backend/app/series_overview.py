@@ -137,12 +137,42 @@ def _enrich_cast_member(
     franchise_dir: Path,
     media_root: Path,
     character_centered: bool = True,
+    default_language: str | None = None,
 ) -> dict:
     name = m.get("name") or ""
     character = m.get("character") or (name if character_centered else None)
     tid = m.get("id") if isinstance(m.get("id"), int) else None
     actors = m.get("actors") if isinstance(m.get("actors"), list) else []
+    performances = m.get("performances") if isinstance(m.get("performances"), list) else []
+    # Legacy → performances
+    if character_centered and not performances:
+        if actors:
+            for a in actors:
+                if not isinstance(a, dict) or not a.get("name"):
+                    continue
+                performances.append(
+                    {
+                        "language": a.get("language") or default_language or "en",
+                        "actor_name": a.get("name"),
+                        "actor_id": a.get("id"),
+                        "photo_url": a.get("photo_url"),
+                    }
+                )
+        elif m.get("roles"):
+            for role in m["roles"]:
+                if not role:
+                    continue
+                performances.append(
+                    {
+                        "language": default_language or "en",
+                        "actor_name": role,
+                        "photo_url": m.get("actor_photo_url")
+                        or m.get("character_photo_url"),
+                    }
+                )
     actor_photo = m.get("actor_photo_url") or m.get("character_photo_url")
+    if not actor_photo and performances:
+        actor_photo = (performances[0] or {}).get("photo_url")
     if not actor_photo and actors:
         actor_photo = (actors[0] or {}).get("photo_url")
 
@@ -153,8 +183,12 @@ def _enrich_cast_member(
             media_root=media_root,
             actor_name=name,
         )
-        # Actor local photo (first actor name)
-        actor_name = (actors[0] or {}).get("name") if actors else None
+        # Actor local photo (first performance / actor)
+        actor_name = None
+        if performances:
+            actor_name = (performances[0] or {}).get("actor_name")
+        if not actor_name and actors:
+            actor_name = (actors[0] or {}).get("name")
         actor_local = None
         if actor_name:
             actor_local = find_person_photo(
@@ -164,6 +198,25 @@ def _enrich_cast_member(
         # Don't keep actor shot as the character front
         if photo and actor_photo and photo == actor_photo and not char_local:
             photo = None
+        # Enrich performances with local actor photos when possible
+        enriched_perfs = []
+        for p in performances:
+            if not isinstance(p, dict):
+                continue
+            p_actor = (p.get("actor_name") or "").strip()
+            local = (
+                find_person_photo(
+                    p_actor, franchise_dir=franchise_dir, media_root=media_root
+                )
+                if p_actor
+                else None
+            )
+            enriched_perfs.append(
+                {
+                    **p,
+                    "photo_url": local or p.get("photo_url"),
+                }
+            )
         return {
             **m,
             "name": character or name,
@@ -171,9 +224,19 @@ def _enrich_cast_member(
             "photo_url": photo,
             "actor_photo_url": actor_local or actor_photo,
             "character_photo_url": actor_local or actor_photo,
-            "actors": actors,
+            "performances": enriched_perfs,
+            "actors": actors
+            or [
+                {
+                    "name": p.get("actor_name"),
+                    "photo_url": p.get("photo_url"),
+                    "language": p.get("language"),
+                }
+                for p in enriched_perfs
+                if p.get("actor_name")
+            ],
             "roles": m.get("roles")
-            or [a.get("name") for a in actors if a.get("name")],
+            or [p.get("actor_name") for p in enriched_perfs if p.get("actor_name")],
             "tmdb_photo_url": actor_photo,
         }
 
@@ -186,6 +249,7 @@ def _enrich_cast_member(
         "character_photo_url": m.get("character_photo_url"),
         "actor_photo_url": m.get("actor_photo_url"),
         "tmdb_photo_url": m.get("photo_url"),
+        "performances": performances,
     }
 
 
@@ -261,16 +325,48 @@ def build_series_overview(
     # Main cast / staff only — avoids overlapping lineup photos
     characters = [m for m in characters if isinstance(m, dict)][:8]
     staff = [m for m in staff if isinstance(m, dict)][:8]
+
+    images = _parse_json(row.ser_images_json, {})
+    if not isinstance(images, dict):
+        images = {}
+
+    from app.series_languages import (
+        LANGUAGE_CATALOG,
+        language_options_for_franchise,
+        normalize_lang_code,
+        origin_language_code,
+    )
+
+    origin_lang = (
+        normalize_lang_code(images.get("origin_language"))
+        or origin_language_code(country_iso=row.ser_country_iso)
+        or "en"
+    )
+    selected_langs = images.get("languages")
+    if not isinstance(selected_langs, list) or not selected_langs:
+        selected_langs = [origin_lang]
+    else:
+        selected_langs = [
+            normalize_lang_code(c) or c for c in selected_langs if c
+        ]
+
     cast = {
         "characters": [
             _enrich_cast_member(
-                m, franchise_dir=franchise_dir, media_root=root, character_centered=True
+                m,
+                franchise_dir=franchise_dir,
+                media_root=root,
+                character_centered=True,
+                default_language=origin_lang,
             )
             for m in characters
         ],
         "staff": [
             _enrich_cast_member(
-                m, franchise_dir=franchise_dir, media_root=root, character_centered=False
+                m,
+                franchise_dir=franchise_dir,
+                media_root=root,
+                character_centered=False,
             )
             for m in staff
         ],
@@ -281,6 +377,37 @@ def build_series_overview(
     cast["animated"] = cast["characters"]
     cast["people"] = cast["staff"]
 
+    # Languages that currently have at least one character performance
+    cast_lang_codes: set[str] = set()
+    for m in cast["characters"]:
+        for p in m.get("performances") or []:
+            code = normalize_lang_code(p.get("language")) or p.get("language")
+            if code:
+                cast_lang_codes.add(code)
+
+    language_options = language_options_for_franchise(
+        selected_langs, origin_code=origin_lang
+    )
+    # Cast tab pills: enabled langs that have cast (hide empty)
+    cast_languages = [
+        opt
+        for opt in language_options
+        if opt.get("selected") and opt["code"] in cast_lang_codes
+    ]
+    if not cast_languages and cast_lang_codes:
+        # Fall back: show any lang that has cast
+        for code in sorted(cast_lang_codes):
+            cast_languages.append(
+                {
+                    "code": code,
+                    "label": next(
+                        (c["label"] for c in LANGUAGE_CATALOG if c["code"] == code),
+                        code,
+                    ),
+                    "is_origin": code == origin_lang,
+                    "selected": True,
+                }
+            )
     links_raw = _parse_json(row.ser_links_json, [])
     # Shape like EntityLinksPayload categories
     by_cat: dict[str, list] = {
@@ -334,7 +461,6 @@ def build_series_overview(
         "total": sum(len(v) for v in by_cat.values()),
     }
 
-    images = _parse_json(row.ser_images_json, {})
     posters = images.get("posters") or []
     backdrops = images.get("backdrops") or []
     # Ensure local [Artwork] has Portrait/Landscape files (download TMDb if missing)
@@ -408,6 +534,19 @@ def build_series_overview(
         for s in (detail.get("subseries") or [])
     ]
 
+    related_stored = images.get("related") if isinstance(images.get("related"), dict) else {}
+
+    def _visible_related(bucket: str) -> list:
+        items = related_stored.get(bucket) or []
+        return [
+            x
+            for x in items
+            if isinstance(x, dict) and not x.get("hidden")
+        ]
+
+    creator_cards = _visible_related("creator")
+    similar_cards = _visible_related("similar")
+
     return {
         "id": detail["id"],
         "ser_id": row.ser_id,
@@ -420,8 +559,12 @@ def build_series_overview(
         "bio_manual": bool(row.ser_bio_manual),
         "writers": _split_semi(row.ser_writers),
         "aliases": _split_semi(row.ser_other_names),
-        "city": row.ser_origin_place,
+        "city": None,
         "country": country,
+        "languages": selected_langs,
+        "origin_language": origin_lang,
+        "language_options": language_options,
+        "cast_languages": cast_languages,
         "activity_periods": _activity_periods(
             row.ser_starting_date,
             row.ser_ending_date,
@@ -449,10 +592,10 @@ def build_series_overview(
             "books": _enrich_related_cards(related.get("books") or [], root),
             "games": _enrich_related_cards(related.get("games") or [], root),
             "music": related.get("music") or [],
-            "creator": (images.get("related") or {}).get("creator") or [],
-            "similar": (images.get("related") or {}).get("similar") or [],
-            "creator_count": len((images.get("related") or {}).get("creator") or []),
-            "similar_count": len((images.get("related") or {}).get("similar") or []),
+            "creator": creator_cards,
+            "similar": similar_cards,
+            "creator_count": len(creator_cards),
+            "similar_count": len(similar_cards),
         },
         "metadata_refreshed_at": row.ser_metadata_refreshed_at,
         "needs_metadata": not bool(row.ser_metadata_refreshed_at),

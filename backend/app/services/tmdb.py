@@ -179,50 +179,79 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
     MAIN_CAST_MAX_ORDER = 7
     MAIN_CAST_LIMIT = 8
 
-    # Character-centered cast: one card per character, possibly multiple actors
+    from app.series_languages import normalize_lang_code, split_character_names
+
+    origin_lang = normalize_lang_code(data.get("original_language")) or "ja"
+
+    # Character-centered cast: one card per character (split multi-role credits)
     by_character: dict[str, dict[str, Any]] = {}
     for c in cast_raw[:40]:
         order = c.get("order")
         if isinstance(order, int) and order > MAIN_CAST_MAX_ORDER:
             continue
-        char_name = (c.get("character") or "").strip() or None
         actor_name = (c.get("name") or "").strip() or None
-        if not char_name and not actor_name:
+        if not actor_name and not c.get("character"):
             continue
-        # Prefer character name as the card identity; fall back to actor
-        key_name = char_name or actor_name or ""
-        key = key_name.casefold()
         actor_photo = image_url(c.get("profile_path"), "w185")
-        actor = {
-            "id": c.get("id"),
-            "name": actor_name,
-            "photo_url": actor_photo,
-        }
-        if key not in by_character:
-            by_character[key] = {
-                "id": f"char-{c.get('id') or key_name}",
-                "name": key_name,  # character name (display)
-                "character": char_name or key_name,
-                # Front: character art (filled later from local/Jikan)
-                "photo_url": None,
-                # Back / hover: primary actor portrait
-                "actor_photo_url": actor_photo,
-                "character_photo_url": actor_photo,  # legacy flip field = actor
-                "actors": [actor] if actor_name else [],
-                "roles": [actor_name] if actor_name else [],
-                "is_deceased": False,
+        char_names = split_character_names(c.get("character"))
+        if not char_names:
+            continue
+        for char_name in char_names:
+            key = char_name.casefold()
+            performance = {
+                "language": origin_lang,
+                "actor_name": actor_name,
+                "actor_id": c.get("id"),
+                "photo_url": actor_photo,
             }
-        else:
-            entry = by_character[key]
-            if actor_name and not any(
-                (a.get("name") or "").casefold() == actor_name.casefold()
-                for a in entry["actors"]
-            ):
-                entry["actors"].append(actor)
-                entry["roles"].append(actor_name)
-            if not entry.get("actor_photo_url") and actor_photo:
-                entry["actor_photo_url"] = actor_photo
-                entry["character_photo_url"] = actor_photo
+            if key not in by_character:
+                by_character[key] = {
+                    "id": f"char-{c.get('id') or key}",
+                    "name": char_name,
+                    "character": char_name,
+                    "photo_url": None,
+                    "actor_photo_url": actor_photo,
+                    "character_photo_url": actor_photo,
+                    "performances": [performance],
+                    "actors": (
+                        [
+                            {
+                                "id": c.get("id"),
+                                "name": actor_name,
+                                "photo_url": actor_photo,
+                                "language": origin_lang,
+                            }
+                        ]
+                        if actor_name
+                        else []
+                    ),
+                    "roles": [actor_name] if actor_name else [],
+                    "is_deceased": False,
+                }
+            else:
+                entry = by_character[key]
+                langs = {
+                    (p.get("language") or "").casefold()
+                    for p in entry.get("performances") or []
+                }
+                if origin_lang.casefold() not in langs:
+                    entry.setdefault("performances", []).append(performance)
+                if actor_name and not any(
+                    (a.get("name") or "").casefold() == actor_name.casefold()
+                    for a in entry.get("actors") or []
+                ):
+                    entry.setdefault("actors", []).append(
+                        {
+                            "id": c.get("id"),
+                            "name": actor_name,
+                            "photo_url": actor_photo,
+                            "language": origin_lang,
+                        }
+                    )
+                    entry.setdefault("roles", []).append(actor_name)
+                if not entry.get("actor_photo_url") and actor_photo:
+                    entry["actor_photo_url"] = actor_photo
+                    entry["character_photo_url"] = actor_photo
 
     characters_cast = list(by_character.values())[:MAIN_CAST_LIMIT]
 
@@ -353,8 +382,14 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         "publishers": publishers,
         "origin_place": origin_place,
         "origin_countries": origin_countries,
+        "original_language": data.get("original_language"),
         "aliases": [a for a in aliases if a],
-        "cast": {"animated": characters_cast, "people": people_cast, "characters": characters_cast, "staff": people_cast},
+        "cast": {
+            "animated": characters_cast,
+            "people": people_cast,
+            "characters": characters_cast,
+            "staff": people_cast,
+        },
         "creator_ids": creator_ids,
         "links": links,
         "posters": [p for p in posters if p],
