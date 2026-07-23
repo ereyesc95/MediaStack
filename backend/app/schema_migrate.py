@@ -233,3 +233,26 @@ def migrate_schema(eng: Engine) -> None:
                     """
                 )
             )
+        if "series" in tables:
+            cols = {c["name"] for c in inspect(eng).get_columns("series")}
+            for col, typ in (
+                ("serBio", "TEXT"),
+                ("serBioManual", "INTEGER"),
+                ("serBioSource", "TEXT"),
+                ("serOriginPlace", "TEXT"),
+                ("serCountryIso", "TEXT"),
+                ("serWriters", "TEXT"),
+                ("serPublishers", "TEXT"),
+                ("serGenresJson", "TEXT"),
+                ("serCastJson", "TEXT"),
+                ("serLinksJson", "TEXT"),
+                ("serStatus", "TEXT"),
+                ("serType", "TEXT"),
+                ("serIsAnimated", "INTEGER"),
+                ("serPosterUrl", "TEXT"),
+                ("serBackdropUrl", "TEXT"),
+                ("serImagesJson", "TEXT"),
+                ("serMetadataRefreshedAt", "TEXT"),
+            ):
+                if col not in cols:
+                    conn.execute(text(f'ALTER TABLE series ADD COLUMN "{col}" {typ}'))

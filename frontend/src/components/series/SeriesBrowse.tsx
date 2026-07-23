@@ -83,7 +83,6 @@ type Props = {
   publisher: string;
   writer: string;
   loading?: boolean;
-  onCatalogScopeChange: (scope: SeriesCatalogScope) => void;
   onSearchChange: (v: string) => void;
   onLetterChange: (v: string) => void;
   onFilterModeChange: (m: SeriesFilterMode) => void;
@@ -94,7 +93,11 @@ type Props = {
   onSubgenreIdChange: (v: number | "") => void;
   onPublisherChange: (v: string) => void;
   onWriterChange: (v: string) => void;
-  onOpen: (franchiseId: string, subseriesId?: string) => void;
+  onOpen: (
+    franchiseId: string,
+    subseriesId?: string,
+    shell?: { name: string; cover_url: string | null }
+  ) => void;
 };
 
 export default function SeriesBrowse({
@@ -113,7 +116,6 @@ export default function SeriesBrowse({
   publisher,
   writer,
   loading,
-  onCatalogScopeChange,
   onSearchChange,
   onLetterChange,
   onFilterModeChange,
@@ -373,7 +375,11 @@ export default function SeriesBrowse({
 
   const handleCardClick = useCallback(
     (card: SeriesCatalogCard) => {
-      const open = () => onOpen(card.franchiseId, card.subseriesId);
+      const open = () =>
+        onOpen(card.franchiseId, card.subseriesId, {
+          name: card.name,
+          cover_url: card.cover_url,
+        });
       if (!isPhone) {
         open();
         return;
@@ -561,22 +567,6 @@ export default function SeriesBrowse({
           ))}
         </nav>
         {subBar}
-        <div className="series-browse__scope filter-subbar filter-subbar--spread">
-          <button
-            type="button"
-            className={catalogScope === "franchises" ? "active" : ""}
-            onClick={() => onCatalogScopeChange("franchises")}
-          >
-            FRANCHISES
-          </button>
-          <button
-            type="button"
-            className={catalogScope === "shows" ? "active" : ""}
-            onClick={() => onCatalogScopeChange("shows")}
-          >
-            SHOWS
-          </button>
-        </div>
       </div>
 
       <div className="artist-browse-scroll">

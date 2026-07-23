@@ -184,6 +184,26 @@ class Series(Base):
     ser_starting_date: Mapped[str | None] = mapped_column("serStartingDate", Text)
     ser_ending_date: Mapped[str | None] = mapped_column("serEndingDate", Text)
     ser_studio: Mapped[str | None] = mapped_column("serStudio", Text)
+    # TMDb-enriched fields (migrated onto legacy DBs via schema_migrate)
+    ser_bio: Mapped[str | None] = mapped_column("serBio", Text)
+    ser_bio_manual: Mapped[int | None] = mapped_column("serBioManual", Integer, default=0)
+    ser_bio_source: Mapped[str | None] = mapped_column("serBioSource", Text)
+    ser_origin_place: Mapped[str | None] = mapped_column("serOriginPlace", Text)
+    ser_country_iso: Mapped[str | None] = mapped_column("serCountryIso", Text)
+    ser_writers: Mapped[str | None] = mapped_column("serWriters", Text)
+    ser_publishers: Mapped[str | None] = mapped_column("serPublishers", Text)
+    ser_genres_json: Mapped[str | None] = mapped_column("serGenresJson", Text)
+    ser_cast_json: Mapped[str | None] = mapped_column("serCastJson", Text)
+    ser_links_json: Mapped[str | None] = mapped_column("serLinksJson", Text)
+    ser_status: Mapped[str | None] = mapped_column("serStatus", Text)
+    ser_type: Mapped[str | None] = mapped_column("serType", Text)
+    ser_is_animated: Mapped[int | None] = mapped_column("serIsAnimated", Integer, default=0)
+    ser_poster_url: Mapped[str | None] = mapped_column("serPosterUrl", Text)
+    ser_backdrop_url: Mapped[str | None] = mapped_column("serBackdropUrl", Text)
+    ser_images_json: Mapped[str | None] = mapped_column("serImagesJson", Text)
+    ser_metadata_refreshed_at: Mapped[str | None] = mapped_column(
+        "serMetadataRefreshedAt", Text
+    )
 
 
 class Season(Base):

@@ -12868,16 +12868,211 @@ button.lyrics-status-badge--icon-only {
   word-break: break-all;
 }
 
-.series-browse__scope {
-  border-top: none;
-  justify-content: flex-start;
-  gap: 0.25rem;
+.catalog-scope-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+  height: 1.85rem;
 }
 
-.series-browse__scope button {
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
+.catalog-scope-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.62rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0 0.55rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.catalog-scope-toggle button + button {
+  border-left: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+
+.catalog-scope-toggle button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.module-top-bar__menu .catalog-scope-toggle {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .catalog-scope-toggle button {
+    font-size: 0.55rem;
+    padding: 0 0.4rem;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* Match artist about photo column width (TMDb posters are narrower at max-height). */
+.series-about:not(.artist-about--stacked) .artist-about__photo {
+  width: min(46vw, calc(90vh * 0.7));
+  max-width: min(46vw, calc(90vh * 0.7));
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.series-about__subseries-row {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+  align-items: flex-start;
+  gap: 0.85rem 1rem;
+  padding-bottom: 0.35rem;
+  grid-template-columns: unset;
+}
+
+.series-about__subseries-card {
+  width: 7.5rem;
+  max-width: 7.5rem;
+  flex: 0 0 auto;
+}
+
+.series-about__subseries-cover {
+  width: 7.5rem !important;
+  height: 11rem !important;
+  max-width: none !important;
+  aspect-ratio: auto !important;
+  border-radius: 2px;
+}
+
+.series-about__subseries-cover .artist-about__track-cover-bg {
+  background-size: cover;
+  background-position: center;
+}
+
+.artist-about__pill--static {
+  cursor: default;
+  pointer-events: none;
+}
+
+.series-media-grid {
+  padding: 0.75rem 1rem 2rem;
+}
+
+.series-cast-card__photo {
+  position: relative;
+  width: var(--lineup-photo);
+  height: var(--lineup-photo);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.series-cast-card__photo--flip {
+  perspective: 800px;
+}
+
+.series-cast-card__photo-inner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.45s ease;
+}
+
+.series-cast-card:hover .series-cast-card__photo--flip .series-cast-card__photo-inner {
+  transform: rotateY(180deg);
+}
+
+.series-cast-card:hover .series-cast-card__photo img {
+  transform: none;
+}
+
+.series-cast-card__face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.series-cast-card__face img,
+.series-cast-card__face .artist-lineup-card__ph {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.series-cast-card__face--back {
+  transform: rotateY(180deg);
+}
+
+.series-cast-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.series-cast-modal__photo {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  object-fit: cover;
+  align-self: center;
+}
+
+.series-section-subbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  padding: 0.35rem 1rem 0.55rem;
+  justify-content: space-evenly;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.series-section-subbar button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  flex: 1 1 0;
+  text-align: center;
+  min-width: 0;
+}
+
+.series-section-subbar button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.series-franchise__drill-back {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.series-franchise__drill-back:hover {
+  color: var(--text);
 }
 
 .series-franchise__section h2 {

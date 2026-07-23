@@ -3,6 +3,7 @@ import type {
   ArtistCard,
   Band,
   FilterOptions,
+  FranchiseMediaEntry,
   Health,
   MbArtistMatch,
   MediaRelatedPayload,
@@ -15,6 +16,8 @@ import type {
   SeriesFolderDetail,
   SeriesFranchiseDetail,
   SeriesGalleryPayload,
+  SeriesOverview,
+  SeriesCastMember,
   UserPlaylist,
 } from "./types";
 import { EMPTY_DASHBOARD } from "./types";
@@ -1562,6 +1565,174 @@ export async function fetchSeriesFilterOptions() {
 export async function fetchSeriesFranchise(franchiseId: string) {
   return request<SeriesFranchiseDetail>(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}`
+  );
+}
+
+export async function fetchSeriesOverview(
+  franchiseId: string,
+  orientation = "portrait"
+) {
+  return request<SeriesOverview>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function refreshSeriesMetadata(
+  franchiseId: string,
+  includeBio = true
+) {
+  return request<{ ok: boolean; refreshed_at?: string; tmdb_id?: string }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/refresh-metadata?include_bio=${includeBio ? "true" : "false"}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function patchSeriesAbout(
+  franchiseId: string,
+  body: {
+    bio?: string;
+    writers?: string;
+    origin_city?: string;
+    country_id?: number | null;
+    activity_start?: string;
+    activity_end?: string;
+    publishers?: string;
+  }
+) {
+  return request<{ ok: boolean }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/about`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function addSeriesCastMember(
+  franchiseId: string,
+  body: {
+    bucket: string;
+    name: string;
+    character?: string;
+    photo_url?: string;
+    character_photo_url?: string;
+    roles?: string[];
+  }
+) {
+  return request<SeriesCastMember>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/cast`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function removeSeriesCastMember(
+  franchiseId: string,
+  memberId: string | number,
+  bucket?: string
+) {
+  const q = bucket ? `?bucket=${encodeURIComponent(bucket)}` : "";
+  return request<{ ok: boolean }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/cast/${encodeURIComponent(String(memberId))}${q}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function createSeriesLink(
+  franchiseId: string,
+  body: {
+    category: string;
+    label: string;
+    url: string;
+    logo_key?: string | null;
+    logo_url?: string | null;
+  }
+) {
+  return request<{ ok: boolean; id: string }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/links`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchSeriesLink(
+  franchiseId: string,
+  linkId: string,
+  body: {
+    category?: string;
+    label?: string;
+    url?: string;
+    logo_key?: string | null;
+    logo_url?: string | null;
+    clear_logo_upload?: boolean;
+  }
+) {
+  return request<{ ok: boolean }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/links/${encodeURIComponent(linkId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function deleteSeriesLink(franchiseId: string, linkId: string) {
+  return request<{ ok: boolean }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/links/${encodeURIComponent(linkId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function fetchSeriesFranchiseMovies(franchiseId: string) {
+  return request<{ items: FranchiseMediaEntry[] }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/movies`
+  );
+}
+
+export async function fetchSeriesFranchiseAudio(franchiseId: string) {
+  return request<{
+    band_id: number | null;
+    releases?: unknown[];
+    categories?: unknown[];
+    [key: string]: unknown;
+  }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/audio`
+  );
+}
+
+export async function fetchSeriesFranchiseShows(franchiseId: string) {
+  return request<{
+    items: {
+      id: string;
+      title: string;
+      date_iso?: string | null;
+      display_date?: string | null;
+      cover_url?: string | null;
+      folder_path?: string;
+      season_count?: number;
+      episode_count?: number;
+    }[];
+  }>(`${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/series`);
+}
+
+export async function fetchSeriesFranchiseLibrary(franchiseId: string) {
+  return request<{ items: FranchiseMediaEntry[] }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/library`
+  );
+}
+
+export async function fetchSeriesFranchiseGames(franchiseId: string) {
+  return request<{ items: FranchiseMediaEntry[] }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/games`
   );
 }
 

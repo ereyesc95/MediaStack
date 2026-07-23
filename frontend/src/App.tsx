@@ -35,6 +35,12 @@ import {
   saveOrientation,
 } from "./themes";
 import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushPlaylistsGridRoute } from "./musicRoute";
+import {
+  parseSeriesCatalogPath,
+  parseSeriesPath,
+  parseSeriesRootPath,
+  pushSeriesRootRoute,
+} from "./seriesRoute";
 import type { CardOrientation, MusicTab, View } from "./types";
 
 
@@ -136,19 +142,36 @@ export default function App() {
         tab: "playlists",
       });
     } else {
-      const route = parseArtistPath(window.location.pathname);
-      if (route) {
+      const seriesRoute = parseSeriesPath(window.location.pathname);
+      if (seriesRoute) {
         setView({
-          kind: "music",
-          tab: "artists",
-          bandId: route.bandId,
-          artistSection: route.section,
-          artistOverviewTab: route.overviewTab,
-          releaseId: route.releaseId,
-          releaseTab: route.releaseTab,
-          mediaItemId: route.mediaItemId,
-          playlistSlug: route.playlistSlug,
+          kind: "series",
+          franchiseId: seriesRoute.franchiseId,
+          subseriesId: seriesRoute.subseriesId,
+          seasonId: seriesRoute.seasonId,
+          section: seriesRoute.section,
+          overviewTab: seriesRoute.overviewTab,
         });
+      } else if (
+        parseSeriesCatalogPath(window.location.pathname) ||
+        parseSeriesRootPath(window.location.pathname)
+      ) {
+        setView({ kind: "series" });
+      } else {
+        const route = parseArtistPath(window.location.pathname);
+        if (route) {
+          setView({
+            kind: "music",
+            tab: "artists",
+            bandId: route.bandId,
+            artistSection: route.section,
+            artistOverviewTab: route.overviewTab,
+            releaseId: route.releaseId,
+            releaseTab: route.releaseTab,
+            mediaItemId: route.mediaItemId,
+            playlistSlug: route.playlistSlug,
+          });
+        }
       }
     }
     init();
@@ -208,7 +231,29 @@ export default function App() {
                 playlistSlug: route.playlistSlug,
               }
         );
-      } else if (window.location.pathname === "/" || window.location.pathname === "") {
+        return;
+      }
+      const seriesRoute = parseSeriesPath(window.location.pathname);
+      if (seriesRoute) {
+        setView({
+          kind: "series",
+          franchiseId: seriesRoute.franchiseId,
+          subseriesId: seriesRoute.subseriesId,
+          seasonId: seriesRoute.seasonId,
+          section: seriesRoute.section,
+          overviewTab: seriesRoute.overviewTab,
+        });
+        return;
+      }
+      if (parseSeriesCatalogPath(window.location.pathname)) {
+        setView({ kind: "series" });
+        return;
+      }
+      if (parseSeriesRootPath(window.location.pathname)) {
+        setView({ kind: "series" });
+        return;
+      }
+      if (window.location.pathname === "/" || window.location.pathname === "") {
         setView({ kind: "hub" });
       }
     }
@@ -346,9 +391,13 @@ export default function App() {
       return;
     }
 
-    if (opt.kind === "series") setView({ kind: "series" });
+    if (opt.kind === "series") {
+      pushSeriesRootRoute();
+      setView({ kind: "series" });
+      return;
+    }
 
-    else if (opt.kind === "movies") setView({ kind: "movies" });
+    if (opt.kind === "movies") setView({ kind: "movies" });
 
     else if (opt.kind === "books") setView({ kind: "books" });
 
@@ -664,6 +713,7 @@ export default function App() {
             subseriesId={view.subseriesId}
             seasonId={view.seasonId}
             section={view.section}
+            overviewTab={view.overviewTab}
             cardOrientation={cardOrientation}
             onSetOrientation={setOrientation}
             onNavigate={(patch) =>
@@ -675,6 +725,10 @@ export default function App() {
                   "subseriesId" in patch ? patch.subseriesId : view.subseriesId,
                 seasonId: "seasonId" in patch ? patch.seasonId : view.seasonId,
                 section: patch.section ?? view.section,
+                overviewTab:
+                  "overviewTab" in patch
+                    ? patch.overviewTab
+                    : view.overviewTab,
               })
             }
           />

@@ -102,6 +102,287 @@ def series_franchise(franchise_id: str):
     return detail
 
 
+@router.get("/franchises/{franchise_id}/overview")
+def series_franchise_overview(
+    franchise_id: str,
+    orientation: str = Query("portrait"),
+    db: Session = Depends(get_db),
+):
+    """Artist-parity overview: bio/cast/links + disk subseries + related media."""
+    from app.series_overview import build_series_overview
+
+    data = build_series_overview(db, franchise_id, orientation=orientation)
+    if not data:
+        raise HTTPException(404, "Series franchise not found")
+    return data
+
+
+@router.post("/franchises/{franchise_id}/refresh-metadata")
+async def series_refresh_metadata(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    include_bio: bool = True,
+):
+    """Admin: pull TMDb metadata into the Series row for this franchise."""
+    from app.series_index import build_franchise_detail, find_franchise_dir
+    from app.series_refresh import refresh_series_metadata
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    franchise_dir, _letter = found
+    detail = build_franchise_detail(franchise_id) or {}
+    sub_titles = [
+        s.get("title")
+        for s in (detail.get("subseries") or [])
+        if s.get("title")
+    ]
+    result = await refresh_series_metadata(
+        db,
+        franchise_dir.name,
+        include_bio=include_bio,
+        subseries_titles=sub_titles,
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Refresh failed")
+    return result
+
+
+@router.patch("/franchises/{franchise_id}/about")
+def series_patch_about(
+    franchise_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import patch_series_about
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    franchise_dir, _ = found
+    row = patch_series_about(
+        db,
+        franchise_dir.name,
+        bio=body.get("bio"),
+        writers=body.get("writers"),
+        origin_city=body.get("origin_city"),
+        country_id=body.get("country_id"),
+        activity_start=body.get("activity_start"),
+        activity_end=body.get("activity_end"),
+        publishers=body.get("publishers"),
+    )
+    return {"ok": True, "ser_id": row.ser_id}
+
+
+@router.post("/franchises/{franchise_id}/cast")
+def series_add_cast(
+    franchise_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import add_series_cast_member
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    member = add_series_cast_member(
+        db,
+        found[0].name,
+        bucket=body.get("bucket") or "characters",
+        name=name,
+        character=body.get("character"),
+        photo_url=body.get("photo_url"),
+        character_photo_url=body.get("character_photo_url"),
+        roles=body.get("roles"),
+    )
+    return member
+
+
+@router.delete("/franchises/{franchise_id}/cast/{member_id}")
+def series_remove_cast(
+    franchise_id: str,
+    member_id: str,
+    bucket: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import remove_series_cast_member
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    ok = remove_series_cast_member(
+        db, found[0].name, member_id=member_id, bucket=bucket
+    )
+    if not ok:
+        raise HTTPException(404, "Cast member not found")
+    return {"ok": True}
+
+
+@router.post("/franchises/{franchise_id}/links")
+def series_add_link(
+    franchise_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import add_series_link
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url required")
+    item = add_series_link(
+        db,
+        found[0].name,
+        category=body.get("category") or "databases",
+        label=body.get("label") or "Link",
+        url=url,
+        logo_key=body.get("logo_key"),
+        logo_url=body.get("logo_url"),
+    )
+    return {"ok": True, "id": item["id"], "link": item}
+
+
+@router.patch("/franchises/{franchise_id}/links/{link_id}")
+def series_patch_link(
+    franchise_id: str,
+    link_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import patch_series_link
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    item = patch_series_link(
+        db,
+        found[0].name,
+        link_id,
+        category=body.get("category"),
+        label=body.get("label"),
+        url=body.get("url"),
+        logo_key=body.get("logo_key"),
+        logo_url=body.get("logo_url"),
+        clear_logo_key=bool(body.get("clear_logo_upload")),
+    )
+    if not item:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True, "link": item}
+
+
+@router.delete("/franchises/{franchise_id}/links/{link_id}")
+def series_delete_link(
+    franchise_id: str,
+    link_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import remove_series_link
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    if not remove_series_link(db, found[0].name, link_id):
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}
+
+
+@router.get("/franchises/{franchise_id}/media/movies")
+def series_franchise_movies(franchise_id: str, db: Session = Depends(get_db)):
+    from app.series_overview import build_series_overview
+
+    overview = build_series_overview(db, franchise_id)
+    if not overview:
+        raise HTTPException(404, "Series franchise not found")
+    return {"items": (overview.get("related") or {}).get("movies") or []}
+
+
+@router.get("/franchises/{franchise_id}/media/audio")
+def series_franchise_audio(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+):
+    """Audio releases when a Music artist matches the franchise name."""
+    from app.media_index import get_audio_index
+    from app.models import Band
+    from app.series_overview import build_series_overview
+
+    overview = build_series_overview(db, franchise_id)
+    if not overview:
+        raise HTTPException(404, "Series franchise not found")
+    band_id = overview.get("music_band_id")
+    if not band_id:
+        return {"releases": [], "categories": [], "band_id": None}
+    band = db.get(Band, band_id)
+    if not band:
+        return {"releases": [], "categories": [], "band_id": None}
+    index = get_audio_index(db, band)
+    return {**index, "band_id": band_id}
+
+
+@router.get("/franchises/{franchise_id}/media/series")
+def series_franchise_shows(franchise_id: str, db: Session = Depends(get_db)):
+    """Subseries (and direct seasons) as release-style cards."""
+    from app.series_overview import build_series_overview
+
+    overview = build_series_overview(db, franchise_id)
+    if not overview:
+        raise HTTPException(404, "Series franchise not found")
+    cards = list(overview.get("subseries") or [])
+    if not cards:
+        for s in overview.get("seasons") or []:
+            cards.append(
+                {
+                    "id": s.get("id"),
+                    "title": s.get("title"),
+                    "date_iso": s.get("date_iso"),
+                    "display_date": s.get("display_date"),
+                    "cover_url": s.get("cover_url") or overview.get("cover_url"),
+                    "folder_path": s.get("folder_path"),
+                    "season_count": 0,
+                    "episode_count": s.get("episode_count"),
+                }
+            )
+    return {"items": cards}
+
+
+@router.get("/franchises/{franchise_id}/media/library")
+def series_franchise_library(franchise_id: str, db: Session = Depends(get_db)):
+    from app.series_overview import build_series_overview
+
+    overview = build_series_overview(db, franchise_id)
+    if not overview:
+        raise HTTPException(404, "Series franchise not found")
+    return {"items": (overview.get("related") or {}).get("books") or []}
+
+
+@router.get("/franchises/{franchise_id}/media/games")
+def series_franchise_games(franchise_id: str, db: Session = Depends(get_db)):
+    from app.series_overview import build_series_overview
+
+    overview = build_series_overview(db, franchise_id)
+    if not overview:
+        raise HTTPException(404, "Series franchise not found")
+    return {"items": (overview.get("related") or {}).get("games") or []}
+
+
 @router.get("/folder")
 def series_folder(path: str = Query(..., min_length=1)):
     """Subseries or season folder detail (seasons or episodes)."""

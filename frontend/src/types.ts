@@ -959,7 +959,17 @@ export type AudioAlbum = {
   category: string;
 };
 
-export type SeriesSection = "overview" | "gallery" | "related";
+export type SeriesSection =
+  | "overview"
+  | "series"
+  | "movies"
+  | "audio"
+  | "library"
+  | "games"
+  | "gallery";
+
+export type SeriesOverviewTab = "about" | "cast" | "links" | "related";
+export type SeriesCastTab = "characters" | "staff";
 
 export type View =
   | { kind: "hub" }
@@ -985,6 +995,7 @@ export type View =
       subseriesId?: string;
       seasonId?: string;
       section?: SeriesSection;
+      overviewTab?: SeriesOverviewTab;
     }
   | { kind: "movies" }
   | { kind: "books" }
@@ -1075,6 +1086,8 @@ export type FranchiseMediaEntry = {
   platform?: string | null;
   subseries?: string | null;
   franchise_display?: string | null;
+  cover_url?: string | null;
+  display_date?: string | null;
 };
 
 export type MediaRelatedPayload = {
@@ -1159,6 +1172,99 @@ export type SeriesFilterOptions = {
   decades: number[];
   publishers: string[];
   writers: string[];
+};
+
+export type SeriesCastMember = {
+  id?: number | string | null;
+  name: string;
+  character?: string | null;
+  photo_url?: string | null;
+  character_photo_url?: string | null;
+  tmdb_photo_url?: string | null;
+  roles?: string[];
+  is_deceased?: boolean;
+  manual?: boolean;
+};
+
+export type SeriesOverviewEra = {
+  orientation: string;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  slide_url?: string | null;
+  icon_url?: string | null;
+  logo_url?: string | null;
+  year?: number | null;
+};
+
+export type SeriesOverview = {
+  id: string;
+  ser_id?: number;
+  name: string;
+  letter: string;
+  slug?: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  bio: string | null;
+  bio_manual?: boolean;
+  writers: string[];
+  aliases: string[];
+  city?: string | null;
+  country?: { id: number; name: string | null; iso?: string | null } | null;
+  activity_periods: { label: string; start?: string | null; end?: string | null }[];
+  genres: { id: number | string; name: string }[];
+  publishers: string[];
+  status?: string | null;
+  type?: string | null;
+  is_animated?: boolean;
+  tmdb_id?: string | null;
+  eras: SeriesOverviewEra[];
+  logo_url?: string | null;
+  icon_url?: string | null;
+  cast: {
+    characters: SeriesCastMember[];
+    staff: SeriesCastMember[];
+    animated?: SeriesCastMember[];
+    people?: SeriesCastMember[];
+  };
+  media: {
+    has_audio: boolean;
+    has_series: boolean;
+    has_movies?: boolean;
+    has_library: boolean;
+    has_games: boolean;
+    has_gallery: boolean;
+  };
+  links: {
+    entity_type?: string;
+    entity_id?: number;
+    categories: { id: string; label: string; count: number }[];
+    groups: Partial<
+      Record<
+        string,
+        {
+          id?: string;
+          label: string;
+          url: string;
+          logo_url?: string;
+          logo_key?: string | null;
+          category?: string;
+        }[]
+      >
+    >;
+    total?: number;
+  };
+  subseries: SeriesSubseriesCard[];
+  seasons: SeriesSeasonCard[];
+  music_band_id?: number | null;
+  related: {
+    movies: FranchiseMediaEntry[];
+    series: FranchiseMediaEntry[];
+    books: FranchiseMediaEntry[];
+    games: FranchiseMediaEntry[];
+    music: FranchiseMediaEntry[];
+  };
+  metadata_refreshed_at?: string | null;
+  needs_metadata?: boolean;
 };
 
 export type Health = {
