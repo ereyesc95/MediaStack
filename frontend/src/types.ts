@@ -1179,11 +1179,25 @@ export type SeriesCastMember = {
   name: string;
   character?: string | null;
   photo_url?: string | null;
+  /** Actor portrait shown on hover flip (character-centered cards). */
+  actor_photo_url?: string | null;
   character_photo_url?: string | null;
   tmdb_photo_url?: string | null;
+  actors?: { id?: number | string | null; name: string; photo_url?: string | null }[];
   roles?: string[];
   is_deceased?: boolean;
   manual?: boolean;
+};
+
+export type SeriesRelatedShow = {
+  id?: number | string;
+  tmdb_id?: number | string;
+  title?: string;
+  name?: string;
+  date_iso?: string | null;
+  poster_url?: string | null;
+  cover_url?: string | null;
+  overview?: string | null;
 };
 
 export type SeriesOverviewEra = {
@@ -1262,6 +1276,10 @@ export type SeriesOverview = {
     books: FranchiseMediaEntry[];
     games: FranchiseMediaEntry[];
     music: FranchiseMediaEntry[];
+    creator?: SeriesRelatedShow[];
+    similar?: SeriesRelatedShow[];
+    creator_count?: number;
+    similar_count?: number;
   };
   metadata_refreshed_at?: string | null;
   needs_metadata?: boolean;

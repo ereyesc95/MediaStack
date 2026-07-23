@@ -99,7 +99,8 @@ export default function SeriesAbout({
   };
 
   const heroUrl = era ? eraHeroUrl(era, stacked) : undefined;
-  // Never fall back to folder cover (booklets/logos without portrait/landscape)  const [photoLayers, setPhotoLayers] = useState<{
+  // Never fall back to folder cover (booklets/logos without portrait/landscape)
+  const [photoLayers, setPhotoLayers] = useState<{
     current: string | undefined;
     outgoing: string | undefined;
   }>(() => ({ current: heroUrl ?? undefined, outgoing: undefined }));

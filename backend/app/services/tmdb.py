@@ -29,7 +29,7 @@ async def fetch_tv(
     tv_id: int | str,
     api_key: str,
     *,
-    append: str = "credits,external_ids,content_ratings,images,keywords,alternative_titles",
+    append: str = "credits,external_ids,content_ratings,images,keywords,alternative_titles,recommendations,similar",
 ) -> dict[str, Any]:
     """Fetch TV series details with optional appended resources."""
     async with httpx.AsyncClient(timeout=45.0) as client:
@@ -43,6 +43,85 @@ async def fetch_tv(
         )
         r.raise_for_status()
         return r.json()
+
+
+async def fetch_person_tv_credits(
+    person_id: int, api_key: str
+) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{TMDB_BASE}/person/{person_id}/tv_credits",
+            params={"api_key": api_key},
+        )
+        r.raise_for_status()
+        data = r.json()
+    return list(data.get("cast") or []) + list(data.get("crew") or [])
+
+
+def _tv_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    tid = item.get("id")
+    name = item.get("name") or item.get("original_name")
+    if not tid or not name:
+        return None
+    return {
+        "id": tid,
+        "tmdb_id": tid,
+        "title": name,
+        "name": name,
+        "date_iso": item.get("first_air_date"),
+        "poster_url": image_url(item.get("poster_path"), "w342"),
+        "cover_url": image_url(item.get("poster_path"), "w342"),
+        "overview": (item.get("overview") or "")[:280] or None,
+    }
+
+
+def build_related_from_tv(
+    data: dict[str, Any],
+    *,
+    creator_credits: list[dict[str, Any]] | None = None,
+    self_id: int | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Build same-creator + similar series lists from TMDb payloads."""
+    self_id = self_id or data.get("id")
+    similar: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    if self_id:
+        seen.add(int(self_id))
+
+    def add(bucket: list[dict[str, Any]], raw: dict[str, Any]) -> None:
+        card = _tv_card(raw)
+        if not card:
+            return
+        tid = int(card["tmdb_id"])
+        if tid in seen:
+            return
+        seen.add(tid)
+        bucket.append(card)
+
+    for raw in (data.get("recommendations") or {}).get("results") or []:
+        add(similar, raw)
+    for raw in (data.get("similar") or {}).get("results") or []:
+        add(similar, raw)
+
+    creator: list[dict[str, Any]] = []
+    creator_seen: set[int] = set(seen)
+    for raw in creator_credits or []:
+        card = _tv_card(raw)
+        if not card:
+            continue
+        tid = int(card["tmdb_id"])
+        if tid in creator_seen:
+            continue
+        # Skip pure acting credits; keep creator/writer/crew work
+        if raw.get("character") and not raw.get("job") and not raw.get("department"):
+            continue
+        creator_seen.add(tid)
+        creator.append(card)
+
+    return {
+        "creator": creator[:24],
+        "similar": similar[:24],
+    }
 
 
 def image_url(path: str | None, size: str = "w780") -> str | None:
@@ -97,78 +176,98 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         "anim" in (data.get("type") or "").casefold() for _ in (0,)
     )
 
-    def cast_member(c: dict[str, Any], *, limit_order: int | None = None) -> dict[str, Any] | None:
-        name = c.get("name")
-        if not name:
-            return None
-        order = c.get("order")
-        if limit_order is not None and isinstance(order, int) and order > limit_order:
-            return None
-        return {
-            "id": c.get("id"),
-            "name": name,
-            "character": c.get("character") or None,
-            "photo_url": image_url(c.get("profile_path"), "w185"),
-            "roles": [c["character"]] if c.get("character") else [],
-            "is_deceased": False,
-        }
-
-    # Main cast only (TMDb order 0–7) to avoid overlapping lineup photos
     MAIN_CAST_MAX_ORDER = 7
     MAIN_CAST_LIMIT = 8
-    animated_cast: list[dict[str, Any]] = []
-    people_cast: list[dict[str, Any]] = []
-    for c in cast_raw[:40]:
-        member = cast_member(c, limit_order=MAIN_CAST_MAX_ORDER)
-        if not member:
-            continue
-        if is_animated:
-            animated_cast.append(member)
-        else:
-            people_cast.append(member)
-    animated_cast = animated_cast[:MAIN_CAST_LIMIT]
-    people_cast = people_cast[:MAIN_CAST_LIMIT]
 
-    # Creators always appear under People
+    # Character-centered cast: one card per character, possibly multiple actors
+    by_character: dict[str, dict[str, Any]] = {}
+    for c in cast_raw[:40]:
+        order = c.get("order")
+        if isinstance(order, int) and order > MAIN_CAST_MAX_ORDER:
+            continue
+        char_name = (c.get("character") or "").strip() or None
+        actor_name = (c.get("name") or "").strip() or None
+        if not char_name and not actor_name:
+            continue
+        # Prefer character name as the card identity; fall back to actor
+        key_name = char_name or actor_name or ""
+        key = key_name.casefold()
+        actor_photo = image_url(c.get("profile_path"), "w185")
+        actor = {
+            "id": c.get("id"),
+            "name": actor_name,
+            "photo_url": actor_photo,
+        }
+        if key not in by_character:
+            by_character[key] = {
+                "id": f"char-{c.get('id') or key_name}",
+                "name": key_name,  # character name (display)
+                "character": char_name or key_name,
+                # Front: character art (filled later from local/Jikan)
+                "photo_url": None,
+                # Back / hover: primary actor portrait
+                "actor_photo_url": actor_photo,
+                "character_photo_url": actor_photo,  # legacy flip field = actor
+                "actors": [actor] if actor_name else [],
+                "roles": [actor_name] if actor_name else [],
+                "is_deceased": False,
+            }
+        else:
+            entry = by_character[key]
+            if actor_name and not any(
+                (a.get("name") or "").casefold() == actor_name.casefold()
+                for a in entry["actors"]
+            ):
+                entry["actors"].append(actor)
+                entry["roles"].append(actor_name)
+            if not entry.get("actor_photo_url") and actor_photo:
+                entry["actor_photo_url"] = actor_photo
+                entry["character_photo_url"] = actor_photo
+
+    characters_cast = list(by_character.values())[:MAIN_CAST_LIMIT]
+
+    # Staff: creators + writers (people, not characters)
+    people_cast: list[dict[str, Any]] = []
     for c in created_by:
         name = c.get("name")
         if not name:
             continue
         if any(p["name"] == name for p in people_cast):
             continue
-        people_cast.insert(
-            0,
+        people_cast.append(
             {
                 "id": c.get("id"),
                 "name": name,
                 "character": None,
                 "photo_url": image_url(c.get("profile_path"), "w185"),
+                "actor_photo_url": None,
+                "character_photo_url": None,
+                "actors": [],
                 "roles": ["Creator"],
                 "is_deceased": False,
-            },
+            }
         )
-
-    if is_animated and not people_cast:
-        # Still expose creators/writers as people for animated shows
-        for name in writers[:8]:
-            if any(p["name"] == name for p in people_cast):
-                continue
-            people_cast.append(
-                {
-                    "id": None,
-                    "name": name,
-                    "character": None,
-                    "photo_url": None,
-                    "roles": ["Writer"],
-                    "is_deceased": False,
-                }
-            )
-
+    for name in writers:
+        if not name or any(p["name"] == name for p in people_cast):
+            continue
+        people_cast.append(
+            {
+                "id": None,
+                "name": name,
+                "character": None,
+                "photo_url": None,
+                "actor_photo_url": None,
+                "character_photo_url": None,
+                "actors": [],
+                "roles": ["Writer"],
+                "is_deceased": False,
+            }
+        )
     people_cast = people_cast[:MAIN_CAST_LIMIT]
 
-    if not is_animated and not animated_cast:
-        # Live-action: keep animated tab empty; people has cast
-        pass
+    creator_ids = [
+        c.get("id") for c in created_by if isinstance(c.get("id"), int)
+    ]
 
     external = data.get("external_ids") or {}
     links: list[dict[str, str]] = []
@@ -255,7 +354,8 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         "origin_place": origin_place,
         "origin_countries": origin_countries,
         "aliases": [a for a in aliases if a],
-        "cast": {"animated": animated_cast, "people": people_cast},
+        "cast": {"animated": characters_cast, "people": people_cast, "characters": characters_cast, "staff": people_cast},
+        "creator_ids": creator_ids,
         "links": links,
         "posters": [p for p in posters if p],
         "backdrops": [b for b in backdrops if b],

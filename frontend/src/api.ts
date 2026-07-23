@@ -1643,6 +1643,29 @@ export async function removeSeriesCastMember(
   );
 }
 
+export async function patchSeriesCastMember(
+  franchiseId: string,
+  memberId: string | number,
+  body: {
+    bucket?: string;
+    name?: string;
+    character?: string;
+    photo_url?: string | null;
+    actor_photo_url?: string | null;
+    actors?: string[];
+    roles?: string[];
+  }
+) {
+  return request<SeriesCastMember>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/cast/${encodeURIComponent(String(memberId))}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
 export async function createSeriesLink(
   franchiseId: string,
   body: {

@@ -228,6 +228,37 @@ def series_remove_cast(
     return {"ok": True}
 
 
+@router.patch("/franchises/{franchise_id}/cast/{member_id}")
+def series_patch_cast(
+    franchise_id: str,
+    member_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.series_admin import patch_series_cast_member
+    from app.series_index import find_franchise_dir
+
+    found = find_franchise_dir(franchise_id)
+    if not found:
+        raise HTTPException(404, "Series franchise not found")
+    member = patch_series_cast_member(
+        db,
+        found[0].name,
+        member_id,
+        bucket=body.get("bucket") or "characters",
+        name=body.get("name"),
+        character=body.get("character"),
+        photo_url=body.get("photo_url"),
+        actor_photo_url=body.get("actor_photo_url"),
+        actors=body.get("actors"),
+        roles=body.get("roles"),
+    )
+    if not member:
+        raise HTTPException(404, "Cast member not found")
+    return member
+
+
 @router.post("/franchises/{franchise_id}/links")
 def series_add_link(
     franchise_id: str,

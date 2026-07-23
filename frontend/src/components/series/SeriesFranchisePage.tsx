@@ -44,7 +44,9 @@ import SeriesCast from "./SeriesCast";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
 import SeriesLinks from "./SeriesLinks";
 import SeriesMediaGrid, { type SeriesMediaCard } from "./SeriesMediaGrid";
-import SeriesRelatedPanel from "./SeriesRelatedPanel";
+import SeriesRelatedPanel, {
+  type SeriesRelatedTab,
+} from "./SeriesRelatedPanel";
 
 export type SeriesFranchiseShell = {
   name: string;
@@ -134,6 +136,7 @@ export default function SeriesFranchisePage({
   const [eraIndex, setEraIndex] = useState(0);
   const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
   const [linkTab, setLinkTab] = useState<LinkCategory | string>("databases");
+  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("creator");
   const [refreshBio, setRefreshBio] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
@@ -391,13 +394,21 @@ export default function SeriesFranchisePage({
   }, [section, franchiseId]);
 
   const title = data?.name ?? shell?.name ?? "Series";
-  // Theme / chrome: only portrait/landscape-named era assets — never booklet covers
-  const coverUrl =
-    data?.eras?.find((e) => e.portrait_url)?.portrait_url ??
-    data?.eras?.[0]?.portrait_url ??
+  // Match About carousel slides so left/right clicks advance the paired landscape bg
+  const aboutSlides = useMemo(() => {
+    const eras = data?.eras || [];
+    if (stacked) {
+      return eras.filter((e) => e.landscape_url);
+    }
+    return eras.filter((e) => e.portrait_url);
+  }, [data?.eras, stacked]);
+  const currentAboutEra =
+    aboutSlides[Math.min(eraIndex, Math.max(aboutSlides.length - 1, 0))] ??
     null;
+  const coverUrl = currentAboutEra?.portrait_url ?? aboutSlides[0]?.portrait_url ?? null;
   const bgUrl =
-    data?.eras?.find((e) => e.landscape_url)?.landscape_url ??
+    currentAboutEra?.landscape_url ??
+    aboutSlides.find((e) => e.landscape_url)?.landscape_url ??
     undefined;
 
   useEffect(() => {
@@ -429,7 +440,7 @@ export default function SeriesFranchisePage({
     return SECTIONS.filter((s) => !s.flag || data.media[s.flag]);
   }, [data]);
 
-  const era = data?.eras?.[Math.min(eraIndex, (data.eras.length || 1) - 1)];
+  const era = currentAboutEra ?? data?.eras?.[0];
   const topBrand = (era?.icon_url || data?.icon_url || shell?.icon_url) ? (
     <img
       src={(era?.icon_url || data?.icon_url || shell?.icon_url)!}
@@ -707,6 +718,29 @@ export default function SeriesFranchisePage({
           </div>
         ) : null}
 
+        {section === "overview" && overviewTab === "related" ? (
+          <nav className="artist-page__subtabs artist-page__related-subtabs">
+            {(
+              [
+                ["creator", "SAME CREATOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
+                ["similar", "SIMILAR", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                className={relatedTab === id ? "active" : ""}
+                onClick={() => setRelatedTab(id)}
+              >
+                <span>
+                  {label}
+                  <span className="artist-page__lineup-count">{count}</span>
+                </span>
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
         {section === "overview" &&
         overviewTab === "links" &&
         (data?.links?.categories?.length ?? 0) > 0 ? (
@@ -780,7 +814,11 @@ export default function SeriesFranchisePage({
         ) : null}
 
         {data && section === "overview" && overviewTab === "related" ? (
-          <SeriesRelatedPanel folderPath={data.folder_path} />
+          <SeriesRelatedPanel
+            creator={data.related?.creator || []}
+            similar={data.related?.similar || []}
+            tab={relatedTab}
+          />
         ) : null}
 
         {section === "audio" ? (

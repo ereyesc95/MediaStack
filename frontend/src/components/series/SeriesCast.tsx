@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addSeriesCastMember,
+  patchSeriesCastMember,
   removeSeriesCastMember,
 } from "../../api";
 import type { SeriesCastMember, SeriesCastTab } from "../../types";
@@ -41,29 +42,41 @@ function splitRows<T>(items: T[], perRow?: number): { top: T[]; bottom: T[] } {
   return { top: items.slice(0, topCount), bottom: items.slice(topCount) };
 }
 
+function actorNames(member: SeriesCastMember): string {
+  if (member.actors?.length) {
+    return member.actors.map((a) => a.name).filter(Boolean).join(" · ");
+  }
+  return (member.roles || []).filter(Boolean).join(" · ");
+}
+
 function MemberCard({
   member,
+  characterCentered,
   onSelect,
 }: {
   member: SeriesCastMember;
+  characterCentered: boolean;
   onSelect: (m: SeriesCastMember) => void;
 }) {
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const [charFailed, setCharFailed] = useState(false);
-  const roles =
-    member.roles?.filter(Boolean).join(" · ") ||
-    member.character ||
-    undefined;
-  const front = member.photo_url && !photoFailed ? member.photo_url : null;
-  const back =
-    member.character_photo_url && !charFailed
-      ? member.character_photo_url
-      : null;
+  const [frontFailed, setFrontFailed] = useState(false);
+  const [backFailed, setBackFailed] = useState(false);
+
+  // Characters tab: front = character art, back = actor
+  // Staff tab: front = person only (no flip)
+  const frontUrl = member.photo_url;
+  const backUrl = characterCentered
+    ? member.actor_photo_url || member.character_photo_url || null
+    : null;
+  const front = frontUrl && !frontFailed ? frontUrl : null;
+  const back = backUrl && !backFailed && backUrl !== frontUrl ? backUrl : null;
+  const subtitle = characterCentered
+    ? actorNames(member)
+    : member.roles?.filter(Boolean).join(" · ");
 
   useEffect(() => {
-    setPhotoFailed(false);
-    setCharFailed(false);
-  }, [member.photo_url, member.character_photo_url]);
+    setFrontFailed(false);
+    setBackFailed(false);
+  }, [member.photo_url, member.actor_photo_url, member.character_photo_url]);
 
   return (
     <button
@@ -81,11 +94,7 @@ function MemberCard({
         <span className="series-cast-card__photo-inner">
           <span className="series-cast-card__face series-cast-card__face--front">
             {front ? (
-              <img
-                src={front}
-                alt=""
-                onError={() => setPhotoFailed(true)}
-              />
+              <img src={front} alt="" onError={() => setFrontFailed(true)} />
             ) : (
               <span className="artist-lineup-card__ph">
                 {initials(member.name)}
@@ -94,11 +103,7 @@ function MemberCard({
           </span>
           {back ? (
             <span className="series-cast-card__face series-cast-card__face--back">
-              <img
-                src={back}
-                alt=""
-                onError={() => setCharFailed(true)}
-              />
+              <img src={back} alt="" onError={() => setBackFailed(true)} />
             </span>
           ) : null}
         </span>
@@ -111,7 +116,9 @@ function MemberCard({
           </span>
         ) : null}
       </span>
-      {roles ? <span className="artist-lineup-card__roles">{roles}</span> : null}
+      {subtitle ? (
+        <span className="artist-lineup-card__roles">{subtitle}</span>
+      ) : null}
     </button>
   );
 }
@@ -133,13 +140,51 @@ function CastMemberModal({
   onClose: () => void;
   onDataChanged: () => void;
 }) {
+  const characterCentered = bucket === "characters";
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoFailed, setPhotoFailed] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const [charName, setCharName] = useState(
+    member.character || member.name || ""
+  );
+  const [actorsText, setActorsText] = useState(actorNames(member));
+  const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
+  const [actorPhotoUrl, setActorPhotoUrl] = useState(
+    member.actor_photo_url || member.character_photo_url || ""
+  );
+
+  const handleSave = async () => {
+    if (member.id == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const actors = actorsText
+        .split(/[;·,]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await patchSeriesCastMember(franchiseId, member.id, {
+        bucket,
+        name: characterCentered ? actors[0] || charName : charName,
+        character: characterCentered ? charName : undefined,
+        photo_url: photoUrl.trim() || null,
+        actor_photo_url: actorPhotoUrl.trim() || null,
+        actors: characterCentered ? actors : undefined,
+        roles: actors,
+      });
+      onDataChanged();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleRemove = async () => {
     if (member.id == null) return;
+    if (!window.confirm(`Remove “${member.name}” from cast?`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -153,10 +198,8 @@ function CastMemberModal({
     }
   };
 
-  const tmdbPerson =
-    member.id != null && String(member.id).match(/^\d+$/)
-      ? `https://www.themoviedb.org/person/${member.id}`
-      : null;
+  const displayPhoto = member.photo_url;
+  const actorsLabel = actorNames(member);
 
   return (
     <ModalPortal onClose={onClose}>
@@ -170,9 +213,9 @@ function CastMemberModal({
               <button
                 type="button"
                 className="artist-member-modal__edit-icon"
-                aria-label="Remove member"
-                title="Remove from cast"
-                onClick={() => setConfirmRemove(true)}
+                aria-label="Edit member"
+                title="Edit"
+                onClick={() => setEditing((v) => !v)}
               >
                 <IconEditProfile />
               </button>
@@ -188,108 +231,123 @@ function CastMemberModal({
           </div>
         </div>
 
-        <div className="artist-member-modal__body">
-          <div className="artist-member-modal__hero">
-            <span className="artist-member-modal__photo-btn">
-              {member.photo_url && !photoFailed ? (
-                <img
-                  src={member.photo_url}
-                  alt=""
-                  onError={() => setPhotoFailed(true)}
-                />
-              ) : (
-                <span className="artist-member-modal__ph">
-                  {initials(member.name)}
-                </span>
-              )}
-            </span>
-
-            <div className="artist-member-modal__info">
-              <p className="artist-member-modal__title">
-                {member.name}
-                {member.is_deceased ? (
-                  <span
-                    className="artist-member-modal__deceased"
-                    title="Deceased"
-                  >
-                    †
+        {!editing ? (
+          <div className="artist-member-modal__body">
+            <div className="artist-member-modal__hero">
+              <span className="artist-member-modal__photo-btn">
+                {displayPhoto && !photoFailed ? (
+                  <img
+                    src={displayPhoto}
+                    alt=""
+                    onError={() => setPhotoFailed(true)}
+                  />
+                ) : (
+                  <span className="artist-member-modal__ph">
+                    {initials(member.name)}
                   </span>
-                ) : null}
-              </p>
-
-              {member.character ? (
-                <p className="artist-member-modal__row">
-                  <span className="artist-member-modal__label">
-                    Character:
-                  </span>
-                  <span className="artist-member-modal__value">
-                    {member.character}
-                  </span>
-                </p>
-              ) : null}
-
-              {member.roles && member.roles.length > 0 ? (
-                <p className="artist-member-modal__row">
-                  <span className="artist-member-modal__label">Roles:</span>
-                  <span className="artist-member-modal__value">
-                    {member.roles.filter(Boolean).join(" · ")}
-                  </span>
-                </p>
-              ) : null}
-
-              <div className="artist-member-modal__row artist-member-modal__row--projects">
-                <span className="artist-member-modal__label">
-                  Related projects:
-                </span>
-                <ul className="artist-member-modal__projects">
-                  <li>
-                    <span className="artist-member-modal__project-name">
-                      {franchiseName}
+                )}
+              </span>
+              <div className="artist-member-modal__info">
+                <p className="artist-member-modal__title">{member.name}</p>
+                {characterCentered && actorsLabel ? (
+                  <p className="artist-member-modal__row">
+                    <span className="artist-member-modal__label">
+                      Portrayed by:
                     </span>
-                  </li>
-                </ul>
-              </div>
-
-              {tmdbPerson ? (
-                <p className="artist-member-modal__row artist-member-modal__row--links">
-                  <span className="artist-member-modal__label">Links:</span>
-                  <span className="artist-member-modal__links-inline">
-                    <a
-                      href={tmdbPerson}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="artist-member-modal__link-name"
-                    >
-                      TMDb
-                    </a>
+                    <span className="artist-member-modal__value">
+                      {actorsLabel}
+                    </span>
+                  </p>
+                ) : null}
+                {!characterCentered && member.roles?.length ? (
+                  <p className="artist-member-modal__row">
+                    <span className="artist-member-modal__label">Roles:</span>
+                    <span className="artist-member-modal__value">
+                      {member.roles.join(" · ")}
+                    </span>
+                  </p>
+                ) : null}
+                <div className="artist-member-modal__row artist-member-modal__row--projects">
+                  <span className="artist-member-modal__label">
+                    Related projects:
                   </span>
-                </p>
-              ) : null}
-
-              {error ? <p className="error">{error}</p> : null}
+                  <ul className="artist-member-modal__projects">
+                    <li>
+                      <span className="artist-member-modal__project-name">
+                        {franchiseName}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+                {error ? <p className="error">{error}</p> : null}
+              </div>
             </div>
           </div>
-        </div>
-
-        {confirmRemove ? (
-          <div className="modal-panel-actions">
-            <button
-              type="button"
-              className="btn btn--danger"
-              disabled={busy}
-              onClick={() => void handleRemove()}
-            >
-              {busy ? "Removing…" : "Remove from cast"}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setConfirmRemove(false)}
-            >
-              Cancel
-            </button>
+        ) : (
+          <div className="artist-admin-form" style={{ padding: "0.5rem 0 1rem" }}>
+            <label>
+              {characterCentered ? "Character name" : "Name"}
+              <input
+                value={charName}
+                onChange={(e) => setCharName(e.target.value)}
+              />
+            </label>
+            {characterCentered ? (
+              <label>
+                Actors (semicolon-separated)
+                <input
+                  value={actorsText}
+                  onChange={(e) => setActorsText(e.target.value)}
+                  placeholder="Actor one; Actor two"
+                />
+              </label>
+            ) : null}
+            <label>
+              {characterCentered ? "Character photo URL" : "Photo URL"}
+              <input
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+              />
+            </label>
+            {characterCentered ? (
+              <label>
+                Actor photo URL (hover flip)
+                <input
+                  value={actorPhotoUrl}
+                  onChange={(e) => setActorPhotoUrl(e.target.value)}
+                />
+              </label>
+            ) : null}
+            {error ? <p className="error">{error}</p> : null}
+            <div className="modal-actions-row">
+              <button
+                type="button"
+                className="btn link-form__delete"
+                disabled={busy}
+                onClick={() => void handleRemove()}
+              >
+                Remove
+              </button>
+              <span className="modal-actions__spacer" />
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setEditing(false)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={busy || !charName.trim()}
+                onClick={() => void handleSave()}
+              >
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
-        ) : null}
+        )}
       </div>
     </ModalPortal>
   );
@@ -306,21 +364,32 @@ function AddCastModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [character, setCharacter] = useState("");
+  const characterCentered = bucket === "characters";
+  const [charName, setCharName] = useState("");
+  const [actorName, setActorName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [actorPhotoUrl, setActorPhotoUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
-    if (!name.trim()) return;
+    if (!charName.trim()) return;
     setSaving(true);
     setError(null);
     try {
       await addSeriesCastMember(franchiseId, {
         bucket,
-        name: name.trim(),
-        character: character.trim() || undefined,
-        roles: character.trim() ? [character.trim()] : undefined,
+        name: characterCentered
+          ? actorName.trim() || charName.trim()
+          : charName.trim(),
+        character: characterCentered ? charName.trim() : undefined,
+        photo_url: characterCentered
+          ? actorPhotoUrl.trim() || undefined
+          : photoUrl.trim() || undefined,
+        character_photo_url: characterCentered
+          ? photoUrl.trim() || undefined
+          : undefined,
+        roles: actorName.trim() ? [actorName.trim()] : undefined,
       });
       onSaved();
       onClose();
@@ -338,7 +407,9 @@ function AddCastModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>Add {bucket === "characters" ? "character" : "staff"}</h3>
+          <h3>
+            Add {characterCentered ? "character" : "staff member"}
+          </h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
@@ -346,18 +417,46 @@ function AddCastModal({
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
           <label>
-            Name
-            <input value={name} onChange={(e) => setName(e.target.value)} />
+            {characterCentered ? "Character name" : "Name"}
+            <input
+              value={charName}
+              onChange={(e) => setCharName(e.target.value)}
+              autoFocus
+            />
           </label>
-          {bucket === "characters" ? (
+          {characterCentered ? (
+            <>
+              <label>
+                Actor / portrayed by (optional)
+                <input
+                  value={actorName}
+                  onChange={(e) => setActorName(e.target.value)}
+                />
+              </label>
+              <label>
+                Character photo URL (optional)
+                <input
+                  value={photoUrl}
+                  onChange={(e) => setPhotoUrl(e.target.value)}
+                />
+              </label>
+              <label>
+                Actor photo URL (optional)
+                <input
+                  value={actorPhotoUrl}
+                  onChange={(e) => setActorPhotoUrl(e.target.value)}
+                />
+              </label>
+            </>
+          ) : (
             <label>
-              Character
+              Photo URL (optional)
               <input
-                value={character}
-                onChange={(e) => setCharacter(e.target.value)}
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
               />
             </label>
-          ) : null}
+          )}
         </div>
         <div className="modal-panel-actions">
           <button type="button" className="btn" onClick={onClose}>
@@ -366,10 +465,10 @@ function AddCastModal({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={saving || !name.trim()}
+            disabled={saving || !charName.trim()}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : "Add"}
+            {saving ? "Adding…" : "Add"}
           </button>
         </div>
       </div>
@@ -389,6 +488,7 @@ export default function SeriesCast({
 }: Props) {
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
+  const characterCentered = tab === "characters";
 
   const members = useMemo(() => {
     const list =
@@ -408,17 +508,10 @@ export default function SeriesCast({
     return (
       <div className="artist-lineup">
         <p className="muted artist-lineup__empty">
-          No {tab === "characters" ? "characters" : "staff"} yet. Refresh
-          metadata from TMDb or add members from the menu.
+          No {tab === "characters" ? "characters" : "staff"} yet. Use the menu
+          → <strong>Add member</strong>
+          {isAdmin ? "" : " (admin)"}, or refresh metadata from TMDb.
         </p>
-        {addOpen && onAddClose ? (
-          <AddCastModal
-            franchiseId={franchiseId}
-            bucket={tab}
-            onClose={onAddClose}
-            onSaved={onDataChanged}
-          />
-        ) : null}
       </div>
     );
   }
@@ -437,6 +530,7 @@ export default function SeriesCast({
               <MemberCard
                 key={`${m.id ?? m.name}-t${i}`}
                 member={m}
+                characterCentered={characterCentered}
                 onSelect={setModalMember}
               />
             ))}
@@ -447,6 +541,7 @@ export default function SeriesCast({
                 <MemberCard
                   key={`${m.id ?? m.name}-b${i}`}
                   member={m}
+                  characterCentered={characterCentered}
                   onSelect={setModalMember}
                 />
               ))}

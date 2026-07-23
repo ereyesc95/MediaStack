@@ -12970,7 +12970,7 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast-card__photo--flip {
-  perspective: 800px;
+  perspective: 1000px;
 }
 
 .series-cast-card__photo-inner {
@@ -12982,11 +12982,13 @@ button.lyrics-status-badge--icon-only {
   transition: transform 0.45s ease;
 }
 
-.series-cast-card:hover .series-cast-card__photo--flip .series-cast-card__photo-inner {
+.series-cast-card:hover .series-cast-card__photo--flip .series-cast-card__photo-inner,
+.series-cast-card:focus-visible .series-cast-card__photo--flip .series-cast-card__photo-inner {
   transform: rotateY(180deg);
 }
 
-.series-cast-card:hover .series-cast-card__photo img {
+.series-cast-card:hover .series-cast-card__photo img,
+.series-cast-card:hover .artist-lineup-card__photo img {
   transform: none;
 }
 

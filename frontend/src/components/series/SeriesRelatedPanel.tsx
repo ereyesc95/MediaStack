@@ -1,113 +1,82 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchMediaRelated } from "../../api";
-import type { FranchiseMediaEntry, MediaRelatedPayload } from "../../types";
+import { useMemo } from "react";
+import type { SeriesRelatedShow } from "../../types";
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
 
+export type SeriesRelatedTab = "creator" | "similar";
+
 type Props = {
-  folderPath: string;
+  creator: SeriesRelatedShow[];
+  similar: SeriesRelatedShow[];
+  tab: SeriesRelatedTab;
 };
 
-const KIND_ORDER = ["series", "movies", "books", "games", "music"] as const;
+export default function SeriesRelatedPanel({ creator, similar, tab }: Props) {
+  const items = useMemo(
+    () => (tab === "creator" ? creator : similar),
+    [tab, creator, similar]
+  );
 
-const KIND_LABEL: Record<string, string> = {
-  series: "Series",
-  movies: "Movies",
-  books: "Books",
-  games: "Games",
-  music: "Music",
-};
-
-export default function SeriesRelatedPanel({ folderPath }: Props) {
-  const [data, setData] = useState<MediaRelatedPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await fetchMediaRelated(folderPath));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [folderPath]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const groups = useMemo(() => {
-    if (!data) return [];
-    return KIND_ORDER.map((kind) => {
-      const items = ((data[kind] as FranchiseMediaEntry[] | undefined) ?? []).filter(
-        (it) => {
-          if (kind !== "series") return true;
-          // Prefer dated subseries over franchise hub roots
-          const parts = (it.path || "").replace(/\\/g, "/").split("/").filter(Boolean);
-          return !(parts.length === 3 && !it.date_iso);
-        }
-      );
-      return { kind, label: KIND_LABEL[kind] ?? kind, items };
-    }).filter((g) => g.items.length > 0);
-  }, [data]);
-
-  if (loading) {
-    return <p className="muted artist-section-empty">Loading related media…</p>;
-  }
-  if (error) {
-    return <p className="error artist-section-empty">{error}</p>;
-  }
-  if (!groups.length) {
+  if (!items.length) {
     return (
-      <p className="muted artist-section-empty">
-        No related media under the same franchise name in Movies, Books, Games,
-        or Music.
+      <p className="muted artist-section-empty artist-related__empty">
+        {tab === "creator"
+          ? "No other series by the same creator yet. Refresh metadata from TMDb."
+          : "No similar series yet. Refresh metadata from TMDb."}
       </p>
     );
   }
 
   return (
-    <div className="series-related">
-      {data?.franchise ? (
-        <p className="muted series-related__franchise">
-          Franchise: {data.franchise.display_name}
-        </p>
-      ) : null}
-      {groups.map((g) => (
-        <section key={g.kind} className="series-related__section">
-          <h3>{g.label}</h3>
-          <div className="media-release-grid series-related__grid">
-            {g.items.map((it) => (
-              <article
-                key={`${it.kind}:${it.path}`}
-                className="media-release-card media-release-card--portrait"
-                title={it.title}
-              >
-                <span
-                  className="media-release-card__cover"
-                  style={{
-                    backgroundImage: `url("${DEFAULT_DISC_URL}")`,
-                  }}
-                />
-                <span className="media-release-card__dim" aria-hidden />
-                <span className="media-release-card__hover">
-                  <span className="media-release-card__title-hover">
-                    {it.title}
-                  </span>
+    <div className="series-related artist-related">
+      <div className="media-release-grid series-related__grid artist-related__grid">
+        {items.map((it) => {
+          const cover = it.cover_url || it.poster_url || DEFAULT_DISC_URL;
+          const href = it.tmdb_id
+            ? `https://www.themoviedb.org/tv/${it.tmdb_id}`
+            : undefined;
+          const inner = (
+            <>
+              <span
+                className="media-release-card__cover"
+                style={{ backgroundImage: `url("${cover}")` }}
+              />
+              <span className="media-release-card__dim" aria-hidden />
+              <span className="media-release-card__hover">
+                <span className="media-release-card__title-hover">
+                  {it.title || it.name}
                 </span>
+              </span>
+              {it.date_iso ? (
                 <span className="media-release-card__date">
                   <span className="media-release-card__date-label">
-                    {it.kind}
-                    {it.platform ? ` · ${it.platform}` : ""}
+                    {it.date_iso.slice(0, 4)}
                   </span>
                 </span>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
+              ) : null}
+            </>
+          );
+          return href ? (
+            <a
+              key={`${tab}-${it.tmdb_id || it.title}`}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="media-release-card media-release-card--portrait"
+              title={it.title || it.name}
+            >
+              {inner}
+            </a>
+          ) : (
+            <article
+              key={`${tab}-${it.title}`}
+              className="media-release-card media-release-card--portrait"
+              title={it.title || it.name}
+            >
+              {inner}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }

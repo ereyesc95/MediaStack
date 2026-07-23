@@ -136,23 +136,55 @@ def _enrich_cast_member(
     *,
     franchise_dir: Path,
     media_root: Path,
+    character_centered: bool = True,
 ) -> dict:
     name = m.get("name") or ""
-    character = m.get("character")
+    character = m.get("character") or (name if character_centered else None)
     tid = m.get("id") if isinstance(m.get("id"), int) else None
+    actors = m.get("actors") if isinstance(m.get("actors"), list) else []
+    actor_photo = m.get("actor_photo_url") or m.get("character_photo_url")
+    if not actor_photo and actors:
+        actor_photo = (actors[0] or {}).get("photo_url")
+
+    if character_centered:
+        char_local = find_character_photo(
+            character or name,
+            franchise_dir=franchise_dir,
+            media_root=media_root,
+            actor_name=name,
+        )
+        # Actor local photo (first actor name)
+        actor_name = (actors[0] or {}).get("name") if actors else None
+        actor_local = None
+        if actor_name:
+            actor_local = find_person_photo(
+                actor_name, franchise_dir=franchise_dir, media_root=media_root
+            )
+        photo = char_local or m.get("photo_url")
+        # Don't keep actor shot as the character front
+        if photo and actor_photo and photo == actor_photo and not char_local:
+            photo = None
+        return {
+            **m,
+            "name": character or name,
+            "character": character or name,
+            "photo_url": photo,
+            "actor_photo_url": actor_local or actor_photo,
+            "character_photo_url": actor_local or actor_photo,
+            "actors": actors,
+            "roles": m.get("roles")
+            or [a.get("name") for a in actors if a.get("name")],
+            "tmdb_photo_url": actor_photo,
+        }
+
     local = find_person_photo(
         name, franchise_dir=franchise_dir, media_root=media_root, tmdb_id=tid
-    )
-    char_local = find_character_photo(
-        character or "",
-        franchise_dir=franchise_dir,
-        media_root=media_root,
-        actor_name=name,
     )
     return {
         **m,
         "photo_url": local or m.get("photo_url"),
-        "character_photo_url": char_local or m.get("character_photo_url"),
+        "character_photo_url": m.get("character_photo_url"),
+        "actor_photo_url": m.get("actor_photo_url"),
         "tmdb_photo_url": m.get("photo_url"),
     }
 
@@ -231,11 +263,15 @@ def build_series_overview(
     staff = [m for m in staff if isinstance(m, dict)][:8]
     cast = {
         "characters": [
-            _enrich_cast_member(m, franchise_dir=franchise_dir, media_root=root)
+            _enrich_cast_member(
+                m, franchise_dir=franchise_dir, media_root=root, character_centered=True
+            )
             for m in characters
         ],
         "staff": [
-            _enrich_cast_member(m, franchise_dir=franchise_dir, media_root=root)
+            _enrich_cast_member(
+                m, franchise_dir=franchise_dir, media_root=root, character_centered=False
+            )
             for m in staff
         ],
         # legacy aliases for older clients
@@ -413,6 +449,10 @@ def build_series_overview(
             "books": _enrich_related_cards(related.get("books") or [], root),
             "games": _enrich_related_cards(related.get("games") or [], root),
             "music": related.get("music") or [],
+            "creator": (images.get("related") or {}).get("creator") or [],
+            "similar": (images.get("related") or {}).get("similar") or [],
+            "creator_count": len((images.get("related") or {}).get("creator") or []),
+            "similar_count": len((images.get("related") or {}).get("similar") or []),
         },
         "metadata_refreshed_at": row.ser_metadata_refreshed_at,
         "needs_metadata": not bool(row.ser_metadata_refreshed_at),

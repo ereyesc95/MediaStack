@@ -302,90 +302,127 @@ def enrich_cast_character_photos_from_jikan(
     cast_members: list[dict],
 ) -> list[dict]:
     """
-    For animated shows, pull character portraits from Jikan (MAL) when local
-    People/Characters photos are missing — used for cast card hover flip.
+    Character-centered cards: photo_url = character art (front),
+    actor_photo_url / character_photo_url = actor portrait (hover flip).
     """
     if not cast_members:
         return cast_members
-    need = [
-        m
-        for m in cast_members
-        if m.get("character")
-        and not find_character_photo(
-            m["character"], franchise_dir=franchise_dir, media_root=media_root
-        )
-        and not m.get("character_photo_url")
-    ]
-    if not need:
-        return cast_members
+
+    need_remote = False
+    for m in cast_members:
+        character = m.get("character") or m.get("name") or ""
+        if character and not find_character_photo(
+            character, franchise_dir=franchise_dir, media_root=media_root
+        ):
+            # Only fetch Jikan if we don't already have a distinct character photo
+            existing = m.get("photo_url")
+            actor = m.get("actor_photo_url") or m.get("character_photo_url")
+            if not existing or (actor and existing == actor):
+                need_remote = True
+                break
 
     char_map: dict[str, str] = {}
-    try:
-        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-            r = client.get(
-                "https://api.jikan.moe/v4/anime",
-                params={"q": franchise_name, "limit": 5},
-            )
-            r.raise_for_status()
-            results = (r.json() or {}).get("data") or []
-            anime_id = None
-            want = _norm_key(franchise_name)
-            for a in results:
-                title = a.get("title") or ""
-                titles = [title] + [
-                    t.get("title") or ""
-                    for t in (a.get("titles") or [])
-                    if isinstance(t, dict)
-                ]
-                if any(want in _norm_key(t) or _norm_key(t) in want for t in titles if t):
-                    anime_id = a.get("mal_id")
-                    break
-            if anime_id is None and results:
-                anime_id = results[0].get("mal_id")
-            if not anime_id:
-                return cast_members
-            r2 = client.get(
-                f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
-            )
-            r2.raise_for_status()
-            for row in (r2.json() or {}).get("data") or []:
-                ch = row.get("character") or {}
-                cname = ch.get("name") or ""
-                imgs = (ch.get("images") or {}).get("jpg") or {}
-                url = imgs.get("image_url") or imgs.get("small_image_url")
-                if cname and url:
-                    char_map[_norm_key(cname)] = url
-                    # MAL uses "Last, First" sometimes
-                    if "," in cname:
-                        parts = [p.strip() for p in cname.split(",", 1)]
-                        if len(parts) == 2:
-                            char_map[_norm_key(f"{parts[1]} {parts[0]}")] = url
-    except Exception:
-        return cast_members
+    if need_remote:
+        try:
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                r = client.get(
+                    "https://api.jikan.moe/v4/anime",
+                    params={"q": franchise_name, "limit": 5},
+                )
+                r.raise_for_status()
+                results = (r.json() or {}).get("data") or []
+                anime_id = None
+                want = _norm_key(franchise_name)
+                for a in results:
+                    title = a.get("title") or ""
+                    titles = [title] + [
+                        t.get("title") or ""
+                        for t in (a.get("titles") or [])
+                        if isinstance(t, dict)
+                    ]
+                    if any(
+                        want in _norm_key(t) or _norm_key(t) in want
+                        for t in titles
+                        if t
+                    ):
+                        anime_id = a.get("mal_id")
+                        break
+                if anime_id is None and results:
+                    anime_id = results[0].get("mal_id")
+                if anime_id:
+                    r2 = client.get(
+                        f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
+                    )
+                    r2.raise_for_status()
+                    for row in (r2.json() or {}).get("data") or []:
+                        ch = row.get("character") or {}
+                        cname = ch.get("name") or ""
+                        imgs = (ch.get("images") or {}).get("jpg") or {}
+                        url = imgs.get("image_url") or imgs.get("small_image_url")
+                        if cname and url:
+                            char_map[_norm_key(cname)] = url
+                            if "," in cname:
+                                parts = [p.strip() for p in cname.split(",", 1)]
+                                if len(parts) == 2:
+                                    char_map[
+                                        _norm_key(f"{parts[1]} {parts[0]}")
+                                    ] = url
+        except Exception:
+            char_map = {}
 
     out: list[dict] = []
     for m in cast_members:
-        character = m.get("character") or ""
-        if not character:
-            out.append(m)
-            continue
-        local = find_character_photo(
-            character, franchise_dir=franchise_dir, media_root=media_root
-        )
-        if local:
-            out.append({**m, "character_photo_url": local})
-            continue
-        ck = _norm_key(re.sub(r"\(.*?\)", "", character))
-        remote = None
-        for k, url in char_map.items():
-            if ck and (ck in k or k in ck):
-                remote = url
-                break
-        if remote:
-            cached = cache_character_photo(
-                franchise_dir, media_root, character, remote
+        character = (m.get("character") or m.get("name") or "").strip()
+        actors = m.get("actors") if isinstance(m.get("actors"), list) else []
+        actor_photo = m.get("actor_photo_url") or None
+        if not actor_photo and actors:
+            actor_photo = (actors[0] or {}).get("photo_url")
+        # Legacy: actor was stored as photo_url / character_photo_url
+        if not actor_photo:
+            legacy = m.get("character_photo_url") or m.get("photo_url")
+            # Only treat as actor if we have roles/actors list
+            if actors or m.get("roles"):
+                actor_photo = legacy
+
+        local = (
+            find_character_photo(
+                character, franchise_dir=franchise_dir, media_root=media_root
             )
-            out.append({**m, "character_photo_url": cached or remote})
-        else:
-            out.append(m)
+            if character
+            else None
+        )
+        char_photo = local
+        if not char_photo:
+            ck = _norm_key(re.sub(r"\(.*?\)", "", character))
+            remote = None
+            for k, url in char_map.items():
+                if ck and (ck in k or k in ck):
+                    remote = url
+                    break
+            if remote:
+                char_photo = (
+                    cache_character_photo(
+                        franchise_dir, media_root, character, remote
+                    )
+                    or remote
+                )
+        # Keep an existing distinct photo_url if it isn't the actor shot
+        if not char_photo:
+            existing = m.get("photo_url")
+            if existing and existing != actor_photo:
+                char_photo = existing
+
+        out.append(
+            {
+                **m,
+                "name": character or m.get("name"),
+                "character": character or m.get("character"),
+                "photo_url": char_photo,
+                "actor_photo_url": actor_photo,
+                "character_photo_url": actor_photo,
+                "actors": actors,
+                "roles": m.get("roles")
+                or [a.get("name") for a in actors if a.get("name")],
+            }
+        )
     return out

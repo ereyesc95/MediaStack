@@ -15,7 +15,13 @@ from app.franchise_index import normalize_franchise_slug
 from app.models import Series
 from app.series_artwork import ensure_artwork_cached
 from app.series_index import find_franchise_dir
-from app.services.tmdb import fetch_tv, normalize_tv_payload, search_tv_id
+from app.services.tmdb import (
+    build_related_from_tv,
+    fetch_person_tv_credits,
+    fetch_tv,
+    normalize_tv_payload,
+    search_tv_id,
+)
 
 
 def _now() -> str:
@@ -165,18 +171,21 @@ async def refresh_series_metadata(
         row.ser_genres_json = json.dumps(genres, ensure_ascii=False)
 
     cast = data.get("cast") or {}
-    # Normalize to characters/staff keys — main cast only
-    characters = (cast.get("animated") or cast.get("characters") or [])[:8]
-    staff = (cast.get("people") or cast.get("staff") or [])[:8]
+    # Normalize to characters/staff keys — main cast only (character-centered)
+    characters = (
+        cast.get("characters")
+        or cast.get("animated")
+        or []
+    )[:8]
+    staff = (cast.get("staff") or cast.get("people") or [])[:8]
 
-    # Cache character flip photos for animated franchises (Jikan → People/Characters)
     root = Path(settings.media_root) if settings.media_root else None
     found = None
     if root and root.is_dir():
         found = find_franchise_dir(
             normalize_franchise_slug(franchise_name) or franchise_name, root
         )
-    if found and data.get("is_animated"):
+    if found:
         franchise_dir, _ = found
         from app.series_artwork import enrich_cast_character_photos_from_jikan
 
@@ -191,6 +200,19 @@ async def refresh_series_metadata(
         "people": staff,
     }
     row.ser_cast_json = json.dumps(cast_out, ensure_ascii=False)
+
+    # Same-creator + similar series from TMDb
+    creator_credits: list = []
+    for cid in (data.get("creator_ids") or [])[:3]:
+        try:
+            creator_credits.extend(await fetch_person_tv_credits(int(cid), api_key))
+        except Exception:
+            continue
+    related = build_related_from_tv(
+        raw,
+        creator_credits=creator_credits,
+        self_id=int(tv_id) if str(tv_id).isdigit() else None,
+    )
 
     links = data.get("links") or []
     # Ensure stable ids for edit/delete in the UI
@@ -214,6 +236,7 @@ async def refresh_series_metadata(
         "posters": data.get("posters") or [],
         "backdrops": data.get("backdrops") or [],
         "activity_periods": [],
+        "related": related,
     }
     if first_air or last_air:
         images_blob["activity_periods"] = [

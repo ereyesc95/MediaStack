@@ -120,14 +120,35 @@ def add_series_cast_member(
     key = "characters" if bucket in ("characters", "animated") else "staff"
     member = {
         "id": f"manual-{uuid.uuid4().hex[:10]}",
-        "name": name.strip(),
-        "character": (character or "").strip() or None,
-        "photo_url": photo_url,
-        "character_photo_url": character_photo_url,
-        "roles": roles or ([character] if character else []),
+        "name": (character or name).strip() if bucket in ("characters", "animated") else name.strip(),
+        "character": (character or name).strip() if bucket in ("characters", "animated") else (character or "").strip() or None,
+        "photo_url": photo_url or character_photo_url,
+        "actor_photo_url": None,
+        "character_photo_url": None,
+        "actors": [{"name": name.strip(), "photo_url": None}] if name.strip() and bucket in ("characters", "animated") and character else [],
+        "roles": roles
+        or (
+            [name.strip()]
+            if bucket in ("characters", "animated") and name.strip()
+            else ([character] if character else [])
+        ),
         "is_deceased": False,
         "manual": True,
     }
+    if bucket in ("characters", "animated"):
+        # Character-centered: name = character; optional actor in roles
+        char_name = (character or name).strip()
+        actor_name = name.strip() if character and name.strip() and name.strip() != char_name else (
+            (roles[0] if roles else None)
+        )
+        member["name"] = char_name
+        member["character"] = char_name
+        member["photo_url"] = character_photo_url or photo_url
+        if actor_name:
+            member["actors"] = [{"name": actor_name, "photo_url": None}]
+            member["roles"] = [actor_name]
+            member["actor_photo_url"] = photo_url if photo_url and photo_url != member["photo_url"] else None
+            member["character_photo_url"] = member["actor_photo_url"]
     cast.setdefault(key, []).append(member)
     _save_cast(db, row, cast)
     return member
@@ -164,6 +185,51 @@ def remove_series_cast_member(
     if removed:
         _save_cast(db, row, cast)
     return removed
+
+
+def patch_series_cast_member(
+    db: Session,
+    franchise_name: str,
+    member_id: str | int,
+    *,
+    bucket: str = "characters",
+    name: str | None = None,
+    character: str | None = None,
+    photo_url: str | None = None,
+    actor_photo_url: str | None = None,
+    actors: list[str] | None = None,
+    roles: list[str] | None = None,
+) -> dict | None:
+    row = find_series_row(db, franchise_name)
+    if not row:
+        return None
+    cast = _load_cast(row)
+    key = "characters" if bucket in ("characters", "animated") else "staff"
+    want = str(member_id)
+    for member in cast.get(key) or []:
+        if str(member.get("id")) != want:
+            continue
+        if name is not None:
+            member["name"] = name.strip()
+        if character is not None:
+            member["character"] = character.strip() or None
+            if bucket in ("characters", "animated") and character.strip():
+                member["name"] = character.strip()
+        if photo_url is not None:
+            member["photo_url"] = photo_url.strip() or None
+        if actor_photo_url is not None:
+            member["actor_photo_url"] = actor_photo_url.strip() or None
+            member["character_photo_url"] = member["actor_photo_url"]
+        if actors is not None:
+            cleaned = [a.strip() for a in actors if a and a.strip()]
+            member["actors"] = [{"name": a, "photo_url": None} for a in cleaned]
+            member["roles"] = cleaned
+        elif roles is not None:
+            member["roles"] = [r for r in roles if r]
+        member["manual"] = True
+        _save_cast(db, row, cast)
+        return member
+    return None
 
 
 def _load_links(row: Series) -> list[dict]:
