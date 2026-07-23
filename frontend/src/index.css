@@ -13048,11 +13048,31 @@ button.lyrics-status-badge--icon-only {
   gap: 0.35rem;
   border: none;
   background: transparent;
-  color: inherit;
+  color: var(--text);
   font: inherit;
   cursor: pointer;
   padding: 0;
   width: 100%;
+}
+
+/* Character name is primary when idle. While an actor is previewed, dim it
+   so only that actor name reads as active (not character + actor together). */
+.series-cast-card__main:hover,
+.series-cast-card__main:focus-visible {
+  color: var(--text);
+  opacity: 1;
+}
+
+.series-cast-card .artist-lineup-card__name {
+  color: var(--text);
+  opacity: 1;
+  transition: color 0.15s ease;
+}
+
+.series-cast-card--actor-shown .series-cast-card__main .artist-lineup-card__name,
+.series-cast-card:has(.series-cast-card__actor:hover) .series-cast-card__main .artist-lineup-card__name,
+.series-cast-card:has(.series-cast-card__actor:focus-visible) .series-cast-card__main .artist-lineup-card__name {
+  color: var(--text-muted);
 }
 
 .series-cast .artist-lineup-card {
@@ -13081,12 +13101,20 @@ button.lyrics-status-badge--icon-only {
   border: none;
   background: transparent;
   color: var(--text-muted);
+  opacity: 1;
   font: inherit;
   font-size: 0.68rem;
   line-height: 1.15;
   cursor: pointer;
   padding: 0;
   max-width: 100%;
+  transition: color 0.15s ease;
+}
+
+/* Only the hovered / pinned actor brightens — siblings stay muted. */
+.series-cast-card:hover .series-cast-card__actor:not(:hover):not(:focus-visible):not(.is-active),
+.series-cast-card--actor-shown .series-cast-card__actor:not(:hover):not(:focus-visible):not(.is-active) {
+  color: var(--text-muted);
 }
 
 .series-about-edit__custom-lang {
@@ -13107,7 +13135,8 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast-card__actor:hover,
-.series-cast-card__actor:focus-visible {
+.series-cast-card__actor:focus-visible,
+.series-cast-card__actor.is-active {
   color: var(--text);
 }
 
@@ -13167,13 +13196,12 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
 }
 
-/* Don't fight the cast photo crossfade with the shared lineup scale hover. */
-.series-cast-card:hover img,
-.series-cast-card.series-cast-card--actor-shown img {
-  transform: none;
-}
-
-.series-cast-card__photo-layer {
+/*
+ * Beat `.artist-lineup-card img { transition: transform }` which was
+ * overriding opacity transitions and making the crossfade instant.
+ */
+.series-cast-card.artist-lineup-card img.series-cast-card__photo-layer,
+.series-cast-card .series-cast-card__photo-layer {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -13184,7 +13212,12 @@ button.lyrics-status-badge--icon-only {
   justify-content: center;
   border-radius: 50%;
   opacity: 1;
-  transition: opacity 220ms ease;
+  transform: none !important;
+  transition: opacity 220ms ease !important;
+}
+
+.series-cast-card:hover img,
+.series-cast-card.series-cast-card--actor-shown img {
   transform: none !important;
 }
 
@@ -13198,11 +13231,6 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast-card__photo-layer--hover.is-visible {
-  opacity: 1;
-}
-
-.series-cast-card__actor.is-active {
-  color: var(--text);
   opacity: 1;
 }
 

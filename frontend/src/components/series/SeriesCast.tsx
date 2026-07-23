@@ -189,6 +189,7 @@ function MemberCard({
   const [actorVisible, setActorVisible] = useState(false);
   const fadeRaf = useRef(0);
   const clearTimer = useRef(0);
+  const hoverGen = useRef(0);
 
   const characterUrl = member.photo_url;
   const actors = characterCentered
@@ -200,10 +201,11 @@ function MemberCard({
     : null;
 
   const clearActorPhoto = () => {
+    hoverGen.current += 1;
     cancelAnimationFrame(fadeRaf.current);
     window.clearTimeout(clearTimer.current);
     setActorVisible(false);
-    clearTimer.current = window.setTimeout(() => setActorSrc(null), 240);
+    clearTimer.current = window.setTimeout(() => setActorSrc(null), 260);
   };
 
   const showActorPhoto = (url: string | null) => {
@@ -213,16 +215,28 @@ function MemberCard({
       clearActorPhoto();
       return;
     }
-    setActorSrc(url);
-    setActorVisible(false);
-    // Double rAF so the hover layer paints at opacity 0 before fading in.
-    fadeRaf.current = requestAnimationFrame(() => {
-      fadeRaf.current = requestAnimationFrame(() => setActorVisible(true));
-    });
+    const gen = ++hoverGen.current;
+    // Preload so the fade isn't skipped while the browser fetches the actor still.
+    const preload = new Image();
+    preload.src = url;
+    const startFade = () => {
+      if (gen !== hoverGen.current) return;
+      setActorSrc(url);
+      setActorVisible(false);
+      fadeRaf.current = requestAnimationFrame(() => {
+        fadeRaf.current = requestAnimationFrame(() => {
+          if (gen !== hoverGen.current) return;
+          setActorVisible(true);
+        });
+      });
+    };
+    if (preload.complete) startFade();
+    else preload.onload = startFade;
   };
 
   useEffect(() => {
     setPhotoFailed(false);
+    hoverGen.current += 1;
     cancelAnimationFrame(fadeRaf.current);
     window.clearTimeout(clearTimer.current);
     setActorSrc(null);

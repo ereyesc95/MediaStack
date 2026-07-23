@@ -164,6 +164,50 @@ def series_filter_options(db: Session = Depends(get_db)):
             if len(iso) >= 4 and iso[:4].isdigit():
                 decades.add((int(iso[:4]) // 10) * 10)
 
+    # Publishers / writers from Series rows (catalog), not MediaItemMeta video tags
+    used_publishers: list[str] = []
+    used_writers: list[str] = []
+    seen_pub: set[str] = set()
+    seen_writer: set[str] = set()
+
+    def _split_people(raw: str | None) -> list[str]:
+        if not raw:
+            return []
+        return [p.strip() for p in raw.replace(",", ";").split(";") if p.strip()]
+
+    for row in db.scalars(select(Series)).all():
+        for name in _split_people(row.ser_publishers):
+            key = name.casefold()
+            if key not in seen_pub:
+                seen_pub.add(key)
+                used_publishers.append(name)
+        for name in _split_people(row.ser_writers):
+            key = name.casefold()
+            if key not in seen_writer:
+                seen_writer.add(key)
+                used_writers.append(name)
+
+    used_publishers.sort(key=lambda s: s.casefold())
+    used_writers.sort(key=lambda s: s.casefold())
+
+    # Keep MediaItemMeta video tags as extras for editors / mixed libraries
+    for name in list_publishers_for_kind(db, "video"):
+        key = name.casefold()
+        if key not in seen_pub:
+            seen_pub.add(key)
+            used_publishers.append(name)
+    for name in (
+        list_people_for_kind(db, "video", "author")
+        or list_people_for_kind(db, "video", "director")
+    ):
+        key = name.casefold()
+        if key not in seen_writer:
+            seen_writer.add(key)
+            used_writers.append(name)
+
+    used_publishers.sort(key=lambda s: s.casefold())
+    used_writers.sort(key=lambda s: s.casefold())
+
     return {
         "continents": continents,
         "country_groups": country_groups,
@@ -171,9 +215,8 @@ def series_filter_options(db: Session = Depends(get_db)):
         "subgenre_groups": subgenre_groups,
         "all_subgenre_groups": all_subgenre_groups,
         "decades": sorted(decades),
-        "publishers": list_publishers_for_kind(db, "video"),
-        "writers": list_people_for_kind(db, "video", "author")
-        or list_people_for_kind(db, "video", "director"),
+        "publishers": used_publishers,
+        "writers": used_writers,
     }
 
 
