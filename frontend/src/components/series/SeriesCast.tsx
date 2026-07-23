@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   addSeriesCastMember,
   patchSeriesCastMember,
@@ -183,10 +183,11 @@ function MemberCard({
       window.matchMedia("(hover: none)").matches);
 
   const [photoFailed, setPhotoFailed] = useState(false);
-  /** Actor photo src kept mounted so opacity can transition. */
+  /** Which actor row is hovered / pinned — by language+name, never by photo URL. */
+  const [activeActorKey, setActiveActorKey] = useState<string | null>(null);
   const [actorSrc, setActorSrc] = useState<string | null>(null);
-  /** When true, crossfade to actor layer. */
   const [actorVisible, setActorVisible] = useState(false);
+  const hoverImgRef = useRef<HTMLImageElement | null>(null);
   const fadeRaf = useRef(0);
   const clearTimer = useRef(0);
   const hoverGen = useRef(0);
@@ -199,46 +200,62 @@ function MemberCard({
   const staffSubtitle = !characterCentered
     ? member.roles?.filter(Boolean).join(" · ")
     : null;
+  const actorPreview = Boolean(activeActorKey);
 
   const clearActorPhoto = () => {
     hoverGen.current += 1;
     cancelAnimationFrame(fadeRaf.current);
     window.clearTimeout(clearTimer.current);
     setActorVisible(false);
-    clearTimer.current = window.setTimeout(() => setActorSrc(null), 260);
+    clearTimer.current = window.setTimeout(() => setActorSrc(null), 280);
   };
 
   const showActorPhoto = (url: string | null) => {
     cancelAnimationFrame(fadeRaf.current);
     window.clearTimeout(clearTimer.current);
     if (!url) {
-      clearActorPhoto();
+      // Name can still highlight via activeActorKey; photo stays on character.
+      hoverGen.current += 1;
+      setActorVisible(false);
+      clearTimer.current = window.setTimeout(() => setActorSrc(null), 280);
       return;
     }
     const gen = ++hoverGen.current;
-    // Preload so the fade isn't skipped while the browser fetches the actor still.
     const preload = new Image();
     preload.src = url;
-    const startFade = () => {
+    const arm = () => {
       if (gen !== hoverGen.current) return;
       setActorSrc(url);
       setActorVisible(false);
-      fadeRaf.current = requestAnimationFrame(() => {
-        fadeRaf.current = requestAnimationFrame(() => {
-          if (gen !== hoverGen.current) return;
-          setActorVisible(true);
-        });
-      });
     };
-    if (preload.complete) startFade();
-    else preload.onload = startFade;
+    if (preload.complete) arm();
+    else preload.onload = arm;
   };
+
+  // After actorSrc mounts / changes, force a layout pass then fade in.
+  useLayoutEffect(() => {
+    if (!actorSrc) {
+      setActorVisible(false);
+      return;
+    }
+    setActorVisible(false);
+    const gen = hoverGen.current;
+    fadeRaf.current = requestAnimationFrame(() => {
+      void hoverImgRef.current?.offsetWidth;
+      fadeRaf.current = requestAnimationFrame(() => {
+        if (gen !== hoverGen.current) return;
+        setActorVisible(true);
+      });
+    });
+    return () => cancelAnimationFrame(fadeRaf.current);
+  }, [actorSrc]);
 
   useEffect(() => {
     setPhotoFailed(false);
     hoverGen.current += 1;
     cancelAnimationFrame(fadeRaf.current);
     window.clearTimeout(clearTimer.current);
+    setActiveActorKey(null);
     setActorSrc(null);
     setActorVisible(false);
   }, [member.photo_url, member.id]);
@@ -251,11 +268,21 @@ function MemberCard({
     []
   );
 
+  const activateActor = (key: string, photo: string | null) => {
+    setActiveActorKey(key);
+    showActorPhoto(photo);
+  };
+
+  const deactivateActor = () => {
+    setActiveActorKey(null);
+    clearActorPhoto();
+  };
+
   return (
     <div
       className={`artist-lineup-card series-cast-card${
         member.is_deceased ? " artist-lineup-card--deceased" : ""
-      }${actorVisible ? " series-cast-card--actor-shown" : ""}`}
+      }${actorPreview ? " series-cast-card--actor-shown" : ""}`}
     >
       <button
         type="button"
@@ -267,30 +294,39 @@ function MemberCard({
             <img
               src={baseUrl}
               alt=""
-              className={`series-cast-card__photo-layer series-cast-card__photo-layer--base${
-                actorVisible ? " is-faded" : ""
-              }`}
+              className="series-cast-card__photo-layer series-cast-card__photo-layer--base"
+              style={{
+                opacity: actorVisible ? 0 : 1,
+                transition: "opacity 220ms ease",
+              }}
               onError={() => setPhotoFailed(true)}
             />
           ) : (
             <span
-              className={`artist-lineup-card__ph series-cast-card__photo-layer series-cast-card__photo-layer--base${
-                actorVisible ? " is-faded" : ""
-              }`}
+              className="artist-lineup-card__ph series-cast-card__photo-layer series-cast-card__photo-layer--base"
+              style={{
+                opacity: actorVisible ? 0 : 1,
+                transition: "opacity 220ms ease",
+              }}
             >
               {initials(member.name)}
             </span>
           )}
-          {actorSrc ? (
-            <img
-              src={actorSrc}
-              alt=""
-              className={`series-cast-card__photo-layer series-cast-card__photo-layer--hover${
-                actorVisible ? " is-visible" : ""
-              }`}
-              onError={() => clearActorPhoto()}
-            />
-          ) : null}
+          {/* Keep overlay mounted whenever we have a src so opacity can transition. */}
+          <img
+            ref={hoverImgRef}
+            src={actorSrc || baseUrl || undefined}
+            alt=""
+            className="series-cast-card__photo-layer series-cast-card__photo-layer--hover"
+            style={{
+              opacity: actorVisible && actorSrc ? 1 : 0,
+              transition: "opacity 220ms ease",
+              visibility: actorSrc ? "visible" : "hidden",
+            }}
+            onError={() => {
+              if (actorSrc) clearActorPhoto();
+            }}
+          />
         </span>
         <span className="artist-lineup-card__name">
           {member.name}
@@ -305,9 +341,10 @@ function MemberCard({
         <ul className="series-cast-card__actors">
           {actors.map((a) => {
             const photo = a.photo_url || null;
-            const isActive = actorVisible && actorSrc === photo;
+            const key = `${a.language}::${a.name}`;
+            const isActive = activeActorKey === key;
             return (
-              <li key={`${a.language}-${a.name}`}>
+              <li key={key}>
                 <button
                   type="button"
                   className={`series-cast-card__actor${
@@ -316,22 +353,22 @@ function MemberCard({
                   title={a.name}
                   aria-pressed={tapToSwap ? isActive : undefined}
                   onMouseEnter={() => {
-                    if (!tapToSwap) showActorPhoto(photo);
+                    if (!tapToSwap) activateActor(key, photo);
                   }}
                   onMouseLeave={() => {
-                    if (!tapToSwap) clearActorPhoto();
+                    if (!tapToSwap) deactivateActor();
                   }}
                   onFocus={() => {
-                    if (!tapToSwap) showActorPhoto(photo);
+                    if (!tapToSwap) activateActor(key, photo);
                   }}
                   onBlur={() => {
-                    if (!tapToSwap) clearActorPhoto();
+                    if (!tapToSwap) deactivateActor();
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (tapToSwap) {
-                      if (isActive) clearActorPhoto();
-                      else showActorPhoto(photo);
+                      if (isActive) deactivateActor();
+                      else activateActor(key, photo);
                       return;
                     }
                     onSelect(member);
@@ -560,9 +597,17 @@ function CastMemberModal({
                     value={editLang}
                     onChange={(e) => setEditLang(e.target.value)}
                   >
-                    {(languageOptions.length
-                      ? languageOptions
-                      : franchiseLangs.map((c) => ({ code: c, label: c }))
+                    {(franchiseLangs.length
+                      ? franchiseLangs.map((c) => {
+                          const opt = languageOptions.find(
+                            (o) => o.code.toLowerCase() === c.toLowerCase()
+                          );
+                          return {
+                            code: c,
+                            label: opt?.label || c,
+                          };
+                        })
+                      : languageOptions
                     ).map((o) => (
                       <option key={o.code} value={o.code}>
                         {o.label.replace(/\s*\(origin\)\s*$/i, "")}
@@ -707,10 +752,7 @@ function AddCastModal({
               <label>
                 Language
                 <select value={lang} onChange={(e) => setLang(e.target.value)}>
-                  {(languageOptions.length
-                    ? languageOptions
-                    : [{ code: lang, label: lang }]
-                  ).map((o) => (
+                  {languageOptions.map((o) => (
                     <option key={o.code} value={o.code}>
                       {o.label.replace(/\s*\(origin\)\s*$/i, "")}
                     </option>
@@ -812,14 +854,26 @@ export default function SeriesCast({
     [members, deviceLayout]
   );
 
-  const allLangOptions = useMemo(() => {
+  const franchiseLangOptions = useMemo(() => {
+    const byCode = new Map(
+      (languageOptions || []).map((o) => [o.code.toLowerCase(), o] as const)
+    );
+    if (franchiseLangs.length) {
+      return franchiseLangs.map((code) => {
+        const opt = byCode.get(code.toLowerCase());
+        return {
+          code,
+          label: (opt?.label || code).replace(/\s*\(origin\)\s*$/i, ""),
+        };
+      });
+    }
     if (languageOptions?.length) {
       return languageOptions.map((o) => ({
         ...o,
         label: o.label.replace(/\s*\(origin\)\s*$/i, ""),
       }));
     }
-    return franchiseLangs.map((code) => ({ code, label: code }));
+    return [] as SeriesLanguageOption[];
   }, [languageOptions, franchiseLangs]);
 
   if (!members.length && !addOpen) {
@@ -834,7 +888,7 @@ export default function SeriesCast({
           <AddCastModal
             franchiseId={franchiseId}
             bucket={tab}
-            languageOptions={allLangOptions}
+            languageOptions={franchiseLangOptions}
             defaultLanguage={franchiseLangs[0] || null}
             onClose={onAddClose}
             onSaved={onDataChanged}
@@ -890,7 +944,7 @@ export default function SeriesCast({
           isAdmin={isAdmin}
           bucket={tab}
           franchiseLangs={franchiseLangs}
-          languageOptions={allLangOptions}
+          languageOptions={franchiseLangOptions}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />
@@ -900,7 +954,7 @@ export default function SeriesCast({
         <AddCastModal
           franchiseId={franchiseId}
           bucket={tab}
-          languageOptions={allLangOptions}
+          languageOptions={franchiseLangOptions}
           defaultLanguage={franchiseLangs[0] || null}
           onClose={onAddClose}
           onSaved={onDataChanged}

@@ -13100,7 +13100,7 @@ button.lyrics-status-badge--icon-only {
   gap: 0.28rem;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-muted) !important;
   opacity: 1;
   font: inherit;
   font-size: 0.68rem;
@@ -13111,10 +13111,15 @@ button.lyrics-status-badge--icon-only {
   transition: color 0.15s ease;
 }
 
-/* Only the hovered / pinned actor brightens — siblings stay muted. */
-.series-cast-card:hover .series-cast-card__actor:not(:hover):not(:focus-visible):not(.is-active),
-.series-cast-card--actor-shown .series-cast-card__actor:not(:hover):not(:focus-visible):not(.is-active) {
-  color: var(--text-muted);
+/* Only the hovered / pinned actor brightens — never all rows on card hover. */
+.series-cast-card__actor:hover,
+.series-cast-card__actor:focus-visible,
+.series-cast-card__actor.is-active {
+  color: var(--text) !important;
+}
+
+.series-cast-card__actor:not(:hover):not(:focus-visible):not(.is-active) {
+  color: var(--text-muted) !important;
 }
 
 .series-about-edit__custom-lang {
@@ -13132,12 +13137,6 @@ button.lyrics-status-badge--icon-only {
   background: var(--bg);
   color: var(--text);
   min-width: 8rem;
-}
-
-.series-cast-card__actor:hover,
-.series-cast-card__actor:focus-visible,
-.series-cast-card__actor.is-active {
-  color: var(--text);
 }
 
 .series-cast-card__flag {
