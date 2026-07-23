@@ -228,6 +228,75 @@ export default function SeriesBrowse({
     [filterMode, startDecade, endDecade]
   );
 
+  const selectedGenreOption = useMemo(() => {
+    if (subgenreId === "") return null;
+    return genreOptions.find((o) => o.value === String(subgenreId)) ?? null;
+  }, [genreOptions, subgenreId]);
+
+  const selectedCountryOption = useMemo(() => {
+    if (countryId === "") return null;
+    return countryOptions.find((o) => o.value === String(countryId)) ?? null;
+  }, [countryOptions, countryId]);
+
+  const matchesFranchiseMeta = useCallback(
+    (f: SeriesFranchiseCard) => {
+      if (filterMode === "country" && countryId !== "") {
+        if (f.country_id != null && f.country_id === countryId) return true;
+        const iso = selectedCountryOption?.iso?.toLowerCase();
+        if (iso && (f.country_iso || "").toLowerCase() === iso) return true;
+        return false;
+      }
+      if (filterMode === "continent" && continentId !== "") {
+        return f.continent_id === continentId;
+      }
+      if (filterMode === "genre" && subgenreId !== "") {
+        const wantId = String(subgenreId);
+        const ids = (f.genre_ids || []).map(String);
+        if (ids.includes(wantId)) return true;
+        const wantName = (selectedGenreOption?.label || "").toLowerCase();
+        if (
+          wantName &&
+          (f.genre_names || []).some((n) => n.toLowerCase() === wantName)
+        ) {
+          return true;
+        }
+        // Parent group match: e.g. franchise "Action & Adventure" under Action
+        const group = (selectedGenreOption?.group || "").toLowerCase();
+        if (
+          group &&
+          (f.genre_names || []).some((n) => {
+            const lower = n.toLowerCase();
+            return lower === group || lower.includes(group) || group.includes(lower);
+          })
+        ) {
+          return true;
+        }
+        return false;
+      }
+      if (filterMode === "publisher" && publisher) {
+        return (f.publishers || []).some(
+          (p) => p.toLowerCase() === publisher.toLowerCase()
+        );
+      }
+      if (filterMode === "writer" && writer) {
+        return (f.writers || []).some(
+          (w) => w.toLowerCase() === writer.toLowerCase()
+        );
+      }
+      return true;
+    },
+    [
+      filterMode,
+      countryId,
+      continentId,
+      subgenreId,
+      publisher,
+      writer,
+      selectedCountryOption,
+      selectedGenreOption,
+    ]
+  );
+
   const filtered = useMemo(() => {
     if (!filterReady) return [] as SeriesCatalogCard[];
 
@@ -236,6 +305,7 @@ export default function SeriesBrowse({
     if (catalogScope === "shows") {
       const cards: SeriesCatalogCard[] = [];
       for (const f of franchises) {
+        if (!matchesFranchiseMeta(f)) continue;
         const shows =
           f.subseries.length > 0
             ? f.subseries
@@ -267,16 +337,6 @@ export default function SeriesBrowse({
           if (
             (filterMode === "start" || filterMode === "end") &&
             !matchesDate(s.date_iso)
-          ) {
-            continue;
-          }
-          // Genre / geo / people filters need per-show metadata (not on disk yet)
-          if (
-            filterMode === "genre" ||
-            filterMode === "continent" ||
-            filterMode === "country" ||
-            filterMode === "publisher" ||
-            filterMode === "writer"
           ) {
             continue;
           }
@@ -329,16 +389,7 @@ export default function SeriesBrowse({
         f.subseries.some((s) => decadeFromIso(s.date_iso) === endDecade)
       );
     }
-    if (
-      filterMode === "genre" ||
-      filterMode === "continent" ||
-      filterMode === "country" ||
-      filterMode === "publisher" ||
-      filterMode === "writer"
-    ) {
-      // No franchise-level metadata on disk yet — require a selection but match none
-      list = [];
-    }
+    list = list.filter((f) => matchesFranchiseMeta(f));
     if (filterMode === "most_played") {
       list.sort(
         (a, b) =>
@@ -371,6 +422,7 @@ export default function SeriesBrowse({
     startDecade,
     endDecade,
     matchesDate,
+    matchesFranchiseMeta,
   ]);
 
   const handleCardClick = useCallback(

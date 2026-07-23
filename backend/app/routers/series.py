@@ -11,11 +11,12 @@ router = APIRouter(prefix="/api/series", tags=["series"])
 
 
 @router.get("/catalog")
-def series_catalog():
-    """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ subseries/seasons counts)."""
+def series_catalog(db: Session = Depends(get_db)):
+    """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ DB filter metadata)."""
+    from app.series_catalog_meta import enrich_catalog_metadata
     from app.series_index import build_series_catalog
 
-    return build_series_catalog()
+    return enrich_catalog_metadata(db, build_series_catalog())
 
 
 @router.get("/filters/options")

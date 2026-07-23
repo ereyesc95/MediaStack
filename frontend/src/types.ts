@@ -1041,6 +1041,14 @@ export type SeriesFranchiseCard = {
   subseries: SeriesSubseriesCard[];
   season_count: number;
   subseries_count: number;
+  /** Enriched from Series DB for catalog filters */
+  country_iso?: string | null;
+  country_id?: number | null;
+  continent_id?: number | null;
+  genre_ids?: (number | string)[];
+  genre_names?: string[];
+  publishers?: string[];
+  writers?: string[];
 };
 
 export type SeriesFranchiseDetail = SeriesFranchiseCard & {

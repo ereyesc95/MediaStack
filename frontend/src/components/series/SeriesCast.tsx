@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addSeriesCastMember,
   patchSeriesCastMember,
@@ -10,7 +10,7 @@ import type {
   SeriesCastTab,
   SeriesLanguageOption,
 } from "../../types";
-import { useDeviceLayout } from "../../usePhoneLayout";
+import { isPhoneLayout, useDeviceLayout } from "../../usePhoneLayout";
 import { IconEditProfile } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
 
@@ -176,29 +176,72 @@ function MemberCard({
   originLanguage?: string | null;
   onSelect: (m: SeriesCastMember) => void;
 }) {
+  const layout = useDeviceLayout();
+  const tapToSwap =
+    isPhoneLayout(layout) ||
+    (typeof window !== "undefined" &&
+      window.matchMedia("(hover: none)").matches);
+
   const [photoFailed, setPhotoFailed] = useState(false);
-  const [hoverActorPhoto, setHoverActorPhoto] = useState<string | null>(null);
+  /** Actor photo src kept mounted so opacity can transition. */
+  const [actorSrc, setActorSrc] = useState<string | null>(null);
+  /** When true, crossfade to actor layer. */
+  const [actorVisible, setActorVisible] = useState(false);
+  const fadeRaf = useRef(0);
+  const clearTimer = useRef(0);
 
   const characterUrl = member.photo_url;
   const actors = characterCentered
     ? actorsForDisplay(member, franchiseLangs, originLanguage)
     : [];
   const baseUrl = characterUrl && !photoFailed ? characterUrl : null;
-  const hoverUrl = hoverActorPhoto;
   const staffSubtitle = !characterCentered
     ? member.roles?.filter(Boolean).join(" · ")
     : null;
 
+  const clearActorPhoto = () => {
+    cancelAnimationFrame(fadeRaf.current);
+    window.clearTimeout(clearTimer.current);
+    setActorVisible(false);
+    clearTimer.current = window.setTimeout(() => setActorSrc(null), 240);
+  };
+
+  const showActorPhoto = (url: string | null) => {
+    cancelAnimationFrame(fadeRaf.current);
+    window.clearTimeout(clearTimer.current);
+    if (!url) {
+      clearActorPhoto();
+      return;
+    }
+    setActorSrc(url);
+    setActorVisible(false);
+    // Double rAF so the hover layer paints at opacity 0 before fading in.
+    fadeRaf.current = requestAnimationFrame(() => {
+      fadeRaf.current = requestAnimationFrame(() => setActorVisible(true));
+    });
+  };
+
   useEffect(() => {
     setPhotoFailed(false);
-    setHoverActorPhoto(null);
+    cancelAnimationFrame(fadeRaf.current);
+    window.clearTimeout(clearTimer.current);
+    setActorSrc(null);
+    setActorVisible(false);
   }, [member.photo_url, member.id]);
+
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(fadeRaf.current);
+      window.clearTimeout(clearTimer.current);
+    },
+    []
+  );
 
   return (
     <div
       className={`artist-lineup-card series-cast-card${
         member.is_deceased ? " artist-lineup-card--deceased" : ""
-      }`}
+      }${actorVisible ? " series-cast-card--actor-shown" : ""}`}
     >
       <button
         type="button"
@@ -211,26 +254,27 @@ function MemberCard({
               src={baseUrl}
               alt=""
               className={`series-cast-card__photo-layer series-cast-card__photo-layer--base${
-                hoverUrl ? " is-faded" : ""
+                actorVisible ? " is-faded" : ""
               }`}
               onError={() => setPhotoFailed(true)}
             />
           ) : (
             <span
               className={`artist-lineup-card__ph series-cast-card__photo-layer series-cast-card__photo-layer--base${
-                hoverUrl ? " is-faded" : ""
+                actorVisible ? " is-faded" : ""
               }`}
             >
               {initials(member.name)}
             </span>
           )}
-          {hoverUrl ? (
+          {actorSrc ? (
             <img
-              key={hoverUrl}
-              src={hoverUrl}
+              src={actorSrc}
               alt=""
-              className="series-cast-card__photo-layer series-cast-card__photo-layer--hover is-visible"
-              onError={() => setHoverActorPhoto(null)}
+              className={`series-cast-card__photo-layer series-cast-card__photo-layer--hover${
+                actorVisible ? " is-visible" : ""
+              }`}
+              onError={() => clearActorPhoto()}
             />
           ) : null}
         </span>
@@ -245,31 +289,49 @@ function MemberCard({
       </button>
       {characterCentered && actors.length > 0 ? (
         <ul className="series-cast-card__actors">
-          {actors.map((a) => (
-            <li key={`${a.language}-${a.name}`}>
-              <button
-                type="button"
-                className="series-cast-card__actor"
-                title={a.name}
-                onMouseEnter={() =>
-                  setHoverActorPhoto(a.photo_url || null)
-                }
-                onMouseLeave={() => setHoverActorPhoto(null)}
-                onFocus={() => setHoverActorPhoto(a.photo_url || null)}
-                onBlur={() => setHoverActorPhoto(null)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(member);
-                }}
-              >
-                <span
-                  className={`fi fi-${flagIso(a.language)} series-cast-card__flag`}
-                  aria-hidden
-                />
-                <span className="series-cast-card__actor-name">{a.name}</span>
-              </button>
-            </li>
-          ))}
+          {actors.map((a) => {
+            const photo = a.photo_url || null;
+            const isActive = actorVisible && actorSrc === photo;
+            return (
+              <li key={`${a.language}-${a.name}`}>
+                <button
+                  type="button"
+                  className={`series-cast-card__actor${
+                    isActive ? " is-active" : ""
+                  }`}
+                  title={a.name}
+                  aria-pressed={tapToSwap ? isActive : undefined}
+                  onMouseEnter={() => {
+                    if (!tapToSwap) showActorPhoto(photo);
+                  }}
+                  onMouseLeave={() => {
+                    if (!tapToSwap) clearActorPhoto();
+                  }}
+                  onFocus={() => {
+                    if (!tapToSwap) showActorPhoto(photo);
+                  }}
+                  onBlur={() => {
+                    if (!tapToSwap) clearActorPhoto();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (tapToSwap) {
+                      if (isActive) clearActorPhoto();
+                      else showActorPhoto(photo);
+                      return;
+                    }
+                    onSelect(member);
+                  }}
+                >
+                  <span
+                    className={`fi fi-${flagIso(a.language)} series-cast-card__flag`}
+                    aria-hidden
+                  />
+                  <span className="series-cast-card__actor-name">{a.name}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       {staffSubtitle ? (

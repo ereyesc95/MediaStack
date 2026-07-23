@@ -13167,6 +13167,12 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
 }
 
+/* Don't fight the cast photo crossfade with the shared lineup scale hover. */
+.series-cast-card:hover img,
+.series-cast-card.series-cast-card--actor-shown img {
+  transform: none;
+}
+
 .series-cast-card__photo-layer {
   position: absolute;
   inset: 0;
@@ -13178,7 +13184,8 @@ button.lyrics-status-badge--icon-only {
   justify-content: center;
   border-radius: 50%;
   opacity: 1;
-  transition: opacity 0.22s ease;
+  transition: opacity 220ms ease;
+  transform: none !important;
 }
 
 .series-cast-card__photo-layer--base.is-faded {
@@ -13191,6 +13198,11 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast-card__photo-layer--hover.is-visible {
+  opacity: 1;
+}
+
+.series-cast-card__actor.is-active {
+  color: var(--text);
   opacity: 1;
 }
 
