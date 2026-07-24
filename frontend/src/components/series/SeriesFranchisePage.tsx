@@ -23,6 +23,7 @@ import {
 } from "../../mediaTheme";
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
+  CardOrientation,
   LinkCategory,
   ReleaseCardLayout,
   SeriesCastTab,
@@ -41,6 +42,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import CardOrientationPicker from "../CardOrientationPicker";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
@@ -71,6 +73,8 @@ type Props = {
   busy?: string;
   isAdmin?: boolean;
   userId?: number;
+  cardOrientation?: CardOrientation;
+  onSetOrientation?: (next: CardOrientation) => void;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -125,6 +129,8 @@ export default function SeriesFranchisePage({
   busy,
   isAdmin = false,
   userId,
+  cardOrientation = "portrait",
+  onSetOrientation,
   onImport,
   onSync,
   onChooseSource,
@@ -142,7 +148,7 @@ export default function SeriesFranchisePage({
   const [eraIndex, setEraIndex] = useState(0);
   const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
   const [linkTab, setLinkTab] = useState<LinkCategory | string>("databases");
-  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("creator");
+  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("similar");
   const [refreshBio, setRefreshBio] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
@@ -607,6 +613,14 @@ export default function SeriesFranchisePage({
                 onChange={setReleaseCardLayoutPersisted}
               />
             )}
+            {section === "overview" &&
+            overviewTab === "related" &&
+            onSetOrientation ? (
+              <CardOrientationPicker
+                value={cardOrientation}
+                onChange={onSetOrientation}
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -880,6 +894,7 @@ export default function SeriesFranchisePage({
             creator={data.related?.creator || []}
             similar={data.related?.similar || []}
             tab={relatedTab}
+            orientation={cardOrientation}
             isAdmin={isAdmin}
             addOpen={addRelatedOpen}
             onAddClose={() => setAddRelatedOpen(false)}

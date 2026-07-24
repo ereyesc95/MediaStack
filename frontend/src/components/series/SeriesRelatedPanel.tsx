@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { addSeriesRelated, removeSeriesRelated } from "../../api";
-import type { SeriesRelatedShow } from "../../types";
-import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
+import type { ArtistCard as ArtistCardType, CardOrientation, SeriesRelatedShow } from "../../types";
+import { usePhoneLayout } from "../../usePhoneLayout";
+import ArtistCard from "../ArtistCard";
 import ModalPortal from "../ModalPortal";
 import ConfirmDialog from "../ConfirmDialog";
 
@@ -12,11 +13,30 @@ type Props = {
   creator: SeriesRelatedShow[];
   similar: SeriesRelatedShow[];
   tab: SeriesRelatedTab;
+  orientation?: CardOrientation;
   isAdmin?: boolean;
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
 };
+
+function toArtistCard(it: SeriesRelatedShow): ArtistCardType {
+  const year =
+    it.date_iso && it.date_iso.length >= 4
+      ? Number(it.date_iso.slice(0, 4)) || null
+      : null;
+  const cover = it.cover_url || it.poster_url || null;
+  return {
+    id: Number(it.id ?? it.tmdb_id ?? 0) || 0,
+    name: it.title || it.name || "Untitled",
+    photo_url: cover,
+    logo_url: null,
+    icon_url: null,
+    era_year: year,
+    show_name_on_hover: true,
+    starting_dates: it.date_iso || null,
+  };
+}
 
 function AddRelatedModal({
   franchiseId,
@@ -125,11 +145,13 @@ export default function SeriesRelatedPanel({
   creator,
   similar,
   tab,
+  orientation = "portrait",
   isAdmin,
   addOpen,
   onAddClose,
   onDataChanged,
 }: Props) {
+  const isPhone = usePhoneLayout();
   const items = useMemo(
     () => (tab === "creator" ? creator : similar),
     [tab, creator, similar]
@@ -138,6 +160,7 @@ export default function SeriesRelatedPanel({
     null
   );
   const [removeBusy, setRemoveBusy] = useState(false);
+  const [revealedId, setRevealedId] = useState<number | string | null>(null);
 
   const confirmRemove = async () => {
     if (!removeTarget) return;
@@ -181,54 +204,35 @@ export default function SeriesRelatedPanel({
 
   return (
     <div className="series-related artist-related">
-      <div className="media-release-grid series-related__grid artist-related__grid">
+      <div
+        className={`artist-grid artist-grid--${orientation} artist-related__grid`}
+      >
         {items.map((it) => {
-          const cover = it.cover_url || it.poster_url || DEFAULT_DISC_URL;
+          const card = toArtistCard(it);
+          const cardId = it.id ?? it.tmdb_id ?? card.name;
           const href = it.tmdb_id
             ? `https://www.themoviedb.org/tv/${it.tmdb_id}`
             : undefined;
-          const key = `${tab}-${it.id || it.tmdb_id || it.title}`;
-          const inner = (
-            <>
-              <span
-                className="media-release-card__cover"
-                style={{ backgroundImage: `url("${cover}")` }}
-              />
-              <span className="media-release-card__dim" aria-hidden />
-              <span className="media-release-card__hover">
-                <span className="media-release-card__title-hover">
-                  {it.title || it.name}
-                </span>
-              </span>
-              {it.date_iso ? (
-                <span className="media-release-card__date">
-                  <span className="media-release-card__date-label">
-                    {it.date_iso.slice(0, 4)}
-                  </span>
-                </span>
-              ) : null}
-            </>
-          );
+          const open = () => {
+            if (isPhone) {
+              if (revealedId === cardId) {
+                if (href) window.open(href, "_blank", "noreferrer");
+              } else {
+                setRevealedId(cardId);
+              }
+              return;
+            }
+            if (href) window.open(href, "_blank", "noreferrer");
+          };
           return (
-            <div key={key} className="artist-related-card-wrap">
-              {href ? (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="media-release-card media-release-card--portrait"
-                  title={it.title || it.name}
-                >
-                  {inner}
-                </a>
-              ) : (
-                <article
-                  className="media-release-card media-release-card--portrait"
-                  title={it.title || it.name}
-                >
-                  {inner}
-                </article>
-              )}
+            <div key={`${tab}-${cardId}`} className="artist-related-card-wrap">
+              <ArtistCard
+                artist={card}
+                orientation={orientation}
+                tapReveal={isPhone}
+                revealed={isPhone && revealedId === cardId}
+                onClick={open}
+              />
               {isAdmin ? (
                 <button
                   type="button"

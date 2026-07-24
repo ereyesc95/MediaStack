@@ -58,16 +58,17 @@ export default function SeriesGalleryPanel({ folderPath }: Props) {
 
   return (
     <div className="series-gallery">
-      <div className="series-gallery__grid">
+      <div className="artist-gallery__photo-grid series-gallery__grid">
         {items.map((it, i) => (
           <button
             key={it.id}
             type="button"
-            className="series-gallery__thumb"
+            className="artist-gallery__photo-card"
             onClick={() => setViewerIndex(i)}
             title={it.title}
           >
-            <img src={it.url} alt={it.title} loading="lazy" />
+            <img src={it.url} alt={it.title} loading="lazy" draggable={false} />
+            <span className="artist-gallery__card-label">{it.title}</span>
           </button>
         ))}
       </div>

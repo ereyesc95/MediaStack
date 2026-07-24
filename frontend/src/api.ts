@@ -1656,7 +1656,7 @@ export async function patchSeriesCastMember(
     character?: string;
     photo_url?: string | null;
     actor_photo_url?: string | null;
-    actors?: string[];
+    actors?: (string | { name: string; photo_url?: string | null })[];
     roles?: string[];
     language?: string;
     performances?: {
@@ -1664,6 +1664,7 @@ export async function patchSeriesCastMember(
       actor_name?: string | null;
       actor_names?: string[];
       photo_url?: string | null;
+      actors?: { name: string; photo_url?: string | null }[];
     }[];
     subseries_ids?: string[];
   }

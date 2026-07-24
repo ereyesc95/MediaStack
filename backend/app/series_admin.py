@@ -1,6 +1,7 @@
 """Admin mutations for Series franchise about + cast + links."""
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 
@@ -9,6 +10,36 @@ from sqlalchemy.orm import Session
 from app.models import Country, Series
 from app.series_languages import normalize_lang_code
 from app.series_refresh import ensure_series_row, find_series_row
+
+
+def stable_cast_member_id(name: str, *, prefix: str = "staff") -> str:
+    key = (name or "member").strip().casefold().encode("utf-8")
+    return f"{prefix}-{hashlib.sha1(key).hexdigest()[:12]}"
+
+
+def ensure_cast_member_id(member: dict, *, character_centered: bool = False) -> str:
+    """Return a stable id, assigning one onto the member dict when missing."""
+    mid = member.get("id")
+    if mid is not None and str(mid).strip() != "":
+        return str(mid)
+    prefix = "char" if character_centered else "staff"
+    label = (member.get("character") or member.get("name") or "member").strip()
+    assigned = stable_cast_member_id(label, prefix=prefix)
+    member["id"] = assigned
+    return assigned
+
+
+def _member_id_matches(member: dict, want: str, *, character_centered: bool) -> bool:
+    mid = member.get("id")
+    if mid is not None and str(mid) == want:
+        return True
+    if mid is None or str(mid).strip() == "":
+        prefix = "char" if character_centered else "staff"
+        label = (member.get("character") or member.get("name") or "").strip()
+        if stable_cast_member_id(label, prefix=prefix) == want:
+            member["id"] = want
+            return True
+    return False
 
 
 def _load_images(row: Series) -> dict:
@@ -124,6 +155,12 @@ def _load_cast(row: Series) -> dict:
         data = {}
     data.setdefault("characters", data.get("animated") or [])
     data.setdefault("staff", data.get("people") or [])
+    for m in data.get("characters") or []:
+        if isinstance(m, dict):
+            ensure_cast_member_id(m, character_centered=True)
+    for m in data.get("staff") or []:
+        if isinstance(m, dict):
+            ensure_cast_member_id(m, character_centered=False)
     # Keep legacy keys in sync
     data["animated"] = data["characters"]
     data["people"] = data["staff"]
@@ -240,7 +277,17 @@ def remove_series_cast_member(
     )
     for key in keys:
         before = cast.get(key) or []
-        after = [m for m in before if str(m.get("id")) != want]
+        character_centered = key == "characters"
+        after = [
+            m
+            for m in before
+            if not (
+                isinstance(m, dict)
+                and _member_id_matches(
+                    m, want, character_centered=character_centered
+                )
+            )
+        ]
         if len(after) != len(before):
             cast[key] = after
             removed = True
@@ -272,8 +319,11 @@ def patch_series_cast_member(
     key = "characters" if bucket in ("characters", "animated") else "staff"
     want = str(member_id)
     lang = normalize_lang_code(language) or language
+    character_centered = key == "characters"
     for member in cast.get(key) or []:
-        if str(member.get("id")) != want:
+        if not _member_id_matches(
+            member, want, character_centered=character_centered
+        ):
             continue
         if name is not None:
             member["name"] = name.strip()
@@ -293,6 +343,8 @@ def patch_series_cast_member(
                 if not isinstance(p, dict):
                     continue
                 plang = p.get("language") or "en"
+                # Prefer nested per-actor photos when present
+                nested = p.get("actors") if isinstance(p.get("actors"), list) else []
                 names = [
                     str(n).strip()
                     for n in (p.get("actor_names") or [])
@@ -302,6 +354,12 @@ def patch_series_cast_member(
                     an = (p.get("actor_name") or "").strip()
                     if an:
                         names = [an]
+                if not names and nested:
+                    names = [
+                        str(a.get("name") or "").strip()
+                        for a in nested
+                        if isinstance(a, dict) and (a.get("name") or "").strip()
+                    ]
                 entry = {
                     **p,
                     "language": plang,
@@ -309,11 +367,21 @@ def patch_series_cast_member(
                     "actor_names": names,
                 }
                 normalized.append(entry)
+                photo_by_name = {
+                    str(a.get("name") or "").strip().casefold(): (
+                        (a.get("photo_url") or "").strip() or None
+                        if isinstance(a.get("photo_url"), str)
+                        else a.get("photo_url")
+                    )
+                    for a in nested
+                    if isinstance(a, dict) and (a.get("name") or "").strip()
+                }
                 for i, an in enumerate(names):
                     actors_out.append(
                         {
                             "name": an,
-                            "photo_url": p.get("photo_url") if i == 0 else None,
+                            "photo_url": photo_by_name.get(an.casefold())
+                            or (p.get("photo_url") if i == 0 else None),
                             "language": plang,
                         }
                     )
@@ -321,8 +389,29 @@ def patch_series_cast_member(
             member["actors"] = actors_out
             member["roles"] = [a["name"] for a in actors_out]
         elif actors is not None:
-            cleaned = [a.strip() for a in actors if a and a.strip()]
             use_lang = lang or "en"
+            cleaned: list[dict] = []
+            for a in actors:
+                if isinstance(a, dict):
+                    n = (a.get("name") or "").strip()
+                    if not n:
+                        continue
+                    photo = a.get("photo_url")
+                    if isinstance(photo, str):
+                        photo = photo.strip() or None
+                    else:
+                        photo = None
+                    cleaned.append(
+                        {"name": n, "photo_url": photo, "language": use_lang}
+                    )
+                elif isinstance(a, str) and a.strip():
+                    cleaned.append(
+                        {
+                            "name": a.strip(),
+                            "photo_url": None,
+                            "language": use_lang,
+                        }
+                    )
             # Keep actors for other languages; replace this language only
             other_actors = [
                 a
@@ -330,16 +419,15 @@ def patch_series_cast_member(
                 if isinstance(a, dict)
                 and (a.get("language") or "").casefold() != use_lang.casefold()
             ]
-            member["actors"] = other_actors + [
-                {
-                    "name": a,
-                    "photo_url": member.get("actor_photo_url") if i == 0 else None,
-                    "language": use_lang,
-                }
-                for i, a in enumerate(cleaned)
-            ]
+            # If a shared actor_photo_url was sent and first has no photo, use it
+            if (
+                cleaned
+                and not cleaned[0].get("photo_url")
+                and member.get("actor_photo_url")
+            ):
+                cleaned[0]["photo_url"] = member.get("actor_photo_url")
+            member["actors"] = other_actors + cleaned
             member["roles"] = [a["name"] for a in member["actors"] if a.get("name")]
-            # Update / create performance for this language (all names)
             perfs = [
                 p
                 for p in (member.get("performances") or [])
@@ -351,18 +439,31 @@ def patch_series_cast_member(
                     0,
                     {
                         "language": use_lang,
-                        "actor_name": cleaned[0],
-                        "actor_names": cleaned,
-                        "photo_url": member.get("actor_photo_url"),
+                        "actor_name": cleaned[0]["name"],
+                        "actor_names": [c["name"] for c in cleaned],
+                        "photo_url": cleaned[0].get("photo_url"),
+                        "actors": [
+                            {"name": c["name"], "photo_url": c.get("photo_url")}
+                            for c in cleaned
+                        ],
                     },
                 )
             member["performances"] = perfs
+            if cleaned and cleaned[0].get("photo_url"):
+                member["actor_photo_url"] = cleaned[0]["photo_url"]
+                member["character_photo_url"] = cleaned[0]["photo_url"]
         elif roles is not None:
             member["roles"] = [r for r in roles if r]
         if actor_photo_url is not None and lang and member.get("performances"):
             for p in member["performances"]:
                 if (p.get("language") or "").casefold() == lang.casefold():
-                    p["photo_url"] = actor_photo_url.strip() or None
+                    if not p.get("photo_url"):
+                        p["photo_url"] = actor_photo_url.strip() or None
+                    # Also stamp first nested actor if missing photo
+                    nested = p.get("actors")
+                    if isinstance(nested, list) and nested and isinstance(nested[0], dict):
+                        if not nested[0].get("photo_url"):
+                            nested[0]["photo_url"] = actor_photo_url.strip() or None
                     break
         if subseries_ids is not None:
             cleaned_subs = [

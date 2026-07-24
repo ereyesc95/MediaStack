@@ -152,13 +152,23 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
     publishers = list(dict.fromkeys([*networks, *companies]))
 
     created_by = data.get("created_by") or []
-    writers = [c.get("name") for c in created_by if c.get("name")]
+    writers: list[dict[str, Any]] = [
+        {
+            "id": c.get("id"),
+            "name": c.get("name"),
+            "profile_path": c.get("profile_path"),
+            "role": "Creator",
+        }
+        for c in created_by
+        if c.get("name")
+    ]
+    writer_names = {w["name"] for w in writers}
 
     credits = data.get("credits") or {}
     cast_raw = credits.get("cast") or []
     crew_raw = credits.get("crew") or []
 
-    # Also pull writers from crew
+    # Also pull writers from crew (keep person id + photo when available)
     for c in crew_raw:
         job = (c.get("job") or "").casefold()
         dept = (c.get("department") or "").casefold()
@@ -166,10 +176,18 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         if not name:
             continue
         if job in {"writer", "story", "screenplay", "creator"} or (
-            dept == "writing" and name not in writers
+            dept == "writing" and name not in writer_names
         ):
-            if name not in writers:
-                writers.append(name)
+            if name not in writer_names:
+                writers.append(
+                    {
+                        "id": c.get("id"),
+                        "name": name,
+                        "profile_path": c.get("profile_path"),
+                        "role": "Writer",
+                    }
+                )
+                writer_names.add(name)
 
     genre_names = {g["name"].casefold() for g in genres}
     is_animated = "animation" in genre_names or any(
@@ -257,38 +275,20 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
 
     # Staff: creators + writers (people, not characters)
     people_cast: list[dict[str, Any]] = []
-    for c in created_by:
-        name = c.get("name")
-        if not name:
-            continue
-        if any(p["name"] == name for p in people_cast):
-            continue
-        people_cast.append(
-            {
-                "id": c.get("id"),
-                "name": name,
-                "character": None,
-                "photo_url": image_url(c.get("profile_path"), "w185"),
-                "actor_photo_url": None,
-                "character_photo_url": None,
-                "actors": [],
-                "roles": ["Creator"],
-                "is_deceased": False,
-            }
-        )
-    for name in writers:
+    for w in writers:
+        name = w.get("name")
         if not name or any(p["name"] == name for p in people_cast):
             continue
         people_cast.append(
             {
-                "id": None,
+                "id": w.get("id"),
                 "name": name,
                 "character": None,
-                "photo_url": None,
+                "photo_url": image_url(w.get("profile_path"), "w185"),
                 "actor_photo_url": None,
                 "character_photo_url": None,
                 "actors": [],
-                "roles": ["Writer"],
+                "roles": [w.get("role") or "Writer"],
                 "is_deceased": False,
             }
         )
@@ -378,7 +378,7 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         "first_air_date": data.get("first_air_date"),
         "last_air_date": data.get("last_air_date"),
         "genres": genres,
-        "writers": writers,
+        "writers": [w["name"] for w in writers if w.get("name")],
         "publishers": publishers,
         "origin_place": origin_place,
         "origin_countries": origin_countries,

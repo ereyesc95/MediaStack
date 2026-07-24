@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+from app.artwork_stems import COVER_BACK_STEM, COVER_FRONT_STEM
 from app.band_library import DATE_PREFIX_RE, _find_artwork_subdir
 from app.config import settings
 from app.franchise_index import normalize_franchise_slug, parse_dated_folder_name
@@ -134,13 +135,13 @@ def _count_seasons(folder: Path) -> int:
 
 
 def _count_seasons_deep(folder: Path) -> int:
-    """Count season folders at any depth (hub → nested subseries → seasons)."""
+    """Count season / arc folders at any depth (hub → nested subseries → seasons)."""
     n = 0
     try:
         for child in folder.iterdir():
             if not child.is_dir() or _is_skip_dir(child.name):
                 continue
-            if _is_season_folder(child.name):
+            if _is_season_folder(child.name) or _folder_has_episode_videos(child):
                 n += 1
             else:
                 n += _count_seasons_deep(child)
@@ -149,50 +150,175 @@ def _count_seasons_deep(folder: Path) -> int:
     return n
 
 
-def _count_seasons_deep(folder: Path) -> int:
-    """Count season folders at any depth (hub → nested subseries → seasons)."""
-    n = 0
+def _folder_has_episode_videos(folder: Path) -> bool:
+    """True when this folder directly contains episode video files."""
     try:
         for child in folder.iterdir():
-            if not child.is_dir() or _is_skip_dir(child.name):
-                continue
-            if _is_season_folder(child.name):
-                n += 1
-            else:
-                n += _count_seasons_deep(child)
+            if child.is_file() and child.suffix.lower() in VIDEO_EXTS:
+                return True
     except OSError:
-        return 0
-    return n
+        return False
+    return False
 
 
-def _season_card(season_dir: Path, media_root: Path) -> dict:
+def _artwork_named_cover(
+    artwork: Path | None,
+    labels: list[str],
+    stem: str,
+    media_root: Path,
+) -> str | None:
+    """Match ``{label} cover - front`` (case-insensitive) inside [Artwork]."""
+    if not artwork or not artwork.is_dir():
+        return None
+    stem_cf = stem.casefold().strip()
+    label_cfs = [lab.casefold().strip() for lab in labels if lab and lab.strip()]
+    if not label_cfs:
+        return None
+    try:
+        files = [p for p in artwork.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
+    except OSError:
+        return None
+    for label_cf in label_cfs:
+        want = f"{label_cf} {stem_cf}"
+        for path in files:
+            if path.stem.casefold().strip() == want:
+                return _media_url(path, media_root)
+    return None
+
+
+def _season_card(
+    season_dir: Path,
+    media_root: Path,
+    *,
+    parent_artwork: Path | None = None,
+) -> dict:
     date_iso, title = parse_dated_folder_name(season_dir.name)
     if season_dir.name.casefold() == "specials":
         title = "Specials"
+    display_title = title or season_dir.name
+    labels = [display_title, season_dir.name]
+    if date_iso and title:
+        labels.append(f"{date_iso}. {title}")
+    front = _artwork_named_cover(
+        parent_artwork, labels, COVER_FRONT_STEM, media_root
+    )
+    back = _artwork_named_cover(
+        parent_artwork, labels, COVER_BACK_STEM, media_root
+    )
     return {
         "id": season_dir.name,
-        "title": title or season_dir.name,
+        "title": display_title,
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
         "folder_path": season_dir.relative_to(media_root).as_posix(),
-        "cover_url": _folder_cover(season_dir, media_root),
+        "cover_url": front or _folder_cover(season_dir, media_root),
+        "cover_back_url": back,
         "episode_count": _count_episodes(season_dir),
     }
 
 
-def _list_seasons(folder: Path, media_root: Path) -> list[dict]:
-    seasons: list[dict] = []
+def _list_movies(folder: Path, media_root: Path) -> list[dict]:
+    """Movie video files under a Movies/ subfolder, or dated movie-like siblings."""
+    movies: list[dict] = []
+    movie_dirs: list[Path] = []
     try:
         children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
     except OSError:
         return []
     for child in children:
-        if (
-            child.is_dir()
-            and not _is_skip_dir(child.name)
-            and _is_season_folder(child.name)
-        ):
-            seasons.append(_season_card(child, media_root))
+        if not child.is_dir() or _is_skip_dir(child.name):
+            continue
+        if child.name.casefold() in {"movies", "films", "theatrical"}:
+            movie_dirs.append(child)
+    scan_roots = movie_dirs or []
+    for root_dir in scan_roots:
+        try:
+            entries = sorted(root_dir.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_file() and entry.suffix.lower() in VIDEO_EXTS:
+                rel = entry.relative_to(media_root).as_posix()
+                number, title = _parse_episode_name(entry.name)
+                movies.append(
+                    {
+                        "id": _episode_id(rel),
+                        "number": number,
+                        "title": title,
+                        "play_path": rel,
+                        "open_url": _file_url(entry, media_root)
+                        or f"/api/media/file?path={quote(rel, safe='/')}",
+                        "kind": "movie",
+                    }
+                )
+            elif entry.is_dir() and not _is_skip_dir(entry.name):
+                # One movie per folder — first video file
+                eps = _list_episodes(entry, media_root)
+                if not eps:
+                    continue
+                ep = eps[0]
+                date_iso, title = parse_dated_folder_name(entry.name)
+                movies.append(
+                    {
+                        **ep,
+                        "id": f"mov_{entry.name}",
+                        "title": title or ep.get("title") or entry.name,
+                        "date_iso": date_iso,
+                        "display_date": format_display_date(date_iso),
+                        "cover_url": _folder_cover(entry, media_root),
+                        "folder_path": entry.relative_to(media_root).as_posix(),
+                        "kind": "movie",
+                    }
+                )
+    return movies
+
+
+def _list_seasons(folder: Path, media_root: Path) -> list[dict]:
+    """Season folders named Season N, Specials, or arc folders with episode videos."""
+    seasons: list[dict] = []
+    parent_art = _find_artwork_subdir(folder)
+    try:
+        children = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return []
+    for child in children:
+        if not child.is_dir() or _is_skip_dir(child.name):
+            continue
+        if child.name.casefold() in {"movies", "films", "theatrical"}:
+            continue
+        if _is_season_folder(child.name):
+            seasons.append(
+                _season_card(child, media_root, parent_artwork=parent_art)
+            )
+    if seasons:
+        return seasons
+    # Story arcs / untitled seasons (e.g. "God of Destruction Beerus") —
+    # any non-meta child folder under a subseries when there are no Season N dirs.
+    for child in children:
+        if not child.is_dir() or _is_skip_dir(child.name):
+            continue
+        if child.name.casefold() in {"movies", "films", "theatrical"}:
+            continue
+        # Skip nested hubs that themselves contain further subseries folders
+        nested_subs = [
+            c
+            for c in (list(child.iterdir()) if child.is_dir() else [])
+            if c.is_dir()
+            and not _is_skip_dir(c.name)
+            and not _is_season_folder(c.name)
+            and not _folder_has_episode_videos(c)
+            and c.name.casefold() not in {"movies", "films", "theatrical"}
+        ]
+        # If child looks like another franchise hub (has nested subseries of its own
+        # without being a leaf), leave it for _list_subseries — but arc folders
+        # either have videos or are empty leaves.
+        if nested_subs and not _folder_has_episode_videos(child):
+            # Heuristic: nested dated folders without videos → still treat as arcs
+            # when they share the same parent pattern (all leaves). Prefer listing.
+            pass
+        seasons.append(
+            _season_card(child, media_root, parent_artwork=parent_art)
+        )
     return seasons
 
 
@@ -207,8 +333,59 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
             continue
         if _is_season_folder(child.name):
             continue
+        # Leaf episode containers and arc folders under a show are seasons
+        if _folder_has_episode_videos(child):
+            continue
+        if child.name.casefold() in {"movies", "films", "theatrical"}:
+            continue
+        # If parent already treats children as seasons (no Season N dirs),
+        # a child with only empty/video leaf siblings isn't a subseries hub —
+        # skip dirs that have no nested content hubs.
         date_iso, title = parse_dated_folder_name(child.name)
         seasons = _list_seasons(child, media_root)
+        # When _list_seasons falls back to listing all children as arcs, a true
+        # subseries (e.g. Dragon Ball Super) will have seasons. Nested empty
+        # arcs should not also appear as subseries at the franchise level —
+        # franchise children like Super have seasons; Super's arcs are seasons.
+        # At franchise level, Super is a subseries because its children aren't
+        # classic seasons AND Super itself has no videos — _list_seasons(Super)
+        # returns the arcs. Good.
+        #
+        # Problem: at franchise level, would we also list Super's arcs as
+        # subseries? _list_subseries(franchise) iterates Super, Z, etc.
+        # For Super: not season folder, no videos at Super root → continues.
+        # seasons = _list_seasons(Super) → 5 arcs. season_count = 5. Appended
+        # as one subseries. Good — arcs are NOT iterated at franchise level.
+        #
+        # At Super level via _list_subseries(Super): each arc has no videos
+        # (except Beerus) — wait Beerus HAS videos so we `continue`. Empty
+        # arcs don't have videos, so they'd be listed as nested subseries!
+        # Fix: if _list_seasons(parent) already claimed these as seasons,
+        # don't list them as subseries. Easiest: if a child has no nested
+        # seasons AND no nested subseries-worthy children, skip it when the
+        # parent's season fallback would include it.
+        #
+        # Simpler rule: skip child if it has no child directories and no nested
+        # season-named folders and no nested dirs with videos — i.e. empty
+        # leaf OR only files. Actually empty arcs SHOULD be seasons via
+        # _list_seasons on parent, so _list_subseries on parent shouldn't
+        # include them.
+        #
+        # Rule: skip children that look like season/arc leaves (no further
+        # subdirectory hubs). A hub has at least one non-meta child dir that
+        # is itself a container (has dirs or many videos).
+        try:
+            child_dirs = [
+                c
+                for c in child.iterdir()
+                if c.is_dir() and not _is_skip_dir(c.name)
+            ]
+        except OSError:
+            child_dirs = []
+        if not child_dirs:
+            # Empty leaf or files-only → season candidate, not subseries
+            continue
+        # Has only episode videos in nested? already handled by has_videos
         season_count = len(seasons)
         nested = []
         if season_count == 0:
@@ -424,12 +601,34 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
 
     seasons = _list_seasons(folder, root)
     subseries = _list_subseries(folder, root)
+    movies = _list_movies(folder, root)
+    # Also treat root-level video files that aren't in a season as movies
+    if not movies:
+        try:
+            for child in sorted(folder.iterdir(), key=lambda p: p.name.casefold()):
+                if child.is_file() and child.suffix.lower() in VIDEO_EXTS:
+                    rel = child.relative_to(root).as_posix()
+                    number, title = _parse_episode_name(child.name)
+                    movies.append(
+                        {
+                            "id": _episode_id(rel),
+                            "number": number,
+                            "title": title,
+                            "play_path": rel,
+                            "open_url": _file_url(child, root)
+                            or f"/api/media/file?path={quote(rel, safe='/')}",
+                            "kind": "movie",
+                        }
+                    )
+        except OSError:
+            pass
     return {
         **base,
-        "kind": "subseries" if seasons or not subseries else "folder",
+        "kind": "subseries" if seasons or movies or not subseries else "folder",
         "seasons": seasons,
         "subseries": subseries,
         "episodes": [],
+        "movies": movies,
         "season_count": len(seasons),
     }
 

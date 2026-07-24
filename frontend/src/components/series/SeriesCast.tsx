@@ -115,18 +115,53 @@ function actorLabel(member: SeriesCastMember, lang: string | null): string {
   return actorNamesForLang(member, lang).join(", ");
 }
 
-/** Actors to list under a character, ordered by franchise language list
- *  (origin / first language first). One row per language; multiple actors
- *  joined with ", ". */
-function actorsForDisplay(
+function actorsForLangDetailed(
+  member: SeriesCastMember,
+  lang: string
+): { name: string; photo_url?: string | null }[] {
+  const perf = performanceForLang(member, lang);
+  const nested = (
+    perf as SeriesCastPerformance & {
+      actors?: { name?: string; photo_url?: string | null }[];
+    }
+  )?.actors;
+  if (Array.isArray(nested) && nested.length) {
+    return nested
+      .filter((a) => a?.name?.trim())
+      .map((a) => ({
+        name: a.name!.trim(),
+        photo_url: a.photo_url ?? null,
+      }));
+  }
+  const names = actorNamesForLang(member, lang);
+  return names.map((name, i) => {
+    const fromActors = (member.actors || []).find(
+      (a) =>
+        a.name === name &&
+        (!a.language || a.language.toLowerCase() === lang.toLowerCase())
+    );
+    return {
+      name,
+      photo_url:
+        fromActors?.photo_url ||
+        (i === 0 ? perf?.photo_url : null) ||
+        null,
+    };
+  });
+}
+
+/** One row per language: flag + individually hoverable actor names. */
+function actorGroupsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
   originLanguage?: string | null
-): { language: string; name: string; photo_url?: string | null }[] {
+): {
+  language: string;
+  people: { name: string; photo_url?: string | null }[];
+}[] {
   const out: {
     language: string;
-    name: string;
-    photo_url?: string | null;
+    people: { name: string; photo_url?: string | null }[];
   }[] = [];
   let langs =
     franchiseLangs.length > 0
@@ -145,36 +180,32 @@ function actorsForDisplay(
   }
 
   for (const lang of langs) {
-    const names = actorNamesForLang(member, lang);
-    if (!names.length) continue;
-    const perf = performanceForLang(member, lang);
-    const firstActor = (member.actors || []).find(
-      (a) =>
-        a.name &&
-        a.name === names[0] &&
-        (!a.language || a.language.toLowerCase() === lang.toLowerCase())
-    );
-    out.push({
-      language: lang,
-      name: names.join(", "),
-      photo_url: perf?.photo_url || firstActor?.photo_url || null,
-    });
+    const people = actorsForLangDetailed(member, lang);
+    if (!people.length) continue;
+    out.push({ language: lang, people });
   }
 
   if (!out.length && (member.roles?.length || member.actors?.length)) {
-    const names = actorNamesForLang(member, originLanguage || franchiseLangs[0] || null);
-    if (names.length) {
-      out.push({
-        language: originLanguage || franchiseLangs[0] || "ja",
-        name: names.join(", "),
-        photo_url:
-          member.actors?.[0]?.photo_url ||
-          member.actor_photo_url ||
-          member.character_photo_url,
-      });
-    }
+    const lang = originLanguage || franchiseLangs[0] || "ja";
+    const people = actorsForLangDetailed(member, lang);
+    if (people.length) out.push({ language: lang, people });
   }
   return out;
+}
+
+/** Flat list for modal “Portrayed by” (joined names per language). */
+function actorsForDisplay(
+  member: SeriesCastMember,
+  franchiseLangs: string[],
+  originLanguage?: string | null
+): { language: string; name: string; photo_url?: string | null }[] {
+  return actorGroupsForDisplay(member, franchiseLangs, originLanguage).map(
+    (g) => ({
+      language: g.language,
+      name: g.people.map((p) => p.name).join(", "),
+      photo_url: g.people[0]?.photo_url ?? null,
+    })
+  );
 }
 
 function MemberCard({
@@ -207,8 +238,8 @@ function MemberCard({
   const hoverGen = useRef(0);
 
   const characterUrl = member.photo_url;
-  const actors = characterCentered
-    ? actorsForDisplay(member, franchiseLangs, originLanguage)
+  const actorGroups = characterCentered
+    ? actorGroupsForDisplay(member, franchiseLangs, originLanguage)
     : [];
   const baseUrl = characterUrl && !photoFailed ? characterUrl : null;
   const staffSubtitle = !characterCentered
@@ -351,52 +382,63 @@ function MemberCard({
           ) : null}
         </span>
       </button>
-      {characterCentered && actors.length > 0 ? (
+      {characterCentered && actorGroups.length > 0 ? (
         <ul className="series-cast-card__actors">
-          {actors.map((a) => {
-            const photo = a.photo_url || null;
-            const key = `${a.language}::${a.name}`;
-            const isActive = activeActorKey === key;
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  className={`series-cast-card__actor${
-                    isActive ? " is-active" : ""
-                  }`}
-                  title={a.name}
-                  aria-pressed={tapToSwap ? isActive : undefined}
-                  onMouseEnter={() => {
-                    if (!tapToSwap) activateActor(key, photo);
-                  }}
-                  onMouseLeave={() => {
-                    if (!tapToSwap) deactivateActor();
-                  }}
-                  onFocus={() => {
-                    if (!tapToSwap) activateActor(key, photo);
-                  }}
-                  onBlur={() => {
-                    if (!tapToSwap) deactivateActor();
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (tapToSwap) {
-                      if (isActive) deactivateActor();
-                      else activateActor(key, photo);
-                      return;
-                    }
-                    onSelect(member);
-                  }}
-                >
-                  <span
-                    className={`fi fi-${flagIso(a.language)} series-cast-card__flag`}
-                    aria-hidden
-                  />
-                  <span className="series-cast-card__actor-name">{a.name}</span>
-                </button>
-              </li>
-            );
-          })}
+          {actorGroups.map((g) => (
+            <li key={g.language} className="series-cast-card__actor-line">
+              <span
+                className={`fi fi-${flagIso(g.language)} series-cast-card__flag`}
+                aria-hidden
+              />
+              <span className="series-cast-card__actor-names">
+                {g.people.map((person, idx) => {
+                  const key = `${g.language}::${person.name}`;
+                  const isActive = activeActorKey === key;
+                  const photo = person.photo_url || null;
+                  return (
+                    <span key={key} className="series-cast-card__actor-chip">
+                      {idx > 0 ? (
+                        <span className="series-cast-card__actor-sep">, </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={`series-cast-card__actor${
+                          isActive ? " is-active" : ""
+                        }`}
+                        title={person.name}
+                        aria-pressed={tapToSwap ? isActive : undefined}
+                        onMouseEnter={() => {
+                          if (!tapToSwap) activateActor(key, photo);
+                        }}
+                        onMouseLeave={() => {
+                          if (!tapToSwap) deactivateActor();
+                        }}
+                        onFocus={() => {
+                          if (!tapToSwap) activateActor(key, photo);
+                        }}
+                        onBlur={() => {
+                          if (!tapToSwap) deactivateActor();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (tapToSwap) {
+                            if (isActive) deactivateActor();
+                            else activateActor(key, photo);
+                            return;
+                          }
+                          onSelect(member);
+                        }}
+                      >
+                        <span className="series-cast-card__actor-name">
+                          {person.name}
+                        </span>
+                      </button>
+                    </span>
+                  );
+                })}
+              </span>
+            </li>
+          ))}
         </ul>
       ) : null}
       {staffSubtitle ? (
@@ -441,25 +483,29 @@ function CastMemberModal({
     member.character || member.name || ""
   );
   const [editLang, setEditLang] = useState(defaultLang);
-  const [actorNames, setActorNames] = useState<string[]>(() => {
-    const names = actorNamesForLang(member, defaultLang);
-    return names.length ? names : [""];
+  const [actorEntries, setActorEntries] = useState<
+    { name: string; photo_url: string }[]
+  >(() => {
+    const people = actorsForLangDetailed(member, defaultLang);
+    return people.length
+      ? people.map((p) => ({ name: p.name, photo_url: p.photo_url || "" }))
+      : [{ name: "", photo_url: "" }];
   });
-  const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
-  const [actorPhotoUrl, setActorPhotoUrl] = useState(
-    performanceForLang(member, defaultLang)?.photo_url ||
-      member.actor_photo_url ||
-      member.character_photo_url ||
-      ""
+  const [rolesText, setRolesText] = useState(
+    () => (member.roles || []).join(", ")
   );
+  const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
   const [selectedSubs, setSelectedSubs] = useState<string[]>(
     () => member.subseries_ids || []
   );
 
   useEffect(() => {
-    const names = actorNamesForLang(member, editLang);
-    setActorNames(names.length ? names : [""]);
-    setActorPhotoUrl(performanceForLang(member, editLang)?.photo_url || "");
+    const people = actorsForLangDetailed(member, editLang);
+    setActorEntries(
+      people.length
+        ? people.map((p) => ({ name: p.name, photo_url: p.photo_url || "" }))
+        : [{ name: "", photo_url: "" }]
+    );
   }, [editLang, member]);
 
   const handleSave = async () => {
@@ -467,15 +513,28 @@ function CastMemberModal({
     setBusy(true);
     setError(null);
     try {
-      const actors = actorNames.map((s) => s.trim()).filter(Boolean);
+      const actors = actorEntries
+        .map((a) => ({
+          name: a.name.trim(),
+          photo_url: a.photo_url.trim() || null,
+        }))
+        .filter((a) => a.name);
+      const staffRoles = rolesText
+        .split(/[;·,]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
       await patchSeriesCastMember(franchiseId, member.id, {
         bucket,
-        name: characterCentered ? charName : charName,
+        name: charName,
         character: characterCentered ? charName : undefined,
         photo_url: photoUrl.trim() || null,
-        actor_photo_url: actorPhotoUrl.trim() || null,
+        actor_photo_url: characterCentered
+          ? actors[0]?.photo_url || null
+          : undefined,
         actors: characterCentered ? actors : undefined,
-        roles: characterCentered ? actors : undefined,
+        roles: characterCentered
+          ? actors.map((a) => a.name)
+          : staffRoles,
         language: characterCentered ? editLang : undefined,
         subseries_ids: selectedSubs,
       });
@@ -611,13 +670,42 @@ function CastMemberModal({
           </div>
         ) : (
           <div className="artist-admin-form" style={{ padding: "0.5rem 0 1rem" }}>
-            <label>
-              {characterCentered ? "Character name" : "Name"}
-              <input
-                value={charName}
-                onChange={(e) => setCharName(e.target.value)}
-              />
-            </label>
+            <div className="series-cast-edit__char-row">
+              <label className="series-cast-edit__grow">
+                {characterCentered ? "Character name" : "Name"}
+                <input
+                  value={charName}
+                  onChange={(e) => setCharName(e.target.value)}
+                />
+              </label>
+              {characterCentered ? (
+                <label className="series-cast-edit__grow">
+                  Character photo URL
+                  <input
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                  />
+                </label>
+              ) : (
+                <label className="series-cast-edit__grow">
+                  Photo URL
+                  <input
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                  />
+                </label>
+              )}
+            </div>
+            {!characterCentered ? (
+              <label>
+                Roles
+                <input
+                  value={rolesText}
+                  onChange={(e) => setRolesText(e.target.value)}
+                  placeholder="Director, Writer, …"
+                />
+              </label>
+            ) : null}
             {characterCentered ? (
               <>
                 <label>
@@ -648,24 +736,38 @@ function CastMemberModal({
                   <span className="series-cast-edit__actors-label">
                     Actors for this language
                   </span>
-                  {actorNames.map((name, idx) => (
+                  {actorEntries.map((entry, idx) => (
                     <div key={idx} className="series-cast-edit__actor-row">
                       <input
-                        value={name}
+                        value={entry.name}
                         onChange={(e) => {
-                          const next = [...actorNames];
-                          next[idx] = e.target.value;
-                          setActorNames(next);
+                          const next = [...actorEntries];
+                          next[idx] = { ...next[idx], name: e.target.value };
+                          setActorEntries(next);
                         }}
                         placeholder={idx === 0 ? "Actor name" : "Additional actor"}
                       />
-                      {actorNames.length > 1 ? (
+                      <input
+                        value={entry.photo_url}
+                        onChange={(e) => {
+                          const next = [...actorEntries];
+                          next[idx] = {
+                            ...next[idx],
+                            photo_url: e.target.value,
+                          };
+                          setActorEntries(next);
+                        }}
+                        placeholder="Actor photo URL"
+                      />
+                      {actorEntries.length > 1 ? (
                         <button
                           type="button"
                           className="btn link-form__delete"
                           aria-label="Remove actor"
                           onClick={() =>
-                            setActorNames(actorNames.filter((_, i) => i !== idx))
+                            setActorEntries(
+                              actorEntries.filter((_, i) => i !== idx)
+                            )
                           }
                         >
                           ×
@@ -675,8 +777,13 @@ function CastMemberModal({
                   ))}
                   <button
                     type="button"
-                    className="btn"
-                    onClick={() => setActorNames([...actorNames, ""])}
+                    className="btn series-cast-edit__add-actor"
+                    onClick={() =>
+                      setActorEntries([
+                        ...actorEntries,
+                        { name: "", photo_url: "" },
+                      ])
+                    }
                   >
                     Add actor
                   </button>
@@ -711,22 +818,6 @@ function CastMemberModal({
                   })}
                 </div>
               </fieldset>
-            ) : null}
-            <label>
-              {characterCentered ? "Character photo URL" : "Photo URL"}
-              <input
-                value={photoUrl}
-                onChange={(e) => setPhotoUrl(e.target.value)}
-              />
-            </label>
-            {characterCentered ? (
-              <label>
-                Actor photo URL
-                <input
-                  value={actorPhotoUrl}
-                  onChange={(e) => setActorPhotoUrl(e.target.value)}
-                />
-              </label>
             ) : null}
             {error ? <p className="error">{error}</p> : null}
             <div className="modal-actions-row">
@@ -774,9 +865,11 @@ function AddCastModal({
 }) {
   const characterCentered = bucket === "characters";
   const [charName, setCharName] = useState("");
-  const [actorNames, setActorNames] = useState<string[]>([""]);
+  const [actorEntries, setActorEntries] = useState<
+    { name: string; photo_url: string }[]
+  >([{ name: "", photo_url: "" }]);
+  const [rolesText, setRolesText] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
-  const [actorPhotoUrl, setActorPhotoUrl] = useState("");
   const [lang, setLang] = useState(
     defaultLanguage || languageOptions[0]?.code || "en"
   );
@@ -789,23 +882,65 @@ function AddCastModal({
     setSaving(true);
     setError(null);
     try {
-      const actors = actorNames.map((s) => s.trim()).filter(Boolean);
-      await addSeriesCastMember(franchiseId, {
+      const actors = actorEntries
+        .map((a) => ({
+          name: a.name.trim(),
+          photo_url: a.photo_url.trim() || null,
+        }))
+        .filter((a) => a.name);
+      const staffRoles = rolesText
+        .split(/[;·,]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const created = await addSeriesCastMember(franchiseId, {
         bucket,
         name: characterCentered
-          ? actors[0] || charName.trim()
+          ? actors[0]?.name || charName.trim()
           : charName.trim(),
         character: characterCentered ? charName.trim() : undefined,
         photo_url: characterCentered
-          ? actorPhotoUrl.trim() || undefined
+          ? actors[0]?.photo_url || undefined
           : photoUrl.trim() || undefined,
         character_photo_url: characterCentered
           ? photoUrl.trim() || undefined
           : undefined,
-        roles: actors.length ? actors : undefined,
+        roles: characterCentered
+          ? actors.length
+            ? actors.map((a) => a.name)
+            : undefined
+          : staffRoles.length
+            ? staffRoles
+            : undefined,
         language: characterCentered ? lang : undefined,
         subseries_ids: selectedSubs.length ? selectedSubs : undefined,
       });
+      if (
+        characterCentered &&
+        created?.id != null &&
+        (actors.length > 0 || selectedSubs.length)
+      ) {
+        await patchSeriesCastMember(franchiseId, created.id, {
+          bucket,
+          character: charName.trim(),
+          photo_url: photoUrl.trim() || null,
+          actor_photo_url: actors[0]?.photo_url || null,
+          actors,
+          language: lang,
+          subseries_ids: selectedSubs,
+        });
+      } else if (
+        !characterCentered &&
+        created?.id != null &&
+        selectedSubs.length
+      ) {
+        await patchSeriesCastMember(franchiseId, created.id, {
+          bucket,
+          name: charName.trim(),
+          photo_url: photoUrl.trim() || null,
+          roles: staffRoles,
+          subseries_ids: selectedSubs,
+        });
+      }
       onSaved();
       onClose();
     } catch (e) {
@@ -831,14 +966,24 @@ function AddCastModal({
         </div>
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
-          <label>
-            {characterCentered ? "Character name" : "Name"}
-            <input
-              value={charName}
-              onChange={(e) => setCharName(e.target.value)}
-              autoFocus
-            />
-          </label>
+          <div className="series-cast-edit__char-row">
+            <label className="series-cast-edit__grow">
+              {characterCentered ? "Character name" : "Name"}
+              <input
+                value={charName}
+                onChange={(e) => setCharName(e.target.value)}
+                autoFocus
+              />
+            </label>
+            <label className="series-cast-edit__grow">
+              {characterCentered ? "Character photo URL" : "Photo URL"}{" "}
+              (optional)
+              <input
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+              />
+            </label>
+          </div>
           {characterCentered ? (
             <>
               <label>
@@ -853,26 +998,40 @@ function AddCastModal({
               </label>
               <div className="series-cast-edit__actors">
                 <span className="series-cast-edit__actors-label">Actors</span>
-                {actorNames.map((name, idx) => (
+                {actorEntries.map((entry, idx) => (
                   <div key={idx} className="series-cast-edit__actor-row">
                     <input
-                      value={name}
+                      value={entry.name}
                       onChange={(e) => {
-                        const next = [...actorNames];
-                        next[idx] = e.target.value;
-                        setActorNames(next);
+                        const next = [...actorEntries];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        setActorEntries(next);
                       }}
                       placeholder={
                         idx === 0 ? "Actor name" : "Additional actor"
                       }
                     />
-                    {actorNames.length > 1 ? (
+                    <input
+                      value={entry.photo_url}
+                      onChange={(e) => {
+                        const next = [...actorEntries];
+                        next[idx] = {
+                          ...next[idx],
+                          photo_url: e.target.value,
+                        };
+                        setActorEntries(next);
+                      }}
+                      placeholder="Actor photo URL"
+                    />
+                    {actorEntries.length > 1 ? (
                       <button
                         type="button"
                         className="btn link-form__delete"
                         aria-label="Remove actor"
                         onClick={() =>
-                          setActorNames(actorNames.filter((_, i) => i !== idx))
+                          setActorEntries(
+                            actorEntries.filter((_, i) => i !== idx)
+                          )
                         }
                       >
                         ×
@@ -882,68 +1041,57 @@ function AddCastModal({
                 ))}
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() => setActorNames([...actorNames, ""])}
+                  className="btn series-cast-edit__add-actor"
+                  onClick={() =>
+                    setActorEntries([
+                      ...actorEntries,
+                      { name: "", photo_url: "" },
+                    ])
+                  }
                 >
                   Add actor
                 </button>
               </div>
-              {subseries.length > 0 ? (
-                <fieldset className="series-cast-edit__subseries">
-                  <legend>Appears in subseries</legend>
-                  <p className="muted series-cast-edit__hint">
-                    Leave all unchecked to show in every subseries (All).
-                  </p>
-                  <div className="series-cast-edit__subseries-list">
-                    {subseries.map((s) => {
-                      const checked = selectedSubs.includes(s.id);
-                      return (
-                        <label
-                          key={s.id}
-                          className="series-cast-edit__sub-item"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setSelectedSubs((prev) =>
-                                checked
-                                  ? prev.filter((id) => id !== s.id)
-                                  : [...prev, s.id]
-                              );
-                            }}
-                          />
-                          {s.title}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-              ) : null}
-              <label>
-                Character photo URL (optional)
-                <input
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                />
-              </label>
-              <label>
-                Actor photo URL (optional)
-                <input
-                  value={actorPhotoUrl}
-                  onChange={(e) => setActorPhotoUrl(e.target.value)}
-                />
-              </label>
             </>
           ) : (
             <label>
-              Photo URL (optional)
+              Roles (optional)
               <input
-                value={photoUrl}
-                onChange={(e) => setPhotoUrl(e.target.value)}
+                value={rolesText}
+                onChange={(e) => setRolesText(e.target.value)}
+                placeholder="Director, Writer, …"
               />
             </label>
           )}
+          {subseries.length > 0 ? (
+            <fieldset className="series-cast-edit__subseries">
+              <legend>Appears in subseries</legend>
+              <p className="muted series-cast-edit__hint">
+                Leave all unchecked to show in every subseries (All).
+              </p>
+              <div className="series-cast-edit__subseries-list">
+                {subseries.map((s) => {
+                  const checked = selectedSubs.includes(s.id);
+                  return (
+                    <label key={s.id} className="series-cast-edit__sub-item">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedSubs((prev) =>
+                            checked
+                              ? prev.filter((id) => id !== s.id)
+                              : [...prev, s.id]
+                          );
+                        }}
+                      />
+                      {s.title}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ) : null}
         </div>
         <div className="modal-panel-actions modal-panel-actions--end">
           <button

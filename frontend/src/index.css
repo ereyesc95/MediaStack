@@ -580,9 +580,17 @@ input {
 }
 
 .module-top-bar__media-icon {
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   opacity: 0.9;
+}
+
+.module-top-bar__media-icon svg {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .module-top-bar__media-menu button {
@@ -13181,8 +13189,126 @@ button.lyrics-status-badge--icon-only {
   pointer-events: none;
 }
 
-.series-media-grid {
-  padding: 0.75rem 1rem 2rem;
+/* Subseries page: collapsible season headers (tracklist edition style) */
+.series-season-block__header {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.55rem 0.15rem;
+  font: inherit;
+}
+
+.series-season-block__header:hover {
+  color: var(--accent, #c9a227);
+}
+
+.series-season-block__header.is-open {
+  color: var(--text);
+}
+
+.series-subseries-overview__cast {
+  margin-top: 0.35rem;
+  min-height: 0;
+  padding-bottom: 0.85rem;
+  overflow: visible;
+}
+
+.series-subseries-page .series-subseries-overview.release-page__overview {
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 1.25rem;
+}
+
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-grid,
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-grid[data-count],
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-grid[data-count="1"],
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-grid[data-count="2"] {
+  --lineup-photo: clamp(2.6rem, 3.4vw, 3.35rem);
+}
+
+.series-subseries-page .series-subseries-overview__cast .series-cast .artist-lineup-card {
+  max-width: calc(var(--lineup-photo) + 2.75rem);
+  gap: 0.35rem;
+}
+
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-card__name {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  overflow: visible;
+  white-space: normal;
+}
+
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-card__roles,
+.series-subseries-page .series-subseries-overview__cast .series-cast-card__actor-line {
+  font-size: 0.58rem;
+  line-height: 1.25;
+  overflow: visible;
+}
+
+.series-subseries-page .series-subseries-overview__cast .release-page__section-glass {
+  overflow: visible;
+  padding-bottom: 0.5rem;
+}
+
+.series-subseries-page .series-subseries-overview__cast .artist-lineup,
+.series-subseries-page .series-subseries-overview__cast .artist-lineup-row {
+  overflow: visible;
+}
+
+.series-subseries-overview__cast-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.series-subseries-overview__cast-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid transparent;
+}
+
+.series-subseries-overview__cast-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent, #c9a227);
+}
+
+.series-subseries-page .release-page__art-stage--cover-only {
+  aspect-ratio: 2 / 3;
+  max-height: min(52vh, 28rem);
+}
+
+.series-subseries-page .release-page__panel-bottom {
+  margin-top: auto;
+}
+
+.release-page__person-link--static {
+  color: var(--text);
+}
+
+.series-subseries-page__country-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.series-subseries-page__country-flag {
+  width: 1rem;
+  height: 0.75rem;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 
 .series-cast-card__photo {
@@ -13196,8 +13322,8 @@ button.lyrics-status-badge--icon-only {
 }
 
 /*
- * Beat `.artist-lineup-card img { transition: transform }` which was
- * overriding opacity transitions and making the crossfade instant.
+ * Zoom the photo inside the circle (circle size stays fixed).
+ * Keep opacity crossfade on layers; scale layers on card hover.
  */
 .series-cast-card.artist-lineup-card img.series-cast-card__photo-layer,
 .series-cast-card .series-cast-card__photo-layer {
@@ -13211,13 +13337,16 @@ button.lyrics-status-badge--icon-only {
   justify-content: center;
   border-radius: 50%;
   opacity: 1;
-  transform: none !important;
-  transition: opacity 220ms ease !important;
+  transform: scale(1);
+  transition: opacity 220ms ease, transform 0.22s ease !important;
 }
 
-.series-cast-card:hover img,
-.series-cast-card.series-cast-card--actor-shown img {
-  transform: none !important;
+.series-cast-card:hover .series-cast-card__photo-layer {
+  transform: scale(1.08) !important;
+}
+
+.series-cast-card:hover .artist-lineup-card__ph {
+  transform: scale(1.08);
 }
 
 .series-cast-card__photo-layer--base.is-faded {
@@ -13245,6 +13374,18 @@ button.lyrics-status-badge--icon-only {
   color: var(--text-muted);
 }
 
+.series-cast-edit__char-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.series-cast-edit__grow {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 .series-cast-edit__actor-row {
   display: flex;
   gap: 0.4rem;
@@ -13254,6 +13395,13 @@ button.lyrics-status-badge--icon-only {
 .series-cast-edit__actor-row input {
   flex: 1;
   min-width: 0;
+}
+
+.series-cast-edit__add-actor {
+  align-self: flex-start;
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.55rem !important;
+  line-height: 1.2;
 }
 
 .series-cast-edit__subseries {
@@ -13274,9 +13422,15 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast-edit__subseries-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem 0.65rem;
+}
+
+@media (max-width: 720px) {
+  .series-cast-edit__subseries-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .series-cast-edit__sub-item {
@@ -13287,6 +13441,37 @@ button.lyrics-status-badge--icon-only {
   font-size: 0.82rem;
   width: auto !important;
   cursor: pointer;
+  min-width: 0;
+}
+
+.series-cast-card__actor-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.28rem;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.series-cast-card__actor-names {
+  display: inline;
+  min-width: 0;
+  text-align: left;
+}
+
+.series-cast-card__actor-chip {
+  display: inline;
+}
+
+.series-cast-card__actor-sep {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.series-cast-card__actor-line .series-cast-card__actor {
+  display: inline;
+  max-width: none;
+  padding: 0;
 }
 
 .search-dropdown-list--portal {
@@ -13476,26 +13661,12 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-gallery__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-  gap: 0.55rem;
+  /* reuse artist photo grid; keep series selector for layout tweaks */
+  gap: 0;
 }
 
-.series-gallery__thumb {
-  border: none;
-  padding: 0;
-  background: var(--bg-hover);
-  cursor: pointer;
-  aspect-ratio: 1;
-  overflow: hidden;
+.series-gallery .artist-gallery__photo-card {
   border-radius: 2px;
-}
-
-.series-gallery__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .series-related__franchise {

@@ -1020,6 +1020,7 @@ export type SeriesSeasonCard = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  cover_back_url?: string | null;
   episode_count: number;
 };
 
@@ -1029,6 +1030,11 @@ export type SeriesEpisodeItem = {
   title: string;
   play_path: string;
   open_url: string | null;
+  kind?: "episode" | "movie";
+  date_iso?: string | null;
+  display_date?: string | null;
+  cover_url?: string | null;
+  folder_path?: string | null;
 };
 
 export type SeriesFranchiseCard = {
@@ -1069,6 +1075,7 @@ export type SeriesFolderDetail = {
   seasons: SeriesSeasonCard[];
   subseries: SeriesSubseriesCard[];
   episodes: SeriesEpisodeItem[];
+  movies?: SeriesEpisodeItem[];
   episode_count?: number;
   season_count?: number;
 };
@@ -1198,6 +1205,8 @@ export type SeriesCastPerformance = {
   actor_name?: string | null;
   /** All actors for this language (comma-joined on cards). */
   actor_names?: string[];
+  /** Per-actor photos for the same language. */
+  actors?: { name: string; photo_url?: string | null }[];
   actor_id?: number | string | null;
   photo_url?: string | null;
 };

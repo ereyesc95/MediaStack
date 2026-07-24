@@ -137,16 +137,66 @@ export default function SeriesBrowse({
 
   const decades = filterOptions?.decades ?? [];
 
-  // Auto-select first decade when entering start/end with nothing selected
+  // Auto-select first subbar option when entering a filter tab (Music catalog parity)
   useEffect(() => {
-    if (!decades.length) return;
-    if (filterMode === "start" && startDecade === "") {
+    if (filterMode === "name" && !letter) {
+      onLetterChange("A");
+      return;
+    }
+    if (!filterOptions) return;
+    if (filterMode === "continent" && continentId === "") {
+      const first = filterOptions.continents[0];
+      if (first) onContinentIdChange(first.id);
+      return;
+    }
+    if (filterMode === "country" && countryId === "") {
+      const first = filterOptions.country_groups.flatMap((g) => g.items)[0];
+      if (first) onCountryIdChange(first.id);
+      return;
+    }
+    if (filterMode === "start" && startDecade === "" && decades.length) {
       onStartDecadeChange(decades[0]);
+      return;
     }
-    if (filterMode === "end" && endDecade === "") {
+    if (filterMode === "end" && endDecade === "" && decades.length) {
       onEndDecadeChange(decades[0]);
+      return;
     }
-  }, [filterMode, decades, startDecade, endDecade, onStartDecadeChange, onEndDecadeChange]);
+    if (filterMode === "genre" && subgenreId === "") {
+      const first = filterOptions.subgenre_groups.flatMap((g) => g.items)[0];
+      if (first) onSubgenreIdChange(first.id);
+      return;
+    }
+    if (filterMode === "publisher" && !publisher.trim()) {
+      const first = filterOptions.publishers[0];
+      if (first) onPublisherChange(first);
+      return;
+    }
+    if (filterMode === "writer" && !writer.trim()) {
+      const first = filterOptions.writers[0];
+      if (first) onWriterChange(first);
+    }
+  }, [
+    filterMode,
+    filterOptions,
+    letter,
+    continentId,
+    countryId,
+    startDecade,
+    endDecade,
+    subgenreId,
+    publisher,
+    writer,
+    decades,
+    onLetterChange,
+    onContinentIdChange,
+    onCountryIdChange,
+    onStartDecadeChange,
+    onEndDecadeChange,
+    onSubgenreIdChange,
+    onPublisherChange,
+    onWriterChange,
+  ]);
 
   const filterReady = useMemo(() => {
     switch (filterMode) {
@@ -457,7 +507,7 @@ export default function SeriesBrowse({
                 key={l}
                 type="button"
                 className={letter === l ? "active" : ""}
-                onClick={() => onLetterChange(letter === l ? "" : l)}
+                onClick={() => onLetterChange(l)}
               >
                 {l}
               </button>
@@ -465,7 +515,7 @@ export default function SeriesBrowse({
             <button
               type="button"
               className={letter === HASH ? "active" : ""}
-              onClick={() => onLetterChange(letter === HASH ? "" : HASH)}
+              onClick={() => onLetterChange(HASH)}
             >
               {HASH}
             </button>
@@ -485,9 +535,7 @@ export default function SeriesBrowse({
                 key={c.id}
                 type="button"
                 className={continentId === c.id ? "active" : ""}
-                onClick={() =>
-                  onContinentIdChange(continentId === c.id ? "" : c.id)
-                }
+                onClick={() => onContinentIdChange(c.id)}
               >
                 {c.name}
               </button>

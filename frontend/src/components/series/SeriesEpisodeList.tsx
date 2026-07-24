@@ -3,6 +3,7 @@ import type { SeriesEpisodeItem } from "../../types";
 type Props = {
   episodes: SeriesEpisodeItem[];
   emptyLabel?: string;
+  onSelect?: (ep: SeriesEpisodeItem) => void;
 };
 
 function openEpisode(ep: SeriesEpisodeItem) {
@@ -15,6 +16,7 @@ function openEpisode(ep: SeriesEpisodeItem) {
 export default function SeriesEpisodeList({
   episodes,
   emptyLabel = "No episode video files in this season folder.",
+  onSelect,
 }: Props) {
   if (!episodes.length) {
     return (
@@ -30,7 +32,10 @@ export default function SeriesEpisodeList({
             <button
               type="button"
               className="release-tracklist__row series-episode-list__row"
-              onClick={() => openEpisode(ep)}
+              onClick={() => {
+                onSelect?.(ep);
+                openEpisode(ep);
+              }}
               title={`Open ${ep.title}`}
             >
               <span className="release-tracklist__num series-episode-list__num">

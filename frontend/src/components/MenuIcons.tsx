@@ -404,3 +404,58 @@ export function IconTrash({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconMediaMusic({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"
+      />
+    </svg>
+  );
+}
+
+export function IconMediaSeries({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-5.5l1.5 2v1H7v-1l1.5-2H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v8h14V7H5z"
+      />
+    </svg>
+  );
+}
+
+export function IconMediaMovies({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M18 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM8 18H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V8h2v2zm10 8h-8v-2h8v2zm0-4h-8v-2h8v2zm0-4h-8V8h8v2z"
+      />
+    </svg>
+  );
+}
+
+export function IconMediaBooks({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M6 4h9a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2V6a2 2 0 0 1 2-2zm0 14h10a1 1 0 0 1 1 1H6a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1zm1-11v8h8V7H7z"
+      />
+    </svg>
+  );
+}
+
+export function IconMediaGames({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M7.5 7h9A4.5 4.5 0 0 1 21 11.5v1A4.5 4.5 0 0 1 16.5 17h-9A4.5 4.5 0 0 1 3 12.5v-1A4.5 4.5 0 0 1 7.5 7zM8 10v1.5H6.5v1H8V14h1.5v-1.5H11v-1H9.5V10H8zm7.25.25a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm2.5 2.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"
+      />
+    </svg>
+  );
+}

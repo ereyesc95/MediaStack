@@ -102,7 +102,7 @@ export default function SeriesModule({
   const [franchiseShell, setFranchiseShell] =
     useState<SeriesFranchiseShell | null>(null);
   const [search, setSearch] = useState("");
-  const [letter, setLetter] = useState("");
+  const [letter, setLetter] = useState("A");
   const [continentId, setContinentId] = useState<number | "">("");
   const [countryId, setCountryId] = useState<number | "">("");
   const [startDecade, setStartDecade] = useState<number | "">("");
@@ -252,6 +252,28 @@ export default function SeriesModule({
               overviewTab: "about",
             })
           }
+          onBrowseCatalog={(target) => {
+            clearMediaTheme(userId);
+            setFranchiseShell(null);
+            setTab("catalog");
+            pushSeriesCatalogRoute(true);
+            onNavigate({
+              franchiseId: undefined,
+              subseriesId: undefined,
+              seasonId: undefined,
+              section: "overview",
+            });
+            setFilterMode(target.mode);
+            setSearch("");
+            setLetter(target.mode === "name" ? "A" : "");
+            setContinentId("");
+            setCountryId(target.countryId ?? "");
+            setStartDecade("");
+            setEndDecade("");
+            setSubgenreId(target.subgenreId ?? "");
+            setPublisher(target.publisher ?? "");
+            setWriter(target.writer ?? "");
+          }}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,
@@ -280,6 +302,8 @@ export default function SeriesModule({
           busy={busy}
           isAdmin={isAdmin}
           userId={userId}
+          cardOrientation={cardOrientation}
+          onSetOrientation={onSetOrientation}
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource}
@@ -420,7 +444,9 @@ export default function SeriesModule({
           onLetterChange={setLetter}
           onFilterModeChange={(m) => {
             setFilterMode(m);
-            setLetter("");
+            setSearch("");
+            // Reset other filters; SeriesBrowse auto-selects the first subbar option.
+            setLetter(m === "name" ? "A" : "");
             setContinentId("");
             setCountryId("");
             setStartDecade("");

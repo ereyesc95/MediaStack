@@ -32,6 +32,7 @@ from app.series_index import (
     build_series_gallery,
     find_franchise_dir,
 )
+from app.series_admin import ensure_cast_member_id
 from app.series_refresh import ensure_series_row, find_series_row
 
 
@@ -260,6 +261,34 @@ def _enrich_cast_member(
                 an0 = (p.get("actor_name") or "").strip()
                 if an0:
                     p_names = [an0]
+            nested_in = p.get("actors") if isinstance(p.get("actors"), list) else []
+            nested_photos = {
+                str(a.get("name") or "").strip().casefold(): (
+                    (a.get("photo_url") or "").strip() or None
+                    if isinstance(a.get("photo_url"), str)
+                    else a.get("photo_url")
+                )
+                for a in nested_in
+                if isinstance(a, dict) and (a.get("name") or "").strip()
+            }
+            # Also pull from member.actors for this language
+            for a in actors:
+                if not isinstance(a, dict) or not a.get("name"):
+                    continue
+                if (a.get("language") or "").casefold() not in (
+                    "",
+                    (p.get("language") or "").casefold(),
+                ):
+                    continue
+                key = str(a["name"]).strip().casefold()
+                if key and key not in nested_photos and a.get("photo_url"):
+                    nested_photos[key] = a.get("photo_url")
+            if not p_names and nested_photos:
+                p_names = [
+                    str(a.get("name") or "").strip()
+                    for a in nested_in
+                    if isinstance(a, dict) and (a.get("name") or "").strip()
+                ]
             p_actor = p_names[0] if p_names else ""
             local = (
                 find_person_photo(
@@ -268,16 +297,46 @@ def _enrich_cast_member(
                 if p_actor
                 else None
             )
+            nested_out = []
+            for an in p_names:
+                a_local = find_person_photo(
+                    an, franchise_dir=franchise_dir, media_root=media_root
+                )
+                nested_out.append(
+                    {
+                        "name": an,
+                        "photo_url": a_local
+                        or nested_photos.get(an.casefold())
+                        or (local if an == p_actor else None)
+                        or (p.get("photo_url") if an == p_actor else None),
+                    }
+                )
             enriched_perfs.append(
                 {
                     **p,
                     "actor_name": p_names[0] if p_names else None,
                     "actor_names": p_names,
-                    "photo_url": local or p.get("photo_url"),
+                    "actors": nested_out,
+                    "photo_url": (nested_out[0]["photo_url"] if nested_out else None)
+                    or local
+                    or p.get("photo_url"),
                 }
             )
         flat_actors = []
         for p in enriched_perfs:
+            nested = p.get("actors") if isinstance(p.get("actors"), list) else []
+            if nested:
+                for a in nested:
+                    if not isinstance(a, dict) or not a.get("name"):
+                        continue
+                    flat_actors.append(
+                        {
+                            "name": a["name"],
+                            "photo_url": a.get("photo_url"),
+                            "language": p.get("language"),
+                        }
+                    )
+                continue
             names = p.get("actor_names") or (
                 [p["actor_name"]] if p.get("actor_name") else []
             )
@@ -289,8 +348,13 @@ def _enrich_cast_member(
                         "language": p.get("language"),
                     }
                 )
+        mid = ensure_cast_member_id(
+            {**m, "name": character or name, "character": character or name},
+            character_centered=True,
+        )
         return {
             **m,
+            "id": mid,
             "name": character or name,
             "character": character or name,
             "photo_url": photo,
@@ -308,8 +372,13 @@ def _enrich_cast_member(
     local = find_person_photo(
         name, franchise_dir=franchise_dir, media_root=media_root, tmdb_id=tid
     )
+    mid = ensure_cast_member_id(
+        {**m, "name": character or name, "character": character or name},
+        character_centered=False,
+    )
     return {
         **m,
+        "id": mid,
         "photo_url": local or m.get("photo_url"),
         "character_photo_url": m.get("character_photo_url"),
         "actor_photo_url": m.get("actor_photo_url"),

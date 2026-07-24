@@ -1,3 +1,12 @@
+import { createElement, type ReactNode } from "react";
+import {
+  IconMediaBooks,
+  IconMediaGames,
+  IconMediaMovies,
+  IconMediaMusic,
+  IconMediaSeries,
+} from "./components/MenuIcons";
+
 /** Display name with Stack suffix (Series → SerieStack, Movies → MovieStack). */
 export function toStackName(label: string): string {
   const trimmed = label.trim();
@@ -7,14 +16,15 @@ export function toStackName(label: string): string {
   return `${base}Stack`;
 }
 
-export const MEDIA_TYPE_ICONS: Record<string, string> = {
-  music: "♫",
-  series: "▦",
-  movies: "▣",
-  books: "☰",
-  games: "◉",
+const MEDIA_ICONS: Record<string, typeof IconMediaMusic> = {
+  music: IconMediaMusic,
+  series: IconMediaSeries,
+  movies: IconMediaMovies,
+  books: IconMediaBooks,
+  games: IconMediaGames,
 };
 
-export function mediaTypeIcon(kind: string): string {
-  return MEDIA_TYPE_ICONS[kind] ?? "▪";
+export function mediaTypeIcon(kind: string): ReactNode {
+  const Icon = MEDIA_ICONS[kind] ?? IconMediaMusic;
+  return createElement(Icon);
 }
