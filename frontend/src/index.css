@@ -13233,6 +13233,62 @@ button.lyrics-status-badge--icon-only {
   opacity: 1;
 }
 
+.series-cast-edit__actors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.series-cast-edit__actors-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.series-cast-edit__actor-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.series-cast-edit__actor-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.series-cast-edit__subseries {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem 0.7rem;
+  margin: 0.5rem 0 0.85rem;
+}
+
+.series-cast-edit__subseries legend {
+  padding: 0 0.25rem;
+  font-size: 0.82rem;
+}
+
+.series-cast-edit__hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+}
+
+.series-cast-edit__subseries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.series-cast-edit__sub-item {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  width: auto !important;
+  cursor: pointer;
+}
+
 .search-dropdown-list--portal {
   top: auto;
   left: auto;

@@ -1622,6 +1622,7 @@ export async function addSeriesCastMember(
     character_photo_url?: string;
     roles?: string[];
     language?: string;
+    subseries_ids?: string[];
   }
 ) {
   return request<SeriesCastMember>(
@@ -1661,8 +1662,10 @@ export async function patchSeriesCastMember(
     performances?: {
       language: string;
       actor_name?: string | null;
+      actor_names?: string[];
       photo_url?: string | null;
     }[];
+    subseries_ids?: string[];
   }
 ) {
   return request<SeriesCastMember>(

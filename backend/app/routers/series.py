@@ -352,6 +352,7 @@ def series_add_cast(
         character_photo_url=body.get("character_photo_url"),
         roles=body.get("roles"),
         language=body.get("language"),
+        subseries_ids=body.get("subseries_ids"),
     )
     return member
 
@@ -405,6 +406,7 @@ def series_patch_cast(
         roles=body.get("roles"),
         language=body.get("language"),
         performances=body.get("performances"),
+        subseries_ids=body.get("subseries_ids"),
     )
     if not member:
         raise HTTPException(404, "Cast member not found")

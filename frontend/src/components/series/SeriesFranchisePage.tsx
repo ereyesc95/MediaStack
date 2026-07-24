@@ -163,6 +163,7 @@ export default function SeriesFranchisePage({
     if (userId) setReleaseCardLayout(getStoredReleaseCardLayout(userId));
   }, [userId]);
   const [mediaSubFilter, setMediaSubFilter] = useState<string>("all");
+  const [castSubFilter, setCastSubFilter] = useState<string>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [bgLayers, setBgLayers] = useState<{
     current?: string;
@@ -698,6 +699,21 @@ export default function SeriesFranchisePage({
           </nav>
         ) : null}
 
+        {section === "overview" && overviewTab === "cast" && subseriesTabs.length > 1 ? (
+          <div className="series-section-subbar" role="tablist" aria-label="Cast subseries">
+            {subseriesTabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={castSubFilter === t.id ? "active" : ""}
+                onClick={() => setCastSubFilter(t.id)}
+              >
+                {t.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {section === "overview" && overviewTab === "cast" ? (
           <nav className="artist-page__subtabs artist-page__lineup-subtabs">
             {(
@@ -836,6 +852,8 @@ export default function SeriesFranchisePage({
             languages={data.languages}
             languageOptions={data.language_options}
             originLanguage={data.origin_language}
+            subseries={data.subseries || []}
+            castSubFilter={castSubFilter}
             tab={castTab}
             isAdmin={isAdmin}
             addOpen={addCastOpen}

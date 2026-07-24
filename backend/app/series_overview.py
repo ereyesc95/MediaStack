@@ -147,15 +147,25 @@ def _enrich_cast_member(
     # Legacy → performances
     if character_centered and not performances:
         if actors:
+            # Group same-language actors into one performance with actor_names
+            by_lang: dict[str, list[dict]] = {}
             for a in actors:
                 if not isinstance(a, dict) or not a.get("name"):
                     continue
+                lang = (a.get("language") or default_language or "en").casefold()
+                by_lang.setdefault(lang, []).append(a)
+            for lang_key, group in by_lang.items():
+                names = [g["name"] for g in group if g.get("name")]
                 performances.append(
                     {
-                        "language": a.get("language") or default_language or "en",
-                        "actor_name": a.get("name"),
-                        "actor_id": a.get("id"),
-                        "photo_url": a.get("photo_url"),
+                        "language": group[0].get("language") or default_language or "en",
+                        "actor_name": names[0] if names else None,
+                        "actor_names": names,
+                        "actor_id": group[0].get("id"),
+                        "photo_url": next(
+                            (g.get("photo_url") for g in group if g.get("photo_url")),
+                            None,
+                        ),
                     }
                 )
         elif m.get("roles"):
@@ -166,10 +176,48 @@ def _enrich_cast_member(
                     {
                         "language": default_language or "en",
                         "actor_name": role,
+                        "actor_names": [role],
                         "photo_url": m.get("actor_photo_url")
                         or m.get("character_photo_url"),
                     }
                 )
+    # Normalize actor_names on existing performances; merge duplicate languages
+    if character_centered and performances:
+        merged: dict[str, dict] = {}
+        order: list[str] = []
+        for p in performances:
+            if not isinstance(p, dict):
+                continue
+            lang = (p.get("language") or default_language or "en").casefold()
+            names = [
+                str(n).strip()
+                for n in (p.get("actor_names") or [])
+                if n and str(n).strip()
+            ]
+            if not names:
+                an = (p.get("actor_name") or "").strip()
+                if an:
+                    names = [an]
+            if lang not in merged:
+                merged[lang] = {
+                    **p,
+                    "actor_name": names[0] if names else None,
+                    "actor_names": list(names),
+                }
+                order.append(lang)
+            else:
+                existing = merged[lang].setdefault("actor_names", [])
+                for n in names:
+                    if n not in existing:
+                        existing.append(n)
+                if not merged[lang].get("photo_url") and p.get("photo_url"):
+                    merged[lang]["photo_url"] = p.get("photo_url")
+                merged[lang]["actor_name"] = (
+                    merged[lang]["actor_names"][0]
+                    if merged[lang]["actor_names"]
+                    else None
+                )
+        performances = [merged[k] for k in order]
     actor_photo = m.get("actor_photo_url") or m.get("character_photo_url")
     if not actor_photo and performances:
         actor_photo = (performances[0] or {}).get("photo_url")
@@ -203,7 +251,16 @@ def _enrich_cast_member(
         for p in performances:
             if not isinstance(p, dict):
                 continue
-            p_actor = (p.get("actor_name") or "").strip()
+            p_names = [
+                str(n).strip()
+                for n in (p.get("actor_names") or [])
+                if n and str(n).strip()
+            ]
+            if not p_names:
+                an0 = (p.get("actor_name") or "").strip()
+                if an0:
+                    p_names = [an0]
+            p_actor = p_names[0] if p_names else ""
             local = (
                 find_person_photo(
                     p_actor, franchise_dir=franchise_dir, media_root=media_root
@@ -214,9 +271,24 @@ def _enrich_cast_member(
             enriched_perfs.append(
                 {
                     **p,
+                    "actor_name": p_names[0] if p_names else None,
+                    "actor_names": p_names,
                     "photo_url": local or p.get("photo_url"),
                 }
             )
+        flat_actors = []
+        for p in enriched_perfs:
+            names = p.get("actor_names") or (
+                [p["actor_name"]] if p.get("actor_name") else []
+            )
+            for i, an in enumerate(names):
+                flat_actors.append(
+                    {
+                        "name": an,
+                        "photo_url": p.get("photo_url") if i == 0 else None,
+                        "language": p.get("language"),
+                    }
+                )
         return {
             **m,
             "name": character or name,
@@ -225,19 +297,12 @@ def _enrich_cast_member(
             "actor_photo_url": actor_local or actor_photo,
             "character_photo_url": actor_local or actor_photo,
             "performances": enriched_perfs,
-            "actors": actors
-            or [
-                {
-                    "name": p.get("actor_name"),
-                    "photo_url": p.get("photo_url"),
-                    "language": p.get("language"),
-                }
-                for p in enriched_perfs
-                if p.get("actor_name")
-            ],
-            "roles": m.get("roles")
-            or [p.get("actor_name") for p in enriched_perfs if p.get("actor_name")],
+            "actors": actors or flat_actors,
+            "roles": m.get("roles") or [a["name"] for a in flat_actors],
             "tmdb_photo_url": actor_photo,
+            "subseries_ids": m.get("subseries_ids")
+            if isinstance(m.get("subseries_ids"), list)
+            else [],
         }
 
     local = find_person_photo(

@@ -1196,6 +1196,8 @@ export type SeriesFilterOptions = {
 export type SeriesCastPerformance = {
   language: string;
   actor_name?: string | null;
+  /** All actors for this language (comma-joined on cards). */
+  actor_names?: string[];
   actor_id?: number | string | null;
   photo_url?: string | null;
 };
@@ -1224,6 +1226,8 @@ export type SeriesCastMember = {
     language?: string | null;
   }[];
   roles?: string[];
+  /** Empty / omitted = appears in all subseries. */
+  subseries_ids?: string[];
   is_deceased?: boolean;
   manual?: boolean;
 };

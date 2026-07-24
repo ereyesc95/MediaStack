@@ -9,6 +9,7 @@ import type {
   SeriesCastPerformance,
   SeriesCastTab,
   SeriesLanguageOption,
+  SeriesSubseriesCard,
 } from "../../types";
 import { isPhoneLayout, useDeviceLayout } from "../../usePhoneLayout";
 import { IconEditProfile } from "../MenuIcons";
@@ -27,6 +28,9 @@ type Props = {
   languages?: string[];
   languageOptions?: SeriesLanguageOption[];
   originLanguage?: string | null;
+  subseries?: SeriesSubseriesCard[];
+  /** "all" or a subseries id — filters members by subseries_ids. */
+  castSubFilter?: string;
   tab: SeriesCastTab;
   isAdmin?: boolean;
   addOpen?: boolean;
@@ -78,23 +82,42 @@ function performanceForLang(
   return perfs[0];
 }
 
-function actorLabel(member: SeriesCastMember, lang: string | null): string {
+function actorNamesFromPerf(perf: SeriesCastPerformance | null): string[] {
+  if (!perf) return [];
+  if (perf.actor_names?.length) {
+    return perf.actor_names.map((n) => n.trim()).filter(Boolean);
+  }
+  if (perf.actor_name?.trim()) return [perf.actor_name.trim()];
+  return [];
+}
+
+function actorNamesForLang(
+  member: SeriesCastMember,
+  lang: string | null
+): string[] {
   const perf = performanceForLang(member, lang);
-  if (perf?.actor_name) return perf.actor_name;
+  const fromPerf = actorNamesFromPerf(perf);
+  if (fromPerf.length) return fromPerf;
   if (member.actors?.length) {
     const byLang = lang
-      ? member.actors.find(
-          (a) => (a.language || "").toLowerCase() === lang.toLowerCase()
+      ? member.actors.filter(
+          (a) =>
+            a.name &&
+            (!a.language || a.language.toLowerCase() === lang.toLowerCase())
         )
-      : null;
-    if (byLang?.name) return byLang.name;
-    return member.actors.map((a) => a.name).filter(Boolean).join(" · ");
+      : member.actors.filter((a) => a.name);
+    if (byLang.length) return byLang.map((a) => a.name);
   }
-  return (member.roles || []).filter(Boolean).join(" · ");
+  return (member.roles || []).filter(Boolean);
+}
+
+function actorLabel(member: SeriesCastMember, lang: string | null): string {
+  return actorNamesForLang(member, lang).join(", ");
 }
 
 /** Actors to list under a character, ordered by franchise language list
- *  (origin / first language first). */
+ *  (origin / first language first). One row per language; multiple actors
+ *  joined with ", ". */
 function actorsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
@@ -112,7 +135,6 @@ function actorsForDisplay(
           .map((p) => p.language)
           .filter(Boolean) as string[];
 
-  // Origin language first
   if (originLanguage) {
     langs = [
       originLanguage,
@@ -123,36 +145,28 @@ function actorsForDisplay(
   }
 
   for (const lang of langs) {
+    const names = actorNamesForLang(member, lang);
+    if (!names.length) continue;
     const perf = performanceForLang(member, lang);
-    if (perf?.actor_name) {
-      out.push({
-        language: lang,
-        name: perf.actor_name,
-        photo_url: perf.photo_url,
-      });
-      continue;
-    }
-    const actor = (member.actors || []).find(
+    const firstActor = (member.actors || []).find(
       (a) =>
         a.name &&
+        a.name === names[0] &&
         (!a.language || a.language.toLowerCase() === lang.toLowerCase())
     );
-    if (actor?.name && !out.some((o) => o.name === actor.name && o.language === lang)) {
-      if (!actor.language && out.length > 0) continue;
-      out.push({
-        language: lang,
-        name: actor.name,
-        photo_url: actor.photo_url,
-      });
-    }
+    out.push({
+      language: lang,
+      name: names.join(", "),
+      photo_url: perf?.photo_url || firstActor?.photo_url || null,
+    });
   }
 
   if (!out.length && (member.roles?.length || member.actors?.length)) {
-    const name = member.actors?.[0]?.name || member.roles?.[0] || "";
-    if (name) {
+    const names = actorNamesForLang(member, originLanguage || franchiseLangs[0] || null);
+    if (names.length) {
       out.push({
         language: originLanguage || franchiseLangs[0] || "ja",
-        name,
+        name: names.join(", "),
         photo_url:
           member.actors?.[0]?.photo_url ||
           member.actor_photo_url ||
@@ -400,6 +414,7 @@ function CastMemberModal({
   bucket,
   franchiseLangs,
   languageOptions,
+  subseries,
   onClose,
   onDataChanged,
 }: {
@@ -410,6 +425,7 @@ function CastMemberModal({
   bucket: SeriesCastTab;
   franchiseLangs: string[];
   languageOptions: SeriesLanguageOption[];
+  subseries: SeriesSubseriesCard[];
   onClose: () => void;
   onDataChanged: () => void;
 }) {
@@ -425,9 +441,10 @@ function CastMemberModal({
     member.character || member.name || ""
   );
   const [editLang, setEditLang] = useState(defaultLang);
-  const [actorsText, setActorsText] = useState(
-    actorLabel(member, defaultLang)
-  );
+  const [actorNames, setActorNames] = useState<string[]>(() => {
+    const names = actorNamesForLang(member, defaultLang);
+    return names.length ? names : [""];
+  });
   const [photoUrl, setPhotoUrl] = useState(member.photo_url || "");
   const [actorPhotoUrl, setActorPhotoUrl] = useState(
     performanceForLang(member, defaultLang)?.photo_url ||
@@ -435,12 +452,14 @@ function CastMemberModal({
       member.character_photo_url ||
       ""
   );
+  const [selectedSubs, setSelectedSubs] = useState<string[]>(
+    () => member.subseries_ids || []
+  );
 
   useEffect(() => {
-    setActorsText(actorLabel(member, editLang));
-    setActorPhotoUrl(
-      performanceForLang(member, editLang)?.photo_url || ""
-    );
+    const names = actorNamesForLang(member, editLang);
+    setActorNames(names.length ? names : [""]);
+    setActorPhotoUrl(performanceForLang(member, editLang)?.photo_url || "");
   }, [editLang, member]);
 
   const handleSave = async () => {
@@ -448,19 +467,17 @@ function CastMemberModal({
     setBusy(true);
     setError(null);
     try {
-      const actors = actorsText
-        .split(/[;·,]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const actors = actorNames.map((s) => s.trim()).filter(Boolean);
       await patchSeriesCastMember(franchiseId, member.id, {
         bucket,
-        name: characterCentered ? actors[0] || charName : charName,
+        name: characterCentered ? charName : charName,
         character: characterCentered ? charName : undefined,
         photo_url: photoUrl.trim() || null,
         actor_photo_url: actorPhotoUrl.trim() || null,
         actors: characterCentered ? actors : undefined,
-        roles: actors,
+        roles: characterCentered ? actors : undefined,
         language: characterCentered ? editLang : undefined,
+        subseries_ids: selectedSubs,
       });
       onDataChanged();
       onClose();
@@ -489,6 +506,16 @@ function CastMemberModal({
 
   const displayPhoto = member.photo_url;
   const listed = actorsForDisplay(member, franchiseLangs, franchiseLangs[0]);
+  const relatedLabels =
+    selectedSubs.length > 0
+      ? subseries
+          .filter((s) => selectedSubs.includes(s.id))
+          .map((s) => s.title)
+      : member.subseries_ids?.length
+        ? subseries
+            .filter((s) => (member.subseries_ids || []).includes(s.id))
+            .map((s) => s.title)
+        : [franchiseName];
 
   return (
     <ModalPortal onClose={onClose}>
@@ -569,11 +596,13 @@ function CastMemberModal({
                     Related projects:
                   </span>
                   <ul className="artist-member-modal__projects">
-                    <li>
-                      <span className="artist-member-modal__project-name">
-                        {franchiseName}
-                      </span>
-                    </li>
+                    {relatedLabels.map((t) => (
+                      <li key={t}>
+                        <span className="artist-member-modal__project-name">
+                          {t}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
                 {error ? <p className="error">{error}</p> : null}
@@ -615,15 +644,73 @@ function CastMemberModal({
                     ))}
                   </select>
                 </label>
-                <label>
-                  Actor for this language
-                  <input
-                    value={actorsText}
-                    onChange={(e) => setActorsText(e.target.value)}
-                    placeholder="Actor name"
-                  />
-                </label>
+                <div className="series-cast-edit__actors">
+                  <span className="series-cast-edit__actors-label">
+                    Actors for this language
+                  </span>
+                  {actorNames.map((name, idx) => (
+                    <div key={idx} className="series-cast-edit__actor-row">
+                      <input
+                        value={name}
+                        onChange={(e) => {
+                          const next = [...actorNames];
+                          next[idx] = e.target.value;
+                          setActorNames(next);
+                        }}
+                        placeholder={idx === 0 ? "Actor name" : "Additional actor"}
+                      />
+                      {actorNames.length > 1 ? (
+                        <button
+                          type="button"
+                          className="btn link-form__delete"
+                          aria-label="Remove actor"
+                          onClick={() =>
+                            setActorNames(actorNames.filter((_, i) => i !== idx))
+                          }
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setActorNames([...actorNames, ""])}
+                  >
+                    Add actor
+                  </button>
+                </div>
               </>
+            ) : null}
+            {subseries.length > 0 ? (
+              <fieldset className="series-cast-edit__subseries">
+                <legend>Appears in subseries</legend>
+                <p className="muted series-cast-edit__hint">
+                  Leave all unchecked to show in every subseries (All).
+                </p>
+                <div className="series-cast-edit__subseries-list">
+                  {subseries.map((s) => {
+                    const checked = selectedSubs.includes(s.id);
+                    return (
+                      <label key={s.id} className="series-cast-edit__sub-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedSubs((prev) =>
+                              checked
+                                ? prev.filter((id) => id !== s.id)
+                                : [...prev, s.id]
+                            );
+                          }}
+                        />
+                        {s.title}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
             ) : null}
             <label>
               {characterCentered ? "Character photo URL" : "Photo URL"}
@@ -673,6 +760,7 @@ function AddCastModal({
   bucket,
   languageOptions,
   defaultLanguage,
+  subseries,
   onClose,
   onSaved,
 }: {
@@ -680,17 +768,19 @@ function AddCastModal({
   bucket: SeriesCastTab;
   languageOptions: SeriesLanguageOption[];
   defaultLanguage: string | null;
+  subseries: SeriesSubseriesCard[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const characterCentered = bucket === "characters";
   const [charName, setCharName] = useState("");
-  const [actorName, setActorName] = useState("");
+  const [actorNames, setActorNames] = useState<string[]>([""]);
   const [photoUrl, setPhotoUrl] = useState("");
   const [actorPhotoUrl, setActorPhotoUrl] = useState("");
   const [lang, setLang] = useState(
     defaultLanguage || languageOptions[0]?.code || "en"
   );
+  const [selectedSubs, setSelectedSubs] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -699,10 +789,11 @@ function AddCastModal({
     setSaving(true);
     setError(null);
     try {
+      const actors = actorNames.map((s) => s.trim()).filter(Boolean);
       await addSeriesCastMember(franchiseId, {
         bucket,
         name: characterCentered
-          ? actorName.trim() || charName.trim()
+          ? actors[0] || charName.trim()
           : charName.trim(),
         character: characterCentered ? charName.trim() : undefined,
         photo_url: characterCentered
@@ -711,8 +802,9 @@ function AddCastModal({
         character_photo_url: characterCentered
           ? photoUrl.trim() || undefined
           : undefined,
-        roles: actorName.trim() ? [actorName.trim()] : undefined,
+        roles: actors.length ? actors : undefined,
         language: characterCentered ? lang : undefined,
+        subseries_ids: selectedSubs.length ? selectedSubs : undefined,
       });
       onSaved();
       onClose();
@@ -759,13 +851,75 @@ function AddCastModal({
                   ))}
                 </select>
               </label>
-              <label>
-                Actor / portrayed by (optional)
-                <input
-                  value={actorName}
-                  onChange={(e) => setActorName(e.target.value)}
-                />
-              </label>
+              <div className="series-cast-edit__actors">
+                <span className="series-cast-edit__actors-label">Actors</span>
+                {actorNames.map((name, idx) => (
+                  <div key={idx} className="series-cast-edit__actor-row">
+                    <input
+                      value={name}
+                      onChange={(e) => {
+                        const next = [...actorNames];
+                        next[idx] = e.target.value;
+                        setActorNames(next);
+                      }}
+                      placeholder={
+                        idx === 0 ? "Actor name" : "Additional actor"
+                      }
+                    />
+                    {actorNames.length > 1 ? (
+                      <button
+                        type="button"
+                        className="btn link-form__delete"
+                        aria-label="Remove actor"
+                        onClick={() =>
+                          setActorNames(actorNames.filter((_, i) => i !== idx))
+                        }
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setActorNames([...actorNames, ""])}
+                >
+                  Add actor
+                </button>
+              </div>
+              {subseries.length > 0 ? (
+                <fieldset className="series-cast-edit__subseries">
+                  <legend>Appears in subseries</legend>
+                  <p className="muted series-cast-edit__hint">
+                    Leave all unchecked to show in every subseries (All).
+                  </p>
+                  <div className="series-cast-edit__subseries-list">
+                    {subseries.map((s) => {
+                      const checked = selectedSubs.includes(s.id);
+                      return (
+                        <label
+                          key={s.id}
+                          className="series-cast-edit__sub-item"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedSubs((prev) =>
+                                checked
+                                  ? prev.filter((id) => id !== s.id)
+                                  : [...prev, s.id]
+                              );
+                            }}
+                          />
+                          {s.title}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
               <label>
                 Character photo URL (optional)
                 <input
@@ -813,6 +967,8 @@ export default function SeriesCast({
   languages,
   languageOptions,
   originLanguage,
+  subseries = [],
+  castSubFilter = "all",
   tab,
   isAdmin,
   addOpen,
@@ -845,8 +1001,16 @@ export default function SeriesCast({
       tab === "characters"
         ? cast.characters || cast.animated || []
         : cast.staff || cast.people || [];
-    return list.slice(0, 8);
-  }, [cast, tab]);
+    const filtered =
+      castSubFilter === "all"
+        ? list
+        : list.filter((m) => {
+            const ids = m.subseries_ids;
+            if (!ids || !ids.length) return true;
+            return ids.includes(castSubFilter);
+          });
+    return filtered.slice(0, 8);
+  }, [cast, tab, castSubFilter]);
 
   const rows = useMemo(
     () =>
@@ -880,7 +1044,8 @@ export default function SeriesCast({
     return (
       <div className="artist-lineup">
         <p className="muted artist-lineup__empty">
-          No {tab === "characters" ? "characters" : "staff"} yet. Use the menu
+          No {tab === "characters" ? "characters" : "staff"} yet
+          {castSubFilter !== "all" ? " for this subseries" : ""}. Use the menu
           → <strong>Add member</strong>
           {isAdmin ? "" : " (admin)"}, or refresh metadata from TMDb.
         </p>
@@ -890,6 +1055,7 @@ export default function SeriesCast({
             bucket={tab}
             languageOptions={franchiseLangOptions}
             defaultLanguage={franchiseLangs[0] || null}
+            subseries={subseries}
             onClose={onAddClose}
             onSaved={onDataChanged}
           />
@@ -945,6 +1111,7 @@ export default function SeriesCast({
           bucket={tab}
           franchiseLangs={franchiseLangs}
           languageOptions={franchiseLangOptions}
+          subseries={subseries}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />
@@ -956,6 +1123,7 @@ export default function SeriesCast({
           bucket={tab}
           languageOptions={franchiseLangOptions}
           defaultLanguage={franchiseLangs[0] || null}
+          subseries={subseries}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

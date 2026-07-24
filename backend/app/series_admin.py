@@ -149,6 +149,7 @@ def add_series_cast_member(
     character_photo_url: str | None = None,
     roles: list[str] | None = None,
     language: str | None = None,
+    subseries_ids: list[str] | None = None,
 ) -> dict:
     row = ensure_series_row(db, franchise_name)
     cast = _load_cast(row)
@@ -173,31 +174,43 @@ def add_series_cast_member(
     }
     if bucket in ("characters", "animated"):
         char_name = (character or name).strip()
+        role_names = [r.strip() for r in (roles or []) if r and str(r).strip()]
         actor_name = (
             name.strip()
             if character and name.strip() and name.strip() != char_name
-            else (roles[0] if roles else None)
+            else (role_names[0] if role_names else None)
         )
+        if actor_name and actor_name not in role_names:
+            role_names = [actor_name, *role_names]
         member["name"] = char_name
         member["character"] = char_name
         member["photo_url"] = character_photo_url or photo_url
-        if actor_name:
+        if role_names:
+            actor_photo = (
+                photo_url if photo_url and photo_url != member["photo_url"] else None
+            )
             performance = {
                 "language": lang,
-                "actor_name": actor_name,
-                "photo_url": photo_url if photo_url and photo_url != member["photo_url"] else None,
+                "actor_name": role_names[0],
+                "actor_names": role_names,
+                "photo_url": actor_photo,
             }
             member["performances"] = [performance]
             member["actors"] = [
                 {
-                    "name": actor_name,
-                    "photo_url": performance["photo_url"],
+                    "name": an,
+                    "photo_url": actor_photo if i == 0 else None,
                     "language": lang,
                 }
+                for i, an in enumerate(role_names)
             ]
-            member["roles"] = [actor_name]
-            member["actor_photo_url"] = performance["photo_url"]
-            member["character_photo_url"] = performance["photo_url"]
+            member["roles"] = role_names
+            member["actor_photo_url"] = actor_photo
+            member["character_photo_url"] = actor_photo
+    if subseries_ids is not None:
+        member["subseries_ids"] = [
+            str(s).strip() for s in subseries_ids if s and str(s).strip()
+        ]
     cast.setdefault(key, []).append(member)
     _save_cast(db, row, cast)
     return member
@@ -250,6 +263,7 @@ def patch_series_cast_member(
     roles: list[str] | None = None,
     language: str | None = None,
     performances: list[dict] | None = None,
+    subseries_ids: list[str] | None = None,
 ) -> dict | None:
     row = find_series_row(db, franchise_name)
     if not row:
@@ -273,28 +287,59 @@ def patch_series_cast_member(
             member["actor_photo_url"] = actor_photo_url.strip() or None
             member["character_photo_url"] = member["actor_photo_url"]
         if performances is not None:
-            member["performances"] = performances
-            actors_out = []
+            normalized: list[dict] = []
+            actors_out: list[dict] = []
             for p in performances:
-                an = (p.get("actor_name") or "").strip()
-                if an:
+                if not isinstance(p, dict):
+                    continue
+                plang = p.get("language") or "en"
+                names = [
+                    str(n).strip()
+                    for n in (p.get("actor_names") or [])
+                    if n and str(n).strip()
+                ]
+                if not names:
+                    an = (p.get("actor_name") or "").strip()
+                    if an:
+                        names = [an]
+                entry = {
+                    **p,
+                    "language": plang,
+                    "actor_name": names[0] if names else None,
+                    "actor_names": names,
+                }
+                normalized.append(entry)
+                for i, an in enumerate(names):
                     actors_out.append(
                         {
                             "name": an,
-                            "photo_url": p.get("photo_url"),
-                            "language": p.get("language"),
+                            "photo_url": p.get("photo_url") if i == 0 else None,
+                            "language": plang,
                         }
                     )
+            member["performances"] = normalized
             member["actors"] = actors_out
             member["roles"] = [a["name"] for a in actors_out]
         elif actors is not None:
             cleaned = [a.strip() for a in actors if a and a.strip()]
             use_lang = lang or "en"
-            member["actors"] = [
-                {"name": a, "photo_url": None, "language": use_lang} for a in cleaned
+            # Keep actors for other languages; replace this language only
+            other_actors = [
+                a
+                for a in (member.get("actors") or [])
+                if isinstance(a, dict)
+                and (a.get("language") or "").casefold() != use_lang.casefold()
             ]
-            member["roles"] = cleaned
-            # Update / create performance for this language
+            member["actors"] = other_actors + [
+                {
+                    "name": a,
+                    "photo_url": member.get("actor_photo_url") if i == 0 else None,
+                    "language": use_lang,
+                }
+                for i, a in enumerate(cleaned)
+            ]
+            member["roles"] = [a["name"] for a in member["actors"] if a.get("name")]
+            # Update / create performance for this language (all names)
             perfs = [
                 p
                 for p in (member.get("performances") or [])
@@ -307,6 +352,7 @@ def patch_series_cast_member(
                     {
                         "language": use_lang,
                         "actor_name": cleaned[0],
+                        "actor_names": cleaned,
                         "photo_url": member.get("actor_photo_url"),
                     },
                 )
@@ -318,6 +364,11 @@ def patch_series_cast_member(
                 if (p.get("language") or "").casefold() == lang.casefold():
                     p["photo_url"] = actor_photo_url.strip() or None
                     break
+        if subseries_ids is not None:
+            cleaned_subs = [
+                str(s).strip() for s in subseries_ids if s and str(s).strip()
+            ]
+            member["subseries_ids"] = cleaned_subs
         member["manual"] = True
         _save_cast(db, row, cast)
         return member
