@@ -2213,7 +2213,9 @@ input {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  /* No top padding — sticky header must sit flush at the scrollport top
+     so scrolled fields cannot paint into a gap above the title. */
+  padding: 0 1.25rem 1.25rem;
   width: min(420px, 92vw);
   max-height: 80vh;
   overflow: auto;
@@ -2221,17 +2223,18 @@ input {
 
 .modal-panel-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   position: sticky;
   top: 0;
-  z-index: 6;
-  margin: -1.25rem -1.25rem 0.65rem;
-  padding: 1.25rem 1.25rem 0.65rem;
+  z-index: 20;
+  margin: 0 -1.25rem 0.75rem;
+  padding: 0.7rem 1.25rem 0.5rem;
   background: var(--bg-elevated);
   border-radius: var(--radius) var(--radius) 0 0;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  isolation: isolate;
 }
 
 .modal-panel-header h3 {
@@ -5354,10 +5357,6 @@ input {
   justify-content: flex-end;
 }
 
-.artist-member-modal__header.modal-panel-header {
-  margin-bottom: 0.65rem;
-}
-
 .artist-member-modal__body {
   display: flex;
   flex-direction: column;
@@ -5401,7 +5400,7 @@ input {
     width: min(96vw, 56rem);
     max-width: calc(100vw - 1rem);
     max-height: calc(100dvh - 1.25rem);
-    padding: 0.75rem 0.9rem;
+    padding: 0 0.9rem 0.75rem;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -5409,10 +5408,10 @@ input {
 
   .artist-member-modal.modal-panel > .modal-panel-header {
     flex-shrink: 0;
-    position: sticky;
-    top: 0;
-    margin: -0.75rem -0.9rem 0.5rem;
-    padding: 0.75rem 0.9rem 0.5rem;
+    position: relative;
+    top: auto;
+    margin: 0 -0.9rem 0.5rem;
+    padding: 0.65rem 0.9rem 0.4rem;
   }
 
   .artist-member-modal__body {
@@ -5695,6 +5694,50 @@ input {
 .artist-admin-modal {
   max-width: 26rem;
   width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Fixed chrome: title + close stay put; only the form scrolls. */
+.modal-panel.artist-admin-modal > .modal-panel-header {
+  position: relative;
+  top: auto;
+  flex-shrink: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0.7rem 1.25rem 0.5rem;
+}
+
+.modal-panel.artist-admin-modal > .artist-admin-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 1.25rem 0.75rem;
+}
+
+.modal-panel.artist-admin-modal > .modal-panel-actions {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 0.65rem 1.25rem 1.1rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.modal-panel.artist-admin-modal > .error,
+.modal-panel.artist-admin-modal > .muted,
+.modal-panel.artist-admin-modal > .confirm-dialog__message {
+  flex-shrink: 0;
+  margin-left: 1.25rem;
+  margin-right: 1.25rem;
+}
+
+.modal-panel.artist-admin-modal > .modal-actions-row,
+.modal-panel.artist-admin-modal > .confirm-dialog__actions {
+  flex-shrink: 0;
+  margin: 0.5rem 1.25rem 1.1rem;
 }
 
 .artist-admin-modal--wide {
