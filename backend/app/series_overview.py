@@ -496,6 +496,9 @@ def _enrich_related_cards(
         logo = None
         open_url = None
         open_mode = None
+        duration = e.get("duration")
+        duration_sec = e.get("duration_sec")
+        kind = (e.get("kind") or "").casefold()
         if folder.is_dir():
             art = _find_artwork_subdir(folder)
             if art:
@@ -523,7 +526,6 @@ def _enrich_related_cards(
                     pass
                 if logo_f:
                     logo = _media_url(logo_f, media_root)
-            kind = (e.get("kind") or "").casefold()
             target = None
             if kind == "movie":
                 target = _first_file(folder, VIDEO_EXTS)
@@ -541,6 +543,29 @@ def _enrich_related_cards(
                         f"/api/media/file?path={quote(target.relative_to(media_root).as_posix(), safe='/')}"
                     )
                     open_mode = "tab"
+                if kind == "movie":
+                    from app.release_tracklist import (
+                        _duration_from_file,
+                        _format_duration,
+                    )
+
+                    duration_sec = _duration_from_file(target)
+                    if duration_sec is None and target.suffix.lower() in {
+                        ".mp4",
+                        ".m4v",
+                        ".mov",
+                    }:
+                        try:
+                            from app.media_item_overview import (
+                                _mp4_duration_from_mvhd,
+                            )
+
+                            duration_sec = _mp4_duration_from_mvhd(target)
+                        except Exception:
+                            duration_sec = None
+                    duration = (
+                        _format_duration(duration_sec) if duration_sec else None
+                    )
         out.append(
             {
                 **e,
@@ -550,6 +575,8 @@ def _enrich_related_cards(
                 "open_url": open_url,
                 "open_mode": open_mode,
                 "display_date": format_display_date(e.get("date_iso")),
+                "duration": duration,
+                "duration_sec": duration_sec,
             }
         )
     return out

@@ -684,13 +684,38 @@ def _cache_path(band_id: int) -> Path:
 
 
 def _audio_mtime(artist_dir: Path) -> float:
+    """Max mtime across Audio/, category folders, and immediate release entries.
+
+    Creating a new album under Albums/ often does not bump Audio/'s own mtime
+    on Windows, so a shallow check would keep a stale cache forever.
+    """
     audio = _audio_root(artist_dir)
     if not audio.is_dir():
         return 0.0
+    latest = 0.0
     try:
-        return audio.stat().st_mtime
+        latest = max(latest, audio.stat().st_mtime)
     except OSError:
-        return 0.0
+        pass
+    for _key, folder_name in AUDIO_CATEGORIES.items():
+        cat = _resolve_child_dir(audio, folder_name)
+        if not cat.is_dir():
+            continue
+        try:
+            latest = max(latest, cat.stat().st_mtime)
+        except OSError:
+            continue
+        try:
+            for child in cat.iterdir():
+                if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+                    continue
+                try:
+                    latest = max(latest, child.stat().st_mtime)
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    return latest
 
 
 def invalidate_media_cache(band_id: int) -> None:

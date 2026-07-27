@@ -63,9 +63,12 @@ export function clearArtistAudioCache(bandId?: number): void {
   inflight.clear();
 }
 
-async function fetchArtistAudioEntry(bandId: number): Promise<ArtistAudioCacheEntry> {
+async function fetchArtistAudioEntry(
+  bandId: number,
+  force = false
+): Promise<ArtistAudioCacheEntry> {
   const [audio, playlistPayload] = await Promise.all([
-    fetchBandAudioIndex(bandId),
+    fetchBandAudioIndex(bandId, force),
     fetchBandPlaylistIndex(bandId),
   ]);
   const entry: ArtistAudioCacheEntry = {
@@ -86,12 +89,13 @@ export function prefetchArtistAudio(
   if (!force) {
     const cached = getCachedArtistAudio(bandId);
     if (cached) return Promise.resolve(cached);
+    const existing = inflight.get(key);
+    if (existing) return existing;
+  } else {
+    inflight.delete(key);
   }
 
-  const existing = inflight.get(key);
-  if (existing) return existing;
-
-  const pending = fetchArtistAudioEntry(bandId).finally(() => {
+  const pending = fetchArtistAudioEntry(bandId, force).finally(() => {
     inflight.delete(key);
   });
 

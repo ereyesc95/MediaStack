@@ -228,6 +228,35 @@ export default function SeriesModule({
     });
   };
 
+  const browseCatalog = (target: {
+    mode: "name" | "genre" | "country" | "publisher" | "writer";
+    countryId?: number;
+    subgenreId?: number;
+    publisher?: string;
+    writer?: string;
+  }) => {
+    clearMediaTheme(userId);
+    setFranchiseShell(null);
+    setTab("catalog");
+    pushSeriesCatalogRoute(true);
+    onNavigate({
+      franchiseId: undefined,
+      subseriesId: undefined,
+      seasonId: undefined,
+      section: "overview",
+    });
+    setFilterMode(target.mode);
+    setSearch("");
+    setLetter(target.mode === "name" ? "A" : "");
+    setContinentId("");
+    setCountryId(target.countryId ?? "");
+    setStartDecade("");
+    setEndDecade("");
+    setSubgenreId(target.subgenreId ?? "");
+    setPublisher(target.publisher ?? "");
+    setWriter(target.writer ?? "");
+  };
+
   if (!showModuleChrome && franchiseId && subseriesId) {
     return (
       <div className="series-module">
@@ -254,28 +283,7 @@ export default function SeriesModule({
               overviewTab: "about",
             })
           }
-          onBrowseCatalog={(target) => {
-            clearMediaTheme(userId);
-            setFranchiseShell(null);
-            setTab("catalog");
-            pushSeriesCatalogRoute(true);
-            onNavigate({
-              franchiseId: undefined,
-              subseriesId: undefined,
-              seasonId: undefined,
-              section: "overview",
-            });
-            setFilterMode(target.mode);
-            setSearch("");
-            setLetter(target.mode === "name" ? "A" : "");
-            setContinentId("");
-            setCountryId(target.countryId ?? "");
-            setStartDecade("");
-            setEndDecade("");
-            setSubgenreId(target.subgenreId ?? "");
-            setPublisher(target.publisher ?? "");
-            setWriter(target.writer ?? "");
-          }}
+          onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={onOpenMusicRelease}
           onNavigate={(patch) =>
             onNavigate({
@@ -313,6 +321,7 @@ export default function SeriesModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBack={backToCatalog}
+          onBrowseCatalog={browseCatalog}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,

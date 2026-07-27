@@ -10,9 +10,8 @@ type Props = {
 };
 
 function openEpisode(ep: SeriesEpisodeItem) {
-  const url =
-    ep.open_url ||
-    `/api/media/file?path=${encodeURIComponent(ep.play_path)}`;
+  const url = ep.open_url?.trim();
+  if (!url) return;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -42,16 +41,20 @@ export default function SeriesEpisodeList({
             showReleaseDate || ep.kind === "movie"
               ? ep.display_date || formatTrackDate(ep.date_iso)
               : null;
+          const canOpen = Boolean(ep.open_url?.trim());
           return (
             <li key={ep.id} className="series-episode-list__item">
               <button
                 type="button"
-                className="release-tracklist__row series-episode-list__row"
+                className={`release-tracklist__row series-episode-list__row${
+                  canOpen ? "" : " series-episode-list__row--unavailable"
+                }`}
                 onClick={() => {
                   onSelect?.(ep);
-                  openEpisode(ep);
+                  if (canOpen) openEpisode(ep);
                 }}
-                title={`Open ${ep.title}`}
+                title={canOpen ? `Open ${ep.title}` : `${ep.title} (file not linked)`}
+                disabled={!canOpen && !onSelect}
               >
                 <span className="release-tracklist__num series-episode-list__num">
                   {num}

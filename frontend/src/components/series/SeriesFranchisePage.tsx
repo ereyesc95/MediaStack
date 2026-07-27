@@ -88,6 +88,13 @@ type Props = {
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
   }) => void;
+  onBrowseCatalog?: (target: {
+    mode: "name" | "genre" | "country" | "publisher" | "writer";
+    countryId?: number;
+    subgenreId?: number;
+    publisher?: string;
+    writer?: string;
+  }) => void;
 };
 
 const SECTIONS: {
@@ -139,6 +146,7 @@ export default function SeriesFranchisePage({
   onEditProfile,
   onBack,
   onNavigate,
+  onBrowseCatalog,
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
@@ -896,6 +904,24 @@ export default function SeriesFranchisePage({
                 subseriesId: sub.id,
                 seasonId: undefined,
               })
+            }
+            onGenre={(id) =>
+              onBrowseCatalog?.({
+                mode: "genre",
+                subgenreId: typeof id === "number" ? id : undefined,
+              })
+            }
+            onPublisher={(name) =>
+              onBrowseCatalog?.({ mode: "publisher", publisher: name })
+            }
+            onCountry={(c) =>
+              onBrowseCatalog?.({
+                mode: "country",
+                countryId: c.id,
+              })
+            }
+            onWriter={(name) =>
+              onBrowseCatalog?.({ mode: "writer", writer: name })
             }
           />
         ) : null}

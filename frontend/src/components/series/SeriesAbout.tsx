@@ -12,6 +12,8 @@ type Props = {
   onOpenSubseries: (sub: SeriesSubseriesCard) => void;
   onGenre?: (id: number | string) => void;
   onPublisher?: (name: string) => void;
+  onCountry?: (country: { id?: number; name: string; iso?: string | null }) => void;
+  onWriter?: (name: string) => void;
 };
 
 function normalizeBio(bio: string): string {
@@ -76,6 +78,8 @@ export default function SeriesAbout({
   onOpenSubseries,
   onGenre,
   onPublisher,
+  onCountry,
+  onWriter,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
@@ -258,19 +262,41 @@ export default function SeriesAbout({
               {writers.length > 0 && (
                 <div className="artist-about__meta-row">
                   <dt>Writers</dt>
-                  <dd>{writers.join(" • ")}</dd>
+                  <dd>
+                    {writers.map((w) => (
+                      <MetaValue
+                        key={w}
+                        onClick={onWriter ? () => onWriter(w) : undefined}
+                      >
+                        {w}
+                      </MetaValue>
+                    ))}
+                  </dd>
                 </div>
               )}
               {data.country && (
                 <div className="artist-about__meta-row">
                   <dt>Origin</dt>
                   <dd className="artist-about__origin">
-                    {data.country?.iso && (
-                      <span className="artist-about__flag" aria-hidden>
-                        <span className={`fi fi-${data.country.iso}`} />
-                      </span>
-                    )}
-                    {originText && <span>{originText}</span>}
+                    <MetaValue
+                      onClick={
+                        onCountry
+                          ? () =>
+                              onCountry({
+                                id: data.country?.id,
+                                name: data.country?.name || originText,
+                                iso: data.country?.iso,
+                              })
+                          : undefined
+                      }
+                    >
+                      {data.country?.iso && (
+                        <span className="artist-about__flag" aria-hidden>
+                          <span className={`fi fi-${data.country.iso}`} />
+                        </span>
+                      )}
+                      {originText && <span>{originText}</span>}
+                    </MetaValue>
                   </dd>
                 </div>
               )}

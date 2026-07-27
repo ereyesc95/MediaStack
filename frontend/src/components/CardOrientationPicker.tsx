@@ -25,6 +25,8 @@ type Props = {
   className?: string;
 };
 
+const CLOSE_DELAY_MS = 280;
+
 export default function CardOrientationPicker({
   value,
   onChange,
@@ -32,12 +34,22 @@ export default function CardOrientationPicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const leaveTimer = useRef<number | null>(null);
   const isPhone = usePhoneLayout();
   const current = OPTIONS.find((o) => o.id === value) ?? OPTIONS[0];
   const CurrentIcon = current.Icon;
 
+  const clearLeaveTimer = () => {
+    if (leaveTimer.current != null) {
+      window.clearTimeout(leaveTimer.current);
+      leaveTimer.current = null;
+    }
+  };
+
+  useEffect(() => () => clearLeaveTimer(), []);
+
   useEffect(() => {
-    if (!open || !isPhone) return;
+    if (!open) return;
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -50,17 +62,24 @@ export default function CardOrientationPicker({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, isPhone]);
+  }, [open]);
 
   return (
     <div
       ref={rootRef}
-      className={`card-orientation-picker ${className}`.trim()}
+      className={`card-orientation-picker${open ? " is-open" : ""} ${className}`.trim()}
       onMouseEnter={() => {
-        if (!isPhone) setOpen(true);
+        if (isPhone) return;
+        clearLeaveTimer();
+        setOpen(true);
       }}
       onMouseLeave={() => {
-        if (!isPhone) setOpen(false);
+        if (isPhone) return;
+        clearLeaveTimer();
+        leaveTimer.current = window.setTimeout(() => {
+          setOpen(false);
+          leaveTimer.current = null;
+        }, CLOSE_DELAY_MS);
       }}
     >
       <button
@@ -70,29 +89,32 @@ export default function CardOrientationPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => {
-          if (isPhone) setOpen((v) => !v);
+          clearLeaveTimer();
+          setOpen((v) => !v);
         }}
       >
         <CurrentIcon />
       </button>
       {open && (
         <div className="card-orientation-picker__menu" role="menu">
-          {OPTIONS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={value === id}
-              className={value === id ? "active" : ""}
-              onClick={() => {
-                onChange(id);
-                setOpen(false);
-              }}
-            >
-              <Icon />
-              <span>{label}</span>
-            </button>
-          ))}
+          <div className="card-orientation-picker__menu-panel">
+            {OPTIONS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={value === id}
+                className={value === id ? "active" : ""}
+                onClick={() => {
+                  onChange(id);
+                  setOpen(false);
+                }}
+              >
+                <Icon />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

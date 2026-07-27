@@ -20,6 +20,8 @@ export type SeriesMediaCard = {
   navigate_band_id?: number | null;
   navigate_release_id?: string | null;
   category?: string | null;
+  duration?: string | null;
+  duration_sec?: number | null;
 };
 
 type Props = {

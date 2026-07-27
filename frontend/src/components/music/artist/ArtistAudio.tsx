@@ -297,7 +297,7 @@ export function ArtistAudioBars({ state, mobilePortrait }: BarsProps) {
 
   return (
     <>
-      {visibleCategories.length > 0 && (
+      {visibleCategories.length > 1 && (
         <nav className="artist-page__subtabs artist-audio__type-bar">
           {visibleCategories.map((c) => (
             <button

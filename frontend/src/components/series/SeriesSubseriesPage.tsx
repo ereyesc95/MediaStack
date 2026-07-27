@@ -226,6 +226,8 @@ function toMediaCards(
     navigate_band_id?: number | null;
     navigate_release_id?: string | null;
     category?: string | null;
+    duration?: string | null;
+    duration_sec?: number | null;
   }[]
 ): SeriesMediaCard[] {
   return items.map((it, i) => ({
@@ -246,6 +248,8 @@ function toMediaCards(
     navigate_band_id: it.navigate_band_id,
     navigate_release_id: it.navigate_release_id,
     category: it.category,
+    duration: it.duration ?? null,
+    duration_sec: it.duration_sec ?? null,
   }));
 }
 
@@ -715,6 +719,8 @@ export default function SeriesSubseriesPage({
           open_url?: string | null;
           open_mode?: "tab" | "local" | null;
           open_label?: string | null;
+          duration?: string | null;
+          duration_sec?: number | null;
         }[];
         setMovieCards(
           filterCardsForSubseries(
@@ -892,27 +898,40 @@ export default function SeriesSubseriesPage({
   } = useSeriesAudioCategories(audioCards);
 
   const episodeMovies: SeriesEpisodeItem[] = useMemo(() => {
-    if (localMovies.length) return localMovies;
-    const scopedRelated = filterCardsForSubseries(
-      relatedMovies,
-      title,
-      detail?.folder_path || card?.folder_path || ""
-    );
-    return scopedRelated.map((m, i) => ({
-      id: m.id || `rel-mov-${i}`,
-      number: null,
-      title: m.title,
-      play_path: m.path || "",
-      open_url: m.path
-        ? `/api/media/file?path=${encodeURIComponent(m.path)}`
-        : null,
-      kind: "movie" as const,
-      cover_url: m.cover_url,
-      folder_path: m.path,
-      display_date: m.display_date || m.date_label || null,
-      date_iso: m.date_iso || null,
-    }));
-  }, [localMovies, relatedMovies, title, detail?.folder_path, card?.folder_path]);
+    // Prefer Movies-tab cards (franchise Movies/ paths with real open_url + duration).
+    const source =
+      movieCards.length > 0
+        ? movieCards
+        : filterCardsForSubseries(
+            relatedMovies,
+            title,
+            detail?.folder_path || card?.folder_path || ""
+          );
+    if (source.length) {
+      return source.map((m, i) => ({
+        id: m.id || `mov-${i}`,
+        number: null,
+        title: m.title,
+        play_path: m.path || "",
+        open_url: m.open_url || null,
+        kind: "movie" as const,
+        cover_url: m.cover_url,
+        folder_path: m.path,
+        display_date: m.display_date || m.date_label || null,
+        date_iso: m.date_iso || null,
+        duration: m.duration || null,
+        duration_sec: m.duration_sec ?? null,
+      }));
+    }
+    return localMovies;
+  }, [
+    movieCards,
+    relatedMovies,
+    localMovies,
+    title,
+    detail?.folder_path,
+    card?.folder_path,
+  ]);
 
   const showMediaLayoutPicker =
     tab === "movies" || tab === "audio" || tab === "library" || tab === "games";

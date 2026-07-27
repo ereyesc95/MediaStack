@@ -293,7 +293,19 @@ input {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  /* Transparent hit-bridge so the pointer can travel from trigger → menu */
+  margin-top: 0;
+  padding-top: 10px;
+  min-width: 10.5rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  z-index: 220;
+}
+
+.card-orientation-picker__menu-panel {
   min-width: 10.5rem;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -301,10 +313,11 @@ input {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  z-index: 220;
+  overflow: hidden;
 }
 
-.card-orientation-picker__menu button {
+.card-orientation-picker__menu button,
+.card-orientation-picker__menu-panel button {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -319,7 +332,9 @@ input {
 }
 
 .card-orientation-picker__menu button:hover,
-.card-orientation-picker__menu button.active {
+.card-orientation-picker__menu button.active,
+.card-orientation-picker__menu-panel button:hover,
+.card-orientation-picker__menu-panel button.active {
   background: var(--bg-hover);
   color: var(--accent);
 }
@@ -4879,8 +4894,16 @@ input {
 }
 
 .artist-about__origin {
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem !important;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.artist-about__origin .artist-about__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__foot {
@@ -13628,7 +13651,7 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-episode-list__item {
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .series-episode-list__item:last-child {
@@ -13648,11 +13671,33 @@ button.lyrics-status-badge--icon-only {
   text-align: left;
   padding: 0.28rem 0.35rem;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 0;
+  transition: background-color 0.18s ease, padding-left 0.18s ease, color 0.18s ease;
 }
 
 .series-episode-list__row:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.035);
+  padding-left: 0.55rem;
+}
+
+.series-episode-list__row:hover .series-episode-list__title {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.series-episode-list__row:hover .series-episode-list__num,
+.series-episode-list__row:hover .release-tracklist__duration,
+.series-episode-list__row:hover .series-episode-list__date {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.series-episode-list__row--unavailable {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.series-episode-list__row--unavailable:hover {
+  background: transparent;
+  padding-left: 0.35rem;
 }
 
 .series-episode-list__num {
@@ -14106,49 +14151,6 @@ button.lyrics-status-badge--icon-only {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-}
-
-.series-episode-list__row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  gap: 0.55rem;
-  align-items: center;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  padding: 0.28rem 0.35rem;
-  cursor: pointer;
-  border-radius: 2px;
-}
-
-.series-episode-list__row:hover {
-  background: var(--bg-hover);
-}
-
-.series-episode-list__num {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
-}
-
-.series-episode-list__title {
-  font-weight: 500;
-  font-size: 0.88rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.series-episode-list__trailing {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-shrink: 0;
-  justify-self: end;
 }
 
 .series-gallery__grid {
