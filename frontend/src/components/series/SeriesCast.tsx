@@ -31,6 +31,8 @@ type Props = {
   subseries?: SeriesSubseriesCard[];
   /** "all" or a subseries id — filters members by subseries_ids. */
   castSubFilter?: string;
+  /** Horizontal scrolling single row (subseries overview). */
+  layout?: "grid" | "row";
   tab: SeriesCastTab;
   isAdmin?: boolean;
   addOpen?: boolean;
@@ -67,19 +69,54 @@ function flagIso(lang: string): string {
   return LANG_FLAG_ISO[lang] || lang.slice(0, 2).toLowerCase();
 }
 
-function performanceForLang(
+function peopleFromPerf(
+  perf: SeriesCastPerformance | null
+): { name: string; photo_url?: string | null }[] {
+  if (!perf) return [];
+  const nested = perf.actors;
+  if (Array.isArray(nested) && nested.length) {
+    return nested
+      .filter((a) => a?.name?.trim())
+      .map((a) => ({
+        name: a.name!.trim(),
+        photo_url: a.photo_url ?? null,
+      }));
+  }
+  const names = actorNamesFromPerf(perf);
+  return names.map((name, i) => ({
+    name,
+    photo_url: i === 0 ? perf.photo_url ?? null : null,
+  }));
+}
+
+function performancesMatchingLang(
   member: SeriesCastMember,
   lang: string | null
-): SeriesCastPerformance | null {
+): SeriesCastPerformance[] {
   const perfs = member.performances || [];
-  if (!perfs.length) return null;
-  if (lang) {
-    const match = perfs.find(
-      (p) => (p.language || "").toLowerCase() === lang.toLowerCase()
-    );
-    if (match) return match;
+  if (!lang) return perfs;
+  return perfs.filter(
+    (p) => (p.language || "").toLowerCase() === lang.toLowerCase()
+  );
+}
+
+/** Pick performances for a language + optional subseries scope. */
+function performancesForScope(
+  member: SeriesCastMember,
+  lang: string | null,
+  subFilter: string = "all"
+): SeriesCastPerformance[] {
+  const langPerfs = performancesMatchingLang(member, lang);
+  if (!langPerfs.length) return [];
+  if (!subFilter || subFilter === "all") {
+    return langPerfs;
   }
-  return perfs[0];
+  const scoped = langPerfs.filter((p) =>
+    (p.subseries_ids || []).includes(subFilter)
+  );
+  if (scoped.length) return scoped;
+  // Fallback: franchise-wide defaults (no subseries_ids)
+  return langPerfs.filter((p) => !(p.subseries_ids && p.subseries_ids.length));
 }
 
 function actorNamesFromPerf(perf: SeriesCastPerformance | null): string[] {
@@ -91,14 +128,27 @@ function actorNamesFromPerf(perf: SeriesCastPerformance | null): string[] {
   return [];
 }
 
-function actorNamesForLang(
+function actorsForLangDetailed(
   member: SeriesCastMember,
-  lang: string | null
-): string[] {
-  const perf = performanceForLang(member, lang);
-  const fromPerf = actorNamesFromPerf(perf);
-  if (fromPerf.length) return fromPerf;
-  if (member.actors?.length) {
+  lang: string,
+  subFilter: string = "all"
+): { name: string; photo_url?: string | null }[] {
+  const perfs = performancesForScope(member, lang, subFilter);
+  if (perfs.length) {
+    const seen = new Set<string>();
+    const out: { name: string; photo_url?: string | null }[] = [];
+    for (const perf of perfs) {
+      for (const person of peopleFromPerf(perf)) {
+        const key = person.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(person);
+      }
+    }
+    if (out.length) return out;
+  }
+  // Legacy flat actors[] — only when no scoped performances
+  if (member.actors?.length && (subFilter === "all" || !subFilter)) {
     const byLang = lang
       ? member.actors.filter(
           (a) =>
@@ -106,55 +156,32 @@ function actorNamesForLang(
             (!a.language || a.language.toLowerCase() === lang.toLowerCase())
         )
       : member.actors.filter((a) => a.name);
-    if (byLang.length) return byLang.map((a) => a.name);
-  }
-  return (member.roles || []).filter(Boolean);
-}
-
-function actorLabel(member: SeriesCastMember, lang: string | null): string {
-  return actorNamesForLang(member, lang).join(", ");
-}
-
-function actorsForLangDetailed(
-  member: SeriesCastMember,
-  lang: string
-): { name: string; photo_url?: string | null }[] {
-  const perf = performanceForLang(member, lang);
-  const nested = (
-    perf as SeriesCastPerformance & {
-      actors?: { name?: string; photo_url?: string | null }[];
+    if (byLang.length) {
+      const seen = new Set<string>();
+      const out: { name: string; photo_url?: string | null }[] = [];
+      for (const a of byLang) {
+        const key = a.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ name: a.name, photo_url: a.photo_url ?? null });
+      }
+      return out;
     }
-  )?.actors;
-  if (Array.isArray(nested) && nested.length) {
-    return nested
-      .filter((a) => a?.name?.trim())
-      .map((a) => ({
-        name: a.name!.trim(),
-        photo_url: a.photo_url ?? null,
-      }));
   }
-  const names = actorNamesForLang(member, lang);
-  return names.map((name, i) => {
-    const fromActors = (member.actors || []).find(
-      (a) =>
-        a.name === name &&
-        (!a.language || a.language.toLowerCase() === lang.toLowerCase())
-    );
-    return {
-      name,
-      photo_url:
-        fromActors?.photo_url ||
-        (i === 0 ? perf?.photo_url : null) ||
-        null,
-    };
-  });
+  if (subFilter === "all" || !subFilter) {
+    return (member.roles || [])
+      .filter(Boolean)
+      .map((name) => ({ name, photo_url: null }));
+  }
+  return [];
 }
 
 /** One row per language: flag + individually hoverable actor names. */
 function actorGroupsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
-  originLanguage?: string | null
+  originLanguage?: string | null,
+  subFilter: string = "all"
 ): {
   language: string;
   people: { name: string; photo_url?: string | null }[];
@@ -180,14 +207,14 @@ function actorGroupsForDisplay(
   }
 
   for (const lang of langs) {
-    const people = actorsForLangDetailed(member, lang);
+    const people = actorsForLangDetailed(member, lang, subFilter);
     if (!people.length) continue;
     out.push({ language: lang, people });
   }
 
   if (!out.length && (member.roles?.length || member.actors?.length)) {
     const lang = originLanguage || franchiseLangs[0] || "ja";
-    const people = actorsForLangDetailed(member, lang);
+    const people = actorsForLangDetailed(member, lang, subFilter);
     if (people.length) out.push({ language: lang, people });
   }
   return out;
@@ -197,15 +224,19 @@ function actorGroupsForDisplay(
 function actorsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
-  originLanguage?: string | null
+  originLanguage?: string | null,
+  subFilter: string = "all"
 ): { language: string; name: string; photo_url?: string | null }[] {
-  return actorGroupsForDisplay(member, franchiseLangs, originLanguage).map(
-    (g) => ({
-      language: g.language,
-      name: g.people.map((p) => p.name).join(", "),
-      photo_url: g.people[0]?.photo_url ?? null,
-    })
-  );
+  return actorGroupsForDisplay(
+    member,
+    franchiseLangs,
+    originLanguage,
+    subFilter
+  ).map((g) => ({
+    language: g.language,
+    name: g.people.map((p) => p.name).join(", "),
+    photo_url: g.people[0]?.photo_url ?? null,
+  }));
 }
 
 function MemberCard({
@@ -213,12 +244,14 @@ function MemberCard({
   characterCentered,
   franchiseLangs,
   originLanguage,
+  castSubFilter = "all",
   onSelect,
 }: {
   member: SeriesCastMember;
   characterCentered: boolean;
   franchiseLangs: string[];
   originLanguage?: string | null;
+  castSubFilter?: string;
   onSelect: (m: SeriesCastMember) => void;
 }) {
   const layout = useDeviceLayout();
@@ -239,7 +272,12 @@ function MemberCard({
 
   const characterUrl = member.photo_url;
   const actorGroups = characterCentered
-    ? actorGroupsForDisplay(member, franchiseLangs, originLanguage)
+    ? actorGroupsForDisplay(
+        member,
+        franchiseLangs,
+        originLanguage,
+        castSubFilter
+      )
     : [];
   const baseUrl = characterUrl && !photoFailed ? characterUrl : null;
   const staffSubtitle = !characterCentered
@@ -457,6 +495,7 @@ function CastMemberModal({
   franchiseLangs,
   languageOptions,
   subseries,
+  castSubFilter = "all",
   onClose,
   onDataChanged,
 }: {
@@ -468,6 +507,7 @@ function CastMemberModal({
   franchiseLangs: string[];
   languageOptions: SeriesLanguageOption[];
   subseries: SeriesSubseriesCard[];
+  castSubFilter?: string;
   onClose: () => void;
   onDataChanged: () => void;
 }) {
@@ -486,7 +526,7 @@ function CastMemberModal({
   const [actorEntries, setActorEntries] = useState<
     { name: string; photo_url: string }[]
   >(() => {
-    const people = actorsForLangDetailed(member, defaultLang);
+    const people = actorsForLangDetailed(member, defaultLang, castSubFilter);
     return people.length
       ? people.map((p) => ({ name: p.name, photo_url: p.photo_url || "" }))
       : [{ name: "", photo_url: "" }];
@@ -498,15 +538,17 @@ function CastMemberModal({
   const [selectedSubs, setSelectedSubs] = useState<string[]>(
     () => member.subseries_ids || []
   );
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removeFromFranchise, setRemoveFromFranchise] = useState(false);
 
   useEffect(() => {
-    const people = actorsForLangDetailed(member, editLang);
+    const people = actorsForLangDetailed(member, editLang, castSubFilter);
     setActorEntries(
       people.length
         ? people.map((p) => ({ name: p.name, photo_url: p.photo_url || "" }))
         : [{ name: "", photo_url: "" }]
     );
-  }, [editLang, member]);
+  }, [editLang, member, castSubFilter]);
 
   const handleSave = async () => {
     if (member.id == null) return;
@@ -523,6 +565,8 @@ function CastMemberModal({
         .split(/[;·,]/)
         .map((s) => s.trim())
         .filter(Boolean);
+      const actorScope =
+        castSubFilter && castSubFilter !== "all" ? [castSubFilter] : [];
       await patchSeriesCastMember(franchiseId, member.id, {
         bucket,
         name: charName,
@@ -537,6 +581,7 @@ function CastMemberModal({
           : staffRoles,
         language: characterCentered ? editLang : undefined,
         subseries_ids: selectedSubs,
+        actor_subseries_ids: characterCentered ? actorScope : undefined,
       });
       onDataChanged();
       onClose();
@@ -549,22 +594,43 @@ function CastMemberModal({
 
   const handleRemove = async () => {
     if (member.id == null) return;
-    if (!window.confirm(`Remove “${member.name}” from cast?`)) return;
     setBusy(true);
     setError(null);
     try {
-      await removeSeriesCastMember(franchiseId, member.id, bucket);
+      const scoped =
+        castSubFilter && castSubFilter !== "all" && !removeFromFranchise;
+      await removeSeriesCastMember(
+        franchiseId,
+        member.id,
+        bucket,
+        member.character || member.name,
+        scoped
+          ? {
+              subseriesId: castSubFilter,
+              fromFranchise: false,
+              retainSubseriesIds: subseries
+                .map((s) => s.id)
+                .filter((id) => id !== castSubFilter),
+            }
+          : { fromFranchise: true }
+      );
       onDataChanged();
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setConfirmRemove(false);
     }
   };
 
   const displayPhoto = member.photo_url;
-  const listed = actorsForDisplay(member, franchiseLangs, franchiseLangs[0]);
+  const listed = actorsForDisplay(
+    member,
+    franchiseLangs,
+    franchiseLangs[0],
+    castSubFilter
+  );
   const relatedLabels =
     selectedSubs.length > 0
       ? subseries
@@ -825,7 +891,10 @@ function CastMemberModal({
                 type="button"
                 className="btn link-form__delete"
                 disabled={busy}
-                onClick={() => void handleRemove()}
+                onClick={() => {
+                  setRemoveFromFranchise(false);
+                  setConfirmRemove(true);
+                }}
               >
                 Remove
               </button>
@@ -842,16 +911,69 @@ function CastMemberModal({
           </div>
         )}
       </div>
+      {confirmRemove ? (
+        <div
+          className="modal-backdrop series-cast-confirm-backdrop"
+          onClick={() => !busy && setConfirmRemove(false)}
+        >
+          <div
+            className="modal-panel series-cast-confirm"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-panel-header">
+              <h3>Remove from cast</h3>
+              <button
+                type="button"
+                className="modal-close-x"
+                aria-label="Close"
+                disabled={busy}
+                onClick={() => setConfirmRemove(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p>
+              Remove “{member.name}” from cast
+              {castSubFilter && castSubFilter !== "all" && !removeFromFranchise
+                ? " for this subseries"
+                : ""}
+              ?
+            </p>
+            {castSubFilter && castSubFilter !== "all" ? (
+              <label className="series-cast-confirm__check">
+                <input
+                  type="checkbox"
+                  checked={removeFromFranchise}
+                  onChange={(e) => setRemoveFromFranchise(e.target.checked)}
+                />
+                Also remove from the entire franchise
+              </label>
+            ) : null}
+            <div className="modal-panel-actions modal-panel-actions--end">
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={busy}
+                onClick={() => void handleRemove()}
+              >
+                {busy ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ModalPortal>
   );
 }
 
-function AddCastModal({
+export function AddCastModal({
   franchiseId,
   bucket,
   languageOptions,
   defaultLanguage,
   subseries,
+  defaultSubseriesIds,
   onClose,
   onSaved,
 }: {
@@ -860,6 +982,7 @@ function AddCastModal({
   languageOptions: SeriesLanguageOption[];
   defaultLanguage: string | null;
   subseries: SeriesSubseriesCard[];
+  defaultSubseriesIds?: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -873,7 +996,9 @@ function AddCastModal({
   const [lang, setLang] = useState(
     defaultLanguage || languageOptions[0]?.code || "en"
   );
-  const [selectedSubs, setSelectedSubs] = useState<string[]>([]);
+  const [selectedSubs, setSelectedSubs] = useState<string[]>(
+    () => defaultSubseriesIds || []
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1117,6 +1242,7 @@ export default function SeriesCast({
   originLanguage,
   subseries = [],
   castSubFilter = "all",
+  layout: castLayout = "grid",
   tab,
   isAdmin,
   addOpen,
@@ -1157,13 +1283,22 @@ export default function SeriesCast({
             if (!ids || !ids.length) return true;
             return ids.includes(castSubFilter);
           });
-    return filtered.slice(0, 8);
-  }, [cast, tab, castSubFilter]);
+    // Prefer scoped members; if none are tagged for this subseries, show the
+    // full franchise cast rather than an empty panel.
+    const resolved = filtered.length > 0 ? filtered : list;
+    if (castLayout === "row") return resolved;
+    return resolved.slice(0, 8);
+  }, [cast, tab, castSubFilter, castLayout]);
 
   const rows = useMemo(
     () =>
-      splitRows(members, deviceLayout === "mobile-landscape" ? 5 : undefined),
-    [members, deviceLayout]
+      castLayout === "row"
+        ? { top: members, bottom: [] as SeriesCastMember[] }
+        : splitRows(
+            members,
+            deviceLayout === "mobile-landscape" ? 5 : undefined
+          ),
+    [members, deviceLayout, castLayout]
   );
 
   const franchiseLangOptions = useMemo(() => {
@@ -1213,9 +1348,31 @@ export default function SeriesCast({
   }
 
   return (
-    <div className="artist-lineup series-cast">
+    <div
+      className={
+        castLayout === "row"
+          ? "series-cast series-cast--row-scroll"
+          : "artist-lineup series-cast"
+      }
+    >
       {members.length === 0 ? (
         <p className="muted artist-lineup__empty">No members in this group.</p>
+      ) : castLayout === "row" ? (
+        <div className="series-cast__scroll">
+          <div className="series-cast__row">
+            {members.map((m, i) => (
+              <MemberCard
+                key={`${m.id ?? m.name}-r${i}`}
+                member={m}
+                characterCentered={characterCentered}
+                franchiseLangs={franchiseLangs}
+                originLanguage={originLanguage}
+                castSubFilter={castSubFilter}
+                onSelect={setModalMember}
+              />
+            ))}
+          </div>
+        </div>
       ) : (
         <div
           className="artist-lineup-grid"
@@ -1229,6 +1386,7 @@ export default function SeriesCast({
                 characterCentered={characterCentered}
                 franchiseLangs={franchiseLangs}
                 originLanguage={originLanguage}
+                castSubFilter={castSubFilter}
                 onSelect={setModalMember}
               />
             ))}
@@ -1242,6 +1400,7 @@ export default function SeriesCast({
                   characterCentered={characterCentered}
                   franchiseLangs={franchiseLangs}
                   originLanguage={originLanguage}
+                  castSubFilter={castSubFilter}
                   onSelect={setModalMember}
                 />
               ))}
@@ -1260,6 +1419,7 @@ export default function SeriesCast({
           franchiseLangs={franchiseLangs}
           languageOptions={franchiseLangOptions}
           subseries={subseries}
+          castSubFilter={castSubFilter}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />

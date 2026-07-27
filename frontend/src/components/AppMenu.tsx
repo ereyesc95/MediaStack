@@ -61,6 +61,10 @@ type Props = {
   onWriteFileTags?: () => void;
   onRefreshTracklist?: () => void;
   menuVariant?: "artist" | "release" | "media-item";
+  /** Override label for the release "Edit Release" menu (e.g. "Edit series"). */
+  editDataLabel?: string;
+  /** Flat single button (no submenu) for series subseries edit. */
+  editDataFlat?: boolean;
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -114,6 +118,8 @@ export default function AppMenu({
   onWriteFileTags,
   onRefreshTracklist,
   menuVariant = "artist",
+  editDataLabel,
+  editDataFlat = false,
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -274,7 +280,9 @@ export default function AppMenu({
 
   const showRefreshData =
     menuVariant !== "media-item" &&
+    !editDataFlat &&
     (onEditAbout ||
+      (menuVariant === "release" && onAddMember) ||
       onRefreshMetadata ||
       onRescanLibrary ||
       onRefreshLineup ||
@@ -284,7 +292,10 @@ export default function AppMenu({
       onRefreshRelatedParticipations ||
       onRefreshIncludeBioChange);
 
-  const refreshMenuLabel = menuVariant === "release" ? "Edit Release" : "Refresh data";
+  const refreshMenuLabel =
+    menuVariant === "release"
+      ? editDataLabel || "Edit Release"
+      : "Refresh data";
   const RefreshMenuIcon = menuVariant === "release" ? IconEditRelease : IconMetadata;
   const aboutLabel = menuVariant === "release" ? "About" : "Edit about";
   const AboutIcon = menuVariant === "release" ? IconAbout : IconEditProfile;
@@ -303,7 +314,7 @@ export default function AppMenu({
       </button>
       {open && (
         <div className="app-menu-dropdown">
-          {isAdmin && onAddMember && (
+          {isAdmin && onAddMember && menuVariant !== "release" && (
             <button
               type="button"
               onClick={() => {
@@ -312,7 +323,19 @@ export default function AppMenu({
               }}
             >
               <IconAddArtist className="menu-item-icon" />
-              Add member
+              Add cast member
+            </button>
+          )}
+          {isAdmin && editDataFlat && onEditAbout && (
+            <button
+              type="button"
+              onClick={() => {
+                onEditAbout();
+                setOpen(false);
+              }}
+            >
+              <IconEditProfile className="menu-item-icon" />
+              {editDataLabel || "Edit series"}
             </button>
           )}
           {isAdmin && onAddLink && (
@@ -489,6 +512,18 @@ export default function AppMenu({
                     >
                       <AboutIcon className="menu-item-icon" />
                       {aboutLabel}
+                    </button>
+                  )}
+                  {menuVariant === "release" && isAdmin && onAddMember && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddMember();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconAddArtist className="menu-item-icon" />
+                      Add cast member
                     </button>
                   )}
                   {onRefreshMetadata && (

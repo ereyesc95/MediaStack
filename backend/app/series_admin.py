@@ -29,6 +29,35 @@ def ensure_cast_member_id(member: dict, *, character_centered: bool = False) -> 
     return assigned
 
 
+def _ensure_unique_cast_ids(
+    members: list, *, character_centered: bool = False
+) -> None:
+    """Assign unique character-based ids; rewrite actor-based char-{digits} collisions."""
+    import re
+
+    seen: set[str] = set()
+    prefix = "char" if character_centered else "staff"
+    actor_id_re = re.compile(r"^char-\d+$")
+    for m in members:
+        if not isinstance(m, dict):
+            continue
+        label = (m.get("character") or m.get("name") or "member").strip()
+        preferred = stable_cast_member_id(label, prefix=prefix)
+        mid = m.get("id")
+        mid_s = str(mid).strip() if mid is not None else ""
+        needs_reassign = (
+            not mid_s
+            or mid_s in seen
+            or (character_centered and actor_id_re.match(mid_s) is not None)
+        )
+        if needs_reassign:
+            mid_s = preferred if preferred not in seen else f"{preferred}-{uuid.uuid4().hex[:6]}"
+            m["id"] = mid_s
+        else:
+            m["id"] = mid_s
+        seen.add(str(m["id"]))
+
+
 def _member_id_matches(member: dict, want: str, *, character_centered: bool) -> bool:
     mid = member.get("id")
     if mid is not None and str(mid) == want:
@@ -38,6 +67,17 @@ def _member_id_matches(member: dict, want: str, *, character_centered: bool) -> 
         label = (member.get("character") or member.get("name") or "").strip()
         if stable_cast_member_id(label, prefix=prefix) == want:
             member["id"] = want
+            return True
+    return False
+
+
+def _member_name_matches(member: dict, want_name: str | None) -> bool:
+    if not want_name or not str(want_name).strip():
+        return True
+    want = str(want_name).strip().casefold()
+    for key in ("character", "name"):
+        val = (member.get(key) or "").strip().casefold()
+        if val and val == want:
             return True
     return False
 
@@ -55,6 +95,52 @@ def _save_images(db: Session, row: Series, images: dict) -> None:
     db.commit()
 
 
+def _clean_genres(genres: list[dict] | list[str] | None) -> list[dict]:
+    cleaned_genres: list[dict] = []
+    seen_g: set[str] = set()
+    for g in genres or []:
+        if isinstance(g, dict):
+            name = (g.get("name") or "").strip()
+            gid = g.get("id")
+        else:
+            name = str(g).strip()
+            gid = None
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen_g:
+            continue
+        seen_g.add(key)
+        cleaned_genres.append({"id": gid or name, "name": name})
+    return cleaned_genres
+
+
+def _clean_languages(languages: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in languages or []:
+        code = normalize_lang_code(raw) or (raw or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        cleaned.append(code)
+    return cleaned
+
+
+def _periods_from_activity(
+    activity_start: str | None, activity_end: str | None
+) -> list[dict]:
+    starts = (activity_start or "").split(";")
+    ends = (activity_end or "").split(";")
+    periods = []
+    for i, s in enumerate(starts):
+        s = s.strip()
+        e = ends[i].strip() if i < len(ends) else ""
+        if s or e:
+            periods.append({"start": s or None, "end": e or None})
+    return periods
+
+
 def patch_series_about(
     db: Session,
     franchise_name: str,
@@ -68,8 +154,51 @@ def patch_series_about(
     languages: list[str] | None = None,
     genres: list[dict] | list[str] | None = None,
     clear_origin_city: bool = True,
+    subseries_id: str | None = None,
 ) -> Series:
     row = ensure_series_row(db, franchise_name)
+    images = _load_images(row)
+
+    # Per-subseries about overrides (writers/genres/country/langs/publishers/air dates/bio)
+    if subseries_id and str(subseries_id).strip():
+        sid = str(subseries_id).strip()
+        subs = images.get("subseries")
+        if not isinstance(subs, dict):
+            subs = {}
+        entry = dict(subs.get(sid) or {}) if isinstance(subs.get(sid), dict) else {}
+        if bio is not None:
+            entry["bio"] = bio.strip()
+        if writers is not None:
+            entry["writers"] = writers.strip().replace(",", ";") or ""
+        if publishers is not None:
+            entry["publishers"] = publishers.strip().replace(",", ";") or ""
+        if genres is not None:
+            entry["genres"] = _clean_genres(genres)
+        if languages is not None:
+            entry["languages"] = _clean_languages(languages)
+        if country_id is not None:
+            if country_id:
+                crow = db.get(Country, country_id)
+                entry["country_id"] = int(country_id)
+                entry["country_iso"] = (
+                    crow.cou_iso.lower() if crow and crow.cou_iso else None
+                )
+                entry["country_name"] = crow.cou_name if crow else None
+            else:
+                entry["country_id"] = None
+                entry["country_iso"] = None
+                entry["country_name"] = None
+        if activity_start is not None or activity_end is not None:
+            entry["activity_periods"] = _periods_from_activity(
+                activity_start, activity_end
+            )
+        subs[sid] = entry
+        images["subseries"] = subs
+        row.ser_images_json = json.dumps(images, ensure_ascii=False)
+        db.commit()
+        db.refresh(row)
+        return row
+
     if bio is not None:
         row.ser_bio = bio.strip()
         row.ser_bio_manual = 1
@@ -101,44 +230,13 @@ def patch_series_about(
         if pubs:
             row.ser_studio = pubs[0]
     if genres is not None:
-        cleaned_genres: list[dict] = []
-        seen_g: set[str] = set()
-        for g in genres:
-            if isinstance(g, dict):
-                name = (g.get("name") or "").strip()
-                gid = g.get("id")
-            else:
-                name = str(g).strip()
-                gid = None
-            if not name:
-                continue
-            key = name.casefold()
-            if key in seen_g:
-                continue
-            seen_g.add(key)
-            cleaned_genres.append({"id": gid or name, "name": name})
-        row.ser_genres_json = json.dumps(cleaned_genres, ensure_ascii=False)
-    images = _load_images(row)
+        row.ser_genres_json = json.dumps(_clean_genres(genres), ensure_ascii=False)
     if activity_start is not None or activity_end is not None:
-        starts = (activity_start or "").split(";")
-        ends = (activity_end or "").split(";")
-        periods = []
-        for i, s in enumerate(starts):
-            s = s.strip()
-            e = ends[i].strip() if i < len(ends) else ""
-            if s or e:
-                periods.append({"start": s or None, "end": e or None})
-        images["activity_periods"] = periods
+        images["activity_periods"] = _periods_from_activity(
+            activity_start, activity_end
+        )
     if languages is not None:
-        cleaned: list[str] = []
-        seen: set[str] = set()
-        for raw in languages:
-            code = normalize_lang_code(raw) or (raw or "").strip()
-            if not code or code in seen:
-                continue
-            seen.add(code)
-            cleaned.append(code)
-        images["languages"] = cleaned
+        images["languages"] = _clean_languages(languages)
     if activity_start is not None or activity_end is not None or languages is not None:
         row.ser_images_json = json.dumps(images, ensure_ascii=False)
     db.commit()
@@ -155,12 +253,12 @@ def _load_cast(row: Series) -> dict:
         data = {}
     data.setdefault("characters", data.get("animated") or [])
     data.setdefault("staff", data.get("people") or [])
-    for m in data.get("characters") or []:
-        if isinstance(m, dict):
-            ensure_cast_member_id(m, character_centered=True)
-    for m in data.get("staff") or []:
-        if isinstance(m, dict):
-            ensure_cast_member_id(m, character_centered=False)
+    chars = [m for m in (data.get("characters") or []) if isinstance(m, dict)]
+    staff = [m for m in (data.get("staff") or []) if isinstance(m, dict)]
+    _ensure_unique_cast_ids(chars, character_centered=True)
+    _ensure_unique_cast_ids(staff, character_centered=False)
+    data["characters"] = chars
+    data["staff"] = staff
     # Keep legacy keys in sync
     data["animated"] = data["characters"]
     data["people"] = data["staff"]
@@ -259,6 +357,10 @@ def remove_series_cast_member(
     *,
     member_id: str | int,
     bucket: str | None = None,
+    member_name: str | None = None,
+    subseries_id: str | None = None,
+    from_franchise: bool = False,
+    retain_subseries_ids: list[str] | None = None,
 ) -> bool:
     row = find_series_row(db, franchise_name)
     if not row:
@@ -275,22 +377,92 @@ def remove_series_cast_member(
             else ["staff"]
         )
     )
+    scope = (subseries_id or "").strip()
+    scoped = bool(scope) and scope != "all" and not from_franchise
+
     for key in keys:
         before = cast.get(key) or []
         character_centered = key == "characters"
-        after = [
+        matches = [
             m
             for m in before
-            if not (
-                isinstance(m, dict)
+            if isinstance(m, dict)
+            and _member_id_matches(
+                m, want, character_centered=character_centered
+            )
+            and _member_name_matches(m, member_name)
+        ]
+        if not matches and member_name:
+            matches = [
+                m
+                for m in before
+                if isinstance(m, dict)
                 and _member_id_matches(
                     m, want, character_centered=character_centered
                 )
-            )
-        ]
+            ]
+            if len(matches) > 1:
+                matches = [
+                    m for m in matches if _member_name_matches(m, member_name)
+                ]
+        if not matches:
+            continue
+
+        target = matches[0]
+        if scoped:
+            ids = [
+                str(s).strip()
+                for s in (target.get("subseries_ids") or [])
+                if s and str(s).strip()
+            ]
+            if not ids:
+                # Franchise-wide member: keep on every other subseries
+                keep = [
+                    str(s).strip()
+                    for s in (retain_subseries_ids or [])
+                    if s and str(s).strip() and str(s).strip() != scope
+                ]
+                target["subseries_ids"] = keep
+            else:
+                target["subseries_ids"] = [s for s in ids if s != scope]
+
+            perfs = target.get("performances") or []
+            if isinstance(perfs, list):
+                new_perfs = []
+                for p in perfs:
+                    if not isinstance(p, dict):
+                        continue
+                    pids = [
+                        str(s).strip()
+                        for s in (p.get("subseries_ids") or [])
+                        if s and str(s).strip()
+                    ]
+                    if not pids:
+                        new_perfs.append(p)
+                        continue
+                    if scope not in pids:
+                        new_perfs.append(p)
+                        continue
+                    remaining = [s for s in pids if s != scope]
+                    if remaining:
+                        p = {**p, "subseries_ids": remaining}
+                        new_perfs.append(p)
+                target["performances"] = new_perfs
+
+            # No remaining subseries → delete the member
+            if not (target.get("subseries_ids") or []):
+                drop_id = id(target)
+                cast[key] = [m for m in before if id(m) != drop_id]
+            removed = True
+            break
+
+        # Full delete (franchise-wide / explicit)
+        drop_id = id(target)
+        after = [m for m in before if id(m) != drop_id]
         if len(after) != len(before):
             cast[key] = after
             removed = True
+            break
     if removed:
         _save_cast(db, row, cast)
     return removed
@@ -311,6 +483,7 @@ def patch_series_cast_member(
     language: str | None = None,
     performances: list[dict] | None = None,
     subseries_ids: list[str] | None = None,
+    actor_subseries_ids: list[str] | None = None,
 ) -> dict | None:
     row = find_series_row(db, franchise_name)
     if not row:
@@ -412,43 +585,90 @@ def patch_series_cast_member(
                             "language": use_lang,
                         }
                     )
-            # Keep actors for other languages; replace this language only
-            other_actors = [
-                a
-                for a in (member.get("actors") or [])
-                if isinstance(a, dict)
-                and (a.get("language") or "").casefold() != use_lang.casefold()
+            # Scope this VA edit to a subseries (empty = franchise-wide default)
+            scope = [
+                str(s).strip()
+                for s in (actor_subseries_ids or [])
+                if s and str(s).strip()
             ]
-            # If a shared actor_photo_url was sent and first has no photo, use it
+
+            def _same_actor_scope(p: dict) -> bool:
+                p_subs = [
+                    str(x).strip()
+                    for x in (p.get("subseries_ids") or [])
+                    if x and str(x).strip()
+                ]
+                return sorted(p_subs) == sorted(scope)
+
             if (
                 cleaned
                 and not cleaned[0].get("photo_url")
                 and member.get("actor_photo_url")
             ):
                 cleaned[0]["photo_url"] = member.get("actor_photo_url")
-            member["actors"] = other_actors + cleaned
-            member["roles"] = [a["name"] for a in member["actors"] if a.get("name")]
+
+            # Keep performances for other languages / other subseries scopes
             perfs = [
                 p
                 for p in (member.get("performances") or [])
                 if isinstance(p, dict)
-                and (p.get("language") or "").casefold() != use_lang.casefold()
+                and not (
+                    (p.get("language") or "").casefold() == use_lang.casefold()
+                    and _same_actor_scope(p)
+                )
             ]
             if cleaned:
-                perfs.insert(
-                    0,
-                    {
-                        "language": use_lang,
-                        "actor_name": cleaned[0]["name"],
-                        "actor_names": [c["name"] for c in cleaned],
-                        "photo_url": cleaned[0].get("photo_url"),
-                        "actors": [
-                            {"name": c["name"], "photo_url": c.get("photo_url")}
-                            for c in cleaned
-                        ],
-                    },
-                )
+                entry: dict = {
+                    "language": use_lang,
+                    "actor_name": cleaned[0]["name"],
+                    "actor_names": [c["name"] for c in cleaned],
+                    "photo_url": cleaned[0].get("photo_url"),
+                    "actors": [
+                        {"name": c["name"], "photo_url": c.get("photo_url")}
+                        for c in cleaned
+                    ],
+                }
+                if scope:
+                    entry["subseries_ids"] = scope
+                perfs.insert(0, entry)
             member["performances"] = perfs
+
+            # Rebuild flat actors[] as union across all performances (display helper)
+            flat: list[dict] = []
+            seen: set[str] = set()
+            for p in perfs:
+                if not isinstance(p, dict):
+                    continue
+                p_lang = p.get("language") or use_lang
+                nested = p.get("actors") if isinstance(p.get("actors"), list) else []
+                names = [
+                    str(a.get("name") or "").strip()
+                    for a in nested
+                    if isinstance(a, dict) and str(a.get("name") or "").strip()
+                ]
+                if not names:
+                    names = [
+                        str(n).strip()
+                        for n in (p.get("actor_names") or [])
+                        if n and str(n).strip()
+                    ]
+                if not names and p.get("actor_name"):
+                    names = [str(p["actor_name"]).strip()]
+                for i, n in enumerate(names):
+                    key = f"{p_lang.casefold()}::{n.casefold()}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    photo = None
+                    if nested and i < len(nested) and isinstance(nested[i], dict):
+                        photo = nested[i].get("photo_url")
+                    if i == 0 and not photo:
+                        photo = p.get("photo_url")
+                    flat.append(
+                        {"name": n, "photo_url": photo, "language": p_lang}
+                    )
+            member["actors"] = flat
+            member["roles"] = [a["name"] for a in flat if a.get("name")]
             if cleaned and cleaned[0].get("photo_url"):
                 member["actor_photo_url"] = cleaned[0]["photo_url"]
                 member["character_photo_url"] = cleaned[0]["photo_url"]

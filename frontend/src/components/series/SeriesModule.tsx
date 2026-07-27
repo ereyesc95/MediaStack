@@ -176,7 +176,7 @@ export default function SeriesModule({
       const show = card.subseries.find((s) => s.id === subseriesId);
       if (show) {
         setFranchiseShell({
-          name: show.title,
+          name: card.name,
           cover_url: show.cover_url || card.cover_url,
         });
         return;
@@ -248,7 +248,7 @@ export default function SeriesModule({
               franchiseId,
               subseriesId: undefined,
               seasonId: undefined,
-              section: "series",
+              section: "overview",
               overviewTab: "about",
             })
           }

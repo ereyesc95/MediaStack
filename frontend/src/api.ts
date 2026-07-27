@@ -1600,6 +1600,8 @@ export async function patchSeriesAbout(
     publishers?: string;
     languages?: string[];
     genres?: { id?: number | string | null; name: string }[];
+    /** When set, saves about fields for this subseries only. */
+    subseries_id?: string;
   }
 ) {
   return request<{ ok: boolean }>(
@@ -1638,9 +1640,23 @@ export async function addSeriesCastMember(
 export async function removeSeriesCastMember(
   franchiseId: string,
   memberId: string | number,
-  bucket?: string
+  bucket?: string,
+  memberName?: string,
+  opts?: {
+    subseriesId?: string;
+    fromFranchise?: boolean;
+    retainSubseriesIds?: string[];
+  }
 ) {
-  const q = bucket ? `?bucket=${encodeURIComponent(bucket)}` : "";
+  const params = new URLSearchParams();
+  if (bucket) params.set("bucket", bucket);
+  if (memberName) params.set("name", memberName);
+  if (opts?.subseriesId) params.set("subseries_id", opts.subseriesId);
+  if (opts?.fromFranchise) params.set("from_franchise", "true");
+  if (opts?.retainSubseriesIds?.length) {
+    params.set("retain_subseries_ids", opts.retainSubseriesIds.join(","));
+  }
+  const q = params.toString() ? `?${params.toString()}` : "";
   return request<{ ok: boolean }>(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}/cast/${encodeURIComponent(String(memberId))}${q}`,
     { method: "DELETE" }
@@ -1665,8 +1681,11 @@ export async function patchSeriesCastMember(
       actor_names?: string[];
       photo_url?: string | null;
       actors?: { name: string; photo_url?: string | null }[];
+      subseries_ids?: string[];
     }[];
     subseries_ids?: string[];
+    /** Scope VA edit to these subseries (empty/omit = franchise-wide default). */
+    actor_subseries_ids?: string[];
   }
 ) {
   return request<SeriesCastMember>(

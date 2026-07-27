@@ -182,7 +182,7 @@ def _enrich_cast_member(
                         or m.get("character_photo_url"),
                     }
                 )
-    # Normalize actor_names on existing performances; merge duplicate languages
+    # Normalize actor_names; merge only when language AND subseries scope match
     if character_centered and performances:
         merged: dict[str, dict] = {}
         order: list[str] = []
@@ -190,6 +190,14 @@ def _enrich_cast_member(
             if not isinstance(p, dict):
                 continue
             lang = (p.get("language") or default_language or "en").casefold()
+            scope = tuple(
+                sorted(
+                    str(s).strip()
+                    for s in (p.get("subseries_ids") or [])
+                    if s and str(s).strip()
+                )
+            )
+            key = f"{lang}::{'|'.join(scope)}"
             names = [
                 str(n).strip()
                 for n in (p.get("actor_names") or [])
@@ -199,23 +207,48 @@ def _enrich_cast_member(
                 an = (p.get("actor_name") or "").strip()
                 if an:
                     names = [an]
-            if lang not in merged:
-                merged[lang] = {
+            if key not in merged:
+                entry = {
                     **p,
                     "actor_name": names[0] if names else None,
                     "actor_names": list(names),
                 }
-                order.append(lang)
+                if scope:
+                    entry["subseries_ids"] = list(scope)
+                else:
+                    entry.pop("subseries_ids", None)
+                merged[key] = entry
+                order.append(key)
             else:
-                existing = merged[lang].setdefault("actor_names", [])
+                existing = merged[key].setdefault("actor_names", [])
                 for n in names:
                     if n not in existing:
                         existing.append(n)
-                if not merged[lang].get("photo_url") and p.get("photo_url"):
-                    merged[lang]["photo_url"] = p.get("photo_url")
-                merged[lang]["actor_name"] = (
-                    merged[lang]["actor_names"][0]
-                    if merged[lang]["actor_names"]
+                if not merged[key].get("photo_url") and p.get("photo_url"):
+                    merged[key]["photo_url"] = p.get("photo_url")
+                # Preserve / merge nested actors
+                nested_in = p.get("actors") if isinstance(p.get("actors"), list) else []
+                if nested_in:
+                    out_nested = merged[key].setdefault("actors", [])
+                    if not isinstance(out_nested, list):
+                        out_nested = []
+                        merged[key]["actors"] = out_nested
+                    seen_n = {
+                        str(a.get("name") or "").strip().casefold()
+                        for a in out_nested
+                        if isinstance(a, dict)
+                    }
+                    for a in nested_in:
+                        if not isinstance(a, dict) or not a.get("name"):
+                            continue
+                        nk = str(a["name"]).strip().casefold()
+                        if nk in seen_n:
+                            continue
+                        seen_n.add(nk)
+                        out_nested.append(a)
+                merged[key]["actor_name"] = (
+                    merged[key]["actor_names"][0]
+                    if merged[key]["actor_names"]
                     else None
                 )
         performances = [merged[k] for k in order]
@@ -451,14 +484,13 @@ def build_series_overview(
         if (g.get("name") if isinstance(g, dict) else g)
     ]
 
-    cast_raw = _parse_json(row.ser_cast_json, {})
-    if not isinstance(cast_raw, dict):
-        cast_raw = {}
-    characters = cast_raw.get("characters") or cast_raw.get("animated") or []
-    staff = cast_raw.get("staff") or cast_raw.get("people") or []
-    # Main cast / staff only — avoids overlapping lineup photos
-    characters = [m for m in characters if isinstance(m, dict)][:8]
-    staff = [m for m in staff if isinstance(m, dict)][:8]
+    # Normalize + rewrite colliding actor-based character ids, then persist
+    from app.series_admin import _load_cast, _save_cast
+
+    loaded_cast = _load_cast(row)
+    _save_cast(db, row, loaded_cast)
+    characters = [m for m in (loaded_cast.get("characters") or []) if isinstance(m, dict)]
+    staff = [m for m in (loaded_cast.get("staff") or []) if isinstance(m, dict)]
 
     images = _parse_json(row.ser_images_json, {})
     if not isinstance(images, dict):
@@ -632,6 +664,71 @@ def build_series_overview(
         else:
             country = {"id": 0, "name": iso.upper(), "iso": iso}
 
+    # Per-subseries about overrides (edit from subseries page)
+    subseries_meta: dict[str, dict] = {}
+    raw_subs = images.get("subseries") if isinstance(images, dict) else None
+    if isinstance(raw_subs, dict):
+        for sid, entry in raw_subs.items():
+            if not isinstance(entry, dict):
+                continue
+            sid_s = str(sid)
+            sm_genres = entry.get("genres") if isinstance(entry.get("genres"), list) else None
+            sm_langs = entry.get("languages") if isinstance(entry.get("languages"), list) else None
+            sm_periods = entry.get("activity_periods")
+            sm_country = None
+            cid = entry.get("country_id")
+            iso = (entry.get("country_iso") or "").lower() or None
+            if cid or iso:
+                crow = None
+                if cid:
+                    crow = db.get(Country, int(cid)) if str(cid).isdigit() else None
+                if not crow and iso:
+                    crow = db.scalars(
+                        select(Country).where(Country.cou_iso == iso)
+                    ).first()
+                if crow:
+                    sm_country = {
+                        "id": crow.cou_id,
+                        "name": crow.cou_name,
+                        "iso": crow.cou_iso,
+                    }
+                else:
+                    sm_country = {
+                        "id": int(cid) if cid else 0,
+                        "name": entry.get("country_name") or (iso.upper() if iso else None),
+                        "iso": iso,
+                    }
+            writers_raw = entry.get("writers")
+            pubs_raw = entry.get("publishers")
+            subseries_meta[sid_s] = {
+                "bio": entry.get("bio"),
+                "writers": _split_semi(writers_raw)
+                if isinstance(writers_raw, str)
+                else (writers_raw if isinstance(writers_raw, list) else None),
+                "publishers": _split_semi(pubs_raw)
+                if isinstance(pubs_raw, str)
+                else (pubs_raw if isinstance(pubs_raw, list) else None),
+                "genres": [
+                    {"id": g.get("id") or i, "name": g.get("name") or str(g)}
+                    for i, g in enumerate(sm_genres or [])
+                    if isinstance(g, dict) and (g.get("name") or g)
+                ]
+                if sm_genres is not None
+                else None,
+                "languages": sm_langs,
+                "country": sm_country,
+                "activity_periods": _activity_periods(
+                    None,
+                    None,
+                    None,
+                    {"activity_periods": sm_periods}
+                    if isinstance(sm_periods, list)
+                    else None,
+                )
+                if isinstance(sm_periods, list)
+                else None,
+            }
+
     index = _ensure_franchise_index(root)
     related = related_for_path(index, folder_path)
     # Exclude this franchise hub from series bucket for related tab
@@ -681,6 +778,128 @@ def build_series_overview(
     creator_cards = _visible_related("creator")
     similar_cards = _visible_related("similar")
 
+    writers = _split_semi(row.ser_writers)
+    publishers = _split_semi(row.ser_publishers)
+    activity_periods = _activity_periods(
+        row.ser_starting_date,
+        row.ser_ending_date,
+        row.ser_status,
+        images if isinstance(images, dict) else None,
+    )
+
+    # Franchise About fields roll up from per-subseries overrides when present
+    if subseries_meta and subseries_cards:
+        base_genres = list(genres)
+        base_writers = list(writers)
+        base_pubs = list(publishers)
+        base_langs = list(selected_langs)
+        base_country = country
+        base_periods = list(activity_periods)
+
+        agg_genres: list[dict] = []
+        seen_g: set[str] = set()
+        agg_writers: list[str] = []
+        seen_w: set[str] = set()
+        agg_pubs: list[str] = []
+        seen_p: set[str] = set()
+        agg_langs: list[str] = []
+        seen_l: set[str] = set()
+        period_starts: list[str] = []
+        period_ends: list[str] = []
+        agg_country = None
+
+        for card in subseries_cards:
+            sid = str(card.get("id") or "")
+            meta = subseries_meta.get(sid) or {}
+            g_list = (
+                meta["genres"]
+                if meta.get("genres") is not None
+                else base_genres
+            )
+            for g in g_list or []:
+                if not isinstance(g, dict):
+                    continue
+                gname = (g.get("name") or "").strip()
+                key = gname.casefold()
+                if not key or key in seen_g:
+                    continue
+                seen_g.add(key)
+                agg_genres.append(g)
+            w_list = (
+                meta["writers"]
+                if meta.get("writers") is not None
+                else base_writers
+            )
+            for w in w_list or []:
+                wname = str(w).strip()
+                key = wname.casefold()
+                if not key or key in seen_w:
+                    continue
+                seen_w.add(key)
+                agg_writers.append(wname)
+            p_list = (
+                meta["publishers"]
+                if meta.get("publishers") is not None
+                else base_pubs
+            )
+            for p in p_list or []:
+                pname = str(p).strip()
+                key = pname.casefold()
+                if not key or key in seen_p:
+                    continue
+                seen_p.add(key)
+                agg_pubs.append(pname)
+            l_list = (
+                meta["languages"]
+                if meta.get("languages") is not None
+                else base_langs
+            )
+            for code in l_list or []:
+                c = str(code).strip()
+                if not c or c in seen_l:
+                    continue
+                seen_l.add(c)
+                agg_langs.append(c)
+            ctry = meta.get("country") if meta.get("country") is not None else base_country
+            if agg_country is None and ctry:
+                agg_country = ctry
+            periods = (
+                meta["activity_periods"]
+                if meta.get("activity_periods") is not None
+                else base_periods
+            )
+            for p in periods or []:
+                if not isinstance(p, dict):
+                    continue
+                if p.get("start"):
+                    period_starts.append(str(p["start"]))
+                if p.get("end"):
+                    period_ends.append(str(p["end"]))
+
+        if agg_genres:
+            genres = agg_genres
+        if agg_writers:
+            writers = agg_writers
+        if agg_pubs:
+            publishers = agg_pubs
+        if agg_langs:
+            selected_langs = agg_langs
+        if agg_country is not None:
+            country = agg_country
+        if period_starts:
+            first_start = min(period_starts)
+            last_end = max(period_ends) if period_ends else None
+            activity_periods = _activity_periods(
+                first_start,
+                last_end,
+                None,
+                {
+                    "activity_periods": [
+                        {"start": first_start, "end": last_end}
+                    ]
+                },
+            )
+
     return {
         "id": detail["id"],
         "ser_id": row.ser_id,
@@ -691,7 +910,7 @@ def build_series_overview(
         "cover_url": detail.get("cover_url") or row.ser_poster_url,
         "bio": row.ser_bio,
         "bio_manual": bool(row.ser_bio_manual),
-        "writers": _split_semi(row.ser_writers),
+        "writers": writers,
         "aliases": _split_semi(row.ser_other_names),
         "city": None,
         "country": country,
@@ -699,14 +918,9 @@ def build_series_overview(
         "origin_language": origin_lang,
         "language_options": language_options,
         "cast_languages": cast_languages,
-        "activity_periods": _activity_periods(
-            row.ser_starting_date,
-            row.ser_ending_date,
-            row.ser_status,
-            images if isinstance(images, dict) else None,
-        ),
+        "activity_periods": activity_periods,
         "genres": genres,
-        "publishers": _split_semi(row.ser_publishers),
+        "publishers": publishers,
         "status": row.ser_status,
         "type": row.ser_type,
         "is_animated": bool(row.ser_is_animated),
@@ -717,6 +931,7 @@ def build_series_overview(
         "cast": cast,
         "links": links_payload,
         "subseries": subseries_cards,
+        "subseries_meta": subseries_meta,
         "seasons": detail.get("seasons") or [],
         "media": media_flags,
         "music_band_id": music_band.bnd_id if music_band else None,

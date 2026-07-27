@@ -44,11 +44,22 @@ export default function SeriesEpisodeList({
               <span className="release-tracklist__title series-episode-list__title">
                 {ep.title}
               </span>
-              <span
-                className="release-tracklist__meta series-episode-list__open"
-                aria-hidden
-              >
-                ↗
+              <span className="series-episode-list__trailing">
+                {ep.duration ? (
+                  <span className="release-tracklist__duration">
+                    {ep.duration}
+                  </span>
+                ) : (
+                  <span className="release-tracklist__duration release-tracklist__duration--empty">
+                    –
+                  </span>
+                )}
+                <span
+                  className="release-tracklist__meta series-episode-list__open"
+                  aria-hidden
+                >
+                  ↗
+                </span>
               </span>
             </button>
           </li>

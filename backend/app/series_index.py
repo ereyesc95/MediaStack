@@ -16,6 +16,7 @@ from app.media_index import format_display_date
 from app.media_item_overview import VIDEO_EXTS, _file_url
 from app.media_paths_util import safe_relative
 from app.media_tabs_index import _folder_cover
+from app.release_tracklist import _duration_from_file, _format_duration
 
 _BRACKET_META = frozenset({"[artwork]", "artwork", "[extras]", "extras"})
 # Obsolete cross-media portal folders — not series content
@@ -433,6 +434,14 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
         rel = child.relative_to(media_root).as_posix()
         number, title = _parse_episode_name(child.name)
         open_url = _file_url(child, media_root)
+        duration_sec = _duration_from_file(child)
+        if duration_sec is None and child.suffix.lower() in {".mp4", ".m4v", ".mov"}:
+            try:
+                from app.media_item_overview import _mp4_duration_from_mvhd
+
+                duration_sec = _mp4_duration_from_mvhd(child)
+            except Exception:
+                duration_sec = None
         episodes.append(
             {
                 "id": _episode_id(rel),
@@ -441,6 +450,8 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
                 "play_path": rel,
                 "open_url": open_url
                 or f"/api/media/file?path={quote(rel, safe='/')}",
+                "duration_sec": duration_sec,
+                "duration": _format_duration(duration_sec),
             }
         )
     episodes.sort(
@@ -588,7 +599,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "has_gallery": _has_gallery(folder),
     }
 
-    if _is_season_folder(folder.name):
+    if _is_season_folder(folder.name) or _folder_has_episode_videos(folder):
         episodes = _list_episodes(folder, root)
         return {
             **base,
@@ -597,6 +608,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
             "subseries": [],
             "episodes": episodes,
             "episode_count": len(episodes),
+            "movies": [],
         }
 
     seasons = _list_seasons(folder, root)

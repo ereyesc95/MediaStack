@@ -197,6 +197,7 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
     MAIN_CAST_MAX_ORDER = 7
     MAIN_CAST_LIMIT = 8
 
+    from app.series_admin import stable_cast_member_id
     from app.series_languages import normalize_lang_code, split_character_names
 
     origin_lang = normalize_lang_code(data.get("original_language")) or "ja"
@@ -223,8 +224,8 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
                 "photo_url": actor_photo,
             }
             if key not in by_character:
-                by_character[key] = {
-                    "id": f"char-{c.get('id') or key}",
+                    by_character[key] = {
+                    "id": stable_cast_member_id(char_name, prefix="char"),
                     "name": char_name,
                     "character": char_name,
                     "photo_url": None,

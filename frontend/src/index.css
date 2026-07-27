@@ -2224,7 +2224,14 @@ input {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: -1.25rem -1.25rem 0.65rem;
+  padding: 1.25rem 1.25rem 0.65rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .modal-panel-header h3 {
@@ -5345,11 +5352,10 @@ input {
 
 .artist-member-modal__header {
   justify-content: flex-end;
-  margin-bottom: 0;
 }
 
-.artist-member-modal__header .modal-panel-header {
-  margin-bottom: 0;
+.artist-member-modal__header.modal-panel-header {
+  margin-bottom: 0.65rem;
 }
 
 .artist-member-modal__body {
@@ -5399,6 +5405,14 @@ input {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  .artist-member-modal.modal-panel > .modal-panel-header {
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    margin: -0.75rem -0.9rem 0.5rem;
+    padding: 0.75rem 0.9rem 0.5rem;
   }
 
   .artist-member-modal__body {
@@ -13084,7 +13098,7 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-cast .artist-lineup-card {
-  max-width: calc(var(--lineup-photo) + 4rem);
+  max-width: calc(var(--lineup-photo, 4.5rem) + 4rem);
   cursor: default;
   gap: 0.3rem;
 }
@@ -13199,8 +13213,16 @@ button.lyrics-status-badge--icon-only {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  padding: 0.55rem 0.15rem;
+  padding: 0.2rem 0.1rem;
+  margin: 0;
   font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.series-season-block__header.release-tracklist__edition-title {
+  margin: 0;
 }
 
 .series-season-block__header:hover {
@@ -13211,17 +13233,140 @@ button.lyrics-status-badge--icon-only {
   color: var(--text);
 }
 
-.series-subseries-overview__cast {
-  margin-top: 0.35rem;
+.series-subseries-episodes .release-tracklist__edition-block + .release-tracklist__edition-block {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+}
+
+.series-subseries-episodes .release-tracklist__edition-empty {
+  margin: 0.25rem 0 0.15rem;
+  font-size: 0.78rem;
+}
+
+.series-cast--row-scroll {
+  --lineup-photo: 3.25rem;
+  --cast-row-gap: 0.75rem;
+  --cast-visible: 8;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.series-cast--row-scroll .series-cast__scroll {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 0.25rem 0.15rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  container-type: inline-size;
+  container-name: series-cast-scroll;
+}
+
+.series-cast--row-scroll .series-cast__row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cast-row-gap);
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.series-cast--row-scroll .series-cast-card.artist-lineup-card,
+.series-subseries-page .series-cast--row-scroll .series-cast-card.artist-lineup-card {
+  flex: 0 0 calc(
+    (100cqw - (var(--cast-visible) - 1) * var(--cast-row-gap)) /
+      var(--cast-visible)
+  ) !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  width: calc(
+    (100cqw - (var(--cast-visible) - 1) * var(--cast-row-gap)) /
+      var(--cast-visible)
+  ) !important;
+  min-width: calc(
+    (100cqw - (var(--cast-visible) - 1) * var(--cast-row-gap)) /
+      var(--cast-visible)
+  ) !important;
+  max-width: calc(
+    (100cqw - (var(--cast-visible) - 1) * var(--cast-row-gap)) /
+      var(--cast-visible)
+  ) !important;
+  gap: 0.35rem;
+}
+
+.series-cast--row-scroll .series-cast-card__main {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.series-cast--row-scroll .series-cast-card .artist-lineup-card__photo,
+.series-cast--row-scroll .series-cast-card__photo {
+  width: 3.25rem !important;
+  height: 3.25rem !important;
+  min-width: 3.25rem !important;
+  min-height: 3.25rem !important;
+  flex: 0 0 3.25rem !important;
+}
+
+.series-subseries-page .series-subseries-overview__cast .release-page__section-glass.release-page__lineup {
   min-height: 0;
-  padding-bottom: 0.85rem;
   overflow: visible;
+  width: 100%;
+  display: block;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  box-sizing: border-box;
+}
+
+.release-page__neighbor-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.release-page__neighbor-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-page__neighbor-date {
+  display: block;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+
+.release-page__neighbor--next .release-page__neighbor-text {
+  align-items: flex-end;
+}
+
+.series-subseries-overview__cast {
+  margin-top: auto;
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .series-subseries-page .series-subseries-overview.release-page__overview {
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-bottom: 1.25rem;
+  overflow: hidden;
+  padding: 0.75rem 1rem 0;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup-grid,
@@ -13231,9 +13376,13 @@ button.lyrics-status-badge--icon-only {
   --lineup-photo: clamp(2.6rem, 3.4vw, 3.35rem);
 }
 
-.series-subseries-page .series-subseries-overview__cast .series-cast .artist-lineup-card {
-  max-width: calc(var(--lineup-photo) + 2.75rem);
+.series-subseries-page .series-subseries-overview__cast .series-cast:not(.series-cast--row-scroll) .artist-lineup-card {
+  max-width: calc(var(--lineup-photo, 4.5rem) + 2.75rem);
   gap: 0.35rem;
+}
+
+.series-subseries-page .series-subseries-overview__cast .series-cast--row-scroll .artist-lineup-card {
+  max-width: none;
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup-card__name {
@@ -13252,7 +13401,6 @@ button.lyrics-status-badge--icon-only {
 
 .series-subseries-page .series-subseries-overview__cast .release-page__section-glass {
   overflow: visible;
-  padding-bottom: 0.5rem;
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup,
@@ -13260,11 +13408,64 @@ button.lyrics-status-badge--icon-only {
   overflow: visible;
 }
 
+.series-about-edit__cast-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.series-about-edit__cast-btn {
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.series-cast-confirm-backdrop {
+  z-index: 80;
+}
+
+.series-cast-confirm {
+  max-width: 26rem;
+  font-size: 0.85rem;
+}
+
+.series-cast-confirm .modal-panel-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.series-cast-confirm p {
+  margin: 0 0 0.85rem;
+  line-height: 1.45;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.series-cast-confirm__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.series-cast-confirm__check input {
+  margin-top: 0.15rem;
+}
+
+.artist-admin-modal .modal-panel-actions .btn,
+.series-about-edit-modal .modal-panel-actions .btn,
+.series-cast-confirm .btn {
+  font-size: 0.85rem;
+}
+
 .series-subseries-overview__cast-tabs {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
   margin: 0 0 0.5rem;
   padding: 0 0.25rem;
+  align-items: center;
 }
 
 .series-subseries-overview__cast-tabs button {
@@ -13275,7 +13476,7 @@ button.lyrics-status-badge--icon-only {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  padding: 0.2rem 0;
+  padding: 0.2rem 0.1rem;
   border-bottom: 1px solid transparent;
 }
 
@@ -13446,17 +13647,22 @@ button.lyrics-status-badge--icon-only {
 
 .series-cast-card__actor-line {
   display: flex;
-  align-items: baseline;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: center;
   gap: 0.28rem;
   max-width: 100%;
-  flex-wrap: wrap;
+}
+
+.series-cast-card__flag {
+  flex-shrink: 0;
 }
 
 .series-cast-card__actor-names {
   display: inline;
   min-width: 0;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .series-cast-card__actor-chip {
@@ -13529,8 +13735,86 @@ button.lyrics-status-badge--icon-only {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+.series-subseries-page .release-page__panel-bottom .release-page__panel-footer {
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+}
+
+.series-subseries-page .release-page__overview-top {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  align-items: stretch;
+  --overview-photo-col: clamp(9.5rem, 17vw, 15.5rem);
+  --overview-portrait-width: 0.82;
+  --overview-portrait-max-h: clamp(12rem, 32vh, 18rem);
+  --overview-landscape-max-h: clamp(7.5rem, 20vh, 12rem);
+  --overview-photocard-scale: 1.2;
+}
+
+.series-subseries-page .release-page__overview-side {
+  align-self: stretch;
+  justify-content: flex-start;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.series-subseries-page .release-page__overview-side .release-page__photocards,
+.series-subseries-page .release-page__overview-top .release-page__overview-side .release-page__photocards {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
+  width: 100%;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: clamp(0.45rem, 1vh, 0.75rem);
+}
+
+.series-subseries-page .release-page__overview-side .release-photocard,
+.series-subseries-page .release-page__overview-side .release-photocard--portrait,
+.series-subseries-page .release-page__overview-side .release-photocard--landscape,
+.series-subseries-page .release-page__overview-top .release-photocard--portrait,
+.series-subseries-page .release-page__overview-top .release-photocard--landscape {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 0;
+  align-self: center;
+}
+
+.series-subseries-page .release-page__overview-top .release-photocard--portrait {
+  max-width: calc(
+    var(--overview-photo-col) * var(--overview-portrait-width) *
+      var(--overview-photocard-scale, 1)
+  );
+  --photocard-max-height: calc(
+    var(--overview-portrait-max-h) * var(--overview-photocard-scale, 1)
+  );
+}
+
+.series-subseries-page .release-page__overview-top .release-photocard--landscape {
+  max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
+  --photocard-max-height: calc(
+    var(--overview-landscape-max-h) * var(--overview-photocard-scale, 1)
+  );
+}
+
+.series-subseries-page.release-page--overview .release-page__main {
+  padding-bottom: 0;
+}
+
+.series-subseries-page.release-page--overview .release-page__overview-bottom {
+  padding-bottom: 0;
+}
+
 .series-subseries-overview {
-  padding: 0.75rem 1rem 2rem;
+  padding: 0.75rem 1rem 0;
 }
 
 .series-subseries-overview__grid {
@@ -13623,7 +13907,7 @@ button.lyrics-status-badge--icon-only {
 .series-episode-list__row {
   width: 100%;
   display: grid;
-  grid-template-columns: 2.5rem 1fr auto;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
   gap: 0.65rem;
   align-items: center;
   border: none;
@@ -13631,7 +13915,7 @@ button.lyrics-status-badge--icon-only {
   color: inherit;
   font: inherit;
   text-align: left;
-  padding: 0.55rem 0.5rem;
+  padding: 0.45rem 0.5rem;
   cursor: pointer;
   border-radius: 2px;
 }
@@ -13648,12 +13932,24 @@ button.lyrics-status-badge--icon-only {
 
 .series-episode-list__title {
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-episode-list__trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+  justify-self: end;
 }
 
 .series-episode-list__open {
   color: var(--text-muted);
-  opacity: 0;
-  font-size: 0.85rem;
+  opacity: 0.35;
+  font-size: 0.75rem;
 }
 
 .series-episode-list__row:hover .series-episode-list__open {

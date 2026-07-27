@@ -299,7 +299,7 @@ export default function SeriesAbout({
               )}
               {data.activity_periods.length > 0 && (
                 <div className="artist-about__meta-row">
-                  <dt>Activity</dt>
+                  <dt>Air Dates</dt>
                   <dd>
                     {data.activity_periods.map((p) => p.label).join(" • ")}
                   </dd>

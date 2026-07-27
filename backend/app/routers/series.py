@@ -322,6 +322,7 @@ def series_patch_about(
         publishers=body.get("publishers"),
         languages=body.get("languages"),
         genres=body.get("genres"),
+        subseries_id=body.get("subseries_id"),
     )
     return {"ok": True, "ser_id": row.ser_id}
 
@@ -362,6 +363,10 @@ def series_remove_cast(
     franchise_id: str,
     member_id: str,
     bucket: str | None = None,
+    name: str | None = None,
+    subseries_id: str | None = None,
+    from_franchise: bool = False,
+    retain_subseries_ids: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -371,8 +376,20 @@ def series_remove_cast(
     found = find_franchise_dir(franchise_id)
     if not found:
         raise HTTPException(404, "Series franchise not found")
+    retain = None
+    if retain_subseries_ids:
+        retain = [
+            s.strip() for s in retain_subseries_ids.split(",") if s and s.strip()
+        ]
     ok = remove_series_cast_member(
-        db, found[0].name, member_id=member_id, bucket=bucket
+        db,
+        found[0].name,
+        member_id=member_id,
+        bucket=bucket,
+        member_name=name,
+        subseries_id=subseries_id,
+        from_franchise=from_franchise,
+        retain_subseries_ids=retain,
     )
     if not ok:
         raise HTTPException(404, "Cast member not found")
@@ -407,6 +424,7 @@ def series_patch_cast(
         language=body.get("language"),
         performances=body.get("performances"),
         subseries_ids=body.get("subseries_ids"),
+        actor_subseries_ids=body.get("actor_subseries_ids"),
     )
     if not member:
         raise HTTPException(404, "Cast member not found")

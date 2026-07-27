@@ -1030,6 +1030,8 @@ export type SeriesEpisodeItem = {
   title: string;
   play_path: string;
   open_url: string | null;
+  duration?: string | null;
+  duration_sec?: number | null;
   kind?: "episode" | "movie";
   date_iso?: string | null;
   display_date?: string | null;
@@ -1209,6 +1211,11 @@ export type SeriesCastPerformance = {
   actors?: { name: string; photo_url?: string | null }[];
   actor_id?: number | string | null;
   photo_url?: string | null;
+  /**
+   * When set, this performance applies only to those subseries.
+   * Empty / omitted = franchise-wide default (used when a subseries has no override).
+   */
+  subseries_ids?: string[];
 };
 
 export type SeriesLanguageOption = {
@@ -1298,6 +1305,23 @@ export type SeriesOverview = {
     animated?: SeriesCastMember[];
     people?: SeriesCastMember[];
   };
+  /** Per-subseries about overrides (writers/genres/country/languages/publishers/air dates). */
+  subseries_meta?: Record<
+    string,
+    {
+      bio?: string | null;
+      writers?: string[] | null;
+      publishers?: string[] | null;
+      genres?: { id: number | string; name: string }[] | null;
+      languages?: string[] | null;
+      country?: { id: number; name: string | null; iso?: string | null } | null;
+      activity_periods?: {
+        label: string;
+        start?: string | null;
+        end?: string | null;
+      }[] | null;
+    }
+  >;
   media: {
     has_audio: boolean;
     has_series: boolean;

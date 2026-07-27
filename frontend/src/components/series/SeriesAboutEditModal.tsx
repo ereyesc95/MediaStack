@@ -8,6 +8,7 @@ import ModalPortal from "../ModalPortal";
 import SearchableDropdown, {
   type DropdownOption,
 } from "../SearchableDropdown";
+import { AddCastModal } from "./SeriesCast";
 
 type ActivityRow = { start: string; end: string };
 
@@ -16,8 +17,12 @@ type GenreOpt = { id: string; name: string; group?: string };
 type Props = {
   franchiseId: string;
   data: SeriesOverview;
+  /** When set, edits about fields for this subseries only. */
+  subseriesId?: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onCastChanged?: () => void;
 };
 
 const FALLBACK_LANGS = [
@@ -30,7 +35,7 @@ const FALLBACK_LANGS = [
 function periodsToRows(
   periods: SeriesOverview["activity_periods"]
 ): ActivityRow[] {
-  if (!periods.length) return [{ start: "", end: "" }];
+  if (!periods?.length) return [{ start: "", end: "" }];
   return periods.map((p) => ({
     start: p.start ?? "",
     end: p.end ?? "",
@@ -53,17 +58,32 @@ function slugLangCode(label: string): string {
 export default function SeriesAboutEditModal({
   franchiseId,
   data,
+  subseriesId,
+  isAdmin = false,
   onClose,
   onSaved,
+  onCastChanged,
 }: Props) {
-  const [bio, setBio] = useState(data.bio ?? "");
-  const [writers, setWriters] = useState(data.writers.join("; "));
-  const [publishers, setPublishers] = useState(data.publishers.join("; "));
+  const scoped = subseriesId
+    ? data.subseries_meta?.[subseriesId] ?? null
+    : null;
+  const [bio, setBio] = useState(
+    (scoped?.bio != null ? scoped.bio : data.bio) ?? ""
+  );
+  const [writers, setWriters] = useState(
+    (scoped?.writers ?? data.writers).join("; ")
+  );
+  const [publishers, setPublishers] = useState(
+    (scoped?.publishers ?? data.publishers).join("; ")
+  );
   const [countryId, setCountryId] = useState(
-    data.country?.id != null ? String(data.country.id) : ""
+    (scoped?.country ?? data.country)?.id != null
+      ? String((scoped?.country ?? data.country)!.id)
+      : ""
   );
   const [selectedLangs, setSelectedLangs] = useState<string[]>(() => {
-    if (data.languages?.length) return [...data.languages];
+    const langs = scoped?.languages ?? data.languages;
+    if (langs?.length) return [...langs];
     if (data.origin_language) return [data.origin_language];
     return [];
   });
@@ -73,13 +93,13 @@ export default function SeriesAboutEditModal({
   const [addingCustomLang, setAddingCustomLang] = useState(false);
   const [customLangDraft, setCustomLangDraft] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<GenreOpt[]>(() =>
-    (data.genres || []).map((g) => ({
+    (scoped?.genres ?? data.genres ?? []).map((g) => ({
       id: String(g.id),
       name: g.name,
     }))
   );
   const [activityRows, setActivityRows] = useState<ActivityRow[]>(() =>
-    periodsToRows(data.activity_periods)
+    periodsToRows(scoped?.activity_periods ?? data.activity_periods)
   );
   const [countryOptions, setCountryOptions] = useState<DropdownOption[]>([]);
   const [genreDropdownOptions, setGenreDropdownOptions] = useState<
@@ -87,6 +107,7 @@ export default function SeriesAboutEditModal({
   >([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addCastOpen, setAddCastOpen] = useState(false);
 
   const languageCatalog = useMemo(() => {
     const opts = data.language_options?.length
@@ -95,7 +116,6 @@ export default function SeriesAboutEditModal({
           label: stripOrigin(o.label),
         }))
       : [...FALLBACK_LANGS];
-    // Include custom labels
     for (const [code, label] of Object.entries(customLangLabels)) {
       if (!opts.some((o) => o.code === code)) {
         opts.push({ code, label });
@@ -125,8 +145,11 @@ export default function SeriesAboutEditModal({
   const selectedLangMeta = useMemo(
     () =>
       selectedLangs
-        .map((code) => languageCatalog.find((o) => o.code === code))
-        .filter(Boolean) as { code: string; label: string }[],
+        .map((code) => {
+          const opt = languageCatalog.find((o) => o.code === code);
+          return { code, label: opt?.label || code };
+        })
+        .filter(Boolean),
     [selectedLangs, languageCatalog]
   );
 
@@ -170,31 +193,12 @@ export default function SeriesAboutEditModal({
   }, []);
 
   const selectedCountry = useMemo(
-    () => countryOptions.find((o) => o.value === countryId),
+    () => countryOptions.find((o) => o.value === countryId) ?? null,
     [countryOptions, countryId]
   );
 
-  const updateActivityRow = (
-    index: number,
-    field: keyof ActivityRow,
-    value: string
-  ) => {
-    setActivityRows((rows) =>
-      rows.map((r, i) => (i === index ? { ...r, [field]: value } : r))
-    );
-  };
-
   const removeLang = (code: string) => {
     setSelectedLangs((prev) => prev.filter((c) => c !== code));
-  };
-
-  const addLang = (code: string) => {
-    if (!code || selectedLangs.includes(code)) return;
-    if (code === "__custom__") {
-      setAddingCustomLang(true);
-      return;
-    }
-    setSelectedLangs((prev) => [...prev, code]);
   };
 
   const commitCustomLang = () => {
@@ -232,6 +236,16 @@ export default function SeriesAboutEditModal({
     });
   };
 
+  const updateActivityRow = (
+    index: number,
+    field: keyof ActivityRow,
+    value: string
+  ) => {
+    setActivityRows((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+    );
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -250,6 +264,7 @@ export default function SeriesAboutEditModal({
           id: Number.isFinite(Number(g.id)) ? Number(g.id) : g.id,
           name: g.name,
         })),
+        subseries_id: subseriesId || undefined,
       });
       onSaved();
       onClose();
@@ -263,11 +278,11 @@ export default function SeriesAboutEditModal({
   return (
     <ModalPortal onClose={onClose}>
       <div
-        className="modal-panel artist-admin-modal artist-admin-modal--wide"
+        className="modal-panel artist-admin-modal artist-admin-modal--wide series-about-edit-modal"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>Edit about</h3>
+          <h3>{subseriesId ? "Edit series" : "Edit about"}</h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
@@ -348,18 +363,25 @@ export default function SeriesAboutEditModal({
                   className="series-about-edit__add-select"
                   value=""
                   onChange={(e) => {
-                    addLang(e.target.value);
-                    e.target.value = "";
+                    const v = e.target.value;
+                    if (v === "__custom__") {
+                      setAddingCustomLang(true);
+                      return;
+                    }
+                    if (v) {
+                      setSelectedLangs((prev) =>
+                        prev.includes(v) ? prev : [...prev, v]
+                      );
+                    }
                   }}
-                  aria-label="Add language"
                 >
-                  <option value="">+ Add</option>
+                  <option value="">Add language…</option>
                   {addableLangs.map((o) => (
                     <option key={o.code} value={o.code}>
                       {o.label}
                     </option>
                   ))}
-                  <option value="__custom__">Custom language…</option>
+                  <option value="__custom__">Custom…</option>
                 </select>
               )}
             </div>
@@ -404,18 +426,10 @@ export default function SeriesAboutEditModal({
               onChange={(e) => setPublishers(e.target.value)}
             />
           </label>
+
           <div className="artist-about-edit__periods">
             <div className="artist-about-edit__periods-head">
-              <span className="series-about-edit__label">Activity periods</span>
-              <button
-                type="button"
-                className="btn btn--small"
-                onClick={() =>
-                  setActivityRows((rows) => [...rows, { start: "", end: "" }])
-                }
-              >
-                + Add period
-              </button>
+              <span className="series-about-edit__label">Air Dates</span>
             </div>
             {activityRows.map((row, index) => (
               <div key={index} className="artist-about-edit__period-row">
@@ -429,7 +443,7 @@ export default function SeriesAboutEditModal({
                   />
                 </label>
                 <label>
-                  End (empty = present)
+                  End
                   <input
                     value={row.end}
                     onChange={(e) =>
@@ -437,22 +451,34 @@ export default function SeriesAboutEditModal({
                     }
                   />
                 </label>
-                <button
-                  type="button"
-                  className="artist-about-edit__period-remove"
-                  onClick={() =>
-                    setActivityRows((rows) =>
-                      rows.length > 1
-                        ? rows.filter((_, i) => i !== index)
-                        : rows
-                    )
-                  }
-                >
-                  ×
-                </button>
+                {activityRows.length > 1 ? (
+                  <button
+                    type="button"
+                    className="artist-about-edit__period-remove"
+                    onClick={() =>
+                      setActivityRows((rows) =>
+                        rows.filter((_, i) => i !== index)
+                      )
+                    }
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
+
+          {isAdmin && subseriesId ? (
+            <div className="series-about-edit__cast-row">
+              <button
+                type="button"
+                className="btn btn--small series-about-edit__cast-btn"
+                onClick={() => setAddCastOpen(true)}
+              >
+                + Add cast member
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="modal-panel-actions modal-panel-actions--end">
           <button
@@ -465,6 +491,26 @@ export default function SeriesAboutEditModal({
           </button>
         </div>
       </div>
+      {addCastOpen ? (
+        <AddCastModal
+          franchiseId={franchiseId}
+          bucket="characters"
+          languageOptions={languageCatalog.map((o) => ({
+            code: o.code,
+            label: o.label,
+          }))}
+          defaultLanguage={
+            selectedLangs[0] || data.origin_language || null
+          }
+          subseries={data.subseries || []}
+          defaultSubseriesIds={subseriesId ? [subseriesId] : undefined}
+          onClose={() => setAddCastOpen(false)}
+          onSaved={() => {
+            setAddCastOpen(false);
+            onCastChanged?.();
+          }}
+        />
+      ) : null}
     </ModalPortal>
   );
 }

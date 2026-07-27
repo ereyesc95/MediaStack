@@ -1,7 +1,9 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -14,6 +16,7 @@ import {
   fetchSeriesFranchiseShows,
   fetchSeriesOverview,
 } from "../../api";
+import { formatTrackDate } from "../../formatDate";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -122,10 +125,12 @@ function tabToSection(tab: SubseriesTab): SeriesSection {
 
 function NeighborLink({
   label,
+  year,
   direction,
   onClick,
 }: {
   label: string;
+  year?: string | null;
   direction: "prev" | "next";
   onClick: () => void;
 }) {
@@ -140,7 +145,12 @@ function NeighborLink({
           ‹
         </span>
       ) : null}
-      <span className="release-page__neighbor-text">{label}</span>
+      <span className="release-page__neighbor-text">
+        <span className="release-page__neighbor-title">{label}</span>
+        {year ? (
+          <span className="release-page__neighbor-date">({year})</span>
+        ) : null}
+      </span>
       {direction === "next" ? (
         <span className="release-page__neighbor-arrow" aria-hidden>
           ›
@@ -148,6 +158,46 @@ function NeighborLink({
       ) : null}
     </button>
   );
+}
+
+function neighborYear(s: {
+  date_iso?: string | null;
+  display_date?: string | null;
+}): string | null {
+  const iso = s.date_iso || "";
+  if (iso.length >= 4 && /^\d{4}/.test(iso)) return iso.slice(0, 4);
+  const disp = s.display_date || "";
+  const m = disp.match(/\b(19|20)\d{2}\b/);
+  return m ? m[0] : null;
+}
+
+/** Start–end air dates for the left panel (end only when known). */
+function formatAirDateRange(
+  startIso: string | null | undefined,
+  startDisplay: string | null | undefined,
+  periods: { start?: string | null; end?: string | null; label: string }[]
+): string | null {
+  const startKey = (startIso || "").slice(0, 10);
+  const startYear = (startIso || "").slice(0, 4);
+  const match =
+    periods.find(
+      (p) => p.start && startKey && p.start.slice(0, 10) === startKey
+    ) ||
+    periods.find(
+      (p) => p.start && startYear && p.start.slice(0, 4) === startYear
+    );
+
+  const startLabel =
+    (match?.start ? formatTrackDate(match.start) : null) ||
+    startDisplay ||
+    (startIso ? formatTrackDate(startIso) : null) ||
+    null;
+  if (!startLabel) return null;
+  const endIso = match?.end?.trim() || "";
+  if (!endIso) return startLabel;
+  const endLabel = formatTrackDate(endIso);
+  if (!endLabel || endLabel === startLabel) return startLabel;
+  return `${startLabel} – ${endLabel}`;
 }
 
 function toMediaCards(
@@ -180,16 +230,39 @@ function filterCardsForSubseries(
   subseriesTitle: string,
   subseriesPath: string
 ): SeriesMediaCard[] {
-  const titleCf = subseriesTitle.toLowerCase();
+  const titleCf = subseriesTitle.trim().toLowerCase();
   const pathCf = (subseriesPath || "").replace(/\\/g, "/").toLowerCase();
-  const matched = cards.filter((c) => {
+  const pathFolder = pathCf.split("/").filter(Boolean).pop() || "";
+
+  const titleBelongs = (cardTitle: string): boolean => {
+    const t = cardTitle.trim().toLowerCase();
+    if (!titleCf || !t) return false;
+    if (t === titleCf) return true;
+    if (
+      !(
+        t.startsWith(`${titleCf} `) ||
+        t.startsWith(`${titleCf}:`) ||
+        t.startsWith(`${titleCf} -`)
+      )
+    ) {
+      return false;
+    }
+    // Don't let "Dragon Ball" claim "Dragon Ball Z/GT/Super …"
+    const rest = t.slice(titleCf.length).replace(/^[\s:-]+/, "");
+    const sequel = rest.match(/^(z|gt|super)\b/);
+    if (sequel && !new RegExp(`\\b${sequel[1]}$`).test(titleCf)) return false;
+    return true;
+  };
+
+  return cards.filter((c) => {
     const p = (c.path || "").replace(/\\/g, "/").toLowerCase();
-    const t = (c.title || "").toLowerCase();
+    const t = c.title || "";
     if (pathCf && p.includes(pathCf)) return true;
-    if (titleCf && (p.includes(titleCf) || t.includes(titleCf))) return true;
+    if (pathFolder && (p.includes(`/${pathFolder}/`) || p.endsWith(`/${pathFolder}`)))
+      return true;
+    if (titleBelongs(t)) return true;
     return false;
   });
-  return matched.length ? matched : cards;
 }
 
 export default function SeriesSubseriesPage({
@@ -242,6 +315,20 @@ export default function SeriesSubseriesPage({
     current?: string;
     outgoing?: string;
   }>({});
+  const castGlassRef = useRef<HTMLElement | null>(null);
+  const [castMinHeight, setCastMinHeight] = useState(0);
+
+  useEffect(() => {
+    setCastMinHeight(0);
+  }, [subseriesId]);
+
+  useLayoutEffect(() => {
+    if (tab !== "overview") return;
+    const el = castGlassRef.current;
+    if (!el) return;
+    const h = Math.ceil(el.getBoundingClientRect().height);
+    if (h > 0) setCastMinHeight((prev) => Math.max(prev, h));
+  }, [tab, castTab, overview?.cast, subseriesId]);
 
   const setCardLayoutPersisted = useCallback(
     (next: ReleaseCardLayout) => {
@@ -416,29 +503,28 @@ export default function SeriesSubseriesPage({
   }, [coverUrl, userId]);
 
   const title = detail?.title || card?.title || subseriesId;
-  const dateLabel =
-    detail?.display_date ||
-    card?.display_date ||
-    detail?.date_iso ||
-    card?.date_iso ||
-    null;
+  const scopedMeta = overview?.subseries_meta?.[subseriesId] ?? null;
+  const dateLabel = formatAirDateRange(
+    detail?.date_iso || card?.date_iso,
+    detail?.display_date || card?.display_date || null,
+    scopedMeta?.activity_periods || overview?.activity_periods || []
+  );
 
   const siblingIndex = siblings.findIndex((s) => s.id === subseriesId);
-  const prevSub =
-    siblingIndex > 0 ? siblings[siblingIndex - 1] : null;
-  const nextSub =
-    siblingIndex >= 0 && siblingIndex < siblings.length - 1
-      ? siblings[siblingIndex + 1]
-      : null;
+  const n = siblings.length;
+  const i = siblingIndex >= 0 ? siblingIndex : 0;
+  const prevSub = n > 1 ? siblings[(i - 1 + n) % n] : null;
+  const nextSub = n > 1 ? siblings[(i + 1) % n] : null;
 
   const galleryPath = detail?.folder_path || card?.folder_path || "";
 
-  const writers = overview?.writers || [];
-  const genres = overview?.genres || [];
-  const publishers = overview?.publishers || [];
+  const writers = scopedMeta?.writers ?? overview?.writers ?? [];
+  const genres = scopedMeta?.genres ?? overview?.genres ?? [];
+  const publishers = scopedMeta?.publishers ?? overview?.publishers ?? [];
   const publisher = publishers[0] || "";
-  const country = overview?.country;
-  const languages = overview?.languages || [];
+  const country = scopedMeta?.country ?? overview?.country;
+  const languages = scopedMeta?.languages ?? overview?.languages ?? [];
+  const overviewBio = scopedMeta?.bio ?? overview?.bio;
   const languageLabels = useMemo(() => {
     const opts = overview?.language_options || [];
     const byCode = new Map(
@@ -608,7 +694,7 @@ export default function SeriesSubseriesPage({
     onNavigate({
       subseriesId: sid,
       seasonId: undefined,
-      section: "overview",
+      section: tabToSection(tab),
     });
   };
 
@@ -644,6 +730,7 @@ export default function SeriesSubseriesPage({
     "release-page",
     "series-subseries-page",
     `release-page--${layout}`,
+    tab === "overview" ? "release-page--overview" : "",
     stacked ? "release-page--stacked" : "",
     mobilePortrait ? "release-page--mobile-portrait" : "",
     bgLayers.current ? "release-page--has-bg" : "",
@@ -651,16 +738,17 @@ export default function SeriesSubseriesPage({
     .filter(Boolean)
     .join(" ");
 
-  const backLabel = (
-    franchiseName ||
-    overview?.name ||
-    "FRANCHISE"
-  ).toUpperCase();
+  const backLabel = (overview?.name || franchiseName || "FRANCHISE").toUpperCase();
 
   const episodeMovies: SeriesEpisodeItem[] = useMemo(() => {
     if (localMovies.length) return localMovies;
+    const scopedRelated = filterCardsForSubseries(
+      relatedMovies,
+      title,
+      detail?.folder_path || card?.folder_path || ""
+    );
     // Related franchise movies as list rows when no local Movies folder
-    return relatedMovies.map((m, i) => ({
+    return scopedRelated.map((m, i) => ({
       id: m.id || `rel-mov-${i}`,
       number: null,
       title: m.title,
@@ -672,7 +760,7 @@ export default function SeriesSubseriesPage({
       cover_url: m.cover_url,
       folder_path: m.path,
     }));
-  }, [localMovies, relatedMovies]);
+  }, [localMovies, relatedMovies, title, detail?.folder_path, card?.folder_path]);
 
   return (
     <div className={pageClass}>
@@ -745,8 +833,12 @@ export default function SeriesSubseriesPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
+              editDataLabel="Edit series"
+              editDataFlat
               onEditAbout={
-                isAdmin && overview ? () => setAboutEditOpen(true) : undefined
+                isAdmin && overview
+                  ? () => setAboutEditOpen(true)
+                  : undefined
               }
             />
           </div>
@@ -944,6 +1036,7 @@ export default function SeriesSubseriesPage({
                     {prevSub ? (
                       <NeighborLink
                         label={prevSub.title}
+                        year={neighborYear(prevSub)}
                         direction="prev"
                         onClick={() => openSibling(prevSub.id)}
                       />
@@ -953,6 +1046,7 @@ export default function SeriesSubseriesPage({
                     {nextSub ? (
                       <NeighborLink
                         label={nextSub.title}
+                        year={neighborYear(nextSub)}
                         direction="next"
                         onClick={() => openSibling(nextSub.id)}
                       />
@@ -979,8 +1073,8 @@ export default function SeriesSubseriesPage({
               <div className="release-page__overview-top">
                 <div className="release-page__desc-block">
                   <div className="release-page__desc-scroll">
-                    {overview?.bio ? (
-                      overview.bio.split(/\n+/).map((p, i) => (
+                    {overviewBio ? (
+                      overviewBio.split(/\n+/).map((p, i) => (
                         <p key={i} className="release-page__desc-para">
                           {p}
                         </p>
@@ -1017,16 +1111,27 @@ export default function SeriesSubseriesPage({
                       Staff
                     </button>
                   </div>
-                  <section className="release-page__section-glass release-page__lineup">
+                  <section
+                    ref={castGlassRef}
+                    className="release-page__section-glass release-page__lineup"
+                    style={
+                      castMinHeight > 0
+                        ? { minHeight: castMinHeight }
+                        : undefined
+                    }
+                  >
                     <SeriesCast
                       franchiseId={franchiseId}
                       franchiseName={overview.name}
                       cast={overview.cast}
-                      languages={overview.languages}
-                      languageOptions={overview.cast_languages || overview.language_options}
+                      languages={languages}
+                      languageOptions={
+                        overview.cast_languages || overview.language_options
+                      }
                       originLanguage={overview.origin_language}
                       subseries={overview.subseries || []}
                       castSubFilter={subseriesId}
+                      layout="row"
                       tab={castTab}
                       isAdmin={isAdmin}
                       onDataChanged={() => void loadCard()}
@@ -1169,11 +1274,14 @@ export default function SeriesSubseriesPage({
         <SeriesAboutEditModal
           franchiseId={franchiseId}
           data={overview}
+          subseriesId={subseriesId}
           onClose={() => setAboutEditOpen(false)}
           onSaved={() => {
             setAboutEditOpen(false);
             void loadCard();
           }}
+          onCastChanged={() => void loadCard()}
+          isAdmin={isAdmin}
         />
       ) : null}
     </div>
