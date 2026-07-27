@@ -70,14 +70,34 @@ def _known_categories(kind: str) -> set[str]:
 
 
 def _folder_cover(folder: Path, media_root: Path) -> str | None:
+    """Prefer exact ``Cover - Front`` / ``Cover - Album`` in [Artwork], then globs."""
+    from app.artwork_stems import resolve_cover_front_file
+    from app.band_library import _find_artwork_subdir
+
+    def _with_mtime(path: Path) -> str:
+        url = _media_url(path, media_root)
+        try:
+            return f"{url}&v={int(path.stat().st_mtime)}"
+        except OSError:
+            return url
+
+    art = _find_artwork_subdir(folder)
+    if art:
+        exact = resolve_cover_front_file(art)
+        if exact:
+            return _with_mtime(exact)
+
     search_dirs: list[Path] = []
-    try:
-        for child in folder.iterdir():
-            if child.is_dir() and child.name.casefold() in _SKIP_ITEM_NAMES:
-                search_dirs.append(child)
-                break
-    except OSError:
-        pass
+    if art:
+        search_dirs.append(art)
+    else:
+        try:
+            for child in folder.iterdir():
+                if child.is_dir() and child.name.casefold() in _SKIP_ITEM_NAMES:
+                    search_dirs.append(child)
+                    break
+        except OSError:
+            pass
     search_dirs.append(folder)
 
     preferred = (
@@ -96,13 +116,23 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
                 matches = sorted(directory.glob(pattern), key=lambda p: p.name.casefold())
             except OSError:
                 continue
+            # Prefer exact stem match over "Cover - Front (alt)" style names
+            exact_front = [
+                p
+                for p in matches
+                if p.is_file()
+                and p.suffix.lower() in IMAGE_EXTS
+                and p.stem.casefold().strip() in {"cover - front", "cover - album"}
+            ]
+            if exact_front:
+                return _with_mtime(exact_front[0])
             for p in matches:
                 if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
-                    return _media_url(p, media_root)
+                    return _with_mtime(p)
         try:
             for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
                 if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
-                    return _media_url(child, media_root)
+                    return _with_mtime(child)
         except OSError:
             continue
     return None

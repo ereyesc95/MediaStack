@@ -324,7 +324,13 @@ def resolve_season_art(
         for path in files:
             stem = path.stem.casefold().strip()
             if stem == want or stem == want_dash:
-                return _media_url(path, media_root)
+                url = _media_url(path, media_root)
+                if not url:
+                    return None
+                try:
+                    return f"{url}&v={int(path.stat().st_mtime)}"
+                except OSError:
+                    return url
         return None
 
     portrait = landscape = front = back = None

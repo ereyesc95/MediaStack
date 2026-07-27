@@ -65,6 +65,8 @@ type Props = {
   editDataLabel?: string;
   /** Flat single button (no submenu) for series subseries edit. */
   editDataFlat?: boolean;
+  /** Single top-level "Refresh local data" (no Refresh data submenu). */
+  refreshLocalFlat?: boolean;
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -120,6 +122,7 @@ export default function AppMenu({
   menuVariant = "artist",
   editDataLabel,
   editDataFlat = false,
+  refreshLocalFlat = false,
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -283,7 +286,7 @@ export default function AppMenu({
     ((!editDataFlat && onEditAbout) ||
       (menuVariant === "release" && !editDataFlat && onAddMember) ||
       onRefreshMetadata ||
-      onRescanLibrary ||
+      (!refreshLocalFlat && onRescanLibrary) ||
       onRefreshLineup ||
       onRefreshPhotos ||
       onRefreshLinks ||
@@ -337,6 +340,18 @@ export default function AppMenu({
             >
               <IconEditProfile className="menu-item-icon" />
               {editDataLabel || "Edit series"}
+            </button>
+          )}
+          {isAdmin && refreshLocalFlat && onRescanLibrary && (
+            <button
+              type="button"
+              onClick={() => {
+                onRescanLibrary();
+                setOpen(false);
+              }}
+            >
+              <IconFolder className="menu-item-icon" />
+              Refresh local data
             </button>
           )}
           {isAdmin && onAddLink && (

@@ -13417,6 +13417,9 @@ button.lyrics-status-badge--icon-only {
   padding-bottom: 0;
   overflow: visible;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .series-subseries-page .series-subseries-overview.release-page__overview {
@@ -13521,9 +13524,10 @@ button.lyrics-status-badge--icon-only {
 .series-subseries-overview__cast-tabs {
   display: flex;
   gap: 1rem;
-  margin: 0 0 0.35rem;
-  padding: 0 0.15rem 0.15rem;
+  margin: 0 0 0.2rem;
+  padding: 0 0.15rem;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .series-subseries-overview__cast-tabs button {
@@ -13548,22 +13552,47 @@ button.lyrics-status-badge--icon-only {
   overflow: visible;
   width: 100%;
   display: block;
-  padding-top: 0.45rem;
+  padding-top: 0.65rem;
   padding-bottom: 0.65rem;
   box-sizing: border-box;
 }
 
-.series-subseries-page .release-page__art-stage--cover-only {
-  aspect-ratio: 2 / 3;
-  max-height: min(62vh, 34rem);
+/* Portrait cover: size the image, not an empty stage. Centered in the panel. */
+.series-subseries-page .release-page__art {
   width: 100%;
+  justify-content: center;
+  align-items: center;
 }
 
-.series-subseries-page .release-page__cover-wrap,
+.series-subseries-page .release-page__art-stage--cover-only {
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: unset;
+  max-height: none;
+  justify-content: center;
+  --release-cover-size: clamp(13.75rem, 88%, 17.25rem);
+}
+
+.series-subseries-page .release-page__cover-wrap {
+  display: block;
+  width: var(--release-cover-size);
+  max-width: 100%;
+  aspect-ratio: 2 / 3;
+  max-height: min(36vh, 19.5rem);
+  height: auto;
+  margin-inline: auto;
+  overflow: hidden;
+  line-height: 0;
+}
+
 .series-subseries-page .release-page__cover {
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   object-fit: cover;
+  object-position: center center;
+  display: block;
 }
 
 .series-subseries-page:not(.release-page--stacked) .release-page__body {

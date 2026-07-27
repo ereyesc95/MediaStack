@@ -1130,6 +1130,7 @@ export default function SeriesSubseriesPage({
               menuVariant="release"
               editDataLabel="Edit series"
               editDataFlat
+              refreshLocalFlat
               onEditAbout={
                 isAdmin && overview
                   ? () => setAboutEditOpen(true)
@@ -1224,7 +1225,14 @@ export default function SeriesSubseriesPage({
               <div className="release-page__art-stage release-page__art-stage--cover-only">
                 <span className="release-page__cover-wrap">
                   <img
-                    src={panelCoverUrl || DEFAULT_DISC_URL}
+                    key={`${panelCoverUrl || DEFAULT_DISC_URL}|${rescanTick}`}
+                    src={
+                      panelCoverUrl
+                        ? rescanTick > 0 && !panelCoverUrl.includes("&v=")
+                          ? `${panelCoverUrl}${panelCoverUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
+                          : panelCoverUrl
+                        : DEFAULT_DISC_URL
+                    }
                     alt=""
                     className="release-page__cover"
                   />
@@ -1477,6 +1485,22 @@ export default function SeriesSubseriesPage({
 
               {overview?.cast ? (
                 <div className="release-page__overview-bottom series-subseries-overview__cast">
+                  <div className="series-subseries-overview__cast-tabs">
+                    <button
+                      type="button"
+                      className={castTab === "characters" ? "active" : ""}
+                      onClick={() => setCastTab("characters")}
+                    >
+                      Characters
+                    </button>
+                    <button
+                      type="button"
+                      className={castTab === "staff" ? "active" : ""}
+                      onClick={() => setCastTab("staff")}
+                    >
+                      Staff
+                    </button>
+                  </div>
                   <section
                     ref={castGlassRef}
                     className="release-page__section-glass release-page__lineup"
@@ -1486,22 +1510,6 @@ export default function SeriesSubseriesPage({
                         : undefined
                     }
                   >
-                    <div className="series-subseries-overview__cast-tabs">
-                      <button
-                        type="button"
-                        className={castTab === "characters" ? "active" : ""}
-                        onClick={() => setCastTab("characters")}
-                      >
-                        Characters
-                      </button>
-                      <button
-                        type="button"
-                        className={castTab === "staff" ? "active" : ""}
-                        onClick={() => setCastTab("staff")}
-                      >
-                        Staff
-                      </button>
-                    </div>
                     <SeriesCast
                       franchiseId={franchiseId}
                       franchiseName={overview.name}

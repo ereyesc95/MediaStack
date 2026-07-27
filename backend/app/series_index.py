@@ -608,6 +608,10 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         back_file = _media_file_in_artwork(art, COVER_BACK_STEM)
         if back_file:
             cover_back = _media_url(back_file, root)
+            try:
+                cover_back = f"{cover_back}&v={int(back_file.stat().st_mtime)}"
+            except OSError:
+                pass
     base = {
         "id": folder.name,
         "title": title or folder.name,
