@@ -357,6 +357,13 @@ export default function SeriesAbout({
                             : undefined
                         }
                       />
+                      {s.logo_url ? (
+                        <img
+                          className="series-about__subseries-logo"
+                          src={s.logo_url}
+                          alt=""
+                        />
+                      ) : null}
                     </span>
                     <span className="artist-about__track-title">{s.title}</span>
                     {(s.display_date || s.date_iso) && (

@@ -573,22 +573,51 @@ def series_franchise_audio(
     franchise_id: str,
     db: Session = Depends(get_db),
 ):
-    """Audio releases when a Music artist matches the franchise name."""
+    """Audio from Series/…/[Audio]/{Category}/ .lnk shortcuts, plus Music artist match."""
     from app.media_index import get_audio_index
     from app.models import Band
+    from app.series_audio import scan_series_audio
     from app.series_overview import build_series_overview
 
     overview = build_series_overview(db, franchise_id)
     if not overview:
         raise HTTPException(404, "Series franchise not found")
+
+    series_payload = scan_series_audio(db, franchise_id)
+    series_releases = list(series_payload.get("releases") or [])
+
     band_id = overview.get("music_band_id")
-    if not band_id:
-        return {"releases": [], "categories": [], "band_id": None}
-    band = db.get(Band, band_id)
-    if not band:
-        return {"releases": [], "categories": [], "band_id": None}
-    index = get_audio_index(db, band)
-    return {**index, "band_id": band_id}
+    band_releases: list[dict] = []
+    categories = list(series_payload.get("categories") or [])
+    if band_id:
+        band = db.get(Band, band_id)
+        if band:
+            index = get_audio_index(db, band)
+            band_releases = list(index.get("releases") or [])
+            for cat in index.get("categories") or []:
+                if cat not in categories:
+                    categories.append(cat)
+
+    seen: set[str] = set()
+    merged: list[dict] = []
+    for card in series_releases + band_releases:
+        key = (
+            (card.get("navigate_release_id") or card.get("id") or "")
+            .casefold()
+        )
+        folder_key = (card.get("folder_path") or "").casefold()
+        dedupe = key or folder_key
+        if not dedupe or dedupe in seen:
+            continue
+        seen.add(dedupe)
+        merged.append(card)
+
+    return {
+        "releases": merged,
+        "categories": categories,
+        "band_id": band_id,
+        "source": "series" if series_releases else ("music" if band_releases else None),
+    }
 
 
 @router.get("/franchises/{franchise_id}/media/series")

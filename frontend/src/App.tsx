@@ -34,7 +34,7 @@ import {
   getStoredOrientation,
   saveOrientation,
 } from "./themes";
-import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushPlaylistsGridRoute } from "./musicRoute";
+import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute } from "./musicRoute";
 import {
   parseSeriesCatalogPath,
   parseSeriesPath,
@@ -731,6 +731,24 @@ export default function App() {
                     : view.overviewTab,
               })
             }
+            onOpenMusicRelease={(bandId, releaseId) => {
+              pushArtistRoute({
+                bandId,
+                section: "audio",
+                overviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "audio",
+                artistOverviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+            }}
           />
         )}
 

@@ -291,5 +291,5 @@ Manual **`.path`** files remain valid; scanner resolves target and registers an 
 | 2026-07 | **Movies grouping:** `Movies/{L}/{Work}/{date}. {Film}/` for sequels |
 | 2026-07 | **Series:** `Series/{L}/{Franchise}/[{subseries}/]`; single-show skips subseries tier |
 | 2026-07 | **Series seasons:** dated `{YYYY.MM.DD}. Season N/` under show/subseries (no `Seasons/` wrapper) |
-| 2026-07 | **No `[Extras]` / nested Audio\|Series\|Books\|Games** under Movies/Series — Related media via franchise index only |
+| 2026-07 | **No `[Extras]` / nested Movies\|Books\|Games portals** under Series — Related media via franchise index; Series **`[Audio]`** may hold `.lnk` shortcuts to Music releases |
 | 2026-07 | **Movies:** always nest each film in `{date}. {Title}/` under `{Work}/` |

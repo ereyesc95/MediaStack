@@ -49,11 +49,7 @@ export default function SeriesGalleryPanel({ folderPath }: Props) {
     return <p className="error artist-section-empty">{error}</p>;
   }
   if (!items.length) {
-    return (
-      <p className="muted artist-section-empty">
-        No images in <code>[Artwork]</code> for this folder.
-      </p>
-    );
+    return <p className="muted artist-section-empty">No images found.</p>;
   }
 
   return (

@@ -5,6 +5,7 @@ import json
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -421,8 +422,14 @@ def _enrich_cast_member(
 
 
 def _ensure_franchise_index(media_root: Path):
+    from app.franchise_index import FRANCHISE_INDEX_VERSION
+
     cached = load_franchise_index()
-    if cached and cached.franchises:
+    if (
+        cached
+        and cached.franchises
+        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
+    ):
         return cached
     index = build_franchise_index(media_root)
     save_franchise_index(index)
@@ -432,15 +439,116 @@ def _ensure_franchise_index(media_root: Path):
 def _enrich_related_cards(
     entries: list[dict], media_root: Path
 ) -> list[dict]:
+    """Attach cover/banner/logo and a primary open_url for movies/books/games."""
+    from app.band_library import _find_artwork_subdir
+    from app.media_index import _artwork_file
+    from app.media_item_overview import VIDEO_EXTS, _file_url
+    from app.artwork_stems import COVER_FRONT_STEM
+
+    BOOK_EXTS = {".pdf", ".epub", ".cbz", ".cbr", ".mobi", ".azw", ".azw3"}
+    GAME_EXTS = {
+        ".gba",
+        ".nds",
+        ".3ds",
+        ".cia",
+        ".nsp",
+        ".xci",
+        ".iso",
+        ".cso",
+        ".chd",
+        ".rvz",
+        ".wud",
+        ".wux",
+        ".nkit",
+        ".psone",
+        ".pbp",
+        ".vpk",
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".lnk",
+        ".zip",
+        ".7z",
+        ".rar",
+    }
+
+    def _first_file(folder: Path, exts: set[str]) -> Path | None:
+        try:
+            files = sorted(folder.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            return None
+        for f in files:
+            if f.is_file() and f.suffix.lower() in exts:
+                return f
+        for f in files:
+            if f.is_dir() and not f.name.startswith("[") and f.name.casefold() != "artwork":
+                nested = _first_file(f, exts)
+                if nested:
+                    return nested
+        return None
+
     out = []
     for e in entries:
         path = e.get("path") or ""
         folder = media_root / path.replace("\\", "/")
         cover = _folder_cover(folder, media_root) if folder.is_dir() else None
+        banner = None
+        logo = None
+        open_url = None
+        open_mode = None
+        if folder.is_dir():
+            art = _find_artwork_subdir(folder)
+            if art:
+                for stem in (
+                    "cover - banner",
+                    "wallpaper - landscape",
+                    COVER_FRONT_STEM,
+                ):
+                    f = _artwork_file(art, stem)
+                    if f:
+                        banner = _media_url(f, media_root)
+                        break
+                logo_f = None
+                try:
+                    for f in art.iterdir():
+                        if (
+                            f.is_file()
+                            and f.suffix.lower() in IMAGE_EXTS
+                            and "logo" in f.stem.casefold()
+                            and "collapsed" not in f.stem.casefold()
+                        ):
+                            logo_f = f
+                            break
+                except OSError:
+                    pass
+                if logo_f:
+                    logo = _media_url(logo_f, media_root)
+            kind = (e.get("kind") or "").casefold()
+            target = None
+            if kind == "movie":
+                target = _first_file(folder, VIDEO_EXTS)
+            elif kind == "book":
+                target = _first_file(folder, BOOK_EXTS)
+            elif kind == "game":
+                target = _first_file(folder, GAME_EXTS)
+            if target:
+                if kind == "game":
+                    rel = target.relative_to(media_root).as_posix()
+                    open_url = f"/api/media/open-local?path={quote(rel, safe='/')}"
+                    open_mode = "local"
+                else:
+                    open_url = _file_url(target, media_root) or (
+                        f"/api/media/file?path={quote(target.relative_to(media_root).as_posix(), safe='/')}"
+                    )
+                    open_mode = "tab"
         out.append(
             {
                 **e,
                 "cover_url": cover,
+                "banner_url": banner or cover,
+                "logo_url": logo,
+                "open_url": open_url,
+                "open_mode": open_mode,
                 "display_date": format_display_date(e.get("date_iso")),
             }
         )
@@ -743,8 +851,13 @@ def build_series_overview(
     gallery = build_series_gallery(folder_path, root)
     has_gallery = bool(gallery.get("items"))
 
+    from app.series_audio import scan_series_audio
+
+    series_audio = scan_series_audio(db, franchise_id)
+    has_series_audio = bool(series_audio.get("releases"))
+
     media_flags = {
-        "has_audio": music_band is not None,
+        "has_audio": music_band is not None or has_series_audio,
         "has_series": bool(detail.get("subseries") or detail.get("seasons")),
         "has_movies": bool(related.get("movies")),
         "has_library": bool(related.get("books")),
@@ -752,18 +865,28 @@ def build_series_overview(
         "has_gallery": has_gallery or bool(local_eras),
     }
 
-    subseries_cards = [
-        {
-            "id": s["id"],
-            "title": s["title"],
-            "date_iso": s.get("date_iso"),
-            "display_date": s.get("display_date"),
-            "cover_url": s.get("cover_url") or detail.get("cover_url"),
-            "folder_path": s.get("folder_path"),
-            "season_count": s.get("season_count") or 0,
-        }
-        for s in (detail.get("subseries") or [])
-    ]
+    subseries_cards = []
+    for s in detail.get("subseries") or []:
+        sub_path = (s.get("folder_path") or "").replace("\\", "/")
+        sub_dir = root / sub_path if sub_path else None
+        logo_url = None
+        icon_url = None
+        if sub_dir and sub_dir.is_dir():
+            logo_url, icon_url = _list_brand_assets(sub_dir, root)
+        subseries_cards.append(
+            {
+                "id": s["id"],
+                "title": s["title"],
+                "date_iso": s.get("date_iso"),
+                "display_date": s.get("display_date"),
+                "cover_url": s.get("cover_url") or detail.get("cover_url"),
+                "logo_url": logo_url,
+                "icon_url": icon_url,
+                "folder_path": s.get("folder_path"),
+                "season_count": s.get("season_count") or 0,
+                "has_gallery": s.get("has_gallery"),
+            }
+        )
 
     related_stored = images.get("related") if isinstance(images.get("related"), dict) else {}
 

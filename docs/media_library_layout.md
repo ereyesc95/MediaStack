@@ -171,6 +171,30 @@ Series/D/Dragon Ball/
 
 Related movies / manga / games live under `Movies/`, `Books/`, and `Games/` with the same franchise folder name (`Dragon Ball`); the app shows them in **Related media**.
 
+### Series audio (`[Audio]/`)
+
+Soundtrack and related releases for a franchise or subseries live under a bracketed **`[Audio]`** bucket (same category folders as Music):
+
+```
+Series/D/Dragon Ball/1986.02.26. Dragon Ball/
+├── [Artwork]/
+├── [Audio]/
+│   ├── Albums/
+│   │   └── 1995.11.21. Dragon Ball Z Music Collection [By Shunsuke Kikuchi].lnk
+│   ├── Compilations/
+│   ├── Singles/
+│   └── Soundtracks/
+│       └── 1986.02.26. Dragon Ball Original Soundtrack.lnk
+├── 1986.02.26. Season 1/
+└── …
+```
+
+- Category folders match Music: `Albums`, `Extended Plays`, `Compilations`, `Soundtracks`, `Live Albums`, `Singles`.
+- Entries are usually **`.lnk`** (or `.path`) shortcuts to the real release under `Music/{Letter}/{Artist}/Audio/…`.
+- Shortcut names use the dated release form; optional **`[By Artist]`** names the Music artist that owns the release.
+- If there is **no** `[By …]` tag, the app assumes **Various Artists**.
+- `[Audio]` may sit on the franchise root and/or on each subseries folder.
+
 ### Single show / miniseries
 
 No subseries tier — seasons sit directly under the franchise/show folder:

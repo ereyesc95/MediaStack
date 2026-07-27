@@ -1517,6 +1517,17 @@ export async function syncFolders(module = "all", mediaRoot?: string) {
   });
 }
 
+/** Rebuild franchise index so new Movies/Books/Games folders appear in Series. */
+export async function rescanSeriesLocalData(force = true) {
+  return request<{
+    status: string;
+    franchise_count: number;
+    scanned_at?: string | null;
+  }>(`${API}/sync/franchise-index?force=${force ? "true" : "false"}`, {
+    method: "POST",
+  });
+}
+
 export type AppSettings = {
   media_root: string;
   media_root_configured: boolean;

@@ -15,6 +15,7 @@ import {
   fetchSeriesFranchiseMovies,
   fetchSeriesFranchiseShows,
   fetchSeriesOverview,
+  rescanSeriesLocalData,
 } from "../../api";
 import { formatTrackDate } from "../../formatDate";
 import {
@@ -42,6 +43,7 @@ import {
 import AppMenu from "../AppMenu";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import MediaBeatFx from "../music/MediaBeatFx";
+import MediaBeatFrame from "../music/MediaBeatFrame";
 import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
@@ -58,7 +60,10 @@ import SeriesAboutEditModal from "./SeriesAboutEditModal";
 import SeriesCast from "./SeriesCast";
 import SeriesEpisodeList from "./SeriesEpisodeList";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
-import SeriesMediaGrid, { type SeriesMediaCard } from "./SeriesMediaGrid";
+import SeriesMediaGrid, {
+  type SeriesMediaCard,
+  useSeriesAudioCategories,
+} from "./SeriesMediaGrid";
 
 export type SubseriesTab =
   | "overview"
@@ -93,6 +98,7 @@ type Props = {
   onEditProfile?: () => void;
   onBack: () => void;
   onBrowseCatalog?: (target: SeriesCatalogBrowseTarget) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onNavigate: (patch: {
     subseriesId?: string;
     seasonId?: string;
@@ -207,11 +213,19 @@ function toMediaCards(
     name?: string;
     cover_url?: string | null;
     banner_url?: string | null;
+    logo_url?: string | null;
     path?: string;
     folder_path?: string;
     date_iso?: string | null;
     display_date?: string | null;
     platform?: string | null;
+    meta?: string | null;
+    open_url?: string | null;
+    open_mode?: "tab" | "local" | null;
+    open_label?: string | null;
+    navigate_band_id?: number | null;
+    navigate_release_id?: string | null;
+    category?: string | null;
   }[]
 ): SeriesMediaCard[] {
   return items.map((it, i) => ({
@@ -219,9 +233,19 @@ function toMediaCards(
     title: it.title || it.name || "Untitled",
     cover_url: it.cover_url,
     banner_url: it.banner_url,
+    logo_url: it.logo_url,
     path: it.path || it.folder_path,
     date_label: it.display_date || it.date_iso || null,
+    date_iso: it.date_iso ?? null,
+    display_date: it.display_date ?? null,
     platform: it.platform ?? null,
+    meta: it.meta ?? undefined,
+    open_url: it.open_url,
+    open_mode: it.open_mode,
+    open_label: it.open_label,
+    navigate_band_id: it.navigate_band_id,
+    navigate_release_id: it.navigate_release_id,
+    category: it.category,
   }));
 }
 
@@ -258,12 +282,55 @@ function filterCardsForSubseries(
     const p = (c.path || "").replace(/\\/g, "/").toLowerCase();
     const t = c.title || "";
     if (pathCf && p.includes(pathCf)) return true;
-    if (pathFolder && (p.includes(`/${pathFolder}/`) || p.endsWith(`/${pathFolder}`)))
+    if (
+      pathFolder &&
+      (p.includes(`/${pathFolder}/`) || p.endsWith(`/${pathFolder}`))
+    )
       return true;
+    // Match Movies/Books/Games paths that nest the same dated subseries folder name
+    if (pathFolder && p.includes(pathFolder)) return true;
     if (titleBelongs(t)) return true;
     return false;
   });
 }
+
+const GAME_PLATFORM_ERA: Record<string, number> = {
+  Arcade: 1971,
+  "Commodore 64": 1982,
+  Amiga: 1985,
+  "Nintendo Entertainment System": 1983,
+  "Sega Master System": 1985,
+  "Game Boy": 1989,
+  "Game Boy Color": 1998,
+  "Game Boy Advance": 2001,
+  "Nintendo DS": 2004,
+  "Nintendo 3DS": 2011,
+  "Sega Genesis": 1988,
+  "Sega CD": 1991,
+  "Sega 32X": 1994,
+  "Sega Saturn": 1994,
+  "Sega Dreamcast": 1998,
+  "Nintendo 64": 1996,
+  "Nintendo GameCube": 2001,
+  "Nintendo Wii": 2006,
+  "Nintendo Wii U": 2012,
+  "Nintendo Switch": 2017,
+  PlayStation: 1994,
+  "PlayStation 2": 2000,
+  "PlayStation 3": 2006,
+  "PlayStation 4": 2013,
+  "PlayStation 5": 2020,
+  "PlayStation Portable": 2004,
+  "PlayStation Vita": 2011,
+  Xbox: 2001,
+  "Xbox 360": 2005,
+  "Xbox One": 2013,
+  "Xbox Series": 2020,
+  Flash: 1996,
+  Browser: 1995,
+  PC: 1981,
+  Mac: 1984,
+};
 
 export default function SeriesSubseriesPage({
   franchiseId,
@@ -281,6 +348,7 @@ export default function SeriesSubseriesPage({
   onEditProfile,
   onBack,
   onBrowseCatalog,
+  onOpenMusicRelease,
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
@@ -301,6 +369,7 @@ export default function SeriesSubseriesPage({
   const [expandedSeasonId, setExpandedSeasonId] = useState<string | null>(null);
   const [moviesExpanded, setMoviesExpanded] = useState(false);
   const [focusCoverUrl, setFocusCoverUrl] = useState<string | null>(null);
+  const [focusBgUrl, setFocusBgUrl] = useState<string | null>(null);
   const [castTab, setCastTab] = useState<"characters" | "staff">("characters");
   const [cardLayout, setCardLayout] = useState<ReleaseCardLayout>(() =>
     userId ? getStoredReleaseCardLayout(userId) : "cover"
@@ -311,6 +380,8 @@ export default function SeriesSubseriesPage({
   const [libraryCards, setLibraryCards] = useState<SeriesMediaCard[]>([]);
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaReady, setMediaReady] = useState(false);
+  const [rescanTick, setRescanTick] = useState(0);
   const [bgLayers, setBgLayers] = useState<{
     current?: string;
     outgoing?: string;
@@ -357,6 +428,8 @@ export default function SeriesSubseriesPage({
           display_date: s.display_date,
           folder_path: s.folder_path!,
           cover_url: s.cover_url ?? null,
+          logo_url: (s as { logo_url?: string | null }).logo_url ?? null,
+          icon_url: (s as { icon_url?: string | null }).icon_url ?? null,
           season_count: s.season_count ?? 0,
           has_gallery: Boolean(
             (s as { has_gallery?: boolean }).has_gallery
@@ -381,7 +454,7 @@ export default function SeriesSubseriesPage({
     } finally {
       setLoading(false);
     }
-  }, [franchiseId, subseriesId]);
+  }, [franchiseId, subseriesId, rescanTick]);
 
   useEffect(() => {
     void loadCard();
@@ -466,41 +539,72 @@ export default function SeriesSubseriesPage({
     [seasons, expandedSeasonId]
   );
 
-  const baseCover =
+  const baseCoverFront =
     detail?.cover_url || card?.cover_url || overview?.cover_url || DEFAULT_DISC_URL;
+  const baseCoverBack = detail?.cover_back_url || baseCoverFront;
+  const baseCover = baseCoverFront;
 
-  const coverUrl =
-    focusCoverUrl ||
-    activeSeason?.cover_url ||
-    baseCover;
+  const onEpisodesTab = tab === "episodes";
+
+  const panelCoverUrl = onEpisodesTab
+    ? focusCoverUrl ||
+      activeSeason?.portrait_url ||
+      activeSeason?.cover_url ||
+      baseCoverFront
+    : baseCoverFront;
+
+  const bgCoverUrl = onEpisodesTab
+    ? focusBgUrl ||
+      activeSeason?.landscape_url ||
+      activeSeason?.portrait_url ||
+      activeSeason?.cover_url ||
+      baseCoverBack
+    : baseCoverBack;
 
   useEffect(() => {
     // Reset focused cover when subseries changes
     setFocusCoverUrl(null);
+    setFocusBgUrl(null);
     setMoviesExpanded(false);
+    setGamePlatform("all");
+    setMediaReady(false);
   }, [subseriesId]);
 
   useEffect(() => {
-    if (!coverUrl) {
+    if (rescanTick === 0) return;
+    setSeasonEpisodes({});
+    setMediaReady(false);
+  }, [rescanTick]);
+
+  useEffect(() => {
+    if (tab !== "episodes") {
+      setFocusCoverUrl(null);
+      setFocusBgUrl(null);
+      setMoviesExpanded(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!bgCoverUrl) {
       setBgLayers({});
       return;
     }
     setBgLayers((prev) => {
-      if (prev.current === coverUrl) return prev;
-      return { current: coverUrl, outgoing: prev.current };
+      if (prev.current === bgCoverUrl) return prev;
+      return { current: bgCoverUrl, outgoing: prev.current };
     });
     const t = window.setTimeout(() => {
       setBgLayers((s) => ({ current: s.current, outgoing: undefined }));
     }, 360);
     return () => window.clearTimeout(t);
-  }, [coverUrl]);
+  }, [bgCoverUrl]);
 
   useEffect(() => {
-    if (!coverUrl || isPlaybackThemeActive()) return;
-    void colorsFromImageUrl(coverUrl).then((c) => {
+    if (!panelCoverUrl || isPlaybackThemeActive()) return;
+    void colorsFromImageUrl(panelCoverUrl).then((c) => {
       if (c && !isPlaybackThemeActive()) applyMediaTheme(c, userId);
     });
-  }, [coverUrl, userId]);
+  }, [panelCoverUrl, userId]);
 
   const title = detail?.title || card?.title || subseriesId;
   const scopedMeta = overview?.subseries_meta?.[subseriesId] ?? null;
@@ -540,10 +644,20 @@ export default function SeriesSubseriesPage({
   }, [languages, overview?.language_options]);
 
   const photocards: ReleasePhotocardSet | null = useMemo(() => {
+    const pc = detail?.photocards;
+    if (pc && (pc.portrait_front || pc.landscape_front)) {
+      return {
+        portrait_front: pc.portrait_front || null,
+        portrait_back: pc.portrait_back || pc.portrait_front || null,
+        landscape_front: pc.landscape_front || null,
+        landscape_back: pc.landscape_back || pc.landscape_front || null,
+        cover_only: Boolean(pc.cover_only),
+      };
+    }
     const eras = overview?.eras || [];
     const portrait = eras.find((e) => e.portrait_url)?.portrait_url || null;
     const landscape = eras.find((e) => e.landscape_url)?.landscape_url || null;
-    const front = portrait || landscape || coverUrl || null;
+    const front = portrait || landscape || panelCoverUrl || null;
     if (!front || front === DEFAULT_DISC_URL) return null;
     const back =
       activeSeason?.cover_back_url ||
@@ -557,130 +671,299 @@ export default function SeriesSubseriesPage({
       landscape_back: back,
       cover_only: !portrait && !landscape,
     };
-  }, [overview?.eras, coverUrl, activeSeason?.cover_back_url]);
+  }, [
+    detail?.photocards,
+    overview?.eras,
+    panelCoverUrl,
+    activeSeason?.cover_back_url,
+  ]);
 
   const relatedMovies = useMemo(
     () => toMediaCards(overview?.related?.movies || []),
     [overview]
   );
 
-  // Lazy-load media tabs scoped later
+  // Prefetch media tabs so empty ones can be hidden
   useEffect(() => {
-    if (tab !== "movies" && tab !== "audio" && tab !== "library" && tab !== "games") {
-      return;
-    }
+    if (!franchiseId || !title || !galleryPath) return;
     let cancelled = false;
     setMediaLoading(true);
     const run = async () => {
       try {
-        if (tab === "movies") {
-          const data = await fetchSeriesFranchiseMovies(franchiseId);
-          if (!cancelled) {
-            const items = (data.items || []) as {
-              id?: string;
-              title?: string;
-              cover_url?: string | null;
-              banner_url?: string | null;
-              path?: string;
-              date_iso?: string | null;
-              display_date?: string | null;
-            }[];
-            setMovieCards(
-              filterCardsForSubseries(
-                toMediaCards(items.length ? items : relatedMovies),
-                title,
-                galleryPath
-              )
-            );
-          }
-        } else if (tab === "audio") {
-          const data = await fetchSeriesFranchiseAudio(franchiseId);
-          if (!cancelled) {
-            const releases = (data.releases || []) as {
-              id?: string;
-              title?: string;
-              name?: string;
-              cover_url?: string | null;
-              date_iso?: string | null;
-              display_date?: string | null;
-              release_date?: string | null;
-            }[];
-            setAudioCards(
-              filterCardsForSubseries(
-                toMediaCards(
-                  releases.map((r) => ({
-                    id: r.id,
-                    title: r.title || r.name,
-                    cover_url: r.cover_url,
-                    date_iso: r.date_iso,
-                    display_date: r.display_date || r.release_date,
+        const [moviesData, audioData, libraryData, gamesData] =
+          await Promise.all([
+            fetchSeriesFranchiseMovies(franchiseId).catch(() => ({ items: [] })),
+            fetchSeriesFranchiseAudio(franchiseId).catch(() => ({
+              releases: [],
+            })),
+            fetchSeriesFranchiseLibrary(franchiseId).catch(() => ({
+              items: [],
+            })),
+            fetchSeriesFranchiseGames(franchiseId).catch(() => ({ items: [] })),
+          ]);
+        if (cancelled) return;
+
+        const movieItems = (moviesData.items || []) as {
+          id?: string;
+          title?: string;
+          cover_url?: string | null;
+          banner_url?: string | null;
+          logo_url?: string | null;
+          path?: string;
+          date_iso?: string | null;
+          display_date?: string | null;
+          open_url?: string | null;
+          open_mode?: "tab" | "local" | null;
+          open_label?: string | null;
+        }[];
+        setMovieCards(
+          filterCardsForSubseries(
+            movieItems.length
+              ? toMediaCards(
+                  movieItems.map((m) => ({
+                    ...m,
+                    open_label: m.open_label || "Play video",
+                    open_mode: m.open_mode || (m.open_url ? "tab" : null),
                   }))
-                ),
-                title,
-                galleryPath
-              )
-            );
-          }
-        } else if (tab === "library") {
-          const data = await fetchSeriesFranchiseLibrary(franchiseId);
-          if (!cancelled) {
-            setLibraryCards(
-              filterCardsForSubseries(
-                toMediaCards(data.items || []),
-                title,
-                galleryPath
-              )
-            );
-          }
-        } else if (tab === "games") {
-          const data = await fetchSeriesFranchiseGames(franchiseId);
-          if (!cancelled) {
-            setGameCards(
-              filterCardsForSubseries(
-                toMediaCards(data.items || []),
-                title,
-                galleryPath
-              )
-            );
-          }
-        }
+                )
+              : relatedMovies.map((m) => ({
+                  ...m,
+                  open_label: m.open_label || "Play video",
+                  open_mode: m.open_mode || (m.open_url ? "tab" : null),
+                })),
+            title,
+            galleryPath
+          )
+        );
+
+        const releases = (audioData.releases || []) as {
+          id?: string;
+          title?: string;
+          name?: string;
+          cover_url?: string | null;
+          banner_url?: string | null;
+          logo_url?: string | null;
+          date_iso?: string | null;
+          display_date?: string | null;
+          release_date?: string | null;
+          folder_path?: string | null;
+          subseries_path?: string | null;
+          subseries_title?: string | null;
+          source_artist_name?: string | null;
+          navigate_band_id?: number | null;
+          navigate_release_id?: string | null;
+          category?: string | null;
+        }[];
+        setAudioCards(
+          filterCardsForSubseries(
+            toMediaCards(
+              releases.map((r) => ({
+                id: r.id,
+                title: r.title || r.name,
+                cover_url: r.cover_url,
+                banner_url: r.banner_url,
+                logo_url: r.logo_url,
+                date_iso: r.date_iso,
+                display_date: r.display_date || r.release_date,
+                folder_path: r.folder_path || r.subseries_path || undefined,
+                path: r.folder_path || r.subseries_path || undefined,
+                meta:
+                  [r.subseries_title, r.source_artist_name]
+                    .filter(Boolean)
+                    .join(" · ") || undefined,
+                navigate_band_id: r.navigate_band_id,
+                navigate_release_id: r.navigate_release_id,
+                category: r.category,
+              }))
+            ),
+            title,
+            galleryPath
+          )
+        );
+
+        setLibraryCards(
+          filterCardsForSubseries(
+            toMediaCards(
+              (libraryData.items || []).map((it) => {
+                const row = it as {
+                  id?: string;
+                  title?: string;
+                  name?: string;
+                  cover_url?: string | null;
+                  banner_url?: string | null;
+                  logo_url?: string | null;
+                  path?: string;
+                  folder_path?: string;
+                  date_iso?: string | null;
+                  display_date?: string | null;
+                  open_url?: string | null;
+                  open_mode?: "tab" | "local" | null;
+                  open_label?: string | null;
+                };
+                return {
+                  ...row,
+                  open_label: row.open_label || "Read",
+                  open_mode: row.open_mode || (row.open_url ? "tab" : null),
+                };
+              })
+            ),
+            title,
+            galleryPath
+          )
+        );
+
+        setGameCards(
+          filterCardsForSubseries(
+            toMediaCards(
+              (gamesData.items || []).map((it) => {
+                const row = it as {
+                  id?: string;
+                  title?: string;
+                  name?: string;
+                  cover_url?: string | null;
+                  banner_url?: string | null;
+                  logo_url?: string | null;
+                  path?: string;
+                  folder_path?: string;
+                  date_iso?: string | null;
+                  display_date?: string | null;
+                  platform?: string | null;
+                  open_url?: string | null;
+                  open_mode?: "tab" | "local" | null;
+                  open_label?: string | null;
+                };
+                return {
+                  ...row,
+                  open_label: row.open_label || "Play game",
+                  open_mode: row.open_mode || "local",
+                };
+              })
+            ),
+            title,
+            galleryPath
+          )
+        );
       } catch {
         /* leave previous */
       } finally {
-        if (!cancelled) setMediaLoading(false);
+        if (!cancelled) {
+          setMediaLoading(false);
+          setMediaReady(true);
+        }
       }
     };
     void run();
     return () => {
       cancelled = true;
     };
-  }, [tab, franchiseId, title, galleryPath, relatedMovies]);
+  }, [franchiseId, title, galleryPath, relatedMovies, rescanTick]);
 
   const gamePlatforms = useMemo(() => {
     const set = new Set<string>();
     for (const g of gameCards) {
       if (g.platform) set.add(g.platform);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).sort((a, b) => {
+      const ea = GAME_PLATFORM_ERA[a] ?? 9999;
+      const eb = GAME_PLATFORM_ERA[b] ?? 9999;
+      if (ea !== eb) return ea - eb;
+      return a.localeCompare(b);
+    });
   }, [gameCards]);
 
+  useEffect(() => {
+    if (gamePlatform !== "all" && !gamePlatforms.includes(gamePlatform)) {
+      setGamePlatform("all");
+    }
+  }, [gamePlatforms, gamePlatform]);
+
   const filteredGames = useMemo(() => {
-    if (gamePlatform === "all") return gameCards;
+    if (gamePlatform === "all" || !gamePlatforms.includes(gamePlatform)) {
+      return gameCards;
+    }
     return gameCards.filter((g) => g.platform === gamePlatform);
-  }, [gameCards, gamePlatform]);
+  }, [gameCards, gamePlatform, gamePlatforms]);
+
+  const {
+    present: audioCategories,
+    categoryKey: audioCategory,
+    setCategoryKey: setAudioCategory,
+    filtered: filteredAudio,
+  } = useSeriesAudioCategories(audioCards);
+
+  const episodeMovies: SeriesEpisodeItem[] = useMemo(() => {
+    if (localMovies.length) return localMovies;
+    const scopedRelated = filterCardsForSubseries(
+      relatedMovies,
+      title,
+      detail?.folder_path || card?.folder_path || ""
+    );
+    return scopedRelated.map((m, i) => ({
+      id: m.id || `rel-mov-${i}`,
+      number: null,
+      title: m.title,
+      play_path: m.path || "",
+      open_url: m.path
+        ? `/api/media/file?path=${encodeURIComponent(m.path)}`
+        : null,
+      kind: "movie" as const,
+      cover_url: m.cover_url,
+      folder_path: m.path,
+      display_date: m.display_date || m.date_label || null,
+      date_iso: m.date_iso || null,
+    }));
+  }, [localMovies, relatedMovies, title, detail?.folder_path, card?.folder_path]);
 
   const showMediaLayoutPicker =
     tab === "movies" || tab === "audio" || tab === "library" || tab === "games";
 
-  const tabs: { id: SubseriesTab; label: string }[] = [
-    { id: "overview", label: "OVERVIEW" },
-    { id: "episodes", label: "EPISODES" },
-    { id: "movies", label: "MOVIES" },
-    { id: "audio", label: "AUDIO" },
-    { id: "library", label: "LIBRARY" },
-    { id: "games", label: "GAMES" },
-    { id: "gallery", label: "GALLERY" },
-  ];
+  const hasEpisodes = seasons.length > 0 || episodeMovies.length > 0;
+  const hasMovies = movieCards.length > 0;
+  const hasAudio = audioCards.length > 0;
+  const hasLibrary = libraryCards.length > 0;
+  const hasGames = gameCards.length > 0;
+  const hasGallery = Boolean(detail?.has_gallery || card?.has_gallery);
+
+  const tabs: { id: SubseriesTab; label: string }[] = useMemo(() => {
+    const all: { id: SubseriesTab; label: string }[] = [
+      { id: "overview", label: "OVERVIEW" },
+      { id: "episodes", label: "EPISODES" },
+      { id: "movies", label: "MOVIES" },
+      { id: "audio", label: "AUDIO" },
+      { id: "library", label: "LIBRARY" },
+      { id: "games", label: "GAMES" },
+      { id: "gallery", label: "GALLERY" },
+    ];
+    return all.filter((t) => {
+      if (t.id === "overview") return true;
+      if (t.id === "episodes") return hasEpisodes;
+      if (t.id === "gallery") return hasGallery;
+      if (!mediaReady) return true;
+      if (t.id === "movies") return hasMovies;
+      if (t.id === "audio") return hasAudio;
+      if (t.id === "library") return hasLibrary;
+      if (t.id === "games") return hasGames;
+      return true;
+    });
+  }, [
+    hasEpisodes,
+    hasGallery,
+    mediaReady,
+    hasMovies,
+    hasAudio,
+    hasLibrary,
+    hasGames,
+  ]);
+
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) {
+      onNavigate({
+        subseriesId,
+        seasonId: expandedSeasonId || seasonId,
+        section: "overview",
+      });
+    }
+  }, [tabs, tab, onNavigate, subseriesId, expandedSeasonId, seasonId]);
 
   const setTab = (next: SubseriesTab) => {
     onNavigate({
@@ -699,15 +982,25 @@ export default function SeriesSubseriesPage({
   };
 
   const selectSeasonCover = (s: SeriesSeasonCard) => {
-    setFocusCoverUrl(s.cover_url || null);
+    setFocusCoverUrl(s.portrait_url || s.cover_url || null);
+    setFocusBgUrl(
+      s.landscape_url || s.portrait_url || s.cover_url || null
+    );
   };
+
+  useEffect(() => {
+    if (tab !== "episodes") return;
+    if (!expandedSeasonId || moviesExpanded) return;
+    const s = seasons.find((x) => x.id === expandedSeasonId);
+    if (s) selectSeasonCover(s);
+  }, [tab, expandedSeasonId, seasons, moviesExpanded]);
 
   const toggleSeason = (s: SeriesSeasonCard) => {
     if (expandedSeasonId !== s.id) {
       setExpandedSeasonId(s.id);
       setMoviesExpanded(false);
     }
-    selectSeasonCover(s);
+    if (tab === "episodes") selectSeasonCover(s);
     onNavigate({
       subseriesId,
       seasonId: s.id,
@@ -724,7 +1017,27 @@ export default function SeriesSubseriesPage({
         ? (first as { cover_url?: string | null }).cover_url
         : null) || baseCover;
     setFocusCoverUrl(url || null);
+    setFocusBgUrl(url || null);
   };
+
+  const openMediaCard = (item: SeriesMediaCard) => {
+    if (item.navigate_band_id && item.navigate_release_id) {
+      onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
+      return;
+    }
+    const url = item.open_url?.trim();
+    if (!url) return;
+    if (item.open_mode === "local") {
+      void fetch(url, { method: "POST" }).catch(() => {});
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const topLogoUrl = detail?.logo_url || card?.logo_url || null;
+  const topLogo = topLogoUrl ? (
+    <img src={topLogoUrl} alt="" className="release-page__brand-logo" />
+  ) : null;
 
   const pageClass = [
     "release-page",
@@ -739,28 +1052,6 @@ export default function SeriesSubseriesPage({
     .join(" ");
 
   const backLabel = (overview?.name || franchiseName || "FRANCHISE").toUpperCase();
-
-  const episodeMovies: SeriesEpisodeItem[] = useMemo(() => {
-    if (localMovies.length) return localMovies;
-    const scopedRelated = filterCardsForSubseries(
-      relatedMovies,
-      title,
-      detail?.folder_path || card?.folder_path || ""
-    );
-    // Related franchise movies as list rows when no local Movies folder
-    return scopedRelated.map((m, i) => ({
-      id: m.id || `rel-mov-${i}`,
-      number: null,
-      title: m.title,
-      play_path: m.path || "",
-      open_url: m.path
-        ? `/api/media/file?path=${encodeURIComponent(m.path)}`
-        : null,
-      kind: "movie" as const,
-      cover_url: m.cover_url,
-      folder_path: m.path,
-    }));
-  }, [localMovies, relatedMovies, title, detail?.folder_path, card?.folder_path]);
 
   return (
     <div className={pageClass}>
@@ -813,7 +1104,11 @@ export default function SeriesSubseriesPage({
             </button>
           </div>
           <div className="release-page__top-center">
-            <span className="release-page__brand-name">{title}</span>
+            {topLogo ? (
+              <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
+            ) : (
+              <span className="release-page__brand-name">{title}</span>
+            )}
           </div>
           <div className="release-page__top-right">
             {busy ? <span className="muted">{busy}</span> : null}
@@ -838,6 +1133,18 @@ export default function SeriesSubseriesPage({
               onEditAbout={
                 isAdmin && overview
                   ? () => setAboutEditOpen(true)
+                  : undefined
+              }
+              onRescanLibrary={
+                isAdmin
+                  ? () => {
+                      void rescanSeriesLocalData(true)
+                        .then(() => {
+                          setMediaReady(false);
+                          setRescanTick((t) => t + 1);
+                        })
+                        .catch(() => {});
+                    }
                   : undefined
               }
             />
@@ -882,6 +1189,32 @@ export default function SeriesSubseriesPage({
             ))}
           </div>
         ) : null}
+
+        {tab === "audio" && audioCategories.length > 1 ? (
+          <div
+            className="series-section-subbar"
+            role="tablist"
+            aria-label="Audio categories"
+          >
+            <button
+              type="button"
+              className={audioCategory === "all" ? "active" : ""}
+              onClick={() => setAudioCategory("all")}
+            >
+              All
+            </button>
+            {audioCategories.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={audioCategory === c.key ? "active" : ""}
+                onClick={() => setAudioCategory(c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="release-page__body">
@@ -891,7 +1224,7 @@ export default function SeriesSubseriesPage({
               <div className="release-page__art-stage release-page__art-stage--cover-only">
                 <span className="release-page__cover-wrap">
                   <img
-                    src={coverUrl || DEFAULT_DISC_URL}
+                    src={panelCoverUrl || DEFAULT_DISC_URL}
                     alt=""
                     className="release-page__cover"
                   />
@@ -902,6 +1235,13 @@ export default function SeriesSubseriesPage({
               <div className="release-page__panel-body">
                 <div className="release-page__panel-head">
                   <h1 className="release-page__album-title">{title}</h1>
+                  {tab === "episodes" && activeSeason && !moviesExpanded ? (
+                    <p className="series-subseries-page__season-line">
+                      {activeSeason.title}
+                    </p>
+                  ) : moviesExpanded && tab === "episodes" ? (
+                    <p className="series-subseries-page__season-line">Movies</p>
+                  ) : null}
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
                   ) : null}
@@ -963,7 +1303,28 @@ export default function SeriesSubseriesPage({
                 ) : null}
                 {country?.name ? (
                   <p className="release-page__track-panel-line series-subseries-page__country">
-                    Country{" "}
+                    <span
+                      className="series-subseries-page__meta-icon"
+                      aria-label="Country"
+                      title="Country"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="9"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                        />
+                        <path
+                          d="M3 12h18M12 3c2.5 2.8 3.75 5.8 3.75 9S14.5 18.2 12 21c-2.5-2.8-3.75-5.8-3.75-9S9.5 5.8 12 3z"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                        />
+                      </svg>
+                    </span>{" "}
                     <button
                       type="button"
                       className="release-page__person-link series-subseries-page__country-link"
@@ -986,7 +1347,28 @@ export default function SeriesSubseriesPage({
                 ) : null}
                 {languageLabels.length ? (
                   <p className="release-page__track-panel-line">
-                    Languages{" "}
+                    <span
+                      className="series-subseries-page__meta-icon"
+                      aria-label="Languages"
+                      title="Languages"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M4 6.5h9.5a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-1.5 1.5H9l-3 3v-3H4A1.5 1.5 0 012.5 13V8A1.5 1.5 0 014 6.5z"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M12.5 4.5H20a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-1.5 1.5h-1.5v2.5l-2.5-2.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>{" "}
                     <span className="release-page__person-link--static">
                       {languageLabels.join(" · ")}
                     </span>
@@ -1095,22 +1477,6 @@ export default function SeriesSubseriesPage({
 
               {overview?.cast ? (
                 <div className="release-page__overview-bottom series-subseries-overview__cast">
-                  <div className="series-subseries-overview__cast-tabs">
-                    <button
-                      type="button"
-                      className={castTab === "characters" ? "active" : ""}
-                      onClick={() => setCastTab("characters")}
-                    >
-                      Characters
-                    </button>
-                    <button
-                      type="button"
-                      className={castTab === "staff" ? "active" : ""}
-                      onClick={() => setCastTab("staff")}
-                    >
-                      Staff
-                    </button>
-                  </div>
                   <section
                     ref={castGlassRef}
                     className="release-page__section-glass release-page__lineup"
@@ -1120,6 +1486,22 @@ export default function SeriesSubseriesPage({
                         : undefined
                     }
                   >
+                    <div className="series-subseries-overview__cast-tabs">
+                      <button
+                        type="button"
+                        className={castTab === "characters" ? "active" : ""}
+                        onClick={() => setCastTab("characters")}
+                      >
+                        Characters
+                      </button>
+                      <button
+                        type="button"
+                        className={castTab === "staff" ? "active" : ""}
+                        onClick={() => setCastTab("staff")}
+                      >
+                        Staff
+                      </button>
+                    </div>
                     <SeriesCast
                       franchiseId={franchiseId}
                       franchiseName={overview.name}
@@ -1155,6 +1537,8 @@ export default function SeriesSubseriesPage({
                       const open = expandedSeasonId === s.id && !moviesExpanded;
                       const eps = seasonEpisodes[s.id] || [];
                       const count = eps.length || s.episode_count || 0;
+                      const seasonDate =
+                        s.display_date || formatTrackDate(s.date_iso);
                       return (
                         <div
                           key={s.id}
@@ -1172,15 +1556,24 @@ export default function SeriesSubseriesPage({
                             <span className="release-tracklist__title-suffix">
                               {" "}
                               · {count} episode{count === 1 ? "" : "s"}
+                              {seasonDate ? ` · ${seasonDate}` : ""}
                             </span>
                           </button>
                           {open ? (
                             <SeriesEpisodeList
                               episodes={eps}
                               emptyLabel="No episode video files in this season folder."
-                              onSelect={() =>
-                                setFocusCoverUrl(s.cover_url || null)
-                              }
+                              onSelect={() => {
+                                setFocusCoverUrl(
+                                  s.portrait_url || s.cover_url || null
+                                );
+                                setFocusBgUrl(
+                                  s.landscape_url ||
+                                    s.portrait_url ||
+                                    s.cover_url ||
+                                    null
+                                );
+                              }}
                             />
                           ) : null}
                         </div>
@@ -1196,9 +1589,10 @@ export default function SeriesSubseriesPage({
                           }`}
                           onClick={() => {
                             if (moviesExpanded) {
-                              setFocusCoverUrl(
-                                episodeMovies[0]?.cover_url || baseCover
-                              );
+                              const url =
+                                episodeMovies[0]?.cover_url || baseCover;
+                              setFocusCoverUrl(url);
+                              setFocusBgUrl(url);
                               return;
                             }
                             selectMovieBlock();
@@ -1214,10 +1608,13 @@ export default function SeriesSubseriesPage({
                         {moviesExpanded ? (
                           <SeriesEpisodeList
                             episodes={episodeMovies}
+                            showReleaseDate
                             emptyLabel="No movies found."
-                            onSelect={(ep) =>
-                              setFocusCoverUrl(ep.cover_url || baseCover)
-                            }
+                            onSelect={(ep) => {
+                              const url = ep.cover_url || baseCover;
+                              setFocusCoverUrl(url);
+                              setFocusBgUrl(url);
+                            }}
                           />
                         ) : null}
                       </div>
@@ -1230,19 +1627,22 @@ export default function SeriesSubseriesPage({
 
           {!loading && !error && tab === "movies" ? (
             <SeriesMediaGrid
-              items={movieCards.length ? movieCards : relatedMovies}
+              items={movieCards}
               loading={mediaLoading}
-              emptyMessage="No movies linked to this franchise yet."
+              emptyMessage="No movies linked to this series yet."
               cardLayout={cardLayout}
+              onOpen={openMediaCard}
             />
           ) : null}
 
           {!loading && !error && tab === "audio" ? (
             <SeriesMediaGrid
-              items={audioCards}
+              items={filteredAudio}
               loading={mediaLoading}
-              emptyMessage="No matching audio for this franchise."
+              emptyMessage="No audio for this series."
               cardLayout={cardLayout}
+              squareCovers={cardLayout === "cover"}
+              onOpen={openMediaCard}
             />
           ) : null}
 
@@ -1250,8 +1650,9 @@ export default function SeriesSubseriesPage({
             <SeriesMediaGrid
               items={libraryCards}
               loading={mediaLoading}
-              emptyMessage="No library items for this franchise."
+              emptyMessage="No library items for this series."
               cardLayout={cardLayout}
+              onOpen={openMediaCard}
             />
           ) : null}
 
@@ -1259,8 +1660,9 @@ export default function SeriesSubseriesPage({
             <SeriesMediaGrid
               items={filteredGames}
               loading={mediaLoading}
-              emptyMessage="No games linked to this franchise yet."
+              emptyMessage="No games linked to this series yet."
               cardLayout={cardLayout}
+              onOpen={openMediaCard}
             />
           ) : null}
 

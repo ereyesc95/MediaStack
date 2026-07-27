@@ -160,6 +160,187 @@ def build_local_eras(franchise_dir: Path, media_root: Path) -> list[dict]:
     return eras
 
 
+def _artwork_subdir(folder: Path) -> Path | None:
+    for name in ("[Artwork]", "Artwork"):
+        d = folder / name
+        if d.is_dir():
+            return d
+    return None
+
+
+def _stem_file(artwork: Path | None, stem: str) -> Path | None:
+    if not artwork or not artwork.is_dir():
+        return None
+    want = stem.casefold().strip()
+    try:
+        for f in artwork.iterdir():
+            if (
+                f.is_file()
+                and f.suffix.lower() in IMAGE_EXTS
+                and f.stem.casefold().strip() == want
+            ):
+                return f
+    except OSError:
+        return None
+    return None
+
+
+def _stem_contains(artwork: Path | None, *needles: str) -> list[Path]:
+    if not artwork or not artwork.is_dir():
+        return []
+    wants = [n.casefold() for n in needles if n]
+    out: list[Path] = []
+    try:
+        files = sorted(artwork.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return []
+    for f in files:
+        if not f.is_file() or f.suffix.lower() not in IMAGE_EXTS:
+            continue
+        low = f.stem.casefold()
+        if all(n in low for n in wants):
+            out.append(f)
+    return out
+
+
+_SKIP_GENERIC_ART = re.compile(
+    r"(?:^|[\s_-])(?:cover|logo|icon|wallpaper|season|photocard)(?:$|[\s_-])",
+    re.I,
+)
+
+
+def resolve_series_photocards(
+    folder: Path, media_root: Path
+) -> dict[str, str | None]:
+    """Photocard fronts/backs for a franchise or subseries [Artwork] folder.
+
+    Order:
+      1. Dedicated ``photocard - …`` stems
+      2. ``Characters - Portrait/Landscape`` fronts + ``Wallpaper - …`` backs
+      3. Any other portrait/landscape-named images (excluding cover/logo/season/…)
+      4. Backs fall back to ``Cover - Front``, then the front image itself
+    """
+    from app.media_index import _artwork_file
+    from app.release_overview import PHOTOCARD_STEMS
+    from app.release_photocards import (
+        scan_photocards,
+        scan_wallpapers,
+        _photocards_empty,
+        _ensure_flip_backs,
+    )
+    from app.band_library import COVER_FRONT_STEM
+
+    artwork = _artwork_subdir(folder)
+    cards = scan_photocards(artwork, media_root)
+    if not _photocards_empty(cards):
+        wp = scan_wallpapers(artwork, media_root)
+        if cards.get("portrait_front") and not cards.get("portrait_back"):
+            cards["portrait_back"] = wp.get("portrait_back")
+        if cards.get("landscape_front") and not cards.get("landscape_back"):
+            cards["landscape_back"] = wp.get("landscape_back")
+        cover = _artwork_file(artwork, COVER_FRONT_STEM) if artwork else None
+        cover_url = _media_url(cover, media_root) if cover else None
+        if cover_url:
+            if cards.get("portrait_front") and not cards.get("portrait_back"):
+                cards["portrait_back"] = cover_url
+            if cards.get("landscape_front") and not cards.get("landscape_back"):
+                cards["landscape_back"] = cover_url
+        _ensure_flip_backs(cards)
+        return cards
+
+    cards = {k: None for k in PHOTOCARD_STEMS}
+    char_p = _stem_file(artwork, "characters - portrait")
+    char_l = _stem_file(artwork, "characters - landscape")
+    wp = scan_wallpapers(artwork, media_root)
+    cover = _artwork_file(artwork, COVER_FRONT_STEM) if artwork else None
+    cover_url = _media_url(cover, media_root) if cover else None
+
+    if char_p:
+        cards["portrait_front"] = _media_url(char_p, media_root)
+    if char_l:
+        cards["landscape_front"] = _media_url(char_l, media_root)
+
+    if _photocards_empty(cards):
+        for f in _stem_contains(artwork, "portrait"):
+            if _SKIP_GENERIC_ART.search(f.stem):
+                continue
+            cards["portrait_front"] = _media_url(f, media_root)
+            break
+        for f in _stem_contains(artwork, "landscape"):
+            if _SKIP_GENERIC_ART.search(f.stem):
+                continue
+            cards["landscape_front"] = _media_url(f, media_root)
+            break
+
+    if _photocards_empty(cards) and cover_url:
+        cards["portrait_front"] = cover_url
+        cards["landscape_front"] = cover_url
+        cards["portrait_back"] = cover_url
+        cards["landscape_back"] = cover_url
+        cards["cover_only"] = True
+        return cards
+
+    if cards.get("portrait_front"):
+        cards["portrait_back"] = (
+            wp.get("portrait_back") or cover_url or cards["portrait_front"]
+        )
+    if cards.get("landscape_front"):
+        cards["landscape_back"] = (
+            wp.get("landscape_back") or cover_url or cards["landscape_front"]
+        )
+    _ensure_flip_backs(cards)
+    return cards
+
+
+def resolve_season_art(
+    artwork: Path | None,
+    labels: list[str],
+    media_root: Path,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Return (portrait_url, landscape_url, cover_front_url, cover_back_url).
+
+    Prefers ``{Season} - Portrait`` / ``{Season} - Landscape``, then
+    ``{Season} cover - front/back``, then a file whose stem equals the label.
+    """
+    from app.artwork_stems import COVER_BACK_STEM, COVER_FRONT_STEM
+
+    if not artwork or not artwork.is_dir():
+        return None, None, None, None
+    label_cfs = [lab.casefold().strip() for lab in labels if lab and lab.strip()]
+    if not label_cfs:
+        return None, None, None, None
+    try:
+        files = [
+            p
+            for p in artwork.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+        ]
+    except OSError:
+        return None, None, None, None
+
+    def match(*parts: str) -> str | None:
+        want = " ".join(p for p in parts if p).casefold().strip()
+        want_dash = " - ".join(p for p in parts if p).casefold().strip()
+        for path in files:
+            stem = path.stem.casefold().strip()
+            if stem == want or stem == want_dash:
+                return _media_url(path, media_root)
+        return None
+
+    portrait = landscape = front = back = None
+    for label in label_cfs:
+        portrait = portrait or match(label, "portrait")
+        landscape = landscape or match(label, "landscape")
+        front = front or match(label, COVER_FRONT_STEM)
+        back = back or match(label, COVER_BACK_STEM)
+        # Exact season name file
+        if not portrait and not landscape and not front:
+            exact = match(label)
+            if exact:
+                front = exact
+    return portrait, landscape, front, back
+
+
 def _norm_key(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (text or "").casefold())
 

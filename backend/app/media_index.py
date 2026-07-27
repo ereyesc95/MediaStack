@@ -403,23 +403,28 @@ def _build_release_card(
     display_entry: Path,
     content_root: Path | None = None,
     bracket_name: str | None = None,
+    default_source_artist: str | None = None,
 ) -> dict | None:
     name = bracket_name or entry_display_name(display_entry)
     clean_name, tags = parse_bracket_tags(name)
+    explicit_source = (tags.get("source_artist") or "").strip() or None
     date_iso = _parse_folder_date(clean_name)
     title = _album_title_from_folder(clean_name)
 
     content = content_root
     if content is None:
         content = resolve_media_entry(display_entry, media_root=media_root)
-    if content is None and tags.get("source_artist"):
-        _source_id, source_dir = _resolve_source_artist_dir(
-            db, media_root, tags["source_artist"]
-        )
-        if source_dir:
-            content = _find_release_under_artist(
-                source_dir, clean_name, media_root=media_root
+    if content is None:
+        lookup_artist = explicit_source or default_source_artist
+        if lookup_artist:
+            tags["source_artist"] = lookup_artist
+            _source_id, source_dir = _resolve_source_artist_dir(
+                db, media_root, lookup_artist
             )
+            if source_dir:
+                content = _find_release_under_artist(
+                    source_dir, clean_name, media_root=media_root
+                )
     if content is None or not content.is_dir():
         return None
 
@@ -441,9 +446,10 @@ def _build_release_card(
             navigate_band_id = content_band_id
             source_band_id = content_band_id
         artwork_root = content
-    elif tags.get("source_artist"):
+    elif explicit_source or tags.get("source_artist"):
+        lookup_artist = explicit_source or tags.get("source_artist")
         source_band_id, source_dir = _resolve_source_artist_dir(
-            db, media_root, tags["source_artist"]
+            db, media_root, lookup_artist
         )
         if source_band_id:
             navigate_band_id = source_band_id
@@ -464,11 +470,14 @@ def _build_release_card(
     release_id = release_id_from_path(rel_path)
     navigate_release_id = release_id_from_path(navigate_rel_path)
 
-    source_artist_name: str | None = tags.get("source_artist")
+    source_artist_name: str | None = explicit_source
     if not source_artist_name and source_band_id:
         src_band = db.get(Band, source_band_id)
         if src_band and src_band.bnd_name:
             source_artist_name = src_band.bnd_name
+    if not source_artist_name and default_source_artist and not explicit_source:
+        # Unresolved By-tag: report the default we assumed for lookup
+        source_artist_name = default_source_artist
 
     return {
         "id": release_id,

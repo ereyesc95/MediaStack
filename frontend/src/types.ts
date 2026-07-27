@@ -1009,6 +1009,8 @@ export type SeriesSubseriesCard = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
   season_count: number;
   has_gallery?: boolean;
 };
@@ -1021,6 +1023,8 @@ export type SeriesSeasonCard = {
   folder_path: string;
   cover_url: string | null;
   cover_back_url?: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
   episode_count: number;
 };
 
@@ -1072,6 +1076,9 @@ export type SeriesFolderDetail = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  cover_back_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
   has_gallery: boolean;
   kind: "season" | "subseries" | "folder";
   seasons: SeriesSeasonCard[];
@@ -1080,6 +1087,13 @@ export type SeriesFolderDetail = {
   movies?: SeriesEpisodeItem[];
   episode_count?: number;
   season_count?: number;
+  photocards?: {
+    portrait_front: string | null;
+    portrait_back: string | null;
+    landscape_front: string | null;
+    landscape_back: string | null;
+    cover_only?: boolean;
+  };
 };
 
 export type SeriesGalleryItem = {

@@ -14,6 +14,7 @@ import {
   fetchSeriesFranchiseShows,
   fetchSeriesOverview,
   refreshSeriesMetadata,
+  rescanSeriesLocalData,
 } from "../../api";
 import {
   applyMediaTheme,
@@ -259,6 +260,18 @@ export default function SeriesFranchisePage({
     }
   }, [franchiseId, refreshBio, load]);
 
+  const handleRescanLibrary = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await rescanSeriesLocalData(true);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     if (section !== "audio") return;
     let cancelled = false;
@@ -274,6 +287,10 @@ export default function SeriesFranchisePage({
           date_iso?: string | null;
           display_date?: string | null;
           release_date?: string | null;
+          folder_path?: string | null;
+          subseries_path?: string | null;
+          subseries_title?: string | null;
+          source_artist_name?: string | null;
         }[];
         setAudioCards(
           releases.map((r, i) => ({
@@ -281,6 +298,10 @@ export default function SeriesFranchisePage({
             title: r.title || r.name || "Release",
             cover_url: r.cover_url,
             date_label: r.display_date || r.release_date || r.date_iso || null,
+            path: r.folder_path || r.subseries_path || undefined,
+            meta: [r.subseries_title, r.source_artist_name]
+              .filter(Boolean)
+              .join(" · ") || undefined,
           }))
         );
       })
@@ -307,6 +328,19 @@ export default function SeriesFranchisePage({
             id: m.path || `movie-${i}`,
             title: m.title,
             cover_url: m.cover_url,
+            banner_url:
+              (m as { banner_url?: string | null }).banner_url ||
+              m.cover_url ||
+              null,
+            logo_url: (m as { logo_url?: string | null }).logo_url || null,
+            open_url: (m as { open_url?: string | null }).open_url || null,
+            open_mode:
+              ((m as { open_mode?: "tab" | "local" | null }).open_mode as
+                | "tab"
+                | "local"
+                | null) ||
+              ((m as { open_url?: string | null }).open_url ? "tab" : null),
+            open_label: "Play video",
             date_label: m.display_date || m.date_iso,
             path: m.path,
             meta: m.subseries || undefined,
@@ -341,6 +375,11 @@ export default function SeriesFranchisePage({
             id: s.id,
             title: s.title,
             cover_url: s.cover_url,
+            logo_url: (s as { logo_url?: string | null }).logo_url || null,
+            banner_url:
+              (s as { banner_url?: string | null }).banner_url ||
+              s.cover_url ||
+              null,
             date_label:
               s.display_date ||
               (s.season_count
@@ -635,6 +674,9 @@ export default function SeriesFranchisePage({
                   ? () => void handleRefreshMetadata()
                   : undefined
               }
+              onRescanLibrary={
+                isAdmin ? () => void handleRescanLibrary() : undefined
+              }
               refreshIncludeBio={refreshBio}
               onRefreshIncludeBioChange={
                 isAdmin && section === "overview" && overviewTab === "about"
@@ -906,7 +948,7 @@ export default function SeriesFranchisePage({
           <SeriesMediaGrid
             items={filterBySubseries(audioCards)}
             loading={audioLoading}
-            emptyMessage="No matching Music artist audio for this franchise."
+            emptyMessage="No audio for this series."
             cardLayout={releaseCardLayout}
           />
         ) : null}

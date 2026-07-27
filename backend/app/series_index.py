@@ -18,7 +18,9 @@ from app.media_paths_util import safe_relative
 from app.media_tabs_index import _folder_cover
 from app.release_tracklist import _duration_from_file, _format_duration
 
-_BRACKET_META = frozenset({"[artwork]", "artwork", "[extras]", "extras"})
+_BRACKET_META = frozenset(
+    {"[artwork]", "artwork", "[extras]", "extras", "[audio]", "audio"}
+)
 # Obsolete cross-media portal folders — not series content
 _PORTAL_DIRS = frozenset(
     {
@@ -193,26 +195,28 @@ def _season_card(
     *,
     parent_artwork: Path | None = None,
 ) -> dict:
+    from app.series_artwork import resolve_season_art
+
     date_iso, title = parse_dated_folder_name(season_dir.name)
     if season_dir.name.casefold() == "specials":
         title = "Specials"
     display_title = title or season_dir.name
     labels = [display_title, season_dir.name]
     if date_iso and title:
-        labels.append(f"{date_iso}. {title}")
-    front = _artwork_named_cover(
-        parent_artwork, labels, COVER_FRONT_STEM, media_root
+        labels.append(f"{date_iso.replace('-', '.')}. {title}")
+    portrait, landscape, front, back = resolve_season_art(
+        parent_artwork, labels, media_root
     )
-    back = _artwork_named_cover(
-        parent_artwork, labels, COVER_BACK_STEM, media_root
-    )
+    cover = portrait or front or _folder_cover(season_dir, media_root)
     return {
         "id": season_dir.name,
         "title": display_title,
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
         "folder_path": season_dir.relative_to(media_root).as_posix(),
-        "cover_url": front or _folder_cover(season_dir, media_root),
+        "cover_url": cover,
+        "portrait_url": portrait or cover,
+        "landscape_url": landscape or portrait or cover,
         "cover_back_url": back,
         "episode_count": _count_episodes(season_dir),
     }
@@ -589,13 +593,32 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     date_iso, title = parse_dated_folder_name(folder.name)
     if folder.name.casefold() == "specials":
         title = "Specials"
+    from app.series_artwork import resolve_series_photocards
+    from app.series_overview import _list_brand_assets
+
+    logo_url, icon_url = _list_brand_assets(folder, root)
+    photocards = resolve_series_photocards(folder, root)
+    from app.band_library import _find_artwork_subdir
+    from app.artwork_stems import _media_file_in_artwork
+
+    art = _find_artwork_subdir(folder)
+    cover_front = _folder_cover(folder, root)
+    cover_back = None
+    if art:
+        back_file = _media_file_in_artwork(art, COVER_BACK_STEM)
+        if back_file:
+            cover_back = _media_url(back_file, root)
     base = {
         "id": folder.name,
         "title": title or folder.name,
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
         "folder_path": folder.relative_to(root).as_posix(),
-        "cover_url": _folder_cover(folder, root),
+        "cover_url": cover_front,
+        "cover_back_url": cover_back,
+        "logo_url": logo_url,
+        "icon_url": icon_url,
+        "photocards": photocards,
         "has_gallery": _has_gallery(folder),
     }
 

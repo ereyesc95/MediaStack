@@ -20,8 +20,14 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 
 
 def _ensure_index():
+    from app.franchise_index import FRANCHISE_INDEX_VERSION
+
     cached = load_franchise_index()
-    if cached and cached.franchises:
+    if (
+        cached
+        and cached.franchises
+        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
+    ):
         return cached
     root = settings.media_root
     if not root:
@@ -29,6 +35,45 @@ def _ensure_index():
     index = build_franchise_index(Path(root))
     save_franchise_index(index)
     return index
+
+
+@router.post("/open-local")
+def open_local_media(path: str = Query(..., min_length=1)):
+    """Open a media file with the OS default application (e.g. ROM emulator)."""
+    import os
+    import sys
+
+    root = settings.media_root
+    if not root:
+        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT")
+    media_root = Path(root).resolve()
+    cleaned = path.replace("\\", "/").lstrip("/")
+    if ".." in cleaned.split("/"):
+        raise HTTPException(400, "Invalid path")
+    target = (media_root / cleaned).resolve()
+    try:
+        target.relative_to(media_root)
+    except ValueError as exc:
+        raise HTTPException(400, "Path escapes media root") from exc
+    if not target.is_file():
+        raise HTTPException(404, "File not found")
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            import subprocess
+
+            subprocess.Popen(["open", str(target)], close_fds=True)
+        else:
+            import subprocess
+
+            subprocess.Popen(["xdg-open", str(target)], close_fds=True)
+    except OSError as exc:
+        raise HTTPException(
+            400,
+            f"No application is associated with this file type ({target.suffix}).",
+        ) from exc
+    return {"ok": True, "path": cleaned}
 
 
 @router.get("/related")

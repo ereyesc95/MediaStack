@@ -280,9 +280,8 @@ export default function AppMenu({
 
   const showRefreshData =
     menuVariant !== "media-item" &&
-    !editDataFlat &&
-    (onEditAbout ||
-      (menuVariant === "release" && onAddMember) ||
+    ((!editDataFlat && onEditAbout) ||
+      (menuVariant === "release" && !editDataFlat && onAddMember) ||
       onRefreshMetadata ||
       onRescanLibrary ||
       onRefreshLineup ||
@@ -292,11 +291,13 @@ export default function AppMenu({
       onRefreshRelatedParticipations ||
       onRefreshIncludeBioChange);
 
-  const refreshMenuLabel =
-    menuVariant === "release"
+  const refreshMenuLabel = editDataFlat
+    ? "Refresh data"
+    : menuVariant === "release"
       ? editDataLabel || "Edit Release"
       : "Refresh data";
-  const RefreshMenuIcon = menuVariant === "release" ? IconEditRelease : IconMetadata;
+  const RefreshMenuIcon =
+    editDataFlat || menuVariant !== "release" ? IconMetadata : IconEditRelease;
   const aboutLabel = menuVariant === "release" ? "About" : "Edit about";
   const AboutIcon = menuVariant === "release" ? IconAbout : IconEditProfile;
 

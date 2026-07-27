@@ -1,9 +1,12 @@
 import type { SeriesEpisodeItem } from "../../types";
+import { formatTrackDate } from "../../formatDate";
 
 type Props = {
   episodes: SeriesEpisodeItem[];
   emptyLabel?: string;
   onSelect?: (ep: SeriesEpisodeItem) => void;
+  /** When true, show release date before duration (movies / specials). */
+  showReleaseDate?: boolean;
 };
 
 function openEpisode(ep: SeriesEpisodeItem) {
@@ -17,6 +20,7 @@ export default function SeriesEpisodeList({
   episodes,
   emptyLabel = "No episode video files in this season folder.",
   onSelect,
+  showReleaseDate = false,
 }: Props) {
   if (!episodes.length) {
     return (
@@ -27,43 +31,52 @@ export default function SeriesEpisodeList({
   return (
     <div className="release-tracklist__content series-episode-list">
       <ul className="release-tracklist__tracks series-episode-list__tracks">
-        {episodes.map((ep) => (
-          <li key={ep.id}>
-            <button
-              type="button"
-              className="release-tracklist__row series-episode-list__row"
-              onClick={() => {
-                onSelect?.(ep);
-                openEpisode(ep);
-              }}
-              title={`Open ${ep.title}`}
-            >
-              <span className="release-tracklist__num series-episode-list__num">
-                {ep.number != null ? ep.number : "–"}
-              </span>
-              <span className="release-tracklist__title series-episode-list__title">
-                {ep.title}
-              </span>
-              <span className="series-episode-list__trailing">
-                {ep.duration ? (
-                  <span className="release-tracklist__duration">
-                    {ep.duration}
-                  </span>
-                ) : (
-                  <span className="release-tracklist__duration release-tracklist__duration--empty">
-                    –
-                  </span>
-                )}
-                <span
-                  className="release-tracklist__meta series-episode-list__open"
-                  aria-hidden
-                >
-                  ↗
+        {episodes.map((ep, index) => {
+          const num =
+            ep.number != null
+              ? ep.number
+              : showReleaseDate
+                ? index + 1
+                : "–";
+          const dateLabel =
+            showReleaseDate || ep.kind === "movie"
+              ? ep.display_date || formatTrackDate(ep.date_iso)
+              : null;
+          return (
+            <li key={ep.id} className="series-episode-list__item">
+              <button
+                type="button"
+                className="release-tracklist__row series-episode-list__row"
+                onClick={() => {
+                  onSelect?.(ep);
+                  openEpisode(ep);
+                }}
+                title={`Open ${ep.title}`}
+              >
+                <span className="release-tracklist__num series-episode-list__num">
+                  {num}
                 </span>
-              </span>
-            </button>
-          </li>
-        ))}
+                <span className="release-tracklist__title series-episode-list__title">
+                  {ep.title}
+                </span>
+                <span className="series-episode-list__trailing">
+                  {dateLabel ? (
+                    <span className="series-episode-list__date">{dateLabel}</span>
+                  ) : null}
+                  {ep.duration ? (
+                    <span className="release-tracklist__duration">
+                      {ep.duration}
+                    </span>
+                  ) : (
+                    <span className="release-tracklist__duration release-tracklist__duration--empty">
+                      –
+                    </span>
+                  )}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

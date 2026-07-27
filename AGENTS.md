@@ -56,7 +56,8 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 
 - **Seasons:** `{YYYY.MM.DD}. Season N/` under show/subseries (no `Seasons/` wrapper)
 - **Movies:** always `{Work}/{date}. {Film}/` — never leave the feature file at work root
-- **Cross-media:** franchise index Related panel only — no nested `Audio/Series/Books/Games/[Extras]` under Movies/Series
+- **Cross-media:** franchise index Related panel for Movies/Books/Games — no nested portal farms
+- **Series audio:** `…/[Audio]/{Albums|…}/` with `.lnk` shortcuts to Music releases (`[By Artist]` or Various Artists)
 - **Golden path fixture:** `Series/D/Dragon Ball/` (+ Movies/Books/Games scaffolding)
 
 ## Next work (in order)

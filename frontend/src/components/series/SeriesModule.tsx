@@ -58,6 +58,7 @@ type Props = {
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
   }) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
 };
 
 export default function SeriesModule({
@@ -79,6 +80,7 @@ export default function SeriesModule({
   section = "overview",
   overviewTab = "about",
   onNavigate,
+  onOpenMusicRelease,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
     if (franchiseId) return "catalog";
@@ -274,6 +276,7 @@ export default function SeriesModule({
             setPublisher(target.publisher ?? "");
             setWriter(target.writer ?? "");
           }}
+          onOpenMusicRelease={onOpenMusicRelease}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,
