@@ -458,7 +458,8 @@ export default function MusicModule({
     const params = new URLSearchParams({
       page: String(artistPage),
       page_size: "48",
-      orientation: cardOrientation,
+      orientation:
+        cardOrientation === "badge" ? "icons" : cardOrientation,
       filter_mode: filterMode,
     });
     if (search.trim()) params.set("search", search.trim());

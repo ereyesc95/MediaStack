@@ -181,7 +181,12 @@ export type PlaylistTrack = {
   path: string;
 };
 
-export type CardOrientation = "landscape" | "portrait" | "banner" | "icons";
+export type CardOrientation =
+  | "landscape"
+  | "portrait"
+  | "banner"
+  | "icons"
+  | "badge";
 
 /** Cover vs banner layout for Audio / Video / Library release cards on artist pages. */
 export type ReleaseCardLayout = "cover" | "banner";
@@ -1011,6 +1016,7 @@ export type SeriesSubseriesCard = {
   cover_url: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
+  badge_url?: string | null;
   season_count: number;
   has_gallery?: boolean;
 };
@@ -1036,11 +1042,12 @@ export type SeriesEpisodeItem = {
   open_url: string | null;
   duration?: string | null;
   duration_sec?: number | null;
-  kind?: "episode" | "movie";
+  kind?: "episode" | "movie" | "opening" | "ending" | "extra";
   date_iso?: string | null;
   display_date?: string | null;
   cover_url?: string | null;
   folder_path?: string | null;
+  video_suffix?: string | null;
 };
 
 export type SeriesFranchiseCard = {
@@ -1050,6 +1057,9 @@ export type SeriesFranchiseCard = {
   slug: string | null;
   folder_path: string;
   cover_url: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
+  badge_url?: string | null;
   subseries: SeriesSubseriesCard[];
   season_count: number;
   subseries_count: number;
@@ -1079,6 +1089,7 @@ export type SeriesFolderDetail = {
   cover_back_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
+  badge_url?: string | null;
   has_gallery: boolean;
   kind: "season" | "subseries" | "folder";
   seasons: SeriesSeasonCard[];
@@ -1102,11 +1113,19 @@ export type SeriesGalleryItem = {
   title: string;
   folder_path: string;
   section: string;
+  subsection?: string | null;
+};
+
+export type SeriesGallerySection = {
+  key: string;
+  label: string;
+  items: SeriesGalleryItem[];
 };
 
 export type SeriesGalleryPayload = {
   folder_path: string;
   items: SeriesGalleryItem[];
+  sections?: SeriesGallerySection[];
 };
 
 export type FranchiseMediaEntry = {

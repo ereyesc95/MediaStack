@@ -322,6 +322,7 @@ export default function SeriesModule({
           onEditProfile={onEditProfile}
           onBack={backToCatalog}
           onBrowseCatalog={browseCatalog}
+          onOpenMusicRelease={onOpenMusicRelease}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,
@@ -390,6 +391,7 @@ export default function SeriesModule({
               <CardOrientationPicker
                 value={cardOrientation}
                 onChange={onSetOrientation}
+                includeBadge
               />
             ) : null}
             <AppMenu

@@ -41,6 +41,9 @@ export type SeriesCatalogCard = {
   name: string;
   letter: string;
   cover_url: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
+  badge_url?: string | null;
   date_iso: string | null;
   meta: string;
 };
@@ -397,6 +400,9 @@ export default function SeriesBrowse({
             name: s.title,
             letter: f.letter,
             cover_url: s.cover_url || f.cover_url,
+            logo_url: s.logo_url || f.logo_url,
+            icon_url: s.icon_url || f.icon_url,
+            badge_url: s.badge_url || f.badge_url,
             date_iso: s.date_iso,
             meta: showMeta(s),
           });
@@ -458,6 +464,9 @@ export default function SeriesBrowse({
         name: f.name,
         letter: f.letter,
         cover_url: f.cover_url,
+        logo_url: f.logo_url,
+        icon_url: f.icon_url,
+        badge_url: f.badge_url,
         date_iso: null,
         meta: franchiseMeta(f),
       })
@@ -679,10 +688,19 @@ export default function SeriesBrowse({
           </div>
         ) : null}
         {filterReady && filtered.length > 0 ? (
-          <div className={`artist-grid artist-grid--${orientation}`}>
+          <div
+            className={`artist-grid artist-grid--${
+              orientation === "badge" ? "icons" : orientation
+            }`}
+          >
             {filtered.map((card) => {
               const cover = card.cover_url || DEFAULT_DISC_URL;
               const isIcons = orientation === "icons";
+              const isBadge = orientation === "badge";
+              const isLogoMode = isIcons || isBadge;
+              const brandSrc = isBadge
+                ? card.badge_url || card.logo_url || card.icon_url
+                : card.logo_url || card.icon_url || card.badge_url;
               const revealed = isPhone && revealedId === card.key;
               return (
                 <button
@@ -692,7 +710,8 @@ export default function SeriesBrowse({
                     "artist-card",
                     "media-beat-frame",
                     "media-beat-frame--card",
-                    `artist-card--${orientation}`,
+                    `artist-card--${orientation === "badge" ? "icons" : orientation}`,
+                    isBadge ? "artist-card--badge" : "",
                     isPhone ? "artist-card--tap-reveal" : "",
                     revealed ? "artist-card--revealed" : "",
                   ]
@@ -704,14 +723,26 @@ export default function SeriesBrowse({
                   <span
                     className="artist-card-bg card-bg-layer"
                     style={
-                      isIcons
+                      isLogoMode
                         ? undefined
                         : { backgroundImage: `url("${cover}")` }
                     }
                   />
                   <span className="artist-card-dim" />
                   <span className="artist-card-footer">
-                    <span className="artist-card-name">{card.name}</span>
+                    {brandSrc ? (
+                      <img
+                        src={brandSrc}
+                        alt=""
+                        className={
+                          isBadge || isIcons
+                            ? "artist-card-icon"
+                            : "artist-card-logo"
+                        }
+                      />
+                    ) : (
+                      <span className="artist-card-name">{card.name}</span>
+                    )}
                   </span>
                 </button>
               );

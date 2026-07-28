@@ -22,9 +22,9 @@ Media/
 | **`{Letter}`** | First letter of the **grouping title** (artist, work, franchise, or game title). Use `#` for non-alpha. |
 | **Item folders** | `{YYYY.MM.DD}. {Title}` or `{YYYY}. {Title}`; bracket tags optional. |
 | **Filenames** | Flexible — numeric prefix (`01.`), date prefix, vinyl side (`A1.`), or title as filename (same rules as Audio). |
-| **`[Artwork]`** | Inside franchise / subseries / item folders as needed (covers, posters, logos). Not at the letter tier. |
+| **`[Artwork]`** | Franchise-level Series logos/badges; Music/Movies/Books/Games item art. Subseries prefer `Gallery/Covers` + `Gallery/Renders`. Not at the letter tier. |
 | **Categories** | Subfolders under `Video/` and `Library/` (**Music only**). Omit unused categories. |
-| **`[Extras]`** | **Not used.** Cross-module media is never nested under Movies/Series/Books/Games. |
+| **`Extras/` / `[Extras]`** | **Series only** — openings/endings/promo videos under a show. Do **not** nest other modules’ catalogs as extras. |
 
 ---
 
@@ -136,9 +136,36 @@ Movies/A/Austin Powers/
 
 ## Series — `Series/{Letter}/{Franchise}/…`
 
-### Season folders (required shape)
+### Subseries layout (preferred)
 
-Seasons are **dated folders** directly under the show or subseries (no `Seasons/` wrapper):
+Seasons live under an **`Episodes/`** wrapper. Local media buckets use plain names (not brackets), except franchise-level **`[Artwork]`** for logos/badges:
+
+```
+Series/D/Dragon Ball/
+├── [Artwork]/                              ← franchise logos / badges (stem contains logo|badge)
+├── 1986.02.26. Dragon Ball/
+│   ├── Gallery/
+│   │   ├── Covers/                          ← Cover - Front/Back, characters, banners, wallpapers…
+│   │   ├── Renders/                         ← Logo.png, Badge.png, other PNGs
+│   │   └── Extras/                          ← optional nested image folders
+│   ├── Audio/                               ← (or legacy [Audio]/) .lnk → Music releases
+│   │   └── Albums/….lnk
+│   ├── Extras/                              ← promo / OP / ED videos
+│   │   ├── 01. Theme [Season 1 Opening].mp4
+│   │   └── 02. Theme [Season 1 Ending].mp4
+│   └── Episodes/
+│       ├── 1986.02.26. Season 1/
+│       │   └── 01. ….mkv
+│       └── 1987.04.15. Season 2/
+├── 1989.04.26. Dragon Ball Z/
+│   └── …
+```
+
+Legacy layouts still resolve: seasons directly under the subseries; `[Artwork]` / `[Audio]` / `[Extras]` instead of `Gallery` / `Audio` / `Extras`.
+
+### Season folders
+
+Dated season folders (under `Episodes/` or directly under the show):
 
 ```
 {YYYY.MM.DD}. Season 1/
@@ -146,46 +173,28 @@ Seasons are **dated folders** directly under the show or subseries (no `Seasons/
 Specials/                         ← optional undated specials bucket
 ```
 
-Episode files live inside each season folder (numeric or date prefixes allowed).
-
 ### Multi-subseries franchise
 
 Subseries folders are dated: `{YYYY.MM.DD}. {Subseries Title}/`.
 
-```
-Series/D/Dragon Ball/
-├── [Artwork]/                              ← franchise-wide logos / key art
-├── 1986.02.26. Dragon Ball/
-│   ├── [Artwork]/
-│   ├── 1986.02.26. Season 1/
-│   │   └── 01. ….mkv
-│   └── 1987.04.15. Season 2/
-├── 1989.04.26. Dragon Ball Z/
-│   ├── [Artwork]/
-│   ├── 1989.04.26. Season 1/
-│   └── Specials/
-└── 1996.02.07. Dragon Ball GT/
-    ├── [Artwork]/
-    └── 1996.02.07. Season 1/
-```
-
 Related movies / manga / games live under `Movies/`, `Books/`, and `Games/` with the same franchise folder name (`Dragon Ball`); the app shows them in **Related media**.
 
-### Series audio (`[Audio]/`)
+### Series audio (`Audio/` or `[Audio]/`)
 
-Soundtrack and related releases for a franchise or subseries live under a bracketed **`[Audio]`** bucket (same category folders as Music):
+Soundtrack and related releases for a franchise or subseries live under **`Audio/`** (preferred) or legacy **`[Audio]`** (same category folders as Music):
 
 ```
 Series/D/Dragon Ball/1986.02.26. Dragon Ball/
-├── [Artwork]/
-├── [Audio]/
+├── Gallery/…
+├── Audio/
 │   ├── Albums/
 │   │   └── 1995.11.21. Dragon Ball Z Music Collection [By Shunsuke Kikuchi].lnk
 │   ├── Compilations/
 │   ├── Singles/
 │   └── Soundtracks/
 │       └── 1986.02.26. Dragon Ball Original Soundtrack.lnk
-├── 1986.02.26. Season 1/
+├── Episodes/
+│   └── 1986.02.26. Season 1/
 └── …
 ```
 
@@ -193,18 +202,20 @@ Series/D/Dragon Ball/1986.02.26. Dragon Ball/
 - Entries are usually **`.lnk`** (or `.path`) shortcuts to the real release under `Music/{Letter}/{Artist}/Audio/…`.
 - Shortcut names use the dated release form; optional **`[By Artist]`** names the Music artist that owns the release.
 - If there is **no** `[By …]` tag, the app assumes **Various Artists**.
-- `[Audio]` may sit on the franchise root and/or on each subseries folder.
+- `Audio/` may sit on the franchise root and/or on each subseries folder.
+- Franchise **AUDIO** also surfaces a synthetic **Openings & Endings** playlist built from `Extras/` OP/ED videos.
 
 ### Single show / miniseries
 
-No subseries tier — seasons sit directly under the franchise/show folder:
+No subseries tier — seasons sit under `Episodes/` (or directly) on the franchise/show folder:
 
 ```
 Series/T/Twin Peaks/
 ├── [Artwork]/
-├── 1990.04.08. Season 1/
-│   └── 01. Pilot.mkv
-├── 1990.09.30. Season 2/
+├── Episodes/
+│   ├── 1990.04.08. Season 1/
+│   │   └── 01. Pilot.mkv
+│   └── 1990.09.30. Season 2/
 └── Specials/
 ```
 

@@ -61,6 +61,11 @@ export default function SeriesEpisodeList({
                 </span>
                 <span className="release-tracklist__title series-episode-list__title">
                   {ep.title}
+                  {(ep as { video_suffix?: string | null }).video_suffix ? (
+                    <span className="release-tracklist__video-badge">
+                      {(ep as { video_suffix?: string }).video_suffix}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="series-episode-list__trailing">
                   {dateLabel ? (

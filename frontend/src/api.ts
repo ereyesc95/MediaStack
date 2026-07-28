@@ -1846,6 +1846,45 @@ export async function fetchSeriesGallery(path: string) {
   );
 }
 
+export async function fetchSeriesOpeningsEndings(franchiseId: string) {
+  return request<{
+    openings: import("./types").SeriesEpisodeItem[];
+    endings: import("./types").SeriesEpisodeItem[];
+    extras: import("./types").SeriesEpisodeItem[];
+    items: import("./types").SeriesEpisodeItem[];
+    title?: string;
+    opening_count?: number;
+    ending_count?: number;
+  }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/playlist/openings-endings`
+  );
+}
+
+export async function fetchSeriesPlayerTracks(franchiseId: string) {
+  return request<{
+    tracks: {
+      id: string;
+      title: string;
+      play_url: string;
+      cover_url?: string | null;
+      artist?: string | null;
+      release_title?: string | null;
+    }[];
+    count: number;
+  }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/player-tracks`
+  );
+}
+
+export async function fetchSeriesFolderExtras(path: string) {
+  return request<{
+    items: import("./types").SeriesEpisodeItem[];
+    openings: import("./types").SeriesEpisodeItem[];
+    endings: import("./types").SeriesEpisodeItem[];
+    extras: import("./types").SeriesEpisodeItem[];
+  }>(`${API}/series/extras?path=${encodeURIComponent(path)}`);
+}
+
 export async function fetchMediaRelated(path: string) {
   return request<MediaRelatedPayload>(
     `${API}/media/related?path=${encodeURIComponent(path)}`

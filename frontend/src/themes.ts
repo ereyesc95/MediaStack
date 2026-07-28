@@ -184,6 +184,7 @@ const CARD_ORIENTATIONS: CardOrientation[] = [
   "portrait",
   "banner",
   "icons",
+  "badge",
 ];
 
 export function getStoredOrientation(

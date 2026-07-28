@@ -28,11 +28,20 @@ def artwork_dir(franchise_dir: Path) -> Path:
 def _list_named(
     franchise_dir: Path, *, want: str
 ) -> list[Path]:
-    """Only files under [Artwork]/Artwork whose stem contains portrait|landscape."""
+    """Files under Gallery/Covers or [Artwork] whose stem contains portrait|landscape."""
+    from app.series_paths import cover_search_dirs
+
     needle = _PORTRAIT_RE if want == "portrait" else _LANDSCAPE_RE
     out: list[Path] = []
-    for sub in ("[Artwork]", "Artwork"):
-        d = franchise_dir / sub
+    dirs = cover_search_dirs(franchise_dir)
+    if not dirs:
+        dirs = [
+            d
+            for name in ("[Artwork]", "Artwork")
+            for d in [franchise_dir / name]
+            if d.is_dir()
+        ]
+    for d in dirs:
         if not d.is_dir():
             continue
         try:
@@ -42,7 +51,6 @@ def _list_named(
         for f in files:
             if not f.is_file() or f.suffix.lower() not in IMAGE_EXTS:
                 continue
-            # Require the orientation word in the filename — booklets/logos never qualify
             if needle.search(f.stem):
                 out.append(f)
     return out
@@ -161,6 +169,12 @@ def build_local_eras(franchise_dir: Path, media_root: Path) -> list[dict]:
 
 
 def _artwork_subdir(folder: Path) -> Path | None:
+    """Prefer Gallery/Covers for cover/photocard art, else [Artwork]/Artwork."""
+    from app.series_paths import find_covers_dir
+
+    covers = find_covers_dir(folder)
+    if covers:
+        return covers
     for name in ("[Artwork]", "Artwork"):
         d = folder / name
         if d.is_dir():

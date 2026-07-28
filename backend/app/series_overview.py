@@ -109,28 +109,9 @@ def _activity_periods(
 
 
 def _list_brand_assets(franchise_dir: Path, media_root: Path) -> tuple[str | None, str | None]:
-    logo_url = None
-    icon_url = None
-    for sub in ("Gallery/Logos", "[Artwork]", "Artwork"):
-        d = franchise_dir / sub
-        if not d.is_dir():
-            continue
-        try:
-            files = list(d.iterdir())
-        except OSError:
-            continue
-        for f in files:
-            if not f.is_file() or f.suffix.lower() not in IMAGE_EXTS:
-                continue
-            low = f.stem.casefold()
-            url = _media_url(f, media_root)
-            if not url:
-                continue
-            if "icon" in low and not icon_url:
-                icon_url = url
-            if "logo" in low and "collapsed" not in low and not logo_url:
-                logo_url = url
-    return logo_url, icon_url
+    from app.series_paths import find_logo_file
+
+    return find_logo_file(franchise_dir, media_root)
 
 
 def _enrich_cast_member(
@@ -893,13 +874,17 @@ def build_series_overview(
     }
 
     subseries_cards = []
+    from app.series_paths import find_badge_file
+
     for s in detail.get("subseries") or []:
         sub_path = (s.get("folder_path") or "").replace("\\", "/")
         sub_dir = root / sub_path if sub_path else None
         logo_url = None
         icon_url = None
+        badge_url = None
         if sub_dir and sub_dir.is_dir():
             logo_url, icon_url = _list_brand_assets(sub_dir, root)
+            badge_url = find_badge_file(sub_dir, root)
         subseries_cards.append(
             {
                 "id": s["id"],
@@ -909,6 +894,7 @@ def build_series_overview(
                 "cover_url": s.get("cover_url") or detail.get("cover_url"),
                 "logo_url": logo_url,
                 "icon_url": icon_url,
+                "badge_url": badge_url,
                 "folder_path": s.get("folder_path"),
                 "season_count": s.get("season_count") or 0,
                 "has_gallery": s.get("has_gallery"),

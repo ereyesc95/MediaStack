@@ -275,6 +275,7 @@ export const SERIES_AUDIO_CATEGORY_META: {
   { key: "soundtracks", label: "Soundtracks" },
   { key: "live_albums", label: "Live" },
   { key: "singles", label: "Singles" },
+  { key: "playlists", label: "Playlists" },
 ];
 
 export function useSeriesAudioCategories(items: SeriesMediaCard[]) {

@@ -148,6 +148,31 @@ export function IconCardIcons({ className }: IconProps) {
   );
 }
 
+export function IconCardBadge({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <rect
+        x="5"
+        y="5"
+        width="14"
+        height="14"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="3.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
 export function IconFolder({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

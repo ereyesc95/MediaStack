@@ -27,7 +27,7 @@ from app.media_index import (
 from app.media_paths_util import resolve_media_entry, safe_relative
 from app.series_index import _list_subseries, find_franchise_dir
 
-AUDIO_BUCKET = "[audio]"
+AUDIO_BUCKETS = ("[audio]", "audio")
 DEFAULT_SOURCE_ARTIST = "Various Artists"
 
 
@@ -36,7 +36,7 @@ def _find_audio_bucket(folder: Path) -> Path | None:
         return None
     try:
         for child in folder.iterdir():
-            if child.is_dir() and child.name.casefold() == AUDIO_BUCKET:
+            if child.is_dir() and child.name.casefold() in AUDIO_BUCKETS:
                 return child
     except OSError:
         return None

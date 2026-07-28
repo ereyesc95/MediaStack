@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   fetchSeriesFolder,
+  fetchSeriesFolderExtras,
   fetchSeriesFranchiseAudio,
   fetchSeriesFranchiseGames,
   fetchSeriesFranchiseLibrary,
@@ -36,8 +37,9 @@ import type {
   SeriesSubseriesCard,
 } from "../../types";
 import {
+  isMobileLandscapeLayout,
   isMobilePortraitLayout,
-  isStackedArtistLayout,
+  isTabletLayout,
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
@@ -57,6 +59,7 @@ import {
   saveReleaseCardLayout,
 } from "../../themes";
 import SeriesAboutEditModal from "./SeriesAboutEditModal";
+import SeriesAudioPlayer from "./SeriesAudioPlayer";
 import SeriesCast from "./SeriesCast";
 import SeriesEpisodeList from "./SeriesEpisodeList";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
@@ -64,6 +67,7 @@ import SeriesMediaGrid, {
   type SeriesMediaCard,
   useSeriesAudioCategories,
 } from "./SeriesMediaGrid";
+import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
 
 export type SubseriesTab =
   | "overview"
@@ -285,6 +289,14 @@ function filterCardsForSubseries(
   return cards.filter((c) => {
     const p = (c.path || "").replace(/\\/g, "/").toLowerCase();
     const t = c.title || "";
+    const meta = (c.meta || "").toLowerCase();
+    if (
+      c.path?.startsWith("playlist:") ||
+      c.category === "playlists" ||
+      c.id.startsWith("series-op-ed:")
+    ) {
+      return true;
+    }
     if (pathCf && p.includes(pathCf)) return true;
     if (
       pathFolder &&
@@ -293,6 +305,7 @@ function filterCardsForSubseries(
       return true;
     // Match Movies/Books/Games paths that nest the same dated subseries folder name
     if (pathFolder && p.includes(pathFolder)) return true;
+    if (titleCf && meta.includes(titleCf)) return true;
     if (titleBelongs(t)) return true;
     return false;
   });
@@ -356,8 +369,10 @@ export default function SeriesSubseriesPage({
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
-  const stacked = isStackedArtistLayout(layout);
-  const mobilePortrait = isMobilePortraitLayout(layout);
+  const stacked = isMobilePortraitLayout(layout);
+  const mobileLandscape = isMobileLandscapeLayout(layout);
+  const tabletLayout = isTabletLayout(layout);
+  const tabletPortrait = layout === "tablet-portrait";
   const tab = sectionToTab(section);
 
   const [card, setCard] = useState<SeriesSubseriesCard | null>(null);
@@ -372,6 +387,7 @@ export default function SeriesSubseriesPage({
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [expandedSeasonId, setExpandedSeasonId] = useState<string | null>(null);
   const [moviesExpanded, setMoviesExpanded] = useState(false);
+  const [extrasExpanded, setExtrasExpanded] = useState(false);
   const [focusCoverUrl, setFocusCoverUrl] = useState<string | null>(null);
   const [focusBgUrl, setFocusBgUrl] = useState<string | null>(null);
   const [castTab, setCastTab] = useState<"characters" | "staff">("characters");
@@ -386,6 +402,16 @@ export default function SeriesSubseriesPage({
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
   const [rescanTick, setRescanTick] = useState(0);
+  const [extraVideos, setExtraVideos] = useState<SeriesEpisodeItem[]>([]);
+  const [openingVideos, setOpeningVideos] = useState<SeriesEpisodeItem[]>([]);
+  const [endingVideos, setEndingVideos] = useState<SeriesEpisodeItem[]>([]);
+  const [seriesPlaying, setSeriesPlaying] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [opedOpen, setOpedOpen] = useState(false);
+  const [gallerySectionKey, setGallerySectionKey] = useState("all");
+  const [gallerySections, setGallerySections] = useState<
+    { key: string; label: string }[]
+  >([]);
   const [bgLayers, setBgLayers] = useState<{
     current?: string;
     outgoing?: string;
@@ -434,6 +460,7 @@ export default function SeriesSubseriesPage({
           cover_url: s.cover_url ?? null,
           logo_url: (s as { logo_url?: string | null }).logo_url ?? null,
           icon_url: (s as { icon_url?: string | null }).icon_url ?? null,
+          badge_url: (s as { badge_url?: string | null }).badge_url ?? null,
           season_count: s.season_count ?? 0,
           has_gallery: Boolean(
             (s as { has_gallery?: boolean }).has_gallery
@@ -544,7 +571,7 @@ export default function SeriesSubseriesPage({
   );
 
   const baseCoverFront =
-    detail?.cover_url || card?.cover_url || overview?.cover_url || DEFAULT_DISC_URL;
+    detail?.cover_url || card?.cover_url || overview?.cover_url || null;
   const baseCoverBack = detail?.cover_back_url || baseCoverFront;
   const baseCover = baseCoverFront;
 
@@ -572,6 +599,14 @@ export default function SeriesSubseriesPage({
     setMoviesExpanded(false);
     setGamePlatform("all");
     setMediaReady(false);
+    setCard(null);
+    setDetail(null);
+    setSeasonEpisodes({});
+    setBgLayers({});
+    setExtraVideos([]);
+    setOpeningVideos([]);
+    setEndingVideos([]);
+    setPanelCollapsed(false);
   }, [subseriesId]);
 
   useEffect(() => {
@@ -579,6 +614,33 @@ export default function SeriesSubseriesPage({
     setSeasonEpisodes({});
     setMediaReady(false);
   }, [rescanTick]);
+
+  useEffect(() => {
+    const path = detail?.folder_path || card?.folder_path;
+    if (!path) {
+      setExtraVideos([]);
+      setOpeningVideos([]);
+      setEndingVideos([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchSeriesFolderExtras(path)
+      .then((data) => {
+        if (cancelled) return;
+        setOpeningVideos(data.openings || []);
+        setEndingVideos(data.endings || []);
+        setExtraVideos(data.extras || []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setExtraVideos([]);
+        setOpeningVideos([]);
+        setEndingVideos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.folder_path, card?.folder_path, rescanTick]);
 
   useEffect(() => {
     if (tab !== "episodes") {
@@ -759,6 +821,9 @@ export default function SeriesSubseriesPage({
           navigate_band_id?: number | null;
           navigate_release_id?: string | null;
           category?: string | null;
+          is_series_playlist?: boolean;
+          playlist_kind?: string | null;
+          meta?: string | null;
         }[];
         setAudioCards(
           filterCardsForSubseries(
@@ -772,14 +837,24 @@ export default function SeriesSubseriesPage({
                 date_iso: r.date_iso,
                 display_date: r.display_date || r.release_date,
                 folder_path: r.folder_path || r.subseries_path || undefined,
-                path: r.folder_path || r.subseries_path || undefined,
+                path: r.is_series_playlist
+                  ? `playlist:${r.playlist_kind || "openings-endings"}`
+                  : r.folder_path || r.subseries_path || undefined,
                 meta:
-                  [r.subseries_title, r.source_artist_name]
+                  [
+                    r.subseries_title,
+                    r.source_artist_name,
+                    r.meta,
+                  ]
                     .filter(Boolean)
                     .join(" · ") || undefined,
                 navigate_band_id: r.navigate_band_id,
                 navigate_release_id: r.navigate_release_id,
-                category: r.category,
+                category: r.is_series_playlist
+                  ? "playlists"
+                  : r.category || undefined,
+                open_label: r.is_series_playlist ? "Open playlist" : undefined,
+                open_mode: r.is_series_playlist ? ("tab" as const) : null,
               }))
             ),
             title,
@@ -936,17 +1011,25 @@ export default function SeriesSubseriesPage({
   const showMediaLayoutPicker =
     tab === "movies" || tab === "audio" || tab === "library" || tab === "games";
 
-  const hasEpisodes = seasons.length > 0 || episodeMovies.length > 0;
+  const hasEpisodes =
+    seasons.length > 0 ||
+    episodeMovies.length > 0 ||
+    (card?.season_count ?? 0) > 0;
   const hasMovies = movieCards.length > 0;
   const hasAudio = audioCards.length > 0;
   const hasLibrary = libraryCards.length > 0;
   const hasGames = gameCards.length > 0;
-  const hasGallery = Boolean(detail?.has_gallery || card?.has_gallery);
+  const hasGallery = Boolean(
+    detail?.has_gallery ||
+      card?.has_gallery ||
+      // Prefer showing Gallery while folder detail is still loading
+      (loading && (card?.folder_path || detail?.folder_path))
+  );
 
   const tabs: { id: SubseriesTab; label: string }[] = useMemo(() => {
     const all: { id: SubseriesTab; label: string }[] = [
-      { id: "overview", label: "OVERVIEW" },
-      { id: "episodes", label: "EPISODES" },
+      { id: "overview", label: stacked ? "INFO" : "OVERVIEW" },
+      { id: "episodes", label: stacked ? "EPS" : "EPISODES" },
       { id: "movies", label: "MOVIES" },
       { id: "audio", label: "AUDIO" },
       { id: "library", label: "LIBRARY" },
@@ -955,8 +1038,8 @@ export default function SeriesSubseriesPage({
     ];
     return all.filter((t) => {
       if (t.id === "overview") return true;
-      if (t.id === "episodes") return hasEpisodes;
-      if (t.id === "gallery") return hasGallery;
+      if (t.id === "episodes") return hasEpisodes || loading;
+      if (t.id === "gallery") return hasGallery || loading;
       if (!mediaReady) return true;
       if (t.id === "movies") return hasMovies;
       if (t.id === "audio") return hasAudio;
@@ -965,8 +1048,10 @@ export default function SeriesSubseriesPage({
       return true;
     });
   }, [
+    stacked,
     hasEpisodes,
     hasGallery,
+    loading,
     mediaReady,
     hasMovies,
     hasAudio,
@@ -975,6 +1060,7 @@ export default function SeriesSubseriesPage({
   ]);
 
   useEffect(() => {
+    if (loading) return;
     if (!tabs.some((t) => t.id === tab)) {
       onNavigate({
         subseriesId,
@@ -982,7 +1068,7 @@ export default function SeriesSubseriesPage({
         section: "overview",
       });
     }
-  }, [tabs, tab, onNavigate, subseriesId, expandedSeasonId, seasonId]);
+  }, [tabs, tab, onNavigate, subseriesId, expandedSeasonId, seasonId, loading]);
 
   const setTab = (next: SubseriesTab) => {
     onNavigate({
@@ -1009,15 +1095,18 @@ export default function SeriesSubseriesPage({
 
   useEffect(() => {
     if (tab !== "episodes") return;
-    if (!expandedSeasonId || moviesExpanded) return;
+    if (!expandedSeasonId || moviesExpanded || extrasExpanded) return;
     const s = seasons.find((x) => x.id === expandedSeasonId);
     if (s) selectSeasonCover(s);
-  }, [tab, expandedSeasonId, seasons, moviesExpanded]);
+  }, [tab, expandedSeasonId, seasons, moviesExpanded, extrasExpanded]);
 
   const toggleSeason = (s: SeriesSeasonCard) => {
     if (expandedSeasonId !== s.id) {
       setExpandedSeasonId(s.id);
       setMoviesExpanded(false);
+      setExtrasExpanded(false);
+    } else {
+      setExpandedSeasonId(null);
     }
     if (tab === "episodes") selectSeasonCover(s);
     onNavigate({
@@ -1030,6 +1119,7 @@ export default function SeriesSubseriesPage({
   const selectMovieBlock = () => {
     setMoviesExpanded(true);
     setExpandedSeasonId(null);
+    setExtrasExpanded(false);
     const first = localMovies[0] || relatedMovies[0];
     const url =
       (first && "cover_url" in first
@@ -1039,7 +1129,22 @@ export default function SeriesSubseriesPage({
     setFocusBgUrl(url || null);
   };
 
+  const toggleExtras = () => {
+    setExtrasExpanded((v) => {
+      const next = !v;
+      if (next) {
+        setMoviesExpanded(false);
+        setExpandedSeasonId(null);
+      }
+      return next;
+    });
+  };
+
   const openMediaCard = (item: SeriesMediaCard) => {
+    if (item.path?.startsWith("playlist:")) {
+      setOpedOpen(true);
+      return;
+    }
     if (item.navigate_band_id && item.navigate_release_id) {
       onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
       return;
@@ -1061,16 +1166,37 @@ export default function SeriesSubseriesPage({
   const pageClass = [
     "release-page",
     "series-subseries-page",
-    `release-page--${layout}`,
-    tab === "overview" ? "release-page--overview" : "",
     stacked ? "release-page--stacked" : "",
-    mobilePortrait ? "release-page--mobile-portrait" : "",
+    stacked ? "release-page--scroll" : "",
+    mobileLandscape ? "release-page--mobile-landscape" : "",
+    tabletLayout ? "release-page--tablet" : "",
+    tabletPortrait ? "release-page--tablet-portrait" : "",
+    tab === "overview" ? "release-page--overview" : "",
     bgLayers.current ? "release-page--has-bg" : "",
+    seriesPlaying ? "release-page--beat-ready release-page--playing" : "",
+    stacked && panelCollapsed ? "series-subseries-page--panel-collapsed" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const backLabel = (overview?.name || franchiseName || "FRANCHISE").toUpperCase();
+
+  if (opedOpen) {
+    return (
+      <SeriesOpeningsEndingsPage
+        franchiseId={franchiseId}
+        franchiseName={overview?.name || franchiseName}
+        onBack={() => setOpedOpen(false)}
+        onImport={onImport}
+        onSync={onSync}
+        onChooseSource={onChooseSource}
+        onSwitchProfile={onSwitchProfile}
+        onEditProfile={onEditProfile}
+        isAdmin={isAdmin}
+        userId={userId}
+      />
+    );
+  }
 
   return (
     <div className={pageClass}>
@@ -1119,7 +1245,7 @@ export default function SeriesSubseriesPage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span>{backLabel}</span>
+              <span className="series-subseries-page__back-label">{backLabel}</span>
             </button>
           </div>
           <div className="release-page__top-center">
@@ -1136,6 +1262,29 @@ export default function SeriesSubseriesPage({
                 value={cardLayout}
                 onChange={setCardLayoutPersisted}
               />
+            ) : null}
+            <SeriesAudioPlayer
+              franchiseId={franchiseId}
+              onPlayingChange={setSeriesPlaying}
+            />
+            {stacked ? (
+              <button
+                type="button"
+                className={`series-subseries-page__cover-toggle${
+                  panelCollapsed ? "" : " is-active"
+                }`}
+                aria-pressed={!panelCollapsed}
+                aria-label={panelCollapsed ? "Show cover" : "Hide cover"}
+                title={panelCollapsed ? "Show cover" : "Hide cover"}
+                onClick={() => setPanelCollapsed((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                  <path
+                    fill="currentColor"
+                    d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h14V7H5zm2 2h4v6H7V9zm5 0h5v2h-5V9zm0 3h5v2h-5v-2z"
+                  />
+                </svg>
+              </button>
             ) : null}
             <AppMenu
               onImport={onImport}
@@ -1235,25 +1384,57 @@ export default function SeriesSubseriesPage({
             ))}
           </div>
         ) : null}
+
+        {tab === "gallery" && gallerySections.length > 1 ? (
+          <div
+            className="series-section-subbar"
+            role="tablist"
+            aria-label="Gallery folders"
+          >
+            <button
+              type="button"
+              className={gallerySectionKey === "all" ? "active" : ""}
+              onClick={() => setGallerySectionKey("all")}
+            >
+              All
+            </button>
+            {gallerySections.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={gallerySectionKey === s.key ? "active" : ""}
+                onClick={() => setGallerySectionKey(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="release-page__body">
-        <aside className="release-page__panel">
+        <aside
+          className={`release-page__panel${
+            stacked && panelCollapsed ? " release-page__panel--collapsed" : ""
+          }`}
+        >
           <div className="release-page__panel-content">
             <div className="release-page__art">
               <div className="release-page__art-stage release-page__art-stage--cover-only">
                 <span className="release-page__cover-wrap">
                   <img
-                    key={`${panelCoverUrl || DEFAULT_DISC_URL}|${rescanTick}`}
+                    key={`${panelCoverUrl || "empty"}|${rescanTick}`}
                     src={
                       panelCoverUrl
                         ? rescanTick > 0 && !panelCoverUrl.includes("&v=")
                           ? `${panelCoverUrl}${panelCoverUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
                           : panelCoverUrl
-                        : DEFAULT_DISC_URL
+                        : undefined
                     }
                     alt=""
-                    className="release-page__cover"
+                    className={`release-page__cover${
+                      panelCoverUrl ? "" : " release-page__cover--placeholder"
+                    }`}
                   />
                 </span>
               </div>
@@ -1262,12 +1443,17 @@ export default function SeriesSubseriesPage({
               <div className="release-page__panel-body">
                 <div className="release-page__panel-head">
                   <h1 className="release-page__album-title">{title}</h1>
-                  {tab === "episodes" && activeSeason && !moviesExpanded ? (
+                  {tab === "episodes" &&
+                  activeSeason &&
+                  !moviesExpanded &&
+                  !extrasExpanded ? (
                     <p className="series-subseries-page__season-line">
                       {activeSeason.title}
                     </p>
                   ) : moviesExpanded && tab === "episodes" ? (
                     <p className="series-subseries-page__season-line">Movies</p>
+                  ) : extrasExpanded && tab === "episodes" ? (
+                    <p className="series-subseries-page__season-line">Extras</p>
                   ) : null}
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
@@ -1561,7 +1747,10 @@ export default function SeriesSubseriesPage({
                 ) : (
                   <div className="release-tracklist__content">
                     {seasons.map((s) => {
-                      const open = expandedSeasonId === s.id && !moviesExpanded;
+                      const open =
+                        expandedSeasonId === s.id &&
+                        !moviesExpanded &&
+                        !extrasExpanded;
                       const eps = seasonEpisodes[s.id] || [];
                       const count = eps.length || s.episode_count || 0;
                       const seasonDate =
@@ -1612,10 +1801,11 @@ export default function SeriesSubseriesPage({
                         <button
                           type="button"
                           className={`release-tracklist__edition-title series-season-block__header${
-                            moviesExpanded ? " is-open" : ""
+                            moviesExpanded && !extrasExpanded ? " is-open" : ""
                           }`}
                           onClick={() => {
                             if (moviesExpanded) {
+                              setMoviesExpanded(false);
                               const url =
                                 episodeMovies[0]?.cover_url || baseCover;
                               setFocusCoverUrl(url);
@@ -1624,7 +1814,7 @@ export default function SeriesSubseriesPage({
                             }
                             selectMovieBlock();
                           }}
-                          aria-expanded={moviesExpanded}
+                          aria-expanded={moviesExpanded && !extrasExpanded}
                         >
                           <span>Movies</span>
                           <span className="release-tracklist__title-suffix">
@@ -1632,7 +1822,7 @@ export default function SeriesSubseriesPage({
                             · {episodeMovies.length}
                           </span>
                         </button>
-                        {moviesExpanded ? (
+                        {moviesExpanded && !extrasExpanded ? (
                           <SeriesEpisodeList
                             episodes={episodeMovies}
                             showReleaseDate
@@ -1646,6 +1836,38 @@ export default function SeriesSubseriesPage({
                         ) : null}
                       </div>
                     ) : null}
+                    {(() => {
+                      const allExtras = [
+                        ...openingVideos,
+                        ...endingVideos,
+                        ...extraVideos,
+                      ];
+                      if (!allExtras.length) return null;
+                      return (
+                        <div className="release-tracklist__edition-block series-season-block">
+                          <button
+                            type="button"
+                            className={`release-tracklist__edition-title series-season-block__header${
+                              extrasExpanded ? " is-open" : ""
+                            }`}
+                            onClick={toggleExtras}
+                            aria-expanded={extrasExpanded}
+                          >
+                            <span>Extras</span>
+                            <span className="release-tracklist__title-suffix">
+                              {" "}
+                              · {allExtras.length}
+                            </span>
+                          </button>
+                          {extrasExpanded ? (
+                            <SeriesEpisodeList
+                              episodes={allExtras}
+                              emptyLabel="No extras found."
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1694,7 +1916,13 @@ export default function SeriesSubseriesPage({
           ) : null}
 
           {!loading && !error && tab === "gallery" && galleryPath ? (
-            <SeriesGalleryPanel folderPath={galleryPath} />
+            <SeriesGalleryPanel
+              folderPath={galleryPath}
+              hideSubbar
+              sectionKey={gallerySectionKey}
+              onSectionKeyChange={setGallerySectionKey}
+              onSectionsChange={(secs) => setGallerySections(secs)}
+            />
           ) : null}
         </main>
       </div>

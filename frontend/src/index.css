@@ -3987,7 +3987,7 @@ input {
 }
 
 .artist-page__chrome-accent {
-  color: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .artist-page .app-menu-trigger {
@@ -3997,33 +3997,41 @@ input {
 
 .artist-page .app-menu-trigger span {
   width: 16px;
-  background: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
+  background: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .artist-page .app-menu-trigger:hover span {
-  background: var(--accent);
+  background: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
 }
 
 .artist-page .card-orientation-toggle,
-.release-page .card-orientation-toggle {
-  color: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
+.release-page .card-orientation-toggle,
+.release-page .series-subseries-page__cover-toggle,
+.release-page .series-audio-player__toggle,
+.release-page .release-page__back {
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .artist-page .card-orientation-toggle:hover,
-.release-page .card-orientation-toggle:hover {
-  color: var(--accent);
+.release-page .card-orientation-toggle:hover,
+.release-page .series-subseries-page__cover-toggle:hover,
+.release-page .series-subseries-page__cover-toggle.is-active,
+.release-page .series-audio-player__toggle:hover,
+.release-page .series-audio-player.is-open .series-audio-player__toggle,
+.release-page .release-page__back:hover {
+  color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
 }
 
 .artist-page .media-inline-search__toggle,
 .release-page .media-inline-search__toggle {
-  color: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .artist-page .media-inline-search__toggle:hover,
 .release-page .media-inline-search__toggle:hover,
 .artist-page .media-inline-search__close:hover,
 .release-page .media-inline-search__close:hover {
-  color: var(--accent);
+  color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
 }
 
 .release-page .app-menu-trigger {
@@ -4033,11 +4041,11 @@ input {
 
 .release-page .app-menu-trigger span {
   width: 16px;
-  background: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
+  background: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .release-page .app-menu-trigger:hover span {
-  background: var(--accent);
+  background: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
 }
 
 .music-module--backdrop .module-top-bar__menu .card-orientation-toggle,
@@ -13581,13 +13589,13 @@ button.lyrics-status-badge--icon-only {
 }
 
 /* Portrait cover: size the image, not an empty stage. Centered in the panel. */
-.series-subseries-page .release-page__art {
+.series-subseries-page:not(.release-page--stacked) .release-page__art {
   width: 100%;
   justify-content: center;
   align-items: center;
 }
 
-.series-subseries-page .release-page__art-stage--cover-only {
+.series-subseries-page:not(.release-page--stacked) .release-page__art-stage--cover-only {
   width: auto;
   max-width: 100%;
   aspect-ratio: unset;
@@ -13596,7 +13604,7 @@ button.lyrics-status-badge--icon-only {
   --release-cover-size: clamp(13.75rem, 88%, 17.25rem);
 }
 
-.series-subseries-page .release-page__cover-wrap {
+.series-subseries-page:not(.release-page--stacked) .release-page__cover-wrap {
   display: block;
   width: var(--release-cover-size);
   max-width: 100%;
@@ -13608,7 +13616,7 @@ button.lyrics-status-badge--icon-only {
   line-height: 0;
 }
 
-.series-subseries-page .release-page__cover {
+.series-subseries-page:not(.release-page--stacked) .release-page__cover {
   width: 100%;
   height: 100%;
   max-width: none;
@@ -13616,6 +13624,36 @@ button.lyrics-status-badge--icon-only {
   object-fit: cover;
   object-position: center center;
   display: block;
+}
+
+.series-subseries-page .release-page__cover--placeholder {
+  opacity: 0;
+  min-height: 8rem;
+}
+
+.series-subseries-page.release-page--stacked .release-page__art-stage--cover-only {
+  width: auto;
+  max-width: var(--release-cover-size, clamp(7.5rem, 34vw, 9.75rem));
+  --release-cover-size: clamp(7.5rem, 34vw, 9.75rem);
+}
+
+.series-subseries-page.release-page--stacked .release-page__cover-wrap {
+  width: var(--release-cover-size);
+  aspect-ratio: 2 / 3;
+  max-height: none;
+  margin-inline: 0;
+}
+
+.series-subseries-page.release-page--tablet-portrait:not(.release-page--stacked)
+  .release-page__art-stage--cover-only {
+  --release-cover-size: clamp(10rem, 28vw, 13.5rem);
+}
+
+.series-subseries-page.release-page--tablet-portrait:not(.release-page--stacked)
+  .release-page__cover-wrap {
+  width: var(--release-cover-size);
+  aspect-ratio: 2 / 3;
+  max-height: none;
 }
 
 .series-subseries-page:not(.release-page--stacked) .release-page__body {
@@ -13708,7 +13746,7 @@ button.lyrics-status-badge--icon-only {
 
 .series-episode-list__title {
   font-weight: 500;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -17546,4 +17584,419 @@ button.lyrics-status-badge--icon-only {
 .add-playlist-modal__hint a {
   color: var(--accent);
   text-decoration: underline;
+}
+
+.series-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.series-audio-player__toggle {
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  padding: 0.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  line-height: 0;
+}
+
+.series-audio-player__toggle:hover,
+.series-audio-player.is-open .series-audio-player__toggle {
+  color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
+}
+
+.series-audio-player__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: block;
+}
+
+.series-audio-player__dock {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 240;
+  min-width: 16rem;
+  max-width: min(22rem, 90vw);
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.series-audio-player__now {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.series-audio-player__now img {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.series-audio-player__now div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.series-audio-player__now strong {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-oped-page {
+  padding: 1rem 1.25rem 2rem;
+}
+
+.series-oped-page__head {
+  margin-bottom: 1.25rem;
+}
+
+.series-oped-page__title {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.35rem;
+}
+
+.series-oped-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.artist-card--badge .artist-card-icon {
+  width: min(72%, 7.5rem);
+  max-width: 72%;
+  max-height: 72%;
+  height: auto;
+  object-fit: contain;
+}
+
+.artist-card--icons.artist-card--tap-reveal .artist-card-footer,
+.artist-card--badge.artist-card--tap-reveal .artist-card-footer {
+  opacity: 1;
+}
+
+.series-episode-list__title .release-tracklist__video-badge {
+  margin-left: 0.45rem;
+  vertical-align: 0.05em;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.series-subseries-page__panel-toggle {
+  align-self: stretch;
+  margin: 0 0 0.35rem;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.series-subseries-page__cover-toggle {
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  padding: 0.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  opacity: 0.92;
+}
+
+.series-subseries-page__cover-toggle.is-active,
+.series-subseries-page__cover-toggle:hover {
+  opacity: 1;
+  color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
+}
+
+.series-subseries-page.release-page--stacked .series-subseries-page__back-label {
+  display: none;
+}
+
+.series-subseries-page.release-page--stacked .release-page__tabs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  gap: 0;
+}
+
+.series-subseries-page.release-page--stacked .release-page__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.series-subseries-page.release-page--stacked .release-page__tabs button {
+  flex: 0 0 auto;
+  min-width: max-content;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.5rem;
+}
+
+.series-subseries-page.release-page--stacked .release-page__body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.series-subseries-page.release-page--stacked .release-page__panel {
+  position: relative;
+  top: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.series-subseries-page.release-page--stacked
+  .release-page__panel--collapsed {
+  display: none !important;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+}
+
+.series-subseries-page.release-page--stacked.series-subseries-page--panel-collapsed
+  .release-page__body {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.series-subseries-page.release-page--stacked.series-subseries-page--panel-collapsed
+  .release-page__main {
+  padding-top: 0.35rem;
+}
+
+.series-subseries-page.release-page--stacked .release-page__art {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.series-subseries-page.release-page--stacked .release-page__art-stage {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.series-subseries-page.release-page--stacked .release-page__cover-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.series-subseries-page.release-page--stacked .release-page__cover {
+  width: min(58vw, 13.5rem);
+  max-width: 13.5rem;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  margin-inline: auto;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top {
+  position: relative;
+  align-items: center;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(52vw, 14rem);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-center * {
+  pointer-events: auto;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-left,
+.series-subseries-page.release-page--stacked .release-page__top-right {
+  z-index: 2;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-right {
+  flex-wrap: nowrap;
+  gap: 0.15rem;
+  max-width: 48%;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-right .release-card-layout-picker,
+.series-subseries-page.release-page--stacked .release-page__top-right .series-audio-player,
+.series-subseries-page.release-page--stacked .release-page__top-right .app-menu {
+  flex-shrink: 0;
+}
+
+.series-subseries-page.release-page--stacked .release-page__main,
+.series-subseries-page.release-page--stacked .release-tracklist,
+.series-subseries-page.release-page--stacked .series-media-grid {
+  min-height: 0;
+}
+
+.series-subseries-page.release-page--stacked .series-media-grid,
+.series-subseries-page.release-page--stacked .media-release-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.series-subseries-page.release-page--stacked .series-media-grid--square,
+.series-subseries-page.release-page--stacked
+  .media-release-grid.series-media-grid--square {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.series-oped-tracklist {
+  width: 100%;
+  padding: 0.25rem 0 1.5rem;
+}
+
+.series-oped-tracklist__head,
+.series-oped-tracklist__row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.1fr) 3.5rem 4.5rem;
+  gap: 0.55rem;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.series-oped-tracklist__head {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.series-oped-tracklist__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.series-oped-tracklist__sort.is-active {
+  color: var(--text);
+}
+
+.series-oped-tracklist__sort .sort-chevron {
+  width: 0.7rem;
+  height: 0.7rem;
+  opacity: 0.55;
+}
+
+.series-oped-tracklist__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.series-oped-tracklist__row {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.series-oped-tracklist__row:hover,
+.series-oped-tracklist__row.is-playing {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.series-oped-tracklist__col-num,
+.series-oped-tracklist__col-year,
+.series-oped-tracklist__col-dur {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.series-oped-tracklist__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.series-oped-tracklist__title-main {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.series-oped-tracklist__title-suffix {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.series-oped-tracklist__col-artist,
+.series-oped-tracklist__col-album,
+.series-oped-tracklist__col-series {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .series-oped-tracklist__head .series-oped-tracklist__col-artist,
+  .series-oped-tracklist__head .series-oped-tracklist__col-album,
+  .series-oped-tracklist__head .series-oped-tracklist__col-year,
+  .series-oped-tracklist__head .series-oped-tracklist__col-series,
+  .series-oped-tracklist__row .series-oped-tracklist__col-artist,
+  .series-oped-tracklist__row .series-oped-tracklist__col-album,
+  .series-oped-tracklist__row .series-oped-tracklist__col-year,
+  .series-oped-tracklist__row .series-oped-tracklist__col-series {
+    display: none;
+  }
+
+  .series-oped-tracklist__head,
+  .series-oped-tracklist__row {
+    grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+  }
 }

@@ -49,10 +49,12 @@ import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import SeriesAbout from "./SeriesAbout";
 import SeriesAboutEditModal from "./SeriesAboutEditModal";
+import SeriesAudioPlayer from "./SeriesAudioPlayer";
 import SeriesCast from "./SeriesCast";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
 import SeriesLinks from "./SeriesLinks";
 import SeriesMediaGrid, { type SeriesMediaCard } from "./SeriesMediaGrid";
+import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
 import SeriesRelatedPanel, {
   type SeriesRelatedTab,
 } from "./SeriesRelatedPanel";
@@ -95,6 +97,7 @@ type Props = {
     publisher?: string;
     writer?: string;
   }) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
 };
 
 const SECTIONS: {
@@ -147,6 +150,7 @@ export default function SeriesFranchisePage({
   onBack,
   onNavigate,
   onBrowseCatalog,
+  onOpenMusicRelease,
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
@@ -189,6 +193,8 @@ export default function SeriesFranchisePage({
 
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
   const [audioLoading, setAudioLoading] = useState(false);
+  const [opedOpen, setOpedOpen] = useState(false);
+  const [seriesPlaying, setSeriesPlaying] = useState(false);
   const [showCards, setShowCards] = useState<SeriesMediaCard[]>([]);
   const [showLoading, setShowLoading] = useState(false);
   const [movieCards, setMovieCards] = useState<SeriesMediaCard[]>([]);
@@ -299,17 +305,37 @@ export default function SeriesFranchisePage({
           subseries_path?: string | null;
           subseries_title?: string | null;
           source_artist_name?: string | null;
+          is_series_playlist?: boolean;
+          playlist_kind?: string | null;
+          meta?: string | null;
+          navigate_band_id?: number | null;
+          navigate_release_id?: string | null;
+          logo_url?: string | null;
+          banner_url?: string | null;
+          category?: string | null;
         }[];
         setAudioCards(
           releases.map((r, i) => ({
             id: r.id || `audio-${i}`,
             title: r.title || r.name || "Release",
             cover_url: r.cover_url,
-            date_label: r.display_date || r.release_date || r.date_iso || null,
+            logo_url: r.logo_url,
+            banner_url: r.banner_url || r.cover_url,
+            date_label: r.display_date || r.release_date || r.date_iso || r.meta || null,
             path: r.folder_path || r.subseries_path || undefined,
-            meta: [r.subseries_title, r.source_artist_name]
+            meta: [r.subseries_title, r.source_artist_name, r.meta]
               .filter(Boolean)
               .join(" · ") || undefined,
+            navigate_band_id: r.navigate_band_id,
+            navigate_release_id: r.navigate_release_id,
+            category: r.is_series_playlist
+              ? "playlists"
+              : r.category || undefined,
+            open_label: r.is_series_playlist ? "Open playlist" : undefined,
+            open_mode: r.is_series_playlist ? ("tab" as const) : null,
+            ...(r.is_series_playlist
+              ? { path: `playlist:${r.playlist_kind || "openings-endings"}` }
+              : {}),
           }))
         );
       })
@@ -384,6 +410,7 @@ export default function SeriesFranchisePage({
             title: s.title,
             cover_url: s.cover_url,
             logo_url: (s as { logo_url?: string | null }).logo_url || null,
+            badge_url: (s as { badge_url?: string | null }).badge_url || null,
             banner_url:
               (s as { banner_url?: string | null }).banner_url ||
               s.cover_url ||
@@ -536,9 +563,14 @@ export default function SeriesFranchisePage({
     staff: data?.cast?.staff?.length ?? data?.cast?.people?.length ?? 0,
   };
 
+  const subseriesList = data?.subseries || [];
+  const showSubseriesSubbar = subseriesList.length > 1;
   const subseriesTabs = useMemo(() => {
-    const list = data?.subseries || [];
-    return [{ id: "all", title: "All" }, ...list.map((s) => ({ id: s.id, title: s.title }))];
+    if (subseriesList.length <= 1) return [];
+    return [
+      { id: "all", title: "All" },
+      ...subseriesList.map((s) => ({ id: s.id, title: s.title })),
+    ];
   }, [data?.subseries]);
 
   const platforms = useMemo(() => {
@@ -553,6 +585,14 @@ export default function SeriesFranchisePage({
     if (mediaSubFilter === "all") return items;
     const key = mediaSubFilter.toLowerCase();
     return items.filter((item) => {
+      // Openings & Endings only on All (when multiple subseries exist)
+      if (
+        item.path?.startsWith("playlist:") ||
+        item.category === "playlists" ||
+        item.id.startsWith("series-op-ed:")
+      ) {
+        return false;
+      }
       const hay = `${item.meta || ""} ${item.path || ""} ${item.id}`.toLowerCase();
       return hay.includes(key);
     });
@@ -574,9 +614,27 @@ export default function SeriesFranchisePage({
     stacked ? "artist-page--stacked" : "",
     mobilePortrait ? "artist-page--mobile-portrait" : "",
     bgLayers.current ? "artist-page--has-bg" : "",
+    seriesPlaying ? "artist-page--beat-ready artist-page--playing" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  if (opedOpen) {
+    return (
+      <SeriesOpeningsEndingsPage
+        franchiseId={franchiseId}
+        franchiseName={data?.name || shell?.name}
+        onBack={() => setOpedOpen(false)}
+        onImport={onImport}
+        onSync={onSync}
+        onChooseSource={onChooseSource}
+        onSwitchProfile={onSwitchProfile}
+        onEditProfile={onEditProfile}
+        isAdmin={isAdmin}
+        userId={userId}
+      />
+    );
+  }
   const bodyLineup =
     section === "overview" &&
     (overviewTab === "cast" || overviewTab === "links");
@@ -666,8 +724,13 @@ export default function SeriesFranchisePage({
               <CardOrientationPicker
                 value={cardOrientation}
                 onChange={onSetOrientation}
+                includeBadge
               />
             ) : null}
+            <SeriesAudioPlayer
+              franchiseId={franchiseId}
+              onPlayingChange={setSeriesPlaying}
+            />
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -763,7 +826,7 @@ export default function SeriesFranchisePage({
           </nav>
         ) : null}
 
-        {section === "overview" && overviewTab === "cast" && subseriesTabs.length > 1 ? (
+        {section === "overview" && overviewTab === "cast" && showSubseriesSubbar ? (
           <div className="series-section-subbar" role="tablist" aria-label="Cast subseries">
             {subseriesTabs.map((t) => (
               <button
@@ -801,7 +864,7 @@ export default function SeriesFranchisePage({
           </nav>
         ) : null}
 
-        {showMediaSubbar && subseriesTabs.length > 1 ? (
+        {showMediaSubbar && showSubseriesSubbar ? (
           <div className="series-section-subbar" role="tablist" aria-label="Subseries">
             {subseriesTabs.map((t) => (
               <button
@@ -976,6 +1039,18 @@ export default function SeriesFranchisePage({
             loading={audioLoading}
             emptyMessage="No audio for this series."
             cardLayout={releaseCardLayout}
+            onOpen={(item) => {
+              if (item.path?.startsWith("playlist:")) {
+                setOpedOpen(true);
+                return;
+              }
+              if (item.navigate_band_id && item.navigate_release_id) {
+                onOpenMusicRelease?.(
+                  item.navigate_band_id,
+                  item.navigate_release_id
+                );
+              }
+            }}
           />
         ) : null}
 

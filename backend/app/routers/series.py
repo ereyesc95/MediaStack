@@ -612,6 +612,14 @@ def series_franchise_audio(
         seen.add(dedupe)
         merged.append(card)
 
+    from app.series_extras import openings_endings_playlist_card
+
+    op_ed = openings_endings_playlist_card(franchise_id)
+    if op_ed:
+        merged.insert(0, op_ed)
+        if "playlists" not in categories:
+            categories = ["playlists", *categories]
+
     return {
         "releases": merged,
         "categories": categories,
@@ -679,10 +687,68 @@ def series_folder(path: str = Query(..., min_length=1)):
 
 @router.get("/gallery")
 def series_gallery(path: str = Query(..., min_length=1)):
-    """[Artwork] images for a Series franchise / subseries / season folder."""
+    """Gallery images for a Series franchise / subseries folder (sectioned)."""
     from app.series_index import build_series_gallery
 
     return build_series_gallery(path)
+
+
+@router.get("/franchises/{franchise_id}/playlist/openings-endings")
+def series_openings_endings(franchise_id: str):
+    from app.series_extras import match_openings_endings_audio
+
+    return match_openings_endings_audio(franchise_id)
+
+
+@router.get("/franchises/{franchise_id}/player-tracks")
+def series_player_tracks(franchise_id: str, db: Session = Depends(get_db)):
+    """Playable audio tracks resolved from Series Audio/ .lnk shortcuts."""
+    from app.series_extras import collect_series_audio_tracks
+
+    tracks = collect_series_audio_tracks(db, franchise_id)
+    return {"tracks": tracks, "count": len(tracks)}
+
+
+@router.get("/extras")
+def series_folder_extras(path: str = Query(..., min_length=1)):
+    """Extras videos under one subseries/franchise folder."""
+    from pathlib import Path
+
+    from app.config import settings
+    from app.media_item_overview import VIDEO_EXTS
+    from app.series_extras import _video_item
+    from app.series_paths import find_extras_dir
+
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root:
+        return {"items": [], "openings": [], "endings": [], "extras": []}
+    folder = root / path.replace("\\", "/")
+    ex = find_extras_dir(folder)
+    if not ex:
+        return {"items": [], "openings": [], "endings": [], "extras": []}
+    openings: list = []
+    endings: list = []
+    extras: list = []
+    try:
+        files = sorted(ex.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        files = []
+    for f in files:
+        if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
+            continue
+        item = _video_item(f, root, subseries=None)
+        if item["kind"] == "opening":
+            openings.append(item)
+        elif item["kind"] == "ending":
+            endings.append(item)
+        else:
+            extras.append(item)
+    return {
+        "items": openings + endings + extras,
+        "openings": openings,
+        "endings": endings,
+        "extras": extras,
+    }
 
 
 # DB-backed stubs — under /db so they never steal /catalog, /folder, etc.

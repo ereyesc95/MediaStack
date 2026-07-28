@@ -1561,7 +1561,7 @@ export default function SystemPlaylistPage({
                             </MediaBeatFrame>
                           )}
                         </button>
-                      ) : (
+                      ) : isUserPlaylist && !showTrackPanel ? null : (
                         <button
                           type="button"
                           className={`release-page__artist-link release-page__artist-link--text${
