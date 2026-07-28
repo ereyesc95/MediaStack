@@ -374,6 +374,12 @@ input {
   background: var(--bg-hover);
 }
 
+.app-menu-chrome {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border);
+}
+
 .menu-item-icon {
   flex-shrink: 0;
   opacity: 0.85;
@@ -13059,28 +13065,76 @@ button.lyrics-status-badge--icon-only {
   max-width: none !important;
   aspect-ratio: auto !important;
   border-radius: 2px;
+  position: relative;
+  overflow: hidden;
 }
 
-.series-about__subseries-logo {
+.series-about__subseries-reveal {
   position: absolute;
   inset: 0;
-  margin: auto;
-  max-width: 82%;
-  max-height: 52%;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: stretch;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.35rem 0.5rem;
+  background: rgba(0, 0, 0, 0.62);
+  box-sizing: border-box;
+}
+
+.series-about__subseries-reveal-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
+}
+
+.series-about__subseries-reveal-logo {
+  max-width: 86%;
+  max-height: 100%;
   object-fit: contain;
-  z-index: 1;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55));
-  pointer-events: none;
+}
+
+.series-about__subseries-reveal-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  color: #fff;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.series-about__subseries-reveal-date {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: center;
+  line-height: 1.2;
+  width: 100%;
 }
 
 .series-about__subseries-card .artist-about__track-title,
 .series-about__subseries-card .artist-about__track-date {
   white-space: nowrap;
-  overflow: visible;
-  text-overflow: clip;
-  max-width: none;
-  width: max-content;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 4.75rem;
+  width: 4.75rem;
   text-align: center;
+}
+
+.artist-page--mobile-portrait .series-about__subseries-card .artist-about__track-title,
+.artist-page--mobile-portrait .series-about__subseries-card .artist-about__track-date,
+.artist-page--stacked .series-about__subseries-card .artist-about__track-title,
+.artist-page--stacked .series-about__subseries-card .artist-about__track-date {
+  display: none;
 }
 
 .series-about__subseries-cover .artist-about__track-cover-bg {
@@ -13302,7 +13356,81 @@ button.lyrics-status-badge--icon-only {
   pointer-events: none;
 }
 
-/* Subseries page: collapsible season headers (tracklist edition style) */
+/* Subseries tabs: keep active chrome readable on dark cover themes */
+.series-subseries-page .release-page__tabs button.active {
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  border-bottom-color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.series-subseries-page .series-section-subbar button.active {
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.series-episode-list__row.active {
+  background: color-mix(in srgb, var(--accent, #c9a227) 22%, transparent);
+  color: var(--text);
+}
+
+.series-episode-list__row.active .series-episode-list__title {
+  color: var(--text);
+}
+
+/* Mobile franchise: match subseries subbar font to overview subtabs */
+.artist-page--mobile-portrait .series-section-subbar button {
+  font-size: 0.58rem;
+  padding: 0.45rem 0.2rem;
+  letter-spacing: 0.06em;
+}
+
+/* Cast: two people stack vertically on mobile portrait; smaller circles */
+.artist-page--mobile-portrait .artist-lineup-grid[data-count="2"] {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 1.1rem;
+  --lineup-photo: clamp(4.25rem, 26vw, 5.75rem);
+}
+
+.artist-page--mobile-portrait .artist-lineup-grid[data-count="2"] .artist-lineup-card {
+  max-width: calc(var(--lineup-photo) + 3rem);
+}
+
+/* Related banners: equal gutters; constrain grid so cards don't clip the right edge */
+.artist-page--mobile-portrait .series-related.artist-related,
+.artist-page--stacked .series-related.artist-related {
+  padding-inline: 0.85rem;
+  box-sizing: border-box;
+}
+
+.artist-page--mobile-portrait .series-related .artist-related__grid,
+.artist-page--stacked .series-related .artist-related__grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.artist-page--mobile-portrait .series-related .artist-related-card-wrap,
+.artist-page--stacked .series-related .artist-related-card-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.artist-page--mobile-portrait .series-related .artist-card.media-beat-frame,
+.artist-page--stacked .series-related .artist-card.media-beat-frame {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.artist-page--mobile-portrait .series-related .artist-card--banner .artist-card-footer,
+.artist-page--stacked .series-related .artist-card--banner .artist-card-footer {
+  padding-inline: 1rem;
+}
 .series-season-block__header {
   display: flex;
   align-items: baseline;
@@ -17586,11 +17714,19 @@ button.lyrics-status-badge--icon-only {
   text-decoration: underline;
 }
 
-.series-audio-player {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  position: relative;
+.series-audio-player--menu-only {
+  position: fixed;
+  top: 0.35rem;
+  right: 2.75rem;
+  z-index: 230;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+.series-audio-player--menu-only .series-audio-player__dock {
+  right: 0;
+  top: 2.4rem;
 }
 
 .series-audio-player__toggle {
@@ -17799,59 +17935,71 @@ button.lyrics-status-badge--icon-only {
   width: 100%;
 }
 
-.series-subseries-page.release-page--stacked .release-page__art-stage {
+.series-subseries-page.release-page--stacked .release-page__art-stage,
+.series-subseries-page.release-page--stacked .release-page__art-stage--cover-only {
   display: flex;
   justify-content: center;
-  width: 100%;
+  width: auto;
+  max-width: min(58vw, 13.5rem);
+  --release-cover-size: min(58vw, 13.5rem);
 }
 
 .series-subseries-page.release-page--stacked .release-page__cover-wrap {
-  display: flex;
-  justify-content: center;
-  width: 100%;
+  display: block;
+  width: var(--release-cover-size, min(58vw, 13.5rem));
+  aspect-ratio: 2 / 3;
+  max-height: none;
+  margin-inline: auto;
 }
 
 .series-subseries-page.release-page--stacked .release-page__cover {
-  width: min(58vw, 13.5rem);
-  max-width: 13.5rem;
-  height: auto;
+  width: 100%;
+  height: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
   margin-inline: auto;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top {
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(2.25rem, 1fr) minmax(0, auto) minmax(7.25rem, 1fr);
   align-items: center;
+  position: relative;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(52vw, 14rem);
+  position: static;
+  left: auto;
+  transform: none;
+  max-width: min(46vw, 12rem);
+  justify-self: center;
+  overflow: hidden;
   pointer-events: none;
   z-index: 1;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-center * {
   pointer-events: auto;
+  max-width: 100%;
 }
 
-.series-subseries-page.release-page--stacked .release-page__top-left,
-.series-subseries-page.release-page--stacked .release-page__top-right {
+.series-subseries-page.release-page--stacked .release-page__top-left {
+  justify-self: start;
   z-index: 2;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-right {
+  justify-self: end;
+  z-index: 2;
   flex-wrap: nowrap;
-  gap: 0.15rem;
-  max-width: 48%;
+  gap: 0.1rem;
+  max-width: none;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-right .release-card-layout-picker,
 .series-subseries-page.release-page--stacked .release-page__top-right .series-audio-player,
-.series-subseries-page.release-page--stacked .release-page__top-right .app-menu {
+.series-subseries-page.release-page--stacked .release-page__top-right .app-menu,
+.series-subseries-page.release-page--stacked .release-page__top-right .series-subseries-page__cover-toggle {
   flex-shrink: 0;
 }
 

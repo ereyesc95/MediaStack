@@ -85,10 +85,24 @@ export default function SeriesAbout({
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
     null
   );
+  const [revealedSubId, setRevealedSubId] = useState<string | null>(null);
+  /** Portrait phone/tablet: hide under-card labels; tap to reveal then open. */
+  const tapRevealSubs = stacked;
   const slides = useMemo(
     () => carouselEras(data.eras, stacked),
     [data.eras, stacked]
   );
+  useEffect(() => {
+    if (!tapRevealSubs || revealedSubId == null) return;
+    const onPointer = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".series-about__subseries-card")) return;
+      setRevealedSubId(null);
+    };
+    document.addEventListener("pointerdown", onPointer, true);
+    return () => document.removeEventListener("pointerdown", onPointer, true);
+  }, [tapRevealSubs, revealedSubId]);
+
   const era: Era | null = slides.length
     ? slides[Math.min(eraIndex, slides.length - 1)]
     : null;
@@ -366,40 +380,77 @@ export default function SeriesAbout({
           {data.subseries.length > 0 && (
             <section className="artist-about__tracks series-about__subseries">
               <div className="artist-about__tracks-row series-about__subseries-row">
-                {data.subseries.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className="artist-about__track series-about__subseries-card"
-                    onClick={() => onOpenSubseries(s)}
-                    title={s.title}
-                  >
-                    <span className="artist-about__track-cover series-about__subseries-cover">
-                      <span
-                        className="artist-about__track-cover-bg"
-                        style={
-                          s.cover_url
-                            ? { backgroundImage: `url("${s.cover_url}")` }
-                            : undefined
+                {data.subseries.map((s) => {
+                  const revealed = tapRevealSubs && revealedSubId === s.id;
+                  const dateLabel =
+                    s.display_date || formatTrackDate(s.date_iso ?? null);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`artist-about__track series-about__subseries-card${
+                        revealed ? " is-revealed" : ""
+                      }`}
+                      onClick={() => {
+                        if (tapRevealSubs) {
+                          if (revealedSubId === s.id) {
+                            onOpenSubseries(s);
+                            return;
+                          }
+                          setRevealedSubId(s.id);
+                          return;
                         }
-                      />
-                      {s.logo_url ? (
-                        <img
-                          className="series-about__subseries-logo"
-                          src={s.logo_url}
-                          alt=""
+                        onOpenSubseries(s);
+                      }}
+                      title={s.title}
+                    >
+                      <span className="artist-about__track-cover series-about__subseries-cover">
+                        <span
+                          className="artist-about__track-cover-bg"
+                          style={
+                            s.cover_url
+                              ? { backgroundImage: `url("${s.cover_url}")` }
+                              : undefined
+                          }
                         />
-                      ) : null}
-                    </span>
-                    <span className="artist-about__track-title">{s.title}</span>
-                    {(s.display_date || s.date_iso) && (
-                      <span className="artist-about__track-date">
-                        {s.display_date ||
-                          formatTrackDate(s.date_iso ?? null)}
+                        {revealed ? (
+                          <span className="series-about__subseries-reveal">
+                            <span className="series-about__subseries-reveal-main">
+                              {s.logo_url ? (
+                                <img
+                                  className="series-about__subseries-reveal-logo"
+                                  src={s.logo_url}
+                                  alt=""
+                                />
+                              ) : (
+                                <span className="series-about__subseries-reveal-title">
+                                  {s.title}
+                                </span>
+                              )}
+                            </span>
+                            {dateLabel ? (
+                              <span className="series-about__subseries-reveal-date">
+                                {dateLabel}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
                       </span>
-                    )}
-                  </button>
-                ))}
+                      {!tapRevealSubs ? (
+                        <>
+                          <span className="artist-about__track-title">
+                            {s.title}
+                          </span>
+                          {dateLabel ? (
+                            <span className="artist-about__track-date">
+                              {dateLabel}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </section>
           )}

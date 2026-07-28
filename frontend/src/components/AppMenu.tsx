@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme } from "../mediaTheme";
 import {
   THEMES,
@@ -82,6 +82,8 @@ type Props = {
   onRefreshIncludeBioChange?: (v: boolean) => void;
   refreshIncludeLabel?: string;
   artistThemeActive?: boolean;
+  /** Extra controls rendered at the top of the dropdown (e.g. mobile chrome). */
+  menuChrome?: ReactNode;
 };
 
 const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
@@ -138,6 +140,7 @@ export default function AppMenu({
   onRefreshIncludeBioChange,
   refreshIncludeLabel = "Include bio",
   artistThemeActive = false,
+  menuChrome,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -318,6 +321,14 @@ export default function AppMenu({
       </button>
       {open && (
         <div className="app-menu-dropdown">
+          {menuChrome ? (
+            <div
+              className="app-menu-chrome"
+              onClick={() => setOpen(false)}
+            >
+              {menuChrome}
+            </div>
+          ) : null}
           {isAdmin && onAddMember && menuVariant !== "release" && (
             <button
               type="button"

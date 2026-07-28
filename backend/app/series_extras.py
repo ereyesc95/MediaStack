@@ -373,7 +373,11 @@ def _theme_audio_item(
     try:
         from app.media_index import release_id_from_path
 
-        item["navigate_release_id"] = release_id_from_path(rel)
+        # Navigate to the album/release folder id (not the track file path).
+        if release_dir is not None:
+            release_rel = safe_relative(release_dir, media_root)
+            if release_rel:
+                item["navigate_release_id"] = release_id_from_path(release_rel)
     except Exception:
         pass
     return item
@@ -419,7 +423,16 @@ def match_openings_endings_audio(franchise_id: str) -> dict:
                 artist_name=artist,
             )
             item = _theme_audio_item(row, matched, root)
-            item["navigate_band_id"] = _band_id(item.get("artist") or artist)
+            band_id = _band_id(item.get("artist") or artist)
+            if band_id is None:
+                audio_rel = (item.get("audio_path") or item.get("play_path") or "").replace(
+                    "\\", "/"
+                )
+                parts = Path(audio_rel).parts
+                if len(parts) >= 3 and parts[0].casefold() == "music":
+                    folder_artist = parts[2].replace("█", "'").replace("■", ",")
+                    band_id = _band_id(folder_artist)
+            item["navigate_band_id"] = band_id
             out.append(item)
         return out
 

@@ -33,10 +33,12 @@ import {
   MiniAudioPlayerControls,
   useMiniAudio,
 } from "../music/artist/MiniAudioPlayer";
+import { openArtistByName } from "../music/artist/openArtistByName";
 import ReleaseAddToPlaylistModal from "../music/release/ReleaseAddToPlaylistModal";
-import ReleaseLyricsModal from "../music/release/ReleaseLyricsModal";
-import ReleaseVersionsModal from "../music/release/ReleaseVersionsModal";
+import ReleaseInlineLyrics from "../music/release/ReleaseInlineLyrics";
+import LyricsStatusBadge from "../music/release/LyricsStatusBadge";
 import {
+  ChevronIcon,
   DEFAULT_DISC_URL,
   parseTrackPanelMeta,
   trackMainTitle,
@@ -89,6 +91,9 @@ type SortKey =
   | "year"
   | "duration";
 
+type RightView = "tracks" | "lyrics" | "versions";
+type MobileTrackView = "player" | "tracks";
+
 type Props = {
   franchiseId: string;
   franchiseName?: string;
@@ -100,6 +105,8 @@ type Props = {
   onEditProfile?: () => void;
   isAdmin?: boolean;
   userId?: number;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number) => void;
 };
 
 function isVideoUrl(url: string | null | undefined): boolean {
@@ -107,7 +114,10 @@ function isVideoUrl(url: string | null | undefined): boolean {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }
 
-function displayTitleParts(t: SeriesOpEdTrack): { main: string; suffix: string | null } {
+function displayTitleParts(t: SeriesOpEdTrack): {
+  main: string;
+  suffix: string | null;
+} {
   const suffix = (t.video_suffix || "").trim() || null;
   let main = t.title || "";
   if (suffix) {
@@ -140,6 +150,15 @@ function toReleaseTrack(t: SeriesOpEdTrack): ReleaseTrackItem {
   };
 }
 
+function openAlbumGoogleSearch(album: string, artist?: string | null) {
+  const q = [`"${album}"`, artist?.trim()].filter(Boolean).join(" ");
+  window.open(
+    `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
 export default function SeriesOpeningsEndingsPage({
   franchiseId,
   franchiseName,
@@ -151,6 +170,8 @@ export default function SeriesOpeningsEndingsPage({
   onEditProfile,
   isAdmin = false,
   userId,
+  onOpenMusicRelease,
+  onOpenArtist,
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isMobilePortraitLayout(layout);
@@ -165,14 +186,18 @@ export default function SeriesOpeningsEndingsPage({
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("number");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [rightView, setRightView] = useState<RightView>("tracks");
+  const [mobileTrackView, setMobileTrackView] =
+    useState<MobileTrackView>("tracks");
   const [lyricsText, setLyricsText] = useState<string | null>(null);
+  const [syncedLyrics, setSyncedLyrics] = useState<string | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
-  const [versionsOpen, setVersionsOpen] = useState(false);
   const [versions, setVersions] = useState<TrackVersionItem[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const indexRef = useRef(0);
+  const lyricsRequestRef = useRef(0);
 
   useBeatPulse(audio.audioRef, Boolean(activeId), audio.playing);
 
@@ -305,8 +330,7 @@ export default function SeriesOpeningsEndingsPage({
   };
 
   const panelCover =
-    (active &&
-      (active.cover_animation_url || active.cover_url)) ||
+    (active && (active.cover_animation_url || active.cover_url)) ||
     coverUrl ||
     null;
   const panelCoverIsVideo = isVideoUrl(panelCover);
@@ -318,37 +342,47 @@ export default function SeriesOpeningsEndingsPage({
     (active?.year ? `Released in ${active.year}` : null);
   const titleParts = active ? displayTitleParts(active) : null;
   const title = franchiseName || "Franchise";
+  const lyricsTitle = titleParts?.main || active?.title || "Lyrics";
+  const versionsTitle = `${lyricsTitle} Versions`;
 
   const openLyrics = async () => {
     if (!active?.artist || !active.title) return;
-    setLyricsOpen(true);
+    if (stacked) setMobileTrackView("tracks");
+    const requestId = ++lyricsRequestRef.current;
+    setRightView("lyrics");
     setLyricsLoading(true);
     setLyricsText(null);
+    setSyncedLyrics(null);
     try {
       const res = await fetchTrackLyrics(
         active.artist,
         trackMainTitle(active.title),
         active.play_path || undefined
       );
+      if (requestId !== lyricsRequestRef.current) return;
       setLyricsText(res.lyrics);
+      setSyncedLyrics(res.synced_lyrics ?? null);
     } catch {
+      if (requestId !== lyricsRequestRef.current) return;
       setLyricsText(null);
+      setSyncedLyrics(null);
     } finally {
-      setLyricsLoading(false);
+      if (requestId === lyricsRequestRef.current) setLyricsLoading(false);
     }
   };
 
   const openVersions = async () => {
     if (!active?.title) return;
+    if (stacked) setMobileTrackView("tracks");
+    setRightView("versions");
+    setVersionsError(null);
     const bandId = active.navigate_band_id;
     const releaseId = active.navigate_release_id;
     if (bandId == null || !releaseId || !active.play_path) {
-      setVersionsOpen(true);
       setVersions([]);
       setVersionsLoading(false);
       return;
     }
-    setVersionsOpen(true);
     setVersionsLoading(true);
     setVersions([]);
     try {
@@ -359,17 +393,41 @@ export default function SeriesOpeningsEndingsPage({
         active.play_path
       );
       setVersions(res.versions || []);
-    } catch {
+    } catch (e) {
       setVersions([]);
+      setVersionsError(e instanceof Error ? e.message : String(e));
     } finally {
       setVersionsLoading(false);
     }
+  };
+
+  const backToTracks = () => {
+    setRightView("tracks");
   };
 
   const openExtrasVideo = () => {
     const url = active?.video_url?.trim();
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleArtistClick = () => {
+    const name = active?.artist?.trim();
+    if (!name) return;
+    void openArtistByName(name, onOpenArtist ?? (() => {}));
+  };
+
+  const handleAlbumClick = () => {
+    if (!active?.album) return;
+    if (
+      active.navigate_band_id != null &&
+      active.navigate_release_id &&
+      onOpenMusicRelease
+    ) {
+      onOpenMusicRelease(active.navigate_band_id, active.navigate_release_id);
+      return;
+    }
+    openAlbumGoogleSearch(active.album, active.artist);
   };
 
   const pageClass = [
@@ -379,6 +437,12 @@ export default function SeriesOpeningsEndingsPage({
     mobileLandscape ? "release-page--mobile-landscape" : "",
     tabletLayout ? "release-page--tablet" : "",
     layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
+    stacked && mobileTrackView === "player"
+      ? "release-page--track-player"
+      : "",
+    stacked && mobileTrackView === "tracks"
+      ? "release-page--track-tracks"
+      : "",
     audio.playing ? "release-page--beat-ready release-page--playing" : "",
     panelCanvas ? "release-page--has-panel-canvas" : "",
   ]
@@ -387,6 +451,13 @@ export default function SeriesOpeningsEndingsPage({
 
   const bgImage =
     active?.cover_url || coverUrl || panelCover || DEFAULT_DISC_URL;
+
+  const mainWrapperClass = [
+    rightView === "lyrics" ? "release-tracklist release-tracklist--lyrics" : "",
+    rightView === "versions" ? "release-tracklist" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className={pageClass}>
@@ -442,6 +513,25 @@ export default function SeriesOpeningsEndingsPage({
             />
           </div>
         </header>
+
+        {stacked ? (
+          <nav className="release-page__subtabs" aria-label="Tracklist views">
+            <button
+              type="button"
+              className={mobileTrackView === "player" ? "active" : ""}
+              onClick={() => setMobileTrackView("player")}
+            >
+              <span>PLAYER</span>
+            </button>
+            <button
+              type="button"
+              className={mobileTrackView === "tracks" ? "active" : ""}
+              onClick={() => setMobileTrackView("tracks")}
+            >
+              <span>TRACKS</span>
+            </button>
+          </nav>
+        ) : null}
       </div>
 
       <div className="release-page__body">
@@ -508,40 +598,32 @@ export default function SeriesOpeningsEndingsPage({
               <div className="release-page__panel-body">
                 {active ? (
                   <div className="release-page__track-panel">
-                    <div className="release-page__brand-row">
-                      {active.artist_icon_url || active.artist_logo_url ? (
-                        <span className="release-page__brand-row-static">
-                          {active.artist_icon_url ? (
-                            <MediaBeatFrame variant="logo">
-                              <img
-                                src={active.artist_icon_url}
-                                alt=""
-                                className="release-page__meta-icon"
-                              />
-                            </MediaBeatFrame>
-                          ) : null}
-                          {active.artist_logo_url ? (
-                            <MediaBeatFrame variant="logo">
-                              <img
-                                src={active.artist_logo_url}
-                                alt=""
-                                className="release-page__meta-logo"
-                              />
-                            </MediaBeatFrame>
-                          ) : null}
-                        </span>
-                      ) : active.artist ? (
-                        <p className="release-page__artist-link--text">
-                          {active.artist}
-                        </p>
-                      ) : null}
-                    </div>
                     <h2 className="release-page__track-panel-title">
                       {titleParts?.main || active.title}
                     </h2>
                     {titleParts?.suffix ? (
                       <p className="release-page__track-panel-version">
                         {titleParts.suffix}
+                      </p>
+                    ) : null}
+                    {active.artist ? (
+                      <p className="release-page__track-panel-line">
+                        {active.artist_icon_url ? (
+                          <MediaBeatFrame variant="logo">
+                            <img
+                              src={active.artist_icon_url}
+                              alt=""
+                              className="release-page__meta-icon"
+                            />
+                          </MediaBeatFrame>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="release-page__person-link"
+                          onClick={handleArtistClick}
+                        >
+                          {active.artist}
+                        </button>
                       </p>
                     ) : null}
                     {releaseDate ? (
@@ -553,7 +635,14 @@ export default function SeriesOpeningsEndingsPage({
                     ) : null}
                     {active.album ? (
                       <p className="release-page__track-panel-source">
-                        Taken from {active.album}
+                        Taken from{" "}
+                        <button
+                          type="button"
+                          className="release-page__release-link"
+                          onClick={handleAlbumClick}
+                        >
+                          {active.album}
+                        </button>
                       </p>
                     ) : null}
                   </div>
@@ -631,130 +720,230 @@ export default function SeriesOpeningsEndingsPage({
         </aside>
 
         <main className="release-page__main">
-          {loading ? <p className="muted">Loading…</p> : null}
-          {error ? <p className="error">{error}</p> : null}
-          {!loading && !error ? (
-            <div className="series-oped-tracklist">
-              <div className="series-oped-tracklist__head">
-                {(
-                  [
-                    ["number", "#"],
-                    ["title", "Title"],
-                    ["series", "Series"],
-                    ["artist", "Artist"],
-                    ["album", "Album"],
-                    ["year", "Year"],
-                    ["duration", "Duration"],
-                  ] as [SortKey, string][]
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`series-oped-tracklist__sort${
-                      key === "number"
-                        ? " series-oped-tracklist__col-num"
-                        : key === "artist"
-                          ? " series-oped-tracklist__col-artist"
-                          : key === "album"
-                            ? " series-oped-tracklist__col-album"
-                            : key === "series"
-                              ? " series-oped-tracklist__col-series"
-                              : key === "year"
-                                ? " series-oped-tracklist__col-year"
-                                : key === "duration"
-                                  ? " series-oped-tracklist__col-dur"
-                                  : ""
-                    }${sortKey === key ? " is-active" : ""}`}
-                    onClick={() => toggleSort(key)}
-                  >
-                    <span>{label}</span>
-                    <SortChevron desc={sortKey === key && sortDir === "desc"} />
-                  </button>
-                ))}
-              </div>
-              <ul className="series-oped-tracklist__rows">
-                {sortedTracks.map((t, i) => {
-                  const playing = t.id === activeId;
-                  const parts = displayTitleParts(t);
-                  const origIndex = tracks.findIndex((x) => x.id === t.id);
-                  return (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        className={`series-oped-tracklist__row${
-                          playing ? " is-playing" : ""
-                        }`}
-                        onClick={() =>
-                          playAt(origIndex >= 0 ? origIndex : i)
-                        }
-                      >
-                        <span className="series-oped-tracklist__col-num">
-                          {t.number ?? i + 1}
-                        </span>
-                        <span className="series-oped-tracklist__title">
-                          <span className="series-oped-tracklist__title-main">
-                            {parts.main}
-                          </span>
-                          {parts.suffix ? (
-                            <span className="series-oped-tracklist__title-suffix">
-                              {" "}
-                              {parts.suffix}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="series-oped-tracklist__col-series">
-                          {t.subseries_title || "—"}
-                        </span>
-                        <span className="series-oped-tracklist__col-artist">
-                          {t.artist || "—"}
-                        </span>
-                        <span className="series-oped-tracklist__col-album">
-                          {t.album || "—"}
-                        </span>
-                        <span className="series-oped-tracklist__col-year">
-                          {t.year || "—"}
-                        </span>
-                        <span className="series-oped-tracklist__col-dur">
-                          {t.duration || "—"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {!tracks.length ? (
-                <p className="muted">No openings or endings found in Extras.</p>
+          <div className={mainWrapperClass || undefined}>
+            <div
+              className={
+                rightView === "lyrics" || rightView === "versions"
+                  ? "release-tracklist__body"
+                  : undefined
+              }
+            >
+              {rightView === "lyrics" ? (
+                <div className="release-tracklist__lyrics-view">
+                  <div className="release-tracklist__lyrics-toolbar">
+                    <button
+                      type="button"
+                      className="release-tracklist__back"
+                      onClick={backToTracks}
+                      aria-label="Back to tracklist"
+                    >
+                      <ChevronIcon direction="left" />
+                    </button>
+                    <div className="release-tracklist__subview-actions">
+                      {!lyricsLoading && syncedLyrics ? (
+                        <LyricsStatusBadge
+                          synced
+                          title="Timestamped synced lyrics"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                  <ReleaseInlineLyrics
+                    title={lyricsTitle}
+                    lyrics={lyricsText}
+                    syncedLyrics={syncedLyrics}
+                    currentTime={audio.progress}
+                    loading={lyricsLoading}
+                  />
+                </div>
+              ) : null}
+
+              {rightView === "versions" ? (
+                <>
+                  <div className="release-tracklist__subview-head">
+                    <button
+                      type="button"
+                      className="release-tracklist__back"
+                      onClick={backToTracks}
+                      aria-label="Back to tracklist"
+                    >
+                      <ChevronIcon direction="left" />
+                    </button>
+                    <h2 className="release-tracklist__subview-title">
+                      {versionsTitle}
+                    </h2>
+                  </div>
+                  <div className="release-tracklist__content">
+                    {versionsLoading ? (
+                      <p className="muted">Scanning library…</p>
+                    ) : null}
+                    {versionsError ? (
+                      <p className="error">{versionsError}</p>
+                    ) : null}
+                    {!versionsLoading &&
+                    !versionsError &&
+                    versions.length === 0 ? (
+                      <p className="muted">
+                        No other versions found in this artist&apos;s library.
+                      </p>
+                    ) : null}
+                    {!versionsLoading &&
+                    !versionsError &&
+                    versions.length > 0 ? (
+                      <ul className="release-versions-modal__list">
+                        {versions.map((v) => (
+                          <li key={v.play_path}>
+                            <button
+                              type="button"
+                              className="release-versions-modal__item"
+                              onClick={() => {
+                                audio.loadSrc(
+                                  `/api/media/file?path=${encodeURIComponent(v.play_path)}`,
+                                  true
+                                );
+                              }}
+                            >
+                              {v.cover_url ? (
+                                <img
+                                  src={v.cover_url}
+                                  alt=""
+                                  className="release-versions-modal__cover"
+                                />
+                              ) : null}
+                              <span className="release-versions-modal__meta">
+                                <span className="release-versions-modal__album">
+                                  {v.album_title ?? "Unknown album"}
+                                </span>
+                                {v.date_iso ? (
+                                  <span className="release-versions-modal__date">
+                                    {v.date_iso}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+
+              {rightView === "tracks" ? (
+                <>
+                  {loading ? <p className="muted">Loading…</p> : null}
+                  {error ? <p className="error">{error}</p> : null}
+                  {!loading && !error ? (
+                    <div className="series-oped-tracklist">
+                      <div className="series-oped-tracklist__head">
+                        {(
+                          [
+                            ["number", "#"],
+                            ["title", "Title"],
+                            ["series", "Series"],
+                            ["artist", "Artist"],
+                            ["album", "Album"],
+                            ["year", "Year"],
+                            ["duration", "Duration"],
+                          ] as [SortKey, string][]
+                        ).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`series-oped-tracklist__sort${
+                              key === "number"
+                                ? " series-oped-tracklist__col-num"
+                                : key === "artist"
+                                  ? " series-oped-tracklist__col-artist"
+                                  : key === "album"
+                                    ? " series-oped-tracklist__col-album"
+                                    : key === "series"
+                                      ? " series-oped-tracklist__col-series"
+                                      : key === "year"
+                                        ? " series-oped-tracklist__col-year"
+                                        : key === "duration"
+                                          ? " series-oped-tracklist__col-dur"
+                                          : ""
+                            }${sortKey === key ? " is-active" : ""}`}
+                            onClick={() => toggleSort(key)}
+                          >
+                            <span>{label}</span>
+                            <SortChevron
+                              desc={sortKey === key && sortDir === "desc"}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <ul className="series-oped-tracklist__rows">
+                        {sortedTracks.map((t, i) => {
+                          const playing = t.id === activeId;
+                          const parts = displayTitleParts(t);
+                          const origIndex = tracks.findIndex(
+                            (x) => x.id === t.id
+                          );
+                          return (
+                            <li key={t.id}>
+                              <button
+                                type="button"
+                                className={`series-oped-tracklist__row${
+                                  playing ? " is-playing" : ""
+                                }`}
+                                onClick={() =>
+                                  playAt(origIndex >= 0 ? origIndex : i)
+                                }
+                              >
+                                <span className="series-oped-tracklist__col-num">
+                                  {t.number ?? i + 1}
+                                </span>
+                                <span className="series-oped-tracklist__title">
+                                  <span className="series-oped-tracklist__title-main">
+                                    {parts.main}
+                                  </span>
+                                  {parts.suffix ? (
+                                    <span className="series-oped-tracklist__title-suffix">
+                                      {" "}
+                                      {parts.suffix}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="series-oped-tracklist__col-series">
+                                  {t.subseries_title || "—"}
+                                </span>
+                                <span className="series-oped-tracklist__col-artist">
+                                  {t.artist || "—"}
+                                </span>
+                                <span className="series-oped-tracklist__col-album">
+                                  {t.album || "—"}
+                                </span>
+                                <span className="series-oped-tracklist__col-year">
+                                  {t.year || "—"}
+                                </span>
+                                <span className="series-oped-tracklist__col-dur">
+                                  {t.duration || "—"}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {!tracks.length ? (
+                        <p className="muted">
+                          No openings or endings found in Extras.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
-          ) : null}
+          </div>
         </main>
       </div>
-      <audio ref={audio.audioRef} src={audio.src ?? undefined} preload="metadata" />
-      {lyricsOpen ? (
-        <ReleaseLyricsModal
-          title={titleParts?.main || active?.title || "Lyrics"}
-          lyrics={lyricsText}
-          loading={lyricsLoading}
-          error={null}
-          onClose={() => setLyricsOpen(false)}
-        />
-      ) : null}
-      {versionsOpen && active ? (
-        <ReleaseVersionsModal
-          title={`${titleParts?.main || active.title} Versions`}
-          versions={versions}
-          loading={versionsLoading}
-          error={null}
-          onClose={() => setVersionsOpen(false)}
-          onPlay={(path) => {
-            audio.loadSrc(
-              `/api/media/file?path=${encodeURIComponent(path)}`,
-              true
-            );
-            setVersionsOpen(false);
-          }}
-        />
-      ) : null}
+      <audio
+        ref={audio.audioRef}
+        src={audio.src ?? undefined}
+        preload="metadata"
+      />
       {plusOpen && active ? (
         <ReleaseAddToPlaylistModal
           track={toReleaseTrack(active)}

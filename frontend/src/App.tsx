@@ -749,6 +749,20 @@ export default function App() {
                 releaseTab: "overview",
               });
             }}
+            onOpenArtist={(bandId) => {
+              pushArtistRoute({
+                bandId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "overview",
+                artistOverviewTab: "about",
+              });
+            }}
           />
         )}
 

@@ -7,6 +7,8 @@ type Props = {
   onSelect?: (ep: SeriesEpisodeItem) => void;
   /** When true, show release date before duration (movies / specials). */
   showReleaseDate?: boolean;
+  /** Highlight the last-clicked / active episode row. */
+  activeId?: string | null;
 };
 
 function openEpisode(ep: SeriesEpisodeItem) {
@@ -20,6 +22,7 @@ export default function SeriesEpisodeList({
   emptyLabel = "No episode video files in this season folder.",
   onSelect,
   showReleaseDate = false,
+  activeId = null,
 }: Props) {
   if (!episodes.length) {
     return (
@@ -42,13 +45,14 @@ export default function SeriesEpisodeList({
               ? ep.display_date || formatTrackDate(ep.date_iso)
               : null;
           const canOpen = Boolean(ep.open_url?.trim());
+          const active = Boolean(activeId && activeId === ep.id);
           return (
             <li key={ep.id} className="series-episode-list__item">
               <button
                 type="button"
                 className={`release-tracklist__row series-episode-list__row${
-                  canOpen ? "" : " series-episode-list__row--unavailable"
-                }`}
+                  active ? " active" : ""
+                }${canOpen ? "" : " series-episode-list__row--unavailable"}`}
                 onClick={() => {
                   onSelect?.(ep);
                   if (canOpen) openEpisode(ep);

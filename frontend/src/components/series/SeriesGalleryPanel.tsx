@@ -8,15 +8,44 @@ import GalleryViewerModal, {
 type SectionMeta = { key: string; label: string };
 
 type Props = {
-  folderPath: string;
+  /** Single folder (legacy). Ignored when folderPaths is set. */
+  folderPath?: string;
+  /** Merge gallery images from multiple folders (franchise All = root + subseries). */
+  folderPaths?: string[];
   sectionKey?: string;
   onSectionKeyChange?: (key: string) => void;
   onSectionsChange?: (sections: SectionMeta[], hasMultiple: boolean) => void;
   hideSubbar?: boolean;
 };
 
+function mergeSections(
+  batches: SeriesGallerySection[][]
+): { sections: SeriesGallerySection[]; items: SeriesGalleryItem[] } {
+  const byKey = new Map<string, SeriesGallerySection>();
+  const seenIds = new Set<string>();
+  const items: SeriesGalleryItem[] = [];
+  for (const secs of batches) {
+    for (const sec of secs) {
+      const existing = byKey.get(sec.key);
+      const fresh = (sec.items || []).filter((it) => {
+        if (seenIds.has(it.id)) return false;
+        seenIds.add(it.id);
+        return true;
+      });
+      if (existing) {
+        existing.items = [...existing.items, ...fresh];
+      } else {
+        byKey.set(sec.key, { ...sec, items: [...fresh] });
+      }
+      items.push(...fresh);
+    }
+  }
+  return { sections: [...byKey.values()], items };
+}
+
 export default function SeriesGalleryPanel({
   folderPath,
+  folderPaths,
   sectionKey: controlledKey,
   onSectionKeyChange,
   onSectionsChange,
@@ -34,6 +63,16 @@ export default function SeriesGalleryPanel({
   onSectionsChangeRef.current = onSectionsChange;
   onSectionKeyChangeRef.current = onSectionKeyChange;
 
+  const pathsKey = useMemo(() => {
+    const paths =
+      folderPaths && folderPaths.length
+        ? folderPaths.filter(Boolean)
+        : folderPath
+          ? [folderPath]
+          : [];
+    return paths.join("|");
+  }, [folderPath, folderPaths]);
+
   const sectionKey = controlledKey ?? internalKey;
   const setSectionKey = (key: string) => {
     if (onSectionKeyChangeRef.current) onSectionKeyChangeRef.current(key);
@@ -41,17 +80,33 @@ export default function SeriesGalleryPanel({
   };
 
   const load = useCallback(async () => {
+    const paths = pathsKey ? pathsKey.split("|").filter(Boolean) : [];
+    if (!paths.length) {
+      setSections([]);
+      setItems([]);
+      setLoading(false);
+      onSectionsChangeRef.current?.([], false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchSeriesGallery(folderPath);
-      const secs = data.sections?.length
-        ? data.sections
-        : data.items.length
-          ? [{ key: "covers", label: "Covers", items: data.items }]
-          : [];
+      const results = await Promise.all(
+        paths.map((p) => fetchSeriesGallery(p).catch(() => null))
+      );
+      const batches: SeriesGallerySection[][] = [];
+      for (const data of results) {
+        if (!data) continue;
+        const secs = data.sections?.length
+          ? data.sections
+          : data.items.length
+            ? [{ key: "covers", label: "Covers", items: data.items }]
+            : [];
+        if (secs.length) batches.push(secs);
+      }
+      const { sections: secs, items: allItems } = mergeSections(batches);
       setSections(secs);
-      setItems(data.items);
+      setItems(allItems);
       onSectionsChangeRef.current?.(
         secs.map((s) => ({ key: s.key, label: s.label })),
         secs.length > 1
@@ -72,7 +127,8 @@ export default function SeriesGalleryPanel({
     } finally {
       setLoading(false);
     }
-  }, [folderPath]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload on path set
+  }, [pathsKey]);
 
   useEffect(() => {
     void load();

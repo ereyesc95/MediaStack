@@ -58,6 +58,11 @@ import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
 import SeriesRelatedPanel, {
   type SeriesRelatedTab,
 } from "./SeriesRelatedPanel";
+import {
+  IconCardBanner,
+  IconCardCover,
+  IconMediaMusic,
+} from "../MenuIcons";
 
 export type SeriesFranchiseShell = {
   name: string;
@@ -98,21 +103,23 @@ type Props = {
     writer?: string;
   }) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number) => void;
 };
 
 const SECTIONS: {
   id: SeriesSection;
   label: string;
+  mobileLabel?: string;
   flag: keyof NonNullable<SeriesOverview["media"]> | null;
 }[] = [
-  { id: "overview", label: "OVERVIEW", flag: null },
+  { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   // Always show after SERIES (empty states when nothing linked yet)
   { id: "movies", label: "MOVIES", flag: null },
   { id: "audio", label: "AUDIO", flag: null },
   { id: "library", label: "LIBRARY", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
-  { id: "gallery", label: "GALLERY", flag: "has_gallery" },
+  { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
 ];
 
 const OVERVIEW_TABS: { id: SeriesOverviewTab; label: string }[] = [
@@ -151,6 +158,7 @@ export default function SeriesFranchisePage({
   onNavigate,
   onBrowseCatalog,
   onOpenMusicRelease,
+  onOpenArtist,
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
@@ -190,11 +198,13 @@ export default function SeriesFranchisePage({
   }>({});
   const prevBgRef = useRef<string | undefined>(undefined);
   const autoRefreshDone = useRef<string | null>(null);
+  const loadGenRef = useRef(0);
 
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
   const [audioLoading, setAudioLoading] = useState(false);
   const [opedOpen, setOpedOpen] = useState(false);
   const [seriesPlaying, setSeriesPlaying] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const [showCards, setShowCards] = useState<SeriesMediaCard[]>([]);
   const [showLoading, setShowLoading] = useState(false);
   const [movieCards, setMovieCards] = useState<SeriesMediaCard[]>([]);
@@ -203,12 +213,19 @@ export default function SeriesFranchisePage({
   const [libLoading, setLibLoading] = useState(false);
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>([]);
   const [gameLoading, setGameLoading] = useState(false);
+  const [gallerySectionKey, setGallerySectionKey] = useState("all");
+  const [gallerySections, setGallerySections] = useState<
+    { key: string; label: string }[]
+  >([]);
 
   const load = useCallback(async () => {
+    const gen = ++loadGenRef.current;
     setLoading(true);
     setError(null);
+    setData(null);
     try {
       const overview = await fetchSeriesOverview(franchiseId);
+      if (gen !== loadGenRef.current) return;
       setData(overview);
       setEraIndex(0);
       if (overview.is_animated) setCastTab("characters");
@@ -216,16 +233,37 @@ export default function SeriesFranchisePage({
       const cats = overview.links?.categories || [];
       if (cats.length) setLinkTab(cats[0].id);
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
       setData(null);
     } finally {
-      setLoading(false);
+      if (gen === loadGenRef.current) setLoading(false);
     }
   }, [franchiseId]);
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGenRef.current += 1;
+    };
   }, [load]);
+
+  useEffect(() => {
+    setPlayerOpen(false);
+    setRefreshing(false);
+    setAudioCards([]);
+    setMovieCards([]);
+    setShowCards([]);
+    setLibCards([]);
+    setGameCards([]);
+    setMediaSubFilter("all");
+    setGallerySectionKey("all");
+    setGallerySections([]);
+  }, [franchiseId]);
+
+  useEffect(() => {
+    setGallerySectionKey("all");
+  }, [mediaSubFilter, section]);
 
   useEffect(() => {
     beginArtistPageSession(userId);
@@ -244,22 +282,33 @@ export default function SeriesFranchisePage({
     );
   }, [franchiseId, subseriesId, seasonId, section, overviewTab]);
 
-  // Auto-fetch TMDb metadata on first visit
+  // Auto-fetch TMDb metadata on first visit — debounce so quick franchise
+  // switches don't pile up long-running refreshes that starve the API.
   useEffect(() => {
     if (!data?.needs_metadata) return;
     if (autoRefreshDone.current === franchiseId) return;
-    autoRefreshDone.current = franchiseId;
-    void (async () => {
-      try {
-        setRefreshing(true);
-        await refreshSeriesMetadata(franchiseId, true);
-        await load();
-      } catch {
-        /* leave empty bio prompt */
-      } finally {
-        setRefreshing(false);
-      }
-    })();
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      autoRefreshDone.current = franchiseId;
+      void (async () => {
+        try {
+          setRefreshing(true);
+          await refreshSeriesMetadata(franchiseId, true);
+          if (cancelled) return;
+          await load();
+        } catch {
+          /* leave empty bio prompt */
+        } finally {
+          setRefreshing(false);
+        }
+      })();
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      setRefreshing(false);
+    };
   }, [data?.needs_metadata, franchiseId, load]);
 
   const handleRefreshMetadata = useCallback(async () => {
@@ -632,6 +681,8 @@ export default function SeriesFranchisePage({
         onEditProfile={onEditProfile}
         isAdmin={isAdmin}
         userId={userId}
+        onOpenMusicRelease={onOpenMusicRelease}
+        onOpenArtist={onOpenArtist}
       />
     );
   }
@@ -708,28 +759,32 @@ export default function SeriesFranchisePage({
             {(busy || refreshing) && (
               <span className="muted">{refreshing ? "Refreshing…" : busy}</span>
             )}
-            {(section === "audio" ||
+            {!mobilePortrait &&
+            (section === "audio" ||
               section === "movies" ||
               section === "series" ||
               section === "library" ||
-              section === "games") && (
+              section === "games") ? (
               <ReleaseCardLayoutPicker
                 value={releaseCardLayout}
                 onChange={setReleaseCardLayoutPersisted}
               />
-            )}
-            {section === "overview" &&
+            ) : null}
+            {!mobilePortrait &&
+            section === "overview" &&
             overviewTab === "related" &&
             onSetOrientation ? (
               <CardOrientationPicker
                 value={cardOrientation}
                 onChange={onSetOrientation}
-                includeBadge
               />
             ) : null}
             <SeriesAudioPlayer
               franchiseId={franchiseId}
               onPlayingChange={setSeriesPlaying}
+              open={playerOpen}
+              onOpenChange={setPlayerOpen}
+              hideToggle={mobilePortrait}
             />
             <AppMenu
               onImport={onImport}
@@ -740,6 +795,68 @@ export default function SeriesFranchisePage({
               artistThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              menuChrome={
+                mobilePortrait ? (
+                  <>
+                    {(section === "audio" ||
+                      section === "movies" ||
+                      section === "series" ||
+                      section === "library" ||
+                      section === "games") && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReleaseCardLayoutPersisted(
+                            releaseCardLayout === "cover" ? "banner" : "cover"
+                          )
+                        }
+                      >
+                        {releaseCardLayout === "cover" ? (
+                          <IconCardCover className="menu-item-icon" />
+                        ) : (
+                          <IconCardBanner className="menu-item-icon" />
+                        )}
+                        Cards:{" "}
+                        {releaseCardLayout === "cover" ? "Cover" : "Banner"}
+                      </button>
+                    )}
+                    {section === "overview" &&
+                      overviewTab === "related" &&
+                      onSetOrientation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const order: CardOrientation[] = [
+                              "banner",
+                              "landscape",
+                              "portrait",
+                              "icons",
+                            ];
+                            const i = order.indexOf(
+                              cardOrientation === "badge"
+                                ? "banner"
+                                : cardOrientation
+                            );
+                            onSetOrientation(order[(i + 1) % order.length]!);
+                          }}
+                        >
+                          <IconCardBanner className="menu-item-icon" />
+                          Card layout:{" "}
+                          {cardOrientation === "badge"
+                            ? "banner"
+                            : cardOrientation}
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      onClick={() => setPlayerOpen((v) => !v)}
+                    >
+                      <IconMediaMusic className="menu-item-icon" />
+                      {playerOpen ? "Hide audio player" : "Show audio player"}
+                    </button>
+                  </>
+                ) : null
+              }
               onRefreshMetadata={
                 isAdmin && section === "overview" && overviewTab === "about"
                   ? () => void handleRefreshMetadata()
@@ -806,7 +923,9 @@ export default function SeriesFranchisePage({
                 })
               }
             >
-              <span>{s.label}</span>
+              <span>
+                {mobilePortrait && s.mobileLabel ? s.mobileLabel : s.label}
+              </span>
             </button>
           ))}
         </nav>
@@ -896,6 +1015,32 @@ export default function SeriesFranchisePage({
                 onClick={() => setPlatformFilter(p)}
               >
                 {p}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {section === "gallery" && gallerySections.length > 1 ? (
+          <div
+            className="series-section-subbar"
+            role="tablist"
+            aria-label="Gallery folders"
+          >
+            <button
+              type="button"
+              className={gallerySectionKey === "all" ? "active" : ""}
+              onClick={() => setGallerySectionKey("all")}
+            >
+              All
+            </button>
+            {gallerySections.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={gallerySectionKey === s.key ? "active" : ""}
+                onClick={() => setGallerySectionKey(s.key)}
+              >
+                {s.label}
               </button>
             ))}
           </div>
@@ -1025,7 +1170,9 @@ export default function SeriesFranchisePage({
             creator={data.related?.creator || []}
             similar={data.related?.similar || []}
             tab={relatedTab}
-            orientation={cardOrientation}
+            orientation={
+              cardOrientation === "badge" ? "banner" : cardOrientation
+            }
             isAdmin={isAdmin}
             addOpen={addRelatedOpen}
             onAddClose={() => setAddRelatedOpen(false)}
@@ -1039,6 +1186,7 @@ export default function SeriesFranchisePage({
             loading={audioLoading}
             emptyMessage="No audio for this series."
             cardLayout={releaseCardLayout}
+            squareCovers={releaseCardLayout === "cover"}
             onOpen={(item) => {
               if (item.path?.startsWith("playlist:")) {
                 setOpedOpen(true);
@@ -1098,7 +1246,28 @@ export default function SeriesFranchisePage({
         ) : null}
 
         {section === "gallery" && data ? (
-          <SeriesGalleryPanel folderPath={data.folder_path} />
+          <SeriesGalleryPanel
+            folderPaths={
+              mediaSubFilter === "all"
+                ? [
+                    data.folder_path,
+                    ...(data.subseries || [])
+                      .map((s) => s.folder_path)
+                      .filter(
+                        (p): p is string =>
+                          Boolean(p) && p !== data.folder_path
+                      ),
+                  ]
+                : [
+                    (data.subseries || []).find((s) => s.id === mediaSubFilter)
+                      ?.folder_path || data.folder_path,
+                  ]
+            }
+            hideSubbar
+            sectionKey={gallerySectionKey}
+            onSectionKeyChange={setGallerySectionKey}
+            onSectionsChange={(secs) => setGallerySections(secs)}
+          />
         ) : null}
       </div>
 

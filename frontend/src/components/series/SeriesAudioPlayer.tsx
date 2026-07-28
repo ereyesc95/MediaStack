@@ -19,6 +19,11 @@ type Props = {
   franchiseId: string;
   enabled?: boolean;
   onPlayingChange?: (playing: boolean) => void;
+  /** When set, dock open state is controlled by the parent. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the top-bar music note toggle (e.g. when control lives in the menu). */
+  hideToggle?: boolean;
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -34,15 +39,25 @@ export default function SeriesAudioPlayer({
   franchiseId,
   enabled = true,
   onPlayingChange,
+  open: openProp,
+  onOpenChange,
+  hideToggle = false,
 }: Props) {
   const audio = useMiniAudio();
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp ?? openInternal;
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(open) : next;
+    if (openProp === undefined) setOpenInternal(value);
+    onOpenChange?.(value);
+  };
   const [tracks, setTracks] = useState<Track[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const queueRef = useRef<Track[]>([]);
   const indexRef = useRef(0);
   const loadedForRef = useRef<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useBeatPulse(
     audio.audioRef,
@@ -57,6 +72,19 @@ export default function SeriesAudioPlayer({
   useEffect(() => {
     indexRef.current = index;
   }, [index]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const root = rootRef.current;
+      if (!root) return;
+      const target = e.target as Node | null;
+      if (target && root.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open]);
 
   const playAt = useCallback(
     (i: number, list: Track[]) => {
@@ -100,6 +128,12 @@ export default function SeriesAudioPlayer({
   }, [playAt]);
 
   useEffect(() => {
+    if (open && loadedForRef.current !== franchiseId) {
+      void loadTracks();
+    }
+  }, [open, franchiseId, loadTracks]);
+
+  useEffect(() => {
     const el = audio.audioRef.current;
     if (!el) return;
     const onEnd = () => playNext();
@@ -122,23 +156,30 @@ export default function SeriesAudioPlayer({
   const now = tracks[index];
 
   return (
-    <div className={`series-audio-player${open ? " is-open" : ""}`}>
-      <button
-        type="button"
-        className="series-audio-player__toggle"
-        aria-pressed={open}
-        aria-label={open ? "Hide player" : "Show player"}
-        title={open ? "Hide player" : "Show player"}
-        onClick={() => {
-          const next = !open;
-          setOpen(next);
-          if (next && loadedForRef.current !== franchiseId) {
-            void loadTracks();
-          }
-        }}
-      >
-        <IconMediaMusic className="series-audio-player__icon" />
-      </button>
+    <div
+      ref={rootRef}
+      className={`series-audio-player${open ? " is-open" : ""}${
+        hideToggle ? " series-audio-player--menu-only" : ""
+      }`}
+    >
+      {!hideToggle ? (
+        <button
+          type="button"
+          className="series-audio-player__toggle"
+          aria-pressed={open}
+          aria-label={open ? "Hide player" : "Show player"}
+          title={open ? "Hide player" : "Show player"}
+          onClick={() => {
+            const next = !open;
+            setOpen(next);
+            if (next && loadedForRef.current !== franchiseId) {
+              void loadTracks();
+            }
+          }}
+        >
+          <IconMediaMusic className="series-audio-player__icon" />
+        </button>
+      ) : null}
       {open ? (
         <div className="series-audio-player__dock">
           {loading ? (

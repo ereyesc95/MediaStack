@@ -44,6 +44,11 @@ import {
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
+import {
+  IconCardBanner,
+  IconCardCover,
+  IconMediaMusic,
+} from "../MenuIcons";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import {
@@ -103,6 +108,7 @@ type Props = {
   onBack: () => void;
   onBrowseCatalog?: (target: SeriesCatalogBrowseTarget) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number) => void;
   onNavigate: (patch: {
     subseriesId?: string;
     seasonId?: string;
@@ -366,6 +372,7 @@ export default function SeriesSubseriesPage({
   onBack,
   onBrowseCatalog,
   onOpenMusicRelease,
+  onOpenArtist,
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
@@ -406,8 +413,10 @@ export default function SeriesSubseriesPage({
   const [openingVideos, setOpeningVideos] = useState<SeriesEpisodeItem[]>([]);
   const [endingVideos, setEndingVideos] = useState<SeriesEpisodeItem[]>([]);
   const [seriesPlaying, setSeriesPlaying] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [opedOpen, setOpedOpen] = useState(false);
+  const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
@@ -1034,7 +1043,7 @@ export default function SeriesSubseriesPage({
       { id: "audio", label: "AUDIO" },
       { id: "library", label: "LIBRARY" },
       { id: "games", label: "GAMES" },
-      { id: "gallery", label: "GALLERY" },
+      { id: "gallery", label: stacked ? "ART" : "GALLERY" },
     ];
     return all.filter((t) => {
       if (t.id === "overview") return true;
@@ -1194,6 +1203,8 @@ export default function SeriesSubseriesPage({
         onEditProfile={onEditProfile}
         isAdmin={isAdmin}
         userId={userId}
+        onOpenMusicRelease={onOpenMusicRelease}
+        onOpenArtist={onOpenArtist}
       />
     );
   }
@@ -1257,7 +1268,7 @@ export default function SeriesSubseriesPage({
           </div>
           <div className="release-page__top-right">
             {busy ? <span className="muted">{busy}</span> : null}
-            {showMediaLayoutPicker ? (
+            {!stacked && showMediaLayoutPicker ? (
               <ReleaseCardLayoutPicker
                 value={cardLayout}
                 onChange={setCardLayoutPersisted}
@@ -1266,26 +1277,10 @@ export default function SeriesSubseriesPage({
             <SeriesAudioPlayer
               franchiseId={franchiseId}
               onPlayingChange={setSeriesPlaying}
+              open={playerOpen}
+              onOpenChange={setPlayerOpen}
+              hideToggle={stacked}
             />
-            {stacked ? (
-              <button
-                type="button"
-                className={`series-subseries-page__cover-toggle${
-                  panelCollapsed ? "" : " is-active"
-                }`}
-                aria-pressed={!panelCollapsed}
-                aria-label={panelCollapsed ? "Show cover" : "Hide cover"}
-                title={panelCollapsed ? "Show cover" : "Hide cover"}
-                onClick={() => setPanelCollapsed((v) => !v)}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-                  <path
-                    fill="currentColor"
-                    d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h14V7H5zm2 2h4v6H7V9zm5 0h5v2h-5V9zm0 3h5v2h-5v-2z"
-                  />
-                </svg>
-              </button>
-            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1299,6 +1294,54 @@ export default function SeriesSubseriesPage({
               editDataLabel="Edit series"
               editDataFlat
               refreshLocalFlat
+              menuChrome={
+                stacked ? (
+                  <>
+                    {showMediaLayoutPicker ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCardLayoutPersisted(
+                            cardLayout === "cover" ? "banner" : "cover"
+                          )
+                        }
+                      >
+                        {cardLayout === "cover" ? (
+                          <IconCardCover className="menu-item-icon" />
+                        ) : (
+                          <IconCardBanner className="menu-item-icon" />
+                        )}
+                        Cards: {cardLayout === "cover" ? "Cover" : "Banner"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setPanelCollapsed((v) => !v)}
+                    >
+                      <svg
+                        className="menu-item-icon"
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        aria-hidden
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h14V7H5zm2 2h4v6H7V9zm5 0h5v2h-5V9zm0 3h5v2h-5v-2z"
+                        />
+                      </svg>
+                      {panelCollapsed ? "Show cover panel" : "Hide cover panel"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlayerOpen((v) => !v)}
+                    >
+                      <IconMediaMusic className="menu-item-icon" />
+                      {playerOpen ? "Hide audio player" : "Show audio player"}
+                    </button>
+                  </>
+                ) : null
+              }
               onEditAbout={
                 isAdmin && overview
                   ? () => setAboutEditOpen(true)
@@ -1778,8 +1821,10 @@ export default function SeriesSubseriesPage({
                           {open ? (
                             <SeriesEpisodeList
                               episodes={eps}
+                              activeId={activeEpisodeId}
                               emptyLabel="No episode video files in this season folder."
-                              onSelect={() => {
+                              onSelect={(ep) => {
+                                setActiveEpisodeId(ep.id);
                                 setFocusCoverUrl(
                                   s.portrait_url || s.cover_url || null
                                 );
@@ -1826,8 +1871,10 @@ export default function SeriesSubseriesPage({
                           <SeriesEpisodeList
                             episodes={episodeMovies}
                             showReleaseDate
+                            activeId={activeEpisodeId}
                             emptyLabel="No movies found."
                             onSelect={(ep) => {
+                              setActiveEpisodeId(ep.id);
                               const url = ep.cover_url || baseCover;
                               setFocusCoverUrl(url);
                               setFocusBgUrl(url);
@@ -1862,7 +1909,9 @@ export default function SeriesSubseriesPage({
                           {extrasExpanded ? (
                             <SeriesEpisodeList
                               episodes={allExtras}
+                              activeId={activeEpisodeId}
                               emptyLabel="No extras found."
+                              onSelect={(ep) => setActiveEpisodeId(ep.id)}
                             />
                           ) : null}
                         </div>
