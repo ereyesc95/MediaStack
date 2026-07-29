@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
+import { usePhoneLayout } from "../../usePhoneLayout";
 import { ChevronIcon } from "../music/release/releaseTrackPanelMeta";
 
 export type SeriesMediaCard = {
@@ -50,10 +51,16 @@ function SeriesMediaCardView({
   item,
   cardLayout,
   onOpen,
+  tapReveal,
+  revealed,
+  onReveal,
 }: {
   item: SeriesMediaCard;
   cardLayout: ReleaseCardLayout;
   onOpen?: (item: SeriesMediaCard) => void;
+  tapReveal: boolean;
+  revealed: boolean;
+  onReveal: () => void;
 }) {
   const cover = item.cover_url || null;
   const bannerBg = item.banner_url || item.cover_url || null;
@@ -71,6 +78,15 @@ function SeriesMediaCardView({
     } else {
       openInTab(openUrl);
     }
+  };
+
+  const handleClick = () => {
+    if (!onOpen) return;
+    if (tapReveal && !revealed) {
+      onReveal();
+      return;
+    }
+    onOpen(item);
   };
 
   const openFileControl =
@@ -99,6 +115,8 @@ function SeriesMediaCardView({
       clickable
         ? "media-release-card--clickable media-release-card--button"
         : "",
+      tapReveal ? "media-release-card--tap-reveal" : "",
+      tapReveal && revealed ? "media-release-card--revealed" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -148,7 +166,7 @@ function SeriesMediaCardView({
         <button
           type="button"
           className={bannerClass}
-          onClick={() => onOpen?.(item)}
+          onClick={handleClick}
           title={item.title}
         >
           {bannerInner}
@@ -169,6 +187,8 @@ function SeriesMediaCardView({
     clickable
       ? "media-release-card--clickable media-release-card--button"
       : "",
+    tapReveal ? "media-release-card--tap-reveal" : "",
+    tapReveal && revealed ? "media-release-card--revealed" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -212,7 +232,7 @@ function SeriesMediaCardView({
       <button
         type="button"
         className={className}
-        onClick={() => onOpen?.(item)}
+        onClick={handleClick}
         title={item.title}
       >
         {inner}
@@ -234,6 +254,27 @@ export default function SeriesMediaGrid({
   cardLayout = "cover",
   squareCovers = false,
 }: Props) {
+  const isPhone = usePhoneLayout();
+  const tapReveal = isPhone;
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRevealedId(null);
+  }, [items, cardLayout]);
+
+  useEffect(() => {
+    if (!tapReveal || revealedId == null) return;
+    const onDoc = (e: Event) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      const el = target instanceof Element ? target : null;
+      if (el?.closest?.(".media-release-card--revealed")) return;
+      setRevealedId(null);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
+  }, [tapReveal, revealedId]);
+
   if (loading) {
     return <p className="muted artist-section-empty">Loading…</p>;
   }
@@ -259,6 +300,9 @@ export default function SeriesMediaGrid({
           item={item}
           cardLayout={cardLayout}
           onOpen={onOpen}
+          tapReveal={tapReveal}
+          revealed={tapReveal && revealedId === item.id}
+          onReveal={() => setRevealedId(item.id)}
         />
       ))}
     </div>

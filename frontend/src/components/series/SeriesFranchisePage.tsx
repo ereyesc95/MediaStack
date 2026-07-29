@@ -58,6 +58,7 @@ import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
 import SeriesRelatedPanel, {
   type SeriesRelatedTab,
 } from "./SeriesRelatedPanel";
+import SeriesScopeControl from "./SeriesScopeControl";
 import {
   IconCardBanner,
   IconCardCover,
@@ -104,6 +105,7 @@ type Props = {
   }) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
+  onShellUpdate?: (shell: SeriesFranchiseShell) => void;
 };
 
 const SECTIONS: {
@@ -159,6 +161,7 @@ export default function SeriesFranchisePage({
   onBrowseCatalog,
   onOpenMusicRelease,
   onOpenArtist,
+  onShellUpdate,
 }: Props) {
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
@@ -199,6 +202,8 @@ export default function SeriesFranchisePage({
   const prevBgRef = useRef<string | undefined>(undefined);
   const autoRefreshDone = useRef<string | null>(null);
   const loadGenRef = useRef(0);
+  const cachedLogoRef = useRef<string | null>(null);
+  const cachedIconRef = useRef<string | null>(null);
 
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -259,6 +264,8 @@ export default function SeriesFranchisePage({
     setMediaSubFilter("all");
     setGallerySectionKey("all");
     setGallerySections([]);
+    cachedLogoRef.current = null;
+    cachedIconRef.current = null;
   }, [franchiseId]);
 
   useEffect(() => {
@@ -268,6 +275,29 @@ export default function SeriesFranchisePage({
   useEffect(() => {
     beginArtistPageSession(userId);
   }, [userId]);
+
+  useEffect(() => {
+    if (!onShellUpdate || !data) return;
+    const logo =
+      data.logo_url || data.eras?.[0]?.logo_url || shell?.logo_url || null;
+    const icon =
+      data.icon_url || data.eras?.[0]?.icon_url || shell?.icon_url || null;
+    onShellUpdate({
+      name: data.name,
+      cover_url: shell?.cover_url ?? null,
+      logo_url: logo,
+      icon_url: icon,
+    });
+  }, [
+    data?.name,
+    data?.logo_url,
+    data?.icon_url,
+    data?.eras,
+    onShellUpdate,
+    shell?.cover_url,
+    shell?.logo_url,
+    shell?.icon_url,
+  ]);
 
   useEffect(() => {
     pushSeriesRoute(
@@ -591,16 +621,24 @@ export default function SeriesFranchisePage({
   }, [data]);
 
   const era = currentAboutEra ?? data?.eras?.[0];
-  const topBrand = (era?.icon_url || data?.icon_url || shell?.icon_url) ? (
+  const logoSrc =
+    era?.logo_url || data?.logo_url || shell?.logo_url || null;
+  const iconSrc =
+    era?.icon_url || data?.icon_url || shell?.icon_url || null;
+  if (logoSrc) cachedLogoRef.current = logoSrc;
+  if (iconSrc) cachedIconRef.current = iconSrc;
+  const displayLogo = logoSrc || cachedLogoRef.current;
+  const displayIcon = iconSrc || cachedIconRef.current;
+  const topBrand = displayIcon ? (
     <img
-      src={(era?.icon_url || data?.icon_url || shell?.icon_url)!}
+      src={displayIcon}
       alt=""
       className="artist-page__brand-icon"
     />
   ) : null;
-  const topLogo = (era?.logo_url || data?.logo_url || shell?.logo_url) ? (
+  const topLogo = displayLogo ? (
     <img
-      src={(era?.logo_url || data?.logo_url || shell?.logo_url)!}
+      src={displayLogo}
       alt=""
       className="artist-page__brand-logo"
     />
@@ -752,13 +790,40 @@ export default function SeriesFranchisePage({
               <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
             ) : null}
             {!topBrand && !topLogo ? (
-              <span className="artist-page__brand-name">{title}</span>
+              loading ? (
+                <span
+                  className="artist-page__brand-logo artist-page__brand-logo--pending"
+                  aria-hidden
+                />
+              ) : (
+                <span className="artist-page__brand-name">{title}</span>
+              )
             ) : null}
           </div>
           <div className="artist-page__top-right">
             {(busy || refreshing) && (
               <span className="muted">{refreshing ? "Refreshing…" : busy}</span>
             )}
+            {!mobilePortrait &&
+            showSubseriesSubbar &&
+            ((section === "overview" && overviewTab === "cast") ||
+              showMediaSubbar) ? (
+              <SeriesScopeControl
+                variant="icon"
+                label="Series"
+                options={subseriesTabs}
+                value={
+                  section === "overview" && overviewTab === "cast"
+                    ? castSubFilter
+                    : mediaSubFilter
+                }
+                onChange={
+                  section === "overview" && overviewTab === "cast"
+                    ? setCastSubFilter
+                    : setMediaSubFilter
+                }
+              />
+            ) : null}
             {!mobilePortrait &&
             (section === "audio" ||
               section === "movies" ||
@@ -816,8 +881,9 @@ export default function SeriesFranchisePage({
                         ) : (
                           <IconCardBanner className="menu-item-icon" />
                         )}
-                        Cards:{" "}
-                        {releaseCardLayout === "cover" ? "Cover" : "Banner"}
+                        {releaseCardLayout === "cover"
+                          ? "Cover view"
+                          : "Banner view"}
                       </button>
                     )}
                     {section === "overview" &&
@@ -852,7 +918,7 @@ export default function SeriesFranchisePage({
                       onClick={() => setPlayerOpen((v) => !v)}
                     >
                       <IconMediaMusic className="menu-item-icon" />
-                      {playerOpen ? "Hide audio player" : "Show audio player"}
+                      {playerOpen ? "Hide music" : "Play music"}
                     </button>
                   </>
                 ) : null
@@ -945,18 +1011,17 @@ export default function SeriesFranchisePage({
           </nav>
         ) : null}
 
-        {section === "overview" && overviewTab === "cast" && showSubseriesSubbar ? (
-          <div className="series-section-subbar" role="tablist" aria-label="Cast subseries">
-            {subseriesTabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={castSubFilter === t.id ? "active" : ""}
-                onClick={() => setCastSubFilter(t.id)}
-              >
-                {t.title}
-              </button>
-            ))}
+        {mobilePortrait &&
+        section === "overview" &&
+        overviewTab === "cast" &&
+        showSubseriesSubbar ? (
+          <div className="series-scope-bar" aria-label="Cast series">
+            <SeriesScopeControl
+              label="Series"
+              options={subseriesTabs}
+              value={castSubFilter}
+              onChange={setCastSubFilter}
+            />
           </div>
         ) : null}
 
@@ -983,18 +1048,14 @@ export default function SeriesFranchisePage({
           </nav>
         ) : null}
 
-        {showMediaSubbar && showSubseriesSubbar ? (
-          <div className="series-section-subbar" role="tablist" aria-label="Subseries">
-            {subseriesTabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={mediaSubFilter === t.id ? "active" : ""}
-                onClick={() => setMediaSubFilter(t.id)}
-              >
-                {t.title}
-              </button>
-            ))}
+        {mobilePortrait && showMediaSubbar && showSubseriesSubbar ? (
+          <div className="series-scope-bar" aria-label="Media series">
+            <SeriesScopeControl
+              label="Series"
+              options={subseriesTabs}
+              value={mediaSubFilter}
+              onChange={setMediaSubFilter}
+            />
           </div>
         ) : null}
 

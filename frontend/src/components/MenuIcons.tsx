@@ -452,6 +452,18 @@ export function IconMediaSeries({ className }: IconProps) {
   );
 }
 
+/** Scope / subseries picker glyph (stacked layers). */
+export function IconSeriesScope({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 3.2 3.5 7.4 12 11.6l8.5-4.2L12 3.2zm0 9.1L3.5 8.1v2.3L12 14.6l8.5-4.2V8.1L12 12.3zm0 3.7L3.5 11.8v2.3L12 18.3l8.5-4.2v-2.3L12 16z"
+      />
+    </svg>
+  );
+}
+
 export function IconMediaMovies({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

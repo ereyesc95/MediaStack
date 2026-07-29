@@ -310,19 +310,19 @@ def resolve_season_art(
     artwork: Path | None,
     labels: list[str],
     media_root: Path,
-) -> tuple[str | None, str | None, str | None, str | None]:
-    """Return (portrait_url, landscape_url, cover_front_url, cover_back_url).
+) -> tuple[str | None, str | None, str | None, str | None, str | None]:
+    """Return (portrait_url, landscape_url, cover_front_url, cover_back_url, banner_url).
 
-    Prefers ``{Season} - Portrait`` / ``{Season} - Landscape``, then
-    ``{Season} cover - front/back``, then a file whose stem equals the label.
+    Prefers ``{Season} - Banner`` then ``{Season} - Landscape`` for wide art,
+    and ``{Season} - Portrait`` / ``{Season} cover - front/back`` for covers.
     """
     from app.artwork_stems import COVER_BACK_STEM, COVER_FRONT_STEM
 
     if not artwork or not artwork.is_dir():
-        return None, None, None, None
+        return None, None, None, None, None
     label_cfs = [lab.casefold().strip() for lab in labels if lab and lab.strip()]
     if not label_cfs:
-        return None, None, None, None
+        return None, None, None, None, None
     try:
         files = [
             p
@@ -330,7 +330,7 @@ def resolve_season_art(
             if p.is_file() and p.suffix.lower() in IMAGE_EXTS
         ]
     except OSError:
-        return None, None, None, None
+        return None, None, None, None, None
 
     def match(*parts: str) -> str | None:
         want = " ".join(p for p in parts if p).casefold().strip()
@@ -347,18 +347,19 @@ def resolve_season_art(
                     return url
         return None
 
-    portrait = landscape = front = back = None
+    portrait = landscape = front = back = banner = None
     for label in label_cfs:
+        banner = banner or match(label, "banner")
         portrait = portrait or match(label, "portrait")
         landscape = landscape or match(label, "landscape")
         front = front or match(label, COVER_FRONT_STEM)
         back = back or match(label, COVER_BACK_STEM)
         # Exact season name file
-        if not portrait and not landscape and not front:
+        if not portrait and not landscape and not front and not banner:
             exact = match(label)
             if exact:
                 front = exact
-    return portrait, landscape, front, back
+    return portrait, landscape, front, back, banner
 
 
 def _norm_key(text: str) -> str:

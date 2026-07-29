@@ -29,7 +29,9 @@ import SeriesFranchisePage, {
   type SeriesFranchiseShell,
 } from "./SeriesFranchisePage";
 import SeriesHome from "./SeriesHome";
-import SeriesSubseriesPage from "./SeriesSubseriesPage";
+import SeriesSubseriesPage, {
+  type SeriesCatalogBrowseTarget,
+} from "./SeriesSubseriesPage";
 
 type SeriesTab = "home" | "catalog";
 
@@ -179,14 +181,21 @@ export default function SeriesModule({
     if (subseriesId) {
       const show = card.subseries.find((s) => s.id === subseriesId);
       if (show) {
-        setFranchiseShell({
+        setFranchiseShell((prev) => ({
           name: card.name,
           cover_url: show.cover_url || card.cover_url,
-        });
+          logo_url: prev?.logo_url || card.logo_url || null,
+          icon_url: prev?.icon_url || card.icon_url || null,
+        }));
         return;
       }
     }
-    setFranchiseShell({ name: card.name, cover_url: card.cover_url });
+    setFranchiseShell((prev) => ({
+      name: card.name,
+      cover_url: card.cover_url,
+      logo_url: prev?.logo_url || card.logo_url || null,
+      icon_url: prev?.icon_url || card.icon_url || null,
+    }));
   }, [franchiseId, subseriesId, franchises]);
 
   const media =
@@ -230,13 +239,7 @@ export default function SeriesModule({
     });
   };
 
-  const browseCatalog = (target: {
-    mode: "name" | "genre" | "country" | "publisher" | "writer";
-    countryId?: number;
-    subgenreId?: number;
-    publisher?: string;
-    writer?: string;
-  }) => {
+  const browseCatalog = (target: SeriesCatalogBrowseTarget) => {
     clearMediaTheme(userId);
     setFranchiseShell(null);
     setTab("catalog");
@@ -265,6 +268,7 @@ export default function SeriesModule({
         <SeriesSubseriesPage
           franchiseId={franchiseId}
           franchiseName={franchiseShell?.name}
+          franchiseLogoUrl={franchiseShell?.logo_url}
           subseriesId={subseriesId}
           seasonId={seasonId}
           section={section}
@@ -327,6 +331,19 @@ export default function SeriesModule({
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={onOpenMusicRelease}
           onOpenArtist={onOpenArtist}
+          onShellUpdate={(next) => {
+            setFranchiseShell((prev) => {
+              if (
+                prev?.name === next.name &&
+                prev?.cover_url === next.cover_url &&
+                prev?.logo_url === next.logo_url &&
+                prev?.icon_url === next.icon_url
+              ) {
+                return prev;
+              }
+              return next;
+            });
+          }}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,
@@ -425,7 +442,12 @@ export default function SeriesModule({
                 id,
                 undefined,
                 card
-                  ? { name: card.name, cover_url: card.cover_url }
+                  ? {
+                      name: card.name,
+                      cover_url: card.cover_url,
+                      logo_url: card.logo_url,
+                      icon_url: card.icon_url,
+                    }
                   : undefined
               );
             }}

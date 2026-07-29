@@ -88,6 +88,9 @@ export default function SeriesAbout({
   const [revealedSubId, setRevealedSubId] = useState<string | null>(null);
   /** Portrait phone/tablet: hide under-card labels; tap to reveal then open. */
   const tapRevealSubs = stacked;
+  useEffect(() => {
+    setBioExpanded(false);
+  }, [data.folder_path, data.name]);
   const slides = useMemo(
     () => carouselEras(data.eras, stacked),
     [data.eras, stacked]
@@ -244,7 +247,7 @@ export default function SeriesAbout({
                 stacked
                   ? bioExpanded
                     ? " artist-about__bio-scroll--expanded"
-                    : " artist-about__bio-scroll--truncated"
+                    : " artist-about__bio-scroll--collapsed"
                   : ""
               }`}
             >

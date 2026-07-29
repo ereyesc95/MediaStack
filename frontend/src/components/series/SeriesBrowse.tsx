@@ -490,6 +490,8 @@ export default function SeriesBrowse({
         onOpen(card.franchiseId, card.subseriesId, {
           name: card.name,
           cover_url: card.cover_url,
+          logo_url: card.logo_url,
+          icon_url: card.icon_url,
         });
       if (!isPhone) {
         open();

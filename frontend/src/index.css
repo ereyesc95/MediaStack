@@ -4196,13 +4196,18 @@ input {
   flex: 1 1 0;
   min-width: 0;
   font-size: 0.58rem;
-  padding: 0.45rem 0.2rem;
-  box-shadow: inset 0 -1px 0 transparent;
+  padding: 0.45rem 0.2rem 0.4rem;
+  box-shadow: none;
+  border-style: solid;
+  border-width: 0 0 1px;
+  border-color: transparent;
+  border-radius: 0;
 }
 
 .artist-page--mobile-portrait .artist-page__sections button.active,
 .artist-page--mobile-portrait .artist-page__subtabs button.active {
-  box-shadow: inset 0 -1px 0 var(--accent);
+  box-shadow: none;
+  border-bottom-color: var(--accent);
 }
 
 .artist-page--mobile-portrait .artist-page__catalog-label {
@@ -4788,15 +4793,15 @@ input {
 }
 
 .artist-about__bio-scroll--collapsed {
-  max-height: 6.5rem;
+  max-height: 10.5rem;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 55%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
 }
 
 .artist-about__bio-scroll--expanded {
-  max-height: 38vh;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   mask-image: none;
   -webkit-mask-image: none;
 }
@@ -4805,7 +4810,7 @@ input {
   margin-top: 0.35rem;
   background: none;
   border: none;
-  color: var(--accent);
+  color: color-mix(in srgb, var(--text) 82%, var(--accent, #c9a227));
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0;
@@ -7341,20 +7346,31 @@ input {
   padding-top: var(--artist-meta-gap);
 }
 
-.artist-page--stacked .artist-about__bio-block {
+.artist-page--stacked .artist-about__bio-block,
+.artist-about--stacked .artist-about__bio-block {
   flex: 0 0 auto;
 }
 
-.artist-page--stacked .artist-about__bio-scroll--collapsed {
-  max-height: 7.5rem;
+.artist-page--stacked .artist-about__bio-scroll--collapsed,
+.artist-about--stacked .artist-about__bio-scroll--collapsed {
+  flex: none;
+  min-height: 0;
+  height: 10.5rem;
+  max-height: 10.5rem;
   overflow: hidden;
-  flex: 0 0 auto;
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
 }
 
-.artist-page--stacked .artist-about__bio-scroll--expanded {
-  max-height: 30vh;
-  overflow-y: auto;
-  flex: 0 0 auto;
+.artist-page--stacked .artist-about__bio-scroll--expanded,
+.artist-about--stacked .artist-about__bio-scroll--expanded {
+  flex: none;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 .artist-page--stacked .artist-about__tracks-row {
@@ -9526,10 +9542,10 @@ input {
 }
 
 .release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-scroll--collapsed {
-  max-height: 5rem;
+  max-height: 9.5rem;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 38%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 38%, transparent);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
 }
 
 .release-page--stacked.release-page--overview .release-page__overview-top .release-page__desc-scroll--expanded {
@@ -9576,13 +9592,21 @@ input {
 }
 
 .release-page--stacked .release-page__desc-scroll--collapsed {
-  max-height: 5rem;
+  max-height: 9.5rem;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 38%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 38%, transparent);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
 }
 
-.release-page--stacked .release-page__desc-scroll--expanded {
+.release-page--mobile-landscape .release-page__desc-scroll--collapsed {
+  max-height: 3.6rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+
+.release-page--stacked .release-page__desc-scroll--expanded,
+.release-page--mobile-landscape .release-page__desc-scroll--expanded {
   max-height: none;
   overflow: visible;
   mask-image: none;
@@ -9593,7 +9617,7 @@ input {
   margin-top: 0.35rem;
   background: none;
   border: none;
-  color: var(--accent);
+  color: color-mix(in srgb, var(--text) 82%, var(--accent, #c9a227));
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0;
@@ -10473,6 +10497,24 @@ input {
 .release-page--mobile-landscape .release-page__overview-top .release-page__desc-scroll {
   overflow: visible;
   max-height: none;
+}
+
+.release-page--mobile-landscape
+  .release-page__overview-top
+  .release-page__desc-scroll--collapsed {
+  max-height: 3.6rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+
+.release-page--mobile-landscape
+  .release-page__overview-top
+  .release-page__desc-scroll--expanded {
+  max-height: none;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 .release-page--mobile-landscape .release-page__overview-top .release-page__photocards {
@@ -12931,6 +12973,9 @@ button.lyrics-status-badge--icon-only {
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .series-catalog {
@@ -13364,7 +13409,9 @@ button.lyrics-status-badge--icon-only {
 
 .series-subseries-page .series-section-subbar button.active {
   color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  box-shadow: none;
+  border-bottom: 2px solid
+    color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
 }
 
 .series-episode-list__row.active {
@@ -13376,11 +13423,11 @@ button.lyrics-status-badge--icon-only {
   color: var(--text);
 }
 
-/* Mobile franchise: match subseries subbar font to overview subtabs */
+/* Mobile franchise: gallery/section subbars match section tab size */
 .artist-page--mobile-portrait .series-section-subbar button {
-  font-size: 0.58rem;
-  padding: 0.45rem 0.2rem;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.55rem;
+  letter-spacing: 0.08em;
 }
 
 /* Cast: two people stack vertically on mobile portrait; smaller circles */
@@ -13431,9 +13478,25 @@ button.lyrics-status-badge--icon-only {
 .artist-page--stacked .series-related .artist-card--banner .artist-card-footer {
   padding-inline: 1rem;
 }
+.release-tracklist__edition-date {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+
+.release-tracklist__edition-name {
+  display: block;
+}
+
 .series-season-block__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
+  gap: 0.15rem 0.35rem;
   width: 100%;
   text-align: left;
   border: none;
@@ -13448,7 +13511,9 @@ button.lyrics-status-badge--icon-only {
   letter-spacing: 0.02em;
 }
 
-.series-season-block__header.release-tracklist__edition-title {
+.release-tracklist__edition-title.series-season-block__header {
+  flex-direction: column;
+  align-items: flex-start;
   margin: 0;
 }
 
@@ -13473,12 +13538,29 @@ button.lyrics-status-badge--icon-only {
 .series-cast--row-scroll {
   --lineup-photo: 3.25rem;
   --cast-row-gap: 0.75rem;
-  --cast-visible: 8;
+  --cast-visible: 4;
   width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   box-sizing: border-box;
+}
+
+.series-cast--row-scroll[data-count="1"] {
+  --cast-visible: 1;
+  --lineup-photo: 4.25rem;
+}
+
+.series-cast--row-scroll[data-count="2"] {
+  --cast-visible: 2;
+  --lineup-photo: 4rem;
+  --cast-row-gap: 1.25rem;
+}
+
+.series-cast--row-scroll[data-count="3"] {
+  --cast-visible: 3;
+  --lineup-photo: 3.65rem;
+  --cast-row-gap: 1rem;
 }
 
 .series-cast--row-scroll .series-cast__scroll {
@@ -13538,11 +13620,11 @@ button.lyrics-status-badge--icon-only {
 
 .series-cast--row-scroll .series-cast-card .artist-lineup-card__photo,
 .series-cast--row-scroll .series-cast-card__photo {
-  width: 3.25rem !important;
-  height: 3.25rem !important;
-  min-width: 3.25rem !important;
-  min-height: 3.25rem !important;
-  flex: 0 0 3.25rem !important;
+  width: var(--lineup-photo, 3.25rem) !important;
+  height: var(--lineup-photo, 3.25rem) !important;
+  min-width: var(--lineup-photo, 3.25rem) !important;
+  min-height: var(--lineup-photo, 3.25rem) !important;
+  flex: 0 0 var(--lineup-photo, 3.25rem) !important;
 }
 
 .release-page__neighbor-text {
@@ -13582,11 +13664,20 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-page .series-subseries-overview.release-page__overview {
-  overflow: hidden;
-  padding: 0.75rem 1rem 0;
-  min-height: 100%;
-  height: 100%;
+  overflow: visible;
+  padding: 0.75rem 1rem 1rem;
+  min-height: 0;
+  height: auto;
   box-sizing: border-box;
+}
+
+.series-subseries-page.release-page--stacked .series-subseries-overview.release-page__overview,
+.series-subseries-page.release-page--mobile-landscape
+  .series-subseries-overview.release-page__overview {
+  overflow: visible;
+  height: auto;
+  min-height: min-content;
+  flex: none;
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup-grid,
@@ -13606,17 +13697,32 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup-card__name {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   line-height: 1.25;
-  overflow: visible;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .series-subseries-page .series-subseries-overview__cast .artist-lineup-card__roles,
 .series-subseries-page .series-subseries-overview__cast .series-cast-card__actor-line {
-  font-size: 0.58rem;
+  font-size: 0.6rem;
   line-height: 1.25;
-  overflow: visible;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.series-subseries-page.release-page--stacked
+  .series-subseries-overview__cast
+  .release-page__section-glass.release-page__lineup,
+.series-subseries-page.release-page--mobile-landscape
+  .series-subseries-overview__cast
+  .release-page__section-glass.release-page__lineup {
+  min-height: var(--series-cast-glass-min, 9.5rem);
+  box-sizing: border-box;
 }
 
 .series-subseries-page .series-subseries-overview__cast .release-page__section-glass {
@@ -14123,6 +14229,7 @@ button.lyrics-status-badge--icon-only {
 
 .series-section-subbar button {
   border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: color-mix(in srgb, var(--text-muted) 72%, transparent);
   font: inherit;
@@ -14135,7 +14242,7 @@ button.lyrics-status-badge--icon-only {
   min-width: max-content;
   text-align: center;
   line-height: 1;
-  box-shadow: inset 0 -2px 0 transparent;
+  box-shadow: none;
   opacity: 0.88;
 }
 
@@ -14147,7 +14254,210 @@ button.lyrics-status-badge--icon-only {
 .series-section-subbar button.active {
   color: var(--accent);
   opacity: 1;
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: none;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* Compact subseries Scope control (replaces long per-subseries subbars) */
+.series-scope-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.28rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
+}
+
+.series-scope-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: min(100%, 22rem);
+}
+
+.series-scope-control__label {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-muted) 78%, transparent);
+}
+
+.series-scope-control__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.series-scope-control__trigger:hover,
+.series-scope-control__trigger.is-open {
+  border-color: color-mix(in srgb, var(--accent, #c9a227) 45%, transparent);
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.series-scope-control__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-scope-control__chev {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  opacity: 0.75;
+}
+
+.series-scope-control__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-elevated, #1a1512) 94%, #000);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+.series-scope-control__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.series-scope-control__search:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent, #c9a227) 55%, transparent);
+}
+
+.series-scope-control__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(50vh, 18rem);
+  overflow-y: auto;
+}
+
+.series-scope-control__panel--fit {
+  width: max-content;
+  max-width: min(92vw, 22rem);
+}
+
+.series-scope-control__panel--fit .series-scope-control__option {
+  width: auto;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.series-scope-control__option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: right;
+  cursor: pointer;
+}
+
+.series-scope-control__option:hover,
+.series-scope-control__option.is-selected {
+  background: color-mix(in srgb, var(--accent, #c9a227) 16%, transparent);
+}
+
+.series-scope-control__option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.series-scope-control__check {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  font-size: 0.78rem;
+}
+
+.series-scope-control__empty {
+  padding: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.artist-page--mobile-portrait .series-scope-bar {
+  padding: 0.3rem 0.55rem;
+}
+
+.artist-page--mobile-portrait .series-scope-control {
+  max-width: 100%;
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.artist-page--mobile-portrait .series-scope-control--bar .series-scope-control__trigger {
+  flex: 1 1 auto;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.series-scope-control--icon .series-scope-control__trigger {
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0.2rem;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.series-scope-control--icon .series-scope-control__trigger:hover,
+.series-scope-control--icon .series-scope-control__trigger.is-open {
+  color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
+  border-color: transparent;
+}
+
+.series-scope-control__icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+}
+
+.artist-page__brand-logo--pending,
+.release-page__brand-logo--pending {
+  display: inline-block;
+  width: min(40vw, 10rem);
+  height: 1.65rem;
+  opacity: 0;
 }
 
 .series-subseries-page .release-page__panel-bottom .release-page__panel-footer {
@@ -14192,6 +14502,30 @@ button.lyrics-status-badge--icon-only {
   gap: clamp(0.45rem, 1vh, 0.75rem);
 }
 
+.series-subseries-page.release-page--stacked .release-page__overview-side {
+  width: 100%;
+  max-width: 100%;
+  align-items: center;
+}
+
+.series-subseries-page.release-page--stacked
+  .release-page__overview-side
+  .release-page__photocards,
+.series-subseries-page.release-page--stacked
+  .release-page__overview-top
+  .release-page__overview-side
+  .release-page__photocards {
+  align-self: center;
+  justify-content: center;
+  align-items: center;
+  max-width: min(92vw, 20rem);
+  width: 100%;
+  --overview-photo-col: clamp(12rem, 46vw, 17rem);
+  --overview-portrait-max-h: clamp(14rem, 58vw, 22rem);
+  --overview-landscape-max-h: clamp(10rem, 40vw, 15rem);
+  --overview-photocard-scale: 1;
+}
+
 .series-subseries-page .release-page__overview-side .release-photocard,
 .series-subseries-page .release-page__overview-side .release-photocard--portrait,
 .series-subseries-page .release-page__overview-side .release-photocard--landscape,
@@ -14229,7 +14563,7 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-overview {
-  padding: 0.75rem 1rem 0;
+  padding: 0.75rem 1rem 1rem;
 }
 
 .series-subseries-overview__grid {
@@ -17715,18 +18049,31 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-audio-player--menu-only {
+  display: none;
+}
+
+.series-audio-player--menu-only.is-open {
+  display: block;
   position: fixed;
-  top: 0.35rem;
-  right: 2.75rem;
+  inset: 0;
+  width: auto;
+  height: auto;
   z-index: 230;
-  width: 0;
-  height: 0;
+  pointer-events: none;
   overflow: visible;
 }
 
-.series-audio-player--menu-only .series-audio-player__dock {
-  right: 0;
-  top: 2.4rem;
+.series-audio-player--menu-only.is-open .series-audio-player__dock {
+  pointer-events: auto;
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: 0.65rem;
+  top: auto;
+  width: min(22rem, calc(100vw - 1.5rem));
+  max-width: min(22rem, calc(100vw - 1.5rem));
+  transform: translateX(-50%);
+  box-sizing: border-box;
 }
 
 .series-audio-player__toggle {
@@ -17876,7 +18223,23 @@ button.lyrics-status-badge--icon-only {
   display: none;
 }
 
+.series-subseries-page.release-page--stacked {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.series-subseries-page.release-page--stacked .release-page__chrome {
+  flex-shrink: 0;
+}
+
 .series-subseries-page.release-page--stacked .release-page__tabs {
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
   overflow-x: auto;
   flex-wrap: nowrap;
   scrollbar-width: none;
@@ -17888,17 +18251,31 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-page.release-page--stacked .release-page__tabs button {
-  flex: 0 0 auto;
-  min-width: max-content;
+  flex: 1 1 0;
+  min-width: 0;
   font-size: 0.68rem;
   letter-spacing: 0.04em;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0.35rem;
+  justify-content: center;
+}
+
+.series-subseries-page.release-page--stacked .series-section-subbar button {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.35rem;
 }
 
 .series-subseries-page.release-page--stacked .release-page__body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
 }
 
 .series-subseries-page.release-page--stacked .release-page__panel {
@@ -17906,76 +18283,171 @@ button.lyrics-status-badge--icon-only {
   top: auto;
   min-height: 0;
   overflow: visible;
-}
-
-.series-subseries-page.release-page--stacked
-  .release-page__panel--collapsed {
-  display: none !important;
-  height: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
+  width: 100%;
+  max-width: none;
+  align-self: stretch;
+  border-radius: 0;
   border: none;
-  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.series-subseries-page.release-page--stacked.series-subseries-page--panel-collapsed
-  .release-page__body {
-  grid-template-rows: minmax(0, 1fr);
+.series-subseries-page.release-page--stacked .release-page__main {
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+  height: auto;
+  flex: none;
 }
 
-.series-subseries-page.release-page--stacked.series-subseries-page--panel-collapsed
-  .release-page__main {
-  padding-top: 0.35rem;
+.series-subseries-page.release-page--stacked .release-tracklist,
+.series-subseries-page.release-page--stacked .series-subseries-episodes {
+  padding: 0.35rem 0.65rem 1rem;
+  box-sizing: border-box;
 }
 
 .series-subseries-page.release-page--stacked .release-page__art {
-  display: flex;
-  justify-content: center;
+  display: block;
   width: 100%;
 }
 
 .series-subseries-page.release-page--stacked .release-page__art-stage,
 .series-subseries-page.release-page--stacked .release-page__art-stage--cover-only {
-  display: flex;
-  justify-content: center;
-  width: auto;
-  max-width: min(58vw, 13.5rem);
-  --release-cover-size: min(58vw, 13.5rem);
-}
-
-.series-subseries-page.release-page--stacked .release-page__cover-wrap {
   display: block;
-  width: var(--release-cover-size, min(58vw, 13.5rem));
-  aspect-ratio: 2 / 3;
-  max-height: none;
-  margin-inline: auto;
+  justify-content: stretch;
+  width: 100%;
+  max-width: none;
+  --release-cover-size: 100%;
 }
 
-.series-subseries-page.release-page--stacked .release-page__cover {
+/* Mobile banner panel: full-bleed Cover - Banner (fallback landscape) */
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__art-stage--banner,
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__art-stage {
+  width: 100%;
+  max-width: none;
+  --release-cover-size: 100%;
+}
+
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__cover-wrap--banner,
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__cover-wrap {
+  display: block;
+  width: 100%;
+  max-width: none;
+  aspect-ratio: 2160 / 600;
+  margin-inline: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__cover--banner,
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__cover {
   width: 100%;
   height: 100%;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: 2160 / 600;
   object-fit: cover;
-  margin-inline: auto;
+  object-position: center;
+  margin-inline: 0;
+  border-radius: 0;
+}
+
+.series-subseries-page__more-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.42);
+  color: color-mix(in srgb, var(--text-muted) 78%, #fff);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1;
+  min-height: 1.55rem;
+}
+
+.series-subseries-page__more-info.is-open {
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.series-subseries-page__panel-meta--glass {
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 0.65rem 0.85rem 0.5rem;
+  box-sizing: border-box;
+}
+
+.series-subseries-page__panel-meta--hidden {
+  display: none;
+}
+
+.series-subseries-page__neighbors {
+  padding: 0.2rem 0.5rem 0.35rem;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.series-subseries-page__neighbors .release-page__neighbor {
+  font-size: 0.68rem;
+  padding: 0.2rem 0.15rem;
+}
+
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__panel--banner
+  .release-page__panel-content {
+  gap: 0;
+  width: 100%;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top {
   display: grid;
-  grid-template-columns: minmax(2.25rem, 1fr) minmax(0, auto) minmax(7.25rem, 1fr);
+  grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
   align-items: center;
   position: relative;
+  min-height: 2.75rem;
+}
+
+.series-subseries-page.release-page--stacked .release-page__top-left {
+  grid-column: 1;
+  justify-self: start;
+  z-index: 2;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-center {
-  position: static;
+  grid-column: 2;
+  position: relative;
   left: auto;
+  top: auto;
   transform: none;
-  max-width: min(46vw, 12rem);
-  justify-self: center;
+  max-width: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   pointer-events: none;
   z-index: 1;
+  justify-self: stretch;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-center * {
@@ -17983,17 +18455,56 @@ button.lyrics-status-badge--icon-only {
   max-width: 100%;
 }
 
-.series-subseries-page.release-page--stacked .release-page__top-left {
-  justify-self: start;
-  z-index: 2;
+.series-subseries-page.release-page--stacked .release-page__brand-logo,
+.series-subseries-page.release-page--stacked .release-page__brand-name {
+  max-height: 1.85rem;
+  height: auto;
+  width: auto;
+  max-width: min(56vw, 15rem);
+  object-fit: contain;
+}
+
+.series-subseries-page.release-page--stacked .release-page__brand-logo--pending {
+  display: inline-block;
+  width: min(40vw, 10rem);
+  height: 1.65rem;
+  opacity: 0;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-right {
+  grid-column: 3;
   justify-self: end;
+  justify-content: flex-end;
+  width: 100%;
   z-index: 2;
   flex-wrap: nowrap;
   gap: 0.1rem;
   max-width: none;
+}
+
+.series-subseries-page.release-page--stacked .release-page__tabs {
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  gap: 0;
+}
+
+.series-subseries-page.release-page--stacked .release-page__tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.35rem;
+  justify-content: center;
+}
+
+.series-subseries-page.release-page--stacked .series-section-subbar button {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.35rem;
 }
 
 .series-subseries-page.release-page--stacked .release-page__top-right .release-card-layout-picker,
@@ -18003,22 +18514,39 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
 }
 
-.series-subseries-page.release-page--stacked .release-page__main,
 .series-subseries-page.release-page--stacked .release-tracklist,
 .series-subseries-page.release-page--stacked .series-media-grid {
   min-height: 0;
 }
 
 .series-subseries-page.release-page--stacked .series-media-grid,
+.series-subseries-page.release-page--stacked .media-release-grid,
+.series-subseries-page.release-page--stacked .series-gallery,
+.series-subseries-page.release-page--stacked .series-gallery__grid,
+.series-subseries-page.release-page--stacked .artist-gallery__photo-grid {
+  gap: 0 !important;
+  column-gap: 0 !important;
+  row-gap: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.series-subseries-page.release-page--stacked .series-media-grid,
 .series-subseries-page.release-page--stacked .media-release-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
 }
 
 .series-subseries-page.release-page--stacked .series-media-grid--square,
 .series-subseries-page.release-page--stacked
   .media-release-grid.series-media-grid--square {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.series-subseries-page.release-page--stacked
+  .media-release-grid.media-release-grid--banner {
+  grid-template-columns: 1fr;
 }
 
 .series-oped-tracklist {
@@ -18147,4 +18675,158 @@ button.lyrics-status-badge--icon-only {
   .series-oped-tracklist__row {
     grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
   }
+}
+
+/* Music release banner panel (mobile + tablet portrait) */
+.release-page--banner-layout.release-page--stacked .release-page__panel--banner {
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  aspect-ratio: 2160 / 600;
+  overflow: hidden;
+  --release-cover-size: min(42%, 7.5rem);
+}
+
+.release-page--banner-layout .release-page__banner-bg {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+  z-index: 0;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner .release-page__cover-wrap--banner-cover,
+.release-page--banner-layout .release-page__art-stage--banner .release-page__disc--banner {
+  position: relative;
+  z-index: 1;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner .release-page__cover-wrap--banner-cover {
+  flex: 0 0 auto;
+  height: 78%;
+  width: auto;
+  aspect-ratio: 1 / 1;
+  margin-left: 4%;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner .release-page__cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  aspect-ratio: 1 / 1;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner .release-page__disc--banner {
+  position: absolute;
+  left: calc(4% + var(--release-cover-size) * 0.55);
+  height: 70%;
+  width: auto;
+  aspect-ratio: 1 / 1;
+  z-index: 0;
+  opacity: 0.92;
+}
+
+.release-page--banner-layout .release-page__more-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.42);
+  color: color-mix(in srgb, var(--text) 78%, #fff);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1;
+  min-height: 1.55rem;
+}
+
+.release-page--banner-layout .release-page__more-info.is-open {
+  color: color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #f4efe6 72%, var(--accent, #c9a227));
+}
+
+.release-page--banner-layout .release-page__panel-meta--glass {
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 0.65rem 0.85rem 0.5rem;
+  box-sizing: border-box;
+}
+
+.release-page--banner-layout .release-page__panel-meta--hidden {
+  display: none;
+}
+
+.release-page--banner-layout .release-page__panel-content {
+  gap: 0;
+  width: 100%;
+}
+
+.release-page--banner-layout .release-page__panel-bottom {
+  background: rgba(0, 0, 0, 0.32);
+  padding: 0.35rem 0.55rem 0.45rem;
+}
+
+.release-page__bg-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.release-page__bg-canvas-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.release-page__bg-canvas-shade {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.release-page--banner-layout.release-page--stacked .release-page__body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 0;
+  padding: 0;
+}
+
+.release-page--banner-layout.release-page--stacked .release-page__main {
+  padding: 0.5rem 0.75rem 1.25rem;
+  min-height: 0;
+  overflow: visible;
+}
+
+.release-page--banner-layout.release-page--stacked .release-page__overview-top .release-page__photocards,
+.release-page--banner-layout.release-page--stacked .release-page__overview-side .release-page__photocards {
+  align-self: center;
+  justify-content: center;
+  --overview-photo-col: clamp(11rem, 42vw, 16rem);
+  --overview-portrait-max-h: clamp(13rem, 55vw, 21rem);
+  --overview-landscape-max-h: clamp(9.5rem, 38vw, 14rem);
 }

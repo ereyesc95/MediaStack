@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   addSeriesCastMember,
   patchSeriesCastMember,
@@ -1353,6 +1353,22 @@ export default function SeriesCast({
         castLayout === "row"
           ? "series-cast series-cast--row-scroll"
           : "artist-lineup series-cast"
+      }
+      data-count={
+        castLayout === "row"
+          ? Math.min(Math.max(members.length, 1), 8)
+          : undefined
+      }
+      style={
+        castLayout === "row"
+          ? ({
+              ["--cast-visible" as string]: String(
+                members.length <= 3
+                  ? Math.max(members.length, 1)
+                  : Math.min(members.length, 4)
+              ),
+            } as CSSProperties)
+          : undefined
       }
     >
       {members.length === 0 ? (

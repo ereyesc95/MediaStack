@@ -355,8 +355,11 @@ export function diskCreditFromTitle(
   };
 }
 
-export function isAdaptationLine(line: TrackPanelLine): boolean {
-  return line.kind === "other" && /^Adaptation of /i.test(line.text);
+export function isAdaptationLine(
+  line: TrackPanelLine
+): line is Extract<TrackPanelLine, { kind: "other" }> {
+  if (line.kind !== "other") return false;
+  return /^Adaptation of /i.test(line.text);
 }
 
 export function writerSearchUrl(name: string): string {

@@ -10,6 +10,7 @@ from app.media_index import _artwork_file
 
 COVER_FRONT_STEM = "cover - front"
 COVER_ALBUM_STEM = "cover - album"
+COVER_BANNER_STEM = "cover - banner"
 COVER_BACK_STEM = "cover - back"
 COVER_INNER_STEM = "cover - inner"
 ANIMATION_ALBUM_STEM = "animation - album"
@@ -51,6 +52,12 @@ def resolve_cover_front_file(artwork: Path | None) -> Path | None:
     if cover:
         return cover
     return _artwork_file(artwork, COVER_ALBUM_STEM)
+
+
+def resolve_cover_banner_file(artwork: Path | None) -> Path | None:
+    if not artwork or not artwork.is_dir():
+        return None
+    return _artwork_file(artwork, COVER_BANNER_STEM)
 
 
 def resolve_animation_album_file(artwork: Path | None) -> Path | None:

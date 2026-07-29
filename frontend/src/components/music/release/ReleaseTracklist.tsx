@@ -18,6 +18,7 @@ import {
   getCachedReleaseTracklist,
   prefetchReleaseTracklist as prefetchTracklist,
 } from "../../../releaseTracklistCache";
+import { formatTrackDate } from "../../../formatDate";
 import { invalidateWordCloud } from "../../../wordCloudInvalidation";
 import type {
   ReleaseEdition,
@@ -74,7 +75,8 @@ export type ReleasePlaybackArt = {
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
-  group_kind?: "disc" | "side" | "tape" | null;
+  logo_url?: string | null;
+  group_kind?: string | null;
   background_layers?: string[];
 };
 
@@ -106,6 +108,25 @@ function stripBracketSuffix(text: string): string {
 function isStandardEdition(label: string): boolean {
   const low = label.toLowerCase().trim();
   return low === "standard edition" || low === "standard";
+}
+
+/** Strip folder date prefix from edition labels like "1997.11.03. Standard Edition". */
+function editionDisplayParts(edition: ReleaseEdition): {
+  title: string;
+  dateLabel: string | null;
+} {
+  if (edition.kind === "bside") {
+    return { title: "B-sides", dateLabel: null };
+  }
+  const dateLabel =
+    edition.display_date?.trim() ||
+    formatTrackDate(edition.date_iso) ||
+    null;
+  const m = edition.label
+    .trim()
+    .match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
+  const title = (m?.[1] || edition.label).trim() || edition.label;
+  return { title, dateLabel };
 }
 
 function sourceAlbumDisplayTitle(title: string): string {
@@ -192,6 +213,10 @@ function versionSourceFromItem(
   date_iso?: string | null;
   display_date?: string | null;
 } | null {
+  // Some parameters are used for navigation/context in the full app flow,
+  // but they are not needed for the current URL-building logic here.
+  void releaseId;
+  void releaseNavigateId;
   if (anchorPath && version.play_path === anchorPath) return null;
   const navId = version.navigate_release_id?.trim();
   if (!navId) return null;
@@ -355,6 +380,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   },
   ref
 ) {
+  // These callbacks are optional depending on which outer panel is enabled.
+  // They remain part of the prop contract, but may be unused in some views.
+  void onMobileViewChange;
+  void onResumeTrack;
   const onActiveTrackChangeRef = useRef(onActiveTrackChange);
   const onPanelActionsChangeRef = useRef(onPanelActionsChange);
   onActiveTrackChangeRef.current = onActiveTrackChange;
@@ -383,6 +412,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     album_title: string;
     navigate_release_id: string;
   } | null>(null);
+  const [expandedEditionId, setExpandedEditionId] = useState<string | null>(null);
   const lyricsRequestRef = useRef(0);
 
   const setView = useCallback(
@@ -480,15 +510,31 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   );
 
 
-  const editionSectionLabel = (edition: ReleaseEdition) => {
-    if (edition.kind === "bside") return "B-sides";
-    return edition.label;
-  };
-
   const shouldShowEditionHeader = (edition: ReleaseEdition) => {
     if (edition.kind === "bside") return true;
     if (edition.unresolved || edition.is_link) return true;
     return data ? data.editions.length > 1 : false;
+  };
+
+  useEffect(() => {
+    if (!data?.editions.length) {
+      setExpandedEditionId(null);
+      return;
+    }
+    setExpandedEditionId((prev) => {
+      if (prev && data.editions.some((e) => e.id === prev)) return prev;
+      if (playingPath) {
+        const match = data.editions.find((ed) =>
+          ed.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
+        );
+        if (match) return match.id;
+      }
+      return data.editions[0]?.id ?? null;
+    });
+  }, [data?.editions, playingPath, bandId, releaseId]);
+
+  const toggleEdition = (id: string) => {
+    setExpandedEditionId((prev) => (prev === id ? null : id));
   };
 
   const resolveTrackContext = useCallback(
@@ -757,21 +803,37 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const tracklistBody = (
     <div className="release-tracklist__content">
-      {data.editions.map((ed) => (
+      {data.editions.map((ed) => {
+          const showHeader = shouldShowEditionHeader(ed);
+          const parts = editionDisplayParts(ed);
+          const open = !showHeader || expandedEditionId === ed.id;
+          return (
           <section
             key={ed.id}
             className="release-tracklist__edition-block"
           >
-            {shouldShowEditionHeader(ed) && (
-              <h2
-                className={`release-tracklist__edition-title${
+            {showHeader && (
+              <button
+                type="button"
+                className={`release-tracklist__edition-title series-season-block__header${
+                  open ? " is-open" : ""
+                }${
                   ed.unresolved ? " release-tracklist__edition-title--unresolved" : ""
                 }`}
+                onClick={() => toggleEdition(ed.id)}
+                aria-expanded={open}
               >
-                {editionSectionLabel(ed)}
-              </h2>
+                <span className="release-tracklist__edition-name">{parts.title}</span>
+                {parts.dateLabel ? (
+                  <span className="release-tracklist__title-suffix release-tracklist__edition-date">
+                    {parts.dateLabel}
+                  </span>
+                ) : null}
+              </button>
             )}
 
+            {open ? (
+              <>
             {ed.unresolved && ed.groups.length === 0 && (
               <p className="release-tracklist__edition-empty muted">
                 Original release not found in library.
@@ -932,8 +994,11 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               </div>
               );
             })}
+              </>
+            ) : null}
           </section>
-      ))}
+          );
+      })}
     </div>
   );
 

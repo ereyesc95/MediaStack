@@ -94,6 +94,8 @@ export type SeriesCatalogBrowseTarget = {
 type Props = {
   franchiseId: string;
   franchiseName?: string;
+  /** Franchise logo shown while subseries art loads (avoids title flash). */
+  franchiseLogoUrl?: string | null;
   subseriesId: string;
   seasonId?: string;
   section?: SeriesSection;
@@ -141,12 +143,10 @@ function tabToSection(tab: SubseriesTab): SeriesSection {
 
 function NeighborLink({
   label,
-  year,
   direction,
   onClick,
 }: {
   label: string;
-  year?: string | null;
   direction: "prev" | "next";
   onClick: () => void;
 }) {
@@ -163,9 +163,6 @@ function NeighborLink({
       ) : null}
       <span className="release-page__neighbor-text">
         <span className="release-page__neighbor-title">{label}</span>
-        {year ? (
-          <span className="release-page__neighbor-date">({year})</span>
-        ) : null}
       </span>
       {direction === "next" ? (
         <span className="release-page__neighbor-arrow" aria-hidden>
@@ -174,17 +171,6 @@ function NeighborLink({
       ) : null}
     </button>
   );
-}
-
-function neighborYear(s: {
-  date_iso?: string | null;
-  display_date?: string | null;
-}): string | null {
-  const iso = s.date_iso || "";
-  if (iso.length >= 4 && /^\d{4}/.test(iso)) return iso.slice(0, 4);
-  const disp = s.display_date || "";
-  const m = disp.match(/\b(19|20)\d{2}\b/);
-  return m ? m[0] : null;
 }
 
 /** Start–end air dates for the left panel (end only when known). */
@@ -301,7 +287,7 @@ function filterCardsForSubseries(
       c.category === "playlists" ||
       c.id.startsWith("series-op-ed:")
     ) {
-      return true;
+      return false;
     }
     if (pathCf && p.includes(pathCf)) return true;
     if (
@@ -358,6 +344,7 @@ const GAME_PLATFORM_ERA: Record<string, number> = {
 export default function SeriesSubseriesPage({
   franchiseId,
   franchiseName,
+  franchiseLogoUrl,
   subseriesId,
   seasonId,
   section = "overview",
@@ -376,10 +363,13 @@ export default function SeriesSubseriesPage({
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
-  const stacked = isMobilePortraitLayout(layout);
+  const mobilePortrait = isMobilePortraitLayout(layout);
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const tabletLayout = isTabletLayout(layout);
   const tabletPortrait = layout === "tablet-portrait";
+  /** Banner + More info panel: phone portrait and tablet portrait. */
+  const bannerLayout = mobilePortrait || tabletPortrait;
+  const stacked = bannerLayout;
   const tab = sectionToTab(section);
 
   const [card, setCard] = useState<SeriesSubseriesCard | null>(null);
@@ -414,7 +404,8 @@ export default function SeriesSubseriesPage({
   const [endingVideos, setEndingVideos] = useState<SeriesEpisodeItem[]>([]);
   const [seriesPlaying, setSeriesPlaying] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [opedOpen, setOpedOpen] = useState(false);
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
@@ -426,10 +417,13 @@ export default function SeriesSubseriesPage({
     outgoing?: string;
   }>({});
   const castGlassRef = useRef<HTMLElement | null>(null);
-  const [castMinHeight, setCastMinHeight] = useState(0);
+  const cachedLogoRef = useRef<string | null>(null);
+  const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
+  const [castGlassMin, setCastGlassMin] = useState(0);
 
   useEffect(() => {
-    setCastMinHeight(0);
+    setOverviewDescExpanded(false);
+    setCastGlassMin(0);
   }, [subseriesId]);
 
   useLayoutEffect(() => {
@@ -437,7 +431,7 @@ export default function SeriesSubseriesPage({
     const el = castGlassRef.current;
     if (!el) return;
     const h = Math.ceil(el.getBoundingClientRect().height);
-    if (h > 0) setCastMinHeight((prev) => Math.max(prev, h));
+    if (h > 0) setCastGlassMin((prev) => Math.max(prev, h));
   }, [tab, castTab, overview?.cast, subseriesId]);
 
   const setCardLayoutPersisted = useCallback(
@@ -581,6 +575,7 @@ export default function SeriesSubseriesPage({
 
   const baseCoverFront =
     detail?.cover_url || card?.cover_url || overview?.cover_url || null;
+  const baseCoverBanner = detail?.banner_url || baseCoverFront;
   const baseCoverBack = detail?.cover_back_url || baseCoverFront;
   const baseCover = baseCoverFront;
 
@@ -593,9 +588,22 @@ export default function SeriesSubseriesPage({
       baseCoverFront
     : baseCoverFront;
 
+  /** Wide art for mobile stacked banner panel. */
+  const panelBannerUrl = onEpisodesTab
+    ? focusBgUrl ||
+      activeSeason?.banner_url ||
+      activeSeason?.landscape_url ||
+      activeSeason?.cover_url ||
+      baseCoverBanner ||
+      baseCoverFront
+    : baseCoverBanner || baseCoverFront;
+
+  const panelArtUrl = stacked ? panelBannerUrl : panelCoverUrl;
+
   const bgCoverUrl = onEpisodesTab
     ? focusBgUrl ||
       activeSeason?.landscape_url ||
+      activeSeason?.banner_url ||
       activeSeason?.portrait_url ||
       activeSeason?.cover_url ||
       baseCoverBack
@@ -615,7 +623,7 @@ export default function SeriesSubseriesPage({
     setExtraVideos([]);
     setOpeningVideos([]);
     setEndingVideos([]);
-    setPanelCollapsed(false);
+    setMoreInfoOpen(false);
   }, [subseriesId]);
 
   useEffect(() => {
@@ -675,11 +683,11 @@ export default function SeriesSubseriesPage({
   }, [bgCoverUrl]);
 
   useEffect(() => {
-    if (!panelCoverUrl || isPlaybackThemeActive()) return;
-    void colorsFromImageUrl(panelCoverUrl).then((c) => {
+    if (!panelArtUrl || isPlaybackThemeActive()) return;
+    void colorsFromImageUrl(panelArtUrl).then((c) => {
       if (c && !isPlaybackThemeActive()) applyMediaTheme(c, userId);
     });
-  }, [panelCoverUrl, userId]);
+  }, [panelArtUrl, userId]);
 
   const title = detail?.title || card?.title || subseriesId;
   const scopedMeta = overview?.subseries_meta?.[subseriesId] ?? null;
@@ -837,7 +845,9 @@ export default function SeriesSubseriesPage({
         setAudioCards(
           filterCardsForSubseries(
             toMediaCards(
-              releases.map((r) => ({
+              releases
+                .filter((r) => !r.is_series_playlist)
+                .map((r) => ({
                 id: r.id,
                 title: r.title || r.name,
                 cover_url: r.cover_url,
@@ -846,9 +856,7 @@ export default function SeriesSubseriesPage({
                 date_iso: r.date_iso,
                 display_date: r.display_date || r.release_date,
                 folder_path: r.folder_path || r.subseries_path || undefined,
-                path: r.is_series_playlist
-                  ? `playlist:${r.playlist_kind || "openings-endings"}`
-                  : r.folder_path || r.subseries_path || undefined,
+                path: r.folder_path || r.subseries_path || undefined,
                 meta:
                   [
                     r.subseries_title,
@@ -859,11 +867,7 @@ export default function SeriesSubseriesPage({
                     .join(" · ") || undefined,
                 navigate_band_id: r.navigate_band_id,
                 navigate_release_id: r.navigate_release_id,
-                category: r.is_series_playlist
-                  ? "playlists"
-                  : r.category || undefined,
-                open_label: r.is_series_playlist ? "Open playlist" : undefined,
-                open_mode: r.is_series_playlist ? ("tab" as const) : null,
+                category: r.category || undefined,
               }))
             ),
             title,
@@ -1096,10 +1100,14 @@ export default function SeriesSubseriesPage({
   };
 
   const selectSeasonCover = (s: SeriesSeasonCard) => {
-    setFocusCoverUrl(s.portrait_url || s.cover_url || null);
-    setFocusBgUrl(
-      s.landscape_url || s.portrait_url || s.cover_url || null
-    );
+    const wide =
+      s.banner_url ||
+      s.landscape_url ||
+      s.portrait_url ||
+      s.cover_url ||
+      null;
+    setFocusCoverUrl(wide);
+    setFocusBgUrl(wide);
   };
 
   useEffect(() => {
@@ -1167,23 +1175,45 @@ export default function SeriesSubseriesPage({
     }
   };
 
-  const topLogoUrl = detail?.logo_url || card?.logo_url || null;
-  const topLogo = topLogoUrl ? (
-    <img src={topLogoUrl} alt="" className="release-page__brand-logo" />
+  useEffect(() => {
+    if (tab !== "overview") setMoreInfoOpen(false);
+  }, [tab]);
+
+  const resolvedLogoUrl =
+    detail?.logo_url ||
+    card?.logo_url ||
+    overview?.logo_url ||
+    franchiseLogoUrl ||
+    null;
+  if (resolvedLogoUrl) cachedLogoRef.current = resolvedLogoUrl;
+  const topLogoUrl = resolvedLogoUrl || cachedLogoRef.current;
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [topLogoUrl, subseriesId]);
+  const brandPending = loading && !topLogoUrl;
+  const showTitleFallback =
+    !brandPending && (!topLogoUrl || logoFailed);
+  const topLogo = topLogoUrl && !logoFailed ? (
+    <img
+      src={topLogoUrl}
+      alt=""
+      className="release-page__brand-logo"
+      onError={() => setLogoFailed(true)}
+    />
   ) : null;
 
   const pageClass = [
     "release-page",
     "series-subseries-page",
     stacked ? "release-page--stacked" : "",
-    stacked ? "release-page--scroll" : "",
+    mobilePortrait ? "series-subseries-page--mobile-portrait" : "",
+    tabletPortrait ? "series-subseries-page--tablet-portrait" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
     tabletLayout ? "release-page--tablet" : "",
     tabletPortrait ? "release-page--tablet-portrait" : "",
     tab === "overview" ? "release-page--overview" : "",
     bgLayers.current ? "release-page--has-bg" : "",
     seriesPlaying ? "release-page--beat-ready release-page--playing" : "",
-    stacked && panelCollapsed ? "series-subseries-page--panel-collapsed" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1262,8 +1292,13 @@ export default function SeriesSubseriesPage({
           <div className="release-page__top-center">
             {topLogo ? (
               <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
-            ) : (
+            ) : showTitleFallback ? (
               <span className="release-page__brand-name">{title}</span>
+            ) : (
+              <span
+                className="release-page__brand-logo release-page__brand-logo--pending"
+                aria-hidden
+              />
             )}
           </div>
           <div className="release-page__top-right">
@@ -1274,13 +1309,22 @@ export default function SeriesSubseriesPage({
                 onChange={setCardLayoutPersisted}
               />
             ) : null}
-            <SeriesAudioPlayer
-              franchiseId={franchiseId}
-              onPlayingChange={setSeriesPlaying}
-              open={playerOpen}
-              onOpenChange={setPlayerOpen}
-              hideToggle={stacked}
-            />
+            {!stacked ? (
+              <SeriesAudioPlayer
+                franchiseId={franchiseId}
+                onPlayingChange={setSeriesPlaying}
+                open={playerOpen}
+                onOpenChange={setPlayerOpen}
+              />
+            ) : (
+              <SeriesAudioPlayer
+                franchiseId={franchiseId}
+                onPlayingChange={setSeriesPlaying}
+                open={playerOpen}
+                onOpenChange={setPlayerOpen}
+                hideToggle
+              />
+            )}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1311,33 +1355,17 @@ export default function SeriesSubseriesPage({
                         ) : (
                           <IconCardBanner className="menu-item-icon" />
                         )}
-                        Cards: {cardLayout === "cover" ? "Cover" : "Banner"}
+                        {cardLayout === "cover"
+                          ? "Cover view"
+                          : "Banner view"}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setPanelCollapsed((v) => !v)}
-                    >
-                      <svg
-                        className="menu-item-icon"
-                        viewBox="0 0 24 24"
-                        width="18"
-                        height="18"
-                        aria-hidden
-                      >
-                        <path
-                          fill="currentColor"
-                          d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h14V7H5zm2 2h4v6H7V9zm5 0h5v2h-5V9zm0 3h5v2h-5v-2z"
-                        />
-                      </svg>
-                      {panelCollapsed ? "Show cover panel" : "Hide cover panel"}
-                    </button>
                     <button
                       type="button"
                       onClick={() => setPlayerOpen((v) => !v)}
                     >
                       <IconMediaMusic className="menu-item-icon" />
-                      {playerOpen ? "Hide audio player" : "Show audio player"}
+                      {playerOpen ? "Hide music" : "Play music"}
                     </button>
                   </>
                 ) : null
@@ -1458,31 +1486,63 @@ export default function SeriesSubseriesPage({
       <div className="release-page__body">
         <aside
           className={`release-page__panel${
-            stacked && panelCollapsed ? " release-page__panel--collapsed" : ""
+            stacked ? " series-subseries-page__panel--banner" : ""
           }`}
         >
           <div className="release-page__panel-content">
             <div className="release-page__art">
-              <div className="release-page__art-stage release-page__art-stage--cover-only">
-                <span className="release-page__cover-wrap">
+              <div
+                className={`release-page__art-stage${
+                  stacked
+                    ? " release-page__art-stage--banner"
+                    : " release-page__art-stage--cover-only"
+                }`}
+              >
+                <span
+                  className={`release-page__cover-wrap${
+                    stacked ? " release-page__cover-wrap--banner" : ""
+                  }`}
+                >
                   <img
-                    key={`${panelCoverUrl || "empty"}|${rescanTick}`}
+                    key={`${panelArtUrl || "empty"}|${rescanTick}`}
                     src={
-                      panelCoverUrl
-                        ? rescanTick > 0 && !panelCoverUrl.includes("&v=")
-                          ? `${panelCoverUrl}${panelCoverUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
-                          : panelCoverUrl
+                      panelArtUrl
+                        ? rescanTick > 0 && !panelArtUrl.includes("&v=")
+                          ? `${panelArtUrl}${panelArtUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
+                          : panelArtUrl
                         : undefined
                     }
                     alt=""
                     className={`release-page__cover${
-                      panelCoverUrl ? "" : " release-page__cover--placeholder"
-                    }`}
+                      stacked ? " release-page__cover--banner" : ""
+                    }${panelArtUrl ? "" : " release-page__cover--placeholder"}`}
                   />
                 </span>
               </div>
             </div>
-            <div className="release-page__panel-meta">
+
+            {stacked && tab === "overview" ? (
+              <button
+                type="button"
+                className={`series-subseries-page__more-info${
+                  moreInfoOpen ? " is-open" : ""
+                }`}
+                aria-expanded={moreInfoOpen}
+                onClick={() => setMoreInfoOpen((v) => !v)}
+              >
+                More info
+              </button>
+            ) : null}
+
+            <div
+              className={`release-page__panel-meta${
+                stacked ? " series-subseries-page__panel-meta--glass" : ""
+              }${
+                stacked && (tab !== "overview" || !moreInfoOpen)
+                  ? " series-subseries-page__panel-meta--hidden"
+                  : ""
+              }`}
+            >
               <div className="release-page__panel-body">
                 <div className="release-page__panel-head">
                   <h1 className="release-page__album-title">{title}</h1>
@@ -1669,32 +1729,57 @@ export default function SeriesSubseriesPage({
                     </p>
                   </div>
                 ) : null}
-                <div className="release-page__panel-footer">
-                  <div className="release-page__panel-bottom-bar">
-                    {prevSub ? (
-                      <NeighborLink
-                        label={prevSub.title}
-                        year={neighborYear(prevSub)}
-                        direction="prev"
-                        onClick={() => openSibling(prevSub.id)}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                    {nextSub ? (
-                      <NeighborLink
-                        label={nextSub.title}
-                        year={neighborYear(nextSub)}
-                        direction="next"
-                        onClick={() => openSibling(nextSub.id)}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
+                {!stacked ? (
+                  <div className="release-page__panel-footer">
+                    <div className="release-page__panel-bottom-bar">
+                      {prevSub ? (
+                        <NeighborLink
+                          label={prevSub.title}
+                          direction="prev"
+                          onClick={() => openSibling(prevSub.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {nextSub ? (
+                        <NeighborLink
+                          label={nextSub.title}
+                          direction="next"
+                          onClick={() => openSibling(nextSub.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             </div>
+
+            {stacked ? (
+              <div className="release-page__panel-footer series-subseries-page__neighbors">
+                <div className="release-page__panel-bottom-bar">
+                  {prevSub ? (
+                    <NeighborLink
+                      label={prevSub.title}
+                      direction="prev"
+                      onClick={() => openSibling(prevSub.id)}
+                    />
+                  ) : (
+                    <span className="release-page__neighbor-spacer" />
+                  )}
+                  {nextSub ? (
+                    <NeighborLink
+                      label={nextSub.title}
+                      direction="next"
+                      onClick={() => openSibling(nextSub.id)}
+                    />
+                  ) : (
+                    <span className="release-page__neighbor-spacer" />
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </aside>
 
@@ -1710,7 +1795,15 @@ export default function SeriesSubseriesPage({
             <div className="release-page__overview release-page__overview--no-singles series-subseries-overview">
               <div className="release-page__overview-top">
                 <div className="release-page__desc-block">
-                  <div className="release-page__desc-scroll">
+                  <div
+                    className={`release-page__desc-scroll${
+                      stacked || mobileLandscape
+                        ? overviewDescExpanded
+                          ? " release-page__desc-scroll--expanded"
+                          : " release-page__desc-scroll--collapsed"
+                        : ""
+                    }`}
+                  >
                     {overviewBio ? (
                       overviewBio.split(/\n+/).map((p, i) => (
                         <p key={i} className="release-page__desc-para">
@@ -1721,6 +1814,15 @@ export default function SeriesSubseriesPage({
                       <p className="muted">No description yet.</p>
                     )}
                   </div>
+                  {(stacked || mobileLandscape) && overviewBio ? (
+                    <button
+                      type="button"
+                      className="release-page__desc-toggle"
+                      onClick={() => setOverviewDescExpanded((o) => !o)}
+                    >
+                      {overviewDescExpanded ? "Show less" : "Read more"}
+                    </button>
+                  ) : null}
                 </div>
                 {photocards ? (
                   <div className="release-page__overview-side">
@@ -1753,8 +1855,11 @@ export default function SeriesSubseriesPage({
                     ref={castGlassRef}
                     className="release-page__section-glass release-page__lineup"
                     style={
-                      castMinHeight > 0
-                        ? { minHeight: castMinHeight }
+                      castGlassMin > 0
+                        ? ({
+                            ["--series-cast-glass-min" as string]: `${castGlassMin}px`,
+                            minHeight: castGlassMin,
+                          } as CSSProperties)
                         : undefined
                     }
                   >
@@ -1825,15 +1930,7 @@ export default function SeriesSubseriesPage({
                               emptyLabel="No episode video files in this season folder."
                               onSelect={(ep) => {
                                 setActiveEpisodeId(ep.id);
-                                setFocusCoverUrl(
-                                  s.portrait_url || s.cover_url || null
-                                );
-                                setFocusBgUrl(
-                                  s.landscape_url ||
-                                    s.portrait_url ||
-                                    s.cover_url ||
-                                    null
-                                );
+                                selectSeasonCover(s);
                               }}
                             />
                           ) : null}

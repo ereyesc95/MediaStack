@@ -145,6 +145,57 @@ def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
     return _folder_cover(folder, media_root)
 
 
+def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
+    """Cover - Banner, then landscape-named art, from Gallery/Covers or [Artwork]."""
+    from app.series_paths import cover_search_dirs
+    from app.artwork_stems import resolve_cover_banner_file
+
+    def _url(p: Path) -> str | None:
+        url = _media_url(p, media_root)
+        if not url:
+            return None
+        try:
+            return f"{url}&v={int(p.stat().st_mtime)}"
+        except OSError:
+            return url
+
+    for d in cover_search_dirs(folder):
+        exact = resolve_cover_banner_file(d)
+        if exact:
+            return _url(exact)
+        try:
+            matches = sorted(
+                d.glob("Cover - Banner*"), key=lambda p: p.name.casefold()
+            )
+        except OSError:
+            matches = []
+        for p in matches:
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+                return _url(p)
+
+    # Fallback: Cover - Landscape / *landscape* (wide art for mobile banner panel)
+    for d in cover_search_dirs(folder):
+        try:
+            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        preferred: list[Path] = []
+        others: list[Path] = []
+        for p in files:
+            if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
+                continue
+            stem = p.stem.casefold()
+            if "banner" in stem:
+                continue
+            if stem.startswith("cover - landscape") or stem == "cover - landscape":
+                preferred.append(p)
+            elif "landscape" in stem:
+                others.append(p)
+        for p in preferred + others:
+            return _url(p)
+    return None
+
+
 def _series_cover_back(folder: Path, media_root: Path) -> str | None:
     from app.series_paths import cover_search_dirs
     from app.artwork_stems import COVER_BACK_STEM, _media_file_in_artwork
@@ -285,10 +336,11 @@ def _season_card(
     labels = [display_title, season_dir.name]
     if date_iso and title:
         labels.append(f"{date_iso.replace('-', '.')}. {title}")
-    portrait, landscape, front, back = resolve_season_art(
+    portrait, landscape, front, back, banner = resolve_season_art(
         parent_artwork, labels, media_root
     )
     cover = portrait or front or _folder_cover(season_dir, media_root)
+    banner_url = banner or landscape
     return {
         "id": season_dir.name,
         "title": display_title,
@@ -298,6 +350,7 @@ def _season_card(
         "cover_url": cover,
         "portrait_url": portrait or cover,
         "landscape_url": landscape or portrait or cover,
+        "banner_url": banner_url or cover,
         "cover_back_url": back,
         "episode_count": _count_episodes(season_dir),
     }
@@ -726,6 +779,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     logo_url, icon_url = find_logo_file(folder, root)
     photocards = resolve_series_photocards(folder, root)
     cover_front = _series_folder_cover(folder, root)
+    cover_banner = _series_folder_banner(folder, root)
     cover_back = _series_cover_back(folder, root)
     badge_url = find_badge_file(folder, root)
     base = {
@@ -735,6 +789,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "display_date": format_display_date(date_iso),
         "folder_path": folder.relative_to(root).as_posix(),
         "cover_url": cover_front,
+        "banner_url": cover_banner or cover_front,
         "cover_back_url": cover_back,
         "logo_url": logo_url,
         "icon_url": icon_url,

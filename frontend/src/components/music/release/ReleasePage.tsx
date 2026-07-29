@@ -335,8 +335,11 @@ export default function ReleasePage({
   onEditProfile,
 }: Props) {
   const layout = useDeviceLayout();
-  const stacked = isMobilePortraitLayout(layout);
+  const mobilePortrait = isMobilePortraitLayout(layout);
   const tabletPortrait = layout === "tablet-portrait";
+  /** Banner panel: phone portrait + tablet portrait (matches series subseries). */
+  const bannerLayout = mobilePortrait || tabletPortrait;
+  const stacked = bannerLayout;
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const isPhone = isPhoneLayout(layout);
   const [data, setData] = useState<ReleaseOverview | null>(() =>
@@ -348,6 +351,7 @@ export default function ReleasePage({
   const [mobileTrackView, setMobileTrackView] =
     useState<ReleaseMobileTrackView>("tracks");
   const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [galleryTab, setGalleryTab] = useState<ReleaseGalleryTab>("artwork");
   const [galleryTabsMeta, setGalleryTabsMeta] = useState<
     { id: ReleaseGalleryTab; label: string; count: number }[]
@@ -883,7 +887,7 @@ export default function ReleasePage({
     if (!el) return;
     if (isPlaying) void el.play().catch(() => {});
     else el.pause();
-  }, [displayCanvas, showPanelCanvas, isPlaying]);
+  }, [displayCanvas, showPanelCanvas, isPlaying, bannerLayout]);
 
   const releaseReferrer = getReleaseReferrer();
   const referrerOverview = releaseReferrer
@@ -1321,26 +1325,26 @@ export default function ReleasePage({
     }
     if (tab !== "overview") {
       setOverviewDescExpanded(false);
+      setMoreInfoOpen(false);
     }
   }, [tab]);
+
+  useEffect(() => {
+    setMoreInfoOpen(false);
+  }, [releaseId]);
 
   const tabletLayout = isTabletLayout(layout);
 
   const pageClass = [
     "release-page",
     stacked ? "release-page--stacked" : "",
+    bannerLayout ? "release-page--banner-layout" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
     tabletLayout ? "release-page--tablet" : "",
     layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
     layout === "tablet-landscape" ? "release-page--tablet-landscape" : "",
     tab === "overview" ? "release-page--overview" : "",
     scrollBody ? "release-page--scroll" : "",
-    tab === "tracklist" && stacked && mobileTrackView === "player"
-      ? "release-page--track-player"
-      : "",
-    tab === "tracklist" && stacked && mobileTrackView === "tracks"
-      ? "release-page--track-tracks"
-      : "",
     tab === "gallery" && (stacked || mobileLandscape)
       ? "release-page--tab-gallery"
       : "",
@@ -1365,13 +1369,11 @@ export default function ReleasePage({
 
   const trackPanelMeta = nowPlayingTitle ? parseTrackPanelMeta(nowPlayingTitle) : null;
   const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
-  const showMobilePlayerMeta =
-    stacked &&
-    tab === "tracklist" &&
-    mobileTrackView === "player" &&
-    !showTrackPanel;
-  const showPanelReleaseMeta =
-    !showTrackPanel && (tab !== "tracklist" || showMobilePlayerMeta);
+  const showMobilePlayerMeta = false;
+  const showPanelReleaseMeta = !showTrackPanel;
+  const bannerMetaHidden =
+    bannerLayout && !showTrackPanel && (tab !== "overview" || !moreInfoOpen);
+  const pageCanvasActive = bannerLayout && showPanelCanvas;
   const mountTracklist = tab === "tracklist" || Boolean(playingPath);
   const cachedTracklist = getCachedReleaseTracklist(bandId, releaseId);
   const cachedGallery = getCachedReleaseGallery(bandId, releaseId);
@@ -1389,15 +1391,17 @@ export default function ReleasePage({
   const panelAside = data ? (
     <aside
       className={`release-page__panel${showTrackPanel ? " release-page__panel--track" : ""}${
-        showPanelCanvas ? " release-page__panel--canvas" : ""
-      }${showMobilePlayerMeta ? " release-page__panel--mobile-player" : ""}`}
+        showPanelCanvas && !pageCanvasActive ? " release-page__panel--canvas" : ""
+      }${bannerLayout ? " release-page__panel--banner" : ""}${
+        showMobilePlayerMeta ? " release-page__panel--mobile-player" : ""
+      }`}
       style={
         showTrackPanel && panelFadedCover
           ? ({ ["--panel-fade" as string]: `url("${panelFadedCover}")` } as CSSProperties)
           : undefined
       }
     >
-      {showPanelCanvas && (
+      {showPanelCanvas && !pageCanvasActive && (
         <div className="release-page__panel-canvas-layer" aria-hidden>
           <video
             key={displayCanvas}
@@ -1415,13 +1419,36 @@ export default function ReleasePage({
       <div className="release-page__panel-content">
       <div className="release-page__art">
         <div className={`release-page__art-stage${
-          !effectivePanelCover && panelDiscSrc
-            ? " release-page__art-stage--disc-only"
-            : ""
+          bannerLayout
+            ? " release-page__art-stage--banner"
+            : !effectivePanelCover && panelDiscSrc
+              ? " release-page__art-stage--disc-only"
+              : ""
         }`}>
+          {bannerLayout ? (
+            <span
+              className="release-page__banner-bg"
+              style={{
+                backgroundImage: `url("${
+                  (playingPath
+                    ? playbackArt?.background_layers?.[0]
+                    : null) ||
+                  data.background_layers?.[0] ||
+                  data.photocards?.landscape_front ||
+                  albumCover ||
+                  ""
+                }")`,
+              }}
+              aria-hidden
+            />
+          ) : null}
           {effectivePanelCover &&
             (panelCoverIsVideo ? (
-              <span className="release-page__cover-wrap">
+              <span
+                className={`release-page__cover-wrap${
+                  bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
+                }`}
+              >
                 <video
                   key={effectivePanelCover}
                   src={effectivePanelCover!}
@@ -1435,7 +1462,11 @@ export default function ReleasePage({
                 />
               </span>
             ) : (
-              <span className="release-page__cover-wrap">
+              <span
+                className={`release-page__cover-wrap${
+                  bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
+                }`}
+              >
                 <img
                   key={effectivePanelCover}
                   src={effectivePanelCover}
@@ -1453,6 +1484,7 @@ export default function ReleasePage({
               alt=""
               className={[
                 "release-page__disc",
+                bannerLayout ? "release-page__disc--banner" : "",
                 hasActiveTrack ? "release-page__disc--spin" : "",
                 hasActiveTrack && !miniAudio.playing ? "release-page__disc--spin-paused" : "",
               ]
@@ -1467,7 +1499,23 @@ export default function ReleasePage({
         )}
       </div>
 
-      <div className="release-page__panel-meta" ref={panelMetaRef}>
+      {bannerLayout && tab === "overview" ? (
+        <button
+          type="button"
+          className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}`}
+          onClick={() => setMoreInfoOpen((o) => !o)}
+          aria-expanded={moreInfoOpen}
+        >
+          More info
+        </button>
+      ) : null}
+
+      <div
+        className={`release-page__panel-meta${
+          bannerLayout ? " release-page__panel-meta--glass" : ""
+        }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+        ref={panelMetaRef}
+      >
         <div className="release-page__panel-fit" ref={panelFitRef}>
           <div className="release-page__panel-fit-inner" ref={panelFitInnerRef}>
         <div className="release-page__panel-body">
@@ -1910,6 +1958,21 @@ export default function ReleasePage({
             style={{ backgroundImage: `url("${bgLayers.current}")` }}
           />
         )}
+        {pageCanvasActive && displayCanvas ? (
+          <div className="release-page__bg-canvas" aria-hidden>
+            <video
+              key={displayCanvas}
+              ref={canvasVideoRef}
+              className="release-page__bg-canvas-video"
+              src={displayCanvas}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            <div className="release-page__bg-canvas-shade" />
+          </div>
+        ) : null}
         <MediaBeatFx />
       </div>
 
@@ -1993,7 +2056,7 @@ export default function ReleasePage({
           ))}
         </nav>
 
-        {stacked && tab === "tracklist" && (
+        {stacked && tab === "tracklist" && !bannerLayout && (
           <nav className="release-page__subtabs" aria-label="Tracklist views">
             <button
               type="button"

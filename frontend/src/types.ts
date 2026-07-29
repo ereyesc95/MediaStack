@@ -1031,6 +1031,7 @@ export type SeriesSeasonCard = {
   cover_back_url?: string | null;
   portrait_url?: string | null;
   landscape_url?: string | null;
+  banner_url?: string | null;
   episode_count: number;
 };
 
@@ -1086,6 +1087,7 @@ export type SeriesFolderDetail = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  banner_url?: string | null;
   cover_back_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;

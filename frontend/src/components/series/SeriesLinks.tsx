@@ -3,17 +3,11 @@ import { IconEditProfile } from "../MenuIcons";
 import SeriesLinkFormModal, {
   type SeriesLinkEditItem,
 } from "./SeriesLinkFormModal";
-
-type SeriesLinkItem = SeriesLinkEditItem;
-
-type SeriesLinksPayload = {
-  categories: { id: string; label: string; count: number }[];
-  groups: Partial<Record<string, SeriesLinkItem[]>>;
-};
+import type { SeriesOverview } from "../../types";
 
 type Props = {
   franchiseId: string;
-  links: SeriesLinksPayload;
+  links: SeriesOverview["links"];
   tab: string;
   isAdmin?: boolean;
   addOpen?: boolean;
@@ -73,7 +67,14 @@ export default function SeriesLinks({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setEditLink(item);
+                  setEditLink({
+                    id: String(item.id),
+                    label: item.label,
+                    url: item.url,
+                    category: item.category,
+                    logo_url: item.logo_url ?? undefined,
+                    logo_key: item.logo_key ?? null,
+                  });
                 }}
                 aria-label={`Edit ${item.label}`}
                 title={`Edit ${item.label}`}
