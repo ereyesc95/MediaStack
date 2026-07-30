@@ -1,6 +1,7 @@
 """Shared helpers for system playlist track payloads."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from app.media_index import release_id_from_path
@@ -10,6 +11,8 @@ _EDITION_DIR_NAMES = frozenset(
         "standard edition",
         "deluxe edition",
         "bonus",
+        "remastered edition",
+        "anniversary edition",
         "disc 1",
         "disc 2",
         "disc 3",
@@ -18,6 +21,42 @@ _EDITION_DIR_NAMES = frozenset(
         "side b",
     }
 )
+
+_DATE_PREFIX_RE = re.compile(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?")
+_DISC_RE = re.compile(r"^disc\s+\d+")
+_SIDE_RE = re.compile(r"^side\s+[a-z]\b")
+
+
+def _folder_core_name(name: str) -> str:
+    text = name.strip()
+    m = _DATE_PREFIX_RE.match(text)
+    if m:
+        text = text[m.end() :].lstrip(". ").strip()
+    return text.casefold()
+
+
+def _is_edition_or_disc_name(name: str) -> bool:
+    core = _folder_core_name(name)
+    if core in _EDITION_DIR_NAMES:
+        return True
+    if core.endswith(" edition"):
+        return True
+    if _DISC_RE.match(core):
+        return True
+    if _SIDE_RE.match(core):
+        return True
+    return False
+
+
+def _album_rel_path(play_path: str) -> str:
+    parts = Path(play_path.replace("\\", "/")).parts
+    if len(parts) < 2:
+        return play_path.replace("\\", "/")
+    album_dir = Path(*parts[:-1])
+    while len(album_dir.parts) > 1 and _is_edition_or_disc_name(album_dir.name):
+        album_dir = album_dir.parent
+    return str(album_dir).replace("\\", "/")
+
 
 PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "top-tracks": "Most popular tracks across the artist library.",
@@ -39,16 +78,6 @@ PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "standalones": "Standalone singles and one-off releases.",
     "most-played": "Tracks ranked by your play history.",
 }
-
-
-def _album_rel_path(play_path: str) -> str:
-    parts = Path(play_path.replace("\\", "/")).parts
-    if len(parts) < 2:
-        return play_path.replace("\\", "/")
-    album_dir = Path(*parts[:-1])
-    while album_dir.name.casefold() in _EDITION_DIR_NAMES and len(album_dir.parts) > 1:
-        album_dir = album_dir.parent
-    return str(album_dir).replace("\\", "/")
 
 
 def _audio_file_for_play_path(play_path: str, media_root: Path) -> Path | None:

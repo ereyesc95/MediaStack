@@ -101,8 +101,16 @@ def _track_entry(
     if not play_path:
         return None
     album_dir = audio_file.parent
-    while album_dir.name.casefold() in ("standard edition", "deluxe edition", "bonus"):
-        album_dir = album_dir.parent
+    category_names = {name.casefold() for name in AUDIO_CATEGORIES.values()}
+    for _ in range(15):
+        parent = album_dir.parent
+        if parent == album_dir:
+            break
+        if parent.name.casefold() in category_names:
+            break
+        if parent.name.casefold() in ("audio", "music"):
+            break
+        album_dir = parent
     entry = {
         "title": display_track_title_from_path(audio_file),
         "play_path": play_path,

@@ -477,23 +477,18 @@ export default function SeriesModule({
                   <>
                     <button
                       type="button"
-                      className={
-                        catalogScope === "franchises" ? "is-active" : undefined
+                      onClick={() =>
+                        setCatalogScope(
+                          catalogScope === "franchises" ? "shows" : "franchises"
+                        )
                       }
-                      onClick={() => setCatalogScope("franchises")}
                     >
-                      <IconSeriesScope className="menu-item-icon" />
-                      Groups
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        catalogScope === "shows" ? "is-active" : undefined
-                      }
-                      onClick={() => setCatalogScope("shows")}
-                    >
-                      <IconMediaSeries className="menu-item-icon" />
-                      Shows
+                      {catalogScope === "franchises" ? (
+                        <IconSeriesScope className="menu-item-icon" />
+                      ) : (
+                        <IconMediaSeries className="menu-item-icon" />
+                      )}
+                      {catalogScope === "franchises" ? "Groups" : "Shows"}
                     </button>
                     {onSetOrientation ? (
                       <button

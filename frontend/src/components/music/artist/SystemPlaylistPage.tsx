@@ -53,6 +53,7 @@ import type {
   TrackYoutubeVideo,
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
+import MyStackIcon from "../../MyStackIcon";
 import MediaBeatFx from "../MediaBeatFx";
 import SystemPlaylistTracklist, {
   type SystemPlaylistTracklistHandle,
@@ -429,7 +430,12 @@ export default function SystemPlaylistPage({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    if (isUserPlaylist && userPlaylistId != null) {
+
+    const isTimeoutError = (message: string) =>
+      /timed out/i.test(message) || /timeout/i.test(message);
+
+    const loadUser = async () => {
+      if (userPlaylistId == null) return;
       const cached = getCachedUserPlaylistDetail(userPlaylistId);
       if (cached) {
         setDetail(cached);
@@ -437,42 +443,83 @@ export default function SystemPlaylistPage({
       } else {
         setLoading(true);
       }
-      prefetchUserPlaylistDetail(userPlaylistId, { force: true })
-        .then((d) => {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const d = await prefetchUserPlaylistDetail(userPlaylistId, {
+            force: true,
+          });
           if (!cancelled) setDetail(d);
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setError(parseApiError(e instanceof Error ? e.message : String(e)));
+          lastError = null;
+          break;
+        } catch (e) {
+          lastError = e;
+          const msg = e instanceof Error ? e.message : String(e);
+          if (attempt === 0 && isTimeoutError(msg) && !cancelled) {
+            continue;
           }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+          break;
+        }
+      }
+      if (!cancelled) {
+        if (lastError) {
+          setError(
+            parseApiError(
+              lastError instanceof Error ? lastError.message : String(lastError)
+            )
+          );
+        }
+        setLoading(false);
+      }
+    };
+
+    const loadArtist = async () => {
+      if (bandId == null || !slug) return;
+      const cached = getCachedArtistPlaylistDetail(bandId, slug);
+      if (cached) {
+        setDetail(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const d = await prefetchArtistPlaylistDetail(bandId, slug, {
+            force: true,
+          });
+          if (!cancelled) setDetail(d);
+          lastError = null;
+          break;
+        } catch (e) {
+          lastError = e;
+          const msg = e instanceof Error ? e.message : String(e);
+          if (attempt === 0 && isTimeoutError(msg) && !cancelled) {
+            continue;
+          }
+          break;
+        }
+      }
+      if (!cancelled) {
+        if (lastError) {
+          setError(
+            parseApiError(
+              lastError instanceof Error ? lastError.message : String(lastError)
+            )
+          );
+        }
+        setLoading(false);
+      }
+    };
+
+    if (isUserPlaylist && userPlaylistId != null) {
+      void loadUser();
       return () => {
         cancelled = true;
       };
     }
     if (bandId == null || !slug) return;
-    const cached = getCachedArtistPlaylistDetail(bandId, slug);
-    if (cached) {
-      setDetail(cached);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    prefetchArtistPlaylistDetail(bandId, slug, { force: true })
-      .then((d) => {
-        if (!cancelled) setDetail(d);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(parseApiError(e instanceof Error ? e.message : String(e)));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void loadArtist();
     return () => {
       cancelled = true;
     };
@@ -1285,13 +1332,21 @@ export default function SystemPlaylistPage({
   );
 
   if (loading && !detail) {
-    return <p className="muted artist-section-empty">Loading playlist…</p>;
+    return (
+      <div className="playlist-boot" role="status" aria-live="polite">
+        <MyStackIcon className="playlist-boot__icon" size={52} />
+        <p className="playlist-boot__label">Loading playlist…</p>
+      </div>
+    );
   }
 
   if (error && !detail) {
     return (
-      <div className="release-page">
-        <p className="error artist-section-empty">{error}</p>
+      <div className="playlist-boot playlist-boot--error">
+        <MyStackIcon className="playlist-boot__icon" size={52} />
+        <p className="playlist-boot__label playlist-boot__label--error">
+          {error}
+        </p>
         <button type="button" className="btn" onClick={onBack}>
           ← Playlists
         </button>

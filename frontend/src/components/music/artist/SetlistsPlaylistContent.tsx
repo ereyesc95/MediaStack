@@ -35,6 +35,22 @@ type Props = {
   }) => void;
 };
 
+function isTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timed out/i.test(message) || /timeout/i.test(message);
+}
+
+async function withTimeoutRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (isTimeoutError(e)) {
+      return await fn();
+    }
+    throw e;
+  }
+}
+
 function formatFetchError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   try {
@@ -138,7 +154,7 @@ const SetlistsPlaylistContent = forwardRef<SetlistsPlaylistHandle, Props>(functi
     setSelectedShowId("");
     setSetlistPayload(null);
     notifyContext({ tourName: null, showLabel: null, trackCount: null, setlistId: null });
-    void fetchSetlistShows(bandId, selectedYear)
+    void withTimeoutRetry(() => fetchSetlistShows(bandId, selectedYear))
       .then((res) => {
         if (cancelled) return;
         setShows(res.shows);
@@ -166,7 +182,7 @@ const SetlistsPlaylistContent = forwardRef<SetlistsPlaylistHandle, Props>(functi
     let cancelled = false;
     setSetlistLoading(true);
     setSetlistError(null);
-    void fetchSetlistTracks(bandId, selectedShowId)
+    void withTimeoutRetry(() => fetchSetlistTracks(bandId, selectedShowId))
       .then((payload) => {
         if (cancelled) return;
         setSetlistPayload(payload);

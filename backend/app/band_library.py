@@ -256,7 +256,13 @@ def title_case_track_title(title: str) -> str:
 
 
 def _title_from_filename_stem(stem: str) -> str:
-    return TRACK_PREFIX_RE.sub("", stem).strip()
+    after_num = TRACK_PREFIX_RE.sub("", stem.strip()).strip()
+    vinyl = VINYL_TRACK_PREFIX_RE.match(after_num)
+    if vinyl:
+        rest = after_num[vinyl.end() :].lstrip(". ").strip()
+        if rest:
+            return rest
+    return after_num
 
 
 def _strip_bracket_suffix(title: str) -> str:
@@ -321,10 +327,19 @@ def _collect_audio_files(artist_dir: Path) -> list[Path]:
 
 
 def _album_dir_for_track(file_path: Path) -> Path:
-    album_dir = file_path.parent
-    while album_dir.name.lower() in ("standard edition", "deluxe edition", "bonus"):
-        album_dir = album_dir.parent
-    return album_dir
+    """Release folder under Albums / Extended Plays / etc. (not edition/disc/side)."""
+    current = file_path.parent
+    category_names = {name.casefold() for name in AUDIO_CATEGORIES.values()}
+    for _ in range(15):
+        parent = current.parent
+        if parent == current:
+            return current
+        if parent.name.casefold() in category_names:
+            return current
+        if parent.name.casefold() in ("audio", "music"):
+            return current
+        current = parent
+    return file_path.parent
 
 
 def _release_date_for_track(file_path: Path) -> str | None:

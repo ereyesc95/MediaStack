@@ -7078,6 +7078,61 @@ input {
   padding: 2rem 1.25rem;
 }
 
+.playlist-boot {
+  min-height: min(70vh, 36rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 40%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 70%
+    ),
+    var(--bg);
+}
+
+.playlist-boot__icon {
+  color: color-mix(in srgb, var(--text) 72%, var(--accent));
+  opacity: 0.92;
+  animation: playlist-boot-pulse 2.4s ease-in-out infinite;
+}
+
+.playlist-boot__label {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.playlist-boot__label--error {
+  color: color-mix(in srgb, #ff8e8e 80%, var(--text));
+  text-transform: none;
+  letter-spacing: 0.02em;
+  max-width: 28rem;
+}
+
+.playlist-boot--error {
+  gap: 1.25rem;
+}
+
+@keyframes playlist-boot-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
 .artist-gallery {
   padding: 0 0 2rem;
 }

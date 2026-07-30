@@ -94,11 +94,48 @@ import {
   trackMainTitle,
 } from "../release/releaseTrackPanelMeta";
 
-/** Last path segment with folder date prefix stripped (e.g. 1997.11.03. Title → Title). */
+/** Release title under Albums/EPs/… — skip edition/disc/side path segments. */
 function albumFolderDisplayTitle(folder: string | null | undefined): string | null {
   if (!folder?.trim()) return null;
-  const segment =
-    folder.replace(/\\/g, "/").split("/").filter(Boolean).pop() || folder;
+  const parts = folder.replace(/\\/g, "/").split("/").filter(Boolean);
+  const categories = new Set([
+    "albums",
+    "extended plays",
+    "compilations",
+    "singles",
+    "soundtracks",
+    "live albums",
+  ]);
+  const isEditionOrDisc = (name: string) => {
+    const core = name
+      .trim()
+      .replace(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*/, "")
+      .trim()
+      .toLowerCase();
+    if (
+      core === "standard edition" ||
+      core === "deluxe edition" ||
+      core === "bonus" ||
+      core === "remastered edition" ||
+      core.endsWith(" edition")
+    ) {
+      return true;
+    }
+    if (/^disc\s+\d+/.test(core) || /^side\s+[a-z]\b/.test(core)) return true;
+    return false;
+  };
+  while (parts.length > 1 && isEditionOrDisc(parts[parts.length - 1]!)) {
+    parts.pop();
+  }
+  // Prefer the folder sitting under an Audio category when present.
+  for (let i = parts.length - 2; i >= 0; i--) {
+    if (categories.has(parts[i]!.toLowerCase())) {
+      const release = parts[i + 1]!;
+      const m = release.trim().match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
+      return (m?.[1] || release).trim() || null;
+    }
+  }
+  const segment = parts[parts.length - 1] || folder;
   const m = segment.trim().match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
   return (m?.[1] || segment).trim() || null;
 }

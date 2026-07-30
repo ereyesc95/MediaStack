@@ -10,6 +10,7 @@ import type {
   ArtistPlaylistTrack,
   ReleaseCardLayout,
 } from "../../../types";
+import MyStackIcon from "../../MyStackIcon";
 
 function PlaylistCard({
   playlist,
@@ -253,7 +254,12 @@ export function ArtistPlaylistDetailView({
   }, [bandId, slug]);
 
   if (loading && !detail) {
-    return <p className="muted artist-section-empty">Loading playlist…</p>;
+    return (
+      <div className="playlist-boot" role="status" aria-live="polite">
+        <MyStackIcon className="playlist-boot__icon" size={52} />
+        <p className="playlist-boot__label">Loading playlist…</p>
+      </div>
+    );
   }
   if (error || !detail) {
     return <p className="muted artist-section-empty">{error ?? "Not found"}</p>;

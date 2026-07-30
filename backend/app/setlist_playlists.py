@@ -299,6 +299,11 @@ def _normalize_setlist_song_title(name: str) -> str:
     return title
 
 
+def _artist_name_key(name: str) -> str:
+    """Normalize artist names for folder matching (H.I.M. → him, The Band → theband)."""
+    return re.sub(r"[^a-z0-9]+", "", (name or "").casefold())
+
+
 def _cover_artist_from_brackets(text: str) -> str | None:
     remaining = (text or "").strip()
     while True:
@@ -325,13 +330,33 @@ def _cover_artist_from_setlist_song(song: dict, raw_name: str) -> str | None:
 
 
 def _resolve_named_artist_dir(media_root: Path, artist_name: str) -> Path | None:
-    """Resolve Music/{Letter}/{Artist}; ignore letter-folder fallback from gallery helper."""
-    artist_dir = _artist_dir(media_root, artist_name)
-    if not artist_dir or not artist_dir.is_dir():
+    """Resolve Music/{Letter}/{Artist}; fuzzy-match names like H.I.M. → HIM."""
+    raw = (artist_name or "").strip()
+    if not raw:
         return None
-    want = _display_name(artist_name).casefold()
-    if artist_dir.name.casefold() == want:
+    want_key = _artist_name_key(_display_name(raw))
+    if not want_key:
+        return None
+
+    artist_dir = _artist_dir(media_root, raw)
+    if (
+        artist_dir
+        and artist_dir.is_dir()
+        and _artist_name_key(artist_dir.name) == want_key
+    ):
         return artist_dir
+
+    # Scan letter folder for punctuation/spacing variants (H.I.M. vs HIM).
+    from app.gallery import _letter_folder, _resolve_child_dir
+
+    letter = _letter_folder(raw)
+    music_dir = _resolve_child_dir(media_root, "Music")
+    letter_path = _resolve_child_dir(music_dir, letter)
+    if not letter_path.is_dir():
+        return None
+    for child in letter_path.iterdir():
+        if child.is_dir() and _artist_name_key(child.name) == want_key:
+            return child
     return None
 
 

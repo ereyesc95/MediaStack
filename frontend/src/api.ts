@@ -905,21 +905,33 @@ export async function fetchBandPlaylistDetail(
   bandId: number,
   slug: string
 ): Promise<import("./types").ArtistPlaylistDetail> {
-  return request(`${API}/music/bands/${bandId}/media/playlists/${slug}`);
+  return request(
+    `${API}/music/bands/${bandId}/media/playlists/${slug}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function fetchSetlistShows(
   bandId: number,
   year: string
 ): Promise<{ year: string; shows: import("./types").SetlistShowSummary[] }> {
-  return request(`${API}/music/bands/${bandId}/media/playlists/setlists/shows?year=${encodeURIComponent(year)}`);
+  return request(
+    `${API}/music/bands/${bandId}/media/playlists/setlists/shows?year=${encodeURIComponent(year)}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function fetchSetlistTracks(
   bandId: number,
   setlistId: string
 ): Promise<import("./types").SetlistTracklistPayload> {
-  return request(`${API}/music/bands/${bandId}/media/playlists/setlists/${encodeURIComponent(setlistId)}`);
+  return request(
+    `${API}/music/bands/${bandId}/media/playlists/setlists/${encodeURIComponent(setlistId)}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function patchBandBio(id: number, bio: string) {
