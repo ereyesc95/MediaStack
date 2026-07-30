@@ -10,6 +10,7 @@ import {
 } from "../../../api";
 import { useBeatPulse } from "../../../useBeatPulse";
 import type { QuizScoreEntry, QuizScores } from "../../../types";
+import PlaylistBoot from "../../PlaylistBoot";
 import { useMiniAudio } from "./MiniAudioPlayer";
 import { stripFilenamePrefixes } from "../release/releaseTrackPanelMeta";
 
@@ -804,7 +805,9 @@ export default function ArtistQuiz({
       className={`artist-quiz${quizActive ? " artist-quiz--active" : ""}`}
     >
       {error && <p className="error">{error}</p>}
-      {phase === "loading" && <p className="muted">Loading quiz…</p>}
+      {phase === "loading" && (
+        <PlaylistBoot className="playlist-boot--compact" label="Loading quiz…" />
+      )}
 
       {phase === "ready" && !error && (
         <div className="artist-quiz__ready">

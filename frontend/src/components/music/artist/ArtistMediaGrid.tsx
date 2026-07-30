@@ -13,6 +13,7 @@ import type {
   MediaTabItem,
   ReleaseCardLayout,
 } from "../../../types";
+import PlaylistBoot from "../../PlaylistBoot";
 
 type Props = {
   bandId: number;
@@ -323,7 +324,7 @@ export default function ArtistMediaGrid({
   );
 
   if (loading && !data) {
-    return <p className="muted artist-section-empty">Loading…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading…" />;
   }
   if (error) {
     return <p className="error artist-section-empty">{error}</p>;

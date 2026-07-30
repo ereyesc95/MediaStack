@@ -44,6 +44,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import PlaylistBoot from "../PlaylistBoot";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import {
   IconCardBanner,
@@ -1820,7 +1821,7 @@ export default function SeriesSubseriesPage({
 
         <main className="release-page__main">
           {loading ? (
-            <p className="muted artist-section-empty">Loading subseries…</p>
+            <PlaylistBoot className="playlist-boot--compact" label="Loading subseries…" />
           ) : null}
           {error ? (
             <p className="error artist-section-empty">{error}</p>

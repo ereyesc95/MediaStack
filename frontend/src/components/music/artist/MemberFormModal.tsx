@@ -13,6 +13,7 @@ import {
 } from "../../../api";
 import type { MbArtistMatch } from "../../../types";
 import ModalPortal from "../../ModalPortal";
+import PlaylistBoot from "../../PlaylistBoot";
 import MultiSelectDropdown from "../../MultiSelectDropdown";
 import SearchableDropdown, {
   type DropdownOption,
@@ -427,7 +428,9 @@ export default function MemberFormModal({
           </button>
         </div>
 
-        {loading && <p className="muted">Loading…</p>}
+        {loading && (
+          <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+        )}
         {error && <p className="error">{error}</p>}
 
         {!loading && (

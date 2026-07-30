@@ -552,6 +552,8 @@ def build_setlist_tracklist(
                     else display_title
                 )
                 track["unavailable"] = False
+                if cover_artist:
+                    track["cover_artist"] = cover_artist
             else:
                 track = _unavailable_setlist_track(
                     track_id=track_id,
@@ -561,6 +563,8 @@ def build_setlist_tracklist(
                     number=None if is_tape else track_num,
                     band_name=band.bnd_name,
                 )
+                if cover_artist:
+                    track["cover_artist"] = cover_artist
             tracks.append(track)
 
         if tracks:

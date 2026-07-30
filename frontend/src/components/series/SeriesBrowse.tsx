@@ -15,6 +15,7 @@ import SearchableDropdown, {
   type DropdownOption,
 } from "../SearchableDropdown";
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
+import PlaylistBoot from "../PlaylistBoot";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -682,7 +683,7 @@ export default function SeriesBrowse({
 
       <div className="artist-browse-scroll">
         {loading ? (
-          <p className="muted artist-browse-status">Loading…</p>
+          <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
         ) : null}
         {!loading && !filterReady ? (
           <div className="artist-browse-empty">

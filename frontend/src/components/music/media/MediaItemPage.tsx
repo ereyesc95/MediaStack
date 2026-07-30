@@ -29,6 +29,7 @@ import type {
   ReleaseNeighbor,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
+import PlaylistBoot from "../../PlaylistBoot";
 import MediaBeatFrame from "../MediaBeatFrame";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
 import {
@@ -623,7 +624,7 @@ export default function MediaItemPage({
       </div>
 
       {loading && !data && (
-        <p className="muted artist-section-empty">Loading…</p>
+        <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
       )}
       {error && <p className="error artist-section-empty">{error}</p>}
 

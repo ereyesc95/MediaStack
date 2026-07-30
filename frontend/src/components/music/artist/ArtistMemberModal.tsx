@@ -3,6 +3,7 @@ import { fetchArtistDetails, uploadArtistPhoto } from "../../../api";
 import type { ArtistDetails } from "../../../types";
 import { IconEditProfile } from "../../MenuIcons";
 import ModalPortal from "../../ModalPortal";
+import PlaylistBoot from "../../PlaylistBoot";
 import MemberFormModal from "./MemberFormModal";
 import NotInLibraryDialog from "./NotInLibraryDialog";
 
@@ -137,7 +138,9 @@ export default function ArtistMemberModal({
             </div>
           </div>
 
-          {loading && <p className="muted">Loading…</p>}
+          {loading && (
+            <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+          )}
           {error && <p className="error">{error}</p>}
 
           {data && !loading && (

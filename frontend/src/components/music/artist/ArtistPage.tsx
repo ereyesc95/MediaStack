@@ -144,6 +144,7 @@ import ArtistRelated from "./ArtistRelated";
 import AddSimilarModal from "./AddSimilarModal";
 import ArtistMemberModal from "./ArtistMemberModal";
 import MemberFormModal from "./MemberFormModal";
+import PlaylistBoot from "../../PlaylistBoot";
 import {
   MiniAudioPlayerControls,
   useMiniAudio,
@@ -696,6 +697,30 @@ export default function ArtistPage({
     ? playerHost ?? playerFallbackRef.current
     : null;
   const showBubblePlayer = Boolean(audioSrc) && !onAboutTab;
+  const showPortraitPlayMusic =
+    portraitMenuChrome && playableTracks.length > 0 && !onAboutTab;
+
+  const handlePortraitPlayMusic = useCallback(() => {
+    if (playerBubbleOpen) {
+      setPlayerBubbleOpen(false);
+      return;
+    }
+    if (!playingPath || !audioSrc) {
+      const first = playableTracks[0];
+      if (!first?.play_path) return;
+      void handlePlay(first.play_path, first.title).then(() => {
+        setPlayerBubbleOpen(true);
+      });
+      return;
+    }
+    setPlayerBubbleOpen(true);
+  }, [
+    playerBubbleOpen,
+    playingPath,
+    audioSrc,
+    playableTracks,
+    handlePlay,
+  ]);
 
   useEffect(() => {
     if (onAboutTab || !audioSrc) setPlayerBubbleOpen(false);
@@ -939,31 +964,34 @@ export default function ArtistPage({
               const dock = playerBubbleOpen ? (
                 <div className="series-audio-player__dock">{dockInner}</div>
               ) : null;
+              const hideToggle = portraitMenuChrome;
               return (
                 <div
                   ref={playerBubbleRef}
                   className={`series-audio-player${
-                    playerBubbleOpen && !mobilePortrait ? " is-open" : ""
-                  }`}
+                    playerBubbleOpen && !hideToggle ? " is-open" : ""
+                  }${hideToggle ? " series-audio-player--menu-anchor" : ""}`}
                 >
-                  <button
-                    type="button"
-                    className={`series-audio-player__toggle${
-                      playing && !playerBubbleOpen
-                        ? " series-audio-player__toggle--live"
-                        : ""
-                    }`}
-                    aria-pressed={playerBubbleOpen}
-                    aria-label={
-                      playerBubbleOpen ? "Hide player" : "Show player"
-                    }
-                    title={playerBubbleOpen ? "Hide player" : "Show player"}
-                    onClick={() => setPlayerBubbleOpen((v) => !v)}
-                  >
-                    <IconMediaMusic className="series-audio-player__icon" />
-                  </button>
-                  {playerBubbleOpen && !mobilePortrait ? dock : null}
-                  {playerBubbleOpen && mobilePortrait
+                  {!hideToggle ? (
+                    <button
+                      type="button"
+                      className={`series-audio-player__toggle${
+                        playing && !playerBubbleOpen
+                          ? " series-audio-player__toggle--live"
+                          : ""
+                      }`}
+                      aria-pressed={playerBubbleOpen}
+                      aria-label={
+                        playerBubbleOpen ? "Hide player" : "Show player"
+                      }
+                      title={playerBubbleOpen ? "Hide player" : "Show player"}
+                      onClick={() => setPlayerBubbleOpen((v) => !v)}
+                    >
+                      <IconMediaMusic className="series-audio-player__icon" />
+                    </button>
+                  ) : null}
+                  {playerBubbleOpen && !hideToggle ? dock : null}
+                  {playerBubbleOpen && hideToggle
                     ? createPortal(
                         <div
                           ref={playerBubbleDockRef}
@@ -1000,27 +1028,44 @@ export default function ArtistPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuChrome={
-                portraitMenuChrome &&
-                (section === "audio" ||
-                  section === "video" ||
-                  section === "library") ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReleaseCardLayoutPersisted(
-                        releaseCardLayout === "cover" ? "banner" : "cover"
-                      )
-                    }
-                  >
-                    {releaseCardLayout === "cover" ? (
-                      <IconCardCover className="menu-item-icon" />
-                    ) : (
-                      <IconCardBanner className="menu-item-icon" />
+                portraitMenuChrome ? (
+                  <>
+                    {showPortraitPlayMusic ? (
+                      <button
+                        type="button"
+                        className={
+                          playing && !playerBubbleOpen
+                            ? "app-menu-chrome__live"
+                            : undefined
+                        }
+                        onClick={handlePortraitPlayMusic}
+                      >
+                        <IconMediaMusic className="menu-item-icon" />
+                        {playerBubbleOpen ? "Hide music" : "Play music"}
+                      </button>
+                    ) : null}
+                    {(section === "audio" ||
+                      section === "video" ||
+                      section === "library") && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReleaseCardLayoutPersisted(
+                            releaseCardLayout === "cover" ? "banner" : "cover"
+                          )
+                        }
+                      >
+                        {releaseCardLayout === "cover" ? (
+                          <IconCardCover className="menu-item-icon" />
+                        ) : (
+                          <IconCardBanner className="menu-item-icon" />
+                        )}
+                        {releaseCardLayout === "cover"
+                          ? "Cover view"
+                          : "Banner view"}
+                      </button>
                     )}
-                    {releaseCardLayout === "cover"
-                      ? "Cover view"
-                      : "Banner view"}
-                  </button>
+                  </>
                 ) : null
               }
               onRefreshMetadata={
@@ -1286,7 +1331,7 @@ export default function ArtistPage({
       >
         {error && <div className="error">{error}</div>}
         {loading && !data && !sectionHasCache && (
-          <p className="muted artist-page__loading">Loading…</p>
+          <PlaylistBoot label="Loading…" />
         )}
 
         {data &&

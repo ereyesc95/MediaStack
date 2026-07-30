@@ -26,7 +26,7 @@ import {
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
-import { IconCardBanner, IconMediaSeries, IconSeriesScope } from "../MenuIcons";
+import { IconMediaSeries, IconSeriesScope } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "./CatalogScopeToggle";
 import SeriesBrowse from "./SeriesBrowse";
@@ -457,7 +457,7 @@ export default function SeriesModule({
                 onChange={setCatalogScope}
               />
             ) : null}
-            {tab === "catalog" && onSetOrientation && !portraitMenuChrome ? (
+            {tab === "catalog" && onSetOrientation ? (
               <CardOrientationPicker
                 value={cardOrientation}
                 onChange={onSetOrientation}
@@ -474,42 +474,21 @@ export default function SeriesModule({
               onEditProfile={onEditProfile}
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCatalogScope(
-                          catalogScope === "franchises" ? "shows" : "franchises"
-                        )
-                      }
-                    >
-                      {catalogScope === "franchises" ? (
-                        <IconSeriesScope className="menu-item-icon" />
-                      ) : (
-                        <IconMediaSeries className="menu-item-icon" />
-                      )}
-                      {catalogScope === "franchises" ? "Groups" : "Shows"}
-                    </button>
-                    {onSetOrientation ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const order: CardOrientation[] = [
-                            "banner",
-                            "landscape",
-                            "portrait",
-                            "icons",
-                            "badge",
-                          ];
-                          const i = order.indexOf(cardOrientation);
-                          onSetOrientation(order[(i + 1) % order.length]!);
-                        }}
-                      >
-                        <IconCardBanner className="menu-item-icon" />
-                        Card layout: {cardOrientation}
-                      </button>
-                    ) : null}
-                  </>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCatalogScope(
+                        catalogScope === "franchises" ? "shows" : "franchises"
+                      )
+                    }
+                  >
+                    {catalogScope === "franchises" ? (
+                      <IconSeriesScope className="menu-item-icon" />
+                    ) : (
+                      <IconMediaSeries className="menu-item-icon" />
+                    )}
+                    {catalogScope === "franchises" ? "Groups" : "Shows"}
+                  </button>
                 ) : null
               }
             />

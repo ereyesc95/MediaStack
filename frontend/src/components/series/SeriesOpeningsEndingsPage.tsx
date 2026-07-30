@@ -27,6 +27,7 @@ import {
 } from "../../usePhoneLayout";
 import { useBeatPulse } from "../../useBeatPulse";
 import AppMenu from "../AppMenu";
+import PlaylistBoot from "../PlaylistBoot";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import {
@@ -984,7 +985,9 @@ export default function SeriesOpeningsEndingsPage({
 
               {rightView === "tracks" ? (
                 <>
-                  {loading ? <p className="muted">Loading…</p> : null}
+                  {loading ? (
+                    <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+                  ) : null}
                   {error ? <p className="error">{error}</p> : null}
                   {!loading && !error ? (
                     <div className="series-oped-tracklist">

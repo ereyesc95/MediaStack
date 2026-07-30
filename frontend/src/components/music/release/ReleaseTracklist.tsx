@@ -30,6 +30,7 @@ import type {
 import BillboardText from "../../BillboardText";
 import { IconVideo } from "../../MenuIcons";
 import { ReleaseTrackTitle } from "./releaseTrackTitle";
+import PlaylistBoot from "../../PlaylistBoot";
 import ReleaseAddToPlaylistModal from "./ReleaseAddToPlaylistModal";
 import ReleaseInlineLyrics from "./ReleaseInlineLyrics";
 import ReleaseLyricsEditModal from "./ReleaseLyricsEditModal";
@@ -808,7 +809,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   );
 
   if (loading && !data) {
-    return <p className="muted release-tracklist__loading">Loading tracklist…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading tracklist…" />;
   }
   if (error) {
     return <p className="error release-tracklist__error">{error}</p>;

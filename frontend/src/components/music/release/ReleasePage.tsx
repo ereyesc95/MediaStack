@@ -1601,6 +1601,26 @@ export default function ReleasePage({
                 <h2 className="release-page__track-panel-title">
                   {trackPanelMeta.mainTitle}
                 </h2>
+                {trackPanelMeta.lines
+                  .filter((line) => line.kind === "cover")
+                  .map((line, i) =>
+                    line.kind === "cover" ? (
+                      <p
+                        key={`cover-${i}`}
+                        className="release-page__track-panel-cover"
+                      >
+                        (
+                        <button
+                          type="button"
+                          className="release-page__person-link"
+                          onClick={() => void openPersonName(line.artist)}
+                        >
+                          {line.artist}
+                        </button>{" "}
+                        cover)
+                      </p>
+                    ) : null
+                  )}
                 {trackPanelReleaseDate && (
                   <p className="release-page__track-panel-date">
                     Released on {trackPanelReleaseDate}
@@ -1637,21 +1657,13 @@ export default function ReleasePage({
                   </p>
                 )}
                 {trackPanelMeta.lines
-                  .filter((line) => !isAdaptationLine(line))
+                  .filter(
+                    (line) =>
+                      !isAdaptationLine(line) && line.kind !== "cover"
+                  )
                   .map((line, i) => {
                   if (line.kind === "cover") {
-                    return (
-                      <p key={i} className="release-page__track-panel-line">
-                        <button
-                          type="button"
-                          className="release-page__person-link"
-                          onClick={() => void openPersonName(line.artist)}
-                        >
-                          {line.artist}
-                        </button>{" "}
-                        cover
-                      </p>
-                    );
+                    return null;
                   }
                   if (line.kind === "featuring") {
                     return (

@@ -531,6 +531,8 @@ export type SetlistTrackItem = ReleaseTrackItem & {
   unavailable?: boolean;
   youtube_query?: string;
   setlist_title?: string;
+  /** Original artist when this setlist song is a cover (from setlist.fm). */
+  cover_artist?: string | null;
 };
 
 export type SetlistTracklistPayload = {

@@ -16,6 +16,7 @@ import type {
   FilterOptions,
 } from "../../types";
 import ArtistCard from "../ArtistCard";
+import PlaylistBoot from "../PlaylistBoot";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -615,7 +616,9 @@ export default function ArtistBrowse({
       </div>
 
       <div className="artist-browse-scroll">
-        {loading && <p className="muted artist-browse-status">Loading…</p>}
+        {loading && (
+          <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+        )}
         {artists.length > 0 && (
           <div className={`artist-grid artist-grid--${orientation}`}>
             {artists.map((a) => (

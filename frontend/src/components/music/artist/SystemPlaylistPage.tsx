@@ -53,7 +53,7 @@ import type {
   TrackYoutubeVideo,
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
-import MyStackIcon from "../../MyStackIcon";
+import PlaylistBoot from "../../PlaylistBoot";
 import MediaBeatFx from "../MediaBeatFx";
 import SystemPlaylistTracklist, {
   type SystemPlaylistTracklistHandle,
@@ -1332,25 +1332,16 @@ export default function SystemPlaylistPage({
   );
 
   if (loading && !detail) {
-    return (
-      <div className="playlist-boot" role="status" aria-live="polite">
-        <MyStackIcon className="playlist-boot__icon" size={52} />
-        <p className="playlist-boot__label">Loading playlist…</p>
-      </div>
-    );
+    return <PlaylistBoot label="Loading playlist…" />;
   }
 
   if (error && !detail) {
     return (
-      <div className="playlist-boot playlist-boot--error">
-        <MyStackIcon className="playlist-boot__icon" size={52} />
-        <p className="playlist-boot__label playlist-boot__label--error">
-          {error}
-        </p>
-        <button type="button" className="btn" onClick={onBack}>
-          ← Playlists
-        </button>
-      </div>
+      <PlaylistBoot
+        error={error}
+        onBack={onBack}
+        backLabel="← Playlists"
+      />
     );
   }
 
@@ -1718,6 +1709,26 @@ export default function SystemPlaylistPage({
                         <h2 className="release-page__track-panel-title">
                           {trackPanelMeta.mainTitle}
                         </h2>
+                        {trackPanelMeta.lines
+                          .filter((line) => line.kind === "cover")
+                          .map((line, i) =>
+                            line.kind === "cover" ? (
+                              <p
+                                key={`cover-${i}`}
+                                className="release-page__track-panel-cover"
+                              >
+                                (
+                                <button
+                                  type="button"
+                                  className="release-page__person-link"
+                                  onClick={() => void openPersonName(line.artist)}
+                                >
+                                  {line.artist}
+                                </button>{" "}
+                                cover)
+                              </p>
+                            ) : null
+                          )}
                         {trackPanelReleaseDate && (
                           <p className="release-page__track-panel-date">
                             Released on {trackPanelReleaseDate}
@@ -1787,22 +1798,11 @@ export default function SystemPlaylistPage({
                           </p>
                         )}
                         {trackPanelMeta.lines
-                          .filter((line) => !isAdaptationLine(line))
+                          .filter(
+                            (line) =>
+                              !isAdaptationLine(line) && line.kind !== "cover"
+                          )
                           .map((line, i) => {
-                            if (line.kind === "cover") {
-                              return (
-                                <p key={i} className="release-page__track-panel-line">
-                                  <button
-                                    type="button"
-                                    className="release-page__person-link"
-                                    onClick={() => void openPersonName(line.artist)}
-                                  >
-                                    {line.artist}
-                                  </button>{" "}
-                                  cover
-                                </p>
-                              );
-                            }
                             if (line.kind === "featuring") {
                               return (
                                 <p key={i} className="release-page__track-panel-line">

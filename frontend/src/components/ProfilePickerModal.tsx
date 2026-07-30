@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchProfiles, selectProfile } from "../api";
 import type { ProfileUser } from "../auth";
 import AdminPasswordModal from "./AdminPasswordModal";
+import PlaylistBoot from "./PlaylistBoot";
 import ProfileAvatar from "./ProfileAvatar";
 import ProfileEditModal from "./ProfileEditModal";
 
@@ -115,7 +116,7 @@ export default function ProfilePickerModal({
           </ul>
           {error && !adminPwOpen && <p className="error-inline">{error}</p>}
           {!profiles.length && !error && (
-            <p className="muted">Loading profiles…</p>
+            <PlaylistBoot className="playlist-boot--compact" label="Loading profiles…" />
           )}
         </div>
       </div>

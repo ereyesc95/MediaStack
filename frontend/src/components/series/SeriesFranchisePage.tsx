@@ -45,6 +45,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import PlaylistBoot from "../PlaylistBoot";
 import CardOrientationPicker from "../CardOrientationPicker";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import MediaBeatFx from "../music/MediaBeatFx";
@@ -1251,7 +1252,7 @@ export default function SeriesFranchisePage({
         }`}
       >
         {loading && !data ? (
-          <p className="muted artist-section-empty">Loading franchise…</p>
+          <PlaylistBoot className="playlist-boot--compact" label="Loading franchise…" />
         ) : null}
         {error ? <p className="error artist-section-empty">{error}</p> : null}
 

@@ -8,6 +8,7 @@ import type {
 } from "../../../types";
 import ArtistCard from "../../ArtistCard";
 import ConfirmDialog from "../../ConfirmDialog";
+import PlaylistBoot from "../../PlaylistBoot";
 import { isMobilePortraitLayout, useDeviceLayout } from "../../../usePhoneLayout";
 
 type Props = {
@@ -219,7 +220,10 @@ export default function ArtistRelated({
   return (
     <div className={`artist-related${hidden ? " artist-panel--hidden" : ""}`}>
       {fetching && items.length === 0 && (
-        <p className="muted artist-related__loading">Loading related artists…</p>
+        <PlaylistBoot
+          className="playlist-boot--compact"
+          label="Loading related artists…"
+        />
       )}
       {!fetching && items.length === 0 && (
         <p className="muted artist-related__empty">

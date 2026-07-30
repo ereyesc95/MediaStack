@@ -5,6 +5,7 @@ import {
   prefetchReleaseGallery,
 } from "../../../releaseGalleryCache";
 import type { ReleaseGalleryItem, ReleaseGalleryPayload } from "../../../types";
+import PlaylistBoot from "../../PlaylistBoot";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "../artist/GalleryViewerModal";
@@ -183,7 +184,7 @@ export default function ReleaseGallery({
   }, [visibleTabs, tab, setTab]);
 
   if (loading && !data) {
-    return <p className="muted release-gallery__loading">Loading gallery…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading gallery…" />;
   }
   if (error) {
     return <p className="error release-gallery__error">{error}</p>;

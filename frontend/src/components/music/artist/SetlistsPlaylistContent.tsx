@@ -16,6 +16,7 @@ import type {
   SetlistTracklistPayload,
 } from "../../../types";
 import SetlistTracklist, { flattenPlayableSetlistTracks } from "./SetlistTracklist";
+import PlaylistBoot from "../../PlaylistBoot";
 
 export type SetlistsPlaylistHandle = {
   adjacentTracks: (path: string) => { prev: ReleaseTrackItem | null; next: ReleaseTrackItem | null };
@@ -256,7 +257,10 @@ const SetlistsPlaylistContent = forwardRef<SetlistsPlaylistHandle, Props>(functi
       )}
 
       {selectedYear && showsLoading && (
-        <p className="muted setlists-playlist__hint">Loading shows for {selectedYear}…</p>
+        <PlaylistBoot
+          className="playlist-boot--compact"
+          label={`Loading shows for ${selectedYear}…`}
+        />
       )}
       {showsError && <p className="error setlists-playlist__hint">{showsError}</p>}
 
@@ -265,7 +269,7 @@ const SetlistsPlaylistContent = forwardRef<SetlistsPlaylistHandle, Props>(functi
       )}
 
       {selectedShowId && setlistLoading && (
-        <p className="muted setlists-playlist__hint">Loading setlist…</p>
+        <PlaylistBoot className="playlist-boot--compact" label="Loading setlist…" />
       )}
       {setlistError && <p className="error setlists-playlist__hint">{setlistError}</p>}
 

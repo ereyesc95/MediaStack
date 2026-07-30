@@ -13,6 +13,7 @@ import {
   saveReleaseReferrer,
 } from "../../../musicRoute";
 import { DEFAULT_DISC_URL, writerSearchUrl } from "../release/releaseTrackPanelMeta";
+import PlaylistBoot from "../../PlaylistBoot";
 import { formatTrackDate } from "../../../formatDate";
 import { usePhoneLayout, useDeviceLayout, isMobilePortraitLayout } from "../../../usePhoneLayout";
 import type {
@@ -698,7 +699,7 @@ export default function ArtistAudio({
   }, [isPhone, revealedId]);
 
   if (loading && !index) {
-    return <p className="muted artist-section-empty">Loading audio…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading audio…" />;
   }
 
   if (error) {

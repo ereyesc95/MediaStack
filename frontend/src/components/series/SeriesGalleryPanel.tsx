@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchSeriesGallery } from "../../api";
 import type { SeriesGalleryItem, SeriesGallerySection } from "../../types";
+import PlaylistBoot from "../PlaylistBoot";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "../music/artist/GalleryViewerModal";
@@ -151,7 +152,7 @@ export default function SeriesGalleryPanel({
   );
 
   if (loading) {
-    return <p className="muted artist-section-empty">Loading gallery…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading gallery…" />;
   }
   if (error) {
     return <p className="error artist-section-empty">{error}</p>;

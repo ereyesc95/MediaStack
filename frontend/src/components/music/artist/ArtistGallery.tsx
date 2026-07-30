@@ -8,6 +8,7 @@ import type {
   GalleryIndexPayload,
   GalleryPhotoItem,
 } from "../../../types";
+import PlaylistBoot from "../../PlaylistBoot";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "./GalleryViewerModal";
@@ -260,7 +261,7 @@ export default function ArtistGallery({ state }: Props) {
   } = state;
 
   if (loading && !index) {
-    return <p className="muted artist-section-empty">Loading gallery…</p>;
+    return <PlaylistBoot className="playlist-boot--compact" label="Loading gallery…" />;
   }
 
   if (error) {

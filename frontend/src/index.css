@@ -7121,6 +7121,12 @@ input {
   gap: 1.25rem;
 }
 
+.playlist-boot--compact {
+  min-height: 8rem;
+  padding: 1.5rem 1rem;
+  background: transparent;
+}
+
 @keyframes playlist-boot-pulse {
   0%,
   100% {
@@ -10075,6 +10081,17 @@ input {
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.35;
+}
+
+.release-page__track-panel-cover {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.release-page__track-panel-cover .release-page__person-link {
+  font-size: inherit;
 }
 
 .release-page__track-panel-edition {
@@ -13174,15 +13191,12 @@ button.lyrics-status-badge--icon-only {
 
 .catalog-scope-toggle {
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
   border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
   border-radius: 4px;
-  overflow: hidden;
   height: 1.85rem;
-}
-
-.catalog-scope-toggle button {
-  border: none;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
@@ -13192,9 +13206,11 @@ button.lyrics-status-badge--icon-only {
   padding: 0 0.55rem;
   cursor: pointer;
   white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.28rem;
+}
+
+.catalog-scope-toggle:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--text-muted));
 }
 
 .catalog-scope-toggle__icon {
@@ -13204,26 +13220,12 @@ button.lyrics-status-badge--icon-only {
   opacity: 0.9;
 }
 
-.catalog-scope-toggle button + button {
-  border-left: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
-}
-
-.catalog-scope-toggle button:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.catalog-scope-toggle button.active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
 .module-top-bar__menu .catalog-scope-toggle {
   flex-shrink: 0;
 }
 
 @media (max-width: 640px) {
-  .catalog-scope-toggle button {
+  .catalog-scope-toggle {
     font-size: 0.55rem;
     padding: 0 0.4rem;
     letter-spacing: 0.04em;
@@ -13598,29 +13600,48 @@ button.lyrics-status-badge--icon-only {
 
 /* Related banners: equal gutters; constrain grid so cards don't clip the right edge */
 .artist-page--mobile-portrait .series-related.artist-related,
-.artist-page--stacked .series-related.artist-related {
-  padding-inline: 0.85rem;
+.artist-page--stacked .series-related.artist-related,
+.artist-page--mobile-portrait .artist-related,
+.artist-page--stacked .artist-related,
+.artist-page--tablet-portrait .artist-related {
+  padding: 1rem 0.85rem 2rem;
   box-sizing: border-box;
-}
-
-.artist-page--mobile-portrait .series-related .artist-related__grid,
-.artist-page--stacked .series-related .artist-related__grid {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  overflow-x: clip;
+}
+
+.artist-page--mobile-portrait .series-related .artist-related__grid,
+.artist-page--stacked .series-related .artist-related__grid,
+.artist-page--mobile-portrait .artist-related__grid,
+.artist-page--stacked .artist-related__grid,
+.artist-page--tablet-portrait .artist-related__grid {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
 }
 
 .artist-page--mobile-portrait .series-related .artist-related-card-wrap,
-.artist-page--stacked .series-related .artist-related-card-wrap {
+.artist-page--stacked .series-related .artist-related-card-wrap,
+.artist-page--mobile-portrait .artist-related-card-wrap,
+.artist-page--stacked .artist-related-card-wrap,
+.artist-page--tablet-portrait .artist-related-card-wrap {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .artist-page--mobile-portrait .series-related .artist-card.media-beat-frame,
-.artist-page--stacked .series-related .artist-card.media-beat-frame {
+.artist-page--stacked .series-related .artist-card.media-beat-frame,
+.artist-page--mobile-portrait .artist-related .artist-card.media-beat-frame,
+.artist-page--stacked .artist-related .artist-card.media-beat-frame,
+.artist-page--tablet-portrait .artist-related .artist-card.media-beat-frame {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -13629,8 +13650,15 @@ button.lyrics-status-badge--icon-only {
 }
 
 .artist-page--mobile-portrait .series-related .artist-card--banner .artist-card-footer,
-.artist-page--stacked .series-related .artist-card--banner .artist-card-footer {
+.artist-page--stacked .series-related .artist-card--banner .artist-card-footer,
+.artist-page--mobile-portrait .artist-related .artist-card--banner .artist-card-footer,
+.artist-page--stacked .artist-related .artist-card--banner .artist-card-footer,
+.artist-page--tablet-portrait .artist-related .artist-card--banner .artist-card-footer {
   padding-inline: 1rem;
+}
+
+.artist-page--tablet-portrait .artist-page__body {
+  overflow-x: hidden;
 }
 .release-tracklist__edition-date {
   display: inline;

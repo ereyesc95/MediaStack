@@ -66,7 +66,12 @@ export default function SetlistTracklist({
                         const active = Boolean(track.play_path && playingPath === track.play_path);
                         const unavailable = Boolean(track.unavailable || !track.play_path);
                         const title = track.setlist_title ?? track.title;
-                        const displayTitle = trackDisplayTitle(title);
+                        const coverArtist = (track.cover_artist || "").trim();
+                        const titleForDisplay =
+                          coverArtist && !/\[.*?cover\]/i.test(title)
+                            ? `${title} [${coverArtist} cover]`
+                            : title;
+                        const displayTitle = trackDisplayTitle(titleForDisplay);
                         return (
                           <li
                             key={track.id}
@@ -88,7 +93,7 @@ export default function SetlistTracklist({
                                   )}
                                 </span>
                                 <span className="release-tracklist__title-wrap">
-                                  <ReleaseTrackTitle title={title} />
+                                  <ReleaseTrackTitle title={titleForDisplay} />
                                 </span>
                                 {track.youtube_query ? (
                                   <a
@@ -113,10 +118,13 @@ export default function SetlistTracklist({
                                   if (!track.play_path) return;
                                   onPlay(
                                     track.play_path,
-                                    track.title,
+                                    titleForDisplay,
                                     `${setlistId}:${track.play_path}`
                                   );
-                                  onPanelTrack?.(track);
+                                  onPanelTrack?.({
+                                    ...track,
+                                    title: titleForDisplay,
+                                  });
                                 }}
                                 aria-label={`Play ${displayTitle}`}
                               >
@@ -128,7 +136,7 @@ export default function SetlistTracklist({
                                   )}
                                 </span>
                                 <span className="release-tracklist__title-wrap">
-                                  <ReleaseTrackTitle title={title} />
+                                  <ReleaseTrackTitle title={titleForDisplay} />
                                 </span>
                                 {track.duration ? (
                                   <span className="release-tracklist__duration">{track.duration}</span>
