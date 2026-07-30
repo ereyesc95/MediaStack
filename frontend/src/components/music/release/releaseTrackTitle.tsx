@@ -98,7 +98,12 @@ export function ReleaseTrackTitle({
         className="release-tracklist__title"
         short={plain}
         full={plain}
-      />
+      >
+        {main}
+        {suffix ? (
+          <span className="release-tracklist__title-suffix">{suffix}</span>
+        ) : null}
+      </BillboardText>
     );
   }
   if (!suffix) {

@@ -174,7 +174,10 @@ export default function SeriesOpeningsEndingsPage({
   onOpenArtist,
 }: Props) {
   const layout = useDeviceLayout();
-  const stacked = isMobilePortraitLayout(layout);
+  const mobilePortrait = isMobilePortraitLayout(layout);
+  const tabletPortrait = layout === "tablet-portrait";
+  const bannerLayout = mobilePortrait || tabletPortrait;
+  const stacked = bannerLayout;
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const tabletLayout = isTabletLayout(layout);
   const audio = useMiniAudio();
@@ -189,6 +192,7 @@ export default function SeriesOpeningsEndingsPage({
   const [rightView, setRightView] = useState<RightView>("tracks");
   const [mobileTrackView, setMobileTrackView] =
     useState<MobileTrackView>("tracks");
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [lyricsText, setLyricsText] = useState<string | null>(null);
   const [syncedLyrics, setSyncedLyrics] = useState<string | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
@@ -198,6 +202,7 @@ export default function SeriesOpeningsEndingsPage({
   const [plusOpen, setPlusOpen] = useState(false);
   const indexRef = useRef(0);
   const lyricsRequestRef = useRef(0);
+  const canvasVideoRef = useRef<HTMLVideoElement>(null);
 
   useBeatPulse(audio.audioRef, Boolean(activeId), audio.playing);
 
@@ -329,6 +334,17 @@ export default function SeriesOpeningsEndingsPage({
     }
   };
 
+  useEffect(() => {
+    setMoreInfoOpen(false);
+  }, [franchiseId]);
+
+  // Open info when the active track changes so track meta is visible; user can still collapse.
+  useEffect(() => {
+    if (bannerLayout && activeId) {
+      setMoreInfoOpen(true);
+    }
+  }, [activeId, bannerLayout]);
+
   const panelCover =
     (active && (active.cover_animation_url || active.cover_url)) ||
     coverUrl ||
@@ -336,6 +352,10 @@ export default function SeriesOpeningsEndingsPage({
   const panelCoverIsVideo = isVideoUrl(panelCover);
   const panelDisc = active?.disc_url || DEFAULT_DISC_URL;
   const panelCanvas = active?.canvas_url || null;
+  const showPanelCanvas = Boolean(panelCanvas);
+  const pageCanvasActive = bannerLayout && showPanelCanvas;
+  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
+  const showTrackPanel = Boolean(activeId && active);
   const releaseDate =
     active?.display_date ||
     formatTrackDate(active?.date_iso) ||
@@ -344,6 +364,7 @@ export default function SeriesOpeningsEndingsPage({
   const title = franchiseName || "Franchise";
   const lyricsTitle = titleParts?.main || active?.title || "Lyrics";
   const versionsTitle = `${lyricsTitle} Versions`;
+  const bannerBgUrl = coverUrl || active?.cover_url || panelCover || "";
 
   const openLyrics = async () => {
     if (!active?.artist || !active.title) return;
@@ -434,17 +455,19 @@ export default function SeriesOpeningsEndingsPage({
     "release-page",
     "series-oped-playlist-page",
     stacked ? "release-page--stacked" : "",
+    bannerLayout ? "release-page--banner-layout" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
     tabletLayout ? "release-page--tablet" : "",
-    layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
-    stacked && mobileTrackView === "player"
+    tabletPortrait ? "release-page--tablet-portrait" : "",
+    stacked && !bannerLayout && mobileTrackView === "player"
       ? "release-page--track-player"
       : "",
-    stacked && mobileTrackView === "tracks"
+    stacked && !bannerLayout && mobileTrackView === "tracks"
       ? "release-page--track-tracks"
       : "",
     audio.playing ? "release-page--beat-ready release-page--playing" : "",
-    panelCanvas ? "release-page--has-panel-canvas" : "",
+    showPanelCanvas && !pageCanvasActive ? "release-page--has-panel-canvas" : "",
+    pageCanvasActive ? "release-page--canvas" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -470,6 +493,21 @@ export default function SeriesOpeningsEndingsPage({
             } as CSSProperties
           }
         />
+        {pageCanvasActive && panelCanvas ? (
+          <div className="release-page__bg-canvas" aria-hidden>
+            <video
+              key={panelCanvas}
+              ref={canvasVideoRef}
+              className="release-page__bg-canvas-video"
+              src={panelCanvas}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            <div className="release-page__bg-canvas-shade" />
+          </div>
+        ) : null}
         <MediaBeatFx />
       </div>
 
@@ -514,7 +552,7 @@ export default function SeriesOpeningsEndingsPage({
           </div>
         </header>
 
-        {stacked ? (
+        {stacked && !bannerLayout ? (
           <nav className="release-page__subtabs" aria-label="Tracklist views">
             <button
               type="button"
@@ -535,13 +573,22 @@ export default function SeriesOpeningsEndingsPage({
       </div>
 
       <div className="release-page__body">
-        <aside className="release-page__panel">
-          {panelCanvas ? (
+        <aside
+          className={`release-page__panel${
+            showTrackPanel ? " release-page__panel--track" : ""
+          }${
+            showPanelCanvas && !pageCanvasActive
+              ? " release-page__panel--canvas"
+              : ""
+          }${bannerLayout ? " release-page__panel--banner" : ""}`}
+        >
+          {showPanelCanvas && !pageCanvasActive ? (
             <div className="release-page__panel-canvas-layer" aria-hidden>
               <video
-                key={panelCanvas}
+                key={panelCanvas!}
+                ref={canvasVideoRef}
                 className="release-page__panel-canvas"
-                src={panelCanvas}
+                src={panelCanvas!}
                 autoPlay
                 loop
                 muted
@@ -552,9 +599,30 @@ export default function SeriesOpeningsEndingsPage({
           ) : null}
           <div className="release-page__panel-content">
             <div className="release-page__art">
-              <div className="release-page__art-stage">
+              <div
+                className={`release-page__art-stage${
+                  bannerLayout ? " release-page__art-stage--banner" : ""
+                }`}
+              >
+                {bannerLayout ? (
+                  <span
+                    className="release-page__banner-bg"
+                    style={{
+                      backgroundImage: bannerBgUrl
+                        ? `url("${bannerBgUrl}")`
+                        : undefined,
+                    }}
+                    aria-hidden
+                  />
+                ) : null}
                 {panelCover ? (
-                  <span className="release-page__cover-wrap">
+                  <span
+                    className={`release-page__cover-wrap${
+                      bannerLayout
+                        ? " release-page__cover-wrap--banner-cover"
+                        : ""
+                    }`}
+                  >
                     {panelCoverIsVideo ? (
                       <video
                         key={panelCover}
@@ -583,6 +651,7 @@ export default function SeriesOpeningsEndingsPage({
                   alt=""
                   className={[
                     "release-page__disc",
+                    bannerLayout ? "release-page__disc--banner" : "",
                     activeId ? "release-page__disc--spin" : "",
                     activeId && !audio.playing
                       ? "release-page__disc--spin-paused"
@@ -594,7 +663,29 @@ export default function SeriesOpeningsEndingsPage({
                 />
               </div>
             </div>
-            <div className="release-page__panel-meta">
+
+            {bannerLayout ? (
+              <button
+                type="button"
+                className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}${
+                  showTrackPanel
+                    ? " release-page__more-info--track"
+                    : " release-page__more-info--release"
+                }`}
+                onClick={() => setMoreInfoOpen((o) => !o)}
+                aria-expanded={moreInfoOpen}
+              >
+                {showTrackPanel
+                  ? titleParts?.main || active?.title || "Openings & Endings"
+                  : "Openings & Endings"}
+              </button>
+            ) : null}
+
+            <div
+              className={`release-page__panel-meta${
+                bannerLayout ? " release-page__panel-meta--glass" : ""
+              }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+            >
               <div className="release-page__panel-body">
                 {active ? (
                   <div className="release-page__track-panel">
@@ -645,6 +736,48 @@ export default function SeriesOpeningsEndingsPage({
                         </button>
                       </p>
                     ) : null}
+                    {bannerLayout ? (
+                      <div className="release-page__track-actions release-page__track-actions--in-info">
+                        <button
+                          type="button"
+                          className="release-page__track-action"
+                          data-tooltip="Lyrics"
+                          aria-label="Lyrics"
+                          onClick={() => void openLyrics()}
+                        >
+                          <TrackActionLyricsIcon className="release-page__track-action-icon" />
+                        </button>
+                        <button
+                          type="button"
+                          className="release-page__track-action"
+                          data-tooltip="Versions"
+                          aria-label="Versions"
+                          onClick={() => void openVersions()}
+                        >
+                          <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                        </button>
+                        <button
+                          type="button"
+                          className="release-page__track-action"
+                          data-tooltip="Add to playlist"
+                          aria-label="Add to playlist"
+                          onClick={() => setPlusOpen(true)}
+                        >
+                          <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+                        </button>
+                        {active.video_url ? (
+                          <button
+                            type="button"
+                            className="release-page__track-action"
+                            data-tooltip="Extras video"
+                            aria-label="Extras video"
+                            onClick={openExtrasVideo}
+                          >
+                            <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="release-page__panel-head">
@@ -658,49 +791,69 @@ export default function SeriesOpeningsEndingsPage({
                   </div>
                 )}
               </div>
-              <div className="release-page__panel-bottom">
-                {active ? (
-                  <div className="release-page__track-actions release-page__track-actions--above-player">
-                    <button
-                      type="button"
-                      className="release-page__track-action"
-                      data-tooltip="Lyrics"
-                      aria-label="Lyrics"
-                      onClick={() => void openLyrics()}
-                    >
-                      <TrackActionLyricsIcon className="release-page__track-action-icon" />
-                    </button>
-                    <button
-                      type="button"
-                      className="release-page__track-action"
-                      data-tooltip="Versions"
-                      aria-label="Versions"
-                      onClick={() => void openVersions()}
-                    >
-                      <TrackActionVersionsIcon className="release-page__track-action-icon" />
-                    </button>
-                    <button
-                      type="button"
-                      className="release-page__track-action"
-                      data-tooltip="Add to playlist"
-                      aria-label="Add to playlist"
-                      onClick={() => setPlusOpen(true)}
-                    >
-                      <TrackActionPlaylistIcon className="release-page__track-action-icon" />
-                    </button>
-                    {active.video_url ? (
+              {!bannerLayout ? (
+                <div className="release-page__panel-bottom">
+                  {active ? (
+                    <div className="release-page__track-actions release-page__track-actions--above-player">
                       <button
                         type="button"
                         className="release-page__track-action"
-                        data-tooltip="Extras video"
-                        aria-label="Extras video"
-                        onClick={openExtrasVideo}
+                        data-tooltip="Lyrics"
+                        aria-label="Lyrics"
+                        onClick={() => void openLyrics()}
                       >
-                        <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                        <TrackActionLyricsIcon className="release-page__track-action-icon" />
                       </button>
-                    ) : null}
+                      <button
+                        type="button"
+                        className="release-page__track-action"
+                        data-tooltip="Versions"
+                        aria-label="Versions"
+                        onClick={() => void openVersions()}
+                      >
+                        <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                      </button>
+                      <button
+                        type="button"
+                        className="release-page__track-action"
+                        data-tooltip="Add to playlist"
+                        aria-label="Add to playlist"
+                        onClick={() => setPlusOpen(true)}
+                      >
+                        <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+                      </button>
+                      {active.video_url ? (
+                        <button
+                          type="button"
+                          className="release-page__track-action"
+                          data-tooltip="Extras video"
+                          aria-label="Extras video"
+                          onClick={openExtrasVideo}
+                        >
+                          <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="release-page__panel-footer">
+                    <div className="release-page__panel-player">
+                      <MiniAudioPlayerControls
+                        playing={audio.playing}
+                        progress={audio.progress}
+                        duration={audio.duration}
+                        toggle={audio.toggle}
+                        seek={audio.seek}
+                        onPrev={playPrev}
+                        onNext={playNext}
+                      />
+                    </div>
                   </div>
-                ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {bannerLayout ? (
+              <div className="release-page__panel-dock">
                 <div className="release-page__panel-footer">
                   <div className="release-page__panel-player">
                     <MiniAudioPlayerControls
@@ -715,7 +868,7 @@ export default function SeriesOpeningsEndingsPage({
                   </div>
                 </div>
               </div>
-            </div>
+            ) : null}
           </div>
         </aside>
 

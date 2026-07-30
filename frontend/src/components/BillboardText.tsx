@@ -1,12 +1,25 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 type Props = {
   short: string;
   full?: string;
   className?: string;
+  /** Optional rich content (e.g. muted title suffix). Falls back to plain text. */
+  children?: ReactNode;
 };
 
-export default function BillboardText({ short, full, className = "" }: Props) {
+export default function BillboardText({
+  short,
+  full,
+  className = "",
+  children,
+}: Props) {
   const complete = (full || short || "").trim();
   const clipRef = useRef<HTMLSpanElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -30,7 +43,7 @@ export default function BillboardText({ short, full, className = "" }: Props) {
     const observer = new ResizeObserver(measure);
     observer.observe(clip);
     return () => observer.disconnect();
-  }, [complete]);
+  }, [complete, children]);
 
   const scrollStyle = scrolls
     ? ({
@@ -50,7 +63,7 @@ export default function BillboardText({ short, full, className = "" }: Props) {
           ref={textRef}
           style={scrollStyle}
         >
-          {complete}
+          {children ?? complete}
         </span>
       </span>
     </span>

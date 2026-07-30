@@ -49,7 +49,6 @@ import type {
   ArtistPlaylistDetail,
   ArtistPlaylistTrack,
   BandOverview,
-  ReleaseNeighbor,
   ReleaseTrackItem,
   TrackYoutubeVideo,
 } from "../../../types";
@@ -241,7 +240,7 @@ function PlaylistNeighborLink({
   direction,
   onClick,
 }: {
-  neighbor: ReleaseNeighbor;
+  neighbor: { id: string; title: string };
   direction: "prev" | "next";
   onClick: () => void;
 }) {
@@ -290,10 +289,12 @@ export default function SystemPlaylistPage({
 }: Props) {
   const isUserPlaylist = userPlaylistId != null;
   const layout = useDeviceLayout();
-  const stacked = isMobilePortraitLayout(layout);
+  const mobilePortrait = isMobilePortraitLayout(layout);
+  const tabletPortrait = layout === "tablet-portrait";
+  const bannerLayout = mobilePortrait || tabletPortrait;
+  const stacked = bannerLayout;
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const tabletLayout = isTabletLayout(layout);
-  const tabletPortrait = layout === "tablet-portrait";
 
   const [detail, setDetail] = useState<ArtistPlaylistDetail | null>(() => {
     if (isUserPlaylist && userPlaylistId != null) {
@@ -336,6 +337,7 @@ export default function SystemPlaylistPage({
   const [repeatOne, setRepeatOne] = useState(false);
   const [mobileTrackView, setMobileTrackView] =
     useState<ReleaseMobileTrackView>("tracks");
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [bgLayers, setBgLayers] = useState<{ current?: string; outgoing?: string }>({});
   const [youtubePickerOpen, setYoutubePickerOpen] = useState(false);
   const [trackWriters, setTrackWriters] = useState<string[]>([]);
@@ -491,6 +493,7 @@ export default function SystemPlaylistPage({
     setYoutubePickerOpen(false);
     setPanelBrand(null);
     setMobileTrackView("tracks");
+    setMoreInfoOpen(false);
     sourceArtCacheRef.current.clear();
     prevBgRef.current = undefined;
   }, [slug, userPlaylistId, miniAudio.clear]);
@@ -644,7 +647,9 @@ export default function SystemPlaylistPage({
 
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const hasActiveTrack = Boolean(playingPath);
-  const showTrackPanel = Boolean(nowPlayingTitle) && (isPlaying || Boolean(versionSource));
+  const showTrackPanel = bannerLayout
+    ? Boolean(playingPath && nowPlayingTitle)
+    : Boolean(nowPlayingTitle) && (isPlaying || Boolean(versionSource));
   // Idle / playlist-head mode: always show the playlist cover beside the disc.
   const usePlaylistCoverArt = isUserPlaylist && !showTrackPanel;
 
@@ -1201,17 +1206,41 @@ export default function SystemPlaylistPage({
       : null) ??
     null;
 
+  // Open info when the active track changes so track meta is visible; user can still collapse.
+  useEffect(() => {
+    if (bannerLayout && playingPath) {
+      setMoreInfoOpen(true);
+    }
+  }, [playingPath, bannerLayout]);
+
+  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
+  const pageCanvasActive = bannerLayout && showPanelCanvas;
+  const overviewLandscape =
+    overview?.eras?.find((e) => e.landscape_url)?.landscape_url ?? null;
+  const bannerBgUrl =
+    coverUrl ||
+    activeTrackCover ||
+    playbackArt?.cover_url ||
+    overviewLandscape ||
+    "";
+
   const pageClass = [
     "release-page",
     stacked ? "release-page--stacked" : "",
+    bannerLayout ? "release-page--banner-layout" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
     tabletLayout ? "release-page--tablet" : "",
     tabletPortrait ? "release-page--tablet-portrait" : "",
-    stacked && mobileTrackView === "player" ? "release-page--track-player" : "",
-    stacked && mobileTrackView === "tracks" ? "release-page--track-tracks" : "",
+    stacked && !bannerLayout && mobileTrackView === "player"
+      ? "release-page--track-player"
+      : "",
+    stacked && !bannerLayout && mobileTrackView === "tracks"
+      ? "release-page--track-tracks"
+      : "",
     beatActive ? "release-page--beat-ready" : "",
     isPlaying ? "release-page--playing" : "",
     hasActiveTrack && isVinylPlayback ? "release-page--vinyl" : "",
+    pageCanvasActive ? "release-page--canvas" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1300,6 +1329,21 @@ export default function SystemPlaylistPage({
             style={{ backgroundImage: `url("${bgLayers.current}")` }}
           />
         )}
+        {pageCanvasActive && displayCanvas ? (
+          <div className="release-page__bg-canvas" aria-hidden>
+            <video
+              key={displayCanvas}
+              ref={canvasVideoRef}
+              className="release-page__bg-canvas-video"
+              src={displayCanvas}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            <div className="release-page__bg-canvas-shade" />
+          </div>
+        ) : null}
         <MediaBeatFx />
       </div>
 
@@ -1381,7 +1425,7 @@ export default function SystemPlaylistPage({
           />
         )}
 
-        {stacked && (
+        {stacked && !bannerLayout && (
           <nav className="release-page__subtabs" aria-label="Tracklist views">
             <button
               type="button"
@@ -1410,15 +1454,15 @@ export default function SystemPlaylistPage({
       <div className="release-page__body">
         <aside
           className={`release-page__panel${showTrackPanel ? " release-page__panel--track" : ""}${
-            showPanelCanvas ? " release-page__panel--canvas" : ""
-          }`}
+            showPanelCanvas && !pageCanvasActive ? " release-page__panel--canvas" : ""
+          }${bannerLayout ? " release-page__panel--banner" : ""}`}
           style={
             showTrackPanel && panelFadedCover
               ? ({ ["--panel-fade" as string]: `url("${panelFadedCover}")` } as CSSProperties)
               : undefined
           }
         >
-          {showPanelCanvas && (
+          {showPanelCanvas && !pageCanvasActive && (
             <div className="release-page__panel-canvas-layer" aria-hidden>
               <video
                 key={displayCanvas ?? undefined}
@@ -1437,18 +1481,31 @@ export default function SystemPlaylistPage({
             <div className="release-page__art">
               <div
                 className={`release-page__art-stage${
-                  panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying
-                    ? " release-page__art-stage--video"
-                    : ""
+                  bannerLayout
+                    ? " release-page__art-stage--banner"
+                    : panelCoverSrc && isVideoMedia(panelCoverSrc) && isPlaying
+                      ? " release-page__art-stage--video"
+                      : ""
                 }${
-                  !showPanelCover && panelDiscSrc
+                  !bannerLayout && !showPanelCover && panelDiscSrc
                     ? " release-page__art-stage--disc-only"
                     : ""
                 }`}
               >
+                {bannerLayout ? (
+                  <span
+                    className="release-page__banner-bg"
+                    style={{
+                      backgroundImage: bannerBgUrl ? `url("${bannerBgUrl}")` : undefined,
+                    }}
+                    aria-hidden
+                  />
+                ) : null}
                 {showCoverPlaceholder ? (
                     <span
-                      className="release-page__cover-wrap release-page__cover-wrap--editable release-page__cover-wrap--placeholder"
+                      className={`release-page__cover-wrap release-page__cover-wrap--editable release-page__cover-wrap--placeholder${
+                        bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
+                      }`}
                       onClick={openCoverPicker}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") openCoverPicker();
@@ -1468,7 +1525,7 @@ export default function SystemPlaylistPage({
                     <span
                       className={`release-page__cover-wrap${
                         canEditPlaylistCover ? " release-page__cover-wrap--editable release-page__cover-wrap--edit-hint" : ""
-                      }`}
+                      }${bannerLayout ? " release-page__cover-wrap--banner-cover" : ""}`}
                       onClick={canEditPlaylistCover ? openCoverPicker : undefined}
                       onKeyDown={
                         canEditPlaylistCover
@@ -1496,7 +1553,7 @@ export default function SystemPlaylistPage({
                     <span
                       className={`release-page__cover-wrap${
                         canEditPlaylistCover ? " release-page__cover-wrap--editable release-page__cover-wrap--edit-hint" : ""
-                      }`}
+                      }${bannerLayout ? " release-page__cover-wrap--banner-cover" : ""}`}
                       onClick={canEditPlaylistCover ? openCoverPicker : undefined}
                       onKeyDown={
                         canEditPlaylistCover
@@ -1523,6 +1580,8 @@ export default function SystemPlaylistPage({
                   src={panelDiscSrc}
                   alt=""
                   className={`release-page__disc${
+                    bannerLayout ? " release-page__disc--banner" : ""
+                  }${
                     playingPath && miniAudio.playing ? " release-page__disc--spin" : ""
                   }${playingPath && !miniAudio.playing ? " release-page__disc--spin-paused" : ""}`}
                   draggable={false}
@@ -1530,7 +1589,28 @@ export default function SystemPlaylistPage({
               </div>
             </div>
 
-            <div className="release-page__panel-meta">
+            {bannerLayout ? (
+              <button
+                type="button"
+                className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}${
+                  showTrackPanel && trackPanelMeta
+                    ? " release-page__more-info--track"
+                    : " release-page__more-info--release"
+                }`}
+                onClick={() => setMoreInfoOpen((o) => !o)}
+                aria-expanded={moreInfoOpen}
+              >
+                {showTrackPanel && trackPanelMeta
+                  ? trackPanelMeta.mainTitle
+                  : detail.name}
+              </button>
+            ) : null}
+
+            <div
+              className={`release-page__panel-meta${
+                bannerLayout ? " release-page__panel-meta--glass" : ""
+              }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+            >
               <div className="release-page__panel-fit">
                 <div className="release-page__panel-fit-inner">
                   <div className="release-page__panel-body">
@@ -1738,6 +1818,109 @@ export default function SystemPlaylistPage({
                         {isSnapshotPlaylist && activeSnapshot ? (
                           <SnapshotStatsPanel snapshot={activeSnapshot} mobile={stacked} />
                         ) : null}
+                        {bannerLayout &&
+                        isSnapshotPlaylist &&
+                        activeSnapshot?.record_label &&
+                        showTrackPanel ? (
+                          <div className="release-page__label">
+                            <img
+                              src={DEFAULT_LABEL_URL}
+                              alt=""
+                              className="release-page__label-logo"
+                            />
+                            <p className="release-page__label-name">
+                              Distributed by{" "}
+                              <span className="release-page__person-link">
+                                {activeSnapshot.record_label}
+                              </span>
+                            </p>
+                          </div>
+                        ) : null}
+                        {bannerLayout && panelActionTrack ? (
+                          <div className="release-page__track-actions release-page__track-actions--in-info">
+                            {showLyricsAction && (
+                              <button
+                                type="button"
+                                className="release-page__track-action"
+                                data-tooltip="Lyrics"
+                                aria-label="Lyrics"
+                                onClick={() => {
+                                  if (stacked) setMobileTrackView("tracks");
+                                  tracklistRef.current?.openLyrics(panelActionTrack);
+                                }}
+                              >
+                                <TrackActionLyricsIcon className="release-page__track-action-icon" />
+                              </button>
+                            )}
+                            {showVersionsAction && (
+                              <button
+                                type="button"
+                                className="release-page__track-action"
+                                data-tooltip="Versions"
+                                aria-label="Versions"
+                                onClick={() => {
+                                  if (stacked) setMobileTrackView("tracks");
+                                  tracklistRef.current?.openVersions(panelActionTrack);
+                                }}
+                              >
+                                <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="release-page__track-action"
+                              data-tooltip="Add to playlist"
+                              aria-label="Add to playlist"
+                              onClick={() => tracklistRef.current?.openPlus(panelActionTrack)}
+                            >
+                              <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+                            </button>
+                            {panelVideos.length > 0 && (
+                              <div ref={youtubePickerRef} className="release-page__youtube-picker-wrap">
+                                <button
+                                  type="button"
+                                  className="release-page__track-action"
+                                  data-tooltip={
+                                    panelVideos.length > 1 ? "Choose video" : "Official video"
+                                  }
+                                  aria-label={
+                                    panelVideos.length > 1 ? "Choose video" : "Official video"
+                                  }
+                                  aria-expanded={
+                                    panelVideos.length > 1 ? youtubePickerOpen : undefined
+                                  }
+                                  onClick={() => {
+                                    if (panelVideos.length <= 1) {
+                                      openYoutubeFullscreen(panelVideos[0]!.url);
+                                      return;
+                                    }
+                                    setYoutubePickerOpen((open) => !open);
+                                  }}
+                                >
+                                  <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                                </button>
+                                {panelVideos.length > 1 && youtubePickerOpen && (
+                                  <div className="release-page__youtube-picker" role="menu">
+                                    {panelVideos.map((video) => (
+                                      <button
+                                        key={video.url}
+                                        type="button"
+                                        className="release-page__youtube-picker-item"
+                                        role="menuitem"
+                                        onClick={() => openYoutubeFullscreen(video.url)}
+                                      >
+                                        <span className="release-page__youtube-picker-label">
+                                          {video.label}
+                                          {video.primary ? " · Primary" : ""}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="release-page__panel-head">
@@ -1782,6 +1965,7 @@ export default function SystemPlaylistPage({
                 </div>
               </div>
 
+              {!bannerLayout ? (
               <div className="release-page__panel-bottom">
                 {isSnapshotPlaylist && activeSnapshot?.record_label && showTrackPanel ? (
                   <div className="release-page__label">
@@ -1924,7 +2108,54 @@ export default function SystemPlaylistPage({
                   </div>
                 </div>
               </div>
+              ) : null}
             </div>
+
+            {bannerLayout ? (
+              <div className="release-page__panel-dock">
+                <div className="release-page__panel-footer">
+                  <div className="release-page__panel-player">
+                    <MiniAudioPlayerControls
+                      playing={miniAudio.playing}
+                      progress={miniAudio.progress}
+                      duration={miniAudio.duration}
+                      toggle={miniAudio.toggle}
+                      seek={miniAudio.seek}
+                      onPrev={() => playAdjacentTrack("prev")}
+                      onNext={() => playAdjacentTrack("next")}
+                      repeatOne={repeatOne}
+                      onRepeatToggle={() => setRepeatOne((r) => !r)}
+                    />
+                  </div>
+                  <div className="release-page__panel-bottom-bar">
+                    {detail.prev ? (
+                      <PlaylistNeighborLink
+                        neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
+                        direction="prev"
+                        onClick={() => {
+                          if (editPlaylist) setEditPlaylist(false);
+                          onOpenPlaylist(detail.prev!.slug);
+                        }}
+                      />
+                    ) : (
+                      <span className="release-page__neighbor-spacer" />
+                    )}
+                    {detail.next ? (
+                      <PlaylistNeighborLink
+                        neighbor={{ id: detail.next.slug, title: detail.next.name }}
+                        direction="next"
+                        onClick={() => {
+                          if (editPlaylist) setEditPlaylist(false);
+                          onOpenPlaylist(detail.next!.slug);
+                        }}
+                      />
+                    ) : (
+                      <span className="release-page__neighbor-spacer" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </aside>
 

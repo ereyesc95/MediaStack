@@ -1512,14 +1512,16 @@ export default function ReleasePage({
         <button
           type="button"
           className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}${
-            showTrackPanel && trackPanelMeta ? " release-page__more-info--track" : ""
+            showTrackPanel && trackPanelMeta
+              ? " release-page__more-info--track"
+              : " release-page__more-info--release"
           }`}
           onClick={() => setMoreInfoOpen((o) => !o)}
           aria-expanded={moreInfoOpen}
         >
           {showTrackPanel && trackPanelMeta
             ? trackPanelMeta.mainTitle
-            : "More info"}
+            : data.title}
         </button>
       ) : null}
 
