@@ -1717,7 +1717,6 @@ export default function SystemPlaylistPage({
                                 key={`cover-${i}`}
                                 className="release-page__track-panel-cover"
                               >
-                                (
                                 <button
                                   type="button"
                                   className="release-page__person-link"
@@ -1725,7 +1724,7 @@ export default function SystemPlaylistPage({
                                 >
                                   {line.artist}
                                 </button>{" "}
-                                cover)
+                                cover
                               </p>
                             ) : null
                           )}

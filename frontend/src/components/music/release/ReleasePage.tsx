@@ -1609,7 +1609,6 @@ export default function ReleasePage({
                         key={`cover-${i}`}
                         className="release-page__track-panel-cover"
                       >
-                        (
                         <button
                           type="button"
                           className="release-page__person-link"
@@ -1617,7 +1616,7 @@ export default function ReleasePage({
                         >
                           {line.artist}
                         </button>{" "}
-                        cover)
+                        cover
                       </p>
                     ) : null
                   )}
