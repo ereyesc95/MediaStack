@@ -34,12 +34,13 @@ import {
   getStoredOrientation,
   saveOrientation,
 } from "./themes";
-import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute } from "./musicRoute";
+import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
 import {
   parseSeriesCatalogPath,
   parseSeriesPath,
   parseSeriesRootPath,
   pushSeriesRootRoute,
+  pushSeriesRoute,
 } from "./seriesRoute";
 import type { CardOrientation, MusicTab, View } from "./types";
 
@@ -687,6 +688,21 @@ export default function App() {
             onEditProfile={
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
             }
+            onBackToSeries={(franchiseId, subseriesId) => {
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
 
           />
 
@@ -731,7 +747,18 @@ export default function App() {
                     : view.overviewTab,
               })
             }
-            onOpenMusicRelease={(bandId, releaseId) => {
+            onOpenMusicRelease={(bandId, releaseId, seriesCtx) => {
+              if (seriesCtx?.franchiseId) {
+                saveReleaseReferrer({
+                  bandId,
+                  section: "audio",
+                  source: "series",
+                  franchiseId: seriesCtx.franchiseId,
+                  subseriesId: seriesCtx.subseriesId,
+                  franchiseName: seriesCtx.franchiseName,
+                  franchiseIconUrl: seriesCtx.franchiseIconUrl,
+                });
+              }
               pushArtistRoute({
                 bandId,
                 section: "audio",

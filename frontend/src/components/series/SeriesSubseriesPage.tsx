@@ -25,6 +25,7 @@ import {
   colorsFromImageUrl,
   isPlaybackThemeActive,
 } from "../../mediaTheme";
+import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
   ReleaseCardLayout,
@@ -51,6 +52,7 @@ import {
 } from "../MenuIcons";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
+import MediaInlineSearch from "../music/MediaInlineSearch";
 import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
@@ -96,6 +98,8 @@ type Props = {
   franchiseName?: string;
   /** Franchise logo shown while subseries art loads (avoids title flash). */
   franchiseLogoUrl?: string | null;
+  /** Franchise Artwork icon for stacked back control / brand fallback. */
+  franchiseIconUrl?: string | null;
   subseriesId: string;
   seasonId?: string;
   section?: SeriesSection;
@@ -303,48 +307,11 @@ function filterCardsForSubseries(
   });
 }
 
-const GAME_PLATFORM_ERA: Record<string, number> = {
-  Arcade: 1971,
-  "Commodore 64": 1982,
-  Amiga: 1985,
-  "Nintendo Entertainment System": 1983,
-  "Sega Master System": 1985,
-  "Game Boy": 1989,
-  "Game Boy Color": 1998,
-  "Game Boy Advance": 2001,
-  "Nintendo DS": 2004,
-  "Nintendo 3DS": 2011,
-  "Sega Genesis": 1988,
-  "Sega CD": 1991,
-  "Sega 32X": 1994,
-  "Sega Saturn": 1994,
-  "Sega Dreamcast": 1998,
-  "Nintendo 64": 1996,
-  "Nintendo GameCube": 2001,
-  "Nintendo Wii": 2006,
-  "Nintendo Wii U": 2012,
-  "Nintendo Switch": 2017,
-  PlayStation: 1994,
-  "PlayStation 2": 2000,
-  "PlayStation 3": 2006,
-  "PlayStation 4": 2013,
-  "PlayStation 5": 2020,
-  "PlayStation Portable": 2004,
-  "PlayStation Vita": 2011,
-  Xbox: 2001,
-  "Xbox 360": 2005,
-  "Xbox One": 2013,
-  "Xbox Series": 2020,
-  Flash: 1996,
-  Browser: 1995,
-  PC: 1981,
-  Mac: 1984,
-};
-
 export default function SeriesSubseriesPage({
   franchiseId,
   franchiseName,
   franchiseLogoUrl,
+  franchiseIconUrl,
   subseriesId,
   seasonId,
   section = "overview",
@@ -406,6 +373,7 @@ export default function SeriesSubseriesPage({
   const [playerOpen, setPlayerOpen] = useState(false);
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
   const [opedOpen, setOpedOpen] = useState(false);
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
@@ -418,6 +386,7 @@ export default function SeriesSubseriesPage({
   }>({});
   const castGlassRef = useRef<HTMLElement | null>(null);
   const cachedLogoRef = useRef<string | null>(null);
+  const cachedIconRef = useRef<string | null>(null);
   const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
   const [castGlassMin, setCastGlassMin] = useState(0);
 
@@ -957,12 +926,7 @@ export default function SeriesSubseriesPage({
     for (const g of gameCards) {
       if (g.platform) set.add(g.platform);
     }
-    return Array.from(set).sort((a, b) => {
-      const ea = GAME_PLATFORM_ERA[a] ?? 9999;
-      const eb = GAME_PLATFORM_ERA[b] ?? 9999;
-      if (ea !== eb) return ea - eb;
-      return a.localeCompare(b);
-    });
+    return sortGamePlatforms(Array.from(set));
   }, [gameCards]);
 
   useEffect(() => {
@@ -1185,17 +1149,35 @@ export default function SeriesSubseriesPage({
     overview?.logo_url ||
     franchiseLogoUrl ||
     null;
+  const resolvedIconUrl =
+    detail?.icon_url ||
+    card?.icon_url ||
+    overview?.icon_url ||
+    franchiseIconUrl ||
+    null;
   if (resolvedLogoUrl) cachedLogoRef.current = resolvedLogoUrl;
+  if (resolvedIconUrl) cachedIconRef.current = resolvedIconUrl;
   const topLogoUrl = resolvedLogoUrl || cachedLogoRef.current;
+  const topIconUrl = resolvedIconUrl || cachedIconRef.current;
   useEffect(() => {
     setLogoFailed(false);
-  }, [topLogoUrl, subseriesId]);
-  const brandPending = loading && !topLogoUrl;
-  const showTitleFallback =
-    !brandPending && (!topLogoUrl || logoFailed);
-  const topLogo = topLogoUrl && !logoFailed ? (
+    setIconFailed(false);
+  }, [topLogoUrl, topIconUrl, subseriesId]);
+  const showLogo = Boolean(topLogoUrl && !logoFailed);
+  const showIcon = Boolean(topIconUrl && !iconFailed);
+  const brandPending = loading && !showLogo && !showIcon;
+  const showTitleFallback = !brandPending && !showLogo && !showIcon;
+  const topIcon = showIcon ? (
     <img
-      src={topLogoUrl}
+      src={topIconUrl!}
+      alt=""
+      className="release-page__brand-icon"
+      onError={() => setIconFailed(true)}
+    />
+  ) : null;
+  const topLogo = showLogo ? (
+    <img
+      src={topLogoUrl!}
       alt=""
       className="release-page__brand-logo"
       onError={() => setLogoFailed(true)}
@@ -1218,7 +1200,18 @@ export default function SeriesSubseriesPage({
     .filter(Boolean)
     .join(" ");
 
-  const backLabel = (overview?.name || franchiseName || "FRANCHISE").toUpperCase();
+  const franchiseBackLabel = (
+    overview?.name ||
+    franchiseName ||
+    "FRANCHISE"
+  ).toUpperCase();
+  const backUsesIcon = Boolean(franchiseIconUrl && stacked);
+  const backLabel = stacked
+    ? backUsesIcon
+      ? null
+      : "Back"
+    : franchiseBackLabel;
+  const backAriaLabel = `Back to ${franchiseBackLabel}`;
 
   if (opedOpen) {
     return (
@@ -1274,7 +1267,7 @@ export default function SeriesSubseriesPage({
               type="button"
               className="release-page__back"
               onClick={onBack}
-              aria-label={`Back to ${backLabel}`}
+              aria-label={backAriaLabel}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -1286,20 +1279,40 @@ export default function SeriesSubseriesPage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="series-subseries-page__back-label">{backLabel}</span>
+              {backUsesIcon ? (
+                <img
+                  src={franchiseIconUrl!}
+                  alt=""
+                  className="series-subseries-page__back-icon"
+                />
+              ) : backLabel ? (
+                <span
+                  className={
+                    backLabel === "Back"
+                      ? "series-subseries-page__back-label series-subseries-page__back-label--short"
+                      : "series-subseries-page__back-label"
+                  }
+                >
+                  {backLabel}
+                </span>
+              ) : null}
             </button>
           </div>
           <div className="release-page__top-center">
+            {topIcon ? (
+              <MediaBeatFrame variant="logo">{topIcon}</MediaBeatFrame>
+            ) : null}
             {topLogo ? (
               <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
-            ) : showTitleFallback ? (
+            ) : null}
+            {showTitleFallback ? (
               <span className="release-page__brand-name">{title}</span>
-            ) : (
+            ) : !topIcon && !topLogo ? (
               <span
                 className="release-page__brand-logo release-page__brand-logo--pending"
                 aria-hidden
               />
-            )}
+            ) : null}
           </div>
           <div className="release-page__top-right">
             {busy ? <span className="muted">{busy}</span> : null}
@@ -1325,6 +1338,16 @@ export default function SeriesSubseriesPage({
                 hideToggle
               />
             )}
+            {siblings.length > 1 ? (
+              <MediaInlineSearch
+                mode="series-subseries"
+                items={siblings.map((s) => ({ id: s.id, title: s.title }))}
+                onSelectSubseries={(id) => {
+                  if (id === subseriesId) return;
+                  openSibling(id);
+                }}
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1524,13 +1547,13 @@ export default function SeriesSubseriesPage({
             {stacked && tab === "overview" ? (
               <button
                 type="button"
-                className={`series-subseries-page__more-info${
+                className={`series-subseries-page__more-info release-page__more-info--release${
                   moreInfoOpen ? " is-open" : ""
                 }`}
                 aria-expanded={moreInfoOpen}
                 onClick={() => setMoreInfoOpen((v) => !v)}
               >
-                More info
+                {title}
               </button>
             ) : null}
 
@@ -2026,6 +2049,7 @@ export default function SeriesSubseriesPage({
               loading={mediaLoading}
               emptyMessage="No movies linked to this series yet."
               cardLayout={cardLayout}
+              coverAspect="portrait"
               onOpen={openMediaCard}
             />
           ) : null}
@@ -2037,6 +2061,7 @@ export default function SeriesSubseriesPage({
               emptyMessage="No audio for this series."
               cardLayout={cardLayout}
               squareCovers={cardLayout === "cover"}
+              coverAspect="square"
               onOpen={openMediaCard}
             />
           ) : null}
@@ -2047,6 +2072,7 @@ export default function SeriesSubseriesPage({
               loading={mediaLoading}
               emptyMessage="No library items for this series."
               cardLayout={cardLayout}
+              coverAspect="portrait"
               onOpen={openMediaCard}
             />
           ) : null}
@@ -2057,6 +2083,7 @@ export default function SeriesSubseriesPage({
               loading={mediaLoading}
               emptyMessage="No games linked to this series yet."
               cardLayout={cardLayout}
+              coverAspect="portrait"
               onOpen={openMediaCard}
             />
           ) : null}

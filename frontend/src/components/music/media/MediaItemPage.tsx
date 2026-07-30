@@ -209,7 +209,11 @@ export default function MediaItemPage({
   onEditProfile,
 }: Props) {
   const layout = useDeviceLayout();
-  const stacked = isMobilePortraitLayout(layout);
+  const mobilePortrait = isMobilePortraitLayout(layout);
+  const tabletPortrait = layout === "tablet-portrait";
+  /** Banner + More info panel: phone portrait and tablet portrait. */
+  const bannerLayout = mobilePortrait || tabletPortrait;
+  const stacked = bannerLayout;
   const tablet = isTabletLayout(layout);
   const mobileLandscape = isMobileLandscapeLayout(layout);
 
@@ -229,6 +233,9 @@ export default function MediaItemPage({
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
   const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   const load = useCallback(
     async (force = false) => {
@@ -269,7 +276,14 @@ export default function MediaItemPage({
     setAboutEditOpen(false);
     setLineupMemberId(null);
     setOverviewDescExpanded(false);
+    setMoreInfoOpen(false);
+    setExpandedGroupId(null);
+    setActiveFilePath(null);
   }, [itemId]);
+
+  useEffect(() => {
+    if (tab !== "overview") setMoreInfoOpen(false);
+  }, [tab]);
 
   const openNeighbor = (neighborId: string) => {
     if (onOpenItem) {
@@ -337,6 +351,42 @@ export default function MediaItemPage({
     if (data.files?.length) return [{ label: "Contents", files: data.files }];
     return [];
   }, [data]);
+
+  const groupKey = (label: string, index: number) => `${index}:${label}`;
+
+  const showGroupHeader = (label: string) =>
+    groups.length > 1 || label !== "Contents";
+
+  // Default expand first labeled group; follow active file into its group
+  useEffect(() => {
+    if (!groups.length) {
+      setExpandedGroupId(null);
+      return;
+    }
+    if (activeFilePath) {
+      const idx = groups.findIndex((g) =>
+        g.files.some((f) => f.path === activeFilePath)
+      );
+      if (idx >= 0) {
+        setExpandedGroupId(groupKey(groups[idx]!.label, idx));
+        return;
+      }
+    }
+    setExpandedGroupId((prev) => {
+      if (prev && groups.some((g, i) => groupKey(g.label, i) === prev)) {
+        return prev;
+      }
+      const first = groups.findIndex(
+        (g) => groups.length > 1 || g.label !== "Contents"
+      );
+      const i = first >= 0 ? first : 0;
+      return groupKey(groups[i]!.label, i);
+    });
+  }, [groups, activeFilePath]);
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroupId((prev) => (prev === id ? null : id));
+  };
 
   const hasDateColumn = useMemo(
     () =>
@@ -447,8 +497,9 @@ export default function MediaItemPage({
     tab === "overview" ? "release-page--overview" : "",
     tab === "gallery" ? "release-page--tab-gallery" : "",
     stacked ? "release-page--stacked" : "",
+    bannerLayout ? "release-page--banner-layout" : "",
     tablet ? "release-page--tablet" : "",
-    layout === "tablet-portrait" ? "release-page--tablet-portrait" : "",
+    tabletPortrait ? "release-page--tablet-portrait" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
   ]
     .filter(Boolean)
@@ -459,6 +510,17 @@ export default function MediaItemPage({
       data?.author ||
       (data?.genres && data.genres.length > 0)
   );
+
+  const bannerBgUrl = data
+    ? data.banner_url ||
+      data.gallery_photo_url ||
+      data.photocards?.landscape_front ||
+      data.cover_url ||
+      null
+    : null;
+
+  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
+  const hasNeighbors = Boolean(data?.prev || data?.next);
 
   return (
     <div className={pageClass}>
@@ -567,31 +629,56 @@ export default function MediaItemPage({
 
       {data && (
         <div className="release-page__body">
-          <aside className="release-page__panel">
+          <aside
+            className={`release-page__panel${
+              bannerLayout ? " release-page__panel--banner" : ""
+            }`}
+          >
             <div className="release-page__panel-content">
               <div className="release-page__art">
                 <div
                   className={[
                     "release-page__art-stage",
-                    kind === "library" ? "release-page__art-stage--cover-only" : "",
-                    kind === "video" && !data.cover_url
+                    bannerLayout
+                      ? "release-page__art-stage--banner"
+                      : kind === "library"
+                        ? "release-page__art-stage--cover-only"
+                        : "",
+                    !bannerLayout && kind === "video" && !data.cover_url
                       ? "release-page__art-stage--disc-only"
                       : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                 >
+                  {bannerLayout ? (
+                    <span
+                      className="release-page__banner-bg"
+                      style={{
+                        backgroundImage: bannerBgUrl
+                          ? `url("${bannerBgUrl}")`
+                          : undefined,
+                      }}
+                      aria-hidden
+                    />
+                  ) : null}
                   {data.cover_url ? (
-                    <div className="release-page__cover-wrap">
+                    <span
+                      className={`release-page__cover-wrap${
+                        bannerLayout
+                          ? " release-page__cover-wrap--banner-cover release-page__cover-wrap--banner-cover-portrait"
+                          : ""
+                      }`}
+                    >
                       <img
                         src={data.cover_url}
                         alt=""
                         className="release-page__cover"
                         draggable={false}
                       />
-                    </div>
+                    </span>
                   ) : null}
-                  {kind === "video" ? (
+                  {!bannerLayout && kind === "video" ? (
                     <img
                       src={discUrl}
                       alt=""
@@ -601,7 +688,25 @@ export default function MediaItemPage({
                   ) : null}
                 </div>
               </div>
-              <div className="release-page__panel-meta">
+
+              {bannerLayout ? (
+                <button
+                  type="button"
+                  className={`release-page__more-info release-page__more-info--release${
+                    moreInfoOpen ? " is-open" : ""
+                  }`}
+                  onClick={() => setMoreInfoOpen((o) => !o)}
+                  aria-expanded={moreInfoOpen}
+                >
+                  {data.title}
+                </button>
+              ) : null}
+
+              <div
+                className={`release-page__panel-meta${
+                  bannerLayout ? " release-page__panel-meta--glass" : ""
+                }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+              >
                 <div className="release-page__panel-fit">
                   <div className="release-page__panel-fit-inner">
                     <div className="release-page__panel-body">
@@ -698,8 +803,48 @@ export default function MediaItemPage({
                     </div>
                   </div>
                 </div>
-                <div className="release-page__panel-bottom">
-                  {data.publisher ? (
+                {!bannerLayout ? (
+                  <div className="release-page__panel-bottom">
+                    {data.publisher ? (
+                      <div className="release-page__label">
+                        <span className="release-page__label-logo-btn">
+                          <img
+                            src={publisherLogoSrc}
+                            alt={data.publisher}
+                            className="release-page__label-logo"
+                          />
+                        </span>
+                        <p className="release-page__label-name">
+                          Published by{" "}
+                          <span className="release-page__person-link">
+                            {data.publisher}
+                          </span>
+                        </p>
+                      </div>
+                    ) : null}
+                    <div className="release-page__panel-bottom-bar">
+                      {data.prev ? (
+                        <MediaNeighborLink
+                          neighbor={data.prev}
+                          direction="prev"
+                          onClick={() => openNeighbor(data.prev!.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {data.next ? (
+                        <MediaNeighborLink
+                          neighbor={data.next}
+                          direction="next"
+                          onClick={() => openNeighbor(data.next!.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
+                  </div>
+                ) : data.publisher ? (
+                  <div className="release-page__panel-bottom">
                     <div className="release-page__label">
                       <span className="release-page__label-logo-btn">
                         <img
@@ -715,29 +860,36 @@ export default function MediaItemPage({
                         </span>
                       </p>
                     </div>
-                  ) : null}
-                  <div className="release-page__panel-bottom-bar">
-                    {data.prev ? (
-                      <MediaNeighborLink
-                        neighbor={data.prev}
-                        direction="prev"
-                        onClick={() => openNeighbor(data.prev!.id)}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                    {data.next ? (
-                      <MediaNeighborLink
-                        neighbor={data.next}
-                        direction="next"
-                        onClick={() => openNeighbor(data.next!.id)}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {bannerLayout && hasNeighbors ? (
+                <div className="release-page__panel-dock">
+                  <div className="release-page__panel-footer">
+                    <div className="release-page__panel-bottom-bar">
+                      {data.prev ? (
+                        <MediaNeighborLink
+                          neighbor={data.prev}
+                          direction="prev"
+                          onClick={() => openNeighbor(data.prev!.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {data.next ? (
+                        <MediaNeighborLink
+                          neighbor={data.next}
+                          direction="next"
+                          onClick={() => openNeighbor(data.next!.id)}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </aside>
 
@@ -897,77 +1049,101 @@ export default function MediaItemPage({
               />
             ) : groups.length > 0 ? (
               <div className="release-tracklist__content media-item-tracklist">
-                {groups.map((group) => (
-                  <div key={group.label} className="release-tracklist__group">
-                    {(groups.length > 1 || group.label !== "Contents") && (
-                      <h3 className="release-tracklist__group-label">
-                        {group.label}
-                      </h3>
-                    )}
-                    <ol className="release-tracklist__tracks">
-                      {group.files.map((file, index) => {
-                        const title = file.title?.trim() || file.name;
-                        const rowDate =
-                          file.display_date ||
-                          formatTrackDate(file.date_iso) ||
-                          "";
-                        const metaRight = showDurationColumn
-                          ? file.duration ?? ""
-                          : showPagesColumn
-                            ? file.pages ??
-                              (file.page_count
-                                ? `${file.page_count} ${
-                                    file.page_count === 1 ? "page" : "pages"
-                                  }`
-                                : "")
-                            : "";
-                        const playClass = [
-                          "release-tracklist__play",
-                          "media-item-tracklist__play",
-                          hasDateColumn
-                            ? "media-item-tracklist__play--date"
-                            : "",
-                          showDurationColumn || showPagesColumn
-                            ? "media-item-tracklist__play--duration"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ");
-                        return (
-                          <li
-                            key={file.path}
-                            className="release-tracklist__row"
-                          >
-                            <button
-                              type="button"
-                              className={playClass}
-                              onClick={() => openFile(file)}
-                            >
-                              <span className="release-tracklist__num">
-                                {file.number ?? index + 1}
-                              </span>
-                              <span className="release-tracklist__title-wrap">
-                                <span className="release-tracklist__title">
-                                  {title}
-                                </span>
-                              </span>
-                              {hasDateColumn ? (
-                                <span className="media-item-tracklist__date">
-                                  {rowDate}
-                                </span>
-                              ) : null}
-                              {showDurationColumn || showPagesColumn ? (
-                                <span className="release-tracklist__duration">
-                                  {metaRight}
-                                </span>
-                              ) : null}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </div>
-                ))}
+                {groups.map((group, groupIndex) => {
+                  const gId = groupKey(group.label, groupIndex);
+                  const header = showGroupHeader(group.label);
+                  const open = !header || expandedGroupId === gId;
+                  return (
+                    <div key={gId} className="release-tracklist__group">
+                      {header ? (
+                        <button
+                          type="button"
+                          className={`release-tracklist__group-label series-season-block__header${
+                            open ? " is-open" : ""
+                          }`}
+                          onClick={() => toggleGroup(gId)}
+                          aria-expanded={open}
+                        >
+                          {group.label}
+                        </button>
+                      ) : null}
+                      {open ? (
+                        <ol className="release-tracklist__tracks">
+                          {group.files.map((file, index) => {
+                            const title = file.title?.trim() || file.name;
+                            const rowDate =
+                              file.display_date ||
+                              formatTrackDate(file.date_iso) ||
+                              "";
+                            const metaRight = showDurationColumn
+                              ? file.duration ?? ""
+                              : showPagesColumn
+                                ? file.pages ??
+                                  (file.page_count
+                                    ? `${file.page_count} ${
+                                        file.page_count === 1
+                                          ? "page"
+                                          : "pages"
+                                      }`
+                                    : "")
+                                : "";
+                            const playClass = [
+                              "release-tracklist__play",
+                              "media-item-tracklist__play",
+                              hasDateColumn
+                                ? "media-item-tracklist__play--date"
+                                : "",
+                              showDurationColumn || showPagesColumn
+                                ? "media-item-tracklist__play--duration"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+                            const active = activeFilePath === file.path;
+                            return (
+                              <li
+                                key={file.path}
+                                className={
+                                  active
+                                    ? "release-tracklist__row active"
+                                    : "release-tracklist__row"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className={playClass}
+                                  onClick={() => {
+                                    setActiveFilePath(file.path);
+                                    openFile(file);
+                                  }}
+                                >
+                                  <span className="release-tracklist__num">
+                                    {file.number ?? index + 1}
+                                  </span>
+                                  <span className="release-tracklist__title-wrap">
+                                    <span className="release-tracklist__title">
+                                      {title}
+                                    </span>
+                                  </span>
+                                  {hasDateColumn ? (
+                                    <span className="media-item-tracklist__date">
+                                      {rowDate}
+                                    </span>
+                                  ) : null}
+                                  {showDurationColumn || showPagesColumn ? (
+                                    <span className="release-tracklist__duration">
+                                      {metaRight}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="muted">

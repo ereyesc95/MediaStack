@@ -98,6 +98,7 @@ type Props = {
   onPlaylist: (id?: number) => void;
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
+  onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
 };
 
 export default function MusicModule({
@@ -134,6 +135,7 @@ export default function MusicModule({
   onPlaylist,
   onGenreFilter,
   onCountryFilter,
+  onBackToSeries,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -1035,6 +1037,7 @@ export default function MusicModule({
           onChooseSource={onChooseSource}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
+          onBackToSeries={onBackToSeries}
         />
       ) : bandId ? (
         <ArtistPage

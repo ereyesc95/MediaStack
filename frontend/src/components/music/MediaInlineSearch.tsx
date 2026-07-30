@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   searchArtistReleases,
   searchRosterBands,
@@ -23,20 +23,57 @@ export type TrackSearchResult = {
   album_title: string | null;
 };
 
+export type SeriesFranchiseSearchItem = {
+  id: string;
+  name: string;
+  logo_url?: string | null;
+};
+
+export type SeriesSubseriesSearchItem = {
+  id: string;
+  title: string;
+};
+
 type Props =
   | {
       mode: "catalog";
       bandId?: never;
+      items?: never;
       onSelectBand: (bandId: number) => void;
       onSelectRelease?: never;
       onSelectTrack?: never;
+      onSelectFranchise?: never;
+      onSelectSubseries?: never;
     }
   | {
       mode: "artist-releases";
       bandId: number;
+      items?: never;
       onSelectBand?: never;
       onSelectRelease: (releaseId: string) => void;
       onSelectTrack?: (path: string, title: string) => void;
+      onSelectFranchise?: never;
+      onSelectSubseries?: never;
+    }
+  | {
+      mode: "series-franchises";
+      bandId?: never;
+      items: SeriesFranchiseSearchItem[];
+      onSelectBand?: never;
+      onSelectRelease?: never;
+      onSelectTrack?: never;
+      onSelectFranchise: (id: string) => void;
+      onSelectSubseries?: never;
+    }
+  | {
+      mode: "series-subseries";
+      bandId?: never;
+      items: SeriesSubseriesSearchItem[];
+      onSelectBand?: never;
+      onSelectRelease?: never;
+      onSelectTrack?: never;
+      onSelectFranchise?: never;
+      onSelectSubseries: (id: string) => void;
     };
 
 function SearchIcon() {
@@ -61,6 +98,8 @@ function SearchIcon() {
   );
 }
 
+const MIN_QUERY = 2;
+
 export default function MediaInlineSearch(props: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -72,10 +111,30 @@ export default function MediaInlineSearch(props: Props) {
   const [releases, setReleases] = useState<ReleaseSearchResult[]>([]);
   const [tracks, setTracks] = useState<TrackSearchResult[]>([]);
 
+  const isClientFilter =
+    props.mode === "series-franchises" || props.mode === "series-subseries";
+
+  const clientMatches = useMemo(() => {
+    if (!isClientFilter) return [];
+    const trimmed = query.trim().toLowerCase();
+    if (trimmed.length < MIN_QUERY) return [];
+    if (props.mode === "series-franchises") {
+      return props.items.filter((f) =>
+        f.name.toLowerCase().includes(trimmed)
+      );
+    }
+    return props.items.filter((s) =>
+      s.title.toLowerCase().includes(trimmed)
+    );
+  }, [isClientFilter, props, query]);
+
   const runSearch = useCallback(
     async (q: string) => {
+      if (props.mode === "series-franchises" || props.mode === "series-subseries") {
+        return;
+      }
       const trimmed = q.trim();
-      if (trimmed.length < 2) {
+      if (trimmed.length < MIN_QUERY) {
         setBands([]);
         setReleases([]);
         setTracks([]);
@@ -106,10 +165,10 @@ export default function MediaInlineSearch(props: Props) {
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isClientFilter) return;
     const t = window.setTimeout(() => void runSearch(query), 220);
     return () => window.clearTimeout(t);
-  }, [query, open, runSearch]);
+  }, [query, open, runSearch, isClientFilter]);
 
   useEffect(() => {
     if (!open) return;
@@ -123,8 +182,11 @@ export default function MediaInlineSearch(props: Props) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const hasResults =
-    bands.length > 0 || releases.length > 0 || tracks.length > 0;
+  const hasResults = isClientFilter
+    ? clientMatches.length > 0
+    : bands.length > 0 || releases.length > 0 || tracks.length > 0;
+
+  const queryReady = query.trim().length >= MIN_QUERY;
 
   const close = () => {
     setOpen(false);
@@ -133,6 +195,15 @@ export default function MediaInlineSearch(props: Props) {
     setReleases([]);
     setTracks([]);
   };
+
+  const placeholder =
+    props.mode === "catalog"
+      ? "Search catalog…"
+      : props.mode === "artist-releases"
+        ? "Search artist…"
+        : props.mode === "series-franchises"
+          ? "Search franchises…"
+          : "Search series…";
 
   return (
     <div
@@ -145,9 +216,7 @@ export default function MediaInlineSearch(props: Props) {
             ref={inputRef}
             type="search"
             className="media-inline-search__input"
-            placeholder={
-              props.mode === "catalog" ? "Search catalog…" : "Search artist…"
-            }
+            placeholder={placeholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-controls={listId}
@@ -174,10 +243,10 @@ export default function MediaInlineSearch(props: Props) {
         </button>
       )}
 
-      {open && (loading || hasResults || query.trim().length >= 2) && (
+      {open && (loading || hasResults || queryReady) && (
         <div id={listId} className="media-inline-search__results" role="listbox">
           {loading && <p className="muted media-inline-search__hint">Searching…</p>}
-          {!loading && query.trim().length >= 2 && !hasResults && (
+          {!loading && queryReady && !hasResults && (
             <p className="muted media-inline-search__hint">No matches</p>
           )}
           {props.mode === "catalog" &&
@@ -240,6 +309,39 @@ export default function MediaInlineSearch(props: Props) {
                   {t.title}
                   {t.album_title ? ` · ${t.album_title}` : ""}
                 </span>
+              </button>
+            ))}
+          {props.mode === "series-franchises" &&
+            (clientMatches as SeriesFranchiseSearchItem[]).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className="media-inline-search__item"
+                role="option"
+                onClick={() => {
+                  props.onSelectFranchise(f.id);
+                  close();
+                }}
+              >
+                {f.logo_url ? (
+                  <img src={f.logo_url} alt="" className="media-inline-search__thumb" />
+                ) : null}
+                <span>{f.name}</span>
+              </button>
+            ))}
+          {props.mode === "series-subseries" &&
+            (clientMatches as SeriesSubseriesSearchItem[]).map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="media-inline-search__item"
+                role="option"
+                onClick={() => {
+                  props.onSelectSubseries(s.id);
+                  close();
+                }}
+              >
+                <span>{s.title}</span>
               </button>
             ))}
         </div>

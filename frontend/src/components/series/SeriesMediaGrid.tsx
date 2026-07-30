@@ -33,6 +33,8 @@ type Props = {
   cardLayout?: ReleaseCardLayout;
   /** Force square cover cards (audio releases). */
   squareCovers?: boolean;
+  /** Banner left-cover aspect: square (audio) or portrait 2/3 (movies/library/games). */
+  coverAspect?: "square" | "portrait";
 };
 
 function openInTab(url: string) {
@@ -50,6 +52,7 @@ async function openLocal(url: string) {
 function SeriesMediaCardView({
   item,
   cardLayout,
+  coverAspect,
   onOpen,
   tapReveal,
   revealed,
@@ -57,6 +60,7 @@ function SeriesMediaCardView({
 }: {
   item: SeriesMediaCard;
   cardLayout: ReleaseCardLayout;
+  coverAspect: "square" | "portrait";
   onOpen?: (item: SeriesMediaCard) => void;
   tapReveal: boolean;
   revealed: boolean;
@@ -67,7 +71,8 @@ function SeriesMediaCardView({
   const dateLabel = item.date_label || item.meta || "";
   const openLabel = item.open_label || null;
   const openUrl = item.open_url?.trim() || null;
-  const clickable = Boolean(onOpen);
+  // Phone tap-reveal needs a click target even when there is no navigation handler.
+  const interactive = Boolean(onOpen) || tapReveal;
 
   const handleOpenFile = (e: MouseEvent) => {
     e.preventDefault();
@@ -81,12 +86,11 @@ function SeriesMediaCardView({
   };
 
   const handleClick = () => {
-    if (!onOpen) return;
     if (tapReveal && !revealed) {
       onReveal();
       return;
     }
-    onOpen(item);
+    onOpen?.(item);
   };
 
   const openFileControl =
@@ -106,13 +110,17 @@ function SeriesMediaCardView({
     ) : null;
 
   if (cardLayout === "banner") {
+    const hasBannerCover = Boolean(cover);
     const bannerClass = [
       "media-release-card",
       "media-release-card--banner",
-      "media-release-card--banner-no-cover",
+      hasBannerCover ? "" : "media-release-card--banner-no-cover",
+      hasBannerCover && coverAspect === "portrait"
+        ? "media-release-card--banner-cover-portrait"
+        : "",
       "media-beat-frame",
       "media-beat-frame--cover",
-      clickable
+      interactive
         ? "media-release-card--clickable media-release-card--button"
         : "",
       tapReveal ? "media-release-card--tap-reveal" : "",
@@ -135,6 +143,12 @@ function SeriesMediaCardView({
         />
         <span className="media-release-card__banner-overlay">
           <span className="media-release-card__banner-glass" aria-hidden />
+          {hasBannerCover ? (
+            <span
+              className="media-release-card__banner-cover"
+              style={{ backgroundImage: `url("${cover}")` }}
+            />
+          ) : null}
           <span className="media-release-card__banner-meta">
             {item.logo_url ? (
               <img
@@ -161,7 +175,7 @@ function SeriesMediaCardView({
         </span>
       </>
     );
-    if (clickable) {
+    if (interactive) {
       return (
         <button
           type="button"
@@ -184,7 +198,7 @@ function SeriesMediaCardView({
     "media-release-card",
     "media-release-card--portrait",
     "series-media-card--portrait",
-    clickable
+    interactive
       ? "media-release-card--clickable media-release-card--button"
       : "",
     tapReveal ? "media-release-card--tap-reveal" : "",
@@ -227,7 +241,7 @@ function SeriesMediaCardView({
       ) : null}
     </>
   );
-  if (clickable) {
+  if (interactive) {
     return (
       <button
         type="button"
@@ -253,6 +267,7 @@ export default function SeriesMediaGrid({
   onOpen,
   cardLayout = "cover",
   squareCovers = false,
+  coverAspect = "square",
 }: Props) {
   const isPhone = usePhoneLayout();
   const tapReveal = isPhone;
@@ -299,6 +314,7 @@ export default function SeriesMediaGrid({
           key={item.id}
           item={item}
           cardLayout={cardLayout}
+          coverAspect={coverAspect}
           onOpen={onOpen}
           tapReveal={tapReveal}
           revealed={tapReveal && revealedId === item.id}

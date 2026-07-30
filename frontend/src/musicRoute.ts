@@ -54,6 +54,11 @@ export type ReleaseReferrer = {
   section: ArtistSection;
   category?: string;
   artistName?: string;
+  source?: "artist" | "series";
+  franchiseId?: string;
+  subseriesId?: string;
+  franchiseName?: string;
+  franchiseIconUrl?: string | null;
 };
 
 export function saveReleaseReferrer(ref: ReleaseReferrer) {

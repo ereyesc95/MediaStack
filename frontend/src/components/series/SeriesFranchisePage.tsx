@@ -22,12 +22,14 @@ import {
   colorsFromImageUrl,
   isPlaybackThemeActive,
 } from "../../mediaTheme";
+import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
   CardOrientation,
   LinkCategory,
   ReleaseCardLayout,
   SeriesCastTab,
+  SeriesFranchiseCard,
   SeriesOverview,
   SeriesOverviewTab,
   SeriesSection,
@@ -47,6 +49,7 @@ import CardOrientationPicker from "../CardOrientationPicker";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
+import MediaInlineSearch from "../music/MediaInlineSearch";
 import SeriesAbout from "./SeriesAbout";
 import SeriesAboutEditModal from "./SeriesAboutEditModal";
 import SeriesAudioPlayer from "./SeriesAudioPlayer";
@@ -79,6 +82,8 @@ type Props = {
   section?: SeriesSection;
   overviewTab?: SeriesOverviewTab;
   shell?: SeriesFranchiseShell | null;
+  /** Catalog franchises for inline search (from SeriesModule cache). */
+  franchises?: SeriesFranchiseCard[];
   busy?: string;
   isAdmin?: boolean;
   userId?: number;
@@ -96,6 +101,7 @@ type Props = {
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
   }) => void;
+  onOpenFranchise?: (id: string) => void;
   onBrowseCatalog?: (target: {
     mode: "name" | "genre" | "country" | "publisher" | "writer";
     countryId?: number;
@@ -146,6 +152,7 @@ export default function SeriesFranchisePage({
   section = "overview",
   overviewTab = "about",
   shell = null,
+  franchises = [],
   busy,
   isAdmin = false,
   userId,
@@ -158,6 +165,7 @@ export default function SeriesFranchisePage({
   onEditProfile,
   onBack,
   onNavigate,
+  onOpenFranchise,
   onBrowseCatalog,
   onOpenMusicRelease,
   onOpenArtist,
@@ -522,14 +530,35 @@ export default function SeriesFranchisePage({
       .then((payload) => {
         if (cancelled) return;
         setLibCards(
-          (payload.items || []).map((b, i) => ({
-            id: b.path || `book-${i}`,
-            title: b.title,
-            cover_url: b.cover_url,
-            date_label: b.display_date || b.date_iso,
-            path: b.path,
-            meta: b.subseries || undefined,
-          }))
+          (payload.items || []).map((b, i) => {
+            const row = b as {
+              path?: string;
+              title?: string;
+              cover_url?: string | null;
+              banner_url?: string | null;
+              logo_url?: string | null;
+              display_date?: string | null;
+              date_iso?: string | null;
+              subseries?: string | null;
+              open_url?: string | null;
+              open_mode?: "tab" | "local" | null;
+              open_label?: string | null;
+            };
+            return {
+              id: row.path || `book-${i}`,
+              title: row.title || "Untitled",
+              cover_url: row.cover_url,
+              banner_url: row.banner_url || row.cover_url || null,
+              logo_url: row.logo_url || null,
+              open_url: row.open_url || null,
+              open_mode:
+                row.open_mode || (row.open_url ? ("tab" as const) : null),
+              open_label: row.open_label || "Read",
+              date_label: row.display_date || row.date_iso,
+              path: row.path,
+              meta: row.subseries || undefined,
+            };
+          })
         );
       })
       .catch(() => {
@@ -551,15 +580,37 @@ export default function SeriesFranchisePage({
       .then((payload) => {
         if (cancelled) return;
         setGameCards(
-          (payload.items || []).map((g, i) => ({
-            id: g.path || `game-${i}`,
-            title: g.title,
-            cover_url: g.cover_url,
-            date_label: g.display_date || g.date_iso || g.platform || null,
-            path: g.path,
-            platform: g.platform,
-            meta: g.subseries || undefined,
-          }))
+          (payload.items || []).map((g, i) => {
+            const row = g as {
+              path?: string;
+              title?: string;
+              cover_url?: string | null;
+              banner_url?: string | null;
+              logo_url?: string | null;
+              display_date?: string | null;
+              date_iso?: string | null;
+              platform?: string | null;
+              subseries?: string | null;
+              open_url?: string | null;
+              open_mode?: "tab" | "local" | null;
+              open_label?: string | null;
+            };
+            return {
+              id: row.path || `game-${i}`,
+              title: row.title || "Untitled",
+              cover_url: row.cover_url,
+              banner_url: row.banner_url || row.cover_url || null,
+              logo_url: row.logo_url || null,
+              open_url: row.open_url || null,
+              open_mode: row.open_mode || ("local" as const),
+              open_label: row.open_label || "Play game",
+              date_label:
+                row.display_date || row.date_iso || row.platform || null,
+              path: row.path,
+              platform: row.platform,
+              meta: row.subseries || undefined,
+            };
+          })
         );
       })
       .catch(() => {
@@ -660,12 +711,22 @@ export default function SeriesFranchisePage({
     ];
   }, [data?.subseries]);
 
+  const franchiseSearchItems = useMemo(
+    () =>
+      franchises.map((f) => ({
+        id: f.id,
+        name: f.name,
+        logo_url: f.logo_url ?? null,
+      })),
+    [franchises]
+  );
+
   const platforms = useMemo(() => {
     const set = new Set<string>();
     for (const g of gameCards) {
       if (g.platform) set.add(g.platform);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return sortGamePlatforms(Array.from(set));
   }, [gameCards]);
 
   const filterBySubseries = (items: SeriesMediaCard[]) => {
@@ -691,6 +752,24 @@ export default function SeriesFranchisePage({
       list = list.filter((g) => (g.platform || "") === platformFilter);
     }
     return list;
+  };
+
+  const openMediaCard = (item: SeriesMediaCard) => {
+    if (item.path?.startsWith("playlist:")) {
+      setOpedOpen(true);
+      return;
+    }
+    if (item.navigate_band_id && item.navigate_release_id) {
+      onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
+      return;
+    }
+    const url = item.open_url?.trim();
+    if (!url) return;
+    if (item.open_mode === "local") {
+      void fetch(url, { method: "POST" }).catch(() => {});
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   const showMediaSubbar = MEDIA_SUBBAR_SECTIONS.includes(section);
@@ -851,6 +930,16 @@ export default function SeriesFranchisePage({
               onOpenChange={setPlayerOpen}
               hideToggle={mobilePortrait}
             />
+            {franchiseSearchItems.length > 0 && onOpenFranchise ? (
+              <MediaInlineSearch
+                mode="series-franchises"
+                items={franchiseSearchItems}
+                onSelectFranchise={(id) => {
+                  if (id === franchiseId) return;
+                  onOpenFranchise(id);
+                }}
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1248,18 +1337,8 @@ export default function SeriesFranchisePage({
             emptyMessage="No audio for this series."
             cardLayout={releaseCardLayout}
             squareCovers={releaseCardLayout === "cover"}
-            onOpen={(item) => {
-              if (item.path?.startsWith("playlist:")) {
-                setOpedOpen(true);
-                return;
-              }
-              if (item.navigate_band_id && item.navigate_release_id) {
-                onOpenMusicRelease?.(
-                  item.navigate_band_id,
-                  item.navigate_release_id
-                );
-              }
-            }}
+            coverAspect="square"
+            onOpen={openMediaCard}
           />
         ) : null}
 
@@ -1269,6 +1348,8 @@ export default function SeriesFranchisePage({
             loading={movieLoading}
             emptyMessage="No movies linked to this franchise yet."
             cardLayout={releaseCardLayout}
+            coverAspect="portrait"
+            onOpen={openMediaCard}
           />
         ) : null}
 
@@ -1278,6 +1359,7 @@ export default function SeriesFranchisePage({
             loading={showLoading}
             emptyMessage="No subseries found."
             cardLayout={releaseCardLayout}
+            coverAspect="portrait"
             onOpen={(item) =>
               onNavigate({
                 section: "overview",
@@ -1294,6 +1376,8 @@ export default function SeriesFranchisePage({
             loading={libLoading}
             emptyMessage="No books linked to this franchise yet."
             cardLayout={releaseCardLayout}
+            coverAspect="portrait"
+            onOpen={openMediaCard}
           />
         ) : null}
 
@@ -1303,6 +1387,8 @@ export default function SeriesFranchisePage({
             loading={gameLoading}
             emptyMessage="No games linked to this franchise yet."
             cardLayout={releaseCardLayout}
+            coverAspect="portrait"
+            onOpen={openMediaCard}
           />
         ) : null}
 

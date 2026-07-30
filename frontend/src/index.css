@@ -4011,6 +4011,7 @@ input {
 }
 
 .artist-page .card-orientation-toggle,
+.artist-page .series-audio-player__toggle,
 .release-page .card-orientation-toggle,
 .release-page .series-subseries-page__cover-toggle,
 .release-page .series-audio-player__toggle,
@@ -4019,6 +4020,8 @@ input {
 }
 
 .artist-page .card-orientation-toggle:hover,
+.artist-page .series-audio-player__toggle:hover,
+.artist-page .series-audio-player.is-open .series-audio-player__toggle,
 .release-page .card-orientation-toggle:hover,
 .release-page .series-subseries-page__cover-toggle:hover,
 .release-page .series-subseries-page__cover-toggle.is-active,
@@ -10764,11 +10767,13 @@ input {
 }
 
 .release-tracklist__single-title {
-  margin: 0 0 0.65rem;
-  font-size: 0.88rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.02em;
+  line-height: 1.25;
+  padding: 0.08rem 0.1rem;
 }
 
 .release-tracklist__title-suffix {
@@ -10792,10 +10797,66 @@ input {
 }
 
 .release-tracklist__group-label {
-  margin: 0 0 0.5rem;
-  font-size: 0.82rem;
-  color: var(--text-muted);
+  margin: 0 0 0.2rem;
+  padding: 0.08rem 0.1rem;
+  font-size: 0.78rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+.release-tracklist__group-label--edition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.35rem;
+  color: var(--text);
+}
+
+.release-tracklist__group-label--edition .release-tracklist__edition-name {
+  color: var(--text);
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.release-tracklist__group-label--edition .release-tracklist__edition-date {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+button.release-tracklist__group-label.series-season-block__header {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  color: var(--text-muted);
+  margin: 0 0 0.2rem;
+  padding: 0.08rem 0.1rem;
+}
+
+button.release-tracklist__group-label.series-season-block__header:hover {
+  color: var(--accent, #c9a227);
+}
+
+button.release-tracklist__group-label.series-season-block__header.is-open {
+  color: var(--text);
+}
+
+.release-tracklist__group + .release-tracklist__group {
+  margin-top: 0.35rem;
+}
+
+.release-tracklist__group .release-tracklist__tracks {
+  margin-bottom: 0.55rem;
 }
 
 .release-tracklist__tracks {
@@ -18090,6 +18151,22 @@ button.lyrics-status-badge--icon-only {
   text-decoration: underline;
 }
 
+.series-audio-player {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Anchor left in chrome when the dock is portaled (menu-driven open). */
+.series-audio-player--menu-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .series-audio-player--menu-only {
   display: none;
 }
@@ -18110,12 +18187,15 @@ button.lyrics-status-badge--icon-only {
   position: fixed;
   left: 50%;
   right: auto;
-  bottom: 0.65rem;
+  bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
   top: auto;
   width: min(22rem, calc(100vw - 1.5rem));
   max-width: min(22rem, calc(100vw - 1.5rem));
   transform: translateX(-50%);
   box-sizing: border-box;
+  padding: 0.95rem 0.85rem 0.85rem;
+  max-height: min(40vh, calc(100dvh - 5.5rem));
+  overflow: auto;
 }
 
 .series-audio-player__toggle {
@@ -18134,6 +18214,13 @@ button.lyrics-status-badge--icon-only {
 .series-audio-player__toggle:hover,
 .series-audio-player.is-open .series-audio-player__toggle {
   color: color-mix(in srgb, #fff 55%, var(--accent, #c9a227));
+}
+
+.series-audio-player__toggle--live,
+.artist-page .series-audio-player__toggle--live,
+.release-page .series-audio-player__toggle--live {
+  color: var(--accent);
+  animation: artist-player-restore-pulse 2.2s ease-in-out infinite;
 }
 
 .series-audio-player__icon {
@@ -18186,6 +18273,23 @@ button.lyrics-status-badge--icon-only {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.series-audio-player__now .muted {
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep chrome from clipping the absolute (desktop) bubble dock. */
+.artist-page__chrome,
+.release-page__chrome,
+.artist-page__top,
+.release-page__top,
+.artist-page__top-right,
+.release-page__top-right {
+  overflow: visible;
 }
 
 .series-oped-page {
@@ -18263,6 +18367,19 @@ button.lyrics-status-badge--icon-only {
 
 .series-subseries-page.release-page--stacked .series-subseries-page__back-label {
   display: none;
+}
+
+.series-subseries-page.release-page--stacked
+  .series-subseries-page__back-label--short {
+  display: inline;
+}
+
+.series-subseries-page__back-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 0.2rem;
 }
 
 .series-subseries-page.release-page--stacked {
@@ -18500,12 +18617,18 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-page.release-page--stacked .release-page__brand-logo,
+.series-subseries-page.release-page--stacked .release-page__brand-icon,
 .series-subseries-page.release-page--stacked .release-page__brand-name {
   max-height: 1.85rem;
   height: auto;
   width: auto;
   max-width: min(56vw, 15rem);
   object-fit: contain;
+}
+
+.series-subseries-page.release-page--stacked .release-page__brand-icon {
+  max-height: 1.35rem;
+  max-width: 1.35rem;
 }
 
 .series-subseries-page.release-page--stacked .release-page__brand-logo--pending {
@@ -18760,25 +18883,25 @@ button.lyrics-status-badge--icon-only {
   aspect-ratio: 2160 / 600;
   overflow: hidden;
   box-sizing: border-box;
-  container-type: size;
-  /* Equal pad on top/bottom/left; cover = remaining square height. */
-  --release-banner-pad: clamp(0.4rem, 2.2cqh, 0.7rem);
-  --release-cover-size: calc(100cqh - 2 * var(--release-banner-pad));
+  container-type: inline-size;
+  /* Equal pad top/bottom/left; cover height = banner height − 2×pad (via cqw). */
+  --release-banner-pad: clamp(0.4rem, 1.4cqw, 0.75rem);
+  --release-cover-size: calc(100cqw * 600 / 2160 - 2 * var(--release-banner-pad));
   --release-banner-inset: var(--release-banner-pad);
   --release-disc-size: calc(var(--release-cover-size) * 0.82);
   padding: 0;
 }
 
-@supports not (width: 1cqh) {
+@supports not (width: 1cqw) {
   .release-page--banner-layout .release-page__art-stage--banner {
     --release-banner-pad: 0.45rem;
-    --release-cover-size: min(24vw, 7.25rem);
+    --release-cover-size: min(22vw, 7.25rem);
     --release-banner-inset: var(--release-banner-pad);
     --release-disc-size: calc(var(--release-cover-size) * 0.82);
   }
   .release-page--tablet-portrait.release-page--banner-layout .release-page__art-stage--banner {
     --release-banner-pad: 0.65rem;
-    --release-cover-size: min(18vw, 11rem);
+    --release-cover-size: min(16vw, 10.5rem);
     --release-banner-inset: var(--release-banner-pad);
     --release-disc-size: calc(var(--release-cover-size) * 0.82);
   }
@@ -18804,6 +18927,13 @@ button.lyrics-status-badge--icon-only {
   overflow: hidden;
 }
 
+/* Portrait video/library covers: height fits banner (same as square), width = 2/3 of height. */
+.release-page--banner-layout .release-page__art-stage--banner .release-page__cover-wrap--banner-cover-portrait {
+  height: var(--release-cover-size);
+  width: calc(var(--release-cover-size) * 2 / 3);
+  aspect-ratio: 2 / 3;
+}
+
 .release-page--banner-layout .release-page__art-stage--banner .release-page__cover {
   width: 100%;
   height: 100%;
@@ -18811,6 +18941,10 @@ button.lyrics-status-badge--icon-only {
   object-position: center;
   aspect-ratio: 1 / 1;
   display: block;
+}
+
+.release-page--banner-layout .release-page__art-stage--banner .release-page__cover-wrap--banner-cover-portrait .release-page__cover {
+  aspect-ratio: 2 / 3;
 }
 
 .release-page--banner-layout .release-page__art-stage--banner .release-page__cover--video {
@@ -18855,7 +18989,8 @@ button.lyrics-status-badge--icon-only {
 }
 
 .release-page--banner-layout .release-page__more-info--track,
-.release-page--banner-layout .release-page__more-info--release {
+.release-page--banner-layout .release-page__more-info--release,
+.series-subseries-page__more-info.release-page__more-info--release {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -18901,9 +19036,36 @@ button.lyrics-status-badge--icon-only {
 /* Single dock strip: player + neighbors (outside info glass). */
 .release-page--banner-layout .release-page__panel-dock {
   background: rgba(0, 0, 0, 0.42);
-  padding: 0.35rem 0.55rem 0.45rem;
+  padding: 0.18rem 0.45rem 0.22rem;
   box-sizing: border-box;
   width: 100%;
+}
+
+.release-page--banner-layout .release-page__panel-footer {
+  padding-top: 0;
+  gap: 0.15rem;
+  border-top: none;
+}
+
+.release-page--banner-layout .release-page__panel-player .artist-mini-player {
+  gap: 0.2rem;
+}
+
+.release-page--banner-layout .artist-mini-player__play,
+.release-page--banner-layout .artist-mini-player__skip,
+.release-page--banner-layout .artist-mini-player__repeat {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.release-page--banner-layout .release-page__panel-bottom-bar {
+  min-height: 0;
+  padding: 0.05rem 0 0;
+}
+
+.release-page--banner-layout .release-page__neighbor {
+  font-size: 0.65rem;
+  padding: 0.12rem 0.1rem;
 }
 
 .release-page--banner-layout .release-page__panel-bottom {

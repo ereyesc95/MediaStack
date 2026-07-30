@@ -386,6 +386,7 @@ function ReleaseCard({
         section: "audio",
         category,
         artistName: referrerArtistName,
+        source: "artist",
       });
     }
     void prefetchReleaseOverview(targetBand, targetRelease);

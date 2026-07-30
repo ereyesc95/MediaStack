@@ -60,7 +60,16 @@ type Props = {
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
   }) => void;
-  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenMusicRelease?: (
+    bandId: number,
+    releaseId: string,
+    seriesCtx?: {
+      franchiseId: string;
+      subseriesId?: string;
+      franchiseName?: string;
+      franchiseIconUrl?: string | null;
+    }
+  ) => void;
   onOpenArtist?: (bandId: number) => void;
 };
 
@@ -262,6 +271,20 @@ export default function SeriesModule({
     setWriter(target.writer ?? "");
   };
 
+  const openMusicRelease = (bandId: number, releaseId: string) => {
+    if (!onOpenMusicRelease) return;
+    if (franchiseId) {
+      onOpenMusicRelease(bandId, releaseId, {
+        franchiseId,
+        subseriesId,
+        franchiseName: franchiseShell?.name,
+        franchiseIconUrl: franchiseShell?.icon_url,
+      });
+      return;
+    }
+    onOpenMusicRelease(bandId, releaseId);
+  };
+
   if (!showModuleChrome && franchiseId && subseriesId) {
     return (
       <div className="series-module">
@@ -269,6 +292,7 @@ export default function SeriesModule({
           franchiseId={franchiseId}
           franchiseName={franchiseShell?.name}
           franchiseLogoUrl={franchiseShell?.logo_url}
+          franchiseIconUrl={franchiseShell?.icon_url}
           subseriesId={subseriesId}
           seasonId={seasonId}
           section={section}
@@ -290,7 +314,7 @@ export default function SeriesModule({
             })
           }
           onBrowseCatalog={browseCatalog}
-          onOpenMusicRelease={onOpenMusicRelease}
+          onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}
           onNavigate={(patch) =>
             onNavigate({
@@ -317,6 +341,7 @@ export default function SeriesModule({
           section={section}
           overviewTab={overviewTab}
           shell={franchiseShell}
+          franchises={franchises}
           busy={busy}
           isAdmin={isAdmin}
           userId={userId}
@@ -328,8 +353,23 @@ export default function SeriesModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBack={backToCatalog}
+          onOpenFranchise={(id) => {
+            const card = franchises.find((f) => f.id === id);
+            openFranchise(
+              id,
+              undefined,
+              card
+                ? {
+                    name: card.name,
+                    cover_url: card.cover_url,
+                    logo_url: card.logo_url,
+                    icon_url: card.icon_url,
+                  }
+                : undefined
+            );
+          }}
           onBrowseCatalog={browseCatalog}
-          onOpenMusicRelease={onOpenMusicRelease}
+          onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}
           onShellUpdate={(next) => {
             setFranchiseShell((prev) => {

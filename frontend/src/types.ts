@@ -754,6 +754,8 @@ export type MediaItemOverview = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  banner_url?: string | null;
+  gallery_photo_url?: string | null;
   disc_url?: string | null;
   logo_url?: string | null;
   era_icon_url?: string | null;

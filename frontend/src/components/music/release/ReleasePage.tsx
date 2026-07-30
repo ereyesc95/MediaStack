@@ -145,6 +145,7 @@ type Props = {
   isAdmin?: boolean;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
+  onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
 };
 
 function isVideoMedia(url: string | null | undefined): boolean {
@@ -333,6 +334,7 @@ export default function ReleasePage({
   isAdmin,
   onSwitchProfile,
   onEditProfile,
+  onBackToSeries,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -891,19 +893,41 @@ export default function ReleasePage({
   }, [displayCanvas, showPanelCanvas, isPlaying, bannerLayout]);
 
   const releaseReferrer = getReleaseReferrer();
+  const seriesReferrer =
+    releaseReferrer?.source === "series" && releaseReferrer.franchiseId
+      ? releaseReferrer
+      : null;
   const referrerOverview = releaseReferrer
     ? getCachedOverview(releaseReferrer.bandId, "landscape")
     : null;
-  const backLabel =
-    releaseReferrer && releaseReferrer.bandId !== bandId
+  const seriesBackUsesIcon = Boolean(
+    seriesReferrer?.franchiseIconUrl && bannerLayout
+  );
+  const franchiseBackLabel = (
+    seriesReferrer?.franchiseName || "Franchise"
+  ).toUpperCase();
+  const backLabel = seriesReferrer
+    ? bannerLayout
+      ? seriesBackUsesIcon
+        ? null
+        : "Back"
+      : franchiseBackLabel
+    : releaseReferrer && releaseReferrer.bandId !== bandId
       ? (releaseReferrer.artistName ??
           referrerOverview?.name ??
           "Artist")
       : (data?.artist_name ?? "Artist");
+  const backAriaLabel = seriesReferrer
+    ? `Back to ${franchiseBackLabel}`
+    : `Back to ${backLabel ?? "Artist"}`;
 
   const handleBack = () => {
     const ref = releaseReferrer;
     clearReleaseReferrer();
+    if (ref?.source === "series" && ref.franchiseId) {
+      onBackToSeries?.(ref.franchiseId, ref.subseriesId);
+      return;
+    }
     if (ref && ref.bandId !== bandId) {
       if (ref.section === "audio" && ref.category) {
         onBrowseArtistAudio(ref.bandId, ref.category);
@@ -2164,7 +2188,7 @@ export default function ReleasePage({
               type="button"
               className="release-page__back"
               onClick={handleBack}
-              aria-label={`Back to ${backLabel}`}
+              aria-label={backAriaLabel}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -2176,7 +2200,23 @@ export default function ReleasePage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span>{backLabel}</span>
+              {seriesBackUsesIcon ? (
+                <img
+                  src={seriesReferrer!.franchiseIconUrl!}
+                  alt=""
+                  className="series-subseries-page__back-icon"
+                />
+              ) : backLabel ? (
+                <span
+                  className={
+                    backLabel === "Back"
+                      ? "series-subseries-page__back-label series-subseries-page__back-label--short"
+                      : undefined
+                  }
+                >
+                  {backLabel}
+                </span>
+              ) : null}
             </button>
           </div>
           <div className="release-page__top-center">

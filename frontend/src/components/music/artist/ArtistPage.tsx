@@ -64,6 +64,11 @@ import MediaInlineSearch from "../MediaInlineSearch";
 import CardOrientationPicker from "../../CardOrientationPicker";
 import ReleaseCardLayoutPicker from "../../ReleaseCardLayoutPicker";
 import {
+  IconCardBanner,
+  IconCardCover,
+  IconMediaMusic,
+} from "../../MenuIcons";
+import {
   getStoredReleaseCardLayout,
   saveReleaseCardLayout,
 } from "../../../themes";
@@ -199,8 +204,10 @@ export default function ArtistPage({
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
   const [playerHost, setPlayerHost] = useState<HTMLDivElement | null>(null);
-  const [playerBarHidden, setPlayerBarHidden] = useState(false);
+  const [playerBubbleOpen, setPlayerBubbleOpen] = useState(false);
   const playerFallbackRef = useRef<HTMLDivElement>(null);
+  const playerBubbleRef = useRef<HTMLDivElement>(null);
+  const playerBubbleDockRef = useRef<HTMLDivElement>(null);
   const {
     audioRef,
     src: audioSrc,
@@ -249,6 +256,8 @@ export default function ArtistPage({
   const deviceLayout = useDeviceLayout();
   const stacked = isStackedArtistLayout(deviceLayout);
   const mobilePortrait = isMobilePortraitLayout(deviceLayout);
+  const portraitMenuChrome =
+    mobilePortrait || deviceLayout === "tablet-portrait";
   const cachedAudio = getCachedArtistAudio(bandId);
   const cachedGallery = getCachedArtistGallery(bandId);
   const cachedVideo = getCachedArtistMediaTab(bandId, "video");
@@ -406,7 +415,7 @@ export default function ArtistPage({
   useEffect(() => {
     setEraIndex(0);
     setPlayingPath(null);
-    setPlayerBarHidden(false);
+    setPlayerBubbleOpen(false);
     clear();
   }, [bandId, clear]);
 
@@ -574,7 +583,6 @@ export default function ArtistPage({
         return;
       }
       setPlayingPath(path);
-      setPlayerBarHidden(false);
       const track = playableTracks.find((t) => t.play_path === path);
       try {
         const res = await playTrack({ path, artist_id: bandId, title });
@@ -634,13 +642,29 @@ export default function ArtistPage({
   }, [audioRef, audioSrc, playingPath, playableTracks, userId, repeatOne]);
 
   const onAboutTab = section === "overview" && overviewTab === "about";
-  const embedPlayerInAbout =
-    onAboutTab && !playerBarHidden && Boolean(audioSrc);
+  const embedPlayerInAbout = onAboutTab && Boolean(audioSrc);
   const playerPortalTarget = embedPlayerInAbout
     ? playerHost ?? playerFallbackRef.current
-    : playerFallbackRef.current;
-  const showFloatingPlayer = Boolean(audioSrc) && !playerBarHidden && !embedPlayerInAbout;
-  const showPlayerRestore = Boolean(audioSrc) && playerBarHidden;
+    : null;
+  const showBubblePlayer = Boolean(audioSrc) && !onAboutTab;
+
+  useEffect(() => {
+    if (onAboutTab || !audioSrc) setPlayerBubbleOpen(false);
+  }, [onAboutTab, audioSrc]);
+
+  useEffect(() => {
+    if (!playerBubbleOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (playerBubbleRef.current?.contains(target)) return;
+      if (playerBubbleDockRef.current?.contains(target)) return;
+      setPlayerBubbleOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [playerBubbleOpen]);
 
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
@@ -828,31 +852,85 @@ export default function ArtistPage({
                   onChange={onSetOrientation}
                 />
               )}
-            {showPlayerRestore && (
-              <button
-                type="button"
-                className={`artist-page__player-restore${
-                  playing ? " artist-page__player-restore--live" : ""
-                }`}
-                onClick={() => setPlayerBarHidden(false)}
-                aria-label="Show player"
-                title="Show player"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
-                  <path
-                    fill="currentColor"
-                    d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"
+            {showBubblePlayer && (() => {
+              const nowTrack = playableTracks.find(
+                (t) => t.play_path === playingPath
+              );
+              const dockInner = (
+                <>
+                  <div className="series-audio-player__now">
+                    {nowTrack?.cover_url ? (
+                      <img src={nowTrack.cover_url} alt="" />
+                    ) : null}
+                    <div>
+                      <strong>{nowTrack?.title ?? "Now playing"}</strong>
+                      {nowTrack?.album_folder ? (
+                        <span className="muted">{nowTrack.album_folder}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <MiniAudioPlayerControls
+                    playing={playing}
+                    progress={progress}
+                    duration={duration}
+                    toggle={toggle}
+                    seek={seek}
+                    onPrev={() => stepTrack(-1)}
+                    onNext={() => stepTrack(1)}
+                    repeatOne={repeatOne}
+                    onRepeatToggle={() => setRepeatOne((r) => !r)}
                   />
-                </svg>
-              </button>
-            )}
+                </>
+              );
+              const dock = playerBubbleOpen ? (
+                <div className="series-audio-player__dock">{dockInner}</div>
+              ) : null;
+              return (
+                <div
+                  ref={playerBubbleRef}
+                  className={`series-audio-player${
+                    playerBubbleOpen && !mobilePortrait ? " is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`series-audio-player__toggle${
+                      playing && !playerBubbleOpen
+                        ? " series-audio-player__toggle--live"
+                        : ""
+                    }`}
+                    aria-pressed={playerBubbleOpen}
+                    aria-label={
+                      playerBubbleOpen ? "Hide player" : "Show player"
+                    }
+                    title={playerBubbleOpen ? "Hide player" : "Show player"}
+                    onClick={() => setPlayerBubbleOpen((v) => !v)}
+                  >
+                    <IconMediaMusic className="series-audio-player__icon" />
+                  </button>
+                  {playerBubbleOpen && !mobilePortrait ? dock : null}
+                  {playerBubbleOpen && mobilePortrait
+                    ? createPortal(
+                        <div
+                          ref={playerBubbleDockRef}
+                          className="series-audio-player series-audio-player--menu-only is-open"
+                        >
+                          {dock}
+                        </div>,
+                        document.body
+                      )
+                    : null}
+                </div>
+              );
+            })()}
             <MediaInlineSearch
               mode="catalog"
               onSelectBand={(id) => onOpenArtist(id)}
             />
             {(section === "audio" ||
               section === "video" ||
-              section === "library") && (
+              section === "library") &&
+              !portraitMenuChrome && (
               <ReleaseCardLayoutPicker
                 value={releaseCardLayout}
                 onChange={setReleaseCardLayoutPersisted}
@@ -867,6 +945,30 @@ export default function ArtistPage({
               artistThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              menuChrome={
+                portraitMenuChrome &&
+                (section === "audio" ||
+                  section === "video" ||
+                  section === "library") ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReleaseCardLayoutPersisted(
+                        releaseCardLayout === "cover" ? "banner" : "cover"
+                      )
+                    }
+                  >
+                    {releaseCardLayout === "cover" ? (
+                      <IconCardCover className="menu-item-icon" />
+                    ) : (
+                      <IconCardBanner className="menu-item-icon" />
+                    )}
+                    {releaseCardLayout === "cover"
+                      ? "Cover view"
+                      : "Banner view"}
+                  </button>
+                ) : null
+              }
               onRefreshMetadata={
                 isAdmin && overviewTab === "about"
                   ? () => void handleRefreshMetadata()
@@ -1097,9 +1199,7 @@ export default function ArtistPage({
 
         <div
           ref={playerFallbackRef}
-          className={`artist-page__player-bar${
-            showFloatingPlayer ? " artist-page__player-bar--visible" : ""
-          }`}
+          className="artist-page__player-bar"
         />
       </div>
 
@@ -1107,42 +1207,17 @@ export default function ArtistPage({
       {audioSrc &&
         playerPortalTarget &&
         createPortal(
-          showFloatingPlayer ? (
-            <div className="artist-page__player-bar-inner">
-              <MiniAudioPlayerControls
-                playing={playing}
-                progress={progress}
-                duration={duration}
-                toggle={toggle}
-                seek={seek}
-                onPrev={() => stepTrack(-1)}
-                onNext={() => stepTrack(1)}
-                repeatOne={repeatOne}
-                onRepeatToggle={() => setRepeatOne((r) => !r)}
-              />
-              <button
-                type="button"
-                className="artist-page__player-bar-dismiss"
-                onClick={() => setPlayerBarHidden(true)}
-                aria-label="Hide player"
-                title="Hide player"
-              >
-                ×
-              </button>
-            </div>
-          ) : (
-            <MiniAudioPlayerControls
-              playing={playing}
-              progress={progress}
-              duration={duration}
-              toggle={toggle}
-              seek={seek}
-              onPrev={() => stepTrack(-1)}
-              onNext={() => stepTrack(1)}
-              repeatOne={repeatOne}
-              onRepeatToggle={() => setRepeatOne((r) => !r)}
-            />
-          ),
+          <MiniAudioPlayerControls
+            playing={playing}
+            progress={progress}
+            duration={duration}
+            toggle={toggle}
+            seek={seek}
+            onPrev={() => stepTrack(-1)}
+            onNext={() => stepTrack(1)}
+            repeatOne={repeatOne}
+            onRepeatToggle={() => setRepeatOne((r) => !r)}
+          />,
           playerPortalTarget
         )}
 

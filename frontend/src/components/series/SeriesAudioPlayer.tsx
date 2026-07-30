@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { fetchSeriesPlayerTracks } from "../../api";
 import { IconMediaMusic } from "../MenuIcons";
 import {
@@ -58,6 +59,7 @@ export default function SeriesAudioPlayer({
   const indexRef = useRef(0);
   const loadedForRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const dockPortalRef = useRef<HTMLDivElement>(null);
 
   useBeatPulse(
     audio.audioRef,
@@ -76,10 +78,10 @@ export default function SeriesAudioPlayer({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      const root = rootRef.current;
-      if (!root) return;
       const target = e.target as Node | null;
-      if (target && root.contains(target)) return;
+      if (!target) return;
+      if (rootRef.current?.contains(target)) return;
+      if (dockPortalRef.current?.contains(target)) return;
       setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -155,62 +157,80 @@ export default function SeriesAudioPlayer({
 
   const now = tracks[index];
 
-  return (
-    <div
-      ref={rootRef}
-      className={`series-audio-player${open ? " is-open" : ""}${
-        hideToggle ? " series-audio-player--menu-only" : ""
-      }`}
-    >
-      {!hideToggle ? (
-        <button
-          type="button"
-          className="series-audio-player__toggle"
-          aria-pressed={open}
-          aria-label={open ? "Hide player" : "Show player"}
-          title={open ? "Hide player" : "Show player"}
-          onClick={() => {
-            const next = !open;
-            setOpen(next);
-            if (next && loadedForRef.current !== franchiseId) {
-              void loadTracks();
-            }
-          }}
-        >
-          <IconMediaMusic className="series-audio-player__icon" />
-        </button>
-      ) : null}
-      {open ? (
-        <div className="series-audio-player__dock">
-          {loading ? (
-            <span className="muted">Loading tracks…</span>
-          ) : tracks.length === 0 ? (
-            <span className="muted">No audio found</span>
-          ) : (
-            <>
-              <div className="series-audio-player__now">
-                {now?.cover_url ? <img src={now.cover_url} alt="" /> : null}
-                <div>
-                  <strong>{now?.title}</strong>
-                  {now?.artist ? (
-                    <span className="muted">{now.artist}</span>
-                  ) : null}
-                </div>
-              </div>
-              <MiniAudioPlayerControls
-                playing={audio.playing}
-                progress={audio.progress}
-                duration={audio.duration}
-                toggle={audio.toggle}
-                seek={audio.seek}
-                onPrev={playPrev}
-                onNext={playNext}
-              />
-            </>
-          )}
+  const dockBody =
+    loading ? (
+      <span className="muted">Loading tracks…</span>
+    ) : tracks.length === 0 ? (
+      <span className="muted">No audio found</span>
+    ) : (
+      <>
+        <div className="series-audio-player__now">
+          {now?.cover_url ? <img src={now.cover_url} alt="" /> : null}
+          <div>
+            <strong>{now?.title}</strong>
+            {now?.artist ? <span className="muted">{now.artist}</span> : null}
+          </div>
         </div>
-      ) : null}
-      <audio ref={audio.audioRef} src={audio.src ?? undefined} preload="metadata" />
-    </div>
+        <MiniAudioPlayerControls
+          playing={audio.playing}
+          progress={audio.progress}
+          duration={audio.duration}
+          toggle={audio.toggle}
+          seek={audio.seek}
+          onPrev={playPrev}
+          onNext={playNext}
+        />
+      </>
+    );
+
+  const dock = open ? (
+    <div className="series-audio-player__dock">{dockBody}</div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={rootRef}
+        className={`series-audio-player${open && !hideToggle ? " is-open" : ""}${
+          hideToggle ? " series-audio-player--menu-anchor" : ""
+        }`}
+      >
+        {!hideToggle ? (
+          <button
+            type="button"
+            className="series-audio-player__toggle"
+            aria-pressed={open}
+            aria-label={open ? "Hide player" : "Show player"}
+            title={open ? "Hide player" : "Show player"}
+            onClick={() => {
+              const next = !open;
+              setOpen(next);
+              if (next && loadedForRef.current !== franchiseId) {
+                void loadTracks();
+              }
+            }}
+          >
+            <IconMediaMusic className="series-audio-player__icon" />
+          </button>
+        ) : null}
+        {open && !hideToggle ? dock : null}
+        <audio
+          ref={audio.audioRef}
+          src={audio.src ?? undefined}
+          preload="metadata"
+        />
+      </div>
+      {open && hideToggle
+        ? createPortal(
+            <div
+              ref={dockPortalRef}
+              className="series-audio-player series-audio-player--menu-only is-open"
+            >
+              {dock}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }

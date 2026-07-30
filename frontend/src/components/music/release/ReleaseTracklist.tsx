@@ -110,6 +110,22 @@ function isStandardEdition(label: string): boolean {
   return low === "standard edition" || low === "standard";
 }
 
+/** Strip folder date prefix from labels like "1997.11.03. Standard Edition". */
+function labelDisplayParts(
+  label: string,
+  dateIso?: string | null,
+  displayDate?: string | null
+): {
+  title: string;
+  dateLabel: string | null;
+} {
+  const dateLabel =
+    displayDate?.trim() || formatTrackDate(dateIso) || null;
+  const m = label.trim().match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
+  const title = (m?.[1] || label).trim() || label;
+  return { title, dateLabel };
+}
+
 /** Strip folder date prefix from edition labels like "1997.11.03. Standard Edition". */
 function editionDisplayParts(edition: ReleaseEdition): {
   title: string;
@@ -118,15 +134,11 @@ function editionDisplayParts(edition: ReleaseEdition): {
   if (edition.kind === "bside") {
     return { title: "B-sides", dateLabel: null };
   }
-  const dateLabel =
-    edition.display_date?.trim() ||
-    formatTrackDate(edition.date_iso) ||
-    null;
-  const m = edition.label
-    .trim()
-    .match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
-  const title = (m?.[1] || edition.label).trim() || edition.label;
-  return { title, dateLabel };
+  return labelDisplayParts(
+    edition.label,
+    edition.date_iso,
+    edition.display_date
+  );
 }
 
 function sourceAlbumDisplayTitle(title: string): string {
@@ -853,11 +865,27 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                     {groups.map((group) => {
                       const showEditionLabel =
                         showSingleHeader || groups.length > 1 || Boolean(group.label);
+                      const groupParts = group.label
+                        ? labelDisplayParts(
+                            group.label,
+                            group.date_iso,
+                            group.display_date
+                          )
+                        : null;
                       return (
                         <div key={group.id} className="release-tracklist__group">
-                          {showEditionLabel && group.label && (
-                            <h4 className="release-tracklist__group-label">{group.label}</h4>
-                          )}
+                          {showEditionLabel && groupParts ? (
+                            <h4 className="release-tracklist__group-label release-tracklist__group-label--edition">
+                              <span className="release-tracklist__edition-name">
+                                {groupParts.title}
+                              </span>
+                              {groupParts.dateLabel ? (
+                                <span className="release-tracklist__title-suffix release-tracklist__edition-date">
+                                  {groupParts.dateLabel}
+                                </span>
+                              ) : null}
+                            </h4>
+                          ) : null}
                           <ol className="release-tracklist__tracks">
                             {group.tracks.map((track) => {
                               const active = playingPath === track.play_path;
