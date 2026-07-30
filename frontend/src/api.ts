@@ -43,7 +43,7 @@ async function request<T>(
     res = await fetch(url, { ...init, headers, signal: controller.signal });
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
-      throw new Error("Request timed out. Is MediaStack running?");
+      throw new Error("Request timed out. Is MyStack running?");
     }
     if (e instanceof TypeError) {
       throw new Error("Cannot reach the API. Start python run.py");

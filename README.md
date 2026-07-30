@@ -1,6 +1,6 @@
-# MediaStack
+# MyStack
 
-Modern reimplementation of **MediaBinger** — a personal media library and player for music, series, movies, books, and games. MediaStack reads your files from disk, enriches them with legacy database metadata, and serves a fast web UI.
+Modern reimplementation of **MediaBinger** — a personal media library and player for music, series, movies, books, and games. MyStack reads your files from disk, enriches them with legacy database metadata, and serves a fast web UI.
 
 **Stack:** FastAPI (Python) + React 19 + Vite 6 · default API port **8766**
 
@@ -67,7 +67,7 @@ npm install
 ## Quick start
 
 ```powershell
-cd "c:\path\to\MediaStack"
+cd "c:\path\to\MyStack"
 
 # First run: import legacy metadata (bands, releases, tracks, links, etc.)
 python run.py --import-sql --import-replace
@@ -91,15 +91,15 @@ npm run dev
 Add to `C:\Windows\System32\drivers\etc\hosts` (as Administrator):
 
 ```
-127.0.0.1 mediastack
+127.0.0.1 mystack
 ```
 
-Then use **http://mediastack:5174** (restart `npm run dev` after Vite host changes).
+Then use **http://mystack:5174** (restart `npm run dev` after Vite host changes).
 
 ### Point at your media library
 
 1. Open the app → **Settings** → set **Media root** to the folder that contains `Music/`, `Series/`, etc.
-2. Or set `MEDIASTACK_MEDIA_ROOT` in a `.env` file at the project root.
+2. Or set `MYSTACK_MEDIA_ROOT` in a `.env` file at the project root.
 
 The path is persisted in user settings and overrides the environment default on startup.
 
@@ -107,23 +107,23 @@ The path is persisted in user settings and overrides the environment default on 
 
 ## Configuration
 
-Environment variables use the `MEDIASTACK_` prefix (`.env` at project root is supported).
+Environment variables use the `MYSTACK_` prefix (`.env` at project root is supported).
 
 | Variable | Purpose |
 |----------|---------|
-| `MEDIASTACK_DATABASE_URL` | SQLite default (`data/mediastack.db`) or `mysql+pymysql://user:pass@host/databinger` |
-| `MEDIASTACK_MYSQL_IMPORT_URL` | Live MySQL → local DB via `POST /api/import/mysql` |
-| `MEDIASTACK_MEDIA_ROOT` | Library root containing `Music/`, `Series/`, etc. |
-| `MEDIASTACK_MEDIA_SERVER_URL` | Stream base URL when files are not read locally (default `http://127.0.0.1:8887`) |
-| `MEDIASTACK_TMDB_API_KEY` | TMDb (series/movies; or stored in `apiauth` after SQL import) |
-| `MEDIASTACK_MUSICBRAINZ_USER_AGENT` | MusicBrainz user-agent for folder sync |
-| `MEDIASTACK_LASTFM_API_KEY` | Last.fm (optional) |
-| `MEDIASTACK_SETLISTFM_API_KEY` | Setlist.fm (optional) |
-| `MEDIASTACK_SPOTIFY_CLIENT_ID` | Spotify app Client ID (optional; can store in `apiauth` instead) |
-| `MEDIASTACK_SPOTIFY_CLIENT_SECRET` | Spotify app Client Secret (optional; can store in `apiauth` instead) |
-| `MEDIASTACK_SPOTIFY_REDIRECT_URI` | Override OAuth callback URL (default: `{API}/api/spotify/auth/callback` on `127.0.0.1`, not `localhost`) |
-| `MEDIASTACK_PUBLIC_URL` | Public base URL for OAuth return redirects when UI and API run on different hosts (e.g. NAS) |
-| `MEDIASTACK_ADMIN_PASSWORD` | Admin profile password (default `mediastack`) |
+| `MYSTACK_DATABASE_URL` | SQLite default (`data/mystack.db`) or `mysql+pymysql://user:pass@host/databinger` |
+| `MYSTACK_MYSQL_IMPORT_URL` | Live MySQL → local DB via `POST /api/import/mysql` |
+| `MYSTACK_MEDIA_ROOT` | Library root containing `Music/`, `Series/`, etc. |
+| `MYSTACK_MEDIA_SERVER_URL` | Stream base URL when files are not read locally (default `http://127.0.0.1:8887`) |
+| `MYSTACK_TMDB_API_KEY` | TMDb (series/movies; or stored in `apiauth` after SQL import) |
+| `MYSTACK_MUSICBRAINZ_USER_AGENT` | MusicBrainz user-agent for folder sync |
+| `MYSTACK_LASTFM_API_KEY` | Last.fm (optional) |
+| `MYSTACK_SETLISTFM_API_KEY` | Setlist.fm (optional) |
+| `MYSTACK_SPOTIFY_CLIENT_ID` | Spotify app Client ID (optional; can store in `apiauth` instead) |
+| `MYSTACK_SPOTIFY_CLIENT_SECRET` | Spotify app Client Secret (optional; can store in `apiauth` instead) |
+| `MYSTACK_SPOTIFY_REDIRECT_URI` | Override OAuth callback URL (default: `{API}/api/spotify/auth/callback` on `127.0.0.1`, not `localhost`) |
+| `MYSTACK_PUBLIC_URL` | Public base URL for OAuth return redirects when UI and API run on different hosts (e.g. NAS) |
+| `MYSTACK_ADMIN_PASSWORD` | Admin profile password (default `mystack`) |
 
 ### Database import
 
@@ -659,19 +659,19 @@ python run.py --no-browser
 1. Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard) and add a **Redirect URI**:
    - Dev: `http://127.0.0.1:8766/api/spotify/auth/callback` (use `127.0.0.1`, not `localhost`)
    - Production (single host): same path on your API origin
-2. Store **Client ID** and **Client Secret** in the database (`apiauth`, service name `Spotify`) or set `MEDIASTACK_SPOTIFY_CLIENT_ID` / `MEDIASTACK_SPOTIFY_CLIENT_SECRET`.
+2. Store **Client ID** and **Client Secret** in the database (`apiauth`, service name `Spotify`) or set `MYSTACK_SPOTIFY_CLIENT_ID` / `MYSTACK_SPOTIFY_CLIENT_SECRET`.
 3. After OAuth, the app returns to **`/music/playlists?spotify=ready`** with the Add playlist modal open on the Spotify tab — not the profile picker. Keep the API running through the redirect (OAuth state is in memory until the callback completes).
 4. **Connect Spotify** does not clear an existing session unless you choose **Not you?** (force re-login). If you see “Session expired”, click Connect again or use **Not you?** to pick another account.
-5. On a NAS or split UI/API setup, set `MEDIASTACK_PUBLIC_URL` to the URL where users open the web UI.
+5. On a NAS or split UI/API setup, set `MYSTACK_PUBLIC_URL` to the URL where users open the web UI.
 
 ---
 
 ## RecordStack
 
-MediaStack shares DNA with **RecordStack** (compatible stack, cross-origin API calls). They can run side by side on different ports.
+MyStack shares DNA with **RecordStack** (compatible stack, cross-origin API calls). They can run side by side on different ports.
 
 ---
 
 ## License / legacy
 
-Metadata and schema originate from the MediaBinger / DataBinger project (`data/databinger.sql`). MediaStack is a clean-room UI and API rewrite on top of that data plus your on-disk library layout.
+Metadata and schema originate from the MediaBinger / DataBinger project (`data/databinger.sql`). MyStack is a clean-room UI and API rewrite on top of that data plus your on-disk library layout.

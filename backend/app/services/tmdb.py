@@ -133,7 +133,7 @@ def image_url(path: str | None, size: str = "w780") -> str | None:
 
 
 def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
-    """Flatten TMDb TV payload into MediaStack series overview fields."""
+    """Flatten TMDb TV payload into MyStack series overview fields."""
     genres = [
         {"id": g.get("id"), "name": g.get("name")}
         for g in (data.get("genres") or [])

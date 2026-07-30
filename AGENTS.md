@@ -1,4 +1,4 @@
-# MediaStack — agent continuation guide
+# MyStack — agent continuation guide
 
 Use this file when resuming work on **media library layout**, **cross-module linking**, or **non-music modules**.
 
@@ -15,7 +15,7 @@ Use this file when resuming work on **media library layout**, **cross-module lin
 User test library (gitignored):
 
 ```
-MEDIASTACK_MEDIA_ROOT=C:\Users\reyedu01\AI Projects\MediaStack\Media
+MYSTACK_MEDIA_ROOT=C:\Users\reyedu01\AI Projects\MediaStack\Media
 ```
 
 Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaffolding.

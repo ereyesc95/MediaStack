@@ -19,7 +19,7 @@ PROJECT_ROOT = install_dir()
 DATA_DIR = PROJECT_ROOT / "data"
 IMPORT_SQL = DATA_DIR / "databinger.sql"
 
-# Complementary resources (not playable media) — kept out of MEDIASTACK_MEDIA_ROOT
+# Complementary resources (not playable media) — kept out of MYSTACK_MEDIA_ROOT
 PEOPLE_DIR = DATA_DIR / "people"
 LINKS_DIR = DATA_DIR / "links"
 
@@ -83,7 +83,14 @@ def migrate_people_links_from_media(media_root: str | Path | None) -> None:
 
 def database_file() -> Path:
     ensure_data_dir()
-    return DATA_DIR / "mediastack.db"
+    new_path = DATA_DIR / "mystack.db"
+    old_path = DATA_DIR / "mediastack.db"
+    if not new_path.exists() and old_path.exists():
+        try:
+            old_path.rename(new_path)
+        except OSError:
+            return old_path
+    return new_path
 
 
 def resolve_frontend_dist() -> Path | None:

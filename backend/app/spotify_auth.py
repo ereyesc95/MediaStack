@@ -1,4 +1,4 @@
-"""Spotify OAuth and Web API helpers (per MediaStack profile)."""
+"""Spotify OAuth and Web API helpers (per MyStack profile)."""
 from __future__ import annotations
 
 import base64

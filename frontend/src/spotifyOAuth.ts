@@ -1,4 +1,19 @@
-export const SPOTIFY_AWAITING_KEY = "mediastack.spotify.awaiting";
+export const SPOTIFY_AWAITING_KEY = "mystack.spotify.awaiting";
+const LEGACY_SPOTIFY_AWAITING_KEY = "mediastack.spotify.awaiting";
+
+function migrateSpotifyAwaitingKey() {
+  try {
+    if (!sessionStorage.getItem(SPOTIFY_AWAITING_KEY)) {
+      const legacy = sessionStorage.getItem(LEGACY_SPOTIFY_AWAITING_KEY);
+      if (legacy) sessionStorage.setItem(SPOTIFY_AWAITING_KEY, legacy);
+    }
+    sessionStorage.removeItem(LEGACY_SPOTIFY_AWAITING_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+migrateSpotifyAwaitingKey();
 export const SPOTIFY_RETURN_PATH = "/music/playlists";
 
 export async function waitForProfileReady(timeoutMs = 8000): Promise<boolean> {

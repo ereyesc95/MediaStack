@@ -20,8 +20,13 @@ import type {
   SeriesOverviewTab,
   SeriesSection,
 } from "../../types";
+import {
+  isMobilePortraitLayout,
+  useDeviceLayout,
+} from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
+import { IconCardBanner, IconMediaSeries, IconSeriesScope } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "./CatalogScopeToggle";
 import SeriesBrowse from "./SeriesBrowse";
@@ -127,6 +132,10 @@ export default function SeriesModule({
   const [writer, setWriter] = useState("");
 
   const showModuleChrome = !franchiseId;
+  const deviceLayout = useDeviceLayout();
+  const portraitMenuChrome =
+    isMobilePortraitLayout(deviceLayout) ||
+    deviceLayout === "tablet-portrait";
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -442,13 +451,13 @@ export default function SeriesModule({
             {busy ? (
               <span className="status-bar module-top-bar__status">{busy}</span>
             ) : null}
-            {tab === "catalog" ? (
+            {tab === "catalog" && !portraitMenuChrome ? (
               <CatalogScopeToggle
                 value={catalogScope}
                 onChange={setCatalogScope}
               />
             ) : null}
-            {tab === "catalog" && onSetOrientation ? (
+            {tab === "catalog" && onSetOrientation && !portraitMenuChrome ? (
               <CardOrientationPicker
                 value={cardOrientation}
                 onChange={onSetOrientation}
@@ -463,6 +472,51 @@ export default function SeriesModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              menuChrome={
+                portraitMenuChrome && tab === "catalog" ? (
+                  <>
+                    <button
+                      type="button"
+                      className={
+                        catalogScope === "franchises" ? "is-active" : undefined
+                      }
+                      onClick={() => setCatalogScope("franchises")}
+                    >
+                      <IconSeriesScope className="menu-item-icon" />
+                      Groups
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        catalogScope === "shows" ? "is-active" : undefined
+                      }
+                      onClick={() => setCatalogScope("shows")}
+                    >
+                      <IconMediaSeries className="menu-item-icon" />
+                      Shows
+                    </button>
+                    {onSetOrientation ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const order: CardOrientation[] = [
+                            "banner",
+                            "landscape",
+                            "portrait",
+                            "icons",
+                            "badge",
+                          ];
+                          const i = order.indexOf(cardOrientation);
+                          onSetOrientation(order[(i + 1) % order.length]!);
+                        }}
+                      >
+                        <IconCardBanner className="menu-item-icon" />
+                        Card layout: {cardOrientation}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null
+              }
             />
           </>
         }

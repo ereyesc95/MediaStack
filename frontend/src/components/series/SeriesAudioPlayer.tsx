@@ -198,7 +198,9 @@ export default function SeriesAudioPlayer({
         {!hideToggle ? (
           <button
             type="button"
-            className="series-audio-player__toggle"
+            className={`series-audio-player__toggle${
+              audio.playing && !open ? " series-audio-player__toggle--live" : ""
+            }`}
             aria-pressed={open}
             aria-label={open ? "Hide player" : "Show player"}
             title={open ? "Hide player" : "Show player"}

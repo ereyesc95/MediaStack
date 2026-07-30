@@ -380,6 +380,15 @@ input {
   border-bottom: 1px solid var(--border);
 }
 
+.app-menu-chrome button.is-active {
+  color: var(--accent);
+}
+
+.app-menu-chrome__live,
+.app-menu-chrome__live .menu-item-icon {
+  color: var(--accent);
+}
+
 .menu-item-icon {
   flex-shrink: 0;
   opacity: 0.85;
@@ -13128,6 +13137,16 @@ button.lyrics-status-badge--icon-only {
   padding: 0 0.55rem;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.catalog-scope-toggle__icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 
 .catalog-scope-toggle button + button {

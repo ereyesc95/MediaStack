@@ -99,7 +99,7 @@ VARIOUS_ARTISTS_BIO = (
     "Various Artists is the crossroads of your library—a dedicated home for "
     "compilations, tribute albums, soundtrack excerpts, split appearances, and "
     "one-off tracks that do not live under a single band folder. Instead of "
-    "scattering these releases across your collection, MediaStack gathers them "
+    "scattering these releases across your collection, MyStack gathers them "
     "here so you can browse them with the same care you give any artist "
     "discography.\n\n"
     "Every entry reflects a different kind of listening. Some are label samplers "

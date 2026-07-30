@@ -447,7 +447,7 @@ export default function App() {
 
       {booting && (
         <div className="app-boot" role="status" aria-live="polite">
-          <p className="app-boot__label">Loading MediaStack…</p>
+          <p className="app-boot__label">Loading MyStack…</p>
         </div>
       )}
 

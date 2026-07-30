@@ -12,17 +12,21 @@ from sqlalchemy.orm import Session
 from app.band_library import (
     _collect_audio_files,
     _find_audio_by_title,
+    _find_audio_by_title_prefer_categories,
+    _find_audio_by_title_with_cover_tag,
     display_track_title_from_path,
 )
 from app.extended_system_playlists import _track_entry
+from app.gallery import _artist_dir, _display_name
 from app.models import Band
 from app.paths import DATA_DIR
-from app.playlist_index import _artist_dir
 from app.services.setlistfm import fetch_artist_setlist_summaries, fetch_setlist_detail
 
 CACHE_DIR = DATA_DIR / "setlist_cache"
 CACHE_TTL_SEC = 24 * 60 * 60
 SETLIST_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
+COVER_TAG_RE = re.compile(r"^(.+?)\s+cover$", re.IGNORECASE)
+LAST_BRACKET_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
 
 
 def _career_start_year(band: Band) -> int:
@@ -295,6 +299,85 @@ def _normalize_setlist_song_title(name: str) -> str:
     return title
 
 
+def _cover_artist_from_brackets(text: str) -> str | None:
+    remaining = (text or "").strip()
+    while True:
+        match = LAST_BRACKET_RE.search(remaining)
+        if not match:
+            break
+        for piece in match.group(1).split(";"):
+            cover = COVER_TAG_RE.match(piece.strip())
+            if cover:
+                name = cover.group(1).strip()
+                if name:
+                    return name
+        remaining = remaining[: match.start()].strip()
+    return None
+
+
+def _cover_artist_from_setlist_song(song: dict, raw_name: str) -> str | None:
+    cover = song.get("cover")
+    if isinstance(cover, dict):
+        name = (cover.get("name") or "").strip()
+        if name:
+            return name
+    return _cover_artist_from_brackets(raw_name)
+
+
+def _resolve_named_artist_dir(media_root: Path, artist_name: str) -> Path | None:
+    """Resolve Music/{Letter}/{Artist}; ignore letter-folder fallback from gallery helper."""
+    artist_dir = _artist_dir(media_root, artist_name)
+    if not artist_dir or not artist_dir.is_dir():
+        return None
+    want = _display_name(artist_name).casefold()
+    if artist_dir.name.casefold() == want:
+        return artist_dir
+    return None
+
+
+def _resolve_setlist_local_path(
+    *,
+    media_root: Path,
+    performer_dir: Path | None,
+    performer_files: list[Path],
+    match_title: str,
+    cover_artist: str | None,
+) -> Path | None:
+    """Find a setlist song on disk.
+
+    Order:
+    1. Performer artist folder (any match)
+    2. Performer folder again, requiring ``[CoverArtist cover]`` bracket tag
+    3. Covered artist folder (Albums → EPs → Compilations → Singles → Soundtracks → rest)
+    """
+    if match_title and performer_files:
+        matched = _find_audio_by_title(performer_files, match_title)
+        if matched:
+            return matched
+        if cover_artist and performer_dir:
+            matched = _find_audio_by_title_with_cover_tag(
+                performer_files,
+                match_title,
+                cover_artist,
+                performer_dir,
+            )
+            if matched:
+                return matched
+
+    if not match_title or not cover_artist:
+        return None
+
+    cover_dir = _resolve_named_artist_dir(media_root, cover_artist)
+    if not cover_dir:
+        return None
+    cover_files = _collect_audio_files(cover_dir)
+    if not cover_files:
+        return None
+    return _find_audio_by_title_prefer_categories(
+        cover_files, match_title, cover_dir
+    )
+
+
 def _set_group_label(block: dict, index: int, total: int) -> str:
     name = (block.get("name") or "").strip()
     if name:
@@ -372,7 +455,7 @@ def build_setlist_tracklist(
     if not detail:
         return None
 
-    artist_dir = _artist_dir(media_root, band.bnd_name)
+    artist_dir = _resolve_named_artist_dir(media_root, band.bnd_name or "")
     local_files = _collect_audio_files(artist_dir) if artist_dir else []
 
     venue = detail.get("venue") or {}
@@ -406,11 +489,18 @@ def build_setlist_tracklist(
             is_tape = bool(song.get("tape"))
             match_title = _normalize_setlist_song_title(raw_name)
             display_title = match_title or raw_name
+            cover_artist = _cover_artist_from_setlist_song(song, raw_name)
 
             matched_path = None
             entry: dict | None = None
-            if match_title and local_files:
-                matched_path = _find_audio_by_title(local_files, match_title)
+            if match_title:
+                matched_path = _resolve_setlist_local_path(
+                    media_root=media_root,
+                    performer_dir=artist_dir,
+                    performer_files=local_files,
+                    match_title=match_title,
+                    cover_artist=cover_artist,
+                )
                 if matched_path:
                     entry = _track_entry(matched_path, media_root)
 

@@ -1,4 +1,4 @@
-import MediaStackIcon from "./MediaStackIcon";
+import MyStackIcon from "./MyStackIcon";
 
 const PHOTO_MARKER = "photo";
 
@@ -20,7 +20,7 @@ export default function ProfileAvatar({
   if (isAdmin) {
     return (
       <span className={`profile-avatar profile-avatar--admin ${className}`} aria-hidden>
-        <MediaStackIcon size={36} className="profile-avatar__mark" />
+        <MyStackIcon size={36} className="profile-avatar__mark" />
       </span>
     );
   }

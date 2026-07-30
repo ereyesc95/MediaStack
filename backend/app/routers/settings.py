@@ -74,7 +74,7 @@ async def pick_media_root(_admin: User = Depends(require_admin)):
     try:
         path = await loop.run_in_executor(
             None,
-            lambda: pick_folder(title="Choose MediaStack source folder"),
+            lambda: pick_folder(title="Choose MyStack source folder"),
         )
     except Exception as exc:
         raise HTTPException(500, f"Could not open folder picker: {exc}") from exc

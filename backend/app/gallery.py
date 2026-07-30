@@ -1,6 +1,6 @@
 """Resolve artist gallery photos and era-matched logos/icons from Media/Music layout.
 
-Expected layout (under MEDIASTACK_MEDIA_ROOT):
+Expected layout (under MYSTACK_MEDIA_ROOT):
 
     Music/{Letter}/{ArtistName}/Gallery/Photos/   — year-prefixed photos
     Music/{Letter}/{ArtistName}/Gallery/Logos/    — era Icon/Logo PNGs

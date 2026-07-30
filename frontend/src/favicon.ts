@@ -1,4 +1,4 @@
-import { mediastackMarkSvg } from "./mediastackMark";
+import { mystackMarkSvg } from "./mystackMark";
 
 export function updateFavicon() {
   const fill =
@@ -12,5 +12,5 @@ export function updateFavicon() {
     document.head.appendChild(link);
   }
   link.type = "image/svg+xml";
-  link.href = `data:image/svg+xml,${encodeURIComponent(mediastackMarkSvg(fill))}`;
+  link.href = `data:image/svg+xml,${encodeURIComponent(mystackMarkSvg(fill))}`;
 }

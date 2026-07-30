@@ -40,8 +40,26 @@ const RELEASE_TABS: ReleaseTab[] = ["overview", "tracklist", "gallery"];
 const RELEASE_ID_RE = /^rel_[0-9a-f]{12}$/;
 const MEDIA_ITEM_ID_RE = /^(vid|lib)_[0-9a-f]{12}$/;
 
-const REFERRER_KEY = "mediastack_release_referrer";
-const AUDIO_CATEGORY_KEY = "mediastack_audio_category";
+const REFERRER_KEY = "mystack_release_referrer";
+const AUDIO_CATEGORY_KEY = "mystack_audio_category";
+const LEGACY_REFERRER_KEY = "mediastack_release_referrer";
+const LEGACY_AUDIO_CATEGORY_KEY = "mediastack_audio_category";
+
+function readSessionKey(primary: string, legacy: string): string | null {
+  try {
+    const raw = sessionStorage.getItem(primary);
+    if (raw) return raw;
+    const old = sessionStorage.getItem(legacy);
+    if (old) {
+      sessionStorage.setItem(primary, old);
+      sessionStorage.removeItem(legacy);
+      return old;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 let audioCategoryIntent: {
   bandId: number;
@@ -71,7 +89,7 @@ export function saveReleaseReferrer(ref: ReleaseReferrer) {
 
 export function getReleaseReferrer(): ReleaseReferrer | null {
   try {
-    const raw = sessionStorage.getItem(REFERRER_KEY);
+    const raw = readSessionKey(REFERRER_KEY, LEGACY_REFERRER_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as ReleaseReferrer;
   } catch {
@@ -153,7 +171,7 @@ function peekPendingAudioIntent(bandId: number): {
     return audioCategoryIntent;
   }
   try {
-    const raw = sessionStorage.getItem(AUDIO_CATEGORY_KEY);
+    const raw = readSessionKey(AUDIO_CATEGORY_KEY, LEGACY_AUDIO_CATEGORY_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       bandId?: number;

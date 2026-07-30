@@ -1,6 +1,6 @@
 # Media library layout
 
-Canonical on-disk layout for MediaStack. All paths are relative to **media root** (`MEDIASTACK_MEDIA_ROOT`).
+Canonical on-disk layout for MyStack. All paths are relative to **media root** (`MYSTACK_MEDIA_ROOT`).
 
 **Related:** [Franchise index design](./franchise_index.md) — how cross-module “Related media” is discovered without manual portal files.
 

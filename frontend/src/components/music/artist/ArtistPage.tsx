@@ -89,7 +89,19 @@ import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
-import { DEFAULT_ARTIST_PHOTO_URL } from "../release/releaseTrackPanelMeta";
+import {
+  DEFAULT_ARTIST_PHOTO_URL,
+  trackMainTitle,
+} from "../release/releaseTrackPanelMeta";
+
+/** Last path segment with folder date prefix stripped (e.g. 1997.11.03. Title → Title). */
+function albumFolderDisplayTitle(folder: string | null | undefined): string | null {
+  if (!folder?.trim()) return null;
+  const segment =
+    folder.replace(/\\/g, "/").split("/").filter(Boolean).pop() || folder;
+  const m = segment.trim().match(/^\d{4}(?:\.\d{1,2}){0,2}\.\s*(.+)$/);
+  return (m?.[1] || segment).trim() || null;
+}
 import ArtistQuiz, { QUIZ_MODES, type QuizMode } from "./ArtistQuiz";
 import ArtistRelated from "./ArtistRelated";
 import AddSimilarModal from "./AddSimilarModal";
@@ -856,6 +868,7 @@ export default function ArtistPage({
               const nowTrack = playableTracks.find(
                 (t) => t.play_path === playingPath
               );
+              const albumLabel = albumFolderDisplayTitle(nowTrack?.album_folder);
               const dockInner = (
                 <>
                   <div className="series-audio-player__now">
@@ -863,9 +876,13 @@ export default function ArtistPage({
                       <img src={nowTrack.cover_url} alt="" />
                     ) : null}
                     <div>
-                      <strong>{nowTrack?.title ?? "Now playing"}</strong>
-                      {nowTrack?.album_folder ? (
-                        <span className="muted">{nowTrack.album_folder}</span>
+                      <strong>
+                        {nowTrack?.title
+                          ? trackMainTitle(nowTrack.title)
+                          : "Now playing"}
+                      </strong>
+                      {albumLabel ? (
+                        <span className="muted">{albumLabel}</span>
                       ) : null}
                     </div>
                   </div>

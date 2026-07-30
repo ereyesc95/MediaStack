@@ -38,7 +38,7 @@ async def sync_folders(
 ):
     root = body.media_root or settings.media_root
     if not root:
-        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT or pass media_root")
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT or pass media_root")
     results = await _do_sync(
         body.module,
         root,
@@ -58,7 +58,7 @@ def sync_folders_background(
 ):
     root = body.media_root or settings.media_root
     if not root:
-        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT or pass media_root")
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT or pass media_root")
     tmdb_key = crud.get_tmdb_key(db)
     mb_ua = settings.musicbrainz_user_agent
 
@@ -81,7 +81,7 @@ def sync_franchise_index(
 
     root = settings.media_root
     if not root:
-        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT")
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
     index = build_franchise_index(Path(root))
     path = save_franchise_index(index)
     return {

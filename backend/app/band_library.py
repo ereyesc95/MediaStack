@@ -21,6 +21,15 @@ AUDIO_CATEGORIES = {
     "singles": "Singles",
 }
 
+# Preferred search order when resolving covers under another artist's Audio/
+COVER_SEARCH_CATEGORY_ORDER = (
+    "Albums",
+    "Extended Plays",
+    "Compilations",
+    "Singles",
+    "Soundtracks",
+)
+
 DATE_PREFIX_RE = re.compile(r"^(\d{4})(?:\.(\d{2})(?:\.(\d{2}))?)?")
 TRACK_PREFIX_RE = re.compile(r"^\d+\.\s*")
 VINYL_TRACK_PREFIX_RE = re.compile(r"^[A-Z]\d+\.\s*", re.I)
@@ -361,6 +370,96 @@ def _find_audio_by_title(files: list[Path], title: str) -> Path | None:
         if _titles_match(title, f.stem):
             return f
     return None
+
+
+def _audio_category_rank(file_path: Path, audio_root: Path) -> int:
+    try:
+        rel = file_path.relative_to(audio_root)
+    except ValueError:
+        return len(COVER_SEARCH_CATEGORY_ORDER) + 1
+    if not rel.parts:
+        return len(COVER_SEARCH_CATEGORY_ORDER) + 1
+    top = rel.parts[0]
+    for index, name in enumerate(COVER_SEARCH_CATEGORY_ORDER):
+        if top.casefold() == name.casefold():
+            return index
+    return len(COVER_SEARCH_CATEGORY_ORDER)
+
+
+def _find_audio_by_title_prefer_categories(
+    files: list[Path],
+    title: str,
+    artist_dir: Path,
+) -> Path | None:
+    """Match title preferring Albums → EPs → Compilations → Singles → Soundtracks → rest."""
+    matches = [f for f in files if _titles_match(title, f.stem)]
+    if not matches:
+        return None
+    audio_root = _audio_root(artist_dir)
+    matches.sort(
+        key=lambda p: (
+            _audio_category_rank(p, audio_root),
+            p.as_posix().lower(),
+        )
+    )
+    return matches[0]
+
+
+def _bracket_parts_from_stem(stem: str) -> list[str]:
+    text = stem.strip()
+    parts: list[str] = []
+    last_bracket = re.compile(r"\s*\[([^\]]+)\]\s*$")
+    while True:
+        match = last_bracket.search(text)
+        if not match:
+            break
+        for piece in match.group(1).split(";"):
+            piece = piece.strip()
+            if piece:
+                parts.append(piece)
+        text = text[: match.start()].strip()
+    return parts
+
+
+def _stem_has_cover_artist(stem: str, cover_artist: str) -> bool:
+    want = cover_artist.casefold().strip()
+    if not want:
+        return False
+    for part in _bracket_parts_from_stem(stem):
+        match = re.match(r"^(.+?)\s+cover$", part.strip(), re.IGNORECASE)
+        if not match:
+            continue
+        name = match.group(1).strip().casefold()
+        if name == want or want in name or name in want:
+            return True
+    return False
+
+
+def _find_audio_by_title_with_cover_tag(
+    files: list[Path],
+    title: str,
+    cover_artist: str,
+    artist_dir: Path | None = None,
+) -> Path | None:
+    """Match title among files tagged ``[CoverArtist cover]`` (any other bracket data allowed)."""
+    matches = [
+        f
+        for f in files
+        if _titles_match(title, f.stem)
+        and _stem_has_cover_artist(f.stem, cover_artist)
+    ]
+    if not matches:
+        return None
+    if artist_dir is not None:
+        audio_root = _audio_root(artist_dir)
+        matches.sort(
+            key=lambda p: (
+                _audio_category_rank(p, audio_root),
+                p.as_posix().lower(),
+            )
+        )
+        return matches[0]
+    return sorted(matches, key=lambda p: p.as_posix().lower())[0]
 
 
 def _path_from_top_entry(raw: str, media_root: Path) -> Path | None:

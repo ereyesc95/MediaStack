@@ -38,7 +38,7 @@ def import_mysql(
 
         raise HTTPException(
             400,
-            "Set MEDIASTACK_MYSQL_IMPORT_URL (e.g. mysql+pymysql://root:pass@localhost/databinger)",
+            "Set MYSTACK_MYSQL_IMPORT_URL (e.g. mysql+pymysql://root:pass@localhost/databinger)",
         )
     result = copy_from_mysql(source, replace=replace)
     return ImportResultOut(

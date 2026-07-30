@@ -1,3 +1,4 @@
+import { IconMediaSeries, IconSeriesScope } from "../MenuIcons";
 import type { SeriesCatalogScope } from "./SeriesBrowse";
 
 type Props = {
@@ -22,18 +23,20 @@ export default function CatalogScopeToggle({
         className={value === "franchises" ? "active" : ""}
         aria-pressed={value === "franchises"}
         onClick={() => onChange("franchises")}
-        title="Franchises"
+        title="Groups"
       >
-        FRANCHISES
+        <IconSeriesScope className="catalog-scope-toggle__icon" />
+        GROUPS
       </button>
       <button
         type="button"
         className={value === "shows" ? "active" : ""}
         aria-pressed={value === "shows"}
         onClick={() => onChange("shows")}
-        title="Series"
+        title="Shows"
       >
-        SERIES
+        <IconMediaSeries className="catalog-scope-toggle__icon" />
+        SHOWS
       </button>
     </div>
   );

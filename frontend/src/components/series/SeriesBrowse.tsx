@@ -21,7 +21,7 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const HASH = "#";
 
 const FILTER_MODES: { id: SeriesFilterMode; label: string }[] = [
-  { id: "name", label: "SERIES" },
+  { id: "name", label: "NAME" },
   { id: "continent", label: "CONTINENT" },
   { id: "country", label: "COUNTRY" },
   { id: "start", label: "START DATE" },

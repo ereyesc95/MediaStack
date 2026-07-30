@@ -93,7 +93,7 @@ def asset_file(slug: str):
 @router.get("/media/file")
 def media_file(path: str = Query(..., min_length=1)):
     if not settings.media_root:
-        raise HTTPException(404, "MEDIASTACK_MEDIA_ROOT not set")
+        raise HTTPException(404, "MYSTACK_MEDIA_ROOT not set")
     root = Path(settings.media_root).resolve()
     target = (root / path.replace("\\", "/")).resolve()
     if not str(target).startswith(str(root)):

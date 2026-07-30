@@ -22,7 +22,7 @@ export default function MediaSourceModal({
   const [error, setError] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState("");
 
-  const heading = title ?? (required ? "Welcome to MediaStack" : "Choose source folder");
+  const heading = title ?? (required ? "Welcome to MyStack" : "Choose source folder");
 
   async function handlePick() {
     setError(null);

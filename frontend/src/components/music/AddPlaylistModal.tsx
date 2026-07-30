@@ -20,7 +20,22 @@ import {
   waitForProfileReady,
 } from "../../spotifyOAuth";
 
-const SPOTIFY_REPAIR_KEY = "mediastack.spotify.credentials_repair";
+const SPOTIFY_REPAIR_KEY = "mystack.spotify.credentials_repair";
+const LEGACY_SPOTIFY_REPAIR_KEY = "mediastack.spotify.credentials_repair";
+
+function migrateSpotifyRepairKey() {
+  try {
+    if (!sessionStorage.getItem(SPOTIFY_REPAIR_KEY)) {
+      const legacy = sessionStorage.getItem(LEGACY_SPOTIFY_REPAIR_KEY);
+      if (legacy) sessionStorage.setItem(SPOTIFY_REPAIR_KEY, legacy);
+    }
+    sessionStorage.removeItem(LEGACY_SPOTIFY_REPAIR_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+migrateSpotifyRepairKey();
 
 export function markSpotifyCredentialsRepair(message: string) {
   try {

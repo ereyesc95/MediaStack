@@ -72,7 +72,7 @@ export default function ProfilePickerModal({
     <>
       <div className="modal-backdrop">
         <div className="modal-panel modal-panel--profiles" onClick={(e) => e.stopPropagation()}>
-          <h3>Who&apos;s using MediaStack?</h3>
+          <h3>Who&apos;s using MyStack?</h3>
           <p className="muted">Choose a profile to continue.</p>
           <ul className="profile-picker-list">
             {profiles.map((p) => (

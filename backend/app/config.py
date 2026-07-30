@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,11 +12,52 @@ ensure_data_dir()
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
+def _migrate_legacy_env_prefix() -> None:
+    """Map MEDIASTACK_* env vars to MYSTACK_* when the new key is unset."""
+    for key, value in list(os.environ.items()):
+        if not key.startswith("MEDIASTACK_"):
+            continue
+        new_key = "MYSTACK_" + key[len("MEDIASTACK_") :]
+        os.environ.setdefault(new_key, value)
+        del os.environ[key]
+
+
+def _migrate_legacy_env_file(path: Path) -> None:
+    """Rewrite MEDIASTACK_ keys in .env to MYSTACK_ (keeps comments/other lines)."""
+    if not path.is_file():
+        return
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    if "MEDIASTACK_" not in text:
+        return
+    lines: list[str] = []
+    changed = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("MEDIASTACK_"):
+            lines.append(line.replace("MEDIASTACK_", "MYSTACK_", 1))
+            changed = True
+        else:
+            lines.append(line)
+    if changed:
+        try:
+            path.write_text("".join(lines), encoding="utf-8")
+        except OSError:
+            pass
+
+
+_migrate_legacy_env_prefix()
+_migrate_legacy_env_file(ENV_FILE)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="MEDIASTACK_",
+        env_prefix="MYSTACK_",
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
+        extra="ignore",
     )
     database_url: str = f"sqlite:///{database_file()}"
     mysql_import_url: str = ""
@@ -23,7 +67,7 @@ class Settings(BaseSettings):
     lastfm_api_key: str = ""
     setlistfm_api_key: str = ""
     musicbrainz_user_agent: str = (
-        "MediaStack/1.0 (https://github.com/local/mediastack; local-dev)"
+        "MyStack/1.0 (https://github.com/local/mystack; local-dev)"
     )
     cors_origins: list[str] = [
         "http://localhost:5174",
@@ -32,7 +76,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
     default_port: int = 8766
-    admin_password: str = "mediastack"
+    admin_password: str = "mystack"
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
     spotify_redirect_uri: str = ""

@@ -1004,6 +1004,11 @@ export default function SeriesFranchisePage({
                       )}
                     <button
                       type="button"
+                      className={
+                        seriesPlaying && !playerOpen
+                          ? "app-menu-chrome__live"
+                          : undefined
+                      }
                       onClick={() => setPlayerOpen((v) => !v)}
                     >
                       <IconMediaMusic className="menu-item-icon" />

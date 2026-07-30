@@ -31,7 +31,7 @@ def _ensure_index():
         return cached
     root = settings.media_root
     if not root:
-        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT")
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
     index = build_franchise_index(Path(root))
     save_franchise_index(index)
     return index
@@ -45,7 +45,7 @@ def open_local_media(path: str = Query(..., min_length=1)):
 
     root = settings.media_root
     if not root:
-        raise HTTPException(400, "Set MEDIASTACK_MEDIA_ROOT")
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
     media_root = Path(root).resolve()
     cleaned = path.replace("\\", "/").lstrip("/")
     if ".." in cleaned.split("/"):

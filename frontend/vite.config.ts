@@ -8,7 +8,7 @@ export default defineConfig({
     host: true,
     port: 5174,
     strictPort: true,
-    allowedHosts: ["mediastack", "localhost", "127.0.0.1"],
+    allowedHosts: ["mystack", "localhost", "127.0.0.1"],
     proxy: {
       "/api": "http://127.0.0.1:8766",
     },

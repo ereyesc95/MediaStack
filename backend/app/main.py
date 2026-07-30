@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MediaStack", lifespan=lifespan)
+app = FastAPI(title="MyStack", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

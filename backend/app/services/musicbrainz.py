@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 
 MB_BASE = "https://musicbrainz.org/ws/2"
-DEFAULT_UA = "MediaStack/1.0 (https://github.com/local/mediastack)"
+DEFAULT_UA = "MyStack/1.0 (https://github.com/local/mystack)"
 
 
 async def search_artist_mbid(name: str, *, user_agent: str = DEFAULT_UA) -> str | None:

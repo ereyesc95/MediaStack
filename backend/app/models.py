@@ -315,7 +315,7 @@ class BookSeries(Base):
 
 
 class Game(Base):
-    """Games module (legacy expected gamName; table added for MediaStack)."""
+    """Games module (legacy expected gamName; table added for MyStack)."""
 
     __tablename__ = "games"
 

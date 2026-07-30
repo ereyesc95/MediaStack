@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start MediaStack API on port 8766 (RecordStack-compatible stack)."""
+"""Start MyStack API on port 8766 (RecordStack-compatible stack)."""
 from __future__ import annotations
 
 import argparse
@@ -56,7 +56,7 @@ def run_import_sql(replace: bool = False) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="MediaStack")
+    parser = argparse.ArgumentParser(description="MyStack")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
@@ -77,13 +77,13 @@ def main() -> None:
         run_import_sql(replace=args.import_replace)
         return
 
-    if not (ROOT / "data" / "mediastack.db").exists() and (ROOT / "data" / "databinger.sql").is_file():
+    if not (ROOT / "data" / "mystack.db").exists() and not (ROOT / "data" / "mediastack.db").exists() and (ROOT / "data" / "databinger.sql").is_file():
         print("First run: importing databinger.sql …")
         run_import_sql(replace=False)
 
     if (ROOT / "frontend" / "dist").is_dir():
         open_url = f"http://127.0.0.1:{args.port}/"
-        print(f"MediaStack: {open_url}")
+        print(f"MyStack: {open_url}")
     else:
         open_url = "http://localhost:5174/"
         print("Dev UI: cd frontend && npm install && npm run dev")

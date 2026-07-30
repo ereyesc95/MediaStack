@@ -1,4 +1,4 @@
-"""Write embedded audio file tags from MediaStack release/track metadata."""
+"""Write embedded audio file tags from MyStack release/track metadata."""
 from __future__ import annotations
 
 import base64
