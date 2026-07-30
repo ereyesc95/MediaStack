@@ -820,6 +820,7 @@ def build_release_overview(
         "disc_url": urls.get("disc_url"),
         "playback_kind": _detect_playback_kind(content),
         "background_layers": bg_layers,
+        "banner_url": None,
         "era_icon_url": era_icon_url,
         "era_logo_url": era_logo_url,
         "spotify_url": urls.get("spotify_url"),
@@ -842,10 +843,18 @@ def build_release_overview(
 
     payload = _enrich_from_db(db, band_id, payload["title"], payload)
     from app.release_admin import apply_release_overrides
+    from app.release_banner_photos import enrich_items_with_banners
     from app.release_metadata_refresh import apply_mb_cache
 
     payload = apply_mb_cache(payload, band_id, release_id)
     payload = apply_release_overrides(payload, band_id, release_id)
+    # Era Banner photo matched by release title/year (same as catalog cards).
+    banner_item = {
+        "title": payload.get("title") or release_title,
+        "date_iso": payload.get("date_iso") or card.get("date_iso"),
+    }
+    enrich_items_with_banners(db, band_id, [banner_item])
+    payload["banner_url"] = banner_item.get("banner_url")
     if payload.get("label"):
         payload["label_logo_url"] = label_logo_url(payload["label"])
     payload["needs_metadata_fetch"] = bool(

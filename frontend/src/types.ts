@@ -919,6 +919,7 @@ export type ReleaseOverview = {
   playback_kind?: "disc" | "vinyl" | "tape";
   disc_url: string | null;
   background_layers: string[];
+  banner_url?: string | null;
   era_icon_url: string | null;
   era_logo_url: string | null;
   logo_url: string | null;

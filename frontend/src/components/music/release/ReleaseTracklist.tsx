@@ -521,14 +521,18 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       setExpandedEditionId(null);
       return;
     }
+    // Follow the playing track across editions (next/prev / track end).
+    if (playingPath) {
+      const match = data.editions.find((ed) =>
+        ed.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
+      );
+      if (match) {
+        setExpandedEditionId(match.id);
+        return;
+      }
+    }
     setExpandedEditionId((prev) => {
       if (prev && data.editions.some((e) => e.id === prev)) return prev;
-      if (playingPath) {
-        const match = data.editions.find((ed) =>
-          ed.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
-        );
-        if (match) return match.id;
-      }
       return data.editions[0]?.id ?? null;
     });
   }, [data?.editions, playingPath, bandId, releaseId]);

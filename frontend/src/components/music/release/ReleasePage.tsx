@@ -824,8 +824,9 @@ export default function ReleasePage({
     : (data?.cover_url ?? null);
   const displayAnim =
     showPlaybackMotion ? (playbackArt?.cover_animation_url ?? null) : null;
-  const displayCanvas =
-    showPlaybackMotion ? (playbackArt?.canvas_url ?? null) : null;
+  const displayCanvas = showPlaybackMotion
+    ? (playbackArt?.canvas_url ?? data?.canvas_url ?? null)
+    : null;
   const displayDisc = hasActiveTrack
     ? (playbackArt?.disc_url ?? data?.disc_url ?? DEFAULT_DISC_URL)
     : (data?.disc_url ?? DEFAULT_DISC_URL);
@@ -1323,17 +1324,44 @@ export default function ReleasePage({
     if (tab !== "gallery") {
       setGalleryTabsMeta([]);
     }
-    if (tab !== "overview") {
+    if (tab !== "overview" && !bannerLayout) {
       setOverviewDescExpanded(false);
       setMoreInfoOpen(false);
     }
-  }, [tab]);
+    if (tab !== "overview") {
+      setOverviewDescExpanded(false);
+    }
+  }, [tab, bannerLayout]);
 
   useEffect(() => {
     setMoreInfoOpen(false);
   }, [releaseId]);
 
+  // Open info when the active track changes so track meta is visible; user can still collapse.
+  useEffect(() => {
+    if (bannerLayout && playingPath) {
+      setMoreInfoOpen(true);
+    }
+  }, [playingPath, bannerLayout]);
+
   const tabletLayout = isTabletLayout(layout);
+
+  const showTrackPanel = Boolean(playingPath && nowPlayingTitle);
+  const panelFadedCover = displayCover ?? data?.cover_url ?? null;
+  const trackPanelReleaseDate =
+    versionSource?.display_date ??
+    (versionSource?.date_iso ? formatTrackDate(versionSource.date_iso) : null) ??
+    (panelDateIso ? formatTrackDate(panelDateIso) : null) ??
+    data?.display_date ??
+    null;
+
+  const trackPanelMeta = nowPlayingTitle ? parseTrackPanelMeta(nowPlayingTitle) : null;
+  const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
+  const showMobilePlayerMeta = false;
+  const showPanelReleaseMeta = !showTrackPanel;
+  /** Banner: info body is toggleable; player + neighbors stay mounted separately. */
+  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
+  const pageCanvasActive = bannerLayout && showPanelCanvas;
 
   const pageClass = [
     "release-page",
@@ -1352,28 +1380,11 @@ export default function ReleasePage({
     playingPath && miniAudio.playing ? "release-page--playing" : "",
     playingPath && isTapePlayback ? "release-page--tape" : "",
     playingPath && isVinylPlayback ? "release-page--vinyl" : "",
+    pageCanvasActive ? "release-page--canvas" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  const showTrackPanel =
-    Boolean(nowPlayingTitle) &&
-    (isPlaying || Boolean(versionSource));
-  const panelFadedCover = displayCover ?? data?.cover_url ?? null;
-  const trackPanelReleaseDate =
-    versionSource?.display_date ??
-    (versionSource?.date_iso ? formatTrackDate(versionSource.date_iso) : null) ??
-    (panelDateIso ? formatTrackDate(panelDateIso) : null) ??
-    data?.display_date ??
-    null;
-
-  const trackPanelMeta = nowPlayingTitle ? parseTrackPanelMeta(nowPlayingTitle) : null;
-  const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
-  const showMobilePlayerMeta = false;
-  const showPanelReleaseMeta = !showTrackPanel;
-  const bannerMetaHidden =
-    bannerLayout && !showTrackPanel && (tab !== "overview" || !moreInfoOpen);
-  const pageCanvasActive = bannerLayout && showPanelCanvas;
   const mountTracklist = tab === "tracklist" || Boolean(playingPath);
   const cachedTracklist = getCachedReleaseTracklist(bandId, releaseId);
   const cachedGallery = getCachedReleaseGallery(bandId, releaseId);
@@ -1430,10 +1441,8 @@ export default function ReleasePage({
               className="release-page__banner-bg"
               style={{
                 backgroundImage: `url("${
-                  (playingPath
-                    ? playbackArt?.background_layers?.[0]
-                    : null) ||
-                  data.background_layers?.[0] ||
+                  data.banner_url ||
+                  data.gallery_photo_url ||
                   data.photocards?.landscape_front ||
                   albumCover ||
                   ""
@@ -1499,14 +1508,18 @@ export default function ReleasePage({
         )}
       </div>
 
-      {bannerLayout && tab === "overview" ? (
+      {bannerLayout ? (
         <button
           type="button"
-          className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}`}
+          className={`release-page__more-info${moreInfoOpen ? " is-open" : ""}${
+            showTrackPanel && trackPanelMeta ? " release-page__more-info--track" : ""
+          }`}
           onClick={() => setMoreInfoOpen((o) => !o)}
           aria-expanded={moreInfoOpen}
         >
-          More info
+          {showTrackPanel && trackPanelMeta
+            ? trackPanelMeta.mainTitle
+            : "More info"}
         </button>
       ) : null}
 
@@ -1673,6 +1686,94 @@ export default function ReleasePage({
                     ))}
                   </p>
                 )}
+                {bannerLayout && panelActionTrack ? (
+                  <div className="release-page__track-actions release-page__track-actions--in-info">
+                    {showLyricsAction && (
+                      <button
+                        type="button"
+                        className="release-page__track-action"
+                        data-tooltip="Lyrics"
+                        aria-label="Lyrics"
+                        onClick={() => {
+                          if (stacked) setMobileTrackView("tracks");
+                          tracklistRef.current?.openLyrics(panelActionTrack);
+                        }}
+                      >
+                        <TrackActionLyricsIcon className="release-page__track-action-icon" />
+                      </button>
+                    )}
+                    {showVersionsAction && (
+                      <button
+                        type="button"
+                        className="release-page__track-action"
+                        data-tooltip="Versions"
+                        aria-label="Versions"
+                        onClick={() => {
+                          if (stacked) setMobileTrackView("tracks");
+                          tracklistRef.current?.openVersions(panelActionTrack);
+                        }}
+                      >
+                        <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="release-page__track-action"
+                      data-tooltip="Add to playlist"
+                      aria-label="Add to playlist"
+                      onClick={() => tracklistRef.current?.openPlus(panelActionTrack)}
+                    >
+                      <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+                    </button>
+                    {panelVideos.length > 0 && (
+                      <div
+                        ref={youtubePickerRef}
+                        className="release-page__youtube-picker-wrap"
+                      >
+                        <button
+                          type="button"
+                          className="release-page__track-action"
+                          data-tooltip={
+                            panelVideos.length > 1 ? "Choose video" : "Official video"
+                          }
+                          aria-label={
+                            panelVideos.length > 1 ? "Choose video" : "Official video"
+                          }
+                          aria-expanded={
+                            panelVideos.length > 1 ? youtubePickerOpen : undefined
+                          }
+                          onClick={() => {
+                            if (panelVideos.length <= 1) {
+                              handleOpenYoutube(panelVideos[0]!.url);
+                              return;
+                            }
+                            setYoutubePickerOpen((open) => !open);
+                          }}
+                        >
+                          <TrackActionYoutubeIcon className="release-page__track-action-icon" />
+                        </button>
+                        {panelVideos.length > 1 && youtubePickerOpen && (
+                          <div className="release-page__youtube-picker" role="menu">
+                            {panelVideos.map((video) => (
+                              <button
+                                key={video.url}
+                                type="button"
+                                className="release-page__youtube-picker-item"
+                                role="menuitem"
+                                onClick={() => handleOpenYoutube(video.url)}
+                              >
+                                <span className="release-page__youtube-picker-label">
+                                  {video.label}
+                                  {video.primary ? " · Primary" : ""}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
           ) : (
             <>
@@ -1779,6 +1880,7 @@ export default function ReleasePage({
 
         </div>
 
+          {!bannerLayout ? (
           <div className="release-page__panel-bottom" ref={panelBottomRef}>
           {showPanelReleaseMeta && data.label && (
             <div className="release-page__label" ref={panelLabelRef}>
@@ -1938,7 +2040,84 @@ export default function ReleasePage({
           </div>
         </div>
         </div>
+          ) : showPanelReleaseMeta ? (
+            <>
+              {data.label && (
+                <div className="release-page__label" ref={panelLabelRef}>
+                  <button
+                    type="button"
+                    className="release-page__label-logo-btn"
+                    onClick={() => onOpenCatalogLabel?.(data.label!)}
+                    aria-label={`Browse ${data.label} label`}
+                  >
+                    <img
+                      src={labelLogoSrc}
+                      alt={data.label}
+                      className="release-page__label-logo"
+                    />
+                  </button>
+                  <p className="release-page__label-name">
+                    Distributed by{" "}
+                    <button
+                      type="button"
+                      className="release-page__person-link"
+                      onClick={() => onOpenCatalogLabel?.(data.label!)}
+                    >
+                      {data.label}
+                    </button>
+                  </p>
+                </div>
+              )}
+              {(data.spotify_url || data.qr_url) && (
+                <div className="release-page__extras">
+                  {data.spotify_url && (
+                    <img src={data.spotify_url} alt="Spotify" className="release-page__spotify" />
+                  )}
+                  {data.qr_url && (
+                    <img src={data.qr_url} alt="QR" className="release-page__qr" />
+                  )}
+                </div>
+              )}
+            </>
+          ) : null}
       </div>
+
+      {bannerLayout ? (
+        <div className="release-page__panel-dock" ref={panelBottomRef}>
+          <div className="release-page__panel-footer">
+            <div className="release-page__panel-player">
+              <MiniAudioPlayerControls
+                {...miniAudio}
+                toggle={handlePanelPlayToggle}
+                onPrev={() => playAdjacentTrack("prev")}
+                onNext={() => playAdjacentTrack("next")}
+                repeatOne={repeatOne}
+                onRepeatToggle={() => setRepeatOne((r) => !r)}
+              />
+            </div>
+            <div className="release-page__panel-bottom-bar">
+              {data.prev ? (
+                <ReleaseNeighborLink
+                  neighbor={data.prev}
+                  direction="prev"
+                  onClick={() => onOpenRelease(bandId, data.prev!.id)}
+                />
+              ) : (
+                <span className="release-page__neighbor-spacer" />
+              )}
+              {data.next ? (
+                <ReleaseNeighborLink
+                  neighbor={data.next}
+                  direction="next"
+                  onClick={() => onOpenRelease(bandId, data.next!.id)}
+                />
+              ) : (
+                <span className="release-page__neighbor-spacer" />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       </div>
     </aside>
   ) : null;
