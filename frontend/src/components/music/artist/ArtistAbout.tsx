@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatTrackDate } from "../../../formatDate";
 import type { BandOverview } from "../../../types";
-import { DEFAULT_ARTIST_PHOTO_URL, trackDisplayTitle } from "../release/releaseTrackPanelMeta";
+import { trackDisplayTitle, defaultArtistHeroUrl } from "../release/releaseTrackPanelMeta";
 import ArtistWordCloud from "./ArtistWordCloud";
 
 type Era = BandOverview["eras"][number];
@@ -113,7 +113,7 @@ export default function ArtistAbout({
   };
 
   const heroUrl =
-    (era ? eraHeroUrl(era, stacked) : undefined) ?? DEFAULT_ARTIST_PHOTO_URL;
+    (era ? eraHeroUrl(era, stacked) : undefined) ?? defaultArtistHeroUrl(stacked);
   const [photoLayers, setPhotoLayers] = useState<{
     current: string | undefined;
     outgoing: string | undefined;

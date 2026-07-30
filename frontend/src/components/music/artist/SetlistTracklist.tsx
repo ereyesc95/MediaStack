@@ -33,6 +33,14 @@ function youtubeSearchUrl(query: string): string {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
+/** Ensure setlist cover artist appears as ``[Artist cover]`` for title/suffix parsing. */
+export function setlistTitleForDisplay(track: SetlistTrackItem): string {
+  const title = (track.setlist_title || track.title || "").trim();
+  const coverArtist = (track.cover_artist || "").trim();
+  if (!coverArtist || /\[.*?cover\]/i.test(title)) return title;
+  return `${title} [${coverArtist} cover]`;
+}
+
 type Props = {
   editions: ReleaseEdition[];
   playingPath: string | null;
@@ -65,12 +73,7 @@ export default function SetlistTracklist({
                       {(group.tracks as SetlistTrackItem[]).map((track) => {
                         const active = Boolean(track.play_path && playingPath === track.play_path);
                         const unavailable = Boolean(track.unavailable || !track.play_path);
-                        const title = track.setlist_title ?? track.title;
-                        const coverArtist = (track.cover_artist || "").trim();
-                        const titleForDisplay =
-                          coverArtist && !/\[.*?cover\]/i.test(title)
-                            ? `${title} [${coverArtist} cover]`
-                            : title;
+                        const titleForDisplay = setlistTitleForDisplay(track);
                         const displayTitle = trackDisplayTitle(titleForDisplay);
                         return (
                           <li
@@ -124,7 +127,8 @@ export default function SetlistTracklist({
                                   onPanelTrack?.({
                                     ...track,
                                     title: titleForDisplay,
-                                  });
+                                    setlist_title: titleForDisplay,
+                                  } as SetlistTrackItem);
                                 }}
                                 aria-label={`Play ${displayTitle}`}
                               >
@@ -163,8 +167,14 @@ export function flattenPlayableSetlistTracks(editions: ReleaseEdition[]): Releas
   for (const ed of editions) {
     for (const group of ed.groups) {
       for (const track of group.tracks) {
-        if (track.play_path && !(track as SetlistTrackItem).unavailable) {
-          out.push(track);
+        const item = track as SetlistTrackItem;
+        if (track.play_path && !item.unavailable) {
+          const titleForDisplay = setlistTitleForDisplay(item);
+          out.push({
+            ...track,
+            title: titleForDisplay,
+            setlist_title: titleForDisplay,
+          } as SetlistTrackItem);
         }
       }
     }

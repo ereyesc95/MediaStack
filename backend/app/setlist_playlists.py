@@ -304,6 +304,16 @@ def _artist_name_key(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (name or "").casefold())
 
 
+def _title_with_cover(display_title: str, cover_artist: str | None) -> str:
+    title = (display_title or "").strip()
+    cover = (cover_artist or "").strip()
+    if not cover or not title:
+        return title
+    if _cover_artist_from_brackets(title):
+        return title
+    return f"{title} [{cover} cover]"
+
+
 def _cover_artist_from_brackets(text: str) -> str | None:
     remaining = (text or "").strip()
     while True:
@@ -515,6 +525,7 @@ def build_setlist_tracklist(
             match_title = _normalize_setlist_song_title(raw_name)
             display_title = match_title or raw_name
             cover_artist = _cover_artist_from_setlist_song(song, raw_name)
+            setlist_display = _title_with_cover(display_title, cover_artist)
 
             matched_path = None
             entry: dict | None = None
@@ -540,24 +551,26 @@ def build_setlist_tracklist(
                 track.update(
                     _setlist_track_meta(
                         track_id=track_id,
-                        title=display_title,
+                        title=setlist_display,
                         event_date=event_date,
                         is_tape=is_tape,
                         number=None if is_tape else track_num,
                     )
                 )
-                track["title"] = (
+                # Prefer setlist display title (includes cover tag); keep file stem as fallback.
+                file_title = (
                     display_track_title_from_path(matched_path)
                     if matched_path
                     else display_title
                 )
+                track["title"] = _title_with_cover(file_title, cover_artist) or setlist_display
                 track["unavailable"] = False
                 if cover_artist:
                     track["cover_artist"] = cover_artist
             else:
                 track = _unavailable_setlist_track(
                     track_id=track_id,
-                    title=display_title,
+                    title=setlist_display,
                     event_date=event_date,
                     is_tape=is_tape,
                     number=None if is_tape else track_num,

@@ -26,10 +26,31 @@ def _first_existing(base: Path, stem: str) -> Path | None:
 
 
 def _stem(name: str) -> str:
-    for ext in (".png", ".jpg", ".webp"):
+    for ext in (".png", ".jpg", ".webp", ".svg"):
         if name.lower().endswith(ext):
             return name[: -len(ext)]
     return name
+
+
+# Legacy / alternate stems for default folder assets.
+_DEFAULT_STEM_ALIASES: dict[str, tuple[str, ...]] = {
+    "artists": ("placeholder - portrait", "placeholder-portrait"),
+    "default artists": ("placeholder - portrait", "placeholder-portrait"),
+    "placeholder - portrait": ("placeholder-portrait",),
+    "placeholder - landscape": ("placeholder-landscape",),
+    "placeholder-portrait": ("placeholder - portrait",),
+    "placeholder-landscape": ("placeholder - landscape",),
+}
+
+
+def _resolve_default_asset(root: Path, name: str) -> Path | None:
+    stem = _stem(name)
+    candidates = (stem, *_DEFAULT_STEM_ALIASES.get(stem.casefold(), ()))
+    for candidate in candidates:
+        found = _first_existing(root / "default", candidate)
+        if found:
+            return found
+    return None
 
 
 def _resolve_under(root: Path, slug: str) -> Path | None:
@@ -49,7 +70,7 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
         if folder == "labels":
             return _first_existing(root / "labels", stem)
         if folder == "default":
-            return _first_existing(root / "default", stem)
+            return _resolve_default_asset(root, name)
         if folder in NESTED_PREFIXES:
             return _first_existing(root / folder, stem)
 

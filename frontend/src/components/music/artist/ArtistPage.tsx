@@ -90,7 +90,7 @@ import ArtistMediaGrid from "./ArtistMediaGrid";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import {
-  DEFAULT_ARTIST_PHOTO_URL,
+  defaultArtistBgUrl,
   trackMainTitle,
 } from "../release/releaseTrackPanelMeta";
 
@@ -508,7 +508,7 @@ export default function ArtistPage({
 
   const bgUrl = useMemo(() => {
     const eraBg =
-      pageBgUrl(era, stacked) ?? shell?.photo_url ?? DEFAULT_ARTIST_PHOTO_URL;
+      pageBgUrl(era, stacked) ?? shell?.photo_url ?? defaultArtistBgUrl(stacked);
 
     if (playing && playingPath) {
       const track = playableTracks.find((t) => t.play_path === playingPath);
@@ -516,7 +516,7 @@ export default function ArtistPage({
     }
 
     if (data?.is_various_artists) {
-      return DEFAULT_ARTIST_PHOTO_URL;
+      return defaultArtistBgUrl(stacked);
     }
 
     return eraBg;

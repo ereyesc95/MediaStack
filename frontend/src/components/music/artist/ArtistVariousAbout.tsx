@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { formatTrackDate } from "../../../formatDate";
 import type { BandOverview, VariousArtistsHub } from "../../../types";
-import { DEFAULT_ARTIST_PHOTO_URL } from "../release/releaseTrackPanelMeta";
+import { defaultArtistHeroUrl } from "../release/releaseTrackPanelMeta";
 import { openArtistByName } from "./openArtistByName";
 
 type Props = {
@@ -48,7 +48,7 @@ export default function ArtistVariousAbout({
   const photoColRef = useRef<HTMLDivElement>(null);
   const photoStageRef = useRef<HTMLDivElement>(null);
   const bioScrollRef = useRef<HTMLDivElement>(null);
-  const photoUrl = DEFAULT_ARTIST_PHOTO_URL;
+  const photoUrl = defaultArtistHeroUrl(stacked);
 
   const featuredReleases = hub.featured_compilations.slice(0, MAX_RELEASES);
   const featuredTracks = hub.featured_tracks.slice(0, MAX_TRACKS);
