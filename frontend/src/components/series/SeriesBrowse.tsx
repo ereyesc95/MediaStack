@@ -65,10 +65,15 @@ function showMeta(s: SeriesSubseriesCard): string {
   return s.display_date ? `${seasons} · ${s.display_date}` : seasons;
 }
 
-function franchiseMeta(f: SeriesFranchiseCard): string {
+function franchiseMeta(
+  f: SeriesFranchiseCard,
+  unitNoun: "season" | "film" = "season"
+): string {
+  const unit = `${f.season_count} ${unitNoun}${f.season_count === 1 ? "" : "s"}`;
+  if (unitNoun === "film") return unit;
   return f.subseries_count > 0
-    ? `${f.subseries_count} subseries · ${f.season_count} seasons`
-    : `${f.season_count} season${f.season_count === 1 ? "" : "s"}`;
+    ? `${f.subseries_count} subseries · ${unit}`
+    : unit;
 }
 
 type Props = {
@@ -86,6 +91,8 @@ type Props = {
   subgenreId: number | "";
   publisher: string;
   writer: string;
+  /** Movies catalog uses film counts mapped onto season_count. */
+  unitNoun?: "season" | "film";
   loading?: boolean;
   onSearchChange: (v: string) => void;
   onLetterChange: (v: string) => void;
@@ -119,6 +126,7 @@ export default function SeriesBrowse({
   subgenreId,
   publisher,
   writer,
+  unitNoun = "season",
   loading,
   onSearchChange,
   onLetterChange,
@@ -469,7 +477,7 @@ export default function SeriesBrowse({
         icon_url: f.icon_url,
         badge_url: f.badge_url,
         date_iso: null,
-        meta: franchiseMeta(f),
+        meta: franchiseMeta(f, unitNoun),
       })
     );
   }, [

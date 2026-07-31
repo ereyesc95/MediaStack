@@ -26,6 +26,7 @@ import HubPage from "./components/HubPage";
 import type { MediaOption } from "./components/ModuleTopBar";
 
 import MusicModule from "./components/music/MusicModule";
+import MoviesModule from "./components/movies/MoviesModule";
 import SeriesModule from "./components/series/SeriesModule";
 
 import { toStackName } from "./mediaStack";
@@ -35,6 +36,13 @@ import {
   saveOrientation,
 } from "./themes";
 import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
+import {
+  parseMoviesCatalogPath,
+  parseMoviesPath,
+  parseMoviesRootPath,
+  pushMoviesRootRoute,
+  pushMoviesRoute,
+} from "./moviesRoute";
 import {
   parseSeriesCatalogPath,
   parseSeriesPath,
@@ -144,6 +152,7 @@ export default function App() {
       });
     } else {
       const seriesRoute = parseSeriesPath(window.location.pathname);
+      const moviesRoute = parseMoviesPath(window.location.pathname);
       if (seriesRoute) {
         setView({
           kind: "series",
@@ -158,6 +167,19 @@ export default function App() {
         parseSeriesRootPath(window.location.pathname)
       ) {
         setView({ kind: "series" });
+      } else if (moviesRoute) {
+        setView({
+          kind: "movies",
+          franchiseId: moviesRoute.franchiseId,
+          filmId: moviesRoute.filmId,
+          section: moviesRoute.section,
+          overviewTab: moviesRoute.overviewTab,
+        });
+      } else if (
+        parseMoviesCatalogPath(window.location.pathname) ||
+        parseMoviesRootPath(window.location.pathname)
+      ) {
+        setView({ kind: "movies" });
       } else {
         const route = parseArtistPath(window.location.pathname);
         if (route) {
@@ -398,12 +420,14 @@ export default function App() {
       return;
     }
 
-    if (opt.kind === "movies") setView({ kind: "movies" });
+    if (opt.kind === "movies") {
+      pushMoviesRootRoute();
+      setView({ kind: "movies" });
+      return;
+    }
 
-    else if (opt.kind === "books") setView({ kind: "books" });
-
+    if (opt.kind === "books") setView({ kind: "books" });
     else if (opt.kind === "games") setView({ kind: "games" });
-
   }
 
 
@@ -790,13 +814,79 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
+            onOpenMoviesFranchise={(franchiseId, filmId) => {
+              pushMoviesRoute({
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+          />
+        )}
+
+        {appReady && view.kind === "movies" && (
+          <MoviesModule
+            key={`movies-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            busy={busy}
+            onImport={handleImport}
+            onSync={handleSync}
+            onSelectMedia={selectMedia}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            userId={profile?.user_id}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+            franchiseId={view.franchiseId}
+            filmId={view.filmId}
+            section={view.section}
+            overviewTab={view.overviewTab}
+            cardOrientation={cardOrientation}
+            onSetOrientation={setOrientation}
+            onNavigate={(patch) =>
+              setView({
+                kind: "movies",
+                franchiseId:
+                  "franchiseId" in patch ? patch.franchiseId : view.franchiseId,
+                filmId: "filmId" in patch ? patch.filmId : view.filmId,
+                section: patch.section ?? view.section,
+                overviewTab:
+                  "overviewTab" in patch
+                    ? patch.overviewTab
+                    : view.overviewTab,
+              })
+            }
+            onOpenSeriesFranchise={(franchiseId) => {
+              pushSeriesRoute({
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
           />
         )}
 
         {appReady &&
           view.kind !== "hub" &&
           view.kind !== "music" &&
-          view.kind !== "series" && (
+          view.kind !== "series" &&
+          view.kind !== "movies" && (
 
           <>
 

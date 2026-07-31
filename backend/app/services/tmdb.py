@@ -1,4 +1,4 @@
-"""TMDb API helpers for TV / series metadata."""
+"""TMDb API helpers for TV / series / movie metadata."""
 from __future__ import annotations
 
 from typing import Any
@@ -398,3 +398,68 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
         "poster_url": image_url(data.get("poster_path"), "w780"),
         "backdrop_url": image_url(data.get("backdrop_path"), "w1280"),
     }
+
+
+async def search_movie_id(
+    name: str, api_key: str, *, year: int | None = None
+) -> tuple[int | None, str | None]:
+    folder_name = name.replace("■", ",").replace("█", "'")
+    params: dict[str, Any] = {"api_key": api_key, "query": folder_name}
+    if year:
+        params["year"] = year
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{TMDB_BASE}/search/movie", params=params)
+        r.raise_for_status()
+        data = r.json()
+    results = data.get("results") or []
+    if not results:
+        return None, None
+    top = results[0]
+    return top.get("id"), top.get("title") or top.get("original_title")
+
+
+async def fetch_movie(
+    movie_id: int | str,
+    api_key: str,
+    *,
+    append: str = "credits,external_ids,images,keywords,alternative_titles,recommendations,similar,belongs_to_collection",
+) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        r = await client.get(
+            f"{TMDB_BASE}/movie/{movie_id}",
+            params={
+                "api_key": api_key,
+                "append_to_response": append,
+                "include_image_language": "en,null",
+            },
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+async def fetch_collection(collection_id: int | str, api_key: str) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        r = await client.get(
+            f"{TMDB_BASE}/collection/{collection_id}",
+            params={"api_key": api_key},
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+async def search_collection_id(
+    name: str, api_key: str
+) -> tuple[int | None, str | None]:
+    folder_name = name.replace("■", ",").replace("█", "'")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{TMDB_BASE}/search/collection",
+            params={"api_key": api_key, "query": folder_name},
+        )
+        r.raise_for_status()
+        data = r.json()
+    results = data.get("results") or []
+    if not results:
+        return None, None
+    top = results[0]
+    return top.get("id"), top.get("name")

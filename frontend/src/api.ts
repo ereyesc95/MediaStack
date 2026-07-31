@@ -1574,6 +1574,68 @@ export async function setMediaRoot(path: string): Promise<{
   });
 }
 
+export async function fetchMoviesCatalog() {
+  return request<{
+    franchises: SeriesFranchiseCard[];
+    films: import("./types").MoviesFilmCard[];
+    scanned_at: string | null;
+  }>(`${API}/movies/catalog`);
+}
+
+export async function fetchMoviesDashboard() {
+  return request<{
+    top_franchises: SeriesFranchiseCard[];
+    top_films: import("./types").MoviesFilmCard[];
+    franchise_count: number;
+    film_count: number;
+    scanned_at: string | null;
+  }>(`${API}/movies/dashboard`);
+}
+
+export async function fetchMoviesFranchise(workId: string) {
+  return request<import("./types").MoviesWorkDetail>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}`
+  );
+}
+
+export async function fetchMoviesFilm(filmId: string) {
+  return request<import("./types").MoviesFilmDetail>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}`
+  );
+}
+
+export async function resolveMoviesPath(path: string) {
+  return request<{
+    work_id: string;
+    film_id: string | null;
+    letter?: string;
+    name?: string;
+    film_title?: string;
+  }>(`${API}/movies/resolve?path=${encodeURIComponent(path)}`);
+}
+
+export async function fetchMoviesFranchiseSeries(workId: string) {
+  return request<{
+    items: {
+      id: string;
+      title: string;
+      date_iso?: string | null;
+      path?: string;
+      cover_url?: string | null;
+      navigate_franchise_id?: string;
+      open_mode?: string;
+    }[];
+    count: number;
+  }>(`${API}/movies/franchises/${encodeURIComponent(workId)}/media/series`);
+}
+
+export async function refreshMoviesUniverse(workId: string) {
+  return request<import("./types").MoviesUniverse & { parts?: unknown[] }>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/refresh-universe`,
+    { method: "POST" }
+  );
+}
+
 export async function fetchSeriesCatalog() {
   return request<SeriesCatalogPayload>(`${API}/series/catalog`);
 }

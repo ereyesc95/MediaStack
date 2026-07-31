@@ -3,6 +3,7 @@ import {
   fetchSeriesCatalog,
   fetchSeriesDashboard,
   fetchSeriesFilterOptions,
+  resolveMoviesPath,
 } from "../../api";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
@@ -76,6 +77,7 @@ type Props = {
     }
   ) => void;
   onOpenArtist?: (bandId: number) => void;
+  onOpenMoviesFranchise?: (franchiseId: string, filmId?: string) => void;
 };
 
 export default function SeriesModule({
@@ -99,6 +101,7 @@ export default function SeriesModule({
   onNavigate,
   onOpenMusicRelease,
   onOpenArtist,
+  onOpenMoviesFranchise,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
     if (franchiseId) return "catalog";
@@ -380,6 +383,15 @@ export default function SeriesModule({
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}
+          onOpenMoviesPath={(path) => {
+            void resolveMoviesPath(path)
+              .then((hit) => {
+                onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
+              })
+              .catch(() => {
+                /* fall through — keep series movies tab usable offline */
+              });
+          }}
           onShellUpdate={(next) => {
             setFranchiseShell((prev) => {
               if (

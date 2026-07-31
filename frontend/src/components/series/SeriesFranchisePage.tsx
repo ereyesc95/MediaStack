@@ -112,6 +112,7 @@ type Props = {
   }) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
+  onOpenMoviesPath?: (path: string) => void;
   onShellUpdate?: (shell: SeriesFranchiseShell) => void;
 };
 
@@ -170,6 +171,7 @@ export default function SeriesFranchisePage({
   onBrowseCatalog,
   onOpenMusicRelease,
   onOpenArtist,
+  onOpenMoviesPath,
   onShellUpdate,
 }: Props) {
   const layout = useDeviceLayout();
@@ -762,6 +764,14 @@ export default function SeriesFranchisePage({
     }
     if (item.navigate_band_id && item.navigate_release_id) {
       onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
+      return;
+    }
+    const diskPath = (item.path || "").replace(/\\/g, "/");
+    if (
+      onOpenMoviesPath &&
+      diskPath.toLowerCase().startsWith("movies/")
+    ) {
+      onOpenMoviesPath(diskPath);
       return;
     }
     const url = item.open_url?.trim();

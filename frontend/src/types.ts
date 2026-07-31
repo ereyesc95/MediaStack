@@ -1008,9 +1008,89 @@ export type View =
       section?: SeriesSection;
       overviewTab?: SeriesOverviewTab;
     }
-  | { kind: "movies" }
+  | {
+      kind: "movies";
+      franchiseId?: string;
+      filmId?: string;
+      section?: import("./moviesRoute").MoviesSection;
+      overviewTab?: import("./moviesRoute").MoviesOverviewTab;
+    }
   | { kind: "books" }
   | { kind: "games" };
+
+export type MoviesFilmCard = {
+  id: string;
+  title: string;
+  date_iso: string | null;
+  display_date?: string | null;
+  folder_path: string;
+  folder_name?: string;
+  cover_url: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
+  badge_url?: string | null;
+  has_video?: boolean;
+  version_count?: number;
+  work_id?: string;
+  work_name?: string;
+  letter?: string;
+};
+
+export type MoviesUniverse = {
+  id: number;
+  name: string;
+  slug: string;
+  overview?: string | null;
+  poster_url?: string | null;
+  backdrop_url?: string | null;
+  work_slugs?: string[];
+  member_count?: number;
+};
+
+export type MoviesWorkDetail = SeriesFranchiseCard & {
+  films: MoviesFilmCard[];
+  film_count: number;
+  is_standalone?: boolean;
+  primary_film_id?: string | null;
+  has_gallery?: boolean;
+  universe?: MoviesUniverse | null;
+};
+
+export type MoviesFilmDetail = {
+  id: string;
+  kind: "film";
+  title: string;
+  date_iso: string | null;
+  display_date?: string | null;
+  folder_path: string;
+  cover_url: string | null;
+  banner_url?: string | null;
+  cover_back_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
+  badge_url?: string | null;
+  has_gallery?: boolean;
+  has_video?: boolean;
+  versions: {
+    id: string;
+    label: string;
+    play_path: string;
+    file_url?: string | null;
+    file_name?: string;
+  }[];
+  work: {
+    id: string;
+    name: string;
+    letter: string;
+    folder_path: string;
+    cover_url: string | null;
+    logo_url?: string | null;
+    icon_url?: string | null;
+    is_standalone?: boolean;
+  };
+  universe?: MoviesUniverse | null;
+};
 
 export type SeriesSubseriesCard = {
   id: string;
