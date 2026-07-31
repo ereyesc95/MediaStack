@@ -202,6 +202,9 @@ export default function MoviesModule({
         filmId={filmId}
         workId={franchiseId}
         overviewTab={overviewTab}
+        section={section === "gallery" ? "gallery" : "overview"}
+        isAdmin={isAdmin}
+        userId={userId}
         onBack={() =>
           onNavigate({
             franchiseId,
@@ -217,7 +220,20 @@ export default function MoviesModule({
             overviewTab: "about",
           })
         }
+        onNavigate={(patch) =>
+          onNavigate({
+            franchiseId,
+            filmId,
+            section: (patch.section as MoviesSection) || section,
+            overviewTab: patch.overviewTab || overviewTab,
+          })
+        }
         onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onImport={onImport}
+        onSync={onSync}
+        onChooseSource={onChooseSource}
+        onSwitchProfile={onSwitchProfile}
+        onEditProfile={onEditProfile}
       />
     );
   }

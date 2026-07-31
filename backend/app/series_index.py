@@ -859,9 +859,17 @@ def build_series_gallery(rel_path: str, media_root: Path | None = None) -> dict:
         return {"folder_path": rel_path, "items": [], "sections": []}
     if not folder.is_dir():
         return {"folder_path": rel_path, "items": [], "sections": []}
+    under_series = True
+    under_movies = True
     try:
         folder.relative_to(root / "Series")
     except ValueError:
+        under_series = False
+    try:
+        folder.relative_to(root / "Movies")
+    except ValueError:
+        under_movies = False
+    if not under_series and not under_movies:
         return {"folder_path": rel_path, "items": [], "sections": []}
 
     sections = gallery_sections(folder, root)

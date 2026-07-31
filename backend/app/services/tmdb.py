@@ -400,6 +400,383 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def fetch_person_movie_credits(
+    person_id: int, api_key: str
+) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{TMDB_BASE}/person/{person_id}/movie_credits",
+            params={"api_key": api_key},
+        )
+        r.raise_for_status()
+        data = r.json()
+    return list(data.get("cast") or []) + list(data.get("crew") or [])
+
+
+def _movie_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    tid = item.get("id")
+    name = item.get("title") or item.get("original_title") or item.get("name")
+    if not tid or not name:
+        return None
+    return {
+        "id": tid,
+        "tmdb_id": tid,
+        "title": name,
+        "name": name,
+        "date_iso": item.get("release_date") or item.get("first_air_date"),
+        "poster_url": image_url(item.get("poster_path"), "w342"),
+        "cover_url": image_url(item.get("poster_path"), "w342"),
+        "overview": (item.get("overview") or "")[:280] or None,
+    }
+
+
+def build_related_from_movie(
+    data: dict[str, Any],
+    *,
+    creator_credits: list[dict[str, Any]] | None = None,
+    self_id: int | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Build same-creator + similar movie lists from TMDb payloads."""
+    self_id = self_id or data.get("id")
+    similar: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    if self_id:
+        seen.add(int(self_id))
+
+    def add(bucket: list[dict[str, Any]], raw: dict[str, Any]) -> None:
+        card = _movie_card(raw)
+        if not card:
+            return
+        tid = int(card["tmdb_id"])
+        if tid in seen:
+            return
+        seen.add(tid)
+        bucket.append(card)
+
+    for raw in (data.get("recommendations") or {}).get("results") or []:
+        add(similar, raw)
+    for raw in (data.get("similar") or {}).get("results") or []:
+        add(similar, raw)
+
+    creator: list[dict[str, Any]] = []
+    creator_seen: set[int] = set(seen)
+    for raw in creator_credits or []:
+        card = _movie_card(raw)
+        if not card:
+            continue
+        tid = int(card["tmdb_id"])
+        if tid in creator_seen:
+            continue
+        if raw.get("character") and not raw.get("job") and not raw.get("department"):
+            continue
+        creator_seen.add(tid)
+        creator.append(card)
+
+    return {
+        "creator": creator[:24],
+        "similar": similar[:24],
+    }
+
+
+def normalize_movie_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Flatten TMDb movie payload into MyStack overview fields (Series-shaped)."""
+    genres = [
+        {"id": g.get("id"), "name": g.get("name")}
+        for g in (data.get("genres") or [])
+        if g.get("name")
+    ]
+    companies = [
+        c.get("name")
+        for c in (data.get("production_companies") or [])
+        if c.get("name")
+    ]
+    publishers = list(dict.fromkeys(companies))
+
+    credits = data.get("credits") or {}
+    cast_raw = credits.get("cast") or []
+    crew_raw = credits.get("crew") or []
+
+    writers: list[dict[str, Any]] = []
+    writer_names: set[str] = set()
+    directors: list[dict[str, Any]] = []
+    for c in crew_raw:
+        job = (c.get("job") or "").casefold()
+        dept = (c.get("department") or "").casefold()
+        name = c.get("name")
+        if not name:
+            continue
+        if job == "director":
+            directors.append(
+                {
+                    "id": c.get("id"),
+                    "name": name,
+                    "profile_path": c.get("profile_path"),
+                    "role": "Director",
+                }
+            )
+        if job in {"writer", "story", "screenplay", "creator"} or (
+            dept == "writing" and name not in writer_names
+        ):
+            if name not in writer_names:
+                writers.append(
+                    {
+                        "id": c.get("id"),
+                        "name": name,
+                        "profile_path": c.get("profile_path"),
+                        "role": "Writer",
+                    }
+                )
+                writer_names.add(name)
+
+    genre_names = {g["name"].casefold() for g in genres}
+    is_animated = "animation" in genre_names
+
+    MAIN_CAST_MAX_ORDER = 7
+    MAIN_CAST_LIMIT = 8
+
+    from app.series_admin import stable_cast_member_id
+    from app.series_languages import normalize_lang_code, split_character_names
+
+    origin_lang = normalize_lang_code(data.get("original_language")) or "en"
+
+    by_character: dict[str, dict[str, Any]] = {}
+    for c in cast_raw[:40]:
+        order = c.get("order")
+        if isinstance(order, int) and order > MAIN_CAST_MAX_ORDER:
+            continue
+        actor_name = (c.get("name") or "").strip() or None
+        if not actor_name and not c.get("character"):
+            continue
+        actor_photo = image_url(c.get("profile_path"), "w185")
+        char_names = split_character_names(c.get("character"))
+        if not char_names:
+            # Live-action / VA with blank character → treat as actor card
+            if actor_name:
+                char_names = [actor_name]
+            else:
+                continue
+        for char_name in char_names:
+            key = char_name.casefold()
+            performance = {
+                "language": origin_lang,
+                "actor_name": actor_name,
+                "actor_id": c.get("id"),
+                "photo_url": actor_photo,
+            }
+            if key not in by_character:
+                by_character[key] = {
+                    "id": stable_cast_member_id(char_name, prefix="char"),
+                    "name": char_name,
+                    "character": char_name,
+                    "photo_url": actor_photo,
+                    "actor_photo_url": actor_photo,
+                    "character_photo_url": actor_photo,
+                    "performances": [performance],
+                    "actors": (
+                        [
+                            {
+                                "id": c.get("id"),
+                                "name": actor_name,
+                                "photo_url": actor_photo,
+                                "language": origin_lang,
+                            }
+                        ]
+                        if actor_name
+                        else []
+                    ),
+                    "roles": [actor_name] if actor_name else [],
+                    "is_deceased": False,
+                }
+            else:
+                entry = by_character[key]
+                langs = {
+                    (p.get("language") or "").casefold()
+                    for p in entry.get("performances") or []
+                }
+                if origin_lang.casefold() not in langs:
+                    entry.setdefault("performances", []).append(performance)
+                if actor_name and not any(
+                    (a.get("name") or "").casefold() == actor_name.casefold()
+                    for a in entry.get("actors") or []
+                ):
+                    entry.setdefault("actors", []).append(
+                        {
+                            "id": c.get("id"),
+                            "name": actor_name,
+                            "photo_url": actor_photo,
+                            "language": origin_lang,
+                        }
+                    )
+                    entry.setdefault("roles", []).append(actor_name)
+
+    characters_cast = list(by_character.values())[:MAIN_CAST_LIMIT]
+
+    # Staff: directors + writers + key crew
+    people_cast: list[dict[str, Any]] = []
+    for w in directors + writers:
+        name = w.get("name")
+        if not name or any(p["name"] == name for p in people_cast):
+            continue
+        people_cast.append(
+            {
+                "id": w.get("id"),
+                "name": name,
+                "character": None,
+                "photo_url": image_url(w.get("profile_path"), "w185"),
+                "actor_photo_url": None,
+                "character_photo_url": None,
+                "actors": [],
+                "roles": [w.get("role") or "Crew"],
+                "is_deceased": False,
+            }
+        )
+    for c in crew_raw:
+        job = (c.get("job") or "").strip()
+        name = c.get("name")
+        if not name or not job:
+            continue
+        if job.casefold() in {
+            "director",
+            "writer",
+            "story",
+            "screenplay",
+            "creator",
+        }:
+            continue
+        if job.casefold() not in {
+            "producer",
+            "executive producer",
+            "director of photography",
+            "original music composer",
+            "editor",
+            "casting",
+        }:
+            continue
+        if any(p["name"] == name for p in people_cast):
+            continue
+        people_cast.append(
+            {
+                "id": c.get("id"),
+                "name": name,
+                "character": None,
+                "photo_url": image_url(c.get("profile_path"), "w185"),
+                "actor_photo_url": None,
+                "character_photo_url": None,
+                "actors": [],
+                "roles": [job],
+                "is_deceased": False,
+            }
+        )
+        if len(people_cast) >= MAIN_CAST_LIMIT:
+            break
+    people_cast = people_cast[:MAIN_CAST_LIMIT]
+
+    creator_ids = [
+        d.get("id") for d in directors if isinstance(d.get("id"), int)
+    ]
+    for w in writers:
+        if isinstance(w.get("id"), int) and w["id"] not in creator_ids:
+            creator_ids.append(w["id"])
+
+    external = data.get("external_ids") or {}
+    links: list[dict[str, str]] = []
+    homepage = (data.get("homepage") or "").strip()
+    if homepage:
+        links.append({"label": "Official", "url": homepage, "category": "social"})
+    if external.get("imdb_id"):
+        links.append(
+            {
+                "label": "IMDb",
+                "url": f"https://www.imdb.com/title/{external['imdb_id']}/",
+                "category": "databases",
+            }
+        )
+    if data.get("id"):
+        links.append(
+            {
+                "label": "TMDb",
+                "url": f"https://www.themoviedb.org/movie/{data['id']}",
+                "category": "databases",
+            }
+        )
+
+    images = data.get("images") or {}
+    posters = [
+        image_url(p.get("file_path"), "w780")
+        for p in (images.get("posters") or [])[:12]
+        if p.get("file_path")
+    ]
+    backdrops = [
+        image_url(b.get("file_path"), "w1280")
+        for b in (images.get("backdrops") or [])[:12]
+        if b.get("file_path")
+    ]
+    if data.get("poster_path"):
+        primary = image_url(data["poster_path"], "w780")
+        if primary and primary not in posters:
+            posters.insert(0, primary)
+    if data.get("backdrop_path"):
+        primary_bd = image_url(data["backdrop_path"], "w1280")
+        if primary_bd and primary_bd not in backdrops:
+            backdrops.insert(0, primary_bd)
+
+    origin_countries = [
+        c.get("iso_3166_1")
+        for c in (data.get("production_countries") or [])
+        if c.get("iso_3166_1")
+    ]
+    origin_place = None
+    if data.get("production_countries"):
+        origin_place = ", ".join(
+            c.get("name") for c in data["production_countries"] if c.get("name")
+        )
+
+    aliases = [
+        (a.get("title") or "")
+        for a in (data.get("alternative_titles", {}).get("titles") or [])
+        if isinstance(a, dict)
+    ]
+    aliases = [a for a in aliases if a]
+    if data.get("original_title") and data.get("original_title") != data.get("title"):
+        aliases.insert(0, data["original_title"])
+
+    collection = data.get("belongs_to_collection") or {}
+
+    return {
+        "tmdb_id": data.get("id"),
+        "name": data.get("title") or data.get("original_title"),
+        "overview": (data.get("overview") or "").strip() or None,
+        "status": data.get("status"),
+        "type": "Movie",
+        "is_animated": is_animated,
+        "first_air_date": data.get("release_date"),
+        "last_air_date": data.get("release_date"),
+        "release_date": data.get("release_date"),
+        "genres": genres,
+        "writers": [w["name"] for w in writers if w.get("name")],
+        "directors": [d["name"] for d in directors if d.get("name")],
+        "publishers": publishers,
+        "origin_place": origin_place,
+        "origin_countries": origin_countries,
+        "original_language": data.get("original_language"),
+        "aliases": [a for a in aliases if a],
+        "cast": {
+            "animated": characters_cast,
+            "people": people_cast,
+            "characters": characters_cast,
+            "staff": people_cast,
+        },
+        "creator_ids": creator_ids[:6],
+        "links": links,
+        "posters": [p for p in posters if p],
+        "backdrops": [b for b in backdrops if b],
+        "poster_url": image_url(data.get("poster_path"), "w780"),
+        "backdrop_url": image_url(data.get("backdrop_path"), "w1280"),
+        "collection_id": collection.get("id"),
+        "collection_name": collection.get("name"),
+    }
+
+
 async def search_movie_id(
     name: str, api_key: str, *, year: int | None = None
 ) -> tuple[int | None, str | None]:

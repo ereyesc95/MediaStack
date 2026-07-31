@@ -1598,9 +1598,55 @@ export async function fetchMoviesFranchise(workId: string) {
   );
 }
 
+export async function fetchMoviesFranchiseOverview(
+  workId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<import("./types").SeriesOverview>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function refreshMoviesWorkMetadata(
+  workId: string,
+  includeBio = true
+) {
+  return request(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/refresh-metadata?include_bio=${includeBio ? "true" : "false"}`,
+    { method: "POST" }
+  );
+}
+
 export async function fetchMoviesFilm(filmId: string) {
   return request<import("./types").MoviesFilmDetail>(
     `${API}/movies/films/${encodeURIComponent(filmId)}`
+  );
+}
+
+export async function fetchMoviesFilmOverview(
+  filmId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<
+    import("./types").SeriesOverview & {
+      versions?: import("./types").MoviesFilmDetail["versions"];
+      work?: import("./types").MoviesFilmDetail["work"];
+      directors?: string[];
+      display_date?: string | null;
+      date_iso?: string | null;
+    }
+  >(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function refreshMoviesFilmMetadata(
+  filmId: string,
+  includeBio = true
+) {
+  return request(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/refresh-metadata?include_bio=${includeBio ? "true" : "false"}`,
+    { method: "POST" }
   );
 }
 
@@ -1629,10 +1675,69 @@ export async function fetchMoviesFranchiseSeries(workId: string) {
   }>(`${API}/movies/franchises/${encodeURIComponent(workId)}/media/series`);
 }
 
+export async function fetchMoviesFranchiseAudio(workId: string) {
+  return request<{
+    releases: Array<{
+      id: string;
+      title: string;
+      category?: string;
+      cover_url?: string | null;
+      folder_path?: string | null;
+    }>;
+    categories: string[];
+  }>(`${API}/movies/franchises/${encodeURIComponent(workId)}/media/audio`);
+}
+
+export async function fetchMoviesFranchiseLibrary(workId: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/media/library`
+  );
+}
+
+export async function fetchMoviesFranchiseGames(workId: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/media/games`
+  );
+}
+
+export async function fetchMoviesGallery(path: string) {
+  return request<{
+    folder_path: string;
+    items: import("./types").SeriesGalleryItem[];
+    sections: import("./types").SeriesGallerySection[];
+  }>(`${API}/movies/gallery?path=${encodeURIComponent(path)}`);
+}
+
 export async function refreshMoviesUniverse(workId: string) {
   return request<import("./types").MoviesUniverse & { parts?: unknown[] }>(
     `${API}/movies/franchises/${encodeURIComponent(workId)}/refresh-universe`,
     { method: "POST" }
+  );
+}
+
+export async function fetchMoviesUniverses() {
+  return request<{ universes: import("./types").MoviesUniverse[] }>(
+    `${API}/movies/universes`
+  );
+}
+
+export async function linkMoviesUniverseMember(
+  universeId: number,
+  workSlug: string
+) {
+  return request(
+    `${API}/movies/universes/${universeId}/members?work_slug=${encodeURIComponent(workSlug)}`,
+    { method: "POST" }
+  );
+}
+
+export async function unlinkMoviesUniverseMember(
+  universeId: number,
+  workSlug: string
+) {
+  return request(
+    `${API}/movies/universes/${universeId}/members?work_slug=${encodeURIComponent(workSlug)}`,
+    { method: "DELETE" }
   );
 }
 
