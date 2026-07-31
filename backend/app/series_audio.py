@@ -52,10 +52,12 @@ def _scan_audio_bucket(
 ) -> list[dict]:
     cards: list[dict] = []
     owner_id = VARIOUS_ARTISTS_DEFAULT_ID
-    for category_key, category_folder in AUDIO_CATEGORIES.items():
-        cat_dir = _resolve_child_dir(bucket, category_folder)
-        if not cat_dir.is_dir():
-            continue
+    scanned_dirs: set[Path] = set()
+
+    def add_from_category(category_key: str, category_folder: str, cat_dir: Path) -> None:
+        if not cat_dir.is_dir() or cat_dir in scanned_dirs:
+            return
+        scanned_dirs.add(cat_dir)
         for entry in _iter_category_release_entries(cat_dir):
             name = entry_display_name(entry)
             resolved = resolve_media_entry(entry, media_root=media_root)
@@ -80,7 +82,65 @@ def _scan_audio_bucket(
                 "subseries_path": scope.get("subseries_path"),
             }
             cards.append(card)
+
+    for category_key, category_folder in AUDIO_CATEGORIES.items():
+        cat_dir = _resolve_child_dir(bucket, category_folder)
+        add_from_category(category_key, category_folder, cat_dir)
+
+    # Loose shortcuts directly under Audio/ → treat as Albums
+    try:
+        loose = [
+            p
+            for p in bucket.iterdir()
+            if p.is_file() and p.suffix.casefold() in {".lnk", ".path", ".url"}
+        ]
+    except OSError:
+        loose = []
+    if loose:
+        add_from_category("albums", "Albums", bucket)
+
+    # Any other child folders (custom categories) under Audio/
+    try:
+        children = sorted(
+            (p for p in bucket.iterdir() if p.is_dir()),
+            key=lambda p: p.name.casefold(),
+        )
+    except OSError:
+        children = []
+    for child in children:
+        if child in scanned_dirs:
+            continue
+        key = child.name.casefold().replace(" ", "_")
+        add_from_category(key, child.name, child)
+
     return cards
+
+
+def scan_folder_audio(db: Session, folder_path: str) -> dict:
+    """Scan ``[Audio]`` under an arbitrary media-relative folder (film/subseries/work)."""
+    media_root = Path(settings.media_root or "")
+    if not media_root.is_dir() or not folder_path:
+        return {"releases": [], "categories": [], "band_id": None, "source": "folder"}
+    folder = media_root / folder_path.replace("\\", "/")
+    bucket = _find_audio_bucket(folder)
+    if not bucket:
+        return {"releases": [], "categories": [], "band_id": None, "source": "folder"}
+    releases = _scan_audio_bucket(
+        db,
+        media_root=media_root,
+        bucket=bucket,
+        scope={
+            "scope": "folder",
+            "subseries_path": folder_path.replace("\\", "/"),
+        },
+    )
+    cats = sorted({(r.get("category") or "") for r in releases if r.get("category")})
+    return {
+        "releases": releases,
+        "categories": cats,
+        "band_id": None,
+        "source": "folder",
+    }
 
 
 def scan_series_audio(db: Session, franchise_id: str) -> dict:

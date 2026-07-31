@@ -727,6 +727,19 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
+            onBackToMovies={(franchiseId) => {
+              pushMoviesRoute({
+                franchiseId,
+                section: "audio",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                section: "audio",
+                overviewTab: "about",
+              });
+            }}
 
           />
 
@@ -814,18 +827,32 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
-            onOpenMoviesFranchise={(franchiseId, filmId) => {
+            onOpenMoviesFranchise={(franchiseId, filmId, section) => {
               pushMoviesRoute({
                 franchiseId,
                 filmId,
-                section: "overview",
+                section: (section as
+                  | "overview"
+                  | "movies"
+                  | "series"
+                  | "audio"
+                  | "library"
+                  | "games"
+                  | "gallery") || "overview",
                 overviewTab: "about",
               });
               setView({
                 kind: "movies",
                 franchiseId,
                 filmId,
-                section: "overview",
+                section: (section as
+                  | "overview"
+                  | "movies"
+                  | "series"
+                  | "audio"
+                  | "library"
+                  | "games"
+                  | "gallery") || "overview",
                 overviewTab: "about",
               });
             }}
@@ -866,17 +893,45 @@ export default function App() {
                     : view.overviewTab,
               })
             }
-            onOpenSeriesFranchise={(franchiseId) => {
+            onOpenSeriesFranchise={(franchiseId, subseriesId) => {
               pushSeriesRoute({
                 franchiseId,
+                subseriesId,
                 section: "overview",
                 overviewTab: "about",
               });
               setView({
                 kind: "series",
                 franchiseId,
+                subseriesId,
                 section: "overview",
                 overviewTab: "about",
+              });
+            }}
+            onOpenMusicRelease={(bandId, releaseId) => {
+              if (view.franchiseId) {
+                saveReleaseReferrer({
+                  bandId,
+                  section: "audio",
+                  source: "movies",
+                  franchiseId: view.franchiseId,
+                });
+              }
+              pushArtistRoute({
+                bandId,
+                section: "audio",
+                overviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "audio",
+                artistOverviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
               });
             }}
           />

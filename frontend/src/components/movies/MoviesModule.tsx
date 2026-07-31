@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchMoviesCatalog,
   fetchMoviesDashboard,
-  fetchSeriesFilterOptions,
+  fetchMoviesFilterOptions,
+  resolveMoviesPath,
 } from "../../api";
+import {
+  catalogBackgroundIso,
+  catalogBackgroundUrl,
+} from "../../catalogBackdrop";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
   pushMoviesCatalogRoute,
@@ -15,9 +20,11 @@ import {
 import type {
   CardOrientation,
   MoviesFilmCard,
+  SeriesDashboard,
   SeriesFilterMode,
   SeriesFilterOptions,
   SeriesFranchiseCard,
+  SeriesSection,
 } from "../../types";
 import {
   isMobilePortraitLayout,
@@ -30,11 +37,34 @@ import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
   type SeriesCatalogScope,
 } from "../series/SeriesBrowse";
-import PlaylistBoot from "../PlaylistBoot";
-import MoviesFilmPage from "./MoviesFilmPage";
+import SeriesSubseriesPage from "../series/SeriesSubseriesPage";
 import MoviesFranchisePage from "./MoviesFranchisePage";
+import MoviesHome from "./MoviesHome";
 
 type MoviesTab = "home" | "catalog";
+
+const MOVIES_FILTER_MODES_GROUPS: { id: SeriesFilterMode; label: string }[] = [
+  { id: "name", label: "NAME" },
+  { id: "continent", label: "CONTINENT" },
+  { id: "country", label: "COUNTRY" },
+  { id: "start", label: "START DATE" },
+  { id: "end", label: "END DATE" },
+  { id: "genre", label: "GENRE" },
+  { id: "publisher", label: "PUBLISHER" },
+  { id: "writer", label: "WRITER" },
+  { id: "most_played", label: "MOST PLAYED" },
+];
+
+const MOVIES_FILTER_MODES_FILMS: { id: SeriesFilterMode; label: string }[] = [
+  { id: "name", label: "NAME" },
+  { id: "continent", label: "CONTINENT" },
+  { id: "country", label: "COUNTRY" },
+  { id: "start", label: "RELEASE DATE" },
+  { id: "genre", label: "GENRE" },
+  { id: "publisher", label: "PUBLISHER" },
+  { id: "writer", label: "WRITER" },
+  { id: "most_played", label: "MOST PLAYED" },
+];
 
 type Props = {
   mediaOptions: MediaOption[];
@@ -59,7 +89,8 @@ type Props = {
     section?: MoviesSection;
     overviewTab?: MoviesOverviewTab;
   }) => void;
-  onOpenSeriesFranchise?: (franchiseId: string) => void;
+  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
 };
 
 export default function MoviesModule({
@@ -81,6 +112,7 @@ export default function MoviesModule({
   overviewTab = "about",
   onNavigate,
   onOpenSeriesFranchise,
+  onOpenMusicRelease,
 }: Props) {
   const deviceLayout = useDeviceLayout();
   const portraitMenuChrome =
@@ -93,12 +125,15 @@ export default function MoviesModule({
   const [dashLoading, setDashLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dashboard, setDashboard] = useState<{
-    top_franchises: SeriesFranchiseCard[];
-    top_films: MoviesFilmCard[];
-    franchise_count: number;
-    film_count: number;
-  } | null>(null);
+  const [dashboard, setDashboard] = useState<
+    | (SeriesDashboard & {
+        franchise_count?: number;
+        film_count?: number;
+        top_franchises?: SeriesFranchiseCard[];
+        top_films?: MoviesFilmCard[];
+      })
+    | null
+  >(null);
 
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
   const [filterOptions, setFilterOptions] =
@@ -114,6 +149,7 @@ export default function MoviesModule({
   const [subgenreId, setSubgenreId] = useState<number | "">("");
   const [publisher, setPublisher] = useState("");
   const [writer, setWriter] = useState("");
+  const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
 
   useEffect(() => {
     clearMediaTheme(userId);
@@ -147,7 +183,7 @@ export default function MoviesModule({
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
-    void fetchSeriesFilterOptions()
+    void fetchMoviesFilterOptions()
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
   }, []);
@@ -156,11 +192,117 @@ export default function MoviesModule({
     if (tab === "catalog" || franchiseId) loadCatalog();
   }, [tab, franchiseId, loadCatalog]);
 
+  useEffect(() => {
+    if (catalogScope === "shows" && filterMode === "end") {
+      setFilterMode("start");
+      setEndDecade("");
+    }
+  }, [catalogScope, filterMode]);
+
+  const backgroundIso = useMemo(
+    () => catalogBackgroundIso(filterMode, countryId, filterOptions),
+    [filterMode, countryId, filterOptions]
+  );
+  const backgroundUrl = useMemo(
+    () =>
+      catalogBackgroundUrl(filterMode, {
+        continentId,
+        subgenreId,
+        startDecade,
+        endDecade,
+        filterOptions,
+      }),
+    [
+      filterMode,
+      continentId,
+      subgenreId,
+      startDecade,
+      endDecade,
+      filterOptions,
+    ]
+  );
+
+  const moduleBackdrop =
+    tab === "catalog" &&
+    !franchiseId &&
+    Boolean(backgroundUrl || backgroundIso);
+
+  const browseFranchises = useMemo((): SeriesFranchiseCard[] => {
+    if (catalogScope === "franchises") {
+      return franchises.map((f) => {
+        const workFilms =
+          (f as SeriesFranchiseCard & { films?: MoviesFilmCard[] }).films ||
+          films.filter((film) => film.work_id === f.id);
+        return {
+          ...f,
+          subseries: workFilms.map((film) => ({
+            id: film.id,
+            title: film.title,
+            date_iso: film.date_iso,
+            display_date: film.display_date ?? null,
+            folder_path: film.folder_path,
+            cover_url: film.cover_url,
+            logo_url: film.logo_url ?? null,
+            icon_url: film.icon_url ?? null,
+            badge_url: film.badge_url ?? null,
+            season_count: film.version_count ?? 1,
+          })),
+          subseries_count: workFilms.length,
+          season_count: workFilms.length || f.season_count || 0,
+        };
+      });
+    }
+    return films.map((film) => {
+      const enriched = film as MoviesFilmCard & {
+        country_iso?: string | null;
+        country_id?: number | null;
+        continent_id?: number | null;
+        genre_ids?: (number | string)[];
+        genre_names?: string[];
+        publishers?: string[];
+        writers?: string[];
+      };
+      return {
+        id: film.id,
+        name: film.title,
+        letter: film.letter || "#",
+        slug: film.work_id || film.id,
+        folder_path: film.folder_path,
+        cover_url: film.cover_url,
+        logo_url: film.logo_url ?? null,
+        icon_url: film.icon_url ?? null,
+        badge_url: film.badge_url ?? null,
+        country_iso: enriched.country_iso ?? null,
+        country_id: enriched.country_id ?? null,
+        continent_id: enriched.continent_id ?? null,
+        genre_ids: enriched.genre_ids ?? [],
+        genre_names: enriched.genre_names ?? [],
+        publishers: enriched.publishers ?? [],
+        writers: enriched.writers ?? [],
+        subseries: [
+          {
+            id: film.id,
+            title: film.title,
+            date_iso: film.date_iso,
+            display_date: film.display_date ?? null,
+            folder_path: film.folder_path,
+            cover_url: film.cover_url,
+            season_count: 1,
+          },
+        ],
+        season_count: 1,
+        subseries_count: 1,
+      } as SeriesFranchiseCard;
+    });
+  }, [catalogScope, franchises, films]);
+
   const openWork = (
     workId: string,
     _sub?: string,
-    shell?: { name: string; cover_url: string | null }
+    shell?: { name: string; cover_url: string | null },
+    from: "home" | "catalog" = "catalog"
   ) => {
+    setEntrySource(from);
     const card = franchises.find((f) => f.id === workId) as
       | (SeriesFranchiseCard & {
           is_standalone?: boolean;
@@ -196,44 +338,166 @@ export default function MoviesModule({
     void shell;
   };
 
+  const openFilm = (
+    nextFilmId: string,
+    workId?: string | null,
+    from: "home" | "catalog" = "catalog"
+  ) => {
+    setEntrySource(from);
+    const film = films.find((f) => f.id === nextFilmId);
+    const wid = workId || film?.work_id;
+    if (!wid) return;
+    pushMoviesRoute({
+      franchiseId: wid,
+      filmId: nextFilmId,
+      section: "overview",
+      overviewTab: "about",
+    });
+    onNavigate({
+      franchiseId: wid,
+      filmId: nextFilmId,
+      section: "overview",
+      overviewTab: "about",
+    });
+  };
+
+  const backToMoviesHome = () => {
+    clearMediaTheme(userId);
+    pushMoviesRootRoute();
+    onNavigate({
+      franchiseId: undefined,
+      filmId: undefined,
+      section: undefined,
+      overviewTab: undefined,
+    });
+    setTab("home");
+  };
+
+  const backToMoviesCatalog = () => {
+    clearMediaTheme(userId);
+    pushMoviesCatalogRoute();
+    onNavigate({
+      franchiseId: undefined,
+      filmId: undefined,
+      section: undefined,
+      overviewTab: undefined,
+    });
+    setTab("catalog");
+  };
+
   if (franchiseId && filmId) {
+    const workName =
+      franchises.find((f) => f.id === franchiseId)?.name ||
+      films.find((f) => f.id === filmId)?.work_name ||
+      undefined;
+    const workCard = franchises.find((f) => f.id === franchiseId);
+    const filmSection: SeriesSection =
+      section === "series" ? "overview" : (section as SeriesSection);
     return (
-      <MoviesFilmPage
-        filmId={filmId}
-        workId={franchiseId}
-        overviewTab={overviewTab}
-        section={section === "gallery" ? "gallery" : "overview"}
+      <SeriesSubseriesPage
+        variant="film"
+        franchiseId={franchiseId}
+        franchiseName={workName}
+        franchiseLogoUrl={workCard?.logo_url}
+        franchiseIconUrl={workCard?.icon_url}
+        subseriesId={filmId}
+        section={filmSection}
+        busy={busy}
         isAdmin={isAdmin}
         userId={userId}
-        onBack={() =>
-          onNavigate({
-            franchiseId,
-            filmId: undefined,
-            section: "movies",
-          })
-        }
-        onOpenWork={() =>
-          onNavigate({
-            franchiseId,
-            filmId: undefined,
-            section: "overview",
-            overviewTab: "about",
-          })
-        }
-        onNavigate={(patch) =>
-          onNavigate({
-            franchiseId,
-            filmId,
-            section: (patch.section as MoviesSection) || section,
-            overviewTab: patch.overviewTab || overviewTab,
-          })
-        }
-        onOpenSeriesFranchise={onOpenSeriesFranchise}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
+        onBack={() => {
+          if (entrySource === "home") {
+            backToMoviesHome();
+            return;
+          }
+          onNavigate({
+            franchiseId,
+            filmId: undefined,
+            section: "movies",
+          });
+        }}
+        backLabelOverride={entrySource === "home" ? "HOME" : undefined}
+        onBrowseCatalog={(target) => {
+          setEntrySource("catalog");
+          setTab("catalog");
+          pushMoviesCatalogRoute();
+          onNavigate({
+            franchiseId: undefined,
+            filmId: undefined,
+            section: undefined,
+            overviewTab: undefined,
+          });
+          if (target.mode) setFilterMode(target.mode);
+          if (target.countryId != null) setCountryId(target.countryId);
+          if (target.subgenreId != null) setSubgenreId(target.subgenreId);
+          if (target.publisher) setPublisher(target.publisher);
+          if (target.writer) setWriter(target.writer);
+          loadCatalog();
+        }}
+        onOpenMusicRelease={onOpenMusicRelease}
+        onOpenFilm={(id) => {
+          pushMoviesRoute({
+            franchiseId,
+            filmId: id,
+            section: "overview",
+            overviewTab: "about",
+          });
+          onNavigate({
+            franchiseId,
+            filmId: id,
+            section: "overview",
+            overviewTab: "about",
+          });
+        }}
+        onOpenMoviesPath={(path) => {
+          void resolveMoviesPath(path)
+            .then((hit) => {
+              pushMoviesRoute({
+                franchiseId: hit.work_id,
+                filmId: hit.film_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+              });
+              onNavigate({
+                franchiseId: hit.work_id,
+                filmId: hit.film_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+              });
+            })
+            .catch(() => {});
+        }}
+        onNavigate={(patch) => {
+          const nextFilmId = patch.subseriesId ?? filmId;
+          const rawSection = (patch.section || section) as string;
+          const nextSection: MoviesSection =
+            rawSection === "episodes" || rawSection === "series"
+              ? "overview"
+              : (rawSection as MoviesSection);
+          pushMoviesRoute({
+            franchiseId,
+            filmId: nextFilmId,
+            section: nextSection,
+            overviewTab:
+              !patch.section || patch.section === "overview"
+                ? "about"
+                : undefined,
+          });
+          onNavigate({
+            franchiseId,
+            filmId: nextFilmId,
+            section: nextSection,
+            overviewTab:
+              !patch.section || patch.section === "overview"
+                ? "about"
+                : overviewTab,
+          });
+        }}
       />
     );
   }
@@ -246,18 +510,16 @@ export default function MoviesModule({
         overviewTab={overviewTab}
         isAdmin={isAdmin}
         userId={userId}
+        cardOrientation={cardOrientation}
+        onSetOrientation={onSetOrientation}
         onBack={() => {
-          pushMoviesCatalogRoute();
-          onNavigate({
-            franchiseId: undefined,
-            filmId: undefined,
-            section: undefined,
-            overviewTab: undefined,
-          });
-          setTab("catalog");
+          if (entrySource === "home") backToMoviesHome();
+          else backToMoviesCatalog();
         }}
+        backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
         onNavigate={onNavigate}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onOpenMusicRelease={onOpenMusicRelease}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}
@@ -268,7 +530,26 @@ export default function MoviesModule({
   }
 
   return (
-    <div className="series-module">
+    <div
+      className={`series-module${
+        moduleBackdrop ? " music-module--backdrop" : ""
+      }`}
+    >
+      {moduleBackdrop ? (
+        <div className="music-module__backdrop" aria-hidden>
+          {backgroundIso ? (
+            <span
+              className={`music-module__backdrop-flag fi fi-${backgroundIso}`}
+            />
+          ) : backgroundUrl ? (
+            <div
+              className="music-module__backdrop-image"
+              style={{ backgroundImage: `url(${backgroundUrl})` }}
+            />
+          ) : null}
+          <div className="music-module__backdrop-overlay" />
+        </div>
+      ) : null}
       <ModuleTopBar
         media={
           mediaOptions.find((m) => m.kind === "movies") ?? {
@@ -350,77 +631,59 @@ export default function MoviesModule({
 
       {tab === "home" ? (
         <div className="music-module__body music-module__body--home">
-          {dashLoading ? (
-            <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
-          ) : (
-            <div style={{ padding: "1.25rem" }}>
-              <h2 style={{ marginTop: 0 }}>Movies</h2>
-              <p className="muted">
-                {dashboard
-                  ? `${dashboard.franchise_count} groups · ${dashboard.film_count} films`
-                  : "No movies scanned yet."}
-              </p>
-              <div className="artist-grid artist-grid--portrait">
-                {(dashboard?.top_franchises || []).map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className="artist-card artist-card--portrait"
-                    onClick={() => openWork(f.id)}
-                    style={{
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      background: f.cover_url
-                        ? `center/cover url("${f.cover_url}")`
-                        : "#1a1f2e",
-                      minHeight: 180,
-                    }}
-                  >
-                    <span
-                      className="artist-card-footer"
-                      style={{ opacity: 1, color: "#fff" }}
-                    >
-                      {f.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {films.length === 0 && (dashboard?.top_films?.length || 0) > 0 ? (
-                <p className="muted" style={{ marginTop: "1rem" }}>
-                  Tip: open Catalog for Groups / Films browse.
-                </p>
-              ) : null}
-            </div>
-          )}
+          <MoviesHome
+            data={dashboard}
+            loading={dashLoading}
+            onFranchise={(workId) => {
+              if (!franchises.length) loadCatalog();
+              openWork(workId, undefined, undefined, "home");
+            }}
+            onFilm={(id, workId) => {
+              if (!films.length) loadCatalog();
+              openFilm(id, workId, "home");
+            }}
+            onGenre={(id) => {
+              setTab("catalog");
+              pushMoviesCatalogRoute();
+              setFilterMode("genre");
+              setContinentId("");
+              setCountryId("");
+              setStartDecade("");
+              setEndDecade("");
+              const numeric =
+                typeof id === "number"
+                  ? id
+                  : typeof id === "string" && /^\d+$/.test(id)
+                    ? Number(id)
+                    : "";
+              setSubgenreId(numeric === "" || Number.isNaN(numeric) ? "" : numeric);
+              loadCatalog();
+            }}
+            onCountry={(c) => {
+              setTab("catalog");
+              pushMoviesCatalogRoute();
+              setFilterMode("country");
+              setContinentId("");
+              setSubgenreId("");
+              setStartDecade("");
+              setEndDecade("");
+              setCountryId(c.id ?? "");
+              loadCatalog();
+            }}
+          />
         </div>
       ) : (
         <SeriesBrowse
-          franchises={
-            catalogScope === "franchises"
-              ? franchises
-              : films.map(
-                  (film) =>
-                    ({
-                      id: film.id,
-                      name: film.title,
-                      letter: film.letter || "#",
-                      slug: film.work_id || film.id,
-                      folder_path: film.folder_path,
-                      cover_url: film.cover_url,
-                      logo_url: film.logo_url ?? null,
-                      icon_url: film.icon_url ?? null,
-                      badge_url: film.badge_url ?? null,
-                      subseries: [],
-                      season_count: 1,
-                      subseries_count: 0,
-                    }) as SeriesFranchiseCard
-                )
-          }
+          franchises={browseFranchises}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
           catalogScope={catalogScope}
+          filterModes={
+            catalogScope === "franchises"
+              ? MOVIES_FILTER_MODES_GROUPS
+              : MOVIES_FILTER_MODES_FILMS
+          }
           search={search}
           letter={letter}
           continentId={continentId}
@@ -434,7 +697,18 @@ export default function MoviesModule({
           loading={catalogLoading}
           onSearchChange={setSearch}
           onLetterChange={setLetter}
-          onFilterModeChange={setFilterMode}
+          onFilterModeChange={(m) => {
+            setFilterMode(m);
+            setSearch("");
+            setLetter(m === "name" ? "A" : "");
+            setContinentId("");
+            setCountryId("");
+            setStartDecade("");
+            setEndDecade("");
+            setSubgenreId("");
+            setPublisher("");
+            setWriter("");
+          }}
           onContinentIdChange={setContinentId}
           onCountryIdChange={setCountryId}
           onStartDecadeChange={setStartDecade}

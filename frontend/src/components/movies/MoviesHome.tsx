@@ -158,20 +158,24 @@ function DashPaneLabel({
   );
 }
 
+export type MoviesDashboardFilm = SeriesDashboard["top_series"][number] & {
+  work_id?: string | null;
+};
+
 type Props = {
-  data: SeriesDashboard | null;
+  data: (SeriesDashboard & { top_series?: MoviesDashboardFilm[] }) | null;
   loading?: boolean;
-  onOpenShow: (franchiseId: string, subseriesId?: string | null) => void;
-  onOpenFranchise: (franchiseId: string) => void;
+  onFranchise: (workId: string) => void;
+  onFilm: (filmId: string, workId?: string | null) => void;
   onGenre?: (id: number | string) => void;
   onCountry?: (country: { id?: number; name: string }) => void;
 };
 
-export default function SeriesHome({
+export default function MoviesHome({
   data,
   loading,
-  onOpenShow,
-  onOpenFranchise,
+  onFranchise,
+  onFilm,
   onGenre,
   onCountry,
 }: Props) {
@@ -180,19 +184,22 @@ export default function SeriesHome({
   const paneLimit = paneItemLimit(layout);
 
   const topFranchises = slicePane(dash.top_franchises || [], paneLimit);
-  const topSeries = slicePane(dash.top_series, paneLimit);
+  const topFilms = slicePane(
+    (dash.top_series || []) as MoviesDashboardFilm[],
+    paneLimit
+  );
   const topGenres = slicePane(dash.top_genres, paneLimit);
   const topCountries = slicePane(dash.top_countries, paneLimit);
 
   const franchisePlaceholders = placeholderCount(topFranchises.length, paneLimit);
-  const seriesPlaceholders = placeholderCount(topSeries.length, paneLimit);
+  const filmPlaceholders = placeholderCount(topFilms.length, paneLimit);
   const genrePlaceholders = placeholderCount(topGenres.length, paneLimit);
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
   const dashClass = DASH_LAYOUT_CLASS[layout];
 
   return (
-    <div className={`music-dashboard series-dashboard${dashClass}`}>
+    <div className={`music-dashboard series-dashboard movies-dashboard${dashClass}`}>
       {loading ? <p className="muted dash-status">Updating…</p> : null}
 
       <section className="dash-row dash-row--icons">
@@ -203,14 +210,13 @@ export default function SeriesHome({
         />
         <div className="dash-scroll dash-scroll--icons">
           {topFranchises.map((s) => {
-            const cover =
-              s.portrait_url || s.cover_url || s.photo_url || DEFAULT_DISC_URL;
+            const cover = s.cover_url || s.photo_url || DEFAULT_DISC_URL;
             return (
               <button
                 key={s.id}
                 type="button"
                 className="dash-icon-item"
-                onClick={() => onOpenFranchise(s.id)}
+                onClick={() => onFranchise(s.id)}
               >
                 <span className="dash-icon-item-cover">
                   <span
@@ -234,20 +240,18 @@ export default function SeriesHome({
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
           logo="/api/assets/icons/pane-icons"
-          title="BEST SERIES"
+          title="BEST MOVIES"
           subtitle="Your top content"
         />
         <div className="dash-scroll dash-scroll--icons">
-          {topSeries.map((s) => {
-            const cover =
-              s.portrait_url || s.cover_url || s.photo_url || DEFAULT_DISC_URL;
-            const franchiseId = s.franchise_id || s.id;
+          {topFilms.map((s) => {
+            const cover = s.cover_url || s.photo_url || DEFAULT_DISC_URL;
             return (
               <button
                 key={s.id}
                 type="button"
                 className="dash-icon-item"
-                onClick={() => onOpenShow(franchiseId, s.subseries_id)}
+                onClick={() => onFilm(s.id, s.work_id)}
               >
                 <span className="dash-icon-item-cover">
                   <span
@@ -262,7 +266,7 @@ export default function SeriesHome({
             );
           })}
           <PlaceholderTiles
-            count={topSeries.length ? seriesPlaceholders : paneLimit}
+            count={topFilms.length ? filmPlaceholders : paneLimit}
             variant="landscape"
           />
         </div>
@@ -271,7 +275,7 @@ export default function SeriesHome({
       <section className="dash-row dash-row--genres">
         <DashPaneLabel
           logo="/api/assets/icons/pane-vibes"
-          title="SHOW VIBES"
+          title="FILM VIBES"
           subtitle="Genres on rotation"
         />
         <div className="dash-scroll dash-scroll--genres">
@@ -306,7 +310,7 @@ export default function SeriesHome({
         <DashPaneLabel
           logo="/api/assets/icons/pane-global"
           title="GLOBAL ACTS"
-          subtitle="Origins of your content"
+          subtitle="Origin of your content"
         />
         <div className="dash-scroll dash-scroll--flags">
           {topCountries.map((c) => (

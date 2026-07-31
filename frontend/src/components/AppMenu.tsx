@@ -24,6 +24,7 @@ import {
   IconLinks,
   IconLyrics,
   IconMetadata,
+  IconDownload,
   IconPlus,
   IconSettings,
   IconSwitchProfile,
@@ -329,18 +330,6 @@ export default function AppMenu({
               {menuChrome}
             </div>
           ) : null}
-          {isAdmin && onAddMember && menuVariant !== "release" && (
-            <button
-              type="button"
-              onClick={() => {
-                onAddMember();
-                setOpen(false);
-              }}
-            >
-              <IconAddArtist className="menu-item-icon" />
-              Add cast member
-            </button>
-          )}
           {isAdmin && editDataFlat && onEditAbout && (
             <button
               type="button"
@@ -351,6 +340,18 @@ export default function AppMenu({
             >
               <IconEditProfile className="menu-item-icon" />
               {editDataLabel || "Edit series"}
+            </button>
+          )}
+          {isAdmin && onAddMember && (menuVariant !== "release" || editDataFlat) && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddMember();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              Edit cast
             </button>
           )}
           {isAdmin && refreshLocalFlat && onRescanLibrary && (
@@ -541,7 +542,7 @@ export default function AppMenu({
                       {aboutLabel}
                     </button>
                   )}
-                  {menuVariant === "release" && isAdmin && onAddMember && (
+                  {menuVariant === "release" && isAdmin && onAddMember && !editDataFlat && (
                     <button
                       type="button"
                       onClick={() => {
@@ -550,7 +551,7 @@ export default function AppMenu({
                       }}
                     >
                       <IconAddArtist className="menu-item-icon" />
-                      Add cast member
+                      Edit cast
                     </button>
                   )}
                   {onRefreshMetadata && (
@@ -561,8 +562,8 @@ export default function AppMenu({
                         setOpen(false);
                       }}
                     >
-                      <IconMetadata className="menu-item-icon" />
-                      Metadata
+                      <IconDownload className="menu-item-icon" />
+                      Metadata (TMDb)
                     </button>
                   )}
                   {onRefreshIncludeBioChange && (

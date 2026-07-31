@@ -128,3 +128,40 @@ export function pushSeriesRootRoute(replace = false) {
     window.history.pushState(null, "", path);
   }
 }
+
+/** Cross-module return path when opening Series from Movies (or similar). */
+const SERIES_ENTRY_REFERRER_KEY = "mystack_series_entry_referrer";
+
+export type SeriesEntryReferrer = {
+  kind: "movies";
+  franchiseId: string;
+  filmId?: string;
+  section?: string;
+  overviewTab?: string;
+};
+
+export function saveSeriesEntryReferrer(ref: SeriesEntryReferrer) {
+  try {
+    sessionStorage.setItem(SERIES_ENTRY_REFERRER_KEY, JSON.stringify(ref));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getSeriesEntryReferrer(): SeriesEntryReferrer | null {
+  try {
+    const raw = sessionStorage.getItem(SERIES_ENTRY_REFERRER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SeriesEntryReferrer;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSeriesEntryReferrer() {
+  try {
+    sessionStorage.removeItem(SERIES_ENTRY_REFERRER_KEY);
+  } catch {
+    /* ignore */
+  }
+}

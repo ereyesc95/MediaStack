@@ -99,6 +99,7 @@ type Props = {
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
+  onBackToMovies?: (franchiseId: string) => void;
 };
 
 export default function MusicModule({
@@ -136,6 +137,7 @@ export default function MusicModule({
   onGenreFilter,
   onCountryFilter,
   onBackToSeries,
+  onBackToMovies,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -169,6 +171,7 @@ export default function MusicModule({
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
   const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
+  const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
   const homeAudio = useMiniAudio();
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
   const loadArtistsGeneration = useRef(0);
@@ -201,7 +204,12 @@ export default function MusicModule({
   );
 
   const openArtist = useCallback(
-    (id: number, shellHint?: ArtistCard | null) => {
+    (
+      id: number,
+      shellHint?: ArtistCard | null,
+      from: "home" | "catalog" = "catalog"
+    ) => {
+      setEntrySource(from);
       clearPendingAudioCategory(id);
       primeArtistShell(id, shellHint);
       onArtistNavigate("overview", "about");
@@ -1038,6 +1046,7 @@ export default function MusicModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBackToSeries={onBackToSeries}
+          onBackToMovies={onBackToMovies}
         />
       ) : bandId ? (
         <ArtistPage
@@ -1073,8 +1082,9 @@ export default function MusicModule({
             clearMediaTheme(userId);
             window.history.pushState(null, "", "/");
             onBand(undefined);
-            onTab("artists");
+            onTab(entrySource === "home" ? "home" : "artists");
           }}
+          backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
           onNavigate={(section, overviewTab) =>
             onArtistNavigate(section, overviewTab ?? artistOverviewTab)
           }
@@ -1117,7 +1127,7 @@ export default function MusicModule({
             onPlayTrack={handlePlay}
             onArtist={(id) => {
               const card = dashboard.top_artists?.find((a) => a.id === id) ?? null;
-              openArtist(id, card);
+              openArtist(id, card, "home");
             }}
             onGenre={(id) => onGenreFilter(id)}
             onCountry={(country) =>

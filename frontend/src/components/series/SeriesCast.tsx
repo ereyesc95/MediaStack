@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  addMoviesFilmCastMember,
   addSeriesCastMember,
+  patchMoviesFilmCastMember,
   patchSeriesCastMember,
   removeSeriesCastMember,
 } from "../../api";
@@ -38,6 +40,9 @@ type Props = {
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
+  /** Use movies film cast endpoints when set to "movies". */
+  castApi?: "series" | "movies";
+  filmId?: string;
 };
 
 /** Language code → flag-icons country ISO */
@@ -496,6 +501,8 @@ function CastMemberModal({
   languageOptions,
   subseries,
   castSubFilter = "all",
+  castApi = "series",
+  filmId,
   onClose,
   onDataChanged,
 }: {
@@ -508,6 +515,8 @@ function CastMemberModal({
   languageOptions: SeriesLanguageOption[];
   subseries: SeriesSubseriesCard[];
   castSubFilter?: string;
+  castApi?: "series" | "movies";
+  filmId?: string;
   onClose: () => void;
   onDataChanged: () => void;
 }) {
@@ -567,22 +576,41 @@ function CastMemberModal({
         .filter(Boolean);
       const actorScope =
         castSubFilter && castSubFilter !== "all" ? [castSubFilter] : [];
-      await patchSeriesCastMember(franchiseId, member.id, {
-        bucket,
-        name: charName,
-        character: characterCentered ? charName : undefined,
-        photo_url: photoUrl.trim() || null,
-        actor_photo_url: characterCentered
-          ? actors[0]?.photo_url || null
-          : undefined,
-        actors: characterCentered ? actors : undefined,
-        roles: characterCentered
-          ? actors.map((a) => a.name)
-          : staffRoles,
-        language: characterCentered ? editLang : undefined,
-        subseries_ids: selectedSubs,
-        actor_subseries_ids: characterCentered ? actorScope : undefined,
-      });
+      if (castApi === "movies") {
+        if (!filmId) throw new Error("Missing film id");
+        await patchMoviesFilmCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          name: charName,
+          character: characterCentered ? charName : undefined,
+          photo_url: photoUrl.trim() || null,
+          actor_photo_url: characterCentered
+            ? actors[0]?.photo_url || null
+            : undefined,
+          actors: characterCentered ? actors : undefined,
+          roles: characterCentered
+            ? actors.map((a) => a.name)
+            : staffRoles,
+          language: characterCentered ? editLang : undefined,
+        });
+      } else {
+        await patchSeriesCastMember(franchiseId, member.id, {
+          bucket,
+          name: charName,
+          character: characterCentered ? charName : undefined,
+          photo_url: photoUrl.trim() || null,
+          actor_photo_url: characterCentered
+            ? actors[0]?.photo_url || null
+            : undefined,
+          actors: characterCentered ? actors : undefined,
+          roles: characterCentered
+            ? actors.map((a) => a.name)
+            : staffRoles,
+          language: characterCentered ? editLang : undefined,
+          subseries_ids: selectedSubs,
+          actor_subseries_ids: characterCentered ? actorScope : undefined,
+        });
+      }
       onDataChanged();
       onClose();
     } catch (e) {
@@ -597,23 +625,32 @@ function CastMemberModal({
     setBusy(true);
     setError(null);
     try {
-      const scoped =
-        castSubFilter && castSubFilter !== "all" && !removeFromFranchise;
-      await removeSeriesCastMember(
-        franchiseId,
-        member.id,
-        bucket,
-        member.character || member.name,
-        scoped
-          ? {
-              subseriesId: castSubFilter,
-              fromFranchise: false,
-              retainSubseriesIds: subseries
-                .map((s) => s.id)
-                .filter((id) => id !== castSubFilter),
-            }
-          : { fromFranchise: true }
-      );
+      if (castApi === "movies") {
+        if (!filmId) throw new Error("Missing film id");
+        await patchMoviesFilmCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          delete: true,
+        });
+      } else {
+        const scoped =
+          castSubFilter && castSubFilter !== "all" && !removeFromFranchise;
+        await removeSeriesCastMember(
+          franchiseId,
+          member.id,
+          bucket,
+          member.character || member.name,
+          scoped
+            ? {
+                subseriesId: castSubFilter,
+                fromFranchise: false,
+                retainSubseriesIds: subseries
+                  .map((s) => s.id)
+                  .filter((id) => id !== castSubFilter),
+              }
+            : { fromFranchise: true }
+        );
+      }
       onDataChanged();
       onClose();
     } catch (e) {
@@ -974,6 +1011,8 @@ export function AddCastModal({
   defaultLanguage,
   subseries,
   defaultSubseriesIds,
+  castApi = "series",
+  filmId,
   onClose,
   onSaved,
 }: {
@@ -983,6 +1022,8 @@ export function AddCastModal({
   defaultLanguage: string | null;
   subseries: SeriesSubseriesCard[];
   defaultSubseriesIds?: string[];
+  castApi?: "series" | "movies";
+  filmId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1017,54 +1058,91 @@ export function AddCastModal({
         .split(/[;·,]/)
         .map((s) => s.trim())
         .filter(Boolean);
-      const created = await addSeriesCastMember(franchiseId, {
-        bucket,
-        name: characterCentered
-          ? actors[0]?.name || charName.trim()
-          : charName.trim(),
-        character: characterCentered ? charName.trim() : undefined,
-        photo_url: characterCentered
-          ? actors[0]?.photo_url || undefined
-          : photoUrl.trim() || undefined,
-        character_photo_url: characterCentered
-          ? photoUrl.trim() || undefined
-          : undefined,
-        roles: characterCentered
-          ? actors.length
-            ? actors.map((a) => a.name)
-            : undefined
-          : staffRoles.length
-            ? staffRoles
+      if (castApi === "movies") {
+        if (!filmId) throw new Error("Missing film id");
+        const created = await addMoviesFilmCastMember(filmId, {
+          kind: bucket,
+          bucket,
+          name: characterCentered
+            ? actors[0]?.name || charName.trim()
+            : charName.trim(),
+          character: characterCentered ? charName.trim() : undefined,
+          photo_url: characterCentered
+            ? actors[0]?.photo_url || undefined
+            : photoUrl.trim() || undefined,
+          character_photo_url: characterCentered
+            ? photoUrl.trim() || undefined
             : undefined,
-        language: characterCentered ? lang : undefined,
-        subseries_ids: selectedSubs.length ? selectedSubs : undefined,
-      });
-      if (
-        characterCentered &&
-        created?.id != null &&
-        (actors.length > 0 || selectedSubs.length)
-      ) {
-        await patchSeriesCastMember(franchiseId, created.id, {
-          bucket,
-          character: charName.trim(),
-          photo_url: photoUrl.trim() || null,
-          actor_photo_url: actors[0]?.photo_url || null,
-          actors,
-          language: lang,
-          subseries_ids: selectedSubs,
+          roles: characterCentered
+            ? actors.length
+              ? actors.map((a) => a.name)
+              : undefined
+            : staffRoles.length
+              ? staffRoles
+              : undefined,
+          language: characterCentered ? lang : undefined,
         });
-      } else if (
-        !characterCentered &&
-        created?.id != null &&
-        selectedSubs.length
-      ) {
-        await patchSeriesCastMember(franchiseId, created.id, {
+        if (characterCentered && created?.id != null && actors.length > 0) {
+          await patchMoviesFilmCastMember(filmId, created.id, {
+            kind: bucket,
+            bucket,
+            character: charName.trim(),
+            photo_url: photoUrl.trim() || null,
+            actor_photo_url: actors[0]?.photo_url || null,
+            actors,
+            language: lang,
+          });
+        }
+      } else {
+        const created = await addSeriesCastMember(franchiseId, {
           bucket,
-          name: charName.trim(),
-          photo_url: photoUrl.trim() || null,
-          roles: staffRoles,
-          subseries_ids: selectedSubs,
+          name: characterCentered
+            ? actors[0]?.name || charName.trim()
+            : charName.trim(),
+          character: characterCentered ? charName.trim() : undefined,
+          photo_url: characterCentered
+            ? actors[0]?.photo_url || undefined
+            : photoUrl.trim() || undefined,
+          character_photo_url: characterCentered
+            ? photoUrl.trim() || undefined
+            : undefined,
+          roles: characterCentered
+            ? actors.length
+              ? actors.map((a) => a.name)
+              : undefined
+            : staffRoles.length
+              ? staffRoles
+              : undefined,
+          language: characterCentered ? lang : undefined,
+          subseries_ids: selectedSubs.length ? selectedSubs : undefined,
         });
+        if (
+          characterCentered &&
+          created?.id != null &&
+          (actors.length > 0 || selectedSubs.length)
+        ) {
+          await patchSeriesCastMember(franchiseId, created.id, {
+            bucket,
+            character: charName.trim(),
+            photo_url: photoUrl.trim() || null,
+            actor_photo_url: actors[0]?.photo_url || null,
+            actors,
+            language: lang,
+            subseries_ids: selectedSubs,
+          });
+        } else if (
+          !characterCentered &&
+          created?.id != null &&
+          selectedSubs.length
+        ) {
+          await patchSeriesCastMember(franchiseId, created.id, {
+            bucket,
+            name: charName.trim(),
+            photo_url: photoUrl.trim() || null,
+            roles: staffRoles,
+            subseries_ids: selectedSubs,
+          });
+        }
       }
       onSaved();
       onClose();
@@ -1248,6 +1326,8 @@ export default function SeriesCast({
   addOpen,
   onAddClose,
   onDataChanged,
+  castApi = "series",
+  filmId,
 }: Props) {
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
@@ -1323,14 +1403,30 @@ export default function SeriesCast({
     return [] as SeriesLanguageOption[];
   }, [languageOptions, franchiseLangs]);
 
+  const castRowRef = useRef<HTMLDivElement | null>(null);
+  const hasCastCarousel = castLayout === "row" && members.length > 4;
+
+  const advanceCastCarousel = () => {
+    const row = castRowRef.current;
+    if (!row) return;
+    const remaining = row.scrollWidth - row.clientWidth - row.scrollLeft;
+    if (remaining <= 12) {
+      row.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    row.scrollBy({
+      left: Math.max(row.clientWidth * 0.75, 160),
+      behavior: "smooth",
+    });
+  };
+
   if (!members.length && !addOpen) {
     return (
       <div className="artist-lineup">
         <p className="muted artist-lineup__empty">
           No {tab === "characters" ? "characters" : "staff"} yet
-          {castSubFilter !== "all" ? " for this subseries" : ""}. Use the menu
-          → <strong>Add member</strong>
-          {isAdmin ? "" : " (admin)"}, or refresh metadata from TMDb.
+          {castSubFilter !== "all" ? " for this subseries" : ""}. Use the menu:
+          Edit cast{isAdmin ? "" : " (admin)"}, or get it from TMDb.
         </p>
         {addOpen && onAddClose ? (
           <AddCastModal
@@ -1339,6 +1435,8 @@ export default function SeriesCast({
             languageOptions={franchiseLangOptions}
             defaultLanguage={franchiseLangs[0] || null}
             subseries={subseries}
+            castApi={castApi}
+            filmId={filmId}
             onClose={onAddClose}
             onSaved={onDataChanged}
           />
@@ -1351,7 +1449,9 @@ export default function SeriesCast({
     <div
       className={
         castLayout === "row"
-          ? "series-cast series-cast--row-scroll"
+          ? `series-cast series-cast--row-scroll${
+              hasCastCarousel ? " series-cast--carousel" : ""
+            }`
           : "artist-lineup series-cast"
       }
       data-count={
@@ -1374,21 +1474,46 @@ export default function SeriesCast({
       {members.length === 0 ? (
         <p className="muted artist-lineup__empty">No members in this group.</p>
       ) : castLayout === "row" ? (
-        <div className="series-cast__scroll">
-          <div className="series-cast__row">
-            {members.map((m, i) => (
-              <MemberCard
-                key={`${m.id ?? m.name}-r${i}`}
-                member={m}
-                characterCentered={characterCentered}
-                franchiseLangs={franchiseLangs}
-                originLanguage={originLanguage}
-                castSubFilter={castSubFilter}
-                onSelect={setModalMember}
-              />
-            ))}
+        <>
+          <div className="series-cast__scroll" ref={castRowRef}>
+            <div className="series-cast__row">
+              {members.map((m, i) => (
+                <MemberCard
+                  key={`${m.id ?? m.name}-r${i}`}
+                  member={m}
+                  characterCentered={characterCentered}
+                  franchiseLangs={franchiseLangs}
+                  originLanguage={originLanguage}
+                  castSubFilter={castSubFilter}
+                  onSelect={setModalMember}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+          {hasCastCarousel ? (
+            <button
+              type="button"
+              className="series-cast__chevron"
+              onClick={advanceCastCarousel}
+              aria-label="Show more cast"
+            >
+              <svg
+                className="artist-page__catalog-chevron"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 6l6 6-6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          ) : null}
+        </>
       ) : (
         <div
           className="artist-lineup-grid"
@@ -1436,6 +1561,8 @@ export default function SeriesCast({
           languageOptions={franchiseLangOptions}
           subseries={subseries}
           castSubFilter={castSubFilter}
+          castApi={castApi}
+          filmId={filmId}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />
@@ -1448,6 +1575,8 @@ export default function SeriesCast({
           languageOptions={franchiseLangOptions}
           defaultLanguage={franchiseLangs[0] || null}
           subseries={subseries}
+          castApi={castApi}
+          filmId={filmId}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

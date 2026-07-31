@@ -1035,6 +1035,9 @@ export type MoviesFilmCard = {
   work_id?: string;
   work_name?: string;
   letter?: string;
+  open_url?: string | null;
+  open_mode?: "tab" | "local" | null;
+  open_label?: string | null;
 };
 
 export type MoviesUniverse = {
@@ -1072,6 +1075,14 @@ export type MoviesFilmDetail = {
   badge_url?: string | null;
   has_gallery?: boolean;
   has_video?: boolean;
+  trailer_url?: string | null;
+  photocards?: {
+    portrait_front: string | null;
+    portrait_back: string | null;
+    landscape_front: string | null;
+    landscape_back: string | null;
+    cover_only?: boolean;
+  };
   versions: {
     id: string;
     label: string;
@@ -1079,6 +1090,10 @@ export type MoviesFilmDetail = {
     file_url?: string | null;
     file_name?: string;
   }[];
+  seasons?: SeriesSeasonCard[];
+  subseries?: SeriesSubseriesCard[];
+  episodes?: SeriesEpisodeItem[];
+  movies?: SeriesEpisodeItem[];
   work: {
     id: string;
     name: string;
@@ -1099,6 +1114,9 @@ export type SeriesSubseriesCard = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
   badge_url?: string | null;
@@ -1117,6 +1135,7 @@ export type SeriesSeasonCard = {
   portrait_url?: string | null;
   landscape_url?: string | null;
   banner_url?: string | null;
+  logo_url?: string | null;
   episode_count: number;
 };
 
@@ -1143,12 +1162,17 @@ export type SeriesFranchiseCard = {
   slug: string | null;
   folder_path: string;
   cover_url: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
   badge_url?: string | null;
   subseries: SeriesSubseriesCard[];
   season_count: number;
   subseries_count: number;
+  /** Movies catalog embeds films on the work card. */
+  films?: MoviesFilmCard[];
   /** Enriched from Series DB for catalog filters */
   country_iso?: string | null;
   country_id?: number | null;
@@ -1245,22 +1269,44 @@ export type SeriesCatalogPayload = {
 
 export type SeriesDashboard = {
   top_episodes: {
-    id: number;
+    id: number | string;
     title: string;
     title_full?: string | null;
     franchise_id?: string | null;
     franchise_name?: string | null;
+    subseries_id?: string | null;
     play_count: number;
     path?: string | null;
     cover_url?: string | null;
     open_url?: string | null;
+    navigate_franchise_id?: string | null;
+    navigate_subseries_id?: string | null;
   }[];
-  top_series: {
+  /** Best Sagas — top franchises / works. */
+  top_franchises: {
     id: string;
     name: string;
     play_count: number;
     photo_url?: string | null;
     cover_url?: string | null;
+    portrait_url?: string | null;
+    landscape_url?: string | null;
+    banner_url?: string | null;
+    logo_url?: string | null;
+    icon_url?: string | null;
+    show_name_on_hover?: boolean;
+  }[];
+  top_series: {
+    id: string;
+    name: string;
+    franchise_id?: string | null;
+    subseries_id?: string | null;
+    play_count: number;
+    photo_url?: string | null;
+    cover_url?: string | null;
+    portrait_url?: string | null;
+    landscape_url?: string | null;
+    banner_url?: string | null;
     logo_url?: string | null;
     icon_url?: string | null;
     show_name_on_hover?: boolean;
@@ -1281,6 +1327,7 @@ export type SeriesDashboard = {
 
 export const EMPTY_SERIES_DASHBOARD: SeriesDashboard = {
   top_episodes: [],
+  top_franchises: [],
   top_series: [],
   top_genres: [],
   top_countries: [],
@@ -1470,6 +1517,8 @@ export type SeriesOverview = {
     total?: number;
   };
   subseries: SeriesSubseriesCard[];
+  /** Movies work overview embeds full film cards (open_url, etc.). */
+  films?: MoviesFilmCard[];
   seasons: SeriesSeasonCard[];
   music_band_id?: number | null;
   related: {

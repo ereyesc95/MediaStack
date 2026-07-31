@@ -14,6 +14,8 @@ type Props = {
   similar: SeriesRelatedShow[];
   tab: SeriesRelatedTab;
   orientation?: CardOrientation;
+  /** TMDb deep-link kind for related cards. */
+  tmdbKind?: "tv" | "movie";
   isAdmin?: boolean;
   addOpen?: boolean;
   onAddClose?: () => void;
@@ -146,6 +148,7 @@ export default function SeriesRelatedPanel({
   similar,
   tab,
   orientation = "portrait",
+  tmdbKind = "tv",
   isAdmin,
   addOpen,
   onAddClose,
@@ -211,7 +214,7 @@ export default function SeriesRelatedPanel({
           const card = toArtistCard(it);
           const cardId = it.id ?? it.tmdb_id ?? card.name;
           const href = it.tmdb_id
-            ? `https://www.themoviedb.org/tv/${it.tmdb_id}`
+            ? `https://www.themoviedb.org/${tmdbKind}/${it.tmdb_id}`
             : undefined;
           const open = () => {
             if (isPhone) {

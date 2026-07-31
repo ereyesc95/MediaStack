@@ -247,6 +247,8 @@ def resolve_series_photocards(
     artwork = _artwork_subdir(folder)
     cards = scan_photocards(artwork, media_root)
     if not _photocards_empty(cards):
+        from app.release_photocards import _apply_cover_front_backs
+
         wp = scan_wallpapers(artwork, media_root)
         if cards.get("portrait_front") and not cards.get("portrait_back"):
             cards["portrait_back"] = wp.get("portrait_back")
@@ -254,11 +256,9 @@ def resolve_series_photocards(
             cards["landscape_back"] = wp.get("landscape_back")
         cover = _artwork_file(artwork, COVER_FRONT_STEM) if artwork else None
         cover_url = _media_url(cover, media_root) if cover else None
-        if cover_url:
-            if cards.get("portrait_front") and not cards.get("portrait_back"):
-                cards["portrait_back"] = cover_url
-            if cards.get("landscape_front") and not cards.get("landscape_back"):
-                cards["landscape_back"] = cover_url
+        _apply_cover_front_backs(
+            cards, artwork, media_root, cover_url=cover_url
+        )
         _ensure_flip_backs(cards)
         return cards
 
@@ -299,9 +299,31 @@ def resolve_series_photocards(
             wp.get("portrait_back") or cover_url or cards["portrait_front"]
         )
     if cards.get("landscape_front"):
-        cards["landscape_back"] = (
-            wp.get("landscape_back") or cover_url or cards["landscape_front"]
+        from app.artwork_stems import (
+            resolve_cover_banner_file,
+            resolve_cover_landscape_file,
         )
+
+        def _cover_url(path: Path | None) -> str | None:
+            return _media_url(path, media_root) if path else None
+
+        cover_l = (
+            _cover_url(resolve_cover_landscape_file(artwork)) if artwork else None
+        )
+        cover_b = (
+            _cover_url(resolve_cover_banner_file(artwork)) if artwork else None
+        )
+        cards["landscape_back"] = (
+            wp.get("landscape_back")
+            or cover_l
+            or cover_b
+            or cover_url
+            or cards["landscape_front"]
+        )
+        if cards["landscape_back"] and cards["landscape_back"] != wp.get(
+            "landscape_back"
+        ):
+            cards["landscape_back_cover"] = True
     _ensure_flip_backs(cards)
     return cards
 
@@ -310,32 +332,55 @@ def resolve_season_art(
     artwork: Path | None,
     labels: list[str],
     media_root: Path,
-) -> tuple[str | None, str | None, str | None, str | None, str | None]:
-    """Return (portrait_url, landscape_url, cover_front_url, cover_back_url, banner_url).
+    *,
+    render_dirs: list[Path] | None = None,
+) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
+    """Return (portrait, landscape, cover_front, cover_back, banner, logo) URLs.
 
-    Prefers ``{Season} - Banner`` then ``{Season} - Landscape`` for wide art,
-    and ``{Season} - Portrait`` / ``{Season} cover - front/back`` for covers.
+    Prefers ``{Season} - Portrait`` for covers; ``{Season} - Banner`` then
+    ``{Season} - Landscape`` for wide art; ``{Season} - Logo`` from renders.
     """
     from app.artwork_stems import COVER_BACK_STEM, COVER_FRONT_STEM
 
+    empty = (None, None, None, None, None, None)
     if not artwork or not artwork.is_dir():
-        return None, None, None, None, None
+        # Still try logo from renders even without covers dir
+        artwork_dirs: list[Path] = []
+    else:
+        artwork_dirs = [artwork]
+    for d in render_dirs or []:
+        if d and d.is_dir() and d not in artwork_dirs:
+            artwork_dirs.append(d)
+    if not artwork_dirs:
+        return empty
+
     label_cfs = [lab.casefold().strip() for lab in labels if lab and lab.strip()]
     if not label_cfs:
-        return None, None, None, None, None
-    try:
-        files = [
-            p
-            for p in artwork.iterdir()
-            if p.is_file() and p.suffix.lower() in IMAGE_EXTS
-        ]
-    except OSError:
-        return None, None, None, None, None
+        return empty
 
-    def match(*parts: str) -> str | None:
+    def files_in(directory: Path) -> list[Path]:
+        try:
+            return [
+                p
+                for p in directory.iterdir()
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+            ]
+        except OSError:
+            return []
+
+    all_files: list[Path] = []
+    for d in artwork_dirs:
+        all_files.extend(files_in(d))
+
+    def match(*parts: str, in_dirs: list[Path] | None = None) -> str | None:
         want = " ".join(p for p in parts if p).casefold().strip()
         want_dash = " - ".join(p for p in parts if p).casefold().strip()
-        for path in files:
+        pool = all_files
+        if in_dirs is not None:
+            pool = []
+            for d in in_dirs:
+                pool.extend(files_in(d))
+        for path in pool:
             stem = path.stem.casefold().strip()
             if stem == want or stem == want_dash:
                 url = _media_url(path, media_root)
@@ -347,19 +392,21 @@ def resolve_season_art(
                     return url
         return None
 
-    portrait = landscape = front = back = banner = None
+    portrait = landscape = front = back = banner = logo = None
+    cover_dirs = [artwork] if artwork and artwork.is_dir() else artwork_dirs
+    logo_dirs = list(render_dirs or []) or artwork_dirs
     for label in label_cfs:
-        banner = banner or match(label, "banner")
-        portrait = portrait or match(label, "portrait")
-        landscape = landscape or match(label, "landscape")
-        front = front or match(label, COVER_FRONT_STEM)
-        back = back or match(label, COVER_BACK_STEM)
-        # Exact season name file
+        banner = banner or match(label, "banner", in_dirs=cover_dirs)
+        portrait = portrait or match(label, "portrait", in_dirs=cover_dirs)
+        landscape = landscape or match(label, "landscape", in_dirs=cover_dirs)
+        front = front or match(label, COVER_FRONT_STEM, in_dirs=cover_dirs)
+        back = back or match(label, COVER_BACK_STEM, in_dirs=cover_dirs)
+        logo = logo or match(label, "logo", in_dirs=logo_dirs)
         if not portrait and not landscape and not front and not banner:
-            exact = match(label)
+            exact = match(label, in_dirs=cover_dirs)
             if exact:
                 front = exact
-    return portrait, landscape, front, back, banner
+    return portrait, landscape, front, back, banner, logo
 
 
 def _norm_key(text: str) -> str:

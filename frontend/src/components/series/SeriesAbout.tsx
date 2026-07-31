@@ -126,6 +126,7 @@ export default function SeriesAbout({
   const photoColRef = useRef<HTMLDivElement>(null);
   const photoStageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const subseriesRowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (stacked) return;
@@ -176,6 +177,18 @@ export default function SeriesAbout({
     data.writers.length > 0 ? data.writers : data.aliases.length > 0
       ? data.aliases
       : [];
+  const hasSubseriesCarousel = data.subseries.length > 6;
+
+  const advanceSubseriesCarousel = () => {
+    const row = subseriesRowRef.current;
+    if (!row) return;
+    const remaining = row.scrollWidth - row.clientWidth - row.scrollLeft;
+    if (remaining <= 12) {
+      row.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    row.scrollBy({ left: Math.max(row.clientWidth * 0.75, 180), behavior: "smooth" });
+  };
 
   return (
     <div
@@ -381,8 +394,19 @@ export default function SeriesAbout({
             </dl>
           </div>
           {data.subseries.length > 0 && (
-            <section className="artist-about__tracks series-about__subseries">
-              <div className="artist-about__tracks-row series-about__subseries-row">
+            <section
+              className={`artist-about__tracks series-about__subseries${
+                hasSubseriesCarousel ? " series-about__subseries--carousel" : ""
+              }`}
+            >
+              <div
+                ref={subseriesRowRef}
+                className={`artist-about__tracks-row series-about__subseries-row${
+                  hasSubseriesCarousel
+                    ? " series-about__subseries-row--scroll"
+                    : " series-about__subseries-row--spread"
+                }`}
+              >
                 {data.subseries.map((s) => {
                   const revealed = tapRevealSubs && revealedSubId === s.id;
                   const dateLabel =
@@ -455,6 +479,29 @@ export default function SeriesAbout({
                   );
                 })}
               </div>
+              {hasSubseriesCarousel ? (
+                <button
+                  type="button"
+                  className="series-about__subseries-chevron"
+                  onClick={advanceSubseriesCarousel}
+                  aria-label="Show more series"
+                >
+                  <svg
+                    className="artist-page__catalog-chevron"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 6l6 6-6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
             </section>
           )}
         </div>

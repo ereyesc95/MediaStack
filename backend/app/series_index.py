@@ -100,18 +100,24 @@ def _has_gallery(folder: Path) -> bool:
 
 
 def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
-    """Cover - Front from Gallery/Covers or [Artwork]."""
+    """Cover - Front from Gallery/Covers or [Artwork].
+
+    Fallback: any image whose filename contains ``portrait`` (case-insensitive).
+    """
     from app.series_paths import cover_search_dirs
     from app.artwork_stems import resolve_cover_front_file
+
+    def _url(path: Path) -> str:
+        url = _media_url(path, media_root)
+        try:
+            return f"{url}&v={int(path.stat().st_mtime)}"
+        except OSError:
+            return url
 
     for d in cover_search_dirs(folder):
         exact = resolve_cover_front_file(d)
         if exact:
-            url = _media_url(exact, media_root)
-            try:
-                return f"{url}&v={int(exact.stat().st_mtime)}"
-            except OSError:
-                return url
+            return _url(exact)
         preferred = (
             "Cover - Front*",
             "Cover - Album*",
@@ -137,12 +143,68 @@ def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
                         pick = p
                         break
             if pick:
-                url = _media_url(pick, media_root)
-                try:
-                    return f"{url}&v={int(pick.stat().st_mtime)}"
-                except OSError:
-                    return url
-    return _folder_cover(folder, media_root)
+                return _url(pick)
+
+        # Fallback: any image with "portrait" in the filename
+        try:
+            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            files = []
+        for p in files:
+            if (
+                p.is_file()
+                and p.suffix.lower() in IMAGE_EXTS
+                and "portrait" in p.stem.casefold()
+            ):
+                return _url(p)
+
+    # Portrait layouts can use landscape art when no dedicated portrait exists.
+    landscape = _series_folder_landscape(folder, media_root)
+    if landscape:
+        return landscape
+
+    cover = _folder_cover(folder, media_root)
+    if cover:
+        return cover
+
+    # Last resort: portrait-named image anywhere under folder (non-recursive shallow)
+    try:
+        for p in sorted(folder.iterdir(), key=lambda x: x.name.casefold()):
+            if (
+                p.is_file()
+                and p.suffix.lower() in IMAGE_EXTS
+                and "portrait" in p.stem.casefold()
+            ):
+                return _url(p)
+    except OSError:
+        pass
+    return None
+
+
+def _series_folder_landscape(folder: Path, media_root: Path) -> str | None:
+    """Landscape artwork from Gallery/Covers or [Artwork], excluding logos."""
+    from app.series_paths import cover_search_dirs
+
+    def _url(path: Path) -> str:
+        url = _media_url(path, media_root)
+        try:
+            return f"{url}&v={int(path.stat().st_mtime)}"
+        except OSError:
+            return url
+
+    for d in cover_search_dirs(folder):
+        try:
+            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        for p in files:
+            if (
+                p.is_file()
+                and p.suffix.lower() in IMAGE_EXTS
+                and "landscape" in p.stem.casefold()
+            ):
+                return _url(p)
+    return None
 
 
 def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
@@ -173,27 +235,8 @@ def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
             if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
                 return _url(p)
 
-    # Fallback: Cover - Landscape / *landscape* (wide art for mobile banner panel)
-    for d in cover_search_dirs(folder):
-        try:
-            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
-        except OSError:
-            continue
-        preferred: list[Path] = []
-        others: list[Path] = []
-        for p in files:
-            if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
-                continue
-            stem = p.stem.casefold()
-            if "banner" in stem:
-                continue
-            if stem.startswith("cover - landscape") or stem == "cover - landscape":
-                preferred.append(p)
-            elif "landscape" in stem:
-                others.append(p)
-        for p in preferred + others:
-            return _url(p)
-    return None
+    # Wide art is the banner fallback; never use a logo as a card image.
+    return _series_folder_landscape(folder, media_root)
 
 
 def _series_cover_back(folder: Path, media_root: Path) -> str | None:
@@ -225,6 +268,28 @@ def _franchise_cover(franchise_dir: Path, media_root: Path) -> str | None:
         cover = _series_folder_cover(child, media_root)
         if cover:
             return cover
+    return None
+
+
+def _franchise_art(
+    franchise_dir: Path,
+    media_root: Path,
+    resolver,
+) -> str | None:
+    """Resolve franchise art, then the first content child with matching art."""
+    art = resolver(franchise_dir, media_root)
+    if art:
+        return art
+    try:
+        children = sorted(franchise_dir.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return None
+    for child in children:
+        if not child.is_dir() or _is_skip_dir(child.name):
+            continue
+        art = resolver(child, media_root)
+        if art:
+            return art
     return None
 
 
@@ -326,6 +391,7 @@ def _season_card(
     media_root: Path,
     *,
     parent_artwork: Path | None = None,
+    parent_renders: list[Path] | None = None,
 ) -> dict:
     from app.series_artwork import resolve_season_art
 
@@ -336,10 +402,14 @@ def _season_card(
     labels = [display_title, season_dir.name]
     if date_iso and title:
         labels.append(f"{date_iso.replace('-', '.')}. {title}")
-    portrait, landscape, front, back, banner = resolve_season_art(
-        parent_artwork, labels, media_root
+    portrait, landscape, front, back, banner, logo = resolve_season_art(
+        parent_artwork,
+        labels,
+        media_root,
+        render_dirs=parent_renders,
     )
     cover = portrait or front or _folder_cover(season_dir, media_root)
+    # Banner falls back to landscape only — never portrait.
     banner_url = banner or landscape
     return {
         "id": season_dir.name,
@@ -349,9 +419,11 @@ def _season_card(
         "folder_path": season_dir.relative_to(media_root).as_posix(),
         "cover_url": cover,
         "portrait_url": portrait or cover,
-        "landscape_url": landscape or portrait or cover,
-        "banner_url": banner_url or cover,
+        # Keep landscape null when missing so UI can fall back intentionally.
+        "landscape_url": landscape,
+        "banner_url": banner_url,
         "cover_back_url": back,
+        "logo_url": logo,
         "episode_count": _count_episodes(season_dir),
     }
 
@@ -429,19 +501,27 @@ def _list_seasons(folder: Path, media_root: Path) -> list[dict]:
     When an ``Episodes/`` wrapper exists, seasons are listed from inside it.
     Root-level ``Specials/`` next to ``Episodes/`` is also included.
     """
-    from app.series_paths import find_episodes_root, find_covers_dir
+    from app.series_paths import find_episodes_root, find_covers_dir, render_search_dirs
 
     seasons: list[dict] = []
     seen: set[str] = set()
     scan_root = find_episodes_root(folder)
     parent_art = find_covers_dir(folder) or _find_artwork_subdir(folder)
+    parent_renders = render_search_dirs(folder)
 
     def _add_season(child: Path) -> None:
         key = child.name.casefold()
         if key in seen:
             return
         seen.add(key)
-        seasons.append(_season_card(child, media_root, parent_artwork=parent_art))
+        seasons.append(
+            _season_card(
+                child,
+                media_root,
+                parent_artwork=parent_art,
+                parent_renders=parent_renders,
+            )
+        )
 
     try:
         children = sorted(scan_root.iterdir(), key=lambda p: p.name.casefold())
@@ -652,6 +732,15 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
         "slug": normalize_franchise_slug(franchise_dir.name),
         "folder_path": rel,
         "cover_url": _franchise_cover(franchise_dir, media_root),
+        "portrait_url": _franchise_art(
+            franchise_dir, media_root, _series_folder_cover
+        ),
+        "landscape_url": _franchise_art(
+            franchise_dir, media_root, _series_folder_landscape
+        ),
+        "banner_url": _franchise_art(
+            franchise_dir, media_root, _series_folder_banner
+        ),
         "logo_url": logo_url,
         "icon_url": icon_url,
         "badge_url": find_badge_file(franchise_dir, media_root),
@@ -663,6 +752,15 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
                 "display_date": s["display_date"],
                 "folder_path": s["folder_path"],
                 "cover_url": s["cover_url"],
+                "portrait_url": _series_folder_cover(
+                    _path_from_rel(s["folder_path"], media_root), media_root
+                ),
+                "landscape_url": _series_folder_landscape(
+                    _path_from_rel(s["folder_path"], media_root), media_root
+                ),
+                "banner_url": _series_folder_banner(
+                    _path_from_rel(s["folder_path"], media_root), media_root
+                ),
                 "logo_url": s.get("logo_url"),
                 "icon_url": s.get("icon_url"),
                 "badge_url": s.get("badge_url"),
@@ -779,6 +877,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     logo_url, icon_url = find_logo_file(folder, root)
     photocards = resolve_series_photocards(folder, root)
     cover_front = _series_folder_cover(folder, root)
+    cover_landscape = _series_folder_landscape(folder, root)
     cover_banner = _series_folder_banner(folder, root)
     cover_back = _series_cover_back(folder, root)
     badge_url = find_badge_file(folder, root)
@@ -789,7 +888,9 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "display_date": format_display_date(date_iso),
         "folder_path": folder.relative_to(root).as_posix(),
         "cover_url": cover_front,
-        "banner_url": cover_banner or cover_front,
+        "portrait_url": cover_front,
+        "landscape_url": cover_landscape,
+        "banner_url": cover_banner or cover_landscape or cover_front,
         "cover_back_url": cover_back,
         "logo_url": logo_url,
         "icon_url": icon_url,

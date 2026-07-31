@@ -1576,20 +1576,30 @@ export async function setMediaRoot(path: string): Promise<{
 
 export async function fetchMoviesCatalog() {
   return request<{
-    franchises: SeriesFranchiseCard[];
+    franchises: import("./types").SeriesFranchiseCard[];
     films: import("./types").MoviesFilmCard[];
     scanned_at: string | null;
   }>(`${API}/movies/catalog`);
 }
 
 export async function fetchMoviesDashboard() {
-  return request<{
-    top_franchises: SeriesFranchiseCard[];
-    top_films: import("./types").MoviesFilmCard[];
-    franchise_count: number;
-    film_count: number;
-    scanned_at: string | null;
-  }>(`${API}/movies/dashboard`);
+  return request<
+    import("./types").SeriesDashboard & {
+      franchise_count?: number;
+      film_count?: number;
+      top_franchises?: import("./types").SeriesFranchiseCard[];
+      top_films?: import("./types").MoviesFilmCard[];
+      scanned_at?: string | null;
+    }
+  >(`${API}/movies/dashboard`);
+}
+
+export async function fetchMoviesFilterOptions() {
+  return request<SeriesFilterOptions>(`${API}/movies/filters/options`);
+}
+
+export async function fetchMoviesPublishers() {
+  return request<{ publishers: string[] }>(`${API}/movies/publishers`);
 }
 
 export async function fetchMoviesFranchise(workId: string) {
@@ -1634,6 +1644,9 @@ export async function fetchMoviesFilmOverview(
       directors?: string[];
       display_date?: string | null;
       date_iso?: string | null;
+      trailer_url?: string | null;
+      has_video?: boolean;
+      photocards?: import("./types").MoviesFilmDetail["photocards"];
     }
   >(
     `${API}/movies/films/${encodeURIComponent(filmId)}/overview?orientation=${encodeURIComponent(orientation)}`
@@ -1647,6 +1660,117 @@ export async function refreshMoviesFilmMetadata(
   return request(
     `${API}/movies/films/${encodeURIComponent(filmId)}/refresh-metadata?include_bio=${includeBio ? "true" : "false"}`,
     { method: "POST" }
+  );
+}
+
+export async function fetchMoviesFilmAudio(filmId: string) {
+  return request<{
+    releases: Array<{
+      id: string;
+      title: string;
+      category?: string;
+      cover_url?: string | null;
+      folder_path?: string | null;
+      navigate_band_id?: number | null;
+      navigate_release_id?: string | null;
+      date_iso?: string | null;
+      display_date?: string | null;
+      source_artist_name?: string | null;
+    }>;
+    categories: string[];
+  }>(`${API}/movies/films/${encodeURIComponent(filmId)}/media/audio`);
+}
+
+export async function fetchMoviesFilmTrailer(filmId: string) {
+  return request<{ trailer_url: string | null }>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/trailer`
+  );
+}
+
+export async function saveMoviesFilmTrailer(
+  filmId: string,
+  trailer_url: string | null
+) {
+  return request<{ trailer_url: string | null }>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/trailer`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trailer_url }),
+    }
+  );
+}
+
+export async function patchMoviesFilmAbout(
+  filmId: string,
+  body: {
+    bio?: string;
+    writers?: string;
+    directors?: string[] | string;
+    country_id?: number | null;
+    activity_start?: string;
+    activity_end?: string;
+    publishers?: string;
+    languages?: string[];
+    genres?: { id?: number | string | null; name: string }[];
+  }
+) {
+  return request<{ ok: boolean; film_id?: string }>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/about`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function addMoviesFilmCastMember(
+  filmId: string,
+  body: {
+    kind?: string;
+    bucket?: string;
+    name: string;
+    character?: string;
+    photo_url?: string;
+    character_photo_url?: string;
+    roles?: string[];
+    language?: string;
+  }
+) {
+  return request<SeriesCastMember>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/cast`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchMoviesFilmCastMember(
+  filmId: string,
+  memberId: string | number,
+  body: {
+    kind?: string;
+    bucket?: string;
+    name?: string;
+    character?: string;
+    photo_url?: string | null;
+    actor_photo_url?: string | null;
+    actors?: (string | { name: string; photo_url?: string | null })[];
+    roles?: string[];
+    language?: string;
+    delete?: boolean;
+  }
+) {
+  return request<SeriesCastMember | { ok: boolean; deleted?: boolean }>(
+    `${API}/movies/films/${encodeURIComponent(filmId)}/cast/${encodeURIComponent(String(memberId))}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
   );
 }
 
@@ -2053,6 +2177,20 @@ export async function fetchSeriesPlayerTracks(franchiseId: string) {
   }>(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}/player-tracks`
   );
+}
+
+export async function fetchMoviesFilmPlayerTracks(filmId: string) {
+  return request<{
+    tracks: {
+      id: string;
+      title: string;
+      play_url: string;
+      cover_url?: string | null;
+      artist?: string | null;
+      release_title?: string | null;
+    }[];
+    count: number;
+  }>(`${API}/movies/films/${encodeURIComponent(filmId)}/player-tracks`);
 }
 
 export async function fetchSeriesFolderExtras(path: string) {

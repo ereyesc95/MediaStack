@@ -1,73 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
-  fetchMoviesFranchiseAudio,
-  fetchMoviesFranchiseGames,
-  fetchMoviesFranchiseLibrary,
-  fetchMoviesFranchiseOverview,
-  fetchMoviesFranchiseSeries,
   fetchMoviesUniverses,
   linkMoviesUniverseMember,
   refreshMoviesUniverse,
-  refreshMoviesWorkMetadata,
   unlinkMoviesUniverseMember,
 } from "../../api";
+import type { CardOrientation, MoviesUniverse } from "../../types";
 import type {
-  MoviesUniverse,
-  SeriesCastTab,
-  SeriesOverview,
-  SeriesSubseriesCard,
-} from "../../types";
-import {
-  pushMoviesRoute,
-  type MoviesOverviewTab,
-  type MoviesSection,
+  MoviesOverviewTab,
+  MoviesSection,
 } from "../../moviesRoute";
-import { usePhoneLayout } from "../../usePhoneLayout";
-import AppMenu from "../AppMenu";
-import ArtistCard from "../ArtistCard";
-import PlaylistBoot from "../PlaylistBoot";
-import SeriesAbout from "../series/SeriesAbout";
-import SeriesCast from "../series/SeriesCast";
-import SeriesGalleryPanel from "../series/SeriesGalleryPanel";
-import SeriesLinks from "../series/SeriesLinks";
-import SeriesMediaGrid, {
-  type SeriesMediaCard,
-} from "../series/SeriesMediaGrid";
-import SeriesRelatedPanel, {
-  type SeriesRelatedTab,
-} from "../series/SeriesRelatedPanel";
+import SeriesFranchisePage from "../series/SeriesFranchisePage";
+import type { SeriesSection } from "../../types";
 
 type Props = {
   workId: string;
   section?: MoviesSection;
   overviewTab?: MoviesOverviewTab;
   isAdmin?: boolean;
+  userId?: number;
+  cardOrientation?: CardOrientation;
+  onSetOrientation?: (next: CardOrientation) => void;
   onBack: () => void;
+  backLabel?: string;
   onNavigate: (patch: {
     franchiseId?: string;
     filmId?: string;
     section?: MoviesSection;
     overviewTab?: MoviesOverviewTab;
   }) => void;
-  onOpenSeriesFranchise?: (franchiseId: string) => void;
+  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
-  userId?: number;
-};
-
-const OVERVIEW_TABS: { id: MoviesOverviewTab; label: string }[] = [
-  { id: "about", label: "ABOUT" },
-  { id: "cast", label: "CAST" },
-  { id: "links", label: "LINKS" },
-  { id: "related", label: "RELATED" },
-];
-
-type MediaCard = SeriesMediaCard & {
-  navigate_franchise_id?: string;
-  folder_path?: string;
 };
 
 export default function MoviesFranchisePage({
@@ -75,493 +43,116 @@ export default function MoviesFranchisePage({
   section = "overview",
   overviewTab = "about",
   isAdmin,
+  userId,
+  cardOrientation = "portrait",
+  onSetOrientation,
   onBack,
+  backLabel,
   onNavigate,
   onOpenSeriesFranchise,
+  onOpenMusicRelease,
   onImport,
   onSync,
   onChooseSource,
   onSwitchProfile,
   onEditProfile,
-  userId,
 }: Props) {
-  const stacked = usePhoneLayout();
-  const [data, setData] = useState<SeriesOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [eraIndex, setEraIndex] = useState(0);
-  const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
-  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("creator");
-  const [linkTab, setLinkTab] = useState("databases");
-  const [seriesItems, setSeriesItems] = useState<MediaCard[]>([]);
-  const [audioCards, setAudioCards] = useState<MediaCard[]>([]);
-  const [libCards, setLibCards] = useState<MediaCard[]>([]);
-  const [gameCards, setGameCards] = useState<MediaCard[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [universes, setUniverses] = useState<MoviesUniverse[]>([]);
   const [universeOpen, setUniverseOpen] = useState(false);
   const [linkSlug, setLinkSlug] = useState("");
+  const [universe, setUniverse] = useState<MoviesUniverse | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    void fetchMoviesFranchiseOverview(workId, stacked ? "landscape" : "portrait")
-      .then((res) => {
-        setData(res);
-        const cats = res.links?.categories || [];
-        if (cats.length && !cats.some((c) => c.id === linkTab)) {
-          setLinkTab(cats[0].id);
-        }
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
-  }, [workId, stacked, linkTab]);
-
-  useEffect(() => {
-    load();
-  }, [workId, stacked]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    pushMoviesRoute(
-      {
-        franchiseId: workId,
-        section,
-        overviewTab: section === "overview" ? overviewTab : undefined,
-      },
-      true
-    );
-  }, [workId, section, overviewTab]);
-
-  useEffect(() => {
-    if (section !== "series" && section !== "overview") return;
-    void fetchMoviesFranchiseSeries(workId)
-      .then((res) =>
-        setSeriesItems(
-          (res.items || []).map((it) => ({
-            id: it.id,
-            title: it.title,
-            cover_url: it.cover_url ?? null,
-            date_iso: it.date_iso ?? null,
-            navigate_franchise_id: it.navigate_franchise_id,
-            open_mode: null,
-          }))
-        )
-      )
-      .catch(() => setSeriesItems([]));
-  }, [section, workId]);
-
-  useEffect(() => {
-    if (section !== "audio") return;
-    void fetchMoviesFranchiseAudio(workId)
-      .then((res) =>
-        setAudioCards(
-          (res.releases || []).map((r) => ({
-            id: r.id,
-            title: r.title,
-            cover_url: r.cover_url ?? null,
-            category: r.category,
-            folder_path: r.folder_path ?? undefined,
-          }))
-        )
-      )
-      .catch(() => setAudioCards([]));
-  }, [section, workId]);
-
-  useEffect(() => {
-    if (section !== "library") return;
-    void fetchMoviesFranchiseLibrary(workId)
-      .then((res) => setLibCards((res.items || []) as MediaCard[]))
-      .catch(() => setLibCards([]));
-  }, [section, workId]);
-
-  useEffect(() => {
-    if (section !== "games") return;
-    void fetchMoviesFranchiseGames(workId)
-      .then((res) => setGameCards((res.items || []) as MediaCard[]))
-      .catch(() => setGameCards([]));
-  }, [section, workId]);
-
-  const media = data?.media;
-  const sections = useMemo(() => {
-    const all: { id: MoviesSection; label: string }[] = [
-      { id: "overview", label: "OVERVIEW" },
-      { id: "movies", label: "MOVIES" },
-    ];
-    if (media?.has_series || seriesItems.length) {
-      all.push({ id: "series", label: "SERIES" });
-    }
-    if (media?.has_audio) all.push({ id: "audio", label: "AUDIO" });
-    if (media?.has_library) all.push({ id: "library", label: "LIBRARY" });
-    if (media?.has_games) all.push({ id: "games", label: "GAMES" });
-    if (media?.has_gallery) all.push({ id: "gallery", label: "GALLERY" });
-    return all;
-  }, [media, seriesItems.length]);
-
-  useEffect(() => {
-    if (!data) return;
-    if (!sections.some((s) => s.id === section)) {
-      onNavigate({
-        franchiseId: workId,
-        section: "overview",
-        overviewTab: "about",
-      });
-    }
-  }, [data, section, sections, onNavigate, workId]);
-
-  const films = (data as SeriesOverview & { films?: SeriesSubseriesCard[] })
-    ?.films || data?.subseries || [];
-
-  const castCounts = {
-    characters: data?.cast?.characters?.length ?? 0,
-    staff: data?.cast?.staff?.length ?? 0,
-  };
-
-  const openFilm = (film: SeriesSubseriesCard) => {
-    onNavigate({
-      franchiseId: workId,
-      filmId: film.id,
-      section: "overview",
-      overviewTab: "about",
-    });
-  };
-
-  const runRefresh = () => {
-    setBusy("Refreshing metadata…");
-    void refreshMoviesWorkMetadata(workId)
-      .then(() => load())
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setBusy(null));
-  };
-
-  const openUniverseAdmin = () => {
+  const openUniverseAdmin = useCallback(() => {
     setUniverseOpen(true);
     void fetchMoviesUniverses()
       .then((res) => setUniverses(res.universes || []))
       .catch(() => setUniverses([]));
-  };
+  }, []);
 
-  if (loading && !data) {
-    return <PlaylistBoot label="Loading franchise…" />;
-  }
-  if (error || !data) {
-    return (
-      <PlaylistBoot
-        error={error ?? "Not found"}
-        onBack={onBack}
-        backLabel="← Catalog"
-      />
-    );
-  }
-
-  const universe = (data as SeriesOverview & { universe?: MoviesUniverse | null })
-    .universe;
+  const menuExtra: ReactNode = isAdmin ? (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setBusy("Seeding universe…");
+          void refreshMoviesUniverse(workId)
+            .then((u) => {
+              setUniverse(u as MoviesUniverse);
+              setReloadKey((k) => k + 1);
+            })
+            .catch((e) =>
+              setError(e instanceof Error ? e.message : String(e))
+            )
+            .finally(() => setBusy(null));
+        }}
+      >
+        Refresh universe (TMDb)
+      </button>
+      <button type="button" onClick={openUniverseAdmin}>
+        Manage universe links…
+      </button>
+    </>
+  ) : null;
 
   return (
-    <div className="artist-page artist-page--stacked movies-franchise-page">
-      <div className="artist-page__top">
-        <div className="artist-page__top-left">
-          <button
-            type="button"
-            className="artist-page__catalog-back"
-            onClick={onBack}
-            aria-label="Back to catalog"
-          >
-            ←
-          </button>
-        </div>
-        <div className="artist-page__top-center">
-          {data.logo_url || data.icon_url ? (
-            <img
-              src={(data.logo_url || data.icon_url)!}
-              alt=""
-              className="artist-page__brand-logo"
-            />
-          ) : (
-            <span className="artist-page__brand-name">{data.name}</span>
-          )}
-        </div>
-        <div className="artist-page__top-right">
-          {busy ? <span className="muted">{busy}</span> : null}
-          <AppMenu
-            onImport={onImport}
-            onSync={onSync}
-            onChooseSource={onChooseSource}
-            isAdmin={isAdmin}
-            userId={userId}
-            onSwitchProfile={onSwitchProfile}
-            onEditProfile={onEditProfile}
-            menuChrome={
-              isAdmin ? (
-                <>
-                  <button type="button" onClick={runRefresh}>
-                    Refresh metadata (TMDb)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBusy("Seeding universe…");
-                      void refreshMoviesUniverse(workId)
-                        .then(() => load())
-                        .catch((e) =>
-                          setError(e instanceof Error ? e.message : String(e))
-                        )
-                        .finally(() => setBusy(null));
-                    }}
-                  >
-                    Refresh universe (TMDb)
-                  </button>
-                  <button type="button" onClick={openUniverseAdmin}>
-                    Manage universe links…
-                  </button>
-                </>
-              ) : null
-            }
-          />
-        </div>
-      </div>
-
-      <nav className="artist-page__sections">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={section === s.id ? "active" : ""}
-            onClick={() =>
-              onNavigate({
-                franchiseId: workId,
-                section: s.id,
-                overviewTab: s.id === "overview" ? "about" : undefined,
-                filmId: undefined,
-              })
-            }
-          >
-            <span>{s.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      {section === "overview" ? (
-        <nav className="artist-page__subtabs" aria-label="Overview">
-          {OVERVIEW_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={overviewTab === t.id ? "active" : ""}
-              onClick={() =>
-                onNavigate({ section: "overview", overviewTab: t.id })
-              }
-            >
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </nav>
+    <>
+      {error ? (
+        <p className="error" style={{ margin: "0.5rem 1rem" }}>
+          {error}
+        </p>
       ) : null}
-
-      {section === "overview" && overviewTab === "cast" ? (
-        <nav className="artist-page__subtabs artist-page__lineup-subtabs">
-          {(
-            [
-              ["characters", "CHARACTERS", castCounts.characters],
-              ["staff", "STAFF", castCounts.staff],
-            ] as const
-          ).map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              className={castTab === id ? "active" : ""}
-              onClick={() => setCastTab(id)}
-            >
-              <span>
-                {label}
-                <span className="artist-page__lineup-count">{count}</span>
-              </span>
-            </button>
-          ))}
-        </nav>
+      {busy ? (
+        <p className="muted" style={{ margin: "0.5rem 1rem" }}>
+          {busy}
+        </p>
       ) : null}
-
-      {section === "overview" && overviewTab === "related" ? (
-        <nav className="artist-page__subtabs artist-page__related-subtabs">
-          {(
-            [
-              [
-                "creator",
-                "SAME CREW",
-                data.related?.creator_count ??
-                  data.related?.creator?.length ??
-                  0,
-              ],
-              [
-                "similar",
-                "SIMILAR",
-                data.related?.similar_count ??
-                  data.related?.similar?.length ??
-                  0,
-              ],
-            ] as const
-          ).map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              className={relatedTab === id ? "active" : ""}
-              onClick={() => setRelatedTab(id)}
-            >
-              <span>
-                {label}
-                <span className="artist-page__lineup-count">{count}</span>
-              </span>
-            </button>
-          ))}
-        </nav>
-      ) : null}
-
-      {section === "overview" &&
-      overviewTab === "links" &&
-      (data.links?.categories?.length ?? 0) > 0 ? (
-        <nav className="artist-page__subtabs artist-page__links-subtabs">
-          {data.links.categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={linkTab === c.id ? "active" : ""}
-              onClick={() => setLinkTab(c.id)}
-            >
-              <span>
-                {c.label}
-                <span className="artist-page__lineup-count">{c.count}</span>
-              </span>
-            </button>
-          ))}
-        </nav>
-      ) : null}
-
-      <div className="artist-page__body">
-        {section === "overview" && overviewTab === "about" ? (
-          <>
-            {universe ? (
-              <p className="muted" style={{ margin: "0 1.25rem 0.75rem" }}>
-                Universe: <strong>{universe.name}</strong>
-              </p>
-            ) : null}
-            <SeriesAbout
-              data={data}
-              eraIndex={eraIndex}
-              stacked={stacked}
-              onEraChange={setEraIndex}
-              onOpenSubseries={openFilm}
-            />
-          </>
-        ) : null}
-
-        {section === "overview" && overviewTab === "cast" ? (
-          <SeriesCast
-            franchiseId={workId}
-            franchiseName={data.name}
-            cast={data.cast}
-            languages={data.languages}
-            languageOptions={data.language_options}
-            originLanguage={data.origin_language}
-            tab={castTab}
-            isAdmin={false}
-            onDataChanged={load}
-          />
-        ) : null}
-
-        {section === "overview" && overviewTab === "links" ? (
-          <SeriesLinks
-            franchiseId={workId}
-            links={data.links}
-            tab={linkTab}
-            isAdmin={false}
-            onDataChanged={load}
-          />
-        ) : null}
-
-        {section === "overview" && overviewTab === "related" ? (
-          <SeriesRelatedPanel
-            franchiseId={workId}
-            creator={data.related?.creator || []}
-            similar={data.related?.similar || []}
-            tab={relatedTab}
-            isAdmin={false}
-            onDataChanged={load}
-          />
-        ) : null}
-
-        {section === "movies" ? (
-          <div style={{ padding: "0 1.25rem 2rem" }}>
-            <div className="artist-grid artist-grid--portrait">
-              {films.map((film) => (
-                <ArtistCard
-                  key={film.id}
-                  orientation="portrait"
-                  artist={{
-                    id: 0,
-                    name: film.title,
-                    photo_url: film.cover_url,
-                    logo_url: film.logo_url ?? null,
-                    icon_url: film.icon_url ?? null,
-                    logo_collapsed_url: null,
-                    era_year: film.date_iso
-                      ? Number(String(film.date_iso).slice(0, 4)) || null
-                      : null,
-                    show_name_on_hover: !film.logo_url && !film.icon_url,
-                  }}
-                  onClick={() => openFilm(film)}
-                />
-              ))}
-            </div>
-            {!films.length ? (
-              <p className="muted">No film folders under this work yet.</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {section === "series" ? (
-          <div style={{ padding: "0 1.25rem 2rem" }}>
-            <SeriesMediaGrid
-              items={seriesItems}
-              emptyMessage="No matching Series franchise for this work name."
-              onOpen={(item) =>
-                onOpenSeriesFranchise?.(
-                  (item as MediaCard).navigate_franchise_id || workId
-                )
-              }
-            />
-          </div>
-        ) : null}
-
-        {section === "audio" ? (
-          <div style={{ padding: "0 1.25rem 2rem" }}>
-            <SeriesMediaGrid
-              items={audioCards}
-              emptyMessage="No audio folders yet."
-            />
-          </div>
-        ) : null}
-
-        {section === "library" ? (
-          <div style={{ padding: "0 1.25rem 2rem" }}>
-            <SeriesMediaGrid
-              items={libCards}
-              emptyMessage="No related books in the franchise index."
-            />
-          </div>
-        ) : null}
-
-        {section === "games" ? (
-          <div style={{ padding: "0 1.25rem 2rem" }}>
-            <SeriesMediaGrid
-              items={gameCards}
-              emptyMessage="No related games in the franchise index."
-            />
-          </div>
-        ) : null}
-
-        {section === "gallery" ? (
-          <SeriesGalleryPanel folderPath={data.folder_path} />
-        ) : null}
-      </div>
+      <SeriesFranchisePage
+        key={`${workId}-${reloadKey}`}
+        module="movies"
+        franchiseId={workId}
+        section={section as SeriesSection}
+        overviewTab={overviewTab}
+        isAdmin={isAdmin}
+        userId={userId}
+        cardOrientation={cardOrientation}
+        onSetOrientation={onSetOrientation}
+        busy={busy ?? undefined}
+        onImport={onImport}
+        onSync={onSync}
+        onChooseSource={onChooseSource}
+        onSwitchProfile={onSwitchProfile}
+        onEditProfile={onEditProfile}
+        onBack={onBack}
+        backLabel={backLabel}
+        onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onOpenMusicRelease={onOpenMusicRelease}
+        menuExtra={menuExtra}
+        onNavigate={(patch) => {
+          // About film strip / MOVIES tab use subseriesId as film id
+          if (patch.subseriesId) {
+            onNavigate({
+              franchiseId: workId,
+              filmId: patch.subseriesId,
+              section: "overview",
+              overviewTab: "about",
+            });
+            return;
+          }
+          onNavigate({
+            franchiseId: workId,
+            filmId: undefined,
+            section: (patch.section as MoviesSection) || section,
+            overviewTab: patch.overviewTab || overviewTab,
+          });
+        }}
+        onShellUpdate={(shell) => {
+          const u = (shell as { universe?: MoviesUniverse }).universe;
+          if (u) setUniverse(u);
+        }}
+      />
 
       {universeOpen && isAdmin ? (
         <div
@@ -583,7 +174,7 @@ export default function MoviesFranchisePage({
               </p>
             ) : (
               <p className="muted">
-                No universe linked. Seed via Refresh universe, or link below.
+                No universe linked yet. Seed via Refresh universe, or link below.
               </p>
             )}
             <label style={{ display: "block", marginBottom: "0.5rem" }}>
@@ -595,7 +186,7 @@ export default function MoviesFranchisePage({
                   if (!id) return;
                   setBusy("Linking…");
                   void linkMoviesUniverseMember(id, workId)
-                    .then(() => load())
+                    .then(() => setReloadKey((k) => k + 1))
                     .catch((err) =>
                       setError(err instanceof Error ? err.message : String(err))
                     )
@@ -633,7 +224,7 @@ export default function MoviesFranchisePage({
                         )
                           .then(() => {
                             setLinkSlug("");
-                            return load();
+                            setReloadKey((k) => k + 1);
                           })
                           .catch((err) =>
                             setError(
@@ -657,10 +248,12 @@ export default function MoviesFranchisePage({
                         onClick={() => {
                           setBusy("Unlinking…");
                           void unlinkMoviesUniverseMember(universe.id, slug)
-                            .then(() => load())
+                            .then(() => setReloadKey((k) => k + 1))
                             .catch((err) =>
                               setError(
-                                err instanceof Error ? err.message : String(err)
+                                err instanceof Error
+                                  ? err.message
+                                  : String(err)
                               )
                             )
                             .finally(() => setBusy(null));
@@ -679,6 +272,6 @@ export default function MoviesFranchisePage({
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

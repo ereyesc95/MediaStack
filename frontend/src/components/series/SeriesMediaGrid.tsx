@@ -8,6 +8,8 @@ export type SeriesMediaCard = {
   id: string;
   title: string;
   cover_url?: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
   banner_url?: string | null;
   logo_url?: string | null;
   meta?: string;
@@ -67,8 +69,9 @@ function SeriesMediaCardView({
   revealed: boolean;
   onReveal: () => void;
 }) {
-  const cover = item.cover_url || null;
-  const bannerBg = item.banner_url || item.cover_url || null;
+  const cover = item.portrait_url || item.landscape_url || item.cover_url || null;
+  const bannerBg =
+    item.banner_url || item.landscape_url || item.portrait_url || item.cover_url || null;
   const dateLabel = item.date_label || item.meta || "";
   const openLabel = item.open_label || null;
   const openUrl = item.open_url?.trim() || null;
@@ -158,7 +161,19 @@ function SeriesMediaCardView({
                 alt=""
               />
             ) : (
-              <span className="media-release-card__banner-title media-release-card__banner-title--compact">
+              <span
+                className={[
+                  "media-release-card__banner-title",
+                  "media-release-card__banner-title--compact",
+                  item.title.length >= 40
+                    ? "media-release-card__banner-title--xlong"
+                    : item.title.length > 26
+                      ? "media-release-card__banner-title--long"
+                      : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
                 {item.title}
               </span>
             )}
@@ -291,7 +306,7 @@ export default function SeriesMediaGrid({
     return () => document.removeEventListener("pointerdown", onDoc);
   }, [tapReveal, revealedId]);
 
-  if (loading) {
+  if (loading && !(items && items.length)) {
     return <PlaylistBoot className="playlist-boot--compact" label="Loading…" />;
   }
   if (!items.length) {

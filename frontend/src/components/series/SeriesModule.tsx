@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchSeriesCatalog,
   fetchSeriesDashboard,
   fetchSeriesFilterOptions,
   resolveMoviesPath,
 } from "../../api";
+import {
+  catalogBackgroundIso,
+  catalogBackgroundUrl,
+} from "../../catalogBackdrop";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
+  clearSeriesEntryReferrer,
+  getSeriesEntryReferrer,
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
   parseSeriesCatalogPath,
@@ -77,7 +83,11 @@ type Props = {
     }
   ) => void;
   onOpenArtist?: (bandId: number) => void;
-  onOpenMoviesFranchise?: (franchiseId: string, filmId?: string) => void;
+  onOpenMoviesFranchise?: (
+    franchiseId: string,
+    filmId?: string,
+    section?: string
+  ) => void;
 };
 
 export default function SeriesModule({
@@ -133,6 +143,35 @@ export default function SeriesModule({
   const [subgenreId, setSubgenreId] = useState<number | "">("");
   const [publisher, setPublisher] = useState("");
   const [writer, setWriter] = useState("");
+  /** Where the user entered the franchise/subseries from. */
+  const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
+
+  const backgroundIso = useMemo(
+    () => catalogBackgroundIso(filterMode, countryId, filterOptions),
+    [filterMode, countryId, filterOptions]
+  );
+  const backgroundUrl = useMemo(
+    () =>
+      catalogBackgroundUrl(filterMode, {
+        continentId,
+        subgenreId,
+        startDecade,
+        endDecade,
+        filterOptions,
+      }),
+    [
+      filterMode,
+      continentId,
+      subgenreId,
+      startDecade,
+      endDecade,
+      filterOptions,
+    ]
+  );
+  const moduleBackdrop =
+    tab === "catalog" &&
+    !franchiseId &&
+    Boolean(backgroundUrl || backgroundIso);
 
   const showModuleChrome = !franchiseId;
   const deviceLayout = useDeviceLayout();
@@ -222,26 +261,31 @@ export default function SeriesModule({
   const media =
     mediaOptions.find((m) => m.kind === "series") ?? mediaOptions[0];
 
-  const openEpisode = (
-    openUrl: string | null | undefined,
-    path?: string | null
-  ) => {
-    const url =
-      openUrl ||
-      (path ? `/api/media/file?path=${encodeURIComponent(path)}` : null);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  };
-
   const openFranchise = (
     id: string,
     nextSubseriesId?: string,
-    shellHint?: SeriesFranchiseShell | null
+    shellHint?: SeriesFranchiseShell | null,
+    from: "home" | "catalog" = "catalog"
   ) => {
+    setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
     setTab("catalog");
     onNavigate({
       franchiseId: id,
       subseriesId: nextSubseriesId,
+      seasonId: undefined,
+      section: "overview",
+    });
+  };
+
+  const backToHome = () => {
+    clearMediaTheme(userId);
+    setFranchiseShell(null);
+    setTab("home");
+    pushSeriesRootRoute(true);
+    onNavigate({
+      franchiseId: undefined,
+      subseriesId: undefined,
       seasonId: undefined,
       section: "overview",
     });
@@ -257,6 +301,40 @@ export default function SeriesModule({
       subseriesId: undefined,
       seasonId: undefined,
       section: "overview",
+    });
+  };
+
+  const backFromFranchise = () => {
+    if (entrySource === "home") {
+      backToHome();
+      return;
+    }
+    backToCatalog();
+  };
+
+  const backFromDeepLink = () => {
+    const ref = getSeriesEntryReferrer();
+    if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
+      clearSeriesEntryReferrer();
+      onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
+      return;
+    }
+    backFromFranchise();
+  };
+
+  const backFromSubseries = () => {
+    const ref = getSeriesEntryReferrer();
+    if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
+      clearSeriesEntryReferrer();
+      onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
+      return;
+    }
+    onNavigate({
+      franchiseId,
+      subseriesId: undefined,
+      seasonId: undefined,
+      section: "overview",
+      overviewTab: "about",
     });
   };
 
@@ -316,18 +394,19 @@ export default function SeriesModule({
           onChooseSource={onChooseSource}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
-          onBack={() =>
-            onNavigate({
-              franchiseId,
-              subseriesId: undefined,
-              seasonId: undefined,
-              section: "overview",
-              overviewTab: "about",
-            })
-          }
+          onBack={backFromSubseries}
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}
+          onOpenMoviesPath={(path) => {
+            void resolveMoviesPath(path)
+              .then((hit) => {
+                onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
+              })
+              .catch(() => {
+                /* fall through — keep series movies tab usable offline */
+              });
+          }}
           onNavigate={(patch) =>
             onNavigate({
               franchiseId,
@@ -364,7 +443,8 @@ export default function SeriesModule({
           onChooseSource={onChooseSource}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
-          onBack={backToCatalog}
+          onBack={backFromDeepLink}
+          backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
           onOpenFranchise={(id) => {
             const card = franchises.find((f) => f.id === id);
             openFranchise(
@@ -377,7 +457,8 @@ export default function SeriesModule({
                     logo_url: card.logo_url,
                     icon_url: card.icon_url,
                   }
-                : undefined
+                : undefined,
+              "catalog"
             );
           }}
           onBrowseCatalog={browseCatalog}
@@ -421,7 +502,26 @@ export default function SeriesModule({
   }
 
   return (
-    <div className="series-module">
+    <div
+      className={`series-module${
+        moduleBackdrop ? " music-module--backdrop" : ""
+      }`}
+    >
+      {moduleBackdrop ? (
+        <div className="music-module__backdrop" aria-hidden>
+          {backgroundIso ? (
+            <span
+              className={`music-module__backdrop-flag fi fi-${backgroundIso}`}
+            />
+          ) : backgroundUrl ? (
+            <div
+              className="music-module__backdrop-image"
+              style={{ backgroundImage: `url(${backgroundUrl})` }}
+            />
+          ) : null}
+          <div className="music-module__backdrop-overlay" />
+        </div>
+      ) : null}
       <ModuleTopBar
         media={media}
         mediaOptions={mediaOptions}
@@ -515,8 +615,7 @@ export default function SeriesModule({
           <SeriesHome
             data={dashboard}
             loading={dashLoading}
-            onOpenEpisode={openEpisode}
-            onFranchise={(id) => {
+            onOpenFranchise={(id) => {
               const card = franchises.find((f) => f.id === id);
               openFranchise(
                 id,
@@ -528,18 +627,51 @@ export default function SeriesModule({
                       logo_url: card.logo_url,
                       icon_url: card.icon_url,
                     }
-                  : undefined
+                  : undefined,
+                "home"
               );
             }}
-            onGenre={() => {
+            onOpenShow={(franchiseId, subseriesId) => {
+              const card = franchises.find((f) => f.id === franchiseId);
+              openFranchise(
+                franchiseId,
+                subseriesId || undefined,
+                card
+                  ? {
+                      name: card.name,
+                      cover_url: card.cover_url,
+                      logo_url: card.logo_url,
+                      icon_url: card.icon_url,
+                    }
+                  : undefined,
+                "home"
+              );
+            }}
+            onGenre={(id) => {
               setTab("catalog");
               pushSeriesCatalogRoute();
               setFilterMode("genre");
+              setContinentId("");
+              setCountryId("");
+              setStartDecade("");
+              setEndDecade("");
+              const numeric =
+                typeof id === "number"
+                  ? id
+                  : typeof id === "string" && /^\d+$/.test(id)
+                    ? Number(id)
+                    : "";
+              setSubgenreId(numeric === "" || Number.isNaN(numeric) ? "" : numeric);
             }}
-            onCountry={() => {
+            onCountry={(c) => {
               setTab("catalog");
               pushSeriesCatalogRoute();
               setFilterMode("country");
+              setContinentId("");
+              setSubgenreId("");
+              setStartDecade("");
+              setEndDecade("");
+              setCountryId(c.id ?? "");
             }}
           />
         </div>

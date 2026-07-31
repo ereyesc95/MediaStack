@@ -146,6 +146,7 @@ type Props = {
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
+  onBackToMovies?: (franchiseId: string) => void;
 };
 
 function isVideoMedia(url: string | null | undefined): boolean {
@@ -335,6 +336,7 @@ export default function ReleasePage({
   onSwitchProfile,
   onEditProfile,
   onBackToSeries,
+  onBackToMovies,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -897,16 +899,21 @@ export default function ReleasePage({
     releaseReferrer?.source === "series" && releaseReferrer.franchiseId
       ? releaseReferrer
       : null;
+  const moviesReferrer =
+    releaseReferrer?.source === "movies" && releaseReferrer.franchiseId
+      ? releaseReferrer
+      : null;
+  const franchiseReferrer = seriesReferrer || moviesReferrer;
   const referrerOverview = releaseReferrer
     ? getCachedOverview(releaseReferrer.bandId, "landscape")
     : null;
   const seriesBackUsesIcon = Boolean(
-    seriesReferrer?.franchiseIconUrl && bannerLayout
+    franchiseReferrer?.franchiseIconUrl && bannerLayout
   );
   const franchiseBackLabel = (
-    seriesReferrer?.franchiseName || "Franchise"
+    franchiseReferrer?.franchiseName || "Franchise"
   ).toUpperCase();
-  const backLabel = seriesReferrer
+  const backLabel = franchiseReferrer
     ? bannerLayout
       ? seriesBackUsesIcon
         ? null
@@ -917,7 +924,7 @@ export default function ReleasePage({
           referrerOverview?.name ??
           "Artist")
       : (data?.artist_name ?? "Artist");
-  const backAriaLabel = seriesReferrer
+  const backAriaLabel = franchiseReferrer
     ? `Back to ${franchiseBackLabel}`
     : `Back to ${backLabel ?? "Artist"}`;
 
@@ -926,6 +933,10 @@ export default function ReleasePage({
     clearReleaseReferrer();
     if (ref?.source === "series" && ref.franchiseId) {
       onBackToSeries?.(ref.franchiseId, ref.subseriesId);
+      return;
+    }
+    if (ref?.source === "movies" && ref.franchiseId) {
+      onBackToMovies?.(ref.franchiseId);
       return;
     }
     if (ref && ref.bandId !== bandId) {
@@ -2213,7 +2224,7 @@ export default function ReleasePage({
               </svg>
               {seriesBackUsesIcon ? (
                 <img
-                  src={seriesReferrer!.franchiseIconUrl!}
+                  src={franchiseReferrer!.franchiseIconUrl!}
                   alt=""
                   className="series-subseries-page__back-icon"
                 />

@@ -10,14 +10,19 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.gallery import _media_url
-from app.media_index import parse_bracket_tags
+from app.media_index import (
+    VARIOUS_ARTISTS_DEFAULT_ID,
+    _build_release_card,
+    _iter_category_release_entries,
+    entry_display_name,
+    parse_bracket_tags,
+)
 from app.media_item_overview import VIDEO_EXTS, _file_url
 from app.media_paths_util import resolve_media_entry, safe_relative
 from app.release_tracklist import _duration_from_file, _format_duration
 from app.series_index import _list_subseries, find_franchise_dir
 from app.series_paths import find_audio_bucket, find_extras_dir
 from app.band_library import AUDIO_CATEGORIES, _resolve_child_dir
-from app.media_index import _iter_category_release_entries
 
 _OPENING_RE = re.compile(r"\bopenings?\b|\bops?\b", re.I)
 _ENDING_RE = re.compile(r"\bendings?\b|\beds?\b", re.I)
@@ -501,31 +506,15 @@ def openings_endings_playlist_card(franchise_id: str) -> dict | None:
     }
 
 
-def collect_series_audio_tracks(db: Session, franchise_id: str) -> list[dict]:
-    """Resolve Audio/ .lnk releases into playable track entries for the series player."""
-    from app.band_library import AUDIO_EXTS, _find_cover_front_artwork
-    from app.media_index import (
-        VARIOUS_ARTISTS_DEFAULT_ID,
-        _build_release_card,
-        entry_display_name,
-    )
-
-    root = Path(settings.media_root) if settings.media_root else None
-    if not root or not root.is_dir():
-        return []
-    found = find_franchise_dir(franchise_id, root)
-    if not found:
-        return []
-    franchise_dir, _ = found
-    scopes = [franchise_dir]
-    for s in _list_subseries(franchise_dir, root):
-        fp = s.get("folder_path") or ""
-        if fp:
-            scopes.append(root / fp.replace("\\", "/"))
+def collect_audio_tracks_from_folders(
+    db: Session, folders: list[Path], media_root: Path
+) -> list[dict]:
+    """Resolve Audio/ .lnk releases under folders into playable track entries."""
+    from app.band_library import AUDIO_EXTS
 
     tracks: list[dict] = []
     seen: set[str] = set()
-    for folder in scopes:
+    for folder in folders:
         bucket = find_audio_bucket(folder)
         if not bucket:
             continue
@@ -535,10 +524,10 @@ def collect_series_audio_tracks(db: Session, franchise_id: str) -> list[dict]:
                 continue
             for entry in _iter_category_release_entries(cat_dir):
                 name = entry_display_name(entry)
-                resolved = resolve_media_entry(entry, media_root=root)
+                resolved = resolve_media_entry(entry, media_root=media_root)
                 card = _build_release_card(
                     db,
-                    media_root=root,
+                    media_root=media_root,
                     owner_band_id=VARIOUS_ARTISTS_DEFAULT_ID,
                     category_key=category_key,
                     category_folder=category_folder,
@@ -563,15 +552,13 @@ def collect_series_audio_tracks(db: Session, franchise_id: str) -> list[dict]:
                 except OSError:
                     continue
                 for audio in audio_files:
-                    rel = safe_relative(audio, root)
+                    rel = safe_relative(audio, media_root)
                     if not rel or rel in seen:
                         continue
                     seen.add(rel)
-                    play_url = (
-                        f"/api/media/file?path={quote(rel, safe='/')}"
-                    )
+                    play_url = f"/api/media/file?path={quote(rel, safe='/')}"
                     title = audio.stem
-                    clean, tags = parse_bracket_tags(title)
+                    clean, _tags = parse_bracket_tags(title)
                     m = _EP_PREFIX.match(clean.strip())
                     if m:
                         title = m.group(2).strip()
@@ -582,18 +569,40 @@ def collect_series_audio_tracks(db: Session, franchise_id: str) -> list[dict]:
                             "id": f"trk_{hashlib.sha256(rel.encode()).hexdigest()[:12]}",
                             "title": title,
                             "play_url": play_url,
-                            "cover_url": cover
-                            or _find_cover_front_artwork(audio.parent, root),
-                            "duration": _format_duration(dur)
-                            if (dur := _duration_from_file(audio))
-                            else None,
-                            "artist": tags.get("source_artist")
-                            or _extract_by_artist(audio.stem)
-                            or (card or {}).get("source_artist_name"),
-                            "release_title": (card or {}).get("title"),
-                            "band_id": (card or {}).get("navigate_band_id"),
-                            "release_id": (card or {}).get("navigate_release_id")
-                            or (card or {}).get("id"),
+                            "cover_url": cover,
+                            "artist": (card or {}).get("source_artist_name")
+                            or "Various Artists",
                         }
                     )
     return tracks
+
+
+def collect_series_audio_tracks(db: Session, franchise_id: str) -> list[dict]:
+    """Resolve Audio/ .lnk releases into playable track entries for the series player."""
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        return []
+    found = find_franchise_dir(franchise_id, root)
+    if not found:
+        return []
+    franchise_dir, _ = found
+    scopes = [franchise_dir]
+    for s in _list_subseries(franchise_dir, root):
+        fp = s.get("folder_path") or ""
+        if fp:
+            scopes.append(root / fp.replace("\\", "/"))
+    return collect_audio_tracks_from_folders(db, scopes, root)
+
+
+def collect_film_audio_tracks(db: Session, film_id: str) -> list[dict]:
+    """Playable tracks from a film folder's Audio/ bucket."""
+    from app.movies_index import find_film_dir
+
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        return []
+    found = find_film_dir(film_id, root)
+    if not found:
+        return []
+    film_dir, _work_dir, _letter = found
+    return collect_audio_tracks_from_folders(db, [film_dir], root)

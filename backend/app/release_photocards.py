@@ -147,19 +147,34 @@ def _apply_cover_front_backs(
     *,
     cover_url: str | None = None,
 ) -> None:
-    """When no wallpaper back exists, flip to cover front at the same card size."""
-    resolved = cover_url
-    if not resolved and artwork and artwork.is_dir():
-        cover = _artwork_file(artwork, COVER_FRONT_STEM)
-        if cover:
-            resolved = _media_url(cover, media_root)
-    if not resolved:
-        return
+    """Fill missing flip backs from cover artwork.
+
+    Landscape back preference: Cover - Landscape → Cover - Banner → Cover - Front.
+    """
+    from app.artwork_stems import (
+        resolve_cover_banner_file,
+        resolve_cover_front_file,
+        resolve_cover_landscape_file,
+    )
+
+    def _url(path: Path | None) -> str | None:
+        if not path:
+            return None
+        return _media_url(path, media_root)
+
+    cover_front = cover_url or _url(resolve_cover_front_file(artwork))
+    cover_banner = _url(resolve_cover_banner_file(artwork))
+    cover_landscape = _url(resolve_cover_landscape_file(artwork))
 
     if cards.get("portrait_front") and not cards.get("portrait_back"):
-        cards["portrait_back"] = resolved
+        cards["portrait_back"] = cover_front
+
     if cards.get("landscape_front") and not cards.get("landscape_back"):
-        cards["landscape_back"] = resolved
+        cards["landscape_back"] = (
+            cover_landscape or cover_banner or cover_front
+        )
+        if cards.get("landscape_back"):
+            cards["landscape_back_cover"] = True
 
 
 def _ensure_flip_backs(cards: dict[str, str | None]) -> None:
@@ -169,6 +184,9 @@ def _ensure_flip_backs(cards: dict[str, str | None]) -> None:
     ):
         if cards.get(front_key) and not cards.get(back_key):
             cards[back_key] = cards[front_key]
+            if front_key == "landscape_front":
+                # Portrait-as-landscape-back must fill the card.
+                cards["landscape_back_cover"] = True
 
 
 def scan_photocards(artwork: Path | None, media_root: Path) -> dict[str, str | None]:

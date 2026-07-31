@@ -135,6 +135,19 @@ def _country_payload(db: Session, meta: dict) -> dict | None:
     if countries:
         iso = str(countries[0]).lower()[:2]
     if not iso:
+        raw = meta.get("country_iso") or meta.get("origin_country")
+        if raw:
+            iso = str(raw).lower()[:2]
+    if not iso:
+        cid = meta.get("country_id")
+        if cid:
+            crow = db.get(Country, int(cid))
+            if crow:
+                return {
+                    "id": crow.cou_id,
+                    "name": crow.cou_name,
+                    "iso": crow.cou_iso,
+                }
         return None
     crow = db.scalars(select(Country).where(Country.cou_iso == iso)).first()
     if crow:
@@ -288,8 +301,8 @@ def build_work_overview(
         bio = universe["overview"]
 
     films = detail.get("films") or []
-    # Map films → subseries-shaped for SeriesAbout filmography grid reuse
-    subseries = [
+    # Map films → subseries-shaped for SeriesAbout filmography strip
+    films_as_subseries = [
         {
             "id": f["id"],
             "title": f.get("title"),
@@ -304,6 +317,66 @@ def build_work_overview(
         }
         for f in films
     ]
+
+    # Same franchise entity as Series (shared slug) → reuse Series overview
+    # so About/Cast/Links/Related/eras/audio match SeriesStack without re-TMDb.
+    series_ov: dict | None = None
+    try:
+        from app.series_index import find_franchise_dir
+        from app.series_overview import build_series_overview
+
+        if find_franchise_dir(slug, root) or find_franchise_dir(name, root):
+            series_ov = build_series_overview(db, slug, orientation=orientation)
+            if not series_ov:
+                series_ov = build_series_overview(
+                    db, name, orientation=orientation
+                )
+    except Exception:
+        series_ov = None
+
+    if series_ov:
+        media = dict(series_ov.get("media") or {})
+        media["has_movies"] = len(films) > 0
+        media["has_series"] = bool(
+            series_ov.get("subseries") or series_ov.get("seasons")
+        )
+        if has_audio:
+            media["has_audio"] = True
+        if has_gallery and not media.get("has_gallery"):
+            media["has_gallery"] = True
+        # Prefer Series disk related for books/games/music; keep creator/similar
+        related = dict(series_ov.get("related") or {})
+        if not related.get("books"):
+            related["books"] = _enrich_related_cards(
+                related_disk.get("books") or [], root
+            )
+        if not related.get("games"):
+            related["games"] = _enrich_related_cards(
+                related_disk.get("games") or [], root
+            )
+        return {
+            **series_ov,
+            "id": detail["id"],
+            "mwk_id": row.mwk_id,
+            "slug": slug,
+            "letter": letter,
+            "movies_folder_path": folder_path,
+            # About strip + MOVIES tab = films; SERIES tab uses series_shows
+            "subseries": films_as_subseries,
+            "films": films,
+            "series_shows": series_ov.get("subseries") or [],
+            "series_franchise_id": series_ov.get("id") or slug,
+            "shared_series": True,
+            "media": media,
+            "related": related,
+            "universe": universe,
+            "is_standalone": detail.get("is_standalone"),
+            "primary_film_id": detail.get("primary_film_id"),
+            "film_count": detail.get("film_count") or len(films),
+            "kind": "franchise",
+            # Don't force a Movies TMDb refresh when Series already has data
+            "needs_metadata": bool(series_ov.get("needs_metadata")),
+        }
 
     language_options = language_options_for_franchise(
         selected_langs, origin_code=origin_lang
@@ -353,7 +426,7 @@ def build_work_overview(
             "creator_count": len(creator),
             "similar_count": len(similar),
         },
-        "subseries": subseries,
+        "subseries": films_as_subseries,
         "films": films,
         "seasons": [],
         "universe": universe,
@@ -364,6 +437,7 @@ def build_work_overview(
         "primary_film_id": detail.get("primary_film_id"),
         "film_count": detail.get("film_count") or len(films),
         "kind": "franchise",
+        "shared_series": False,
     }
 
 
@@ -396,7 +470,13 @@ def build_film_overview(
     db.commit()
     meta = _load_meta(row)
     films_meta = meta.get("films") if isinstance(meta.get("films"), dict) else {}
-    film_meta = films_meta.get(fid) if isinstance(films_meta.get(fid), dict) else {}
+    film_meta = (
+        dict(films_meta.get(fid))
+        if isinstance(films_meta.get(fid), dict)
+        else {}
+    )
+    if not film_meta and isinstance(films_meta.get(film_id), dict):
+        film_meta = dict(films_meta.get(film_id))
 
     from app.series_languages import (
         language_options_for_franchise,
@@ -409,7 +489,13 @@ def build_film_overview(
         or origin_language_code(country_iso=None)
         or "en"
     )
-    selected_langs = [origin_lang]
+    selected_langs = film_meta.get("languages")
+    if not isinstance(selected_langs, list) or not selected_langs:
+        selected_langs = [origin_lang]
+    else:
+        selected_langs = [
+            normalize_lang_code(c) or c for c in selected_langs if c
+        ]
     language_options = language_options_for_franchise(
         selected_langs, origin_code=origin_lang
     )
@@ -483,17 +569,42 @@ def build_film_overview(
     index = _ensure_franchise_index(root)
     related_disk = related_for_path(index, work.get("folder_path") or folder_path)
 
-    genres = [
-        {"id": g.get("id") or i, "name": g.get("name") or str(g)}
-        for i, g in enumerate(film_meta.get("genres") or [])
-        if isinstance(g, dict) and (g.get("name") or g)
-    ]
+    genres = []
+    for i, g in enumerate(film_meta.get("genres") or []):
+        if isinstance(g, dict):
+            name = (g.get("name") or "").strip() or str(g.get("id") or "").strip()
+            if not name:
+                continue
+            genres.append({"id": g.get("id") if g.get("id") is not None else i, "name": name})
+        elif isinstance(g, str) and g.strip():
+            genres.append({"id": i, "name": g.strip()})
     writers = film_meta.get("writers") or []
+    if isinstance(writers, str):
+        writers = [w.strip() for w in writers.split(";") if w.strip()]
     publishers = film_meta.get("publishers") or []
+    if isinstance(publishers, str):
+        publishers = [p.strip() for p in publishers.split(";") if p.strip()]
+    directors = film_meta.get("directors") or []
+    if isinstance(directors, str):
+        directors = [d.strip() for d in directors.split(";") if d.strip()]
     rd = film_meta.get("release_date") or detail.get("date_iso")
-    periods = (
-        [{"label": str(rd)[:4], "start": rd, "end": rd}] if rd else []
-    )
+    stored_periods = film_meta.get("activity_periods")
+    if isinstance(stored_periods, list) and stored_periods:
+        periods = [
+            {
+                "label": str(p.get("start") or "")[:4]
+                or str(p.get("end") or "")[:4]
+                or "",
+                "start": p.get("start"),
+                "end": p.get("end"),
+            }
+            for p in stored_periods
+            if isinstance(p, dict) and (p.get("start") or p.get("end"))
+        ]
+    else:
+        periods = (
+            [{"label": str(rd)[:4], "start": rd, "end": rd}] if rd else []
+        )
 
     universe = universe_for_work(db, work_slug)
 
@@ -560,5 +671,7 @@ def build_film_overview(
         "display_date": detail.get("display_date"),
         "banner_url": detail.get("banner_url"),
         "has_video": detail.get("has_video"),
-        "directors": film_meta.get("directors") or [],
+        "directors": directors,
+        "photocards": detail.get("photocards"),
+        "trailer_url": film_meta.get("trailer_url") or detail.get("trailer_url"),
     }

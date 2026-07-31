@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchSeriesPlayerTracks } from "../../api";
+import { fetchSeriesPlayerTracks, fetchMoviesFilmPlayerTracks } from "../../api";
 import { IconMediaMusic } from "../MenuIcons";
 import {
   MiniAudioPlayerControls,
@@ -18,6 +18,8 @@ type Track = {
 
 type Props = {
   franchiseId: string;
+  /** When set, load tracks from the film Audio/ folder instead of series. */
+  filmId?: string;
   enabled?: boolean;
   onPlayingChange?: (playing: boolean) => void;
   /** When set, dock open state is controlled by the parent. */
@@ -36,8 +38,23 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** Prefer `[By Artist]` / `(By Artist)` when the track artist is Various Artists. */
+function displayTrackArtist(
+  artist?: string | null,
+  title?: string | null
+): string | null {
+  if (!artist) return null;
+  if (!/^various\s+artists$/i.test(artist.trim())) return artist;
+  const fromTitle =
+    title?.match(/\[\s*by\s+([^\]]+?)\s*\]/i) ||
+    title?.match(/\(\s*by\s+([^)]+?)\s*\)/i);
+  const named = fromTitle?.[1]?.trim();
+  return named || artist;
+}
+
 export default function SeriesAudioPlayer({
   franchiseId,
+  filmId,
   enabled = true,
   onPlayingChange,
   open: openProp,
@@ -100,12 +117,15 @@ export default function SeriesAudioPlayer({
 
   const loadTracks = useCallback(async () => {
     setLoading(true);
+    const cacheKey = filmId ? `film:${filmId}` : `series:${franchiseId}`;
     try {
-      const data = await fetchSeriesPlayerTracks(franchiseId);
+      const data = filmId
+        ? await fetchMoviesFilmPlayerTracks(filmId)
+        : await fetchSeriesPlayerTracks(franchiseId);
       const shuffled = shuffle(data.tracks || []);
       setTracks(shuffled);
       queueRef.current = shuffled;
-      loadedForRef.current = franchiseId;
+      loadedForRef.current = cacheKey;
       if (shuffled.length) playAt(0, shuffled);
     } catch {
       setTracks([]);
@@ -113,7 +133,7 @@ export default function SeriesAudioPlayer({
     } finally {
       setLoading(false);
     }
-  }, [franchiseId, playAt]);
+  }, [franchiseId, filmId, playAt]);
 
   const playNext = useCallback(() => {
     const q = queueRef.current;
@@ -129,11 +149,13 @@ export default function SeriesAudioPlayer({
     playAt(prev, q);
   }, [playAt]);
 
+  const scopeKey = filmId ? `film:${filmId}` : `series:${franchiseId}`;
+
   useEffect(() => {
-    if (open && loadedForRef.current !== franchiseId) {
+    if (open && loadedForRef.current !== scopeKey) {
       void loadTracks();
     }
-  }, [open, franchiseId, loadTracks]);
+  }, [open, scopeKey, loadTracks]);
 
   useEffect(() => {
     const el = audio.audioRef.current;
@@ -150,12 +172,13 @@ export default function SeriesAudioPlayer({
     queueRef.current = [];
     audio.clear();
     setOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when franchise changes
-  }, [franchiseId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when scope changes
+  }, [scopeKey]);
 
   if (!enabled) return null;
 
   const now = tracks[index];
+  const nowArtist = displayTrackArtist(now?.artist, now?.title);
 
   const dockBody =
     loading ? (
@@ -168,7 +191,7 @@ export default function SeriesAudioPlayer({
           {now?.cover_url ? <img src={now.cover_url} alt="" /> : null}
           <div>
             <strong>{now?.title}</strong>
-            {now?.artist ? <span className="muted">{now.artist}</span> : null}
+            {nowArtist ? <span className="muted">{nowArtist}</span> : null}
           </div>
         </div>
         <MiniAudioPlayerControls
@@ -207,7 +230,7 @@ export default function SeriesAudioPlayer({
             onClick={() => {
               const next = !open;
               setOpen(next);
-              if (next && loadedForRef.current !== franchiseId) {
+              if (next && loadedForRef.current !== scopeKey) {
                 void loadTracks();
               }
             }}

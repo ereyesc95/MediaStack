@@ -42,6 +42,9 @@ export type SeriesCatalogCard = {
   name: string;
   letter: string;
   cover_url: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
   badge_url?: string | null;
@@ -93,6 +96,8 @@ type Props = {
   writer: string;
   /** Movies catalog uses film counts mapped onto season_count. */
   unitNoun?: "season" | "film";
+  /** Override filter tabs (e.g. Films scope hides END DATE, renames START). */
+  filterModes?: { id: SeriesFilterMode; label: string }[];
   loading?: boolean;
   onSearchChange: (v: string) => void;
   onLetterChange: (v: string) => void;
@@ -107,7 +112,12 @@ type Props = {
   onOpen: (
     franchiseId: string,
     subseriesId?: string,
-    shell?: { name: string; cover_url: string | null }
+    shell?: {
+      name: string;
+      cover_url: string | null;
+      logo_url?: string | null;
+      icon_url?: string | null;
+    }
   ) => void;
 };
 
@@ -127,6 +137,7 @@ export default function SeriesBrowse({
   publisher,
   writer,
   unitNoun = "season",
+  filterModes = FILTER_MODES,
   loading,
   onSearchChange,
   onLetterChange,
@@ -409,6 +420,16 @@ export default function SeriesBrowse({
             name: s.title,
             letter: f.letter,
             cover_url: s.cover_url || f.cover_url,
+            portrait_url: s.portrait_url || f.portrait_url || s.cover_url || f.cover_url,
+            landscape_url:
+              s.landscape_url || f.landscape_url || s.cover_url || f.cover_url,
+            banner_url:
+              s.banner_url ||
+              f.banner_url ||
+              s.landscape_url ||
+              f.landscape_url ||
+              s.cover_url ||
+              f.cover_url,
             logo_url: s.logo_url || f.logo_url,
             icon_url: s.icon_url || f.icon_url,
             badge_url: s.badge_url || f.badge_url,
@@ -473,6 +494,9 @@ export default function SeriesBrowse({
         name: f.name,
         letter: f.letter,
         cover_url: f.cover_url,
+        portrait_url: f.portrait_url || f.cover_url,
+        landscape_url: f.landscape_url || f.cover_url,
+        banner_url: f.banner_url || f.landscape_url || f.cover_url,
         logo_url: f.logo_url,
         icon_url: f.icon_url,
         badge_url: f.badge_url,
@@ -675,7 +699,7 @@ export default function SeriesBrowse({
     <div className="series-browse artist-browse">
       <div className="artist-browse-sticky">
         <nav className="sub-nav sub-nav--spread sub-nav--compact">
-          {FILTER_MODES.map((f) => (
+          {filterModes.map((f) => (
             <button
               key={f.id}
               type="button"
@@ -705,13 +729,24 @@ export default function SeriesBrowse({
             }`}
           >
             {filtered.map((card) => {
-              const cover = card.cover_url || DEFAULT_DISC_URL;
+              const cover =
+                (orientation === "portrait"
+                  ? card.portrait_url || card.landscape_url
+                  : orientation === "landscape"
+                    ? card.landscape_url || card.portrait_url
+                    : orientation === "banner"
+                      ? card.banner_url || card.landscape_url || card.portrait_url
+                      : card.cover_url) ||
+                card.cover_url ||
+                DEFAULT_DISC_URL;
               const isIcons = orientation === "icons";
               const isBadge = orientation === "badge";
               const isLogoMode = isIcons || isBadge;
               const brandSrc = isBadge
                 ? card.badge_url || card.logo_url || card.icon_url
-                : card.logo_url || card.icon_url || card.badge_url;
+                : isIcons
+                  ? card.logo_url || card.icon_url || card.badge_url
+                  : null;
               const revealed = isPhone && revealedId === card.key;
               return (
                 <button

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchMoviesPublishers,
   fetchSeriesFilterOptions,
+  patchMoviesFilmAbout,
   patchSeriesAbout,
 } from "../../api";
 import type { SeriesOverview } from "../../types";
@@ -17,8 +19,12 @@ type GenreOpt = { id: string; name: string; group?: string };
 type Props = {
   franchiseId: string;
   data: SeriesOverview;
-  /** When set, edits about fields for this subseries only. */
+  /** When set, edits about fields for this subseries only (series variant). */
   subseriesId?: string;
+  /** Film id when variant is film (defaults to subseriesId). */
+  filmId?: string;
+  variant?: "series" | "film";
+  title?: string;
   isAdmin?: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -55,26 +61,51 @@ function slugLangCode(label: string): string {
   return cleaned || `lang-${Date.now()}`;
 }
 
+function asWriterList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((w) => String(w).trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(";")
+      .map((w) => w.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export default function SeriesAboutEditModal({
   franchiseId,
   data,
   subseriesId,
+  filmId,
+  variant = "series",
+  title,
   isAdmin = false,
   onClose,
   onSaved,
   onCastChanged,
 }: Props) {
-  const scoped = subseriesId
-    ? data.subseries_meta?.[subseriesId] ?? null
-    : null;
+  const isFilm = variant === "film";
+  const aboutFilmId = filmId || subseriesId || "";
+  const scoped =
+    !isFilm && subseriesId
+      ? data.subseries_meta?.[subseriesId] ?? null
+      : null;
+  const writersSeed = isFilm
+    ? asWriterList(
+        (data as SeriesOverview & { directors?: string[] }).directors?.length
+          ? (data as SeriesOverview & { directors?: string[] }).directors
+          : data.writers
+      )
+    : asWriterList(scoped?.writers ?? data.writers);
+
   const [bio, setBio] = useState(
     (scoped?.bio != null ? scoped.bio : data.bio) ?? ""
   );
-  const [writers, setWriters] = useState(
-    (scoped?.writers ?? data.writers).join("; ")
-  );
+  const [writers, setWriters] = useState(writersSeed.join("; "));
   const [publishers, setPublishers] = useState(
-    (scoped?.publishers ?? data.publishers).join("; ")
+    asWriterList(scoped?.publishers ?? data.publishers).join("; ")
   );
   const [countryId, setCountryId] = useState(
     (scoped?.country ?? data.country)?.id != null
@@ -105,9 +136,19 @@ export default function SeriesAboutEditModal({
   const [genreDropdownOptions, setGenreDropdownOptions] = useState<
     DropdownOption[]
   >([]);
+  const [publisherOptions, setPublisherOptions] = useState<string[]>([]);
+  const [publishersFocused, setPublishersFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addCastOpen, setAddCastOpen] = useState(false);
+
+  const modalTitle =
+    title ||
+    (isFilm
+      ? "Edit movie"
+      : subseriesId
+        ? "Edit series"
+        : "Edit about");
 
   const languageCatalog = useMemo(() => {
     const opts = data.language_options?.length
@@ -192,6 +233,12 @@ export default function SeriesAboutEditModal({
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetchMoviesPublishers()
+      .then((payload) => setPublisherOptions(payload.publishers || []))
+      .catch(() => {});
+  }, []);
+
   const selectedCountry = useMemo(
     () => countryOptions.find((o) => o.value === countryId) ?? null,
     [countryOptions, countryId]
@@ -246,26 +293,73 @@ export default function SeriesAboutEditModal({
     );
   };
 
+  const publisherSegment = publishers.slice(publishers.lastIndexOf(";") + 1).trim();
+  const publisherSuggestions = publisherSegment
+    ? publisherOptions
+        .filter(
+          (publisher) =>
+            publisher.toLowerCase().includes(publisherSegment.toLowerCase())
+        )
+        .filter(
+          (publisher) =>
+            publisher.toLowerCase() !== publisherSegment.toLowerCase()
+        )
+        .slice(0, 8)
+    : [];
+
+  const selectPublisher = (publisher: string) => {
+    const separator = publishers.lastIndexOf(";");
+    const prefix = separator >= 0 ? publishers.slice(0, separator + 1) : "";
+    setPublishers(
+      `${prefix}${prefix && !/\s$/.test(prefix) ? " " : ""}${publisher}`
+    );
+    setPublishersFocused(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
-      const starts = activityRows.map((r) => r.start.trim()).join(";");
-      const ends = activityRows.map((r) => r.end.trim()).join(";");
-      await patchSeriesAbout(franchiseId, {
-        bio,
-        writers,
-        publishers,
-        country_id: countryId ? Number(countryId) : null,
-        activity_start: starts,
-        activity_end: ends,
-        languages: selectedLangs,
-        genres: selectedGenres.map((g) => ({
-          id: Number.isFinite(Number(g.id)) ? Number(g.id) : g.id,
-          name: g.name,
-        })),
-        subseries_id: subseriesId || undefined,
-      });
+      const starts = isFilm
+        ? (activityRows[0]?.start ?? "").trim()
+        : activityRows.map((r) => r.start.trim()).join(";");
+      const ends = isFilm
+        ? starts
+        : activityRows.map((r) => r.end.trim()).join(";");
+      const genrePayload = selectedGenres.map((g) => ({
+        id: Number.isFinite(Number(g.id)) ? Number(g.id) : g.id,
+        name: g.name,
+      }));
+      if (isFilm) {
+        if (!aboutFilmId) throw new Error("Missing film id");
+        const directorList = writers
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        await patchMoviesFilmAbout(aboutFilmId, {
+          bio,
+          writers,
+          directors: directorList,
+          publishers,
+          country_id: countryId ? Number(countryId) : null,
+          activity_start: starts,
+          activity_end: ends,
+          languages: selectedLangs,
+          genres: genrePayload,
+        });
+      } else {
+        await patchSeriesAbout(franchiseId, {
+          bio,
+          writers,
+          publishers,
+          country_id: countryId ? Number(countryId) : null,
+          activity_start: starts,
+          activity_end: ends,
+          languages: selectedLangs,
+          genres: genrePayload,
+          subseries_id: subseriesId || undefined,
+        });
+      }
       onSaved();
       onClose();
     } catch (e) {
@@ -282,7 +376,7 @@ export default function SeriesAboutEditModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>{subseriesId ? "Edit series" : "Edit about"}</h3>
+          <h3>{modalTitle}</h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
@@ -298,7 +392,9 @@ export default function SeriesAboutEditModal({
             />
           </label>
           <label>
-            Writers (semicolon-separated)
+            {isFilm
+              ? "Directors / writers (semicolon-separated)"
+              : "Writers (semicolon-separated)"}
             <input
               value={writers}
               onChange={(e) => setWriters(e.target.value)}
@@ -387,9 +483,9 @@ export default function SeriesAboutEditModal({
             </div>
           </div>
 
-          <div className="series-about-edit__block">
+          <div className="series-about-edit__block series-about-edit__genres">
             <span className="series-about-edit__label">Genres</span>
-            <div className="series-about-edit__chips">
+            <div className="series-about-edit__chips series-about-edit__genre-scroll">
               {selectedGenres.map((g) => (
                 <span key={g.id} className="series-about-edit__chip">
                   {g.name}
@@ -419,56 +515,88 @@ export default function SeriesAboutEditModal({
             />
           </div>
 
-          <label>
+          <label className="series-about-edit__publishers">
             Publishers (semicolon-separated)
             <input
               value={publishers}
               onChange={(e) => setPublishers(e.target.value)}
+              onFocus={() => setPublishersFocused(true)}
+              onBlur={() => setPublishersFocused(false)}
+              autoComplete="off"
             />
+            {publishersFocused && publisherSuggestions.length > 0 ? (
+              <span className="series-about-edit__publisher-suggestions">
+                {publisherSuggestions.map((publisher) => (
+                  <button
+                    key={publisher}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectPublisher(publisher)}
+                  >
+                    {publisher}
+                  </button>
+                ))}
+              </span>
+            ) : null}
           </label>
 
           <div className="artist-about-edit__periods">
-            <div className="artist-about-edit__periods-head">
-              <span className="series-about-edit__label">Air Dates</span>
-            </div>
-            {activityRows.map((row, index) => (
-              <div key={index} className="artist-about-edit__period-row">
-                <label>
-                  Start
-                  <input
-                    value={row.start}
-                    onChange={(e) =>
-                      updateActivityRow(index, "start", e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  End
-                  <input
-                    value={row.end}
-                    onChange={(e) =>
-                      updateActivityRow(index, "end", e.target.value)
-                    }
-                  />
-                </label>
-                {activityRows.length > 1 ? (
-                  <button
-                    type="button"
-                    className="artist-about-edit__period-remove"
-                    onClick={() =>
-                      setActivityRows((rows) =>
-                        rows.filter((_, i) => i !== index)
-                      )
-                    }
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
-            ))}
+            {isFilm ? (
+              <label className="series-about-edit__release-date-row">
+                <span className="series-about-edit__label">Release date</span>
+                <input
+                  value={activityRows[0]?.start || ""}
+                  onChange={(e) =>
+                    updateActivityRow(0, "start", e.target.value)
+                  }
+                  placeholder="YYYY-MM-DD"
+                />
+              </label>
+            ) : (
+              <>
+                <div className="artist-about-edit__periods-head">
+                  <span className="series-about-edit__label">Air Dates</span>
+                </div>
+                {activityRows.map((row, index) => (
+                  <div key={index} className="artist-about-edit__period-row">
+                    <label>
+                      Start
+                      <input
+                        value={row.start}
+                        onChange={(e) =>
+                          updateActivityRow(index, "start", e.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      End
+                      <input
+                        value={row.end}
+                        onChange={(e) =>
+                          updateActivityRow(index, "end", e.target.value)
+                        }
+                      />
+                    </label>
+                    {activityRows.length > 1 ? (
+                      <button
+                        type="button"
+                        className="artist-about-edit__period-remove"
+                        onClick={() =>
+                          setActivityRows((rows) =>
+                            rows.filter((_, i) => i !== index)
+                          )
+                        }
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
-          {isAdmin && subseriesId ? (
+          {isAdmin && subseriesId && !isFilm ? (
             <div className="series-about-edit__cast-row">
               <button
                 type="button"
@@ -491,7 +619,7 @@ export default function SeriesAboutEditModal({
           </button>
         </div>
       </div>
-      {addCastOpen ? (
+      {addCastOpen && !isFilm ? (
         <AddCastModal
           franchiseId={franchiseId}
           bucket="characters"

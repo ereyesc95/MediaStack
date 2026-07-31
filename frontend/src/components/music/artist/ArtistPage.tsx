@@ -196,6 +196,8 @@ type Props = {
   isAdmin: boolean;
   userId?: number;
   onBack: () => void;
+  /** Top-left back label — HOME when opened from home panes, else CATALOG. */
+  backLabel?: string;
   onNavigate: (
     section: ArtistSection,
     overviewTab?: ArtistOverviewTab
@@ -233,6 +235,7 @@ export default function ArtistPage({
   isAdmin,
   userId,
   onBack,
+  backLabel = "CATALOG",
   onNavigate,
   onOpenArtist,
   onCountry,
@@ -883,7 +886,7 @@ export default function ArtistPage({
               type="button"
               className="artist-page__catalog-back"
               onClick={onBack}
-              aria-label="Back to catalog"
+              aria-label={`Back to ${backLabel.toLowerCase()}`}
             >
               <svg
                 className="artist-page__catalog-chevron"
@@ -899,7 +902,7 @@ export default function ArtistPage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="artist-page__catalog-label">CATALOG</span>
+              <span className="artist-page__catalog-label">{backLabel}</span>
             </button>
           </div>
           <div className="artist-page__top-center">

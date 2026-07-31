@@ -32,7 +32,7 @@ type Props = {
     overviewTab?: MoviesOverviewTab;
     section?: string;
   }) => void;
-  onOpenSeriesFranchise?: (franchiseId: string) => void;
+  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
   onImport?: () => void;
   onSync?: () => void;
   onChooseSource?: () => void;

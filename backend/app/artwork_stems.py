@@ -11,6 +11,7 @@ from app.media_index import _artwork_file
 COVER_FRONT_STEM = "cover - front"
 COVER_ALBUM_STEM = "cover - album"
 COVER_BANNER_STEM = "cover - banner"
+COVER_LANDSCAPE_STEM = "cover - landscape"
 COVER_BACK_STEM = "cover - back"
 COVER_INNER_STEM = "cover - inner"
 ANIMATION_ALBUM_STEM = "animation - album"
@@ -58,6 +59,25 @@ def resolve_cover_banner_file(artwork: Path | None) -> Path | None:
     if not artwork or not artwork.is_dir():
         return None
     return _artwork_file(artwork, COVER_BANNER_STEM)
+
+
+def resolve_cover_landscape_file(artwork: Path | None) -> Path | None:
+    if not artwork or not artwork.is_dir():
+        return None
+    found = _artwork_file(artwork, COVER_LANDSCAPE_STEM)
+    if found:
+        return found
+    # Also accept stems that contain "cover" and "landscape"
+    try:
+        for path in sorted(artwork.iterdir(), key=lambda p: p.name.casefold()):
+            if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
+                continue
+            stem = path.stem.casefold()
+            if "cover" in stem and "landscape" in stem:
+                return path
+    except OSError:
+        pass
+    return None
 
 
 def resolve_animation_album_file(artwork: Path | None) -> Path | None:

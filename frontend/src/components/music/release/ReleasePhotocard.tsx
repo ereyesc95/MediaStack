@@ -6,6 +6,8 @@ type Props = {
   variant: "portrait" | "landscape";
   className?: string;
   coverOnly?: boolean;
+  /** Force object-fit: cover on the back face (e.g. Cover - Front filling landscape). */
+  backCoverFit?: boolean;
 };
 
 export type ReleasePhotocardSet = {
@@ -14,6 +16,8 @@ export type ReleasePhotocardSet = {
   landscape_front: string | null;
   landscape_back: string | null;
   cover_only?: boolean;
+  /** When true, landscape back image should object-fit: cover the card. */
+  landscape_back_cover?: boolean;
 };
 
 export function ReleasePhotocardGroup({
@@ -56,6 +60,7 @@ export function ReleasePhotocardGroup({
           variant="landscape"
           frontUrl={cards.landscape_front}
           backUrl={cards.landscape_back ?? cards.landscape_front}
+          backCoverFit={Boolean(cards.landscape_back_cover)}
           className={className}
         />
       )}
@@ -69,6 +74,7 @@ export default function ReleasePhotocard({
   variant,
   className = "",
   coverOnly = false,
+  backCoverFit = false,
 }: Props) {
   const [flipped, setFlipped] = useState(false);
 
@@ -82,7 +88,9 @@ export default function ReleasePhotocard({
   const backPhotocard = Boolean(
     backUrl && /photocard/i.test(decodeURIComponent(backUrl))
   );
-  const backCover = Boolean(canFlip && backUrl && (!backPhotocard || coverOnly));
+  const backCover = Boolean(
+    canFlip && backUrl && (backCoverFit || coverOnly || !backPhotocard)
+  );
 
   return (
     <button

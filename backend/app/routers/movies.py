@@ -1,23 +1,27 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.config import settings
 from app.database import get_db
+from app.deps import get_current_user, require_admin
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
     normalize_franchise_slug,
     save_franchise_index,
 )
+from app.models import MovieWork, Series, User
+from app.movies_dashboard import build_movies_dashboard
 from app.movies_index import (
     build_film_detail,
     build_movies_catalog,
-    build_movies_dashboard,
     build_work_detail,
     resolve_movies_path,
 )
@@ -79,11 +83,55 @@ def list_movies(
 
 
 @router.get("/catalog")
-def movies_catalog():
+def movies_catalog(db: Session = Depends(get_db)):
     try:
-        return build_movies_catalog()
+        from app.movies_catalog_meta import enrich_movies_catalog
+
+        return enrich_movies_catalog(db, build_movies_catalog())
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/filters/options")
+def movies_filter_options(db: Session = Depends(get_db)):
+    """Catalog filter options for Movies home/catalog panes."""
+    from app.movies_catalog_meta import build_movies_filter_options
+
+    return build_movies_filter_options(db)
+
+
+@router.get("/publishers")
+def movies_publishers(db: Session = Depends(get_db)):
+    """Unique publisher names recorded in Series and MovieWork metadata."""
+    publishers: dict[str, str] = {}
+
+    def add(values) -> None:
+        if isinstance(values, str):
+            values = values.replace(",", ";").split(";")
+        if not isinstance(values, list):
+            return
+        for value in values:
+            name = str(value).strip()
+            if name:
+                publishers.setdefault(name.casefold(), name)
+
+    for row in db.scalars(select(Series)).all():
+        add(row.ser_publishers)
+    for row in db.scalars(select(MovieWork)).all():
+        try:
+            meta = json.loads(row.mwk_metadata_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        add(meta.get("publishers"))
+        films = meta.get("films")
+        if isinstance(films, dict):
+            for film_meta in films.values():
+                if isinstance(film_meta, dict):
+                    add(film_meta.get("publishers"))
+
+    return {"publishers": sorted(publishers.values(), key=str.casefold)}
 
 
 @router.get("/resolve")
@@ -98,11 +146,24 @@ def movies_resolve_path(path: str = Query(..., min_length=1)):
 
 
 @router.get("/dashboard")
-def movies_dashboard():
+def movies_dashboard(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Home panes: On Repeat, Icons, Film Vibes, Global Acts."""
     try:
-        return build_movies_dashboard()
-    except FileNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        return build_movies_dashboard(db, user.usr_id)
+    except Exception:
+        return {
+            "top_episodes": [],
+            "top_series": [],
+            "top_genres": [],
+            "top_countries": [],
+            "franchise_count": 0,
+            "film_count": 0,
+            "top_franchises": [],
+            "top_films": [],
+        }
 
 
 @router.get("/universes")
@@ -203,43 +264,57 @@ def movies_franchise_series(work_id: str):
 
 @router.get("/franchises/{work_id}/media/audio")
 def movies_franchise_audio(work_id: str, db: Session = Depends(get_db)):
-    """Audio releases under Movies/…/[Audio] when present (Series-shaped empty OK)."""
-    overview = build_work_overview(db, work_id)
-    if not overview:
+    """Aggregate Audio/[Audio] releases at a movie work and all of its films."""
+    detail = build_work_detail(work_id)
+    if not detail:
         raise HTTPException(404, "Franchise not found")
+    from app.series_audio import scan_folder_audio
+
+    folder_paths = [detail.get("folder_path") or ""]
+    folder_paths.extend(
+        film.get("folder_path") or ""
+        for film in detail.get("films") or []
+        if isinstance(film, dict)
+    )
     releases: list[dict] = []
-    folder = Path(settings.media_root or "") / (overview.get("folder_path") or "")
-    for audio_name in ("[Audio]", "Audio", "audio"):
-        audio_dir = folder / audio_name
-        if not audio_dir.is_dir():
-            continue
-        try:
-            cats = sorted(
-                (p for p in audio_dir.iterdir() if p.is_dir()),
-                key=lambda p: p.name.casefold(),
-            )
-        except OSError:
-            cats = []
-        for cat in cats:
-            releases.append(
-                {
-                    "id": f"audio-{cat.name}",
-                    "title": cat.name,
-                    "category": cat.name,
-                    "cover_url": None,
-                    "folder_path": cat.relative_to(
-                        Path(settings.media_root or "")
-                    ).as_posix()
-                    if settings.media_root
-                    else None,
-                }
-            )
+    seen: set[str] = set()
+    for folder_path in folder_paths:
+        for release in scan_folder_audio(db, folder_path).get("releases") or []:
+            key = str(release.get("folder_path") or release.get("id") or "").casefold()
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            releases.append(release)
+    categories = sorted(
+        {r.get("category") for r in releases if r.get("category")}
+    )
     return {
         "releases": releases,
-        "categories": sorted({r["category"] for r in releases}),
+        "categories": categories,
         "band_id": None,
         "source": "movies",
     }
+
+
+@router.get("/films/{film_id}/media/audio")
+def movies_film_audio(film_id: str, db: Session = Depends(get_db)):
+    """Audio under the film folder's [Audio] bucket — movie-centered, not Series."""
+    detail = build_film_detail(film_id)
+    if not detail:
+        raise HTTPException(404, "Film not found")
+    from app.series_audio import scan_folder_audio
+
+    return scan_folder_audio(db, detail.get("folder_path") or "")
+
+
+@router.get("/films/{film_id}/player-tracks")
+def movies_film_player_tracks(film_id: str, db: Session = Depends(get_db)):
+    """Playable audio tracks from a film folder's Audio/ shortcuts."""
+    from app.series_extras import collect_film_audio_tracks
+
+    tracks = collect_film_audio_tracks(db, film_id)
+    return {"tracks": tracks, "count": len(tracks)}
 
 
 @router.get("/franchises/{work_id}/media/library")
@@ -309,6 +384,126 @@ async def movies_refresh_film_metadata(
     if not result.get("ok"):
         raise HTTPException(400, result.get("error") or "Refresh failed")
     return result
+
+
+@router.get("/films/{film_id}/trailer")
+def movies_film_trailer_get(film_id: str):
+    from app.movies_index import find_film_dir
+    from app.movies_trailer import find_film_trailer_url
+
+    found = find_film_dir(film_id)
+    if not found:
+        raise HTTPException(404, "Film not found")
+    film_dir, _work_dir, _letter = found
+    return {"trailer_url": find_film_trailer_url(film_dir)}
+
+
+@router.patch("/films/{film_id}/about")
+def movies_film_patch_about(
+    film_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import patch_film_about
+
+    try:
+        result = patch_film_about(
+            db,
+            film_id,
+            bio=body.get("bio"),
+            writers=body.get("writers"),
+            publishers=body.get("publishers"),
+            country_id=body.get("country_id"),
+            languages=body.get("languages"),
+            genres=body.get("genres"),
+            activity_start=body.get("activity_start"),
+            activity_end=body.get("activity_end"),
+            directors=body.get("directors"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return result
+
+
+@router.put("/films/{film_id}/trailer")
+def movies_film_trailer_put(
+    film_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import save_film_trailer_db
+
+    url = body.get("trailer_url") if isinstance(body, dict) else None
+    try:
+        saved = save_film_trailer_db(db, film_id, url)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"trailer_url": saved}
+
+
+@router.post("/films/{film_id}/cast")
+def movies_film_add_cast(
+    film_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import add_film_cast_member
+
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    kind = body.get("kind") or body.get("bucket") or "characters"
+    try:
+        member = add_film_cast_member(
+            db,
+            film_id,
+            kind=kind,
+            name=name,
+            character=body.get("character"),
+            photo_url=body.get("photo_url"),
+            character_photo_url=body.get("character_photo_url"),
+            roles=body.get("roles"),
+            language=body.get("language"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return member
+
+
+@router.patch("/films/{film_id}/cast/{member_id}")
+def movies_film_patch_cast(
+    film_id: str,
+    member_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import patch_film_cast_member
+
+    kind = body.get("kind") or body.get("bucket") or "characters"
+    try:
+        member = patch_film_cast_member(
+            db,
+            film_id,
+            member_id,
+            kind=kind,
+            name=body.get("name"),
+            character=body.get("character"),
+            photo_url=body.get("photo_url"),
+            actor_photo_url=body.get("actor_photo_url"),
+            actors=body.get("actors"),
+            roles=body.get("roles"),
+            language=body.get("language"),
+            delete=bool(body.get("delete")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not member:
+        raise HTTPException(404, "Cast member not found")
+    return member
 
 
 @router.post("/franchises/{work_id}/refresh-universe")

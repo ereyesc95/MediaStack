@@ -5,8 +5,15 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import {
+  fetchMoviesFranchiseAudio,
+  fetchMoviesFranchiseGames,
+  fetchMoviesFranchiseLibrary,
+  fetchMoviesFranchiseOverview,
+  fetchMoviesFranchiseSeries,
+  refreshMoviesWorkMetadata,
   fetchSeriesFranchiseAudio,
   fetchSeriesFranchiseGames,
   fetchSeriesFranchiseLibrary,
@@ -23,10 +30,15 @@ import {
   isPlaybackThemeActive,
 } from "../../mediaTheme";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
-import { pushSeriesRoute } from "../../seriesRoute";
+import { pushMoviesRoute } from "../../moviesRoute";
+import {
+  pushSeriesRoute,
+  saveSeriesEntryReferrer,
+} from "../../seriesRoute";
 import type {
   CardOrientation,
   LinkCategory,
+  MoviesFilmCard,
   ReleaseCardLayout,
   SeriesCastTab,
   SeriesFranchiseCard,
@@ -78,6 +90,8 @@ export type SeriesFranchiseShell = {
 
 type Props = {
   franchiseId: string;
+  /** series (default) or movies — same chrome, movies APIs + film strip. */
+  module?: "series" | "movies";
   subseriesId?: string;
   seasonId?: string;
   section?: SeriesSection;
@@ -96,6 +110,8 @@ type Props = {
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   onBack: () => void;
+  /** Label for the top-left back control (e.g. HOME vs CATALOG). */
+  backLabel?: string;
   onNavigate: (patch: {
     subseriesId?: string;
     seasonId?: string;
@@ -113,24 +129,43 @@ type Props = {
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
   onOpenMoviesPath?: (path: string) => void;
+  /** Movies module: open a Series franchise (optionally a subseries) from the SERIES tab. */
+  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
   onShellUpdate?: (shell: SeriesFranchiseShell) => void;
+  /** Movies-only menu extras (universe admin, etc.). */
+  menuExtra?: ReactNode;
 };
 
-const SECTIONS: {
+type FranchiseNavSection = {
   id: SeriesSection;
   label: string;
   mobileLabel?: string;
   flag: keyof NonNullable<SeriesOverview["media"]> | null;
-}[] = [
+};
+
+/** Series-centered path: SERIES before MOVIES. */
+const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
-  // Always show after SERIES (empty states when nothing linked yet)
   { id: "movies", label: "MOVIES", flag: null },
   { id: "audio", label: "AUDIO", flag: null },
   { id: "library", label: "LIBRARY", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
 ];
+
+/** Movies-centered path: MOVIES before SERIES. */
+const MOVIES_SECTIONS: FranchiseNavSection[] = [
+  { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
+  { id: "movies", label: "MOVIES", flag: null },
+  { id: "series", label: "SERIES", flag: "has_series" },
+  { id: "audio", label: "AUDIO", flag: null },
+  { id: "library", label: "LIBRARY", flag: "has_library" },
+  { id: "games", label: "GAMES", flag: "has_games" },
+  { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+];
+
+const EMPTY_SERIES_SHOWS: SeriesSubseriesCard[] = [];
 
 const OVERVIEW_TABS: { id: SeriesOverviewTab; label: string }[] = [
   { id: "about", label: "ABOUT" },
@@ -147,8 +182,12 @@ const MEDIA_SUBBAR_SECTIONS: SeriesSection[] = [
   "gallery",
 ];
 
+/** Keep last overview per franchise so remount (subseries → franchise) isn't a blank boot. */
+const overviewCache = new Map<string, SeriesOverview>();
+
 export default function SeriesFranchisePage({
   franchiseId,
+  module = "series",
   subseriesId,
   seasonId,
   section = "overview",
@@ -166,19 +205,41 @@ export default function SeriesFranchisePage({
   onSwitchProfile,
   onEditProfile,
   onBack,
+  backLabel = "CATALOG",
   onNavigate,
   onOpenFranchise,
   onBrowseCatalog,
   onOpenMusicRelease,
   onOpenArtist,
   onOpenMoviesPath,
+  onOpenSeriesFranchise,
   onShellUpdate,
+  menuExtra,
 }: Props) {
+  const isMovies = module === "movies";
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
   const mobilePortrait = isMobilePortraitLayout(layout);
-  const [data, setData] = useState<SeriesOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${isMovies ? "movies" : "series"}:${franchiseId}`;
+  const [data, setData] = useState<SeriesOverview | null>(
+    () => overviewCache.get(cacheKey) ?? null
+  );
+  const sharedSeries = Boolean(
+    (data as (SeriesOverview & { shared_series?: boolean }) | null)?.shared_series
+  );
+  const seriesFranchiseId =
+    (data as (SeriesOverview & { series_franchise_id?: string }) | null)
+      ?.series_franchise_id || franchiseId;
+  const seriesShowsRaw = (
+    data as (SeriesOverview & { series_shows?: SeriesSubseriesCard[] }) | null
+  )?.series_shows;
+  const seriesShows = seriesShowsRaw ?? EMPTY_SERIES_SHOWS;
+  const seriesShowsKey = useMemo(
+    () => seriesShows.map((s) => s.id).join("|"),
+    [seriesShows]
+  );
+  const navSections = isMovies ? MOVIES_SECTIONS : SERIES_SECTIONS;
+  const [loading, setLoading] = useState(() => !overviewCache.has(cacheKey));
   const [error, setError] = useState<string | null>(null);
   const [eraIndex, setEraIndex] = useState(0);
   const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
@@ -236,26 +297,38 @@ export default function SeriesFranchisePage({
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
-    setLoading(true);
-    setError(null);
-    setData(null);
+    const cacheKey = `${isMovies ? "movies" : "series"}:${franchiseId}`;
+    const cached = overviewCache.get(cacheKey);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
     try {
-      const overview = await fetchSeriesOverview(franchiseId);
+      const overview = isMovies
+        ? await fetchMoviesFranchiseOverview(franchiseId)
+        : await fetchSeriesOverview(franchiseId);
       if (gen !== loadGenRef.current) return;
+      overviewCache.set(cacheKey, overview);
       setData(overview);
       setEraIndex(0);
-      if (overview.is_animated) setCastTab("characters");
-      else setCastTab("staff");
+      if (overview.is_animated || (overview.cast?.characters?.length ?? 0) > 0) {
+        setCastTab("characters");
+      } else {
+        setCastTab("staff");
+      }
       const cats = overview.links?.categories || [];
       if (cats.length) setLinkTab(cats[0].id);
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
-      setData(null);
+      if (!cached) setData(null);
     } finally {
       if (gen === loadGenRef.current) setLoading(false);
     }
-  }, [franchiseId]);
+  }, [franchiseId, isMovies]);
 
   useEffect(() => {
     void load();
@@ -311,6 +384,17 @@ export default function SeriesFranchisePage({
   ]);
 
   useEffect(() => {
+    if (isMovies) {
+      pushMoviesRoute(
+        {
+          franchiseId,
+          section: section as import("../../moviesRoute").MoviesSection,
+          overviewTab: section === "overview" ? overviewTab : undefined,
+        },
+        true
+      );
+      return;
+    }
     pushSeriesRoute(
       {
         franchiseId,
@@ -321,7 +405,7 @@ export default function SeriesFranchisePage({
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, section, overviewTab]);
+  }, [franchiseId, subseriesId, seasonId, section, overviewTab, isMovies]);
 
   // Auto-fetch TMDb metadata on first visit — debounce so quick franchise
   // switches don't pile up long-running refreshes that starve the API.
@@ -335,7 +419,11 @@ export default function SeriesFranchisePage({
       void (async () => {
         try {
           setRefreshing(true);
-          await refreshSeriesMetadata(franchiseId, true);
+          if (isMovies) {
+            await refreshMoviesWorkMetadata(franchiseId, true);
+          } else {
+            await refreshSeriesMetadata(franchiseId, true);
+          }
           if (cancelled) return;
           await load();
         } catch {
@@ -350,21 +438,29 @@ export default function SeriesFranchisePage({
       window.clearTimeout(timer);
       setRefreshing(false);
     };
-  }, [data?.needs_metadata, franchiseId, load]);
+  }, [data?.needs_metadata, franchiseId, load, isMovies]);
 
   const handleRefreshMetadata = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshSeriesMetadata(franchiseId, refreshBio);
+      if (isMovies) {
+        await refreshMoviesWorkMetadata(franchiseId, refreshBio);
+      } else {
+        await refreshSeriesMetadata(franchiseId, refreshBio);
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRefreshing(false);
     }
-  }, [franchiseId, refreshBio, load]);
+  }, [franchiseId, refreshBio, load, isMovies]);
 
   const handleRescanLibrary = useCallback(async () => {
+    if (isMovies) {
+      await load();
+      return;
+    }
     setRefreshing(true);
     try {
       await rescanSeriesLocalData(true);
@@ -374,13 +470,18 @@ export default function SeriesFranchisePage({
     } finally {
       setRefreshing(false);
     }
-  }, [load]);
+  }, [load, isMovies]);
 
   useEffect(() => {
     if (section !== "audio") return;
     let cancelled = false;
     setAudioLoading(true);
-    void fetchSeriesFranchiseAudio(franchiseId)
+    const useSeriesAudio = !isMovies;
+    const audioFranchiseId = useSeriesAudio ? seriesFranchiseId : franchiseId;
+    const fetchAudio = useSeriesAudio
+      ? fetchSeriesFranchiseAudio(audioFranchiseId)
+      : fetchMoviesFranchiseAudio(franchiseId);
+    void fetchAudio
       .then((payload) => {
         if (cancelled) return;
         const releases = (payload.releases || []) as {
@@ -405,7 +506,9 @@ export default function SeriesFranchisePage({
           category?: string | null;
         }[];
         setAudioCards(
-          releases.map((r, i) => ({
+          releases
+            .filter((r) => !(isMovies && r.is_series_playlist))
+            .map((r, i) => ({
             id: r.id || `audio-${i}`,
             title: r.title || r.name || "Release",
             cover_url: r.cover_url,
@@ -438,12 +541,53 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId]);
+  }, [section, franchiseId, isMovies, sharedSeries, seriesFranchiseId]);
 
   useEffect(() => {
     if (section !== "movies") return;
     let cancelled = false;
     setMovieLoading(true);
+    if (isMovies) {
+      // Films that comprise this work — prefer full film cards (open_url).
+      const films =
+        (data as { films?: MoviesFilmCard[] } | null)?.films ||
+        data?.subseries ||
+        [];
+      setMovieCards(
+        films.map((f) => {
+          const film = f as MoviesFilmCard & {
+            portrait_url?: string | null;
+            landscape_url?: string | null;
+            banner_url?: string | null;
+            open_url?: string | null;
+            file_url?: string | null;
+            open_mode?: "tab" | "local" | null;
+            open_label?: string | null;
+          };
+          return {
+            id: film.id,
+            title: film.title,
+            cover_url: film.cover_url,
+            portrait_url: film.portrait_url || film.cover_url,
+            landscape_url: film.landscape_url || null,
+            banner_url:
+              film.banner_url || film.landscape_url || film.cover_url,
+            logo_url: film.logo_url ?? null,
+            date_label: film.display_date || film.date_iso,
+            path: film.folder_path,
+            open_url: film.open_url || film.file_url || null,
+            open_mode: film.open_url || film.file_url ? ("tab" as const) : null,
+            open_label:
+              film.open_label ||
+              (film.open_url || film.file_url ? "Play video" : null),
+          };
+        })
+      );
+      setMovieLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     void fetchSeriesFranchiseMovies(franchiseId)
       .then((payload) => {
         if (cancelled) return;
@@ -480,7 +624,7 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId]);
+  }, [section, franchiseId, isMovies, data?.subseries]);
 
   useEffect(() => {
     setMediaSubFilter("all");
@@ -490,7 +634,55 @@ export default function SeriesFranchisePage({
   useEffect(() => {
     if (section !== "series") return;
     let cancelled = false;
+
+    // Shared movies↔series overview already includes show cards — sync without a
+    // loading flash. Avoid `seriesShows` array identity in deps (|| [] flicker).
+    if (isMovies && sharedSeries && seriesShowsKey) {
+      setShowCards(
+        seriesShows.map((s) => ({
+          id: s.id,
+          title: s.title,
+          cover_url: s.cover_url,
+          logo_url: s.logo_url ?? null,
+          badge_url: s.badge_url ?? null,
+          banner_url: s.cover_url,
+          date_label:
+            s.display_date ||
+            (s.season_count
+              ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
+              : s.date_iso) ||
+            null,
+        }))
+      );
+      setShowLoading(false);
+      return;
+    }
+
     setShowLoading(true);
+    if (isMovies) {
+      void fetchMoviesFranchiseSeries(franchiseId)
+        .then((payload) => {
+          if (cancelled) return;
+          setShowCards(
+            (payload.items || []).map((s) => ({
+              id: s.navigate_franchise_id || s.id,
+              title: s.title,
+              cover_url: s.cover_url ?? null,
+              date_label: s.date_iso ?? null,
+              path: s.path,
+            }))
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setShowCards([]);
+        })
+        .finally(() => {
+          if (!cancelled) setShowLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     void fetchSeriesFranchiseShows(franchiseId)
       .then((payload) => {
         if (cancelled) return;
@@ -523,13 +715,25 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId]);
+  }, [
+    section,
+    franchiseId,
+    isMovies,
+    sharedSeries,
+    seriesShowsKey,
+    seriesShows,
+  ]);
 
   useEffect(() => {
     if (section !== "library") return;
     let cancelled = false;
     setLibLoading(true);
-    void fetchSeriesFranchiseLibrary(franchiseId)
+    const useSeriesLib = !isMovies || sharedSeries;
+    const libId = useSeriesLib ? seriesFranchiseId : franchiseId;
+    const fetchLib = useSeriesLib
+      ? fetchSeriesFranchiseLibrary(libId)
+      : fetchMoviesFranchiseLibrary(franchiseId);
+    void fetchLib
       .then((payload) => {
         if (cancelled) return;
         setLibCards(
@@ -573,13 +777,18 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId]);
+  }, [section, franchiseId, isMovies, sharedSeries, seriesFranchiseId]);
 
   useEffect(() => {
     if (section !== "games") return;
     let cancelled = false;
     setGameLoading(true);
-    void fetchSeriesFranchiseGames(franchiseId)
+    const useSeriesGames = !isMovies || sharedSeries;
+    const gameId = useSeriesGames ? seriesFranchiseId : franchiseId;
+    const fetchGames = useSeriesGames
+      ? fetchSeriesFranchiseGames(gameId)
+      : fetchMoviesFranchiseGames(franchiseId);
+    void fetchGames
       .then((payload) => {
         if (cancelled) return;
         setGameCards(
@@ -625,9 +834,9 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId]);
+  }, [section, franchiseId, isMovies, sharedSeries, seriesFranchiseId]);
 
-  const title = data?.name ?? shell?.name ?? "Series";
+  const title = data?.name ?? shell?.name ?? (isMovies ? "Movies" : "Series");
   // Match About carousel slides so left/right clicks advance the paired landscape bg
   const aboutSlides = useMemo(() => {
     const eras = data?.eras || [];
@@ -670,9 +879,9 @@ export default function SeriesFranchisePage({
   }, [coverUrl, bgUrl, userId]);
 
   const visibleSections = useMemo(() => {
-    if (!data) return SECTIONS.filter((s) => s.id === "overview");
-    return SECTIONS.filter((s) => !s.flag || data.media[s.flag]);
-  }, [data]);
+    if (!data) return navSections.filter((s) => s.id === "overview");
+    return navSections.filter((s) => !s.flag || data.media[s.flag]);
+  }, [data, navSections]);
 
   const era = currentAboutEra ?? data?.eras?.[0];
   const logoSrc =
@@ -704,7 +913,10 @@ export default function SeriesFranchisePage({
     staff: data?.cast?.staff?.length ?? data?.cast?.people?.length ?? 0,
   };
 
-  const subseriesList = data?.subseries || [];
+  const subseriesList =
+    isMovies && sharedSeries && seriesShows.length
+      ? seriesShows
+      : data?.subseries || [];
   const showSubseriesSubbar = subseriesList.length > 1;
   const subseriesTabs = useMemo(() => {
     if (subseriesList.length <= 1) return [];
@@ -712,7 +924,7 @@ export default function SeriesFranchisePage({
       { id: "all", title: "All" },
       ...subseriesList.map((s) => ({ id: s.id, title: s.title })),
     ];
-  }, [data?.subseries]);
+  }, [subseriesList]);
 
   const franchiseSearchItems = useMemo(
     () =>
@@ -853,7 +1065,7 @@ export default function SeriesFranchisePage({
               type="button"
               className="artist-page__catalog-back"
               onClick={onBack}
-              aria-label="Back to catalog"
+              aria-label={`Back to ${backLabel.toLowerCase()}`}
             >
               <svg
                 className="artist-page__catalog-chevron"
@@ -869,7 +1081,7 @@ export default function SeriesFranchisePage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="artist-page__catalog-label">CATALOG</span>
+              <span className="artist-page__catalog-label">{backLabel}</span>
             </button>
           </div>
           <div className="artist-page__top-center">
@@ -934,13 +1146,15 @@ export default function SeriesFranchisePage({
                 onChange={onSetOrientation}
               />
             ) : null}
-            <SeriesAudioPlayer
-              franchiseId={franchiseId}
-              onPlayingChange={setSeriesPlaying}
-              open={playerOpen}
-              onOpenChange={setPlayerOpen}
-              hideToggle={mobilePortrait}
-            />
+            {!isMovies || sharedSeries ? (
+              <SeriesAudioPlayer
+                franchiseId={seriesFranchiseId}
+                onPlayingChange={setSeriesPlaying}
+                open={playerOpen}
+                onOpenChange={setPlayerOpen}
+                hideToggle={mobilePortrait}
+              />
+            ) : null}
             {franchiseSearchItems.length > 0 && onOpenFranchise ? (
               <MediaInlineSearch
                 mode="series-franchises"
@@ -961,72 +1175,77 @@ export default function SeriesFranchisePage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuChrome={
-                mobilePortrait ? (
-                  <>
-                    {(section === "audio" ||
-                      section === "movies" ||
-                      section === "series" ||
-                      section === "library" ||
-                      section === "games") && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setReleaseCardLayoutPersisted(
-                            releaseCardLayout === "cover" ? "banner" : "cover"
-                          )
-                        }
-                      >
-                        {releaseCardLayout === "cover" ? (
-                          <IconCardCover className="menu-item-icon" />
-                        ) : (
-                          <IconCardBanner className="menu-item-icon" />
-                        )}
-                        {releaseCardLayout === "cover"
-                          ? "Cover view"
-                          : "Banner view"}
-                      </button>
-                    )}
-                    {section === "overview" &&
-                      overviewTab === "related" &&
-                      onSetOrientation && (
+                <>
+                  {menuExtra}
+                  {mobilePortrait ? (
+                    <>
+                      {(section === "audio" ||
+                        section === "movies" ||
+                        section === "series" ||
+                        section === "library" ||
+                        section === "games") && (
                         <button
                           type="button"
-                          onClick={() => {
-                            const order: CardOrientation[] = [
-                              "banner",
-                              "landscape",
-                              "portrait",
-                              "icons",
-                            ];
-                            const i = order.indexOf(
-                              cardOrientation === "badge"
-                                ? "banner"
-                                : cardOrientation
-                            );
-                            onSetOrientation(order[(i + 1) % order.length]!);
-                          }}
+                          onClick={() =>
+                            setReleaseCardLayoutPersisted(
+                              releaseCardLayout === "cover" ? "banner" : "cover"
+                            )
+                          }
                         >
-                          <IconCardBanner className="menu-item-icon" />
-                          Card layout:{" "}
-                          {cardOrientation === "badge"
-                            ? "banner"
-                            : cardOrientation}
+                          {releaseCardLayout === "cover" ? (
+                            <IconCardCover className="menu-item-icon" />
+                          ) : (
+                            <IconCardBanner className="menu-item-icon" />
+                          )}
+                          {releaseCardLayout === "cover"
+                            ? "Cover view"
+                            : "Banner view"}
                         </button>
                       )}
-                    <button
-                      type="button"
-                      className={
-                        seriesPlaying && !playerOpen
-                          ? "app-menu-chrome__live"
-                          : undefined
-                      }
-                      onClick={() => setPlayerOpen((v) => !v)}
-                    >
-                      <IconMediaMusic className="menu-item-icon" />
-                      {playerOpen ? "Hide music" : "Play music"}
-                    </button>
-                  </>
-                ) : null
+                      {section === "overview" &&
+                        overviewTab === "related" &&
+                        onSetOrientation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const order: CardOrientation[] = [
+                                "banner",
+                                "landscape",
+                                "portrait",
+                                "icons",
+                              ];
+                              const i = order.indexOf(
+                                cardOrientation === "badge"
+                                  ? "banner"
+                                  : cardOrientation
+                              );
+                              onSetOrientation(order[(i + 1) % order.length]!);
+                            }}
+                          >
+                            <IconCardBanner className="menu-item-icon" />
+                            Card layout:{" "}
+                            {cardOrientation === "badge"
+                              ? "banner"
+                              : cardOrientation}
+                          </button>
+                        )}
+                      {!isMovies || sharedSeries ? (
+                        <button
+                          type="button"
+                          className={
+                            seriesPlaying && !playerOpen
+                              ? "app-menu-chrome__live"
+                              : undefined
+                          }
+                          onClick={() => setPlayerOpen((v) => !v)}
+                        >
+                          <IconMediaMusic className="menu-item-icon" />
+                          {playerOpen ? "Hide music" : "Play music"}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
               }
               onRefreshMetadata={
                 isAdmin && section === "overview" && overviewTab === "about"
@@ -1043,32 +1262,51 @@ export default function SeriesFranchisePage({
                   : undefined
               }
               onEditAbout={
-                isAdmin && section === "overview" && overviewTab === "about"
+                isAdmin &&
+                !isMovies &&
+                section === "overview" &&
+                overviewTab === "about"
                   ? () => setAboutEditOpen(true)
                   : undefined
               }
               onAddMember={
-                isAdmin && section === "overview" && overviewTab === "cast"
+                isAdmin &&
+                !isMovies &&
+                section === "overview" &&
+                overviewTab === "cast"
                   ? () => setAddCastOpen(true)
                   : undefined
               }
               onAddLink={
-                isAdmin && section === "overview" && overviewTab === "links"
+                isAdmin &&
+                !isMovies &&
+                section === "overview" &&
+                overviewTab === "links"
                   ? () => setAddLinkOpen(true)
                   : undefined
               }
               onAddSimilar={
-                isAdmin && section === "overview" && overviewTab === "related"
+                isAdmin &&
+                !isMovies &&
+                section === "overview" &&
+                overviewTab === "related"
                   ? () => setAddRelatedOpen(true)
                   : undefined
               }
               addSimilarLabel={
                 relatedTab === "creator"
-                  ? "Add same author series"
-                  : "Add similar series"
+                  ? isMovies
+                    ? "Add same crew film"
+                    : "Add same author series"
+                  : isMovies
+                    ? "Add similar film"
+                    : "Add similar series"
               }
               onRefreshLineup={
-                isAdmin && section === "overview" && overviewTab === "cast"
+                isAdmin &&
+                !isMovies &&
+                section === "overview" &&
+                overviewTab === "cast"
                   ? () => void handleRefreshMetadata()
                   : undefined
               }
@@ -1216,8 +1454,8 @@ export default function SeriesFranchisePage({
           <nav className="artist-page__subtabs artist-page__related-subtabs">
             {(
               [
-                ["creator", "SAME AUTHOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
-                ["similar", "SIMILAR SERIES", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
+                ["creator", isMovies ? "SAME CREW" : "SAME AUTHOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
+                ["similar", isMovies ? "SIMILAR" : "SIMILAR SERIES", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
               ] as const
             ).map(([id, label, count]) => (
               <button
@@ -1302,16 +1540,16 @@ export default function SeriesFranchisePage({
 
         {data && section === "overview" && overviewTab === "cast" ? (
           <SeriesCast
-            franchiseId={franchiseId}
+            franchiseId={sharedSeries ? seriesFranchiseId : franchiseId}
             franchiseName={data.name}
             cast={data.cast}
             languages={data.languages}
             languageOptions={data.language_options}
             originLanguage={data.origin_language}
-            subseries={data.subseries || []}
+            subseries={subseriesList}
             castSubFilter={castSubFilter}
             tab={castTab}
-            isAdmin={isAdmin}
+            isAdmin={isAdmin && !isMovies}
             addOpen={addCastOpen}
             onAddClose={() => setAddCastOpen(false)}
             onDataChanged={() => void load()}
@@ -1323,7 +1561,7 @@ export default function SeriesFranchisePage({
             franchiseId={franchiseId}
             links={data.links}
             tab={linkTab}
-            isAdmin={isAdmin}
+            isAdmin={isAdmin && !isMovies}
             addOpen={addLinkOpen}
             onAddClose={() => setAddLinkOpen(false)}
             onDataChanged={() => void load()}
@@ -1332,14 +1570,15 @@ export default function SeriesFranchisePage({
 
         {data && section === "overview" && overviewTab === "related" ? (
           <SeriesRelatedPanel
-            franchiseId={franchiseId}
+            franchiseId={sharedSeries ? seriesFranchiseId : franchiseId}
             creator={data.related?.creator || []}
             similar={data.related?.similar || []}
             tab={relatedTab}
             orientation={
               cardOrientation === "badge" ? "banner" : cardOrientation
             }
-            isAdmin={isAdmin}
+            tmdbKind={isMovies && !sharedSeries ? "movie" : "tv"}
+            isAdmin={isAdmin && !isMovies}
             addOpen={addRelatedOpen}
             onAddClose={() => setAddRelatedOpen(false)}
             onDataChanged={() => void load()}
@@ -1349,8 +1588,12 @@ export default function SeriesFranchisePage({
         {section === "audio" ? (
           <SeriesMediaGrid
             items={filterBySubseries(audioCards)}
-            loading={audioLoading}
-            emptyMessage="No audio for this series."
+            loading={audioLoading && audioCards.length === 0}
+            emptyMessage={
+              isMovies
+                ? "No audio for this franchise yet."
+                : "No audio for this series."
+            }
             cardLayout={releaseCardLayout}
             squareCovers={releaseCardLayout === "cover"}
             coverAspect="square"
@@ -1360,36 +1603,71 @@ export default function SeriesFranchisePage({
 
         {section === "movies" ? (
           <SeriesMediaGrid
-            items={filterBySubseries(movieCards)}
-            loading={movieLoading}
-            emptyMessage="No movies linked to this franchise yet."
+            items={isMovies ? movieCards : filterBySubseries(movieCards)}
+            loading={movieLoading && movieCards.length === 0}
+            emptyMessage={
+              isMovies
+                ? "No film folders under this work yet."
+                : "No movies linked to this franchise yet."
+            }
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
-            onOpen={openMediaCard}
+            onOpen={
+              isMovies
+                ? (item) =>
+                    onNavigate({
+                      section: "overview",
+                      subseriesId: item.id,
+                      seasonId: undefined,
+                    })
+                : openMediaCard
+            }
           />
         ) : null}
 
         {section === "series" ? (
           <SeriesMediaGrid
             items={showCards}
-            loading={showLoading}
-            emptyMessage="No subseries found."
+            loading={showLoading && showCards.length === 0}
+            emptyMessage={
+              isMovies
+                ? "No matching Series franchise for this work name."
+                : "No subseries found."
+            }
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
-            onOpen={(item) =>
+            onOpen={(item) => {
+              if (isMovies && sharedSeries) {
+                saveSeriesEntryReferrer({
+                  kind: "movies",
+                  franchiseId,
+                  section: "series",
+                });
+                onOpenSeriesFranchise?.(seriesFranchiseId, item.id);
+                return;
+              }
+              if (isMovies) {
+                saveSeriesEntryReferrer({
+                  kind: "movies",
+                  franchiseId,
+                  section: "series",
+                });
+                onOpenSeriesFranchise?.(item.id);
+                return;
+              }
               onNavigate({
                 section: "overview",
                 subseriesId: item.id,
                 seasonId: undefined,
-              })
-            }
+              });
+            }}
           />
         ) : null}
 
         {section === "library" ? (
           <SeriesMediaGrid
             items={filterBySubseries(libCards)}
-            loading={libLoading}
+            loading={libLoading && libCards.length === 0}
             emptyMessage="No books linked to this franchise yet."
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
@@ -1400,7 +1678,7 @@ export default function SeriesFranchisePage({
         {section === "games" ? (
           <SeriesMediaGrid
             items={filterGames(gameCards)}
-            loading={gameLoading}
+            loading={gameLoading && gameCards.length === 0}
             emptyMessage="No games linked to this franchise yet."
             cardLayout={releaseCardLayout}
             coverAspect="portrait"

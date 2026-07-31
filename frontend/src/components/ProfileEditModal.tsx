@@ -3,7 +3,8 @@ import { updateProfile, uploadProfileAvatar } from "../api";
 import type { ProfileUser } from "../auth";
 import ProfileAvatar from "./ProfileAvatar";
 
-const EMOJI_OPTIONS = ["🎵", "🎸", "🎤", "🎧", "🎹", "🎺", "🎻", "🥁", "🎼", "⭐", "🔥", "💜"];
+/** Lean set spanning music / film / series / games — not music-only. */
+const EMOJI_OPTIONS = ["🎬", "📺", "🎵", "🎮", "🎧", "⭐", "🔥", "💜"];
 const COLOR_OPTIONS = [
   "#6366f1",
   "#8b5cf6",
@@ -29,6 +30,8 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const hasPhoto = avatar === "photo";
 
   async function save() {
     setBusy(true);
@@ -69,13 +72,54 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <h3>Edit profile</h3>
-        <div className="profile-edit-preview">
-          <ProfileAvatar
-            userId={profile.user_id}
-            name={name}
-            avatar={avatar}
-            isAdmin={false}
-          />
+        <div className="profile-edit-layout">
+          <button
+            type="button"
+            className="profile-edit-preview"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            aria-label={hasPhoto ? "Change photo" : "Add photo"}
+          >
+            <ProfileAvatar
+              userId={profile.user_id}
+              name={name}
+              avatar={avatar}
+              isAdmin={false}
+            />
+            {!hasPhoto ? (
+              <span className="profile-edit-preview__hint">+ add photo</span>
+            ) : null}
+          </button>
+          <div className="profile-edit-picks">
+            <p className="muted profile-edit-label">Icon</p>
+            <div className="profile-edit-emoji-grid">
+              {EMOJI_OPTIONS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className={`profile-edit-pick${avatar === e ? " active" : ""}`}
+                  onClick={() => setAvatar(e)}
+                  disabled={busy}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <p className="muted profile-edit-label">Color</p>
+            <div className="profile-edit-color-grid">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`profile-edit-color${avatar === c ? " active" : ""}`}
+                  style={{ background: c }}
+                  onClick={() => setAvatar(c)}
+                  disabled={busy}
+                  aria-label={`Color ${c}`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
         <label className="profile-edit-field">
           <span>Display name</span>
@@ -86,33 +130,6 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
             disabled={busy}
           />
         </label>
-        <p className="muted profile-edit-label">Icon</p>
-        <div className="profile-edit-emoji-grid">
-          {EMOJI_OPTIONS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              className={`profile-edit-pick${avatar === e ? " active" : ""}`}
-              onClick={() => setAvatar(e)}
-              disabled={busy}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-        <div className="profile-edit-color-grid">
-          {COLOR_OPTIONS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`profile-edit-color${avatar === c ? " active" : ""}`}
-              style={{ background: c }}
-              onClick={() => setAvatar(c)}
-              disabled={busy}
-              aria-label={`Color ${c}`}
-            />
-          ))}
-        </div>
         <input
           ref={fileRef}
           type="file"
@@ -120,14 +137,6 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
           hidden
           onChange={(e) => handlePhoto(e.target.files?.[0] ?? null)}
         />
-        <button
-          type="button"
-          className="btn profile-edit-upload"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-        >
-          Upload photo
-        </button>
         {error && <p className="error-inline">{error}</p>}
         <div className="modal-actions-row">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>
