@@ -1007,6 +1007,7 @@ export type View =
       seasonId?: string;
       section?: SeriesSection;
       overviewTab?: SeriesOverviewTab;
+      universeId?: number;
     }
   | {
       kind: "movies";
@@ -1014,6 +1015,7 @@ export type View =
       filmId?: string;
       section?: import("./moviesRoute").MoviesSection;
       overviewTab?: import("./moviesRoute").MoviesOverviewTab;
+      universeId?: number;
     }
   | { kind: "books" }
   | { kind: "games" };
@@ -1026,6 +1028,8 @@ export type MoviesFilmCard = {
   folder_path: string;
   folder_name?: string;
   cover_url: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
   banner_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
@@ -1040,15 +1044,58 @@ export type MoviesFilmCard = {
   open_label?: string | null;
 };
 
-export type MoviesUniverse = {
+export type UniverseMember = {
+  module: "movies" | "series";
+  slug: string;
+  source?: string;
+};
+
+/** Shared Movies + Series universe (replaces legacy movie-only shape). */
+export type Universe = {
   id: number;
   name: string;
   slug: string;
   overview?: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
+  cover_url?: string | null;
+  member_count?: number;
+  members?: UniverseMember[] | null;
+  parent_module?: string;
+  parent_slug?: string;
+  /** Legacy movie-universe fields (compat). */
   poster_url?: string | null;
   backdrop_url?: string | null;
   work_slugs?: string[];
-  member_count?: number;
+};
+
+/** @deprecated Prefer Universe */
+export type MoviesUniverse = Universe;
+
+export type UniverseCard = {
+  id?: string;
+  title?: string;
+  name?: string;
+  date_iso?: string | null;
+  display_date?: string | null;
+  cover_url?: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
+  folder_path?: string;
+  module: "movies" | "series";
+  franchise_id: string;
+  leaf_id?: string;
+  kind?: "film" | "subseries" | "franchise" | string;
+};
+
+export type UniverseLanding = {
+  module: "movies" | "series";
+  franchise_id: string;
+  universe_id: number;
 };
 
 export type MoviesWorkDetail = SeriesFranchiseCard & {
@@ -1057,7 +1104,7 @@ export type MoviesWorkDetail = SeriesFranchiseCard & {
   is_standalone?: boolean;
   primary_film_id?: string | null;
   has_gallery?: boolean;
-  universe?: MoviesUniverse | null;
+  universe?: Universe | null;
 };
 
 export type MoviesFilmDetail = {
@@ -1104,7 +1151,7 @@ export type MoviesFilmDetail = {
     icon_url?: string | null;
     is_standalone?: boolean;
   };
-  universe?: MoviesUniverse | null;
+  universe?: Universe | null;
 };
 
 export type SeriesSubseriesCard = {
@@ -1200,6 +1247,11 @@ export type SeriesFolderDetail = {
   cover_back_url?: string | null;
   logo_url?: string | null;
   icon_url?: string | null;
+  logo_assets?: {
+    default?: string | null;
+    any?: string | null;
+    variants?: Record<string, string>;
+  } | null;
   badge_url?: string | null;
   has_gallery: boolean;
   kind: "season" | "subseries" | "folder";
@@ -1466,6 +1518,10 @@ export type SeriesOverview = {
   eras: SeriesOverviewEra[];
   logo_url?: string | null;
   icon_url?: string | null;
+  /** Resolved logo URL per listed language code. */
+  logo_by_language?: Record<string, string>;
+  /** True when language pills should switch the top-bar logo. */
+  logos_switchable?: boolean;
   cast: {
     characters: SeriesCastMember[];
     staff: SeriesCastMember[];
@@ -1529,9 +1585,12 @@ export type SeriesOverview = {
     music: FranchiseMediaEntry[];
     creator?: SeriesRelatedShow[];
     similar?: SeriesRelatedShow[];
+    universe?: UniverseCard[];
     creator_count?: number;
     similar_count?: number;
+    universe_count?: number;
   };
+  universe?: Universe | null;
   metadata_refreshed_at?: string | null;
   needs_metadata?: boolean;
 };

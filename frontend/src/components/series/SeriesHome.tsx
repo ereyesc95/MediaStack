@@ -161,8 +161,10 @@ function DashPaneLabel({
 type Props = {
   data: SeriesDashboard | null;
   loading?: boolean;
+  universes?: import("../../types").Universe[];
   onOpenShow: (franchiseId: string, subseriesId?: string | null) => void;
   onOpenFranchise: (franchiseId: string) => void;
+  onOpenUniverse?: (universeId: number) => void;
   onGenre?: (id: number | string) => void;
   onCountry?: (country: { id?: number; name: string }) => void;
 };
@@ -170,8 +172,10 @@ type Props = {
 export default function SeriesHome({
   data,
   loading,
+  universes = [],
   onOpenShow,
   onOpenFranchise,
+  onOpenUniverse,
   onGenre,
   onCountry,
 }: Props) {
@@ -181,11 +185,13 @@ export default function SeriesHome({
 
   const topFranchises = slicePane(dash.top_franchises || [], paneLimit);
   const topSeries = slicePane(dash.top_series, paneLimit);
+  const topUniverses = slicePane(universes, paneLimit);
   const topGenres = slicePane(dash.top_genres, paneLimit);
   const topCountries = slicePane(dash.top_countries, paneLimit);
 
   const franchisePlaceholders = placeholderCount(topFranchises.length, paneLimit);
   const seriesPlaceholders = placeholderCount(topSeries.length, paneLimit);
+  const universePlaceholders = placeholderCount(topUniverses.length, paneLimit);
   const genrePlaceholders = placeholderCount(topGenres.length, paneLimit);
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
@@ -267,6 +273,47 @@ export default function SeriesHome({
           />
         </div>
       </section>
+
+      {universes.length > 0 ? (
+        <section className="dash-row dash-row--icons">
+          <DashPaneLabel
+            logo="/api/assets/icons/pane-on-repeat"
+            title="UNIVERSES"
+            subtitle="Shared story worlds"
+          />
+          <div className="dash-scroll dash-scroll--icons">
+            {topUniverses.map((u) => {
+              const cover =
+                u.portrait_url || u.cover_url || u.landscape_url || DEFAULT_DISC_URL;
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  className="dash-icon-item"
+                  onClick={() => onOpenUniverse?.(u.id)}
+                >
+                  <span className="dash-icon-item-cover">
+                    <span
+                      className="card-bg-layer"
+                      style={{ backgroundImage: `url("${cover}")` }}
+                    />
+                  </span>
+                  <span
+                    className="dash-item-label dash-icon-item-name"
+                    title={u.name}
+                  >
+                    {u.name}
+                  </span>
+                </button>
+              );
+            })}
+            <PlaceholderTiles
+              count={topUniverses.length ? universePlaceholders : paneLimit}
+              variant="landscape"
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="dash-row dash-row--genres">
         <DashPaneLabel

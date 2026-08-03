@@ -155,8 +155,8 @@ def scan_extras_videos(franchise_id: str) -> dict:
 
 
 def _extract_by_artist(stem: str) -> str | None:
-    """Pull ``By Artist`` from any bracket group in a filename stem."""
-    for m in re.finditer(r"\[([^\]]+)\]", stem):
+    """Pull ``By Artist`` from ``[…]`` / ``(…)`` groups in a filename stem."""
+    for m in re.finditer(r"[\[(]([^)\]]+)[\])]", stem):
         for part in m.group(1).split(";"):
             piece = part.strip()
             if piece.casefold().startswith("by "):
@@ -558,20 +558,35 @@ def collect_audio_tracks_from_folders(
                     seen.add(rel)
                     play_url = f"/api/media/file?path={quote(rel, safe='/')}"
                     title = audio.stem
+                    by_from_file = _extract_by_artist(audio.stem)
+                    by_from_release = _extract_by_artist(name) if name else None
                     clean, _tags = parse_bracket_tags(title)
                     m = _EP_PREFIX.match(clean.strip())
                     if m:
                         title = m.group(2).strip()
                     else:
                         title = clean.strip() or title
+                    card_artist = (card or {}).get("source_artist_name")
+                    if isinstance(card_artist, str):
+                        card_artist = card_artist.strip() or None
+                    if (
+                        card_artist
+                        and card_artist.casefold() == "various artists"
+                    ):
+                        card_artist = None
+                    artist = (
+                        by_from_file
+                        or by_from_release
+                        or card_artist
+                        or "Various Artists"
+                    )
                     tracks.append(
                         {
                             "id": f"trk_{hashlib.sha256(rel.encode()).hexdigest()[:12]}",
                             "title": title,
                             "play_url": play_url,
                             "cover_url": cover,
-                            "artist": (card or {}).get("source_artist_name")
-                            or "Various Artists",
+                            "artist": artist,
                         }
                     )
     return tracks

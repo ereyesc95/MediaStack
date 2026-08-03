@@ -1832,37 +1832,137 @@ export async function fetchMoviesGallery(path: string) {
   }>(`${API}/movies/gallery?path=${encodeURIComponent(path)}`);
 }
 
-export async function refreshMoviesUniverse(workId: string) {
-  return request<import("./types").MoviesUniverse & { parts?: unknown[] }>(
-    `${API}/movies/franchises/${encodeURIComponent(workId)}/refresh-universe`,
-    { method: "POST" }
+export async function fetchUniverses() {
+  return request<{ universes: import("./types").Universe[] }>(
+    `${API}/universes`
   );
 }
 
+export async function fetchUniverse(universeId: number) {
+  return request<import("./types").Universe>(
+    `${API}/universes/${universeId}`
+  );
+}
+
+export async function lookupUniverse(module: "movies" | "series", slug: string) {
+  return request<{ universe: import("./types").Universe | null }>(
+    `${API}/universes/lookup?module=${encodeURIComponent(module)}&slug=${encodeURIComponent(slug)}`
+  );
+}
+
+export async function createUniverse(body: {
+  name: string;
+  overview?: string | null;
+}) {
+  return request<import("./types").Universe>(`${API}/universes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchUniverseOverview(
+  universeId: number,
+  overview: string | null
+) {
+  return request<import("./types").Universe>(`${API}/universes/${universeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ overview }),
+  });
+}
+
+export async function fetchUniverseCards(universeId: number) {
+  return request<{ items: import("./types").UniverseCard[] }>(
+    `${API}/universes/${universeId}/cards`
+  );
+}
+
+export async function fetchUniverseLanding(
+  universeId: number,
+  preferModule: "movies" | "series" = "movies"
+) {
+  return request<import("./types").UniverseLanding>(
+    `${API}/universes/${universeId}/landing?prefer_module=${encodeURIComponent(preferModule)}`
+  );
+}
+
+export async function linkUniverseMember(
+  universeId: number,
+  module: "movies" | "series",
+  slug: string
+) {
+  return request(`${API}/universes/${universeId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ module, slug }),
+  });
+}
+
+export async function unlinkUniverseMember(
+  universeId: number,
+  module: "movies" | "series",
+  slug: string
+) {
+  return request(
+    `${API}/universes/${universeId}/members?module=${encodeURIComponent(module)}&slug=${encodeURIComponent(slug)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function uploadUniverseArt(
+  universeId: number,
+  kind: "Portrait" | "Landscape" | "Banner" | "Logo",
+  file: File
+) {
+  const form = new FormData();
+  form.append("kind", kind);
+  form.append("file", file);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  const res = await fetch(`${API}/universes/${universeId}/art`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json() as Promise<
+    import("./types").Universe & { uploaded?: string; url?: string }
+  >;
+}
+
+export async function pullUniverseTmdbPortrait(universeId: number) {
+  return request<import("./types").Universe>(
+    `${API}/universes/${universeId}/tmdb-portrait`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+/** @deprecated Use fetchUniverses */
 export async function fetchMoviesUniverses() {
-  return request<{ universes: import("./types").MoviesUniverse[] }>(
-    `${API}/movies/universes`
-  );
+  return fetchUniverses();
 }
 
+/** @deprecated Use linkUniverseMember */
 export async function linkMoviesUniverseMember(
   universeId: number,
   workSlug: string
 ) {
-  return request(
-    `${API}/movies/universes/${universeId}/members?work_slug=${encodeURIComponent(workSlug)}`,
-    { method: "POST" }
-  );
+  return linkUniverseMember(universeId, "movies", workSlug);
 }
 
+/** @deprecated Use unlinkUniverseMember */
 export async function unlinkMoviesUniverseMember(
   universeId: number,
   workSlug: string
 ) {
-  return request(
-    `${API}/movies/universes/${universeId}/members?work_slug=${encodeURIComponent(workSlug)}`,
-    { method: "DELETE" }
-  );
+  return unlinkUniverseMember(universeId, "movies", workSlug);
 }
 
 export async function fetchSeriesCatalog() {

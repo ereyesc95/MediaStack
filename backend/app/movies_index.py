@@ -398,8 +398,6 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
     logo_url, icon_url = find_logo_file(film_dir, root)
     versions = _list_versions(film_dir, root)
     work_card = _work_card(work_dir, letter, root)
-    from app.movies_trailer import find_film_trailer_url
-
     return {
         "id": _film_id(rel),
         "kind": "film",
@@ -422,7 +420,7 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
         "has_gallery": _has_gallery(film_dir),
         "has_video": _folder_has_video(film_dir),
         "versions": versions,
-        "trailer_url": find_film_trailer_url(film_dir),
+        "trailer_url": None,
         "seasons": [],
         "subseries": [],
         "episodes": [],

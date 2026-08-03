@@ -151,8 +151,14 @@ export default function App() {
         tab: "playlists",
       });
     } else {
-      const seriesRoute = parseSeriesPath(window.location.pathname);
-      const moviesRoute = parseMoviesPath(window.location.pathname);
+      const seriesRoute = parseSeriesPath(
+        window.location.pathname,
+        window.location.search
+      );
+      const moviesRoute = parseMoviesPath(
+        window.location.pathname,
+        window.location.search
+      );
       if (seriesRoute) {
         setView({
           kind: "series",
@@ -161,6 +167,7 @@ export default function App() {
           seasonId: seriesRoute.seasonId,
           section: seriesRoute.section,
           overviewTab: seriesRoute.overviewTab,
+          universeId: seriesRoute.universeId,
         });
       } else if (
         parseSeriesCatalogPath(window.location.pathname) ||
@@ -174,6 +181,7 @@ export default function App() {
           filmId: moviesRoute.filmId,
           section: moviesRoute.section,
           overviewTab: moviesRoute.overviewTab,
+          universeId: moviesRoute.universeId,
         });
       } else if (
         parseMoviesCatalogPath(window.location.pathname) ||
@@ -256,7 +264,10 @@ export default function App() {
         );
         return;
       }
-      const seriesRoute = parseSeriesPath(window.location.pathname);
+      const seriesRoute = parseSeriesPath(
+        window.location.pathname,
+        window.location.search
+      );
       if (seriesRoute) {
         setView({
           kind: "series",
@@ -265,6 +276,7 @@ export default function App() {
           seasonId: seriesRoute.seasonId,
           section: seriesRoute.section,
           overviewTab: seriesRoute.overviewTab,
+          universeId: seriesRoute.universeId,
         });
         return;
       }
@@ -767,6 +779,7 @@ export default function App() {
             seasonId={view.seasonId}
             section={view.section}
             overviewTab={view.overviewTab}
+            universeId={view.universeId}
             cardOrientation={cardOrientation}
             onSetOrientation={setOrientation}
             onNavigate={(patch) =>
@@ -782,6 +795,8 @@ export default function App() {
                   "overviewTab" in patch
                     ? patch.overviewTab
                     : view.overviewTab,
+                universeId:
+                  "universeId" in patch ? patch.universeId : view.universeId,
               })
             }
             onOpenMusicRelease={(bandId, releaseId, seriesCtx) => {
@@ -827,7 +842,8 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
-            onOpenMoviesFranchise={(franchiseId, filmId, section) => {
+            onOpenMoviesFranchise={(franchiseId, filmId, section, universeId) => {
+              const isLanding = !filmId && universeId != null;
               pushMoviesRoute({
                 franchiseId,
                 filmId,
@@ -839,7 +855,8 @@ export default function App() {
                   | "library"
                   | "games"
                   | "gallery") || "overview",
-                overviewTab: "about",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
               });
               setView({
                 kind: "movies",
@@ -853,7 +870,8 @@ export default function App() {
                   | "library"
                   | "games"
                   | "gallery") || "overview",
-                overviewTab: "about",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
               });
             }}
           />
@@ -878,6 +896,7 @@ export default function App() {
             filmId={view.filmId}
             section={view.section}
             overviewTab={view.overviewTab}
+            universeId={view.universeId}
             cardOrientation={cardOrientation}
             onSetOrientation={setOrientation}
             onNavigate={(patch) =>
@@ -891,21 +910,26 @@ export default function App() {
                   "overviewTab" in patch
                     ? patch.overviewTab
                     : view.overviewTab,
+                universeId:
+                  "universeId" in patch ? patch.universeId : view.universeId,
               })
             }
-            onOpenSeriesFranchise={(franchiseId, subseriesId) => {
+            onOpenSeriesFranchise={(franchiseId, subseriesId, universeId) => {
+              const isLanding = !subseriesId && universeId != null;
               pushSeriesRoute({
                 franchiseId,
                 subseriesId,
                 section: "overview",
-                overviewTab: "about",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
               });
               setView({
                 kind: "series",
                 franchiseId,
                 subseriesId,
                 section: "overview",
-                overviewTab: "about",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
               });
             }}
             onOpenMusicRelease={(bandId, releaseId) => {

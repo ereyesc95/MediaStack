@@ -3,6 +3,8 @@ import {
   fetchMoviesCatalog,
   fetchMoviesDashboard,
   fetchMoviesFilterOptions,
+  fetchUniverseLanding,
+  fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
 import {
@@ -25,6 +27,7 @@ import type {
   SeriesFilterOptions,
   SeriesFranchiseCard,
   SeriesSection,
+  Universe,
 } from "../../types";
 import {
   isMobilePortraitLayout,
@@ -32,6 +35,7 @@ import {
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
+import { IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
@@ -83,13 +87,19 @@ type Props = {
   filmId?: string;
   section?: MoviesSection;
   overviewTab?: MoviesOverviewTab;
+  universeId?: number;
   onNavigate: (patch: {
     franchiseId?: string;
     filmId?: string;
     section?: MoviesSection;
     overviewTab?: MoviesOverviewTab;
+    universeId?: number;
   }) => void;
-  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
+  onOpenSeriesFranchise?: (
+    franchiseId: string,
+    subseriesId?: string,
+    universeId?: number
+  ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
 };
 
@@ -110,6 +120,7 @@ export default function MoviesModule({
   filmId,
   section = "overview",
   overviewTab = "about",
+  universeId,
   onNavigate,
   onOpenSeriesFranchise,
   onOpenMusicRelease,
@@ -140,6 +151,7 @@ export default function MoviesModule({
     useState<SeriesFilterOptions | null>(null);
   const [catalogScope, setCatalogScope] =
     useState<SeriesCatalogScope>("franchises");
+  const [universes, setUniverses] = useState<Universe[]>([]);
   const [search, setSearch] = useState("");
   const [letter, setLetter] = useState("");
   const [continentId, setContinentId] = useState<number | "">("");
@@ -191,6 +203,41 @@ export default function MoviesModule({
   useEffect(() => {
     if (tab === "catalog" || franchiseId) loadCatalog();
   }, [tab, franchiseId, loadCatalog]);
+
+  useEffect(() => {
+    void fetchUniverses()
+      .then((res) => setUniverses(res.universes || []))
+      .catch(() => setUniverses([]));
+  }, []);
+
+  const openUniverseLanding = useCallback(
+    (id: number) => {
+      void fetchUniverseLanding(id, "movies")
+        .then((landing) => {
+          setEntrySource("catalog");
+          setTab("catalog");
+          if (landing.module === "movies") {
+            pushMoviesRoute({
+              franchiseId: landing.franchise_id,
+              section: "overview",
+              overviewTab: "related",
+              universeId: id,
+            });
+            onNavigate({
+              franchiseId: landing.franchise_id,
+              filmId: undefined,
+              section: "overview",
+              overviewTab: "related",
+              universeId: id,
+            });
+            return;
+          }
+          onOpenSeriesFranchise?.(landing.franchise_id, undefined, id);
+        })
+        .catch(() => {});
+    },
+    [onNavigate, onOpenSeriesFranchise]
+  );
 
   useEffect(() => {
     if (catalogScope === "shows" && filterMode === "end") {
@@ -321,6 +368,7 @@ export default function MoviesModule({
         filmId: card.primary_film_id,
         section: "overview",
         overviewTab: "about",
+        universeId: undefined,
       });
       return;
     }
@@ -334,6 +382,7 @@ export default function MoviesModule({
       filmId: undefined,
       section: "overview",
       overviewTab: "about",
+      universeId: undefined,
     });
     void shell;
   };
@@ -358,6 +407,7 @@ export default function MoviesModule({
       filmId: nextFilmId,
       section: "overview",
       overviewTab: "about",
+      universeId: undefined,
     });
   };
 
@@ -369,6 +419,7 @@ export default function MoviesModule({
       filmId: undefined,
       section: undefined,
       overviewTab: undefined,
+      universeId: undefined,
     });
     setTab("home");
   };
@@ -381,6 +432,7 @@ export default function MoviesModule({
       filmId: undefined,
       section: undefined,
       overviewTab: undefined,
+      universeId: undefined,
     });
     setTab("catalog");
   };
@@ -402,6 +454,7 @@ export default function MoviesModule({
         franchiseIconUrl={workCard?.icon_url}
         subseriesId={filmId}
         section={filmSection}
+        universeId={universeId}
         busy={busy}
         isAdmin={isAdmin}
         userId={userId}
@@ -411,6 +464,16 @@ export default function MoviesModule({
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
         onBack={() => {
+          if (universeId != null) {
+            onNavigate({
+              franchiseId,
+              filmId: undefined,
+              section: "overview",
+              overviewTab: "related",
+              universeId,
+            });
+            return;
+          }
           if (entrySource === "home") {
             backToMoviesHome();
             return;
@@ -421,7 +484,13 @@ export default function MoviesModule({
             section: "movies",
           });
         }}
-        backLabelOverride={entrySource === "home" ? "HOME" : undefined}
+        backLabelOverride={
+          universeId != null
+            ? undefined
+            : entrySource === "home"
+              ? "HOME"
+              : undefined
+        }
         onBrowseCatalog={(target) => {
           setEntrySource("catalog");
           setTab("catalog");
@@ -431,6 +500,7 @@ export default function MoviesModule({
             filmId: undefined,
             section: undefined,
             overviewTab: undefined,
+            universeId: undefined,
           });
           if (target.mode) setFilterMode(target.mode);
           if (target.countryId != null) setCountryId(target.countryId);
@@ -446,12 +516,48 @@ export default function MoviesModule({
             filmId: id,
             section: "overview",
             overviewTab: "about",
+            universeId,
           });
           onNavigate({
             franchiseId,
             filmId: id,
             section: "overview",
             overviewTab: "about",
+            universeId,
+          });
+        }}
+        onOpenUniverseLeaf={(leaf) => {
+          if (leaf.module === "series") {
+            onOpenSeriesFranchise?.(
+              leaf.franchiseId,
+              leaf.leafId === leaf.franchiseId ? undefined : leaf.leafId,
+              universeId
+            );
+            return;
+          }
+          pushMoviesRoute({
+            franchiseId: leaf.franchiseId,
+            filmId: leaf.leafId,
+            section: "overview",
+            overviewTab: "about",
+            universeId,
+          });
+          onNavigate({
+            franchiseId: leaf.franchiseId,
+            filmId: leaf.leafId,
+            section: "overview",
+            overviewTab: "about",
+            universeId,
+          });
+        }}
+        onOpenUniverseParent={() => {
+          if (universeId == null) return;
+          onNavigate({
+            franchiseId,
+            filmId: undefined,
+            section: "overview",
+            overviewTab: "related",
+            universeId,
           });
         }}
         onOpenMoviesPath={(path) => {
@@ -462,12 +568,14 @@ export default function MoviesModule({
                 filmId: hit.film_id ?? undefined,
                 section: "overview",
                 overviewTab: "about",
+                universeId,
               });
               onNavigate({
                 franchiseId: hit.work_id,
                 filmId: hit.film_id ?? undefined,
                 section: "overview",
                 overviewTab: "about",
+                universeId,
               });
             })
             .catch(() => {});
@@ -479,23 +587,31 @@ export default function MoviesModule({
             rawSection === "episodes" || rawSection === "series"
               ? "overview"
               : (rawSection as MoviesSection);
+          const nextFranchise =
+            "franchiseId" in patch && patch.franchiseId
+              ? patch.franchiseId
+              : franchiseId;
           pushMoviesRoute({
-            franchiseId,
+            franchiseId: nextFranchise,
             filmId: nextFilmId,
             section: nextSection,
             overviewTab:
               !patch.section || patch.section === "overview"
                 ? "about"
                 : undefined,
+            universeId:
+              "universeId" in patch ? patch.universeId : universeId,
           });
           onNavigate({
-            franchiseId,
+            franchiseId: nextFranchise,
             filmId: nextFilmId,
             section: nextSection,
             overviewTab:
               !patch.section || patch.section === "overview"
                 ? "about"
                 : overviewTab,
+            universeId:
+              "universeId" in patch ? patch.universeId : universeId,
           });
         }}
       />
@@ -508,6 +624,7 @@ export default function MoviesModule({
         workId={franchiseId}
         section={section}
         overviewTab={overviewTab}
+        universeId={universeId}
         isAdmin={isAdmin}
         userId={userId}
         cardOrientation={cardOrientation}
@@ -517,7 +634,17 @@ export default function MoviesModule({
           else backToMoviesCatalog();
         }}
         backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
-        onNavigate={onNavigate}
+        onNavigate={(patch) =>
+          onNavigate({
+            franchiseId:
+              "franchiseId" in patch ? patch.franchiseId : franchiseId,
+            filmId: "filmId" in patch ? patch.filmId : undefined,
+            section: patch.section ?? section,
+            overviewTab: patch.overviewTab ?? overviewTab,
+            universeId:
+              "universeId" in patch ? patch.universeId : universeId,
+          })
+        }
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
         onImport={onImport}
@@ -591,6 +718,7 @@ export default function MoviesModule({
                 value={catalogScope}
                 onChange={setCatalogScope}
                 itemsLabel="FILMS"
+                hasUniverses={universes.length > 0}
               />
             ) : null}
             {tab === "catalog" && onSetOrientation ? (
@@ -612,13 +740,27 @@ export default function MoviesModule({
                 portraitMenuChrome && tab === "catalog" ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      setCatalogScope(
-                        catalogScope === "franchises" ? "shows" : "franchises"
-                      )
-                    }
+                    onClick={() => {
+                      const order: SeriesCatalogScope[] =
+                        universes.length > 0
+                          ? ["franchises", "shows", "universes"]
+                          : ["franchises", "shows"];
+                      const current =
+                        catalogScope === "universes" && universes.length === 0
+                          ? "franchises"
+                          : catalogScope;
+                      const i = Math.max(0, order.indexOf(current));
+                      setCatalogScope(order[(i + 1) % order.length]!);
+                    }}
                   >
-                    {catalogScope === "franchises" ? "Groups" : "Films"}
+                    {catalogScope === "universes" ? (
+                      <IconUniverse className="menu-item-icon" />
+                    ) : null}
+                    {catalogScope === "franchises"
+                      ? "Groups"
+                      : catalogScope === "universes"
+                        ? "Universes"
+                        : "Films"}
                   </button>
                 ) : null
               }
@@ -634,6 +776,7 @@ export default function MoviesModule({
           <MoviesHome
             data={dashboard}
             loading={dashLoading}
+            universes={universes}
             onFranchise={(workId) => {
               if (!franchises.length) loadCatalog();
               openWork(workId, undefined, undefined, "home");
@@ -642,6 +785,7 @@ export default function MoviesModule({
               if (!films.length) loadCatalog();
               openFilm(id, workId, "home");
             }}
+            onOpenUniverse={openUniverseLanding}
             onGenre={(id) => {
               setTab("catalog");
               pushMoviesCatalogRoute();
@@ -675,6 +819,7 @@ export default function MoviesModule({
       ) : (
         <SeriesBrowse
           franchises={browseFranchises}
+          universes={universes}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
@@ -716,6 +861,7 @@ export default function MoviesModule({
           onSubgenreIdChange={setSubgenreId}
           onPublisherChange={setPublisher}
           onWriterChange={setWriter}
+          onOpenUniverse={openUniverseLanding}
           onOpen={(id, _sub, shell) => {
             if (catalogScope === "shows") {
               const film = films.find(
@@ -727,6 +873,7 @@ export default function MoviesModule({
                   filmId: film.id,
                   section: "overview",
                   overviewTab: "about",
+                  universeId: undefined,
                 });
                 pushMoviesRoute({
                   franchiseId: film.work_id,

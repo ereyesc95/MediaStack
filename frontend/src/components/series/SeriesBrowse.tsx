@@ -10,6 +10,7 @@ import type {
   SeriesFilterOptions,
   SeriesFranchiseCard,
   SeriesSubseriesCard,
+  Universe,
 } from "../../types";
 import SearchableDropdown, {
   type DropdownOption,
@@ -33,12 +34,14 @@ const FILTER_MODES: { id: SeriesFilterMode; label: string }[] = [
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
-export type SeriesCatalogScope = "franchises" | "shows";
+export type SeriesCatalogScope = "franchises" | "shows" | "universes";
 
 export type SeriesCatalogCard = {
   key: string;
   franchiseId: string;
   subseriesId?: string;
+  /** When set, card opens a universe landing instead of a franchise. */
+  universeId?: number;
   name: string;
   letter: string;
   cover_url: string | null;
@@ -81,6 +84,7 @@ function franchiseMeta(
 
 type Props = {
   franchises: SeriesFranchiseCard[];
+  universes?: Universe[];
   orientation: CardOrientation;
   filterMode: SeriesFilterMode;
   filterOptions: SeriesFilterOptions | null;
@@ -119,10 +123,12 @@ type Props = {
       icon_url?: string | null;
     }
   ) => void;
+  onOpenUniverse?: (universeId: number) => void;
 };
 
 export default function SeriesBrowse({
   franchises,
+  universes = [],
   orientation,
   filterMode,
   filterOptions,
@@ -150,6 +156,7 @@ export default function SeriesBrowse({
   onPublisherChange,
   onWriterChange,
   onOpen,
+  onOpenUniverse,
 }: Props) {
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);
@@ -375,6 +382,40 @@ export default function SeriesBrowse({
 
     const q = search.trim().toLowerCase();
 
+    if (catalogScope === "universes") {
+      let list = [...universes];
+      if (q) {
+        list = list.filter((u) => u.name.toLowerCase().includes(q));
+      }
+      if (filterMode === "name" && letter) {
+        const want = letter === HASH ? "#" : letter.toUpperCase();
+        list = list.filter((u) => {
+          const L = (u.name.slice(0, 1) || "").toUpperCase();
+          if (want === "#") return !/[A-Z]/.test(L);
+          return L === want;
+        });
+      }
+      list.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      );
+      return list.map(
+        (u): SeriesCatalogCard => ({
+          key: `universe:${u.id}`,
+          franchiseId: "",
+          universeId: u.id,
+          name: u.name,
+          letter: (u.name.slice(0, 1) || "#").toUpperCase(),
+          cover_url: u.cover_url || u.portrait_url || null,
+          portrait_url: u.portrait_url || u.cover_url || null,
+          landscape_url: u.landscape_url || u.cover_url || null,
+          banner_url: u.banner_url || u.landscape_url || u.cover_url || null,
+          logo_url: u.logo_url || null,
+          date_iso: null,
+          meta: `${u.member_count ?? u.members?.length ?? 0} members`,
+        })
+      );
+    }
+
     if (catalogScope === "shows") {
       const cards: SeriesCatalogCard[] = [];
       for (const f of franchises) {
@@ -508,6 +549,7 @@ export default function SeriesBrowse({
     filterReady,
     catalogScope,
     franchises,
+    universes,
     search,
     letter,
     filterMode,
@@ -515,17 +557,23 @@ export default function SeriesBrowse({
     endDecade,
     matchesDate,
     matchesFranchiseMeta,
+    unitNoun,
   ]);
 
   const handleCardClick = useCallback(
     (card: SeriesCatalogCard) => {
-      const open = () =>
+      const open = () => {
+        if (card.universeId != null) {
+          onOpenUniverse?.(card.universeId);
+          return;
+        }
         onOpen(card.franchiseId, card.subseriesId, {
           name: card.name,
           cover_url: card.cover_url,
           logo_url: card.logo_url,
           icon_url: card.icon_url,
         });
+      };
       if (!isPhone) {
         open();
         return;
@@ -537,7 +585,7 @@ export default function SeriesBrowse({
         setRevealedId(card.key);
       }
     },
-    [isPhone, revealedId, onOpen]
+    [isPhone, revealedId, onOpen, onOpenUniverse]
   );
 
   const subBar = useMemo(() => {

@@ -30,6 +30,8 @@ type Props = {
   languages?: string[];
   languageOptions?: SeriesLanguageOption[];
   originLanguage?: string | null;
+  /** Prefer this language first when ordering actor name rows. */
+  activeLanguage?: string | null;
   subseries?: SeriesSubseriesCard[];
   /** "all" or a subseries id — filters members by subseries_ids. */
   castSubFilter?: string;
@@ -186,7 +188,8 @@ function actorGroupsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
   originLanguage?: string | null,
-  subFilter: string = "all"
+  subFilter: string = "all",
+  activeLanguage?: string | null
 ): {
   language: string;
   people: { name: string; photo_url?: string | null }[];
@@ -202,11 +205,12 @@ function actorGroupsForDisplay(
           .map((p) => p.language)
           .filter(Boolean) as string[];
 
-  if (originLanguage) {
+  const preferred = activeLanguage || originLanguage;
+  if (preferred) {
     langs = [
-      originLanguage,
+      preferred,
       ...langs.filter(
-        (l) => l.toLowerCase() !== originLanguage.toLowerCase()
+        (l) => l.toLowerCase() !== preferred.toLowerCase()
       ),
     ];
   }
@@ -218,7 +222,7 @@ function actorGroupsForDisplay(
   }
 
   if (!out.length && (member.roles?.length || member.actors?.length)) {
-    const lang = originLanguage || franchiseLangs[0] || "ja";
+    const lang = preferred || franchiseLangs[0] || "ja";
     const people = actorsForLangDetailed(member, lang, subFilter);
     if (people.length) out.push({ language: lang, people });
   }
@@ -230,13 +234,15 @@ function actorsForDisplay(
   member: SeriesCastMember,
   franchiseLangs: string[],
   originLanguage?: string | null,
-  subFilter: string = "all"
+  subFilter: string = "all",
+  activeLanguage?: string | null
 ): { language: string; name: string; photo_url?: string | null }[] {
   return actorGroupsForDisplay(
     member,
     franchiseLangs,
     originLanguage,
-    subFilter
+    subFilter,
+    activeLanguage
   ).map((g) => ({
     language: g.language,
     name: g.people.map((p) => p.name).join(", "),
@@ -249,6 +255,7 @@ function MemberCard({
   characterCentered,
   franchiseLangs,
   originLanguage,
+  activeLanguage,
   castSubFilter = "all",
   onSelect,
 }: {
@@ -256,6 +263,7 @@ function MemberCard({
   characterCentered: boolean;
   franchiseLangs: string[];
   originLanguage?: string | null;
+  activeLanguage?: string | null;
   castSubFilter?: string;
   onSelect: (m: SeriesCastMember) => void;
 }) {
@@ -281,7 +289,8 @@ function MemberCard({
         member,
         franchiseLangs,
         originLanguage,
-        castSubFilter
+        castSubFilter,
+        activeLanguage
       )
     : [];
   const baseUrl = characterUrl && !photoFailed ? characterUrl : null;
@@ -666,7 +675,8 @@ function CastMemberModal({
     member,
     franchiseLangs,
     franchiseLangs[0],
-    castSubFilter
+    castSubFilter,
+    franchiseLangs[0]
   );
   const relatedLabels =
     selectedSubs.length > 0
@@ -1318,6 +1328,7 @@ export default function SeriesCast({
   languages,
   languageOptions,
   originLanguage,
+  activeLanguage,
   subseries = [],
   castSubFilter = "all",
   layout: castLayout = "grid",
@@ -1339,6 +1350,14 @@ export default function SeriesCast({
       : originLanguage
         ? [originLanguage]
         : [];
+    // Prefer active language first, then origin, then the rest.
+    const preferred = activeLanguage || originLanguage;
+    if (preferred && langs.length) {
+      return [
+        preferred,
+        ...langs.filter((l) => l.toLowerCase() !== preferred.toLowerCase()),
+      ];
+    }
     if (originLanguage && langs.length) {
       return [
         originLanguage,
@@ -1348,7 +1367,7 @@ export default function SeriesCast({
       ];
     }
     return langs;
-  }, [languages, originLanguage]);
+  }, [languages, originLanguage, activeLanguage]);
 
   const members = useMemo(() => {
     const list =
@@ -1404,7 +1423,7 @@ export default function SeriesCast({
   }, [languageOptions, franchiseLangs]);
 
   const castRowRef = useRef<HTMLDivElement | null>(null);
-  const hasCastCarousel = castLayout === "row" && members.length > 4;
+  const hasCastCarousel = castLayout === "row" && members.length > 6;
 
   const advanceCastCarousel = () => {
     const row = castRowRef.current;
@@ -1465,7 +1484,7 @@ export default function SeriesCast({
               ["--cast-visible" as string]: String(
                 members.length <= 3
                   ? Math.max(members.length, 1)
-                  : Math.min(members.length, 4)
+                  : Math.min(members.length, 6)
               ),
             } as CSSProperties)
           : undefined
@@ -1484,6 +1503,7 @@ export default function SeriesCast({
                   characterCentered={characterCentered}
                   franchiseLangs={franchiseLangs}
                   originLanguage={originLanguage}
+                  activeLanguage={activeLanguage}
                   castSubFilter={castSubFilter}
                   onSelect={setModalMember}
                 />
@@ -1527,6 +1547,7 @@ export default function SeriesCast({
                 characterCentered={characterCentered}
                 franchiseLangs={franchiseLangs}
                 originLanguage={originLanguage}
+                activeLanguage={activeLanguage}
                 castSubFilter={castSubFilter}
                 onSelect={setModalMember}
               />
@@ -1541,6 +1562,7 @@ export default function SeriesCast({
                   characterCentered={characterCentered}
                   franchiseLangs={franchiseLangs}
                   originLanguage={originLanguage}
+                  activeLanguage={activeLanguage}
                   castSubFilter={castSubFilter}
                   onSelect={setModalMember}
                 />

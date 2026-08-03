@@ -24,7 +24,11 @@ from app.movies_index import (
     find_work_dir,
 )
 from app.movies_refresh import ensure_movie_work, find_movie_work, _load_meta
-from app.movies_universes import universe_for_work
+from app.universes import (
+    expand_universe_cards,
+    filter_similar_against_universe,
+    universe_for_franchise,
+)
 from app.series_artwork import build_local_eras, ensure_artwork_cached
 from app.series_overview import _enrich_cast_member, _enrich_related_cards
 from app.series_paths import find_logo_file, gallery_sections
@@ -240,7 +244,25 @@ def build_work_overview(
             or ([meta["backdrop_url"]] if meta.get("backdrop_url") else []),
         )
     local_eras = build_local_eras(work_dir, root)
-    logo_url, icon_url = find_logo_file(work_dir, root)
+    from app.language_logos import resolve_language_logos
+
+    child_dirs: list = []
+    for f in detail.get("films") or []:
+        fp = (f.get("folder_path") or "").replace("\\", "/")
+        if fp:
+            child_dirs.append(root / fp)
+    child_dirs.sort(key=lambda p: p.name.casefold())
+    lang_logos = resolve_language_logos(
+        work_dir,
+        root,
+        listed_languages=list(selected_langs or []),
+        child_folders=child_dirs,
+        child_default_only=True,
+    )
+    logo_url = lang_logos.get("logo_url")
+    _unused_logo, icon_url = find_logo_file(work_dir, root)
+    if not icon_url:
+        icon_url = None
 
     links_payload = _group_links(meta.get("links") or [])
     links_payload["entity_id"] = row.mwk_id or 0
@@ -296,9 +318,13 @@ def build_work_overview(
 
     bio = row.mwk_bio or meta.get("bio")
     # Prefer universe overview when work bio empty
-    universe = universe_for_work(db, slug)
+    universe = universe_for_franchise(db, "movies", slug)
     if not bio and universe and universe.get("overview"):
         bio = universe["overview"]
+    similar = filter_similar_against_universe(db, "movies", slug, similar)
+    universe_cards = (
+        expand_universe_cards(db, universe["id"]) if universe else []
+    )
 
     films = detail.get("films") or []
     # Map films → subseries-shaped for SeriesAbout filmography strip
@@ -412,6 +438,8 @@ def build_work_overview(
         "eras": local_eras,
         "logo_url": logo_url or detail.get("logo_url"),
         "icon_url": icon_url or detail.get("icon_url"),
+        "logo_by_language": lang_logos.get("logo_by_language") or {},
+        "logos_switchable": bool(lang_logos.get("logos_switchable")),
         "cast": cast,
         "media": media_flags,
         "links": links_payload,
@@ -425,6 +453,8 @@ def build_work_overview(
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
+            "universe": universe_cards,
+            "universe_count": len(universe_cards),
         },
         "subseries": films_as_subseries,
         "films": films,
@@ -545,7 +575,18 @@ def build_film_overview(
             backdrops=backdrops,
         )
     local_eras = build_local_eras(film_dir, root)
-    logo_url, icon_url = find_logo_file(film_dir, root)
+    from app.language_logos import resolve_language_logos
+
+    lang_logos = resolve_language_logos(
+        film_dir,
+        root,
+        listed_languages=list(selected_langs or []),
+        fallback_folders=[work_dir] if work_dir else [],
+    )
+    logo_url = lang_logos.get("logo_url")
+    _unused_logo, icon_url = find_logo_file(film_dir, root)
+    if not icon_url and work_dir:
+        _u, icon_url = find_logo_file(work_dir, root)
 
     links_payload = _group_links(film_meta.get("links") or [])
     related_tmdb = (
@@ -606,7 +647,7 @@ def build_film_overview(
             [{"label": str(rd)[:4], "start": rd, "end": rd}] if rd else []
         )
 
-    universe = universe_for_work(db, work_slug)
+    universe = universe_for_franchise(db, "movies", work_slug)
 
     return {
         "id": fid,
@@ -637,6 +678,8 @@ def build_film_overview(
         "eras": local_eras,
         "logo_url": logo_url or detail.get("logo_url"),
         "icon_url": icon_url or detail.get("icon_url"),
+        "logo_by_language": lang_logos.get("logo_by_language") or {},
+        "logos_switchable": bool(lang_logos.get("logos_switchable")),
         "cast": cast,
         "media": {
             "has_audio": False,

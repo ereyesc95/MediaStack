@@ -305,38 +305,34 @@ class MovieWork(Base):
     mwk_folder_path: Mapped[str | None] = mapped_column(Text)
     mwk_tmdb_collection_id: Mapped[int | None] = mapped_column(Integer)
     mwk_tmdb_movie_id: Mapped[int | None] = mapped_column(Integer)
-    mwk_universe_id: Mapped[int | None] = mapped_column(Integer, index=True)
     mwk_bio: Mapped[str | None] = mapped_column(Text)
     mwk_metadata_json: Mapped[str | None] = mapped_column(Text)
     mwk_refreshed_at: Mapped[str | None] = mapped_column(Text)
 
 
-class MovieUniverse(Base):
-    """Soft universe grouping (MCU, Wizarding World) — DB-only, not on disk."""
+class Universe(Base):
+    """Shared soft grouping across Movies and Series franchises (DB + optional local art)."""
 
-    __tablename__ = "movie_universes"
+    __tablename__ = "universes"
 
-    mvu_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    mvu_name: Mapped[str] = mapped_column(Text)
-    mvu_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    mvu_tmdb_collection_id: Mapped[int | None] = mapped_column(Integer)
-    mvu_overview: Mapped[str | None] = mapped_column(Text)
-    mvu_poster_url: Mapped[str | None] = mapped_column(Text)
-    mvu_backdrop_url: Mapped[str | None] = mapped_column(Text)
-    mvu_source: Mapped[str | None] = mapped_column(String(64))  # tmdb | manual
-    mvu_created_at: Mapped[str | None] = mapped_column(Text)
-    mvu_updated_at: Mapped[str | None] = mapped_column(Text)
+    uni_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uni_name: Mapped[str] = mapped_column(Text)
+    uni_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    uni_overview: Mapped[str | None] = mapped_column(Text)
+    uni_created_at: Mapped[str | None] = mapped_column(Text)
+    uni_updated_at: Mapped[str | None] = mapped_column(Text)
 
 
-class MovieUniverseMember(Base):
-    """Links a movie work slug to a universe (manual + TMDb-seeded)."""
+class UniverseMember(Base):
+    """One franchise/work per row; each franchise belongs to at most one universe."""
 
-    __tablename__ = "movie_universe_members"
+    __tablename__ = "universe_members"
 
-    mum_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    mum_universe_id: Mapped[int] = mapped_column(Integer, index=True)
-    mum_work_slug: Mapped[str] = mapped_column(String(255), index=True)
-    mum_source: Mapped[str | None] = mapped_column(String(64))  # tmdb | manual
+    ume_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ume_universe_id: Mapped[int] = mapped_column(Integer, index=True)
+    ume_module: Mapped[str] = mapped_column(String(32), index=True)  # movies | series
+    ume_slug: Mapped[str] = mapped_column(String(255), index=True)
+    ume_source: Mapped[str | None] = mapped_column(String(64))  # manual | tmdb
 
 
 class Book(Base):

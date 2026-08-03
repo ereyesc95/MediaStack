@@ -6,6 +6,7 @@ export type SeriesRoute = {
   seasonId?: string;
   section: SeriesSection;
   overviewTab?: SeriesOverviewTab;
+  universeId?: number;
 };
 
 const SECTIONS: SeriesSection[] = [
@@ -40,6 +41,19 @@ function dec(seg: string): string {
   }
 }
 
+function parseUniverseId(search: string): number | undefined {
+  const raw = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search
+  ).get("universe");
+  if (!raw || !/^\d+$/.test(raw)) return undefined;
+  return Number(raw);
+}
+
+function withUniverseQuery(path: string, universeId?: number): string {
+  if (universeId == null) return path;
+  return `${path}?universe=${universeId}`;
+}
+
 export function seriesPath(route: SeriesRoute): string {
   let path = `/series/franchise/${enc(route.franchiseId)}`;
   if (route.subseriesId) {
@@ -58,10 +72,13 @@ export function seriesPath(route: SeriesRoute): string {
   } else {
     path += `/${section}`;
   }
-  return path;
+  return withUniverseQuery(path, route.universeId);
 }
 
-export function parseSeriesPath(pathname: string): SeriesRoute | null {
+export function parseSeriesPath(
+  pathname: string,
+  search = typeof window !== "undefined" ? window.location.search : ""
+): SeriesRoute | null {
   const m = pathname.match(/^\/series\/franchise\/([^/]+)(?:\/(.*))?\/?$/);
   if (!m) return null;
 
@@ -91,7 +108,14 @@ export function parseSeriesPath(pathname: string): SeriesRoute | null {
     section = parts[i] as SeriesSection;
   }
 
-  return { franchiseId, subseriesId, seasonId, section, overviewTab };
+  return {
+    franchiseId,
+    subseriesId,
+    seasonId,
+    section,
+    overviewTab,
+    universeId: parseUniverseId(search),
+  };
 }
 
 export function parseSeriesCatalogPath(pathname: string): boolean {
@@ -138,6 +162,7 @@ export type SeriesEntryReferrer = {
   filmId?: string;
   section?: string;
   overviewTab?: string;
+  universeId?: number;
 };
 
 export function saveSeriesEntryReferrer(ref: SeriesEntryReferrer) {

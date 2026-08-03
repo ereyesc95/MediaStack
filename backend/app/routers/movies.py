@@ -31,12 +31,10 @@ from app.movies_overview import (
     build_work_overview,
 )
 from app.movies_refresh import refresh_film_metadata, refresh_work_metadata
-from app.movies_universes import (
-    link_work_to_universe,
-    list_universes,
-    seed_universe_from_tmdb_collection,
-    universe_for_work,
-    unlink_work_from_universe,
+from app.universes import (
+    expand_universe_cards,
+    filter_similar_against_universe,
+    universe_for_franchise,
 )
 from app.schemas import MovieListOut
 
@@ -166,53 +164,6 @@ def movies_dashboard(
         }
 
 
-@router.get("/universes")
-def movies_universes(db: Session = Depends(get_db)):
-    return {"universes": list_universes(db)}
-
-
-@router.post("/universes/seed-collection")
-async def movies_seed_universe(
-    collection_id: int = Query(..., ge=1),
-    work_slug: str | None = None,
-    db: Session = Depends(get_db),
-):
-    api_key = crud.get_tmdb_key(db)
-    if not api_key:
-        raise HTTPException(400, "TMDb API key not configured")
-    try:
-        return await seed_universe_from_tmdb_collection(
-            db,
-            collection_id=collection_id,
-            api_key=api_key,
-            local_work_slug=work_slug,
-        )
-    except Exception as exc:
-        raise HTTPException(502, f"TMDb collection seed failed: {exc}") from exc
-
-
-@router.post("/universes/{universe_id}/members")
-def movies_universe_add_member(
-    universe_id: int,
-    work_slug: str = Query(...),
-    db: Session = Depends(get_db),
-):
-    link_work_to_universe(
-        db, universe_id=universe_id, work_slug=work_slug, source="manual"
-    )
-    return {"ok": True}
-
-
-@router.delete("/universes/{universe_id}/members")
-def movies_universe_remove_member(
-    universe_id: int,
-    work_slug: str = Query(...),
-    db: Session = Depends(get_db),
-):
-    unlink_work_from_universe(db, universe_id=universe_id, work_slug=work_slug)
-    return {"ok": True}
-
-
 @router.get("/franchises/{work_id}")
 def movies_franchise(work_id: str, db: Session = Depends(get_db)):
     try:
@@ -221,8 +172,10 @@ def movies_franchise(work_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, str(exc)) from exc
     if not detail:
         raise HTTPException(404, "Franchise not found")
-    universe = universe_for_work(db, detail.get("slug") or work_id)
+    universe = universe_for_franchise(db, "movies", detail.get("slug") or work_id)
     detail["universe"] = universe
+    if universe:
+        detail["universe_cards"] = expand_universe_cards(db, universe["id"])
     return detail
 
 
@@ -356,7 +309,7 @@ def movies_film(film_id: str, db: Session = Depends(get_db)):
     if not detail:
         raise HTTPException(404, "Film not found")
     work = detail.get("work") or {}
-    detail["universe"] = universe_for_work(db, work.get("id") or "")
+    detail["universe"] = universe_for_franchise(db, "movies", work.get("id") or "")
     return detail
 
 
@@ -387,15 +340,17 @@ async def movies_refresh_film_metadata(
 
 
 @router.get("/films/{film_id}/trailer")
-def movies_film_trailer_get(film_id: str):
-    from app.movies_index import find_film_dir
-    from app.movies_trailer import find_film_trailer_url
+def movies_film_trailer_get(film_id: str, db: Session = Depends(get_db)):
+    from app.movies_admin import get_film_trailer_db
 
-    found = find_film_dir(film_id)
-    if not found:
-        raise HTTPException(404, "Film not found")
-    film_dir, _work_dir, _letter = found
-    return {"trailer_url": find_film_trailer_url(film_dir)}
+    url = get_film_trailer_db(db, film_id)
+    if url is None:
+        # Film exists check — 404 if unknown id
+        from app.movies_index import find_film_dir
+
+        if not find_film_dir(film_id):
+            raise HTTPException(404, "Film not found")
+    return {"trailer_url": url}
 
 
 @router.patch("/films/{film_id}/about")
@@ -504,40 +459,3 @@ def movies_film_patch_cast(
     if not member:
         raise HTTPException(404, "Cast member not found")
     return member
-
-
-@router.post("/franchises/{work_id}/refresh-universe")
-async def movies_refresh_universe(work_id: str, db: Session = Depends(get_db)):
-    """Seed universe from TMDb collection matching the work name (initial pull)."""
-    from app.services import tmdb
-
-    api_key = crud.get_tmdb_key(db)
-    if not api_key:
-        raise HTTPException(400, "TMDb API key not configured")
-    detail = build_work_detail(work_id)
-    if not detail:
-        raise HTTPException(404, "Franchise not found")
-    name = detail.get("name") or work_id
-    collection_id, collection_name = await tmdb.search_collection_id(name, api_key)
-    if not collection_id:
-        films = detail.get("films") or []
-        if films:
-            title = films[0].get("title") or name
-            year = None
-            iso = films[0].get("date_iso") or ""
-            if len(iso) >= 4 and iso[:4].isdigit():
-                year = int(iso[:4])
-            movie_id, _ = await tmdb.search_movie_id(title, api_key, year=year)
-            if movie_id:
-                movie = await tmdb.fetch_movie(movie_id, api_key)
-                coll = movie.get("belongs_to_collection") or {}
-                collection_id = coll.get("id")
-                collection_name = coll.get("name")
-    if not collection_id:
-        raise HTTPException(404, f"No TMDb collection found for {name!r}")
-    return await seed_universe_from_tmdb_collection(
-        db,
-        collection_id=int(collection_id),
-        api_key=api_key,
-        local_work_slug=detail.get("slug") or work_id,
-    )

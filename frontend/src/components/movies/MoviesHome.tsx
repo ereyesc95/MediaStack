@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import type { SeriesDashboard } from "../../types";
+import type { SeriesDashboard, Universe } from "../../types";
 import { EMPTY_SERIES_DASHBOARD } from "../../types";
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
 
@@ -165,8 +165,10 @@ export type MoviesDashboardFilm = SeriesDashboard["top_series"][number] & {
 type Props = {
   data: (SeriesDashboard & { top_series?: MoviesDashboardFilm[] }) | null;
   loading?: boolean;
+  universes?: Universe[];
   onFranchise: (workId: string) => void;
   onFilm: (filmId: string, workId?: string | null) => void;
+  onOpenUniverse?: (universeId: number) => void;
   onGenre?: (id: number | string) => void;
   onCountry?: (country: { id?: number; name: string }) => void;
 };
@@ -174,8 +176,10 @@ type Props = {
 export default function MoviesHome({
   data,
   loading,
+  universes = [],
   onFranchise,
   onFilm,
+  onOpenUniverse,
   onGenre,
   onCountry,
 }: Props) {
@@ -188,11 +192,13 @@ export default function MoviesHome({
     (dash.top_series || []) as MoviesDashboardFilm[],
     paneLimit
   );
+  const topUniverses = slicePane(universes, paneLimit);
   const topGenres = slicePane(dash.top_genres, paneLimit);
   const topCountries = slicePane(dash.top_countries, paneLimit);
 
   const franchisePlaceholders = placeholderCount(topFranchises.length, paneLimit);
   const filmPlaceholders = placeholderCount(topFilms.length, paneLimit);
+  const universePlaceholders = placeholderCount(topUniverses.length, paneLimit);
   const genrePlaceholders = placeholderCount(topGenres.length, paneLimit);
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
@@ -271,6 +277,47 @@ export default function MoviesHome({
           />
         </div>
       </section>
+
+      {universes.length > 0 ? (
+        <section className="dash-row dash-row--icons">
+          <DashPaneLabel
+            logo="/api/assets/icons/pane-on-repeat"
+            title="UNIVERSES"
+            subtitle="Shared story worlds"
+          />
+          <div className="dash-scroll dash-scroll--icons">
+            {topUniverses.map((u) => {
+              const cover =
+                u.portrait_url || u.cover_url || u.landscape_url || DEFAULT_DISC_URL;
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  className="dash-icon-item"
+                  onClick={() => onOpenUniverse?.(u.id)}
+                >
+                  <span className="dash-icon-item-cover">
+                    <span
+                      className="card-bg-layer"
+                      style={{ backgroundImage: `url("${cover}")` }}
+                    />
+                  </span>
+                  <span
+                    className="dash-item-label dash-icon-item-name"
+                    title={u.name}
+                  >
+                    {u.name}
+                  </span>
+                </button>
+              );
+            })}
+            <PlaceholderTiles
+              count={topUniverses.length ? universePlaceholders : paneLimit}
+              variant="landscape"
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="dash-row dash-row--genres">
         <DashPaneLabel

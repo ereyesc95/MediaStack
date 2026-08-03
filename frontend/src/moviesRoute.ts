@@ -14,6 +14,7 @@ export type MoviesRoute = {
   filmId?: string;
   section: MoviesSection;
   overviewTab?: MoviesOverviewTab;
+  universeId?: number;
 };
 
 const SECTIONS: MoviesSection[] = [
@@ -48,6 +49,19 @@ function dec(seg: string): string {
   }
 }
 
+function parseUniverseId(search: string): number | undefined {
+  const raw = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search
+  ).get("universe");
+  if (!raw || !/^\d+$/.test(raw)) return undefined;
+  return Number(raw);
+}
+
+function withUniverseQuery(path: string, universeId?: number): string {
+  if (universeId == null) return path;
+  return `${path}?universe=${universeId}`;
+}
+
 export function moviesPath(route: MoviesRoute): string {
   let path = `/movies/franchise/${enc(route.franchiseId)}`;
   if (route.filmId) {
@@ -63,10 +77,13 @@ export function moviesPath(route: MoviesRoute): string {
   } else {
     path += `/${section}`;
   }
-  return path;
+  return withUniverseQuery(path, route.universeId);
 }
 
-export function parseMoviesPath(pathname: string): MoviesRoute | null {
+export function parseMoviesPath(
+  pathname: string,
+  search = typeof window !== "undefined" ? window.location.search : ""
+): MoviesRoute | null {
   const m = pathname.match(/^\/movies\/franchise\/([^/]+)(?:\/(.*))?\/?$/);
   if (!m) return null;
 
@@ -91,7 +108,13 @@ export function parseMoviesPath(pathname: string): MoviesRoute | null {
     section = parts[i] as MoviesSection;
   }
 
-  return { franchiseId, filmId, section, overviewTab };
+  return {
+    franchiseId,
+    filmId,
+    section,
+    overviewTab,
+    universeId: parseUniverseId(search),
+  };
 }
 
 export function parseMoviesRootPath(pathname: string): boolean {

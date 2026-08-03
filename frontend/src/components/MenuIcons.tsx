@@ -507,3 +507,39 @@ export function IconMediaGames({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Orbit / galaxy glyph for shared universes. */
+export function IconUniverse({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <circle
+        cx="12"
+        cy="12"
+        r="2.2"
+        fill="currentColor"
+      />
+      <ellipse
+        cx="12"
+        cy="12"
+        rx="9"
+        ry="4.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        transform="rotate(-28 12 12)"
+      />
+      <ellipse
+        cx="12"
+        cy="12"
+        rx="9"
+        ry="4.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        transform="rotate(38 12 12)"
+      />
+      <circle cx="18.4" cy="9.2" r="1.1" fill="currentColor" />
+      <circle cx="6.2" cy="14.6" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}

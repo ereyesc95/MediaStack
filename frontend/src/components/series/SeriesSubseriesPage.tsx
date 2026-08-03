@@ -22,6 +22,8 @@ import {
   fetchSeriesFranchiseMovies,
   fetchSeriesFranchiseShows,
   fetchSeriesOverview,
+  fetchUniverse,
+  fetchUniverseCards,
   refreshMoviesFilmMetadata,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
@@ -34,6 +36,11 @@ import {
   colorsFromImageUrl,
   isPlaybackThemeActive,
 } from "../../mediaTheme";
+import {
+  readStoredLanguage,
+  resolveLanguageLogos,
+  writeStoredLanguage,
+} from "../../languageLogos";
 import {
   pushMoviesRoute,
   type MoviesSection,
@@ -51,6 +58,8 @@ import type {
   SeriesSection,
   SeriesSeasonCard,
   SeriesSubseriesCard,
+  Universe,
+  UniverseCard,
 } from "../../types";
 import {
   isMobileLandscapeLayout,
@@ -121,6 +130,7 @@ type Props = {
   subseriesId: string;
   seasonId?: string;
   section?: SeriesSection;
+  universeId?: number;
   busy?: string;
   isAdmin?: boolean;
   userId?: number;
@@ -140,10 +150,18 @@ type Props = {
   onOpenFilm?: (filmId: string) => void;
   /** Override back chip text (e.g. HOME when opened from a home pane). */
   backLabelOverride?: string | null;
+  onOpenUniverseParent?: () => void;
+  onOpenUniverseLeaf?: (leaf: {
+    module: "movies" | "series";
+    franchiseId: string;
+    leafId: string;
+  }) => void;
   onNavigate: (patch: {
+    franchiseId?: string;
     subseriesId?: string;
     seasonId?: string;
     section?: SeriesSection;
+    universeId?: number;
   }) => void;
 };
 
@@ -279,6 +297,8 @@ function toMediaCards(
     title?: string;
     name?: string;
     cover_url?: string | null;
+    portrait_url?: string | null;
+    landscape_url?: string | null;
     banner_url?: string | null;
     logo_url?: string | null;
     path?: string;
@@ -301,7 +321,10 @@ function toMediaCards(
     id: String(it.id ?? it.path ?? it.folder_path ?? i),
     title: it.title || it.name || "Untitled",
     cover_url: it.cover_url,
-    banner_url: it.banner_url,
+    portrait_url: it.portrait_url || it.cover_url || null,
+    landscape_url: it.landscape_url || null,
+    banner_url:
+      it.banner_url || it.landscape_url || it.portrait_url || it.cover_url || null,
     logo_url: it.logo_url,
     path: it.path || it.folder_path,
     date_label: it.display_date || it.date_iso || null,
@@ -414,6 +437,7 @@ export default function SeriesSubseriesPage({
   subseriesId,
   seasonId,
   section = "overview",
+  universeId,
   busy,
   isAdmin = false,
   userId,
@@ -430,6 +454,8 @@ export default function SeriesSubseriesPage({
   onOpenMoviesPath,
   onOpenFilm,
   backLabelOverride,
+  onOpenUniverseParent,
+  onOpenUniverseLeaf,
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
@@ -451,6 +477,8 @@ export default function SeriesSubseriesPage({
   const [siblings, setSiblings] = useState<SeriesSubseriesCard[]>(
     () => initialCached?.siblings ?? []
   );
+  const [universeInfo, setUniverseInfo] = useState<Universe | null>(null);
+  const [universeCards, setUniverseCards] = useState<UniverseCard[]>([]);
   const [overview, setOverview] = useState<SeriesOverview | null>(
     () => initialCached?.overview ?? null
   );
@@ -724,6 +752,7 @@ export default function SeriesSubseriesPage({
           filmId: subseriesId,
           section,
           overviewTab: tab === "overview" ? "about" : undefined,
+          universeId,
         },
         true
       );
@@ -736,6 +765,7 @@ export default function SeriesSubseriesPage({
         seasonId,
         section: tabToSection(tab),
         overviewTab: tab === "overview" ? "about" : undefined,
+        universeId,
       },
       true
     );
@@ -951,6 +981,26 @@ export default function SeriesSubseriesPage({
     });
   }, [panelArtUrl, userId]);
 
+  useEffect(() => {
+    if (universeId == null) {
+      setUniverseInfo(null);
+      setUniverseCards([]);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([
+      fetchUniverse(universeId).catch(() => null),
+      fetchUniverseCards(universeId).catch(() => ({ items: [] as UniverseCard[] })),
+    ]).then(([uni, cards]) => {
+      if (cancelled) return;
+      setUniverseInfo(uni);
+      setUniverseCards(cards?.items || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [universeId]);
+
   const title =
     detail?.title || card?.title || (isFilm ? overview?.name || "" : "") || "";
   const scopedMeta = overview?.subseries_meta?.[subseriesId] ?? null;
@@ -965,11 +1015,79 @@ export default function SeriesSubseriesPage({
         scopedMeta?.activity_periods || overview?.activity_periods || []
       );
 
+  const universeNav =
+    universeId != null && universeCards.length > 1
+      ? (() => {
+          const idx = universeCards.findIndex(
+            (c) =>
+              (c.leaf_id || c.id) === subseriesId &&
+              (c.franchise_id === franchiseId ||
+                !c.franchise_id ||
+                c.module === (isFilm ? "movies" : "series"))
+          );
+          const fallback = universeCards.findIndex(
+            (c) => (c.leaf_id || c.id) === subseriesId
+          );
+          const cur = idx >= 0 ? idx : fallback >= 0 ? fallback : 0;
+          const len = universeCards.length;
+          return {
+            prev: universeCards[(cur - 1 + len) % len]!,
+            next: universeCards[(cur + 1) % len]!,
+          };
+        })()
+      : null;
+
   const siblingIndex = siblings.findIndex((s) => s.id === subseriesId);
   const n = siblings.length;
   const i = siblingIndex >= 0 ? siblingIndex : 0;
-  const prevSub = n > 1 ? siblings[(i - 1 + n) % n] : null;
-  const nextSub = n > 1 ? siblings[(i + 1) % n] : null;
+  const prevSub = universeNav
+    ? null
+    : n > 1
+      ? siblings[(i - 1 + n) % n]
+      : null;
+  const nextSub = universeNav
+    ? null
+    : n > 1
+      ? siblings[(i + 1) % n]
+      : null;
+
+  const openUniverseCard = (c: UniverseCard) => {
+    const leaf = c.leaf_id || c.id || "";
+    const fid = c.franchise_id || franchiseId;
+    const mod = c.module || (isFilm ? "movies" : "series");
+    if (onOpenUniverseLeaf) {
+      onOpenUniverseLeaf({
+        module: mod === "movies" ? "movies" : "series",
+        franchiseId: fid,
+        leafId: leaf,
+      });
+      return;
+    }
+    onNavigate({
+      franchiseId: fid,
+      subseriesId: leaf,
+      seasonId: undefined,
+      section: "overview",
+      universeId,
+    });
+  };
+
+  const prevNeighbor = universeNav
+    ? {
+        label: universeNav.prev.title || universeNav.prev.name || "Previous",
+        onClick: () => openUniverseCard(universeNav.prev),
+      }
+    : prevSub
+      ? { label: prevSub.title, onClick: () => openSibling(prevSub.id) }
+      : null;
+  const nextNeighbor = universeNav
+    ? {
+        label: universeNav.next.title || universeNav.next.name || "Next",
+        onClick: () => openUniverseCard(universeNav.next),
+      }
+    : nextSub
+      ? { label: nextSub.title, onClick: () => openSibling(nextSub.id) }
+      : null;
 
   const galleryPath = detail?.folder_path || card?.folder_path || "";
 
@@ -985,19 +1103,85 @@ export default function SeriesSubseriesPage({
   const overviewBio = isFilm
     ? overview?.bio ?? scopedMeta?.bio
     : scopedMeta?.bio ?? overview?.bio;
-  const languageLabels = useMemo(() => {
+  const languageOpts = useMemo(() => {
     const opts = overview?.language_options || [];
     const byCode = new Map(
       opts.map((o) => [o.code.toLowerCase(), o.label] as const)
     );
-    return languages.map(
-      (code) =>
-        (byCode.get(code.toLowerCase()) || code).replace(
-          /\s*\(origin\)\s*$/i,
-          ""
-        )
-    );
+    return languages.map((code) => ({
+      code,
+      label: (byCode.get(code.toLowerCase()) || code).replace(
+        /\s*\(origin\)\s*$/i,
+        ""
+      ),
+    }));
   }, [languages, overview?.language_options]);
+  const languageLabels = useMemo(
+    () => languageOpts.map((o) => o.label),
+    [languageOpts]
+  );
+
+  const storageScope = isFilm
+    ? `film:${subseriesId}`
+    : `sub:${franchiseId}:${subseriesId}`;
+
+  const folderLogoState = useMemo(() => {
+    const assets = detail?.logo_assets;
+    if (
+      assets &&
+      (assets.default ||
+        assets.any ||
+        Object.keys(assets.variants || {}).length)
+    ) {
+      return resolveLanguageLogos(assets, languages);
+    }
+    return null;
+  }, [detail?.logo_assets, languages]);
+
+  const logosSwitchable = folderLogoState
+    ? folderLogoState.logosSwitchable
+    : Boolean(overview?.logos_switchable);
+
+  const logoByLanguage = folderLogoState
+    ? folderLogoState.logoByLanguage
+    : overview?.logo_by_language || {};
+
+  const [activeLanguage, setActiveLanguage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!languages.length) {
+      setActiveLanguage(null);
+      return;
+    }
+    const stored = readStoredLanguage(storageScope);
+    const match = stored
+      ? languages.find((c) => c.toLowerCase() === stored.toLowerCase())
+      : null;
+    const origin = overview?.origin_language;
+    const next =
+      match ||
+      (origin &&
+      languages.some((c) => c.toLowerCase() === origin.toLowerCase())
+        ? origin
+        : languages[0]);
+    setActiveLanguage(next);
+  }, [storageScope, languages, overview?.origin_language]);
+
+  const selectLanguage = useCallback(
+    (code: string) => {
+      setActiveLanguage(code);
+      writeStoredLanguage(storageScope, code);
+    },
+    [storageScope]
+  );
+
+  const langLogo =
+    (activeLanguage &&
+      (logoByLanguage[activeLanguage] ||
+        Object.entries(logoByLanguage).find(
+          ([k]) => k.toLowerCase() === activeLanguage.toLowerCase()
+        )?.[1])) ||
+    null;
 
   const photocards: ReleasePhotocardSet | null = useMemo(() => {
     const pc = detail?.photocards;
@@ -1107,13 +1291,29 @@ export default function SeriesSubseriesPage({
 
           setMovieCards(
             toMediaCards(
-              siblingFilms.map((m) => ({
-                ...m,
-                path: m.folder_path,
-                open_label: m.open_label || (m.open_url ? "Play video" : null),
-                open_mode:
-                  m.open_mode || (m.open_url ? ("local" as const) : null),
-              }))
+              siblingFilms.map((m) => {
+                const film = m as MoviesFilmCard & {
+                  portrait_url?: string | null;
+                  landscape_url?: string | null;
+                };
+                return {
+                  ...film,
+                  path: film.folder_path,
+                  portrait_url: film.portrait_url || film.cover_url,
+                  landscape_url: film.landscape_url || null,
+                  banner_url:
+                    film.banner_url ||
+                    film.landscape_url ||
+                    film.portrait_url ||
+                    film.cover_url ||
+                    null,
+                  open_label:
+                    film.open_label || (film.open_url ? "Play video" : null),
+                  open_mode:
+                    film.open_mode ||
+                    (film.open_url ? ("local" as const) : null),
+                };
+              })
             )
           );
 
@@ -1239,6 +1439,8 @@ export default function SeriesSubseriesPage({
           id?: string;
           title?: string;
           cover_url?: string | null;
+          portrait_url?: string | null;
+          landscape_url?: string | null;
           banner_url?: string | null;
           logo_url?: string | null;
           path?: string;
@@ -1256,6 +1458,14 @@ export default function SeriesSubseriesPage({
               ? toMediaCards(
                   movieItems.map((m) => ({
                     ...m,
+                    portrait_url: m.portrait_url || m.cover_url,
+                    landscape_url: m.landscape_url || null,
+                    banner_url:
+                      m.banner_url ||
+                      m.landscape_url ||
+                      m.portrait_url ||
+                      m.cover_url ||
+                      null,
                     open_label: m.open_label || "Play video",
                     open_mode: m.open_mode || (m.open_url ? "tab" : null),
                   }))
@@ -1752,6 +1962,7 @@ export default function SeriesSubseriesPage({
   }, [tab]);
 
   const resolvedLogoUrl =
+    langLogo ||
     detail?.logo_url ||
     card?.logo_url ||
     overview?.logo_url ||
@@ -2262,6 +2473,19 @@ export default function SeriesSubseriesPage({
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
                   ) : null}
+                  {universeInfo ? (
+                    <p className="release-page__type-line">
+                      Part of the{" "}
+                      <button
+                        type="button"
+                        className="release-page__artist-link release-page__artist-link--inline"
+                        onClick={() => onOpenUniverseParent?.()}
+                      >
+                        {universeInfo.name}
+                      </button>{" "}
+                      universe
+                    </p>
+                  ) : null}
                   <p className="release-page__type-line">
                     <button
                       type="button"
@@ -2293,6 +2517,30 @@ export default function SeriesSubseriesPage({
                       </>
                     ) : null}
                   </p>
+                  {overview?.universe?.name ? (
+                    <p className="release-page__type-line series-subseries-page__universe-line">
+                      Part of the{" "}
+                      <button
+                        type="button"
+                        className="release-page__artist-link release-page__artist-link--inline"
+                        onClick={() => {
+                          if (onOpenUniverseParent) {
+                            onOpenUniverseParent();
+                            return;
+                          }
+                          onNavigate({
+                            subseriesId: undefined,
+                            seasonId: undefined,
+                            section: "overview",
+                            universeId: overview.universe?.id,
+                          });
+                        }}
+                      >
+                        {overview.universe.name}
+                      </button>{" "}
+                      universe
+                    </p>
+                  ) : null}
                 </div>
                 {genres.length > 0 ? (
                   <div className="release-page__panel-credits">
@@ -2362,8 +2610,8 @@ export default function SeriesSubseriesPage({
                     </button>
                   </p>
                 ) : null}
-                {languageLabels.length ? (
-                  <p className="release-page__track-panel-line">
+                {languageOpts.length ? (
+                  <p className="release-page__track-panel-line series-subseries-page__lang-line">
                     <span
                       className="series-subseries-page__meta-icon"
                       aria-label="Languages"
@@ -2386,8 +2634,36 @@ export default function SeriesSubseriesPage({
                         />
                       </svg>
                     </span>{" "}
-                    <span className="release-page__person-link--static">
-                      {languageLabels.join(" · ")}
+                    <span className="series-subseries-page__lang-pills">
+                      {languageOpts.map((o, i) => (
+                        <span key={o.code}>
+                          {i > 0 ? (
+                            <span className="series-subseries-page__lang-sep">
+                              {" "}
+                              ·{" "}
+                            </span>
+                          ) : null}
+                          {logosSwitchable ? (
+                            <button
+                              type="button"
+                              className={`series-subseries-page__lang-pill${
+                                activeLanguage &&
+                                activeLanguage.toLowerCase() ===
+                                  o.code.toLowerCase()
+                                  ? " is-active"
+                                  : ""
+                              }`}
+                              onClick={() => selectLanguage(o.code)}
+                            >
+                              {o.label}
+                            </button>
+                          ) : (
+                            <span className="release-page__person-link--static">
+                              {o.label}
+                            </span>
+                          )}
+                        </span>
+                      ))}
                     </span>
                   </p>
                 ) : null}
@@ -2592,20 +2868,20 @@ export default function SeriesSubseriesPage({
                 {!stacked ? (
                   <div className="release-page__panel-footer">
                     <div className="release-page__panel-bottom-bar">
-                      {prevSub ? (
+                      {prevNeighbor ? (
                         <NeighborLink
-                          label={prevSub.title}
+                          label={prevNeighbor.label}
                           direction="prev"
-                          onClick={() => openSibling(prevSub.id)}
+                          onClick={prevNeighbor.onClick}
                         />
                       ) : (
                         <span className="release-page__neighbor-spacer" />
                       )}
-                      {nextSub ? (
+                      {nextNeighbor ? (
                         <NeighborLink
-                          label={nextSub.title}
+                          label={nextNeighbor.label}
                           direction="next"
-                          onClick={() => openSibling(nextSub.id)}
+                          onClick={nextNeighbor.onClick}
                         />
                       ) : (
                         <span className="release-page__neighbor-spacer" />
@@ -2619,20 +2895,20 @@ export default function SeriesSubseriesPage({
             {stacked ? (
               <div className="release-page__panel-footer series-subseries-page__neighbors">
                 <div className="release-page__panel-bottom-bar">
-                  {prevSub ? (
+                  {prevNeighbor ? (
                     <NeighborLink
-                      label={prevSub.title}
+                      label={prevNeighbor.label}
                       direction="prev"
-                      onClick={() => openSibling(prevSub.id)}
+                      onClick={prevNeighbor.onClick}
                     />
                   ) : (
                     <span className="release-page__neighbor-spacer" />
                   )}
-                  {nextSub ? (
+                  {nextNeighbor ? (
                     <NeighborLink
-                      label={nextSub.title}
+                      label={nextNeighbor.label}
                       direction="next"
-                      onClick={() => openSibling(nextSub.id)}
+                      onClick={nextNeighbor.onClick}
                     />
                   ) : (
                     <span className="release-page__neighbor-spacer" />
@@ -2744,6 +3020,7 @@ export default function SeriesSubseriesPage({
                         overview.cast_languages || overview.language_options
                       }
                       originLanguage={overview.origin_language}
+                      activeLanguage={activeLanguage}
                       subseries={overview.subseries || []}
                       castSubFilter={isFilm ? "all" : subseriesId}
                       layout="row"

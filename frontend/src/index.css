@@ -2588,58 +2588,88 @@ input {
 }
 
 .modal-panel--profile-edit {
-  width: min(520px, 94vw);
+  width: min(560px, 94vw);
   padding: 1.15rem 1.35rem 1.25rem;
 }
 
-.modal-panel--profile-edit h3 {
+.modal-panel--profile-edit .modal-panel-header {
   margin: 0 0 1rem;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  position: static;
+  border-radius: 0;
+}
+
+.modal-panel--profile-edit .modal-panel-header h3 {
+  margin: 0;
 }
 
 .profile-edit-layout {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 1.1rem;
   margin-bottom: 1rem;
 }
 
 .profile-edit-preview {
   position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
+  flex: 0 0 7.75rem;
+  align-self: stretch;
+  display: block;
   margin: 0;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
   color: inherit;
+  overflow: hidden;
+  border-radius: 0.65rem;
 }
 
 .profile-edit-preview .profile-avatar {
-  width: 7.5rem;
-  height: 7.5rem;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
   font-size: 2.6rem;
   border-radius: 0.65rem;
+  box-sizing: border-box;
+}
+
+.profile-edit-preview .profile-avatar--photo .profile-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .profile-edit-preview .profile-avatar--emoji {
   font-size: 3rem;
 }
 
-.profile-edit-preview__hint {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
+.profile-edit-preview__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
 }
 
-.profile-edit-preview:hover .profile-edit-preview__hint,
-.profile-edit-preview:focus-visible .profile-edit-preview__hint {
-  color: var(--accent);
+.profile-edit-preview:hover .profile-edit-preview__overlay,
+.profile-edit-preview:focus-visible .profile-edit-preview__overlay {
+  opacity: 1;
+}
+
+.profile-edit-preview__hint {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
 .profile-edit-picks {
@@ -2647,14 +2677,34 @@ input {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.55rem;
+  justify-content: flex-start;
 }
 
 .profile-edit-field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
+}
+
+.profile-edit-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.15rem;
+}
+
+.profile-edit-field--inline > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.profile-edit-field--inline input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .profile-edit-field input {
@@ -2672,18 +2722,22 @@ input {
 
 .profile-edit-emoji-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.65rem;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  margin: 0;
 }
 
 .profile-edit-pick {
-  width: 2.4rem;
-  height: 2.4rem;
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
   border: 2px solid transparent;
   border-radius: var(--radius);
   background: var(--bg);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   cursor: pointer;
 }
 
@@ -2693,22 +2747,53 @@ input {
 
 .profile-edit-color-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  margin: 0;
+  position: relative;
 }
 
 .profile-edit-color {
+  flex: 0 0 auto;
   width: 1.75rem;
   height: 1.75rem;
   border: 2px solid transparent;
   border-radius: 50%;
   cursor: pointer;
+  padding: 0;
 }
 
 .profile-edit-color.active {
   border-color: var(--text);
   box-shadow: 0 0 0 2px var(--bg-elevated);
+}
+
+.profile-edit-color--custom {
+  display: grid;
+  place-items: center;
+  background: var(--bg-hover);
+  border: 2px dashed color-mix(in srgb, var(--text-muted) 55%, transparent);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.profile-edit-color--custom.active {
+  border-style: solid;
+  border-color: var(--text);
+  color: #fff;
+}
+
+.profile-edit-color-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .profile-edit-upload {
@@ -13891,6 +13976,37 @@ button.lyrics-status-badge--icon-only {
   pointer-events: none;
 }
 
+.series-subseries-page__lang-pills {
+  display: inline;
+}
+
+.series-subseries-page__lang-pill {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: transparent;
+}
+
+.series-subseries-page__lang-pill:hover {
+  color: var(--accent);
+}
+
+.series-subseries-page__lang-pill.is-active {
+  color: var(--text);
+  text-decoration-color: var(--accent);
+  font-weight: 600;
+}
+
+.series-subseries-page__lang-sep {
+  color: var(--text-muted);
+}
+
 /* Subseries/film tabs: match franchise artist-page__sections chrome */
 .series-subseries-page .release-page__tabs button.active {
   color: var(--text);
@@ -14060,7 +14176,7 @@ button.lyrics-status-badge--icon-only {
 .series-cast--row-scroll {
   --lineup-photo: 3.25rem;
   --cast-row-gap: 0.75rem;
-  --cast-visible: 4;
+  --cast-visible: 6;
   width: 100%;
   min-width: 0;
   display: flex;
@@ -14173,16 +14289,20 @@ button.lyrics-status-badge--icon-only {
   margin: 0.15rem auto 0.35rem;
 }
 
-.series-subseries-page__season-logo-glass {
+.series-subseries-page__universe-line {
+  font-size: 0.78rem;
+  margin: 0.15rem 0 0;
+  line-height: 1.25;
+}
   position: absolute;
-  left: 0.45rem;
+  left: 0;
   top: 50%;
   transform: translateY(-50%);
   z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.7rem 0.95rem;
+  padding: 0.7rem 0.95rem 0.7rem 0.75rem;
   max-width: min(46%, 12rem);
   max-height: 78%;
   box-sizing: border-box;
@@ -14190,6 +14310,7 @@ button.lyrics-status-badge--icon-only {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   pointer-events: none;
+  border-radius: 0 4px 4px 0;
 }
 
 .series-subseries-page__season-logo--on-banner {
@@ -14866,12 +14987,15 @@ button.lyrics-status-badge--icon-only {
 .series-film-bubble {
   position: absolute;
   left: 0;
-  right: 0;
+  right: auto;
   bottom: calc(100% + 0.35rem);
   z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  width: min(28rem, 92vw);
+  min-width: min(22rem, 92vw);
+  box-sizing: border-box;
   padding: 0.55rem 0.6rem;
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg-elevated, #1a1512) 94%, #000);
@@ -14887,7 +15011,8 @@ button.lyrics-status-badge--icon-only {
 
 .series-film-bubble__input {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 12rem;
+  width: 100%;
   border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
   border-radius: 4px;
   background: color-mix(in srgb, var(--bg, #0e0b09) 88%, #000);

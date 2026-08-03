@@ -24,6 +24,7 @@ from app.routers import (
     settings as settings_router,
     spotify,
     sync,
+    universes,
 )
 
 RECORDSTACK_PORTS = [
@@ -63,6 +64,7 @@ app.include_router(spotify.router)
 app.include_router(playback.router)
 app.include_router(series.router)
 app.include_router(movies.router)
+app.include_router(universes.router)
 app.include_router(books.router)
 app.include_router(games.router)
 app.include_router(import_router.router)

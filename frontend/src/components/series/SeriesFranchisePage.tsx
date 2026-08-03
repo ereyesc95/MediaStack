@@ -29,6 +29,10 @@ import {
   colorsFromImageUrl,
   isPlaybackThemeActive,
 } from "../../mediaTheme";
+import {
+  readStoredLanguage,
+  writeStoredLanguage,
+} from "../../languageLogos";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import { pushMoviesRoute } from "../../moviesRoute";
 import {
@@ -96,6 +100,7 @@ type Props = {
   seasonId?: string;
   section?: SeriesSection;
   overviewTab?: SeriesOverviewTab;
+  universeId?: number;
   shell?: SeriesFranchiseShell | null;
   /** Catalog franchises for inline search (from SeriesModule cache). */
   franchises?: SeriesFranchiseCard[];
@@ -113,10 +118,12 @@ type Props = {
   /** Label for the top-left back control (e.g. HOME vs CATALOG). */
   backLabel?: string;
   onNavigate: (patch: {
+    franchiseId?: string;
     subseriesId?: string;
     seasonId?: string;
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
+    universeId?: number;
   }) => void;
   onOpenFranchise?: (id: string) => void;
   onBrowseCatalog?: (target: {
@@ -130,9 +137,19 @@ type Props = {
   onOpenArtist?: (bandId: number) => void;
   onOpenMoviesPath?: (path: string) => void;
   /** Movies module: open a Series franchise (optionally a subseries) from the SERIES tab. */
-  onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
+  onOpenSeriesFranchise?: (
+    franchiseId: string,
+    subseriesId?: string,
+    universeId?: number
+  ) => void;
+  /** Open a Movies franchise/film (from series universe cards). */
+  onOpenMoviesFranchise?: (
+    franchiseId: string,
+    filmId?: string,
+    universeId?: number
+  ) => void;
   onShellUpdate?: (shell: SeriesFranchiseShell) => void;
-  /** Movies-only menu extras (universe admin, etc.). */
+  /** Admin menu extras (Add to universe, etc.). */
   menuExtra?: ReactNode;
 };
 
@@ -213,8 +230,10 @@ export default function SeriesFranchisePage({
   onOpenArtist,
   onOpenMoviesPath,
   onOpenSeriesFranchise,
+  onOpenMoviesFranchise,
   onShellUpdate,
   menuExtra,
+  universeId,
 }: Props) {
   const isMovies = module === "movies";
   const layout = useDeviceLayout();
@@ -244,7 +263,9 @@ export default function SeriesFranchisePage({
   const [eraIndex, setEraIndex] = useState(0);
   const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
   const [linkTab, setLinkTab] = useState<LinkCategory | string>("databases");
-  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("similar");
+  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>(() =>
+    universeId != null ? "universe" : "similar"
+  );
   const [refreshBio, setRefreshBio] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
@@ -390,6 +411,7 @@ export default function SeriesFranchisePage({
           franchiseId,
           section: section as import("../../moviesRoute").MoviesSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
+          universeId,
         },
         true
       );
@@ -402,10 +424,25 @@ export default function SeriesFranchisePage({
         seasonId,
         section,
         overviewTab: section === "overview" ? overviewTab : undefined,
+        universeId,
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, section, overviewTab, isMovies]);
+  }, [
+    franchiseId,
+    subseriesId,
+    seasonId,
+    section,
+    overviewTab,
+    isMovies,
+    universeId,
+  ]);
+
+  useEffect(() => {
+    if (universeId != null && overviewTab === "related") {
+      setRelatedTab("universe");
+    }
+  }, [universeId, overviewTab]);
 
   // Auto-fetch TMDb metadata on first visit — debounce so quick franchise
   // switches don't pile up long-running refreshes that starve the API.
@@ -596,8 +633,15 @@ export default function SeriesFranchisePage({
             id: m.path || `movie-${i}`,
             title: m.title,
             cover_url: m.cover_url,
+            portrait_url:
+              (m as { portrait_url?: string | null }).portrait_url ||
+              m.cover_url ||
+              null,
+            landscape_url:
+              (m as { landscape_url?: string | null }).landscape_url || null,
             banner_url:
               (m as { banner_url?: string | null }).banner_url ||
+              (m as { landscape_url?: string | null }).landscape_url ||
               m.cover_url ||
               null,
             logo_url: (m as { logo_url?: string | null }).logo_url || null,
@@ -884,8 +928,66 @@ export default function SeriesFranchisePage({
   }, [data, navSections]);
 
   const era = currentAboutEra ?? data?.eras?.[0];
+  const listedLangs = useMemo(() => {
+    if (!data) return [] as string[];
+    const fromOpts = (data.language_options || [])
+      .filter((o) => o.selected)
+      .map((o) => o.code);
+    if (fromOpts.length) return fromOpts;
+    if (data.languages?.length) return [...data.languages];
+    if (data.origin_language) return [data.origin_language];
+    return [];
+  }, [data]);
+
+  const logosSwitchable = Boolean(data?.logos_switchable);
+  const logoByLanguage = data?.logo_by_language || {};
+
+  const storageScope = `${isMovies ? "movies" : "series"}:${franchiseId}`;
+  const [activeLanguage, setActiveLanguage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!listedLangs.length) {
+      setActiveLanguage(null);
+      return;
+    }
+    const stored = readStoredLanguage(storageScope);
+    const match = stored
+      ? listedLangs.find((c) => c.toLowerCase() === stored.toLowerCase())
+      : null;
+    const next =
+      match ||
+      (data?.origin_language &&
+      listedLangs.some(
+        (c) => c.toLowerCase() === data.origin_language!.toLowerCase()
+      )
+        ? data.origin_language
+        : listedLangs[0]);
+    setActiveLanguage(next);
+  }, [storageScope, listedLangs, data?.origin_language]);
+
+  const selectLanguage = useCallback(
+    (code: string) => {
+      setActiveLanguage(code);
+      writeStoredLanguage(storageScope, code);
+    },
+    [storageScope]
+  );
+
+  const langLogo =
+    (activeLanguage && logoByLanguage[activeLanguage]) ||
+    (activeLanguage
+      ? Object.entries(logoByLanguage).find(
+          ([k]) => k.toLowerCase() === activeLanguage.toLowerCase()
+        )?.[1]
+      : null) ||
+    null;
+
   const logoSrc =
-    era?.logo_url || data?.logo_url || shell?.logo_url || null;
+    langLogo ||
+    era?.logo_url ||
+    data?.logo_url ||
+    shell?.logo_url ||
+    null;
   const iconSrc =
     era?.icon_url || data?.icon_url || shell?.icon_url || null;
   if (logoSrc) cachedLogoRef.current = logoSrc;
@@ -1454,15 +1556,56 @@ export default function SeriesFranchisePage({
           <nav className="artist-page__subtabs artist-page__related-subtabs">
             {(
               [
-                ["creator", isMovies ? "SAME CREW" : "SAME AUTHOR", data?.related?.creator_count ?? data?.related?.creator?.length ?? 0],
-                ["similar", isMovies ? "SIMILAR" : "SIMILAR SERIES", data?.related?.similar_count ?? data?.related?.similar?.length ?? 0],
+                ...(data?.universe &&
+                (data.related?.universe_count ??
+                  data.related?.universe?.length ??
+                  0) > 0
+                  ? ([
+                      [
+                        "universe",
+                        data.universe.name.toLocaleUpperCase(),
+                        data.related?.universe_count ??
+                          data.related?.universe?.length ??
+                          0,
+                      ],
+                    ] as const)
+                  : []),
+                [
+                  "creator",
+                  isMovies ? "SAME DIRECTOR" : "SAME AUTHOR",
+                  data?.related?.creator_count ??
+                    data?.related?.creator?.length ??
+                    0,
+                ],
+                [
+                  "similar",
+                  isMovies ? "SIMILAR MOVIES" : "SIMILAR SERIES",
+                  data?.related?.similar_count ??
+                    data?.related?.similar?.length ??
+                    0,
+                ],
               ] as const
             ).map(([id, label, count]) => (
               <button
                 key={id}
                 type="button"
                 className={relatedTab === id ? "active" : ""}
-                onClick={() => setRelatedTab(id)}
+                onClick={() => {
+                  setRelatedTab(id);
+                  if (id === "universe" && data?.universe?.id != null) {
+                    onNavigate({
+                      section: "overview",
+                      overviewTab: "related",
+                      universeId: data.universe.id,
+                    });
+                  } else if (universeId != null) {
+                    onNavigate({
+                      section: "overview",
+                      overviewTab: "related",
+                      universeId: undefined,
+                    });
+                  }
+                }}
               >
                 <span>
                   {label}
@@ -1535,6 +1678,9 @@ export default function SeriesFranchisePage({
             onWriter={(name) =>
               onBrowseCatalog?.({ mode: "writer", writer: name })
             }
+            activeLanguage={activeLanguage}
+            logosSwitchable={logosSwitchable}
+            onLanguageSelect={selectLanguage}
           />
         ) : null}
 
@@ -1546,6 +1692,7 @@ export default function SeriesFranchisePage({
             languages={data.languages}
             languageOptions={data.language_options}
             originLanguage={data.origin_language}
+            activeLanguage={activeLanguage}
             subseries={subseriesList}
             castSubFilter={castSubFilter}
             tab={castTab}
@@ -1569,20 +1716,85 @@ export default function SeriesFranchisePage({
         ) : null}
 
         {data && section === "overview" && overviewTab === "related" ? (
-          <SeriesRelatedPanel
-            franchiseId={sharedSeries ? seriesFranchiseId : franchiseId}
-            creator={data.related?.creator || []}
-            similar={data.related?.similar || []}
-            tab={relatedTab}
-            orientation={
-              cardOrientation === "badge" ? "banner" : cardOrientation
-            }
-            tmdbKind={isMovies && !sharedSeries ? "movie" : "tv"}
-            isAdmin={isAdmin && !isMovies}
-            addOpen={addRelatedOpen}
-            onAddClose={() => setAddRelatedOpen(false)}
-            onDataChanged={() => void load()}
-          />
+          relatedTab === "universe" ? (
+            <SeriesMediaGrid
+              items={(data.related?.universe || []).map((u) => {
+                const leaf = u.leaf_id || u.id || "";
+                const fid = u.franchise_id || "";
+                return {
+                  id: `${u.module}:${fid}:${leaf}`,
+                  title: u.title || u.name || "Untitled",
+                  cover_url: u.cover_url,
+                  portrait_url: u.portrait_url || u.cover_url,
+                  landscape_url: u.landscape_url,
+                  banner_url: u.banner_url || u.landscape_url,
+                  logo_url: u.logo_url,
+                  date_iso: u.date_iso,
+                  date_label: u.display_date || u.date_iso || null,
+                  display_date: u.display_date,
+                  path: u.folder_path,
+                  universe_module: u.module,
+                  universe_franchise_id: fid,
+                  universe_leaf_id: leaf,
+                };
+              })}
+              emptyMessage="No universe members yet."
+              cardLayout={releaseCardLayout}
+              coverAspect="portrait"
+              onOpen={(item) => {
+                const mod = item.universe_module || (isMovies ? "movies" : "series");
+                const fid = item.universe_franchise_id || franchiseId;
+                const leaf = item.universe_leaf_id || item.id;
+                const uid = data.universe?.id;
+                if (mod === "movies") {
+                  if (isMovies) {
+                    onNavigate({
+                      subseriesId: leaf,
+                      seasonId: undefined,
+                      section: "overview",
+                      universeId: uid,
+                    });
+                  } else {
+                    onOpenMoviesFranchise?.(fid, leaf, uid);
+                  }
+                  return;
+                }
+                if (isMovies) {
+                  saveSeriesEntryReferrer({
+                    kind: "movies",
+                    franchiseId,
+                    section: "overview",
+                    overviewTab: "related",
+                    universeId: uid,
+                  });
+                  onOpenSeriesFranchise?.(fid, leaf, uid);
+                  return;
+                }
+                onNavigate({
+                  franchiseId: fid,
+                  subseriesId: leaf === fid ? undefined : leaf,
+                  seasonId: undefined,
+                  section: "overview",
+                  universeId: uid,
+                });
+              }}
+            />
+          ) : (
+            <SeriesRelatedPanel
+              franchiseId={sharedSeries ? seriesFranchiseId : franchiseId}
+              creator={data.related?.creator || []}
+              similar={data.related?.similar || []}
+              tab={relatedTab}
+              orientation={
+                cardOrientation === "badge" ? "banner" : cardOrientation
+              }
+              tmdbKind={isMovies && !sharedSeries ? "movie" : "tv"}
+              isAdmin={isAdmin && !isMovies}
+              addOpen={addRelatedOpen}
+              onAddClose={() => setAddRelatedOpen(false)}
+              onDataChanged={() => void load()}
+            />
+          )
         ) : null}
 
         {section === "audio" ? (

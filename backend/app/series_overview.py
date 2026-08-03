@@ -468,11 +468,20 @@ def _enrich_related_cards(
                     return nested
         return None
 
+    from app.series_index import (
+        _series_folder_banner,
+        _series_folder_cover,
+        _series_folder_landscape,
+    )
+    from app.series_paths import find_logo_file
+
     out = []
     for e in entries:
         path = e.get("path") or ""
         folder = media_root / path.replace("\\", "/")
-        cover = _folder_cover(folder, media_root) if folder.is_dir() else None
+        cover = None
+        portrait = None
+        landscape = None
         banner = None
         logo = None
         open_url = None
@@ -481,32 +490,47 @@ def _enrich_related_cards(
         duration_sec = e.get("duration_sec")
         kind = (e.get("kind") or "").casefold()
         if folder.is_dir():
-            art = _find_artwork_subdir(folder)
-            if art:
-                for stem in (
-                    "cover - banner",
-                    "wallpaper - landscape",
-                    COVER_FRONT_STEM,
-                ):
-                    f = _artwork_file(art, stem)
-                    if f:
-                        banner = _media_url(f, media_root)
-                        break
-                logo_f = None
-                try:
-                    for f in art.iterdir():
-                        if (
-                            f.is_file()
-                            and f.suffix.lower() in IMAGE_EXTS
-                            and "logo" in f.stem.casefold()
-                            and "collapsed" not in f.stem.casefold()
-                        ):
-                            logo_f = f
+            if kind == "movie":
+                portrait = _series_folder_cover(folder, media_root) or _folder_cover(
+                    folder, media_root
+                )
+                landscape = _series_folder_landscape(folder, media_root)
+                banner = (
+                    _series_folder_banner(folder, media_root)
+                    or landscape
+                    or portrait
+                )
+                cover = portrait or landscape or _folder_cover(folder, media_root)
+                logo_url, _icon = find_logo_file(folder, media_root)
+                logo = logo_url
+            else:
+                cover = _folder_cover(folder, media_root)
+                art = _find_artwork_subdir(folder)
+                if art:
+                    for stem in (
+                        "cover - banner",
+                        "wallpaper - landscape",
+                        COVER_FRONT_STEM,
+                    ):
+                        f = _artwork_file(art, stem)
+                        if f:
+                            banner = _media_url(f, media_root)
                             break
-                except OSError:
-                    pass
-                if logo_f:
-                    logo = _media_url(logo_f, media_root)
+                    logo_f = None
+                    try:
+                        for f in art.iterdir():
+                            if (
+                                f.is_file()
+                                and f.suffix.lower() in IMAGE_EXTS
+                                and "logo" in f.stem.casefold()
+                                and "collapsed" not in f.stem.casefold()
+                            ):
+                                logo_f = f
+                                break
+                    except OSError:
+                        pass
+                    if logo_f:
+                        logo = _media_url(logo_f, media_root)
             target = None
             if kind == "movie":
                 target = _first_file(folder, VIDEO_EXTS)
@@ -551,7 +575,9 @@ def _enrich_related_cards(
             {
                 **e,
                 "cover_url": cover,
-                "banner_url": banner or cover,
+                "portrait_url": portrait or cover,
+                "landscape_url": landscape,
+                "banner_url": banner or landscape or cover,
                 "logo_url": logo,
                 "open_url": open_url,
                 "open_mode": open_mode,
@@ -1036,6 +1062,43 @@ def build_series_overview(
                 },
             )
 
+    from app.language_logos import resolve_language_logos
+
+    child_dirs: list = []
+    for s in detail.get("subseries") or []:
+        fp = (s.get("folder_path") or "").replace("\\", "/")
+        if fp:
+            child_dirs.append(root / fp)
+    child_dirs.sort(key=lambda p: p.name.casefold())
+
+    lang_logos = resolve_language_logos(
+        franchise_dir,
+        root,
+        listed_languages=list(selected_langs or []),
+        child_folders=child_dirs,
+        child_default_only=True,
+    )
+    logo_url = lang_logos.get("logo_url") or logo_url
+    if local_eras and logo_url:
+        local_eras[0] = {
+            **local_eras[0],
+            "logo_url": logo_url,
+        }
+
+    from app.universes import (
+        expand_universe_cards,
+        filter_similar_against_universe,
+        universe_for_franchise,
+    )
+
+    universe = universe_for_franchise(db, "series", detail.get("id") or franchise_id)
+    similar_cards = filter_similar_against_universe(
+        db, "series", detail.get("id") or franchise_id, similar_cards
+    )
+    universe_cards = (
+        expand_universe_cards(db, universe["id"]) if universe else []
+    )
+
     return {
         "id": detail["id"],
         "ser_id": row.ser_id,
@@ -1064,6 +1127,8 @@ def build_series_overview(
         "eras": local_eras,
         "logo_url": logo_url,
         "icon_url": icon_url,
+        "logo_by_language": lang_logos.get("logo_by_language") or {},
+        "logos_switchable": bool(lang_logos.get("logos_switchable")),
         "cast": cast,
         "links": links_payload,
         "subseries": subseries_cards,
@@ -1081,7 +1146,10 @@ def build_series_overview(
             "similar": similar_cards,
             "creator_count": len(creator_cards),
             "similar_count": len(similar_cards),
+            "universe": universe_cards,
+            "universe_count": len(universe_cards),
         },
+        "universe": universe,
         "metadata_refreshed_at": row.ser_metadata_refreshed_at,
         "needs_metadata": not bool(row.ser_metadata_refreshed_at),
     }

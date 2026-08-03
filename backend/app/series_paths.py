@@ -135,7 +135,13 @@ def find_badge_file(folder: Path, media_root: Path) -> str | None:
 
 
 def find_logo_file(folder: Path, media_root: Path) -> tuple[str | None, str | None]:
-    """Return (logo_url, icon_url) from renders / artwork."""
+    """Return (logo_url, icon_url) from renders / artwork.
+
+    Prefers exact stem ``logo`` over other logo* files. Language variants
+    (``logo - japanese``) are not preferred here — use ``language_logos``.
+    """
+    from app.language_logos import resolve_language_logos
+
     logo_url = None
     icon_url = None
     for d in render_search_dirs(folder):
@@ -158,8 +164,11 @@ def find_logo_file(folder: Path, media_root: Path) -> tuple[str | None, str | No
                 continue
             if "icon" in low and not icon_url:
                 icon_url = url
-            if "logo" in low and "collapsed" not in low and not logo_url:
+            if low == "logo" and not logo_url:
                 logo_url = url
+    if not logo_url:
+        resolved = resolve_language_logos(folder, media_root, listed_languages=[])
+        logo_url = resolved.get("logo_url")
     return logo_url, icon_url
 
 

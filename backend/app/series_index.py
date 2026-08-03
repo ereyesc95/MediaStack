@@ -487,7 +487,17 @@ def _list_movies(folder: Path, media_root: Path) -> list[dict]:
                         "title": title or ep.get("title") or entry.name,
                         "date_iso": date_iso,
                         "display_date": format_display_date(date_iso),
-                        "cover_url": _folder_cover(entry, media_root),
+                        "cover_url": _series_folder_cover(entry, media_root)
+                        or _folder_cover(entry, media_root),
+                        "portrait_url": _series_folder_cover(entry, media_root)
+                        or _folder_cover(entry, media_root),
+                        "landscape_url": _series_folder_landscape(
+                            entry, media_root
+                        ),
+                        "banner_url": _series_folder_banner(entry, media_root)
+                        or _series_folder_landscape(entry, media_root)
+                        or _series_folder_cover(entry, media_root)
+                        or _folder_cover(entry, media_root),
                         "folder_path": entry.relative_to(media_root).as_posix(),
                         "kind": "movie",
                     }
@@ -875,6 +885,17 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     from app.artwork_stems import COVER_BACK_STEM, _media_file_in_artwork
 
     logo_url, icon_url = find_logo_file(folder, root)
+    from app.language_logos import _scan_folder_logos
+
+    scanned = _scan_folder_logos(folder, root)
+    logo_assets = {
+        "default": scanned.get("default"),
+        "any": scanned.get("any"),
+        "variants": scanned.get("by_token") or {},
+    }
+    # Prefer exact default when present
+    if scanned.get("default"):
+        logo_url = scanned["default"]
     photocards = resolve_series_photocards(folder, root)
     cover_front = _series_folder_cover(folder, root)
     cover_landscape = _series_folder_landscape(folder, root)
@@ -894,6 +915,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "cover_back_url": cover_back,
         "logo_url": logo_url,
         "icon_url": icon_url,
+        "logo_assets": logo_assets,
         "badge_url": badge_url,
         "photocards": photocards,
         "has_gallery": _has_gallery(folder),

@@ -1,4 +1,4 @@
-import { IconMediaSeries, IconSeriesScope } from "../MenuIcons";
+import { IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import type { SeriesCatalogScope } from "./SeriesBrowse";
 
 type Props = {
@@ -7,31 +7,60 @@ type Props = {
   className?: string;
   /** Secondary scope label when not Groups (default Shows; Movies uses Films). */
   itemsLabel?: string;
+  /** When true, cycle includes Universes as a third mode. */
+  hasUniverses?: boolean;
 };
 
-/** Single control that flips between Groups and Shows/Films (like Cover/Banner). */
+const ORDER_BASE: SeriesCatalogScope[] = ["franchises", "shows"];
+const ORDER_WITH_UNI: SeriesCatalogScope[] = [
+  "franchises",
+  "shows",
+  "universes",
+];
+
+/** Single control that cycles Groups → Shows/Films → Universes (like Cover/Banner). */
 export default function CatalogScopeToggle({
   value,
   onChange,
   className = "",
   itemsLabel = "SHOWS",
+  hasUniverses = false,
 }: Props) {
-  const isGroups = value === "franchises";
-  const items = itemsLabel.toLocaleUpperCase();
+  const order = hasUniverses ? ORDER_WITH_UNI : ORDER_BASE;
+  const idx = Math.max(0, order.indexOf(value === "universes" && !hasUniverses ? "franchises" : value));
+  const current = order[idx] ?? "franchises";
+  const next = order[(idx + 1) % order.length] ?? "franchises";
+
+  const label =
+    current === "franchises"
+      ? "GROUPS"
+      : current === "universes"
+        ? "UNIVERSES"
+        : itemsLabel.toLocaleUpperCase();
+
+  const title =
+    next === "franchises"
+      ? "Switch to Groups"
+      : next === "universes"
+        ? "Switch to Universes"
+        : `Switch to ${itemsLabel}`;
+
   return (
     <button
       type="button"
       className={`catalog-scope-toggle catalog-scope-toggle--switch ${className}`.trim()}
-      aria-label={isGroups ? "Groups view" : `${itemsLabel} view`}
-      title={isGroups ? `Switch to ${itemsLabel}` : "Switch to Groups"}
-      onClick={() => onChange(isGroups ? "shows" : "franchises")}
+      aria-label={label}
+      title={title}
+      onClick={() => onChange(next)}
     >
-      {isGroups ? (
+      {current === "franchises" ? (
         <IconSeriesScope className="catalog-scope-toggle__icon" />
+      ) : current === "universes" ? (
+        <IconUniverse className="catalog-scope-toggle__icon" />
       ) : (
         <IconMediaSeries className="catalog-scope-toggle__icon" />
       )}
-      {isGroups ? "GROUPS" : items}
+      {label}
     </button>
   );
 }

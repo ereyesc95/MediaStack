@@ -157,16 +157,27 @@ def patch_film_about(
 def save_film_trailer_db(db: Session, film_id: str, url: str | None) -> str | None:
     from app.movies_trailer import save_film_trailer_url
 
-    row, meta, films_meta, film_meta, fid, film_dir = _resolve_film_row(
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(
         db, film_id
     )
-    saved = save_film_trailer_url(film_dir, url)
+    saved = save_film_trailer_url(None, url)
     film_meta["trailer_url"] = saved
     films_meta[fid] = film_meta
     meta["films"] = films_meta
     _save_meta(row, meta)
     db.commit()
     return saved
+
+
+def get_film_trailer_db(db: Session, film_id: str) -> str | None:
+    try:
+        _row, _meta, _films_meta, film_meta, _fid, _film_dir = _resolve_film_row(
+            db, film_id
+        )
+    except Exception:
+        return None
+    url = film_meta.get("trailer_url")
+    return url.strip() if isinstance(url, str) and url.strip() else None
 
 
 def _load_film_cast(film_meta: dict) -> dict:

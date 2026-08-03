@@ -14,6 +14,10 @@ type Props = {
   onPublisher?: (name: string) => void;
   onCountry?: (country: { id?: number; name: string; iso?: string | null }) => void;
   onWriter?: (name: string) => void;
+  /** Active language for logo / cast reordering. */
+  activeLanguage?: string | null;
+  logosSwitchable?: boolean;
+  onLanguageSelect?: (code: string) => void;
 };
 
 function normalizeBio(bio: string): string {
@@ -55,16 +59,26 @@ function originLabel(country: string | null | undefined) {
 
 function MetaValue({
   onClick,
+  active,
   children,
 }: {
   onClick?: () => void;
+  active?: boolean;
   children: ReactNode;
 }) {
   if (!onClick) {
-    return <span className="artist-about__pill artist-about__pill--static">{children}</span>;
+    return (
+      <span className="artist-about__pill artist-about__pill--static">
+        {children}
+      </span>
+    );
   }
   return (
-    <button type="button" className="artist-about__pill" onClick={onClick}>
+    <button
+      type="button"
+      className={`artist-about__pill${active ? " artist-about__pill--active" : ""}`}
+      onClick={onClick}
+    >
       {children}
     </button>
   );
@@ -80,6 +94,9 @@ export default function SeriesAbout({
   onPublisher,
   onCountry,
   onWriter,
+  activeLanguage,
+  logosSwitchable,
+  onLanguageSelect,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
@@ -346,7 +363,21 @@ export default function SeriesAbout({
                             is_origin: code === data.origin_language,
                           }))
                     ).map((o) => (
-                      <MetaValue key={o.code}>
+                      <MetaValue
+                        key={o.code}
+                        active={
+                          Boolean(
+                            activeLanguage &&
+                              activeLanguage.toLowerCase() ===
+                                o.code.toLowerCase()
+                          )
+                        }
+                        onClick={
+                          logosSwitchable && onLanguageSelect
+                            ? () => onLanguageSelect(o.code)
+                            : undefined
+                        }
+                      >
                         {o.label.replace(/\s*\(origin\)\s*$/i, "")}
                       </MetaValue>
                     ))}

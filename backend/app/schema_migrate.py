@@ -256,3 +256,16 @@ def migrate_schema(eng: Engine) -> None:
             ):
                 if col not in cols:
                     conn.execute(text(f'ALTER TABLE series ADD COLUMN "{col}" {typ}'))
+
+        # Start clean: drop legacy movie-only universe tables (replaced by shared universes)
+        for legacy in ("movie_universe_members", "movie_universes"):
+            if legacy in tables:
+                conn.execute(text(f'DROP TABLE IF EXISTS "{legacy}"'))
+        # Drop obsolete FK column on movie_works if present
+        if "movie_works" in tables:
+            mwk_cols = {c["name"] for c in inspect(eng).get_columns("movie_works")}
+            if "mwk_universe_id" in mwk_cols:
+                try:
+                    conn.execute(text("ALTER TABLE movie_works DROP COLUMN mwk_universe_id"))
+                except Exception:
+                    pass

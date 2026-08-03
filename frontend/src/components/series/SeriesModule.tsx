@@ -3,6 +3,8 @@ import {
   fetchSeriesCatalog,
   fetchSeriesDashboard,
   fetchSeriesFilterOptions,
+  fetchUniverseLanding,
+  fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
 import {
@@ -15,6 +17,7 @@ import {
   getSeriesEntryReferrer,
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
+  pushSeriesRoute,
   parseSeriesCatalogPath,
   parseSeriesRootPath,
 } from "../../seriesRoute";
@@ -26,14 +29,16 @@ import type {
   SeriesFranchiseCard,
   SeriesOverviewTab,
   SeriesSection,
+  Universe,
 } from "../../types";
 import {
   isMobilePortraitLayout,
   useDeviceLayout,
 } from "../../usePhoneLayout";
+import AddToUniverseModal from "../AddToUniverseModal";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
-import { IconMediaSeries, IconSeriesScope } from "../MenuIcons";
+import { IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "./CatalogScopeToggle";
 import SeriesBrowse from "./SeriesBrowse";
@@ -65,12 +70,14 @@ type Props = {
   seasonId?: string;
   section?: SeriesSection;
   overviewTab?: SeriesOverviewTab;
+  universeId?: number;
   onNavigate: (patch: {
     franchiseId?: string;
     subseriesId?: string;
     seasonId?: string;
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
+    universeId?: number;
   }) => void;
   onOpenMusicRelease?: (
     bandId: number,
@@ -86,7 +93,8 @@ type Props = {
   onOpenMoviesFranchise?: (
     franchiseId: string,
     filmId?: string,
-    section?: string
+    section?: string,
+    universeId?: number
   ) => void;
 };
 
@@ -108,6 +116,7 @@ export default function SeriesModule({
   seasonId,
   section = "overview",
   overviewTab = "about",
+  universeId,
   onNavigate,
   onOpenMusicRelease,
   onOpenArtist,
@@ -129,9 +138,11 @@ export default function SeriesModule({
   const [dashLoading, setDashLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
-  const [catalogScope, setCatalogScope] = useState<"franchises" | "shows">(
+  const [catalogScope, setCatalogScope] = useState<"franchises" | "shows" | "universes">(
     "franchises"
   );
+  const [universes, setUniverses] = useState<Universe[]>([]);
+  const [addUniverseOpen, setAddUniverseOpen] = useState(false);
   const [franchiseShell, setFranchiseShell] =
     useState<SeriesFranchiseShell | null>(null);
   const [search, setSearch] = useState("");
@@ -215,7 +226,45 @@ export default function SeriesModule({
     void loadCatalog();
     void loadDashboard();
     void loadFilters();
+    void fetchUniverses()
+      .then((res) => setUniverses(res.universes || []))
+      .catch(() => setUniverses([]));
   }, [loadCatalog, loadDashboard, loadFilters]);
+
+  const openUniverseLanding = useCallback(
+    (id: number) => {
+      void fetchUniverseLanding(id, "series")
+        .then((landing) => {
+          setEntrySource("catalog");
+          setTab("catalog");
+          if (landing.module === "series") {
+            pushSeriesRoute({
+              franchiseId: landing.franchise_id,
+              section: "overview",
+              overviewTab: "related",
+              universeId: id,
+            });
+            onNavigate({
+              franchiseId: landing.franchise_id,
+              subseriesId: undefined,
+              seasonId: undefined,
+              section: "overview",
+              overviewTab: "related",
+              universeId: id,
+            });
+            return;
+          }
+          onOpenMoviesFranchise?.(
+            landing.franchise_id,
+            undefined,
+            "overview",
+            id
+          );
+        })
+        .catch(() => {});
+    },
+    [onNavigate, onOpenMoviesFranchise]
+  );
 
   useEffect(() => {
     if (franchiseId) {
@@ -386,6 +435,7 @@ export default function SeriesModule({
           subseriesId={subseriesId}
           seasonId={seasonId}
           section={section}
+          universeId={universeId}
           busy={busy}
           isAdmin={isAdmin}
           userId={userId}
@@ -394,7 +444,20 @@ export default function SeriesModule({
           onChooseSource={onChooseSource}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
-          onBack={backFromSubseries}
+          onBack={() => {
+            if (universeId != null) {
+              onNavigate({
+                franchiseId,
+                subseriesId: undefined,
+                seasonId: undefined,
+                section: "overview",
+                overviewTab: "related",
+                universeId,
+              });
+              return;
+            }
+            backFromSubseries();
+          }}
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}
@@ -407,14 +470,50 @@ export default function SeriesModule({
                 /* fall through — keep series movies tab usable offline */
               });
           }}
-          onNavigate={(patch) =>
+          onOpenUniverseLeaf={(leaf) => {
+            if (leaf.module === "movies") {
+              onOpenMoviesFranchise?.(
+                leaf.franchiseId,
+                leaf.leafId,
+                "overview",
+                universeId
+              );
+              return;
+            }
+            onNavigate({
+              franchiseId: leaf.franchiseId,
+              subseriesId:
+                leaf.leafId === leaf.franchiseId ? undefined : leaf.leafId,
+              seasonId: undefined,
+              section: "overview",
+              overviewTab: "about",
+              universeId,
+            });
+          }}
+          onOpenUniverseParent={() => {
+            if (universeId == null) return;
             onNavigate({
               franchiseId,
+              subseriesId: undefined,
+              seasonId: undefined,
+              section: "overview",
+              overviewTab: "related",
+              universeId,
+            });
+          }}
+          onNavigate={(patch) =>
+            onNavigate({
+              franchiseId:
+                "franchiseId" in patch && patch.franchiseId
+                  ? patch.franchiseId
+                  : franchiseId,
               subseriesId:
                 "subseriesId" in patch ? patch.subseriesId : subseriesId,
               seasonId: "seasonId" in patch ? patch.seasonId : seasonId,
               section: patch.section ?? section,
               overviewTab: overviewTab,
+              universeId:
+                "universeId" in patch ? patch.universeId : universeId,
             })
           }
         />
@@ -431,6 +530,7 @@ export default function SeriesModule({
           seasonId={seasonId}
           section={section}
           overviewTab={overviewTab}
+          universeId={universeId}
           shell={franchiseShell}
           franchises={franchises}
           busy={busy}
@@ -445,6 +545,14 @@ export default function SeriesModule({
           onEditProfile={onEditProfile}
           onBack={backFromDeepLink}
           backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
+          menuExtra={
+            isAdmin ? (
+              <button type="button" onClick={() => setAddUniverseOpen(true)}>
+                <IconUniverse className="menu-item-icon" />
+                Add to universe
+              </button>
+            ) : null
+          }
           onOpenFranchise={(id) => {
             const card = franchises.find((f) => f.id === id);
             openFranchise(
@@ -473,6 +581,9 @@ export default function SeriesModule({
                 /* fall through — keep series movies tab usable offline */
               });
           }}
+          onOpenMoviesFranchise={(fid, filmId, uid) => {
+            onOpenMoviesFranchise?.(fid, filmId, "overview", uid);
+          }}
           onShellUpdate={(next) => {
             setFranchiseShell((prev) => {
               if (
@@ -488,15 +599,31 @@ export default function SeriesModule({
           }}
           onNavigate={(patch) =>
             onNavigate({
-              franchiseId,
+              franchiseId:
+                "franchiseId" in patch && patch.franchiseId
+                  ? patch.franchiseId
+                  : franchiseId,
               subseriesId:
                 "subseriesId" in patch ? patch.subseriesId : subseriesId,
               seasonId: "seasonId" in patch ? patch.seasonId : seasonId,
               section: patch.section ?? section,
               overviewTab: patch.overviewTab ?? overviewTab,
+              universeId:
+                "universeId" in patch ? patch.universeId : universeId,
             })
           }
         />
+        {addUniverseOpen && isAdmin ? (
+          <AddToUniverseModal
+            module="series"
+            franchiseId={franchiseId}
+            onClose={() => setAddUniverseOpen(false)}
+            onSaved={() => {
+              setAddUniverseOpen(false);
+              /* overview reload via franchise remount key not needed — modal closes */
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -567,6 +694,7 @@ export default function SeriesModule({
               <CatalogScopeToggle
                 value={catalogScope}
                 onChange={setCatalogScope}
+                hasUniverses={universes.length > 0}
               />
             ) : null}
             {tab === "catalog" && onSetOrientation ? (
@@ -588,18 +716,31 @@ export default function SeriesModule({
                 portraitMenuChrome && tab === "catalog" ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      setCatalogScope(
-                        catalogScope === "franchises" ? "shows" : "franchises"
-                      )
-                    }
+                    onClick={() => {
+                      const order: Array<"franchises" | "shows" | "universes"> =
+                        universes.length > 0
+                          ? ["franchises", "shows", "universes"]
+                          : ["franchises", "shows"];
+                      const current =
+                        catalogScope === "universes" && universes.length === 0
+                          ? "franchises"
+                          : catalogScope;
+                      const i = Math.max(0, order.indexOf(current));
+                      setCatalogScope(order[(i + 1) % order.length]!);
+                    }}
                   >
                     {catalogScope === "franchises" ? (
                       <IconSeriesScope className="menu-item-icon" />
+                    ) : catalogScope === "universes" ? (
+                      <IconUniverse className="menu-item-icon" />
                     ) : (
                       <IconMediaSeries className="menu-item-icon" />
                     )}
-                    {catalogScope === "franchises" ? "Groups" : "Shows"}
+                    {catalogScope === "franchises"
+                      ? "Groups"
+                      : catalogScope === "universes"
+                        ? "Universes"
+                        : "Shows"}
                   </button>
                 ) : null
               }
@@ -615,6 +756,7 @@ export default function SeriesModule({
           <SeriesHome
             data={dashboard}
             loading={dashLoading}
+            universes={universes}
             onOpenFranchise={(id) => {
               const card = franchises.find((f) => f.id === id);
               openFranchise(
@@ -647,6 +789,7 @@ export default function SeriesModule({
                 "home"
               );
             }}
+            onOpenUniverse={openUniverseLanding}
             onGenre={(id) => {
               setTab("catalog");
               pushSeriesCatalogRoute();
@@ -678,6 +821,7 @@ export default function SeriesModule({
       ) : (
         <SeriesBrowse
           franchises={franchises}
+          universes={universes}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
@@ -714,6 +858,7 @@ export default function SeriesModule({
           onSubgenreIdChange={setSubgenreId}
           onPublisherChange={setPublisher}
           onWriterChange={setWriter}
+          onOpenUniverse={openUniverseLanding}
           onOpen={(id, nextSubseriesId, shell) =>
             openFranchise(id, nextSubseriesId, shell)
           }

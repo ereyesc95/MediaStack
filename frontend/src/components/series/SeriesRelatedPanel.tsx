@@ -6,7 +6,8 @@ import ArtistCard from "../ArtistCard";
 import ModalPortal from "../ModalPortal";
 import ConfirmDialog from "../ConfirmDialog";
 
-export type SeriesRelatedTab = "creator" | "similar";
+export type SeriesRelatedTab = "universe" | "creator" | "similar";
+type SeriesRelatedTmdbTab = "creator" | "similar";
 
 type Props = {
   franchiseId: string;
@@ -47,7 +48,7 @@ function AddRelatedModal({
   onSaved,
 }: {
   franchiseId: string;
-  bucket: SeriesRelatedTab;
+  bucket: SeriesRelatedTmdbTab;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -156,7 +157,7 @@ export default function SeriesRelatedPanel({
 }: Props) {
   const isPhone = usePhoneLayout();
   const items = useMemo(
-    () => (tab === "creator" ? creator : similar),
+    () => (tab === "creator" ? creator : tab === "similar" ? similar : []),
     [tab, creator, similar]
   );
   const [removeTarget, setRemoveTarget] = useState<SeriesRelatedShow | null>(
@@ -166,7 +167,7 @@ export default function SeriesRelatedPanel({
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
 
   const confirmRemove = async () => {
-    if (!removeTarget) return;
+    if (!removeTarget || tab === "universe") return;
     const id = removeTarget.id ?? removeTarget.tmdb_id;
     if (id == null) return;
     setRemoveBusy(true);
@@ -180,6 +181,10 @@ export default function SeriesRelatedPanel({
       setRemoveBusy(false);
     }
   };
+
+  if (tab === "universe") {
+    return null;
+  }
 
   if (!items.length && !addOpen) {
     return (
