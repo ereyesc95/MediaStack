@@ -190,3 +190,10 @@ async def api_tmdb_portrait(
         return await pull_tmdb_portrait(db, universe_id, api_key)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            502,
+            "Couldn't fetch a cover from TMDb right now. Try again in a moment.",
+        ) from exc

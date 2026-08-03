@@ -5,7 +5,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
-from urllib.request import urlopen
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -433,6 +432,11 @@ def universe_member_slugs(db: Session, universe_id: int) -> set[tuple[str, str]]
     }
 
 
+def _norm_title_key(value: str) -> str:
+    """Alphanumeric-only key so ':' vs '-' title variants still match."""
+    return re.sub(r"[^a-z0-9]+", "", (value or "").casefold())
+
+
 def filter_similar_against_universe(
     db: Session,
     module: ModuleKind,
@@ -448,29 +452,41 @@ def filter_similar_against_universe(
         for m in (uni.get("members") or [])
         if m.get("slug")
     }
-    member_names = {uni.get("name", "").casefold()} if uni.get("name") else set()
+    member_name_keys: set[str] = set()
+    if uni.get("name"):
+        member_name_keys.add(_norm_title_key(uni["name"]))
+    for m in uni.get("members") or []:
+        slug = (m.get("slug") or "").strip()
+        if slug:
+            member_name_keys.add(_norm_title_key(slug))
 
     # Also collect leaf titles for loose matching against TMDb similar titles
-    leaf_titles: set[str] = set()
+    leaf_keys: set[str] = set()
     for c in expand_universe_cards(db, uni["id"]):
-        t = (c.get("title") or c.get("name") or "").casefold().strip()
+        t = (c.get("title") or c.get("name") or "").strip()
         if t:
-            leaf_titles.add(t)
+            leaf_keys.add(_norm_title_key(t))
         fid = (c.get("franchise_id") or "").casefold()
         if fid:
             member_slugs.add(fid)
+            member_name_keys.add(_norm_title_key(fid))
 
     out = []
     for item in similar:
-        title = (item.get("title") or item.get("name") or "").casefold().strip()
+        title = (item.get("title") or item.get("name") or "").strip()
+        title_key = _norm_title_key(title)
         sid = str(item.get("id") or item.get("slug") or "").casefold()
-        if title and title in leaf_titles:
+        if title_key and title_key in leaf_keys:
             continue
         if sid and sid in member_slugs:
             continue
-        if title and title in member_names:
+        # Franchise / universe name is a substantial substring of the similar title
+        # (e.g. "Fantastic Beasts: …" vs member "fantastic beasts").
+        if title_key and any(
+            len(mk) >= 8 and (mk in title_key or title_key in mk)
+            for mk in member_name_keys
+        ):
             continue
-        # Match by slug-ish id fields
         local_id = (item.get("local_id") or item.get("franchise_id") or "").casefold()
         if local_id and local_id in member_slugs:
             continue
@@ -480,21 +496,61 @@ def filter_similar_against_universe(
 
 async def pull_tmdb_portrait(db: Session, universe_id: int, api_key: str) -> dict:
     """Search TMDb collection by universe name; save Portrait.png only (no collection id)."""
+    import httpx
+
     from app.services import tmdb
 
     u = db.get(Universe, universe_id)
     if not u:
         raise ValueError("Universe not found")
-    collection_id, _ = await tmdb.search_collection_id(u.uni_name, api_key)
+
+    names_to_try: list[str] = [u.uni_name]
+    for m in _member_rows(db, universe_id):
+        hint = (m.ume_slug or "").replace("-", " ").strip()
+        if hint and hint.casefold() not in {n.casefold() for n in names_to_try}:
+            names_to_try.append(hint)
+
+    collection_id = None
+    last_err: Exception | None = None
+    for name in names_to_try:
+        try:
+            collection_id, _ = await tmdb.search_collection_id(name, api_key)
+        except Exception as exc:  # network / TMDb outages
+            last_err = exc
+            continue
+        if collection_id:
+            break
     if not collection_id:
-        raise ValueError(f"No TMDb collection found for {u.uni_name!r}")
-    data = await tmdb.fetch_collection(collection_id, api_key)
+        if last_err is not None:
+            raise RuntimeError(
+                "Couldn't reach TMDb right now. Try Fetch cover again in a moment."
+            ) from last_err
+        raise ValueError(
+            f"No TMDb collection found for {u.uni_name!r}. "
+            "You can upload a portrait instead."
+        )
+
+    try:
+        data = await tmdb.fetch_collection(collection_id, api_key)
+    except Exception as exc:
+        raise RuntimeError(
+            "Couldn't reach TMDb right now. Try Fetch cover again in a moment."
+        ) from exc
+
     poster_path = data.get("poster_path")
     url = tmdb.image_url(poster_path, "w500")
     if not url:
-        raise ValueError("Collection has no poster")
-    with urlopen(url, timeout=30) as resp:
-        raw = resp.read()
+        raise ValueError("That collection has no poster to fetch.")
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            raw = resp.content
+    except Exception as exc:
+        raise RuntimeError(
+            "Couldn't download the cover image. Try again in a moment."
+        ) from exc
+
     art_url = save_universe_art_bytes(u, "Portrait", raw, suffix=".png")
     overview = (data.get("overview") or "").strip()
     if overview and not u.uni_overview:

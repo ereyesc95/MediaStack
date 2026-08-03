@@ -20,6 +20,24 @@ type Props = {
 
 const ART_KINDS = ["Portrait", "Landscape", "Banner", "Logo"] as const;
 
+function calmErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const trimmed = raw.trim();
+  if (!trimmed) return "Something went wrong. Please try again.";
+  try {
+    const parsed = JSON.parse(trimmed) as { detail?: unknown };
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      return parsed.detail.trim();
+    }
+  } catch {
+    /* plain text */
+  }
+  if (/internal server error/i.test(trimmed)) {
+    return "Couldn't complete that request right now. Please try again in a moment.";
+  }
+  return trimmed;
+}
+
 export default function AddToUniverseModal({
   module,
   franchiseId,
@@ -58,7 +76,7 @@ export default function AddToUniverseModal({
         }
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(calmErrorMessage(e));
       });
     return () => {
       cancelled = true;
@@ -79,7 +97,7 @@ export default function AddToUniverseModal({
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(calmErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -102,7 +120,7 @@ export default function AddToUniverseModal({
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(calmErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -117,7 +135,7 @@ export default function AddToUniverseModal({
       onSaved();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(calmErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -131,7 +149,7 @@ export default function AddToUniverseModal({
       let id = selectedId;
       if (creating) {
         if (!newName.trim()) {
-          setError("Enter a universe name first");
+          setError("Enter a universe name first.");
           setBusy(false);
           return;
         }
@@ -150,7 +168,7 @@ export default function AddToUniverseModal({
       const list = await fetchUniverses();
       setUniverses(list.universes || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(calmErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -159,9 +177,8 @@ export default function AddToUniverseModal({
   return (
     <ModalPortal onClose={onClose}>
       <div
-        className="modal-panel artist-admin-modal"
+        className="modal-panel artist-admin-modal artist-admin-modal--wide add-universe-modal"
         onMouseDown={(e) => e.stopPropagation()}
-        style={{ maxWidth: 440 }}
       >
         <div className="modal-panel-header">
           <h3>Add to universe</h3>
@@ -175,13 +192,17 @@ export default function AddToUniverseModal({
           </button>
         </div>
 
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <p className="modal-notice">{error}</p> : null}
 
         {!creating ? (
           <div className="artist-admin-form">
-            <label>
-              Universe
-              <div ref={listRef} style={{ position: "relative" }}>
+            <label className="artist-admin-form__inline">
+              <span className="artist-admin-form__inline-label">Universe</span>
+              <div
+                ref={listRef}
+                className="artist-admin-form__inline-field"
+                style={{ position: "relative" }}
+              >
                 <input
                   value={query}
                   onChange={(e) => {
@@ -276,43 +297,56 @@ export default function AddToUniverseModal({
           </div>
         ) : (
           <div className="artist-admin-form">
-            <label>
-              Name
+            <label className="artist-admin-form__inline">
+              <span className="artist-admin-form__inline-label">Name</span>
               <input
+                className="artist-admin-form__inline-field"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 disabled={busy}
                 autoFocus
               />
             </label>
-            <label>
-              Overview (optional)
+            <label className="artist-admin-form__inline artist-admin-form__inline--top">
+              <span className="artist-admin-form__inline-label">
+                Overview
+              </span>
               <textarea
+                className="artist-admin-form__inline-field"
                 value={newOverview}
                 onChange={(e) => setNewOverview(e.target.value)}
                 rows={3}
                 disabled={busy}
+                placeholder="Optional"
               />
             </label>
             {ART_KINDS.map((kind) => (
-              <label key={kind}>
-                {kind} (optional)
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={busy}
-                  onChange={(e) =>
-                    setArtFiles((prev) => ({
-                      ...prev,
-                      [kind]: e.target.files?.[0] ?? null,
-                    }))
-                  }
-                />
+              <label key={kind} className="artist-admin-form__inline">
+                <span className="artist-admin-form__inline-label">
+                  {kind}
+                </span>
+                <span className="artist-admin-form__inline-field add-universe-modal__file">
+                  <span className="add-universe-modal__file-label">
+                    {artFiles[kind]?.name || "Choose image…"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="add-universe-modal__file-input"
+                    disabled={busy}
+                    onChange={(e) =>
+                      setArtFiles((prev) => ({
+                        ...prev,
+                        [kind]: e.target.files?.[0] ?? null,
+                      }))
+                    }
+                  />
+                </span>
               </label>
             ))}
             <button
               type="button"
-              className="btn"
+              className="btn btn--small add-universe-modal__back"
               disabled={busy}
               onClick={() => {
                 setCreating(false);
@@ -341,7 +375,7 @@ export default function AddToUniverseModal({
               disabled={busy}
               onClick={() => void pullPoster()}
             >
-              Pull portrait (TMDb)
+              Fetch cover
             </button>
           )}
           {current ? (

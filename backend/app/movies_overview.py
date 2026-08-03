@@ -648,6 +648,10 @@ def build_film_overview(
         )
 
     universe = universe_for_franchise(db, "movies", work_slug)
+    similar = filter_similar_against_universe(db, "movies", work_slug, similar)
+    universe_cards = (
+        expand_universe_cards(db, universe["id"]) if universe else []
+    )
 
     return {
         "id": fid,
@@ -700,6 +704,8 @@ def build_film_overview(
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
+            "universe": universe_cards,
+            "universe_count": len(universe_cards),
         },
         "subseries": [],
         "seasons": [],

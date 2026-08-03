@@ -634,17 +634,25 @@ export default function MoviesModule({
           else backToMoviesCatalog();
         }}
         backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
-        onNavigate={(patch) =>
-          onNavigate({
-            franchiseId:
-              "franchiseId" in patch ? patch.franchiseId : franchiseId,
-            filmId: "filmId" in patch ? patch.filmId : undefined,
+        onNavigate={(patch) => {
+          const next: {
+            franchiseId?: string;
+            filmId?: string;
+            section?: typeof section;
+            overviewTab?: typeof overviewTab;
+            universeId?: number;
+          } = {
             section: patch.section ?? section,
             overviewTab: patch.overviewTab ?? overviewTab,
-            universeId:
-              "universeId" in patch ? patch.universeId : universeId,
-          })
-        }
+          };
+          // Preserve franchise context unless the patch explicitly changes it.
+          if ("franchiseId" in patch) next.franchiseId = patch.franchiseId;
+          else next.franchiseId = franchiseId;
+          if ("filmId" in patch) next.filmId = patch.filmId;
+          if ("universeId" in patch) next.universeId = patch.universeId;
+          else next.universeId = universeId;
+          onNavigate(next);
+        }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
         onImport={onImport}

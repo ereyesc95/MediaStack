@@ -90,6 +90,9 @@ export default function MoviesFranchisePage({
         onBack={onBack}
         backLabel={backLabel}
         onNavigate={(patch) => {
+          // Only forward keys present on the inbound patch. Tab clicks send
+          // { section, overviewTab } only — writing franchiseId: undefined here
+          // made App treat it as "leave franchise" and bounce back to home/catalog.
           const next: {
             franchiseId?: string;
             filmId?: string;
@@ -97,11 +100,11 @@ export default function MoviesFranchisePage({
             overviewTab?: MoviesOverviewTab;
             universeId?: number;
           } = {
-            franchiseId: patch.franchiseId,
-            filmId: patch.subseriesId,
             section: patch.section as MoviesSection | undefined,
             overviewTab: patch.overviewTab as MoviesOverviewTab | undefined,
           };
+          if ("franchiseId" in patch) next.franchiseId = patch.franchiseId;
+          if ("subseriesId" in patch) next.filmId = patch.subseriesId;
           if ("universeId" in patch) next.universeId = patch.universeId;
           onNavigate(next);
         }}

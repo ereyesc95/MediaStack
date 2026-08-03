@@ -2316,7 +2316,9 @@ input {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2329,9 +2331,14 @@ input {
 }
 
 .modal-panel {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   /* No top padding — sticky header must sit flush at the scrollport top
      so scrolled fields cannot paint into a gap above the title. */
   padding: 0 1.25rem 1.25rem;
@@ -2350,8 +2357,10 @@ input {
   z-index: 20;
   margin: 0 -1.25rem 0.75rem;
   padding: 0.7rem 1.25rem 0.5rem;
-  background: var(--bg-elevated);
-  border-radius: var(--radius) var(--radius) 0 0;
+  background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0 0;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
   isolation: isolate;
 }
@@ -6030,11 +6039,14 @@ input {
   flex-shrink: 0;
   margin-top: 0;
   padding: 0.65rem 1.25rem 1.1rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .modal-panel.artist-admin-modal > .error,
+.modal-panel.artist-admin-modal > .modal-notice,
 .modal-panel.artist-admin-modal > .muted,
 .modal-panel.artist-admin-modal > .confirm-dialog__message {
   flex-shrink: 0;
@@ -6071,15 +6083,90 @@ input {
   color: var(--text-muted);
 }
 
+.artist-admin-form__inline {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.75rem !important;
+}
+
+.artist-admin-form__inline--top {
+  align-items: flex-start;
+}
+
+.artist-admin-form__inline-label {
+  flex: 0 0 5.75rem;
+  line-height: 1.2;
+}
+
+.artist-admin-form__inline-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
 .artist-admin-form input,
 .artist-admin-form textarea,
 .artist-admin-form select {
   font-size: 0.85rem;
   color: var(--text);
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   border-radius: 4px;
   padding: 0.4rem 0.5rem;
+}
+
+.add-universe-modal__file {
+  position: relative;
+  display: block;
+}
+
+.add-universe-modal__file-label {
+  display: block;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius);
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-universe-modal__file:hover .add-universe-modal__file-label {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+
+.add-universe-modal__file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.add-universe-modal__back {
+  align-self: flex-start;
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
+
+.modal-notice {
+  color: var(--text-muted);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.modal-panel > .error {
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  font-size: 0.82rem;
 }
 
 .artist-admin-form__section {
@@ -6711,6 +6798,9 @@ input {
 }
 
 .media-release-card--banner {
+  /* Override .media-beat-frame { display: inline-block } so aspect-ratio
+     can size the card when children are absolutely positioned. */
+  display: block;
   aspect-ratio: 2160 / 600;
   width: 100%;
   max-width: 100%;

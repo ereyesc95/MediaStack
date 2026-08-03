@@ -769,7 +769,7 @@ export default function SeriesSubseriesPage({
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, tab, isFilm]);
+  }, [franchiseId, subseriesId, seasonId, tab, isFilm, universeId]);
 
   const seasons: SeriesSeasonCard[] = useMemo(
     () => detail?.seasons || [],

@@ -27,6 +27,23 @@ const API = "/api";
 const FETCH_TIMEOUT_MS = 30_000;
 const LONG_RUNNING_TIMEOUT_MS = 180_000;
 
+async function errorMessageFromResponse(res: Response): Promise<string> {
+  const text = await res.text();
+  let message = text || res.statusText;
+  try {
+    const parsed = JSON.parse(text) as { detail?: unknown };
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      message = parsed.detail.trim();
+    }
+  } catch {
+    /* plain text body */
+  }
+  if (/^internal server error$/i.test(message.trim())) {
+    return "Couldn't complete that request right now. Please try again in a moment.";
+  }
+  return message;
+}
+
 async function request<T>(
   url: string,
   init?: RequestInit,
@@ -53,8 +70,7 @@ async function request<T>(
     window.clearTimeout(timeout);
   }
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
+    throw new Error(await errorMessageFromResponse(res));
   }
   return res.json();
 }
