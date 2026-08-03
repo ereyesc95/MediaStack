@@ -208,14 +208,62 @@ def create_universe(
 def update_universe_overview(
     db: Session, universe_id: int, overview: str | None
 ) -> Universe | None:
+    return update_universe(db, universe_id, overview=overview, set_overview=True)
+
+
+def update_universe(
+    db: Session,
+    universe_id: int,
+    *,
+    name: str | None = None,
+    overview: str | None = None,
+    set_overview: bool = False,
+) -> Universe | None:
     u = db.get(Universe, universe_id)
     if not u:
         return None
-    u.uni_overview = (overview or "").strip() or None
+    if name is not None:
+        cleaned = name.strip()
+        if not cleaned:
+            raise ValueError("Name is required")
+        new_slug = _slugify(cleaned)
+        clash = db.scalar(
+            select(Universe).where(
+                Universe.uni_slug == new_slug,
+                Universe.uni_id != universe_id,
+            )
+        )
+        if clash:
+            raise ValueError(f"Universe {cleaned!r} already exists")
+        old_name = u.uni_name
+        if cleaned != old_name:
+            _rename_universe_art_files(old_name, cleaned)
+            u.uni_name = cleaned
+            u.uni_slug = new_slug
+    if set_overview:
+        u.uni_overview = (overview or "").strip() or None
     u.uni_updated_at = _now()
     db.commit()
     db.refresh(u)
     return u
+
+
+def _rename_universe_art_files(old_name: str, new_name: str) -> None:
+    root = _media_root()
+    folder = universes_dir(root) if root else None
+    if not folder or not folder.is_dir() or not root:
+        return
+    for kind in ART_KINDS:
+        src = _art_file(old_name, kind, root)
+        if not src:
+            continue
+        dest = folder / f"{new_name} - {kind}{src.suffix}"
+        try:
+            if dest.exists() and dest != src:
+                dest.unlink()
+            src.rename(dest)
+        except OSError:
+            pass
 
 
 def link_franchise(
@@ -525,10 +573,7 @@ async def pull_tmdb_portrait(db: Session, universe_id: int, api_key: str) -> dic
             raise RuntimeError(
                 "Couldn't reach TMDb right now. Try Fetch cover again in a moment."
             ) from last_err
-        raise ValueError(
-            f"No TMDb collection found for {u.uni_name!r}. "
-            "You can upload a portrait instead."
-        )
+        raise ValueError("No cover found")
 
     try:
         data = await tmdb.fetch_collection(collection_id, api_key)

@@ -79,25 +79,32 @@ export default function ReleaseAboutEditModal({
               onChange={(e) => setDescription(e.target.value)}
             />
           </label>
-          <label>
-            Subgenres (semicolon-separated)
+          <label className="artist-admin-form__inline">
+            <span className="artist-admin-form__inline-label">Genres</span>
             <input
+              className="artist-admin-form__inline-field"
               type="text"
               value={subgenres}
               onChange={(e) => setSubgenres(e.target.value)}
             />
           </label>
-          <label>
-            Producer
+          <label className="artist-admin-form__inline">
+            <span className="artist-admin-form__inline-label">Producer</span>
             <input
+              className="artist-admin-form__inline-field"
               type="text"
               value={producer}
               onChange={(e) => setProducer(e.target.value)}
             />
           </label>
-          <label>
-            Label
-            <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <label className="artist-admin-form__inline">
+            <span className="artist-admin-form__inline-label">Label</span>
+            <input
+              className="artist-admin-form__inline-field"
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
           </label>
         </div>
 

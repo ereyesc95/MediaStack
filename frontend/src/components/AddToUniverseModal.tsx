@@ -4,11 +4,13 @@ import {
   fetchUniverses,
   linkUniverseMember,
   lookupUniverse,
+  patchUniverse,
   pullUniverseTmdbPortrait,
   unlinkUniverseMember,
   uploadUniverseArt,
 } from "../api";
 import type { Universe } from "../types";
+import { IconEditRelease } from "./MenuIcons";
 import ModalPortal from "./ModalPortal";
 
 type Props = {
@@ -19,6 +21,8 @@ type Props = {
 };
 
 const ART_KINDS = ["Portrait", "Landscape", "Banner", "Logo"] as const;
+
+type FormMode = "pick" | "create" | "edit";
 
 function calmErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
@@ -38,6 +42,19 @@ function calmErrorMessage(err: unknown): string {
   return trimmed;
 }
 
+function artHint(u: Universe | null | undefined, kind: (typeof ART_KINDS)[number]) {
+  if (!u) return "Choose image…";
+  const url =
+    kind === "Portrait"
+      ? u.portrait_url || u.cover_url
+      : kind === "Landscape"
+        ? u.landscape_url
+        : kind === "Banner"
+          ? u.banner_url
+          : u.logo_url;
+  return url ? `Current ${kind.toLowerCase()} on file — choose to replace` : "Choose image…";
+}
+
 export default function AddToUniverseModal({
   module,
   franchiseId,
@@ -48,7 +65,8 @@ export default function AddToUniverseModal({
   const [current, setCurrent] = useState<Universe | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<FormMode>("pick");
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [newOverview, setNewOverview] = useState("");
   const [artFiles, setArtFiles] = useState<
@@ -58,6 +76,15 @@ export default function AddToUniverseModal({
   const [error, setError] = useState<string | null>(null);
   const [openList, setOpenList] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const selectedUniverse = useMemo(
+    () => universes.find((u) => u.id === selectedId) ?? null,
+    [universes, selectedId]
+  );
+  const editingUniverse = useMemo(
+    () => universes.find((u) => u.id === editingId) ?? null,
+    [universes, editingId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -83,11 +110,54 @@ export default function AddToUniverseModal({
     };
   }, [module, franchiseId]);
 
+  useEffect(() => {
+    if (!openList) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (listRef.current && t && !listRef.current.contains(t)) {
+        setOpenList(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [openList]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return universes;
     return universes.filter((u) => u.name.toLowerCase().includes(q));
   }, [universes, query]);
+
+  const backToPick = () => {
+    setMode("pick");
+    setEditingId(null);
+    setArtFiles({});
+    setOpenList(false);
+    setError(null);
+  };
+
+  const startCreate = () => {
+    setMode("create");
+    setEditingId(null);
+    setNewName(query.trim());
+    setNewOverview("");
+    setArtFiles({});
+    setSelectedId(null);
+    setOpenList(false);
+    setError(null);
+  };
+
+  const startEdit = (u: Universe) => {
+    setMode("edit");
+    setEditingId(u.id);
+    setSelectedId(u.id);
+    setQuery(u.name);
+    setNewName(u.name);
+    setNewOverview(u.overview || "");
+    setArtFiles({});
+    setOpenList(false);
+    setError(null);
+  };
 
   const saveLink = async (universeId: number) => {
     setBusy(true);
@@ -126,6 +196,33 @@ export default function AddToUniverseModal({
     }
   };
 
+  const saveEdit = async () => {
+    if (editingId == null || !newName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await patchUniverse(editingId, {
+        name: newName.trim(),
+        overview: newOverview.trim() || null,
+      });
+      for (const kind of ART_KINDS) {
+        const file = artFiles[kind];
+        if (file) await uploadUniverseArt(editingId, kind, file);
+      }
+      const list = await fetchUniverses();
+      setUniverses(list.universes || []);
+      setQuery(updated.name);
+      setSelectedId(updated.id);
+      if (current?.id === updated.id) setCurrent(updated);
+      backToPick();
+      onSaved();
+    } catch (e) {
+      setError(calmErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async () => {
     if (!current) return;
     setBusy(true);
@@ -142,12 +239,17 @@ export default function AddToUniverseModal({
   };
 
   const pullPoster = async () => {
-    if (!selectedId && !creating) return;
+    const targetId =
+      mode === "edit"
+        ? editingId
+        : mode === "create"
+          ? null
+          : selectedId;
     setBusy(true);
     setError(null);
     try {
-      let id = selectedId;
-      if (creating) {
+      let id = targetId;
+      if (mode === "create") {
         if (!newName.trim()) {
           setError("Enter a universe name first.");
           setBusy(false);
@@ -159,7 +261,8 @@ export default function AddToUniverseModal({
         });
         id = created.id;
         setSelectedId(id);
-        setCreating(false);
+        setEditingId(id);
+        setMode("edit");
         setQuery(created.name);
         setUniverses((prev) => [...prev, created]);
       }
@@ -174,14 +277,29 @@ export default function AddToUniverseModal({
     }
   };
 
+  const formUniverse = mode === "edit" ? editingUniverse : null;
+
   return (
     <ModalPortal onClose={onClose}>
       <div
-        className="modal-panel artist-admin-modal artist-admin-modal--wide add-universe-modal"
+        className="modal-panel artist-admin-modal add-universe-modal"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="modal-panel-header">
-          <h3>Add to universe</h3>
+        <div className="modal-panel-header add-universe-modal__header">
+          <div className="add-universe-modal__titles">
+            <h3>
+              {mode === "edit"
+                ? "Edit universe"
+                : mode === "create"
+                  ? "Create universe"
+                  : "Add to universe"}
+            </h3>
+            {current && mode === "pick" ? (
+              <p className="add-universe-modal__current">
+                Currently in {current.name}
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             className="modal-close-x"
@@ -194,93 +312,63 @@ export default function AddToUniverseModal({
 
         {error ? <p className="modal-notice">{error}</p> : null}
 
-        {!creating ? (
+        {mode === "pick" ? (
           <div className="artist-admin-form">
             <label className="artist-admin-form__inline">
               <span className="artist-admin-form__inline-label">Universe</span>
               <div
                 ref={listRef}
-                className="artist-admin-form__inline-field"
-                style={{ position: "relative" }}
+                className="artist-admin-form__inline-field add-universe-modal__picker"
               >
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setSelectedId(null);
-                    setOpenList(true);
-                    setCreating(false);
-                  }}
-                  onFocus={() => setOpenList(true)}
-                  placeholder="Search or select…"
-                  disabled={busy}
-                  autoComplete="off"
-                />
-                {openList ? (
-                  <ul
-                    className="add-similar-results"
-                    role="listbox"
-                    style={{
-                      position: "absolute",
-                      zIndex: 5,
-                      left: 0,
-                      right: 0,
-                      maxHeight: "12rem",
-                      overflow: "auto",
-                      margin: "0.25rem 0 0",
-                      padding: 0,
-                      listStyle: "none",
-                      background: "var(--bg-elevated)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
+                <div className="add-universe-modal__picker-row">
+                  <input
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setSelectedId(null);
+                      setOpenList(true);
                     }}
-                  >
+                    onFocus={() => setOpenList(true)}
+                    placeholder="Search or select…"
+                    disabled={busy}
+                    autoComplete="off"
+                  />
+                  {selectedUniverse ? (
+                    <button
+                      type="button"
+                      className="add-universe-modal__edit-btn"
+                      disabled={busy}
+                      title="Edit universe"
+                      aria-label="Edit universe"
+                      onClick={() => startEdit(selectedUniverse)}
+                    >
+                      <IconEditRelease />
+                    </button>
+                  ) : null}
+                </div>
+                {openList ? (
+                  <ul className="add-universe-modal__dropdown" role="listbox">
                     {filtered.map((u) => (
                       <li key={u.id}>
                         <button
                           type="button"
-                          className="add-similar-results__item"
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            padding: "0.45rem 0.65rem",
-                            border: "none",
-                            background: "transparent",
-                            color: "inherit",
-                            cursor: "pointer",
-                          }}
+                          className="add-universe-modal__dropdown-item"
                           onClick={() => {
                             setSelectedId(u.id);
                             setQuery(u.name);
                             setOpenList(false);
                           }}
                         >
-                          {u.name}
-                          <span className="muted" style={{ marginLeft: 8 }}>
-                            ({u.member_count ?? 0})
-                          </span>
+                          <span>{u.name}</span>
+                          <span className="muted">({u.member_count ?? 0})</span>
                         </button>
                       </li>
                     ))}
                     <li>
                       <button
                         type="button"
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.45rem 0.65rem",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--accent)",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                        onClick={() => {
-                          setCreating(true);
-                          setOpenList(false);
-                          setNewName(query.trim());
-                          setSelectedId(null);
-                        }}
+                        className="add-universe-modal__dropdown-item add-universe-modal__dropdown-item--create"
+                        onClick={startCreate}
                       >
                         + Create universe…
                       </button>
@@ -289,11 +377,6 @@ export default function AddToUniverseModal({
                 ) : null}
               </div>
             </label>
-            {current ? (
-              <p className="muted" style={{ margin: "0.35rem 0" }}>
-                Currently in <strong>{current.name}</strong>
-              </p>
-            ) : null}
           </div>
         ) : (
           <div className="artist-admin-form">
@@ -308,9 +391,7 @@ export default function AddToUniverseModal({
               />
             </label>
             <label className="artist-admin-form__inline artist-admin-form__inline--top">
-              <span className="artist-admin-form__inline-label">
-                Overview
-              </span>
+              <span className="artist-admin-form__inline-label">Overview</span>
               <textarea
                 className="artist-admin-form__inline-field"
                 value={newOverview}
@@ -322,12 +403,10 @@ export default function AddToUniverseModal({
             </label>
             {ART_KINDS.map((kind) => (
               <label key={kind} className="artist-admin-form__inline">
-                <span className="artist-admin-form__inline-label">
-                  {kind}
-                </span>
+                <span className="artist-admin-form__inline-label">{kind}</span>
                 <span className="artist-admin-form__inline-field add-universe-modal__file">
                   <span className="add-universe-modal__file-label">
-                    {artFiles[kind]?.name || "Choose image…"}
+                    {artFiles[kind]?.name || artHint(formUniverse, kind)}
                   </span>
                   <input
                     type="file"
@@ -348,27 +427,15 @@ export default function AddToUniverseModal({
               type="button"
               className="btn btn--small add-universe-modal__back"
               disabled={busy}
-              onClick={() => {
-                setCreating(false);
-                setOpenList(true);
-              }}
+              onClick={backToPick}
             >
               Back to list
             </button>
           </div>
         )}
 
-        <div
-          className="modal-panel-actions"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.5rem",
-            justifyContent: "flex-end",
-            marginTop: "1rem",
-          }}
-        >
-          {(creating || selectedId) && (
+        <div className="modal-panel-actions add-universe-modal__actions">
+          {(mode !== "pick" || selectedId) && (
             <button
               type="button"
               className="btn"
@@ -378,7 +445,7 @@ export default function AddToUniverseModal({
               Fetch cover
             </button>
           )}
-          {current ? (
+          {current && mode === "pick" ? (
             <button
               type="button"
               className="btn"
@@ -388,7 +455,7 @@ export default function AddToUniverseModal({
               Remove from universe
             </button>
           ) : null}
-          {creating ? (
+          {mode === "create" ? (
             <button
               type="button"
               className="btn btn--primary"
@@ -396,6 +463,15 @@ export default function AddToUniverseModal({
               onClick={() => void createAndLink()}
             >
               {busy ? "Saving…" : "Create & add"}
+            </button>
+          ) : mode === "edit" ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={busy || !newName.trim()}
+              onClick={() => void saveEdit()}
+            >
+              {busy ? "Saving…" : "Save changes"}
             </button>
           ) : (
             <button

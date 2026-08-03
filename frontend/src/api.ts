@@ -1881,10 +1881,17 @@ export async function patchUniverseOverview(
   universeId: number,
   overview: string | null
 ) {
+  return patchUniverse(universeId, { overview });
+}
+
+export async function patchUniverse(
+  universeId: number,
+  body: { name?: string; overview?: string | null }
+) {
   return request<import("./types").Universe>(`${API}/universes/${universeId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ overview }),
+    body: JSON.stringify(body),
   });
 }
 

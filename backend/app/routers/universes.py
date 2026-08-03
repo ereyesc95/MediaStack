@@ -20,7 +20,7 @@ from app.universes import (
     save_universe_art_bytes,
     unlink_franchise,
     universe_for_franchise,
-    update_universe_overview,
+    update_universe,
 )
 
 router = APIRouter(prefix="/api/universes", tags=["universes"])
@@ -37,6 +37,7 @@ class LinkMemberBody(BaseModel):
 
 
 class OverviewBody(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
     overview: str | None = None
 
 
@@ -85,7 +86,22 @@ def api_patch_universe(
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ):
-    row = update_universe_overview(db, universe_id, body.overview)
+    fields = body.model_dump(exclude_unset=True)
+    if not fields:
+        data = get_universe(db, universe_id)
+        if not data:
+            raise HTTPException(404, "Universe not found")
+        return data
+    try:
+        row = update_universe(
+            db,
+            universe_id,
+            name=fields.get("name"),
+            overview=fields.get("overview"),
+            set_overview="overview" in fields,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if not row:
         raise HTTPException(404, "Universe not found")
     return get_universe(db, universe_id)
