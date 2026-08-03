@@ -1793,13 +1793,17 @@ export default function SeriesFranchisePage({
                             : orient === "icons"
                               ? null
                               : portrait;
+                      const year =
+                        u.date_iso && u.date_iso.length >= 4
+                          ? Number(u.date_iso.slice(0, 4)) || null
+                          : null;
                       const card: ArtistCardType = {
                         id: 0,
                         name: title,
                         photo_url: photo,
                         logo_url: u.logo_url || null,
-                        icon_url: u.logo_url || null,
-                        era_year: null,
+                        icon_url: null,
+                        era_year: year,
                         show_name_on_hover: true,
                         starting_dates: u.date_iso || null,
                       };
@@ -1811,6 +1815,7 @@ export default function SeriesFranchisePage({
                           <ArtistCard
                             artist={card}
                             orientation={orient}
+                            showDateOnHover
                             tapReveal={mobilePortrait}
                             revealed={
                               mobilePortrait &&
