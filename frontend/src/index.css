@@ -802,6 +802,17 @@ input {
   gap: 0 !important;
   column-gap: 0 !important;
   row-gap: 0 !important;
+  /* Playlists keep natural banner sizing (not the 3-row release scroll viewport). */
+  container-type: normal;
+  max-height: none;
+  overflow-y: visible;
+  grid-auto-rows: auto;
+}
+
+.artist-playlist-grid.artist-playlist-grid--banner .media-release-card--banner,
+.artist-playlist-grid.artist-playlist-grid--banner button.media-release-card--banner {
+  height: auto;
+  aspect-ratio: 2160 / 600;
 }
 
 @media (min-width: 700px) {
@@ -6925,25 +6936,35 @@ input {
   }
 }
 
-/* Banner layout must beat the cover columns above.
-   Height comes from aspect-ratio × column width — item count only adds rows
-   (scroll), it never shrinks banner height. Cap ~8 visible (2×4) on a
-   typical desktop before scrolling. */
+/* Banner layout: fixed row height from aspect ratio; show up to 3 rows
+   (~6 cards in 2-col), then scroll. Item count never shrinks row height. */
 .media-release-grid.media-release-grid--banner {
+  container-type: inline-size;
+  container-name: release-banner-grid;
   grid-template-columns: 1fr;
-  grid-auto-rows: auto;
+  /* One full-width banner row */
+  --banner-row-h: calc(100cqw * 600 / 2160);
+  grid-auto-rows: var(--banner-row-h);
   align-content: start;
+  align-items: stretch;
   gap: 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   justify-content: stretch;
+  max-height: calc(3 * var(--banner-row-h));
   overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @media (min-width: 1100px) {
   .media-release-grid.media-release-grid--banner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Each card is half the grid width */
+    --banner-row-h: calc(50cqw * 600 / 2160);
+    grid-auto-rows: var(--banner-row-h);
+    max-height: calc(3 * var(--banner-row-h));
   }
 }
 
@@ -6953,6 +6974,23 @@ input {
 
 .artist-page--mobile-landscape .media-release-grid.media-release-grid--banner {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  --banner-row-h: calc(50cqw * 600 / 2160);
+  grid-auto-rows: var(--banner-row-h);
+  max-height: calc(3 * var(--banner-row-h));
+}
+
+@supports not (width: 1cqw) {
+  .media-release-grid.media-release-grid--banner {
+    --banner-row-h: clamp(7.5rem, 22vw, 12rem);
+    grid-auto-rows: var(--banner-row-h);
+    max-height: calc(3 * var(--banner-row-h));
+  }
+
+  @media (min-width: 1100px) {
+    .media-release-grid.media-release-grid--banner {
+      --banner-row-h: clamp(8rem, 14vw, 11rem);
+    }
+  }
 }
 
 .artist-page--mobile-landscape .artist-gallery__photo-grid {
@@ -6973,38 +7011,40 @@ input {
 }
 
 .media-release-card--banner {
-  /* Override .media-beat-frame { display: inline-block } so aspect-ratio
-     can size the card when children are absolutely positioned. */
+  /* Override .media-beat-frame { display: inline-block }. Row height is set by
+     the banner grid track; fill it instead of relying on aspect-ratio alone
+     (which was collapsing for all but the last row in long lists). */
   display: block;
-  aspect-ratio: 2160 / 600;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   min-height: 0;
-  height: auto;
+  height: 100%;
+  aspect-ratio: unset;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 button.media-release-card--banner {
   display: block;
   appearance: none;
   -webkit-appearance: none;
+  height: 100%;
+  padding: 0;
 }
 
 .series-media-grid.media-release-grid--banner {
   align-content: start;
-  grid-auto-rows: auto;
 }
 
 .series-media-grid .media-release-card--banner,
 .series-media-grid button.media-release-card--banner {
-  aspect-ratio: 2160 / 600;
   width: 100%;
-  height: auto;
+  height: 100%;
   min-height: 0;
   max-height: none;
-  align-self: start;
-  flex-shrink: 0;
+  aspect-ratio: unset;
+  align-self: stretch;
 }
 
 .media-release-card__banner-bg {
@@ -13669,8 +13709,7 @@ button.lyrics-status-badge--icon-only {
 .artist-media-grid .media-release-grid.media-release-grid--banner,
 .artist-media-grid__cards.media-release-grid--banner {
   grid-template-columns: 1fr;
-  grid-auto-rows: auto;
-  align-content: start;
+  /* Inherit --banner-row-h / max-height / overflow from .media-release-grid--banner */
   justify-content: stretch;
   width: 100%;
 }
@@ -15116,9 +15155,9 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-media-grid .media-release-card--banner {
-  aspect-ratio: 2160 / 600;
   width: 100%;
-  height: auto;
+  height: 100%;
+  aspect-ratio: unset;
   min-height: 0;
 }
 
