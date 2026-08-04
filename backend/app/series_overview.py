@@ -417,6 +417,30 @@ def _ensure_franchise_index(media_root: Path):
     return index
 
 
+def _stamp_creator_via(
+    cards: list[dict], talent_names: list[str] | None
+) -> list[dict]:
+    """Ensure same-talent cards expose via_members for hover (fallback to page talent)."""
+    names = [
+        str(n).strip()
+        for n in (talent_names or [])
+        if n and str(n).strip()
+    ]
+    out: list[dict] = []
+    for raw in cards:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        vias = item.get("via_members")
+        if isinstance(vias, str):
+            vias = [p.strip() for p in vias.replace("|", ";").split(";") if p.strip()]
+            item["via_members"] = vias
+        if not vias and names:
+            item["via_members"] = list(names)
+        out.append(item)
+    return out
+
+
 def _enrich_related_cards(
     entries: list[dict], media_root: Path
 ) -> list[dict]:
@@ -937,11 +961,11 @@ def build_series_overview(
             if isinstance(x, dict) and not x.get("hidden")
         ]
 
+    writers = _split_semi(row.ser_writers)
+    publishers = _split_semi(row.ser_publishers)
     creator_cards = _visible_related("creator")
     similar_cards = _visible_related("similar")
 
-    writers = _split_semi(row.ser_writers)
-    publishers = _split_semi(row.ser_publishers)
     activity_periods = _activity_periods(
         row.ser_starting_date,
         row.ser_ending_date,
@@ -1151,7 +1175,7 @@ def build_series_overview(
             "books": _enrich_related_cards(related.get("books") or [], root),
             "games": _enrich_related_cards(related.get("games") or [], root),
             "music": related.get("music") or [],
-            "creator": creator_cards,
+            "creator": _stamp_creator_via(creator_cards, writers),
             "similar": similar_cards,
             "creator_count": len(creator_cards),
             "similar_count": len(similar_cards),

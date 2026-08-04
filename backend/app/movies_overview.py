@@ -31,7 +31,7 @@ from app.universes import (
     universes_for_leaf,
 )
 from app.series_artwork import build_local_eras, ensure_artwork_cached
-from app.series_overview import _enrich_cast_member, _enrich_related_cards
+from app.series_overview import _enrich_cast_member, _enrich_related_cards, _stamp_creator_via
 from app.series_paths import find_logo_file, gallery_sections
 
 
@@ -451,7 +451,15 @@ def build_work_overview(
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": _enrich_related_cards(related_disk.get("games") or [], root),
             "music": related_disk.get("music") or [],
-            "creator": creator,
+            "creator": _stamp_creator_via(
+                creator,
+                list(meta.get("directors") or [])
+                if isinstance(meta.get("directors"), list)
+                else (
+                    [d.strip() for d in str(meta.get("directors") or "").split(";") if d.strip()]
+                )
+                or list(writers or []),
+            ),
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
@@ -723,7 +731,10 @@ def build_film_overview(
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": _enrich_related_cards(related_disk.get("games") or [], root),
             "music": [],
-            "creator": creator,
+            "creator": _stamp_creator_via(
+                creator,
+                list(directors or []) or list(writers or []),
+            ),
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),

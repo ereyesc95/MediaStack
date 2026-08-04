@@ -165,7 +165,37 @@ export default function SeriesBrowse({
     setRevealedId(null);
   }, [franchises, orientation, search, letter, filterMode, catalogScope, isPhone]);
 
-  const decades = filterOptions?.decades ?? [];
+  const catalogMetaPool = useMemo(() => {
+    /** Unfiltered catalog cards used to derive which filter chips have media. */
+    if (catalogScope === "universes") {
+      return {
+        continentIds: new Set<number>(),
+        decades: new Set<number>(),
+      };
+    }
+    const continentIds = new Set<number>();
+    const decadeSet = new Set<number>();
+    for (const f of franchises) {
+      if (f.continent_id != null) continentIds.add(f.continent_id);
+      for (const s of f.subseries || []) {
+        const d = decadeFromIso(s.date_iso);
+        if (d != null) decadeSet.add(d);
+      }
+    }
+    return { continentIds, decades: decadeSet };
+  }, [catalogScope, franchises]);
+
+  const availableContinents = useMemo(() => {
+    const opts = filterOptions?.continents ?? [];
+    if (!catalogMetaPool.continentIds.size) return [];
+    return opts.filter((c) => catalogMetaPool.continentIds.has(c.id));
+  }, [filterOptions, catalogMetaPool]);
+
+  const availableDecades = useMemo(() => {
+    if (!catalogMetaPool.decades.size) return [];
+    // Prefer decades that actually appear on disk; ignore padded API lists.
+    return [...catalogMetaPool.decades].sort((a, b) => a - b);
+  }, [catalogMetaPool]);
 
   const availableLetters = useMemo(() => {
     const set = new Set<string>();
@@ -194,12 +224,12 @@ export default function SeriesBrowse({
     return filterModes.filter((f) => {
       switch (f.id) {
         case "continent":
-          return (filterOptions?.continents?.length ?? 0) > 0;
+          return availableContinents.length > 0;
         case "country":
           return (filterOptions?.country_groups?.length ?? 0) > 0;
         case "start":
         case "end":
-          return decades.length > 0;
+          return availableDecades.length > 0;
         case "genre":
           return (filterOptions?.subgenre_groups?.length ?? 0) > 0;
         case "publisher":
@@ -210,7 +240,12 @@ export default function SeriesBrowse({
           return true;
       }
     });
-  }, [filterModes, filterOptions, decades]);
+  }, [
+    filterModes,
+    filterOptions,
+    availableContinents,
+    availableDecades,
+  ]);
 
   useEffect(() => {
     if (!visibleFilterModes.some((m) => m.id === filterMode)) {
@@ -230,7 +265,17 @@ export default function SeriesBrowse({
     }
     if (!filterOptions) return;
     if (filterMode === "continent" && continentId === "") {
-      const first = filterOptions.continents[0];
+      const first = availableContinents[0];
+      if (first) onContinentIdChange(first.id);
+      return;
+    }
+    if (
+      filterMode === "continent" &&
+      continentId !== "" &&
+      availableContinents.length &&
+      !availableContinents.some((c) => c.id === continentId)
+    ) {
+      const first = availableContinents[0];
       if (first) onContinentIdChange(first.id);
       return;
     }
@@ -239,13 +284,33 @@ export default function SeriesBrowse({
       if (first) onCountryIdChange(first.id);
       return;
     }
-    if (filterMode === "start" && startDecade === "" && decades.length) {
-      onStartDecadeChange(decades[0]);
-      return;
+    if (filterMode === "start") {
+      if (startDecade === "" && availableDecades.length) {
+        onStartDecadeChange(availableDecades[0]!);
+        return;
+      }
+      if (
+        startDecade !== "" &&
+        availableDecades.length &&
+        !availableDecades.includes(startDecade)
+      ) {
+        onStartDecadeChange(availableDecades[0]!);
+        return;
+      }
     }
-    if (filterMode === "end" && endDecade === "" && decades.length) {
-      onEndDecadeChange(decades[0]);
-      return;
+    if (filterMode === "end") {
+      if (endDecade === "" && availableDecades.length) {
+        onEndDecadeChange(availableDecades[0]!);
+        return;
+      }
+      if (
+        endDecade !== "" &&
+        availableDecades.length &&
+        !availableDecades.includes(endDecade)
+      ) {
+        onEndDecadeChange(availableDecades[0]!);
+        return;
+      }
     }
     if (filterMode === "genre" && subgenreId === "") {
       const first = filterOptions.subgenre_groups.flatMap((g) => g.items)[0];
@@ -266,6 +331,8 @@ export default function SeriesBrowse({
     filterOptions,
     letter,
     availableLetters,
+    availableContinents,
+    availableDecades,
     continentId,
     countryId,
     startDecade,
@@ -273,7 +340,6 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
-    decades,
     onLetterChange,
     onContinentIdChange,
     onCountryIdChange,
@@ -677,7 +743,7 @@ export default function SeriesBrowse({
       case "continent":
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {(filterOptions?.continents ?? []).map((c) => (
+            {availableContinents.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -692,7 +758,7 @@ export default function SeriesBrowse({
       case "start":
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {decades.map((d) => (
+            {availableDecades.map((d) => (
               <button
                 key={d}
                 type="button"
@@ -707,7 +773,7 @@ export default function SeriesBrowse({
       case "end":
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {decades.map((d) => (
+            {availableDecades.map((d) => (
               <button
                 key={d}
                 type="button"
@@ -776,6 +842,8 @@ export default function SeriesBrowse({
     letter,
     search,
     availableLetters,
+    availableContinents,
+    availableDecades,
     continentId,
     countryId,
     startDecade,
@@ -783,7 +851,6 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
-    decades,
     countryOptions,
     genreOptions,
     publisherOptions,

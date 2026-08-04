@@ -223,7 +223,13 @@ export default function ArtistBrowse({
   const visibleFilterModes = useMemo(() => {
     return FILTER_MODES.filter((f) => {
       if (!filterOptions) {
-        return f.id === "name" || f.id === "group" || f.id === "members" || f.id === "most_played" || f.id === "gender";
+        return (
+          f.id === "name" ||
+          f.id === "group" ||
+          f.id === "members" ||
+          f.id === "most_played" ||
+          f.id === "gender"
+        );
       }
       switch (f.id) {
         case "continent":

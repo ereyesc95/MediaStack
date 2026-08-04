@@ -24,6 +24,8 @@ type Props = {
   orientation?: CardOrientation;
   /** TMDb deep-link kind for related cards. */
   tmdbKind?: "tv" | "movie";
+  /** Fallback via names when stored related cards lack via_members. */
+  fallbackViaMembers?: string[];
   isAdmin?: boolean;
   addOpen?: boolean;
   onAddClose?: () => void;
@@ -166,6 +168,7 @@ export default function SeriesRelatedPanel({
   tab,
   orientation = "portrait",
   tmdbKind = "tv",
+  fallbackViaMembers,
   isAdmin,
   addOpen,
   onAddClose,
@@ -246,7 +249,13 @@ export default function SeriesRelatedPanel({
             ? `https://www.themoviedb.org/${tmdbKind}/${it.tmdb_id}`
             : undefined;
           const viaText =
-            tab === "creator" ? viaMembersTag(it.via_members ?? []) : "";
+            tab === "creator"
+              ? viaMembersTag(
+                  (it.via_members?.length
+                    ? it.via_members
+                    : fallbackViaMembers) ?? []
+                )
+              : "";
           const open = () => {
             const go = () => {
               if (onOpenLocal?.(it)) return;

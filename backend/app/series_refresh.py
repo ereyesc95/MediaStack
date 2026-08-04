@@ -257,10 +257,19 @@ async def refresh_series_metadata(
         for c in (raw.get("created_by") or [])
         if isinstance(c, dict) and isinstance(c.get("id"), int) and c.get("name")
     }
-    for cid in (data.get("creator_ids") or [])[:3]:
+    fallback_names = [
+        str(n).strip()
+        for n in list(data.get("writers") or [])
+        if n and str(n).strip()
+    ]
+    for idx, cid in enumerate((data.get("creator_ids") or [])[:3]):
         try:
             person_id = int(cid)
-            person_name = via_by_id.get(person_id) or ""
+            person_name = via_by_id.get(person_id) or (
+                fallback_names[idx] if idx < len(fallback_names) else ""
+            )
+            if not person_name and fallback_names:
+                person_name = fallback_names[0]
             for credit in await fetch_person_tv_credits(person_id, api_key):
                 if person_name and isinstance(credit, dict):
                     credit = {**credit, "_via_person": person_name}

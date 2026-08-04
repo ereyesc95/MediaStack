@@ -508,14 +508,11 @@ export default function MoviesModule({
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
         onBack={() => {
+          // Universe card landings should return to home/catalog, not a hub URL
+          // (standalones like Dracula Untold have no franchise related page).
           if (universeId != null) {
-            onNavigate({
-              franchiseId,
-              filmId: undefined,
-              section: "overview",
-              overviewTab: "related",
-              universeId,
-            });
+            if (entrySource === "home") backToMoviesHome();
+            else backToMoviesCatalog();
             return;
           }
           if (entrySource === "home") {
@@ -530,7 +527,9 @@ export default function MoviesModule({
         }}
         backLabelOverride={
           universeId != null
-            ? undefined
+            ? entrySource === "home"
+              ? "HOME"
+              : "CATALOG"
             : entrySource === "home"
               ? "HOME"
               : undefined

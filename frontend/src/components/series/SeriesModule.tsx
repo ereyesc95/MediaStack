@@ -501,18 +501,19 @@ export default function SeriesModule({
           onEditProfile={onEditProfile}
           onBack={() => {
             if (universeId != null) {
-              onNavigate({
-                franchiseId,
-                subseriesId: undefined,
-                seasonId: undefined,
-                section: "overview",
-                overviewTab: "related",
-                universeId,
-              });
+              if (entrySource === "home") backToHome();
+              else backToCatalog();
               return;
             }
             backFromSubseries();
           }}
+          backLabelOverride={
+            universeId != null
+              ? entrySource === "home"
+                ? "HOME"
+                : "CATALOG"
+              : undefined
+          }
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
           onOpenArtist={onOpenArtist}

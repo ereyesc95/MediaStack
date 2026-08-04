@@ -5565,7 +5565,7 @@ input {
 
 .artist-related-via-tag {
   position: fixed;
-  z-index: 60;
+  z-index: 700;
   pointer-events: none;
   padding: 0.28rem 0.55rem;
   font-size: 0.68rem;

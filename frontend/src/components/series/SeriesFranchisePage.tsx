@@ -1884,6 +1884,7 @@ export default function SeriesFranchisePage({
                 cardOrientation === "badge" ? "banner" : cardOrientation
               }
               tmdbKind={isMovies && !sharedSeries ? "movie" : "tv"}
+              fallbackViaMembers={data.writers || []}
               isAdmin={isAdmin && !isMovies}
               addOpen={addRelatedOpen}
               onAddClose={() => setAddRelatedOpen(false)}

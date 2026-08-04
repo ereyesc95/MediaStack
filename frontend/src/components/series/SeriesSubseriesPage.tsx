@@ -3452,6 +3452,7 @@ export default function SeriesSubseriesPage({
                   cardOrientation === "badge" ? "banner" : cardOrientation
                 }
                 tmdbKind={isFilm ? "movie" : "tv"}
+                fallbackViaMembers={creators}
                 isAdmin={isAdmin && !isFilm}
                 onDataChanged={() => void loadCard()}
                 onOpenLocal={onOpenRelatedLocal}
