@@ -1,4 +1,4 @@
-@import type { MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
 import { addSeriesRelated, removeSeriesRelated } from "../../api";
 import type {
