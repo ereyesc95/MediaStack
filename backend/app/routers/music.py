@@ -14,7 +14,6 @@ from app.models import (
     Artist,
     ArtistParticipation,
     Band,
-    Continent,
     EntityLink,
     EntityRelated,
     Playlist,
@@ -213,13 +212,8 @@ def music_filter_options(db: Session = Depends(get_db)):
     from app.seed_music import ensure_music_lookup_data
 
     ensure_music_lookup_data(db)
-    continents = [
-        {"id": c.con_id, "name": c.con_name}
-        for c in db.scalars(select(Continent).order_by(Continent.con_name)).all()
-        if c.con_name and c.con_id != 1007
-    ]
     opts = filter_options(db)
-    return {**opts, "continents": continents}
+    return opts
 
 
 @router.get("/filters/roster-artists")

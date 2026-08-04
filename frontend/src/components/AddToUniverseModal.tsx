@@ -16,6 +16,9 @@ import ModalPortal from "./ModalPortal";
 type Props = {
   module: "movies" | "series";
   franchiseId: string;
+  /** When set, link/unlink this film or subseries only (not bulk franchise). */
+  leafId?: string | null;
+  leafLabel?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -55,14 +58,25 @@ function artHint(u: Universe | null | undefined, kind: (typeof ART_KINDS)[number
   return url ? `Current ${kind.toLowerCase()} on file — choose to replace` : "Choose image…";
 }
 
+function formatMembershipNames(list: Universe[]): string {
+  const names = list.map((u) => u.name).filter(Boolean);
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
 export default function AddToUniverseModal({
   module,
   franchiseId,
+  leafId = null,
+  leafLabel = null,
   onClose,
   onSaved,
 }: Props) {
+  const isLeaf = Boolean(leafId);
   const [universes, setUniverses] = useState<Universe[]>([]);
-  const [current, setCurrent] = useState<Universe | null>(null);
+  const [memberships, setMemberships] = useState<Universe[]>([]);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mode, setMode] = useState<FormMode>("pick");
@@ -85,22 +99,34 @@ export default function AddToUniverseModal({
     () => universes.find((u) => u.id === editingId) ?? null,
     [universes, editingId]
   );
+  const alreadyMember = useMemo(
+    () =>
+      selectedId != null && memberships.some((m) => m.id === selectedId),
+    [memberships, selectedId]
+  );
+  const removeTarget = useMemo(() => {
+    if (selectedId != null) {
+      const hit = memberships.find((m) => m.id === selectedId);
+      if (hit) return hit;
+    }
+    return memberships[0] ?? null;
+  }, [memberships, selectedId]);
 
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
       fetchUniverses(),
-      lookupUniverse(module, franchiseId),
+      lookupUniverse(module, franchiseId, leafId),
     ])
       .then(([list, lookup]) => {
         if (cancelled) return;
         setUniverses(list.universes || []);
-        const u = lookup.universe;
-        setCurrent(u);
-        if (u) {
-          setSelectedId(u.id);
-          setQuery(u.name);
-        }
+        const many = lookup.universes?.length
+          ? lookup.universes
+          : lookup.universe
+            ? [lookup.universe]
+            : [];
+        setMemberships(many);
       })
       .catch((e) => {
         if (!cancelled) setError(calmErrorMessage(e));
@@ -108,7 +134,7 @@ export default function AddToUniverseModal({
     return () => {
       cancelled = true;
     };
-  }, [module, franchiseId]);
+  }, [module, franchiseId, leafId]);
 
   useEffect(() => {
     if (!openList) return;
@@ -160,10 +186,11 @@ export default function AddToUniverseModal({
   };
 
   const saveLink = async (universeId: number) => {
+    if (memberships.some((m) => m.id === universeId)) return;
     setBusy(true);
     setError(null);
     try {
-      await linkUniverseMember(universeId, module, franchiseId);
+      await linkUniverseMember(universeId, module, franchiseId, leafId);
       onSaved();
       onClose();
     } catch (e) {
@@ -186,7 +213,7 @@ export default function AddToUniverseModal({
         const file = artFiles[kind];
         if (file) await uploadUniverseArt(created.id, kind, file);
       }
-      await linkUniverseMember(created.id, module, franchiseId);
+      await linkUniverseMember(created.id, module, franchiseId, leafId);
       onSaved();
       onClose();
     } catch (e) {
@@ -211,9 +238,11 @@ export default function AddToUniverseModal({
       }
       const list = await fetchUniverses();
       setUniverses(list.universes || []);
+      setMemberships((prev) =>
+        prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
+      );
       setQuery(updated.name);
       setSelectedId(updated.id);
-      if (current?.id === updated.id) setCurrent(updated);
       backToPick();
       onSaved();
     } catch (e) {
@@ -224,11 +253,16 @@ export default function AddToUniverseModal({
   };
 
   const remove = async () => {
-    if (!current) return;
+    if (!removeTarget) return;
     setBusy(true);
     setError(null);
     try {
-      await unlinkUniverseMember(current.id, module, franchiseId);
+      await unlinkUniverseMember(
+        removeTarget.id,
+        module,
+        franchiseId,
+        leafId
+      );
       onSaved();
       onClose();
     } catch (e) {
@@ -278,6 +312,7 @@ export default function AddToUniverseModal({
   };
 
   const formUniverse = mode === "edit" ? editingUniverse : null;
+  const membershipLabel = formatMembershipNames(memberships);
 
   return (
     <ModalPortal onClose={onClose}>
@@ -292,11 +327,23 @@ export default function AddToUniverseModal({
                 ? "Edit universe"
                 : mode === "create"
                   ? "Create universe"
-                  : "Add to universe"}
+                  : isLeaf
+                    ? "Add to universe"
+                    : "Add franchise to universe"}
             </h3>
-            {current && mode === "pick" ? (
+            {mode === "pick" && isLeaf && leafLabel ? (
               <p className="add-universe-modal__current">
-                Currently in {current.name}
+                Adding {leafLabel}
+              </p>
+            ) : null}
+            {mode === "pick" && !isLeaf ? (
+              <p className="add-universe-modal__current">
+                Adds all films/series under this franchise
+              </p>
+            ) : null}
+            {memberships.length > 0 && mode === "pick" ? (
+              <p className="add-universe-modal__current">
+                Currently in {membershipLabel}
               </p>
             ) : null}
           </div>
@@ -348,22 +395,28 @@ export default function AddToUniverseModal({
                 </div>
                 {openList ? (
                   <ul className="add-universe-modal__dropdown" role="listbox">
-                    {filtered.map((u) => (
-                      <li key={u.id}>
-                        <button
-                          type="button"
-                          className="add-universe-modal__dropdown-item"
-                          onClick={() => {
-                            setSelectedId(u.id);
-                            setQuery(u.name);
-                            setOpenList(false);
-                          }}
-                        >
-                          <span>{u.name}</span>
-                          <span className="muted">({u.member_count ?? 0})</span>
-                        </button>
-                      </li>
-                    ))}
+                    {filtered.map((u) => {
+                      const member = memberships.some((m) => m.id === u.id);
+                      return (
+                        <li key={u.id}>
+                          <button
+                            type="button"
+                            className="add-universe-modal__dropdown-item"
+                            onClick={() => {
+                              setSelectedId(u.id);
+                              setQuery(u.name);
+                              setOpenList(false);
+                            }}
+                          >
+                            <span>
+                              {u.name}
+                              {member ? " · member" : ""}
+                            </span>
+                            <span className="muted">({u.member_count ?? 0})</span>
+                          </button>
+                        </li>
+                      );
+                    })}
                     <li>
                       <button
                         type="button"
@@ -445,14 +498,16 @@ export default function AddToUniverseModal({
               Fetch cover
             </button>
           )}
-          {current && mode === "pick" ? (
+          {removeTarget && mode === "pick" ? (
             <button
               type="button"
               className="btn"
               disabled={busy}
               onClick={() => void remove()}
             >
-              Remove from universe
+              {isLeaf
+                ? `Remove from ${removeTarget.name}`
+                : `Remove all from ${removeTarget.name}`}
             </button>
           ) : null}
           {mode === "create" ? (
@@ -477,10 +532,14 @@ export default function AddToUniverseModal({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || selectedId == null}
+              disabled={busy || selectedId == null || alreadyMember}
               onClick={() => selectedId != null && void saveLink(selectedId)}
             >
-              {busy ? "Saving…" : "Save"}
+              {busy
+                ? "Saving…"
+                : alreadyMember
+                  ? "Already a member"
+                  : "Save"}
             </button>
           )}
         </div>

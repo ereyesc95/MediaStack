@@ -1,10 +1,8 @@
 import { useRef, useState } from "react";
 import { updateProfile, uploadProfileAvatar } from "../api";
 import type { ProfileUser } from "../auth";
-import ProfileAvatar from "./ProfileAvatar";
+import ProfileAvatar, { PROFILE_ICON_OPTIONS } from "./ProfileAvatar";
 
-/** One row of icons spanning music / film / series / games. */
-const EMOJI_OPTIONS = ["🎬", "📺", "🎵", "🎮", "🎧", "⭐", "🔥", "🖤"];
 /** Preset colors + trailing custom "+" picker; sized to share the icon row width. */
 const COLOR_OPTIONS = [
   "#6366f1",
@@ -20,6 +18,8 @@ const COLOR_OPTIONS = [
 
 type Props = {
   profile: ProfileUser;
+  /** When true, hide the username field (Admin always stays Admin). */
+  lockName?: boolean;
   onSaved: (user: ProfileUser) => void;
   onClose: () => void;
 };
@@ -29,8 +29,15 @@ function isCustomColor(avatar: string | null): boolean {
   return !COLOR_OPTIONS.some((c) => c.toLowerCase() === avatar.toLowerCase());
 }
 
-export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
-  const [name, setName] = useState(profile.username);
+export default function ProfileEditModal({
+  profile,
+  lockName = false,
+  onSaved,
+  onClose,
+}: Props) {
+  const [name, setName] = useState(
+    lockName || profile.is_admin ? "Admin" : profile.username
+  );
   const [avatar, setAvatar] = useState(profile.avatar ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,19 +45,24 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
   const colorRef = useRef<HTMLInputElement>(null);
 
   const customActive = isCustomColor(avatar);
+  const displayName = lockName || profile.is_admin ? "Admin" : name;
+  const isAdmin = lockName || profile.is_admin;
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      const updated = await updateProfile({
-        display_name: name.trim(),
-        avatar,
-      });
+      const updated = await updateProfile(
+        {
+          display_name: isAdmin ? "Admin" : name.trim(),
+          avatar,
+        },
+        profile.user_id
+      );
       onSaved(updated);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof Error ? e.message : "Could not save profile");
     } finally {
       setBusy(false);
     }
@@ -61,29 +73,31 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const updated = await uploadProfileAvatar(file);
+      const updated = await uploadProfileAvatar(file, profile.user_id);
       setAvatar(updated.avatar ?? "photo");
       onSaved(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof Error ? e.message : "Could not upload photo");
     } finally {
       setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="modal-panel modal-panel--profile-edit"
+        role="dialog"
+        aria-labelledby="profile-edit-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>Edit profile</h3>
+          <h3 id="profile-edit-title">Edit profile</h3>
           <button
             type="button"
             className="modal-close-x"
             onClick={onClose}
-            disabled={busy}
             aria-label="Close"
           >
             ×
@@ -99,34 +113,38 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
           >
             <ProfileAvatar
               userId={profile.user_id}
-              name={name}
+              name={displayName}
               avatar={avatar}
-              isAdmin={false}
+              isAdmin={isAdmin}
             />
             <span className="profile-edit-preview__overlay" aria-hidden>
               <span className="profile-edit-preview__hint">+ Add cover</span>
             </span>
           </button>
           <div className="profile-edit-picks">
-            <label className="profile-edit-field profile-edit-field--inline">
-              <span>Your User</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={32}
-                disabled={busy}
-              />
-            </label>
-            <div className="profile-edit-emoji-grid">
-              {EMOJI_OPTIONS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  className={`profile-edit-pick${avatar === e ? " active" : ""}`}
-                  onClick={() => setAvatar(e)}
+            {!(lockName || profile.is_admin) ? (
+              <label className="profile-edit-field profile-edit-field--inline">
+                <span>Your User</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={32}
                   disabled={busy}
+                />
+              </label>
+            ) : null}
+            <div className="profile-edit-emoji-grid" role="group" aria-label="Avatar icons">
+              {PROFILE_ICON_OPTIONS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`profile-edit-pick${avatar === id ? " active" : ""}`}
+                  onClick={() => setAvatar(id)}
+                  disabled={busy}
+                  aria-label={label}
+                  title={label}
                 >
-                  {e}
+                  <Icon className="profile-edit-pick__icon" />
                 </button>
               ))}
             </div>
@@ -183,7 +201,9 @@ export default function ProfileEditModal({ profile, onSaved, onClose }: Props) {
             type="button"
             className="btn btn--primary"
             onClick={save}
-            disabled={busy || !name.trim()}
+            disabled={
+              busy || (!(lockName || profile.is_admin) && !name.trim())
+            }
           >
             {busy ? "Saving…" : "Save"}
           </button>

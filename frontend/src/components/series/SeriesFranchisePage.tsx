@@ -1560,47 +1560,70 @@ export default function SeriesFranchisePage({
           <nav className="artist-page__subtabs artist-page__related-subtabs">
             {(
               [
-                ...(data?.universe &&
-                (data.related?.universe_count ??
-                  data.related?.universe?.length ??
-                  0) > 0
-                  ? ([
-                      [
-                        "universe",
-                        data.universe.name.toLocaleUpperCase(),
-                        data.related?.universe_count ??
-                          data.related?.universe?.length ??
-                          0,
-                      ],
-                    ] as const)
-                  : []),
+                ...((data?.universes?.length
+                  ? data.universes
+                  : data?.universe
+                    ? [data.universe]
+                    : []
+                )
+                  .map((u) => {
+                    const groupCount =
+                      data?.related?.universe_groups?.find((g) => g.id === u.id)
+                        ?.count ??
+                      data?.related?.universe?.filter(
+                        (c) => c.universe_id == null || c.universe_id === u.id
+                      ).length ??
+                      0;
+                    if (groupCount <= 0) return null;
+                    return [
+                      "universe",
+                      u.name.toLocaleUpperCase(),
+                      groupCount,
+                      u.id,
+                    ] as const;
+                  })
+                  .filter((row): row is readonly ["universe", string, number, number] =>
+                    row != null
+                  )),
                 [
                   "creator",
-                  isMovies ? "SAME DIRECTOR" : "SAME AUTHOR",
+                  "SAME TALENT",
                   data?.related?.creator_count ??
                     data?.related?.creator?.length ??
                     0,
-                ],
+                  null,
+                ] as const,
                 [
                   "similar",
                   isMovies ? "SIMILAR MOVIES" : "SIMILAR SERIES",
                   data?.related?.similar_count ??
                     data?.related?.similar?.length ??
                     0,
-                ],
+                  null,
+                ] as const,
               ] as const
-            ).map(([id, label, count]) => (
+            ).map((row) => {
+              const [id, label, count, tabUniverseId] = row;
+              const active =
+                id === "universe"
+                  ? relatedTab === "universe" &&
+                    (universeId === tabUniverseId ||
+                      (universeId == null &&
+                        tabUniverseId ===
+                          (data?.universes?.[0]?.id ?? data?.universe?.id)))
+                  : relatedTab === id;
+              return (
               <button
-                key={id}
+                key={id === "universe" ? `universe-${tabUniverseId}` : id}
                 type="button"
-                className={relatedTab === id ? "active" : ""}
+                className={active ? "active" : ""}
                 onClick={() => {
                   setRelatedTab(id);
-                  if (id === "universe" && data?.universe?.id != null) {
+                  if (id === "universe" && tabUniverseId != null) {
                     onNavigate({
                       section: "overview",
                       overviewTab: "related",
-                      universeId: data.universe.id,
+                      universeId: tabUniverseId,
                     });
                   } else if (universeId != null) {
                     onNavigate({
@@ -1616,7 +1639,8 @@ export default function SeriesFranchisePage({
                   <span className="artist-page__lineup-count">{count}</span>
                 </span>
               </button>
-            ))}
+              );
+            })}
           </nav>
         ) : null}
 
@@ -1724,7 +1748,17 @@ export default function SeriesFranchisePage({
             (() => {
               const orient: CardOrientation =
                 cardOrientation === "badge" ? "banner" : cardOrientation;
-              const members = data.related?.universe || [];
+              const activeUniverseId =
+                universeId ??
+                data.universes?.[0]?.id ??
+                data.universe?.id ??
+                null;
+              const members = (data.related?.universe || []).filter(
+                (c) =>
+                  activeUniverseId == null ||
+                  c.universe_id == null ||
+                  c.universe_id === activeUniverseId
+              );
               if (!members.length) {
                 return (
                   <p className="muted artist-section-empty">
@@ -1736,7 +1770,7 @@ export default function SeriesFranchisePage({
                 const leaf = u.leaf_id || u.id || "";
                 const fid = u.franchise_id || "";
                 const mod = u.module || (isMovies ? "movies" : "series");
-                const uid = data.universe?.id;
+                const uid = u.universe_id ?? activeUniverseId ?? undefined;
                 if (mod === "movies") {
                   if (isMovies) {
                     onNavigate({
@@ -1854,6 +1888,24 @@ export default function SeriesFranchisePage({
               addOpen={addRelatedOpen}
               onAddClose={() => setAddRelatedOpen(false)}
               onDataChanged={() => void load()}
+              onOpenLocal={(it) => {
+                const title = (it.title || it.name || "").trim().toLowerCase();
+                if (!title) return false;
+                const shows = data?.subseries || [];
+                const hit = shows.find(
+                  (s) => (s.title || "").trim().toLowerCase() === title
+                );
+                if (hit) {
+                  onNavigate({
+                    section: "overview",
+                    subseriesId: hit.id,
+                    seasonId: undefined,
+                    overviewTab: "about",
+                  });
+                  return true;
+                }
+                return false;
+              }}
             />
           )
         ) : null}

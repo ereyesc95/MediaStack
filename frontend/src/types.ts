@@ -91,6 +91,8 @@ export type FilterOptions = {
   }[];
   decades: number[];
   continents: { id: number; name: string | null }[];
+  /** Letters that have at least one artist/band on disk. */
+  letters?: string[];
   labels: string[];
   producers: { id: string; name: string }[];
 };
@@ -1047,6 +1049,7 @@ export type MoviesFilmCard = {
 export type UniverseMember = {
   module: "movies" | "series";
   slug: string;
+  leaf_id?: string | null;
   source?: string;
 };
 
@@ -1090,11 +1093,13 @@ export type UniverseCard = {
   franchise_id: string;
   leaf_id?: string;
   kind?: "film" | "subseries" | "franchise" | string;
+  universe_id?: number;
 };
 
 export type UniverseLanding = {
   module: "movies" | "series";
   franchise_id: string;
+  leaf_id?: string | null;
   universe_id: number;
 };
 
@@ -1105,6 +1110,7 @@ export type MoviesWorkDetail = SeriesFranchiseCard & {
   primary_film_id?: string | null;
   has_gallery?: boolean;
   universe?: Universe | null;
+  universes?: Universe[];
 };
 
 export type MoviesFilmDetail = {
@@ -1218,6 +1224,11 @@ export type SeriesFranchiseCard = {
   subseries: SeriesSubseriesCard[];
   season_count: number;
   subseries_count: number;
+  date_iso?: string | null;
+  display_date?: string | null;
+  /** No dated subseries hubs — seasons live under Episodes/ on the show folder. */
+  is_standalone?: boolean;
+  primary_subseries_id?: string | null;
   /** Movies catalog embeds films on the work card. */
   films?: MoviesFilmCard[];
   /** Enriched from Series DB for catalog filters */
@@ -1478,6 +1489,8 @@ export type SeriesRelatedShow = {
   overview?: string | null;
   manual?: boolean;
   hidden?: boolean;
+  /** Person names linking this card (same-talent / creator bucket). */
+  via_members?: string[];
 };
 
 export type SeriesOverviewEra = {
@@ -1589,8 +1602,10 @@ export type SeriesOverview = {
     creator_count?: number;
     similar_count?: number;
     universe_count?: number;
+    universe_groups?: { id: number; name: string; count: number }[];
   };
   universe?: Universe | null;
+  universes?: Universe[];
   metadata_refreshed_at?: string | null;
   needs_metadata?: boolean;
 };

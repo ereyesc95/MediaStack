@@ -110,12 +110,22 @@ def build_related_from_tv(
         if not card:
             continue
         tid = int(card["tmdb_id"])
+        via = (raw.get("_via_person") or "").strip()
         if tid in creator_seen:
+            if via:
+                for existing in creator:
+                    if int(existing.get("tmdb_id") or 0) == tid:
+                        members = list(existing.get("via_members") or [])
+                        if via not in members:
+                            members.append(via)
+                            existing["via_members"] = members
+                        break
             continue
-        # Skip pure acting credits; keep creator/writer/crew work
         if raw.get("character") and not raw.get("job") and not raw.get("department"):
             continue
         creator_seen.add(tid)
+        if via:
+            card["via_members"] = [via]
         creator.append(card)
 
     return {
@@ -465,11 +475,22 @@ def build_related_from_movie(
         if not card:
             continue
         tid = int(card["tmdb_id"])
+        via = (raw.get("_via_person") or "").strip()
         if tid in creator_seen:
+            if via:
+                for existing in creator:
+                    if int(existing.get("tmdb_id") or 0) == tid:
+                        members = list(existing.get("via_members") or [])
+                        if via not in members:
+                            members.append(via)
+                            existing["via_members"] = members
+                        break
             continue
         if raw.get("character") and not raw.get("job") and not raw.get("department"):
             continue
         creator_seen.add(tid)
+        if via:
+            card["via_members"] = [via]
         creator.append(card)
 
     return {

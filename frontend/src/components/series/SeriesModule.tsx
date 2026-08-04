@@ -206,7 +206,12 @@ export default function SeriesModule({
   const loadDashboard = useCallback(async () => {
     setDashLoading(true);
     try {
-      setDashboard(await fetchSeriesDashboard());
+      const [dash, uni] = await Promise.all([
+        fetchSeriesDashboard(),
+        fetchUniverses().catch(() => ({ universes: [] as Universe[] })),
+      ]);
+      setDashboard(dash);
+      setUniverses(uni.universes || []);
     } catch {
       setDashboard(null);
     } finally {
@@ -226,39 +231,49 @@ export default function SeriesModule({
     void loadCatalog();
     void loadDashboard();
     void loadFilters();
-    void fetchUniverses()
-      .then((res) => setUniverses(res.universes || []))
-      .catch(() => setUniverses([]));
   }, [loadCatalog, loadDashboard, loadFilters]);
 
   const openUniverseLanding = useCallback(
     (id: number) => {
+      const go = (
+        module: "movies" | "series",
+        franchiseId: string,
+        leafId?: string | null
+      ) => {
+        setEntrySource("catalog");
+        setTab("catalog");
+        if (module === "series") {
+          pushSeriesRoute({
+            franchiseId,
+            subseriesId: leafId || undefined,
+            section: "overview",
+            overviewTab: leafId ? "about" : "related",
+            universeId: id,
+          });
+          onNavigate({
+            franchiseId,
+            subseriesId: leafId || undefined,
+            seasonId: undefined,
+            section: "overview",
+            overviewTab: leafId ? "about" : "related",
+            universeId: id,
+          });
+          return;
+        }
+        onOpenMoviesFranchise?.(
+          franchiseId,
+          leafId || undefined,
+          "overview",
+          id
+        );
+      };
+
       void fetchUniverseLanding(id, "series")
         .then((landing) => {
-          setEntrySource("catalog");
-          setTab("catalog");
-          if (landing.module === "series") {
-            pushSeriesRoute({
-              franchiseId: landing.franchise_id,
-              section: "overview",
-              overviewTab: "related",
-              universeId: id,
-            });
-            onNavigate({
-              franchiseId: landing.franchise_id,
-              subseriesId: undefined,
-              seasonId: undefined,
-              section: "overview",
-              overviewTab: "related",
-              universeId: id,
-            });
-            return;
-          }
-          onOpenMoviesFranchise?.(
+          go(
+            landing.module === "movies" ? "movies" : "series",
             landing.franchise_id,
-            undefined,
-            "overview",
-            id
+            landing.leaf_id
           );
         })
         .catch(() => {});
@@ -319,9 +334,16 @@ export default function SeriesModule({
     setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
     setTab("catalog");
+    const card = franchises.find((f) => f.id === id);
+    const standaloneId =
+      nextSubseriesId == null &&
+      card?.is_standalone &&
+      card.primary_subseries_id
+        ? card.primary_subseries_id
+        : nextSubseriesId;
     onNavigate({
       franchiseId: id,
-      subseriesId: nextSubseriesId,
+      subseriesId: standaloneId,
       seasonId: undefined,
       section: "overview",
     });
@@ -435,10 +457,43 @@ export default function SeriesModule({
           subseriesId={subseriesId}
           seasonId={seasonId}
           section={section}
+          overviewTab={overviewTab}
           universeId={universeId}
           busy={busy}
           isAdmin={isAdmin}
           userId={userId}
+          cardOrientation={cardOrientation}
+          onSetOrientation={onSetOrientation}
+          onOpenRelatedLocal={(it) => {
+            const title = (it.title || it.name || "").trim().toLowerCase();
+            if (!title) return false;
+            for (const f of franchises) {
+              if ((f.name || "").trim().toLowerCase() === title) {
+                onNavigate({
+                  franchiseId: f.id,
+                  subseriesId: undefined,
+                  seasonId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return true;
+              }
+              const hit = (f.subseries || []).find(
+                (s) => (s.title || "").trim().toLowerCase() === title
+              );
+              if (hit) {
+                onNavigate({
+                  franchiseId: f.id,
+                  subseriesId: hit.id,
+                  seasonId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return true;
+              }
+            }
+            return false;
+          }}
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource}
@@ -501,21 +556,28 @@ export default function SeriesModule({
               universeId,
             });
           }}
-          onNavigate={(patch) =>
+          onNavigate={(patch) => {
+            const nextSub =
+              "subseriesId" in patch ? patch.subseriesId : subseriesId;
+            const nextUniverse =
+              "universeId" in patch ? patch.universeId : universeId;
             onNavigate({
               franchiseId:
                 "franchiseId" in patch && patch.franchiseId
                   ? patch.franchiseId
                   : franchiseId,
-              subseriesId:
-                "subseriesId" in patch ? patch.subseriesId : subseriesId,
+              subseriesId: nextSub,
               seasonId: "seasonId" in patch ? patch.seasonId : seasonId,
               section: patch.section ?? section,
-              overviewTab: overviewTab,
-              universeId:
-                "universeId" in patch ? patch.universeId : universeId,
-            })
-          }
+              overviewTab:
+                "overviewTab" in patch && patch.overviewTab != null
+                  ? patch.overviewTab
+                  : nextUniverse != null && !nextSub
+                    ? "related"
+                    : overviewTab,
+              universeId: nextUniverse,
+            });
+          }}
         />
       </div>
     );

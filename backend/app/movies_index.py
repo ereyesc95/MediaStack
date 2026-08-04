@@ -328,6 +328,15 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
     }
 
 
+def _title_letter(title: str | None) -> str:
+    """A–Z catalog bucket from the film title (not the work folder letter)."""
+    t = (title or "").strip()
+    if not t:
+        return "#"
+    ch = t[0].upper()
+    return ch if "A" <= ch <= "Z" else "#"
+
+
 def build_movies_catalog(media_root: Path | None = None) -> dict:
     root = Path(media_root or settings.media_root or "")
     franchises = [
@@ -343,7 +352,8 @@ def build_movies_catalog(media_root: Path | None = None) -> dict:
                     **film,
                     "work_id": card["id"],
                     "work_name": card["name"],
-                    "letter": card["letter"],
+                    "letter": _title_letter(film.get("title")),
+                    "work_letter": card["letter"],
                 }
             )
     films.sort(

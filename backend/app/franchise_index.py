@@ -217,6 +217,9 @@ def _iter_work_leaf_items(
 
         Work/1986.02.26. Subseries/1986.12.20. Movie Title/
         Work/1986.12.20. Movie Title/   (flat — no hub)
+
+    Standalone works (no dated child folders) may store the video in the work
+    root, e.g. ``Work/2014.10.10. Title.mp4`` beside Audio/Gallery/Extras.
     """
     leaves: list[tuple[Path, str | None, str, str | None]] = []
     for child in _dated_children(work_dir):
@@ -236,6 +239,42 @@ def _iter_work_leaf_items(
             if _is_season_or_specials_title(title):
                 continue
             leaves.append((child, date_iso, title, None))
+    if leaves:
+        return leaves
+
+    # Standalone: dated (or any) video file directly under the work folder.
+    try:
+        from app.media_item_overview import VIDEO_EXTS
+    except ImportError:
+        VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"}
+    try:
+        videos = sorted(
+            (
+                p
+                for p in work_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in VIDEO_EXTS
+            ),
+            key=lambda p: p.name.casefold(),
+        )
+    except OSError:
+        videos = []
+    if not videos:
+        return leaves
+    # Prefer a dated filename; else first video titled as the work folder.
+    primary = None
+    date_iso = None
+    title = work_dir.name
+    for video in videos:
+        d, t = parse_dated_folder_name(video.stem)
+        if d:
+            primary = video
+            date_iso, title = d, t or work_dir.name
+            break
+    if primary is None:
+        primary = videos[0]
+        title = work_dir.name
+    # Treat the work folder itself as the film leaf (covers/gallery live here).
+    leaves.append((work_dir, date_iso, title, None))
     return leaves
 
 
@@ -311,6 +350,26 @@ def _scan_series(media_root: Path, index: FranchiseIndex) -> None:
                 continue
             slug = normalize_franchise_slug(franchise_dir.name)
             franchise_rel = franchise_dir.relative_to(media_root).as_posix()
+            # Standalone shows: date from earliest Episodes/{dated Season}/ folder.
+            show_date: str | None = None
+            try:
+                from app.series_paths import find_episodes_root
+
+                eps_root = find_episodes_root(franchise_dir)
+                season_dates: list[str] = []
+                for child in eps_root.iterdir():
+                    if not child.is_dir() or _is_meta_folder(child.name):
+                        continue
+                    d, title = parse_dated_folder_name(child.name)
+                    if d and (
+                        _is_season_or_specials_title(title)
+                        or d  # any dated folder under Episodes counts
+                    ):
+                        season_dates.append(d)
+                if season_dates:
+                    show_date = min(season_dates)
+            except OSError:
+                show_date = None
             _register_entry(
                 index,
                 slug=slug,
@@ -320,6 +379,7 @@ def _scan_series(media_root: Path, index: FranchiseIndex) -> None:
                     kind="series",
                     path=franchise_rel,
                     title=franchise_dir.name,
+                    date_iso=show_date,
                     letter=letter_dir.name,
                     franchise_display=franchise_dir.name,
                 ),

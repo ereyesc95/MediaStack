@@ -1,7 +1,7 @@
 """SQLAlchemy models aligned with MediaBinger databinger schema."""
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -324,15 +324,48 @@ class Universe(Base):
 
 
 class UniverseMember(Base):
-    """One franchise/work per row; each franchise belongs to at most one universe."""
+    """Leaf membership (film / subseries / show) in a universe.
+
+    ume_slug is the parent franchise/work id. ume_leaf_id is the film or
+    subseries id (equals ume_slug for a series with no subseries).
+    """
 
     __tablename__ = "universe_members"
+    __table_args__ = (
+        UniqueConstraint(
+            "ume_universe_id",
+            "ume_module",
+            "ume_slug",
+            "ume_leaf_id",
+            name="uq_universe_member_leaf",
+        ),
+    )
 
     ume_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ume_universe_id: Mapped[int] = mapped_column(Integer, index=True)
     ume_module: Mapped[str] = mapped_column(String(32), index=True)  # movies | series
-    ume_slug: Mapped[str] = mapped_column(String(255), index=True)
-    ume_source: Mapped[str | None] = mapped_column(String(64))  # manual | tmdb
+    ume_slug: Mapped[str] = mapped_column(String(255), index=True)  # franchise / work
+    ume_leaf_id: Mapped[str] = mapped_column(String(512), index=True, default="")
+    ume_source: Mapped[str | None] = mapped_column(String(64))  # manual | sync | tmdb
+
+
+class UniverseFranchiseSync(Base):
+    """Hidden sync rule: keep a franchise's current leaves in a universe."""
+
+    __tablename__ = "universe_franchise_syncs"
+    __table_args__ = (
+        UniqueConstraint(
+            "ufs_universe_id",
+            "ufs_module",
+            "ufs_franchise_slug",
+            name="uq_universe_franchise_sync",
+        ),
+    )
+
+    ufs_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ufs_universe_id: Mapped[int] = mapped_column(Integer, index=True)
+    ufs_module: Mapped[str] = mapped_column(String(32), index=True)
+    ufs_franchise_slug: Mapped[str] = mapped_column(String(255), index=True)
 
 
 class Book(Base):

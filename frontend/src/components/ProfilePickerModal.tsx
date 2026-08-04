@@ -3,7 +3,7 @@ import { fetchProfiles, selectProfile } from "../api";
 import type { ProfileUser } from "../auth";
 import AdminPasswordModal from "./AdminPasswordModal";
 import PlaylistBoot from "./PlaylistBoot";
-import ProfileAvatar from "./ProfileAvatar";
+import ProfileAvatar, { ProfileWelcomeLogo } from "./ProfileAvatar";
 import ProfileEditModal from "./ProfileEditModal";
 
 type Props = {
@@ -72,23 +72,30 @@ export default function ProfilePickerModal({
   return (
     <>
       <div className="modal-backdrop">
-        <div className="modal-panel modal-panel--profiles" onClick={(e) => e.stopPropagation()}>
-          <h3>Who&apos;s using MyStack?</h3>
-          <p className="muted">Choose a profile to continue.</p>
+        <div
+          className="modal-panel modal-panel--profiles"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="profile-picker-welcome">
+            <ProfileWelcomeLogo />
+            <span>Welcome to MyStack</span>
+          </h3>
           <ul className="profile-picker-list">
             {profiles.map((p) => (
               <li key={p.user_id} className="profile-picker-item">
                 <button
                   type="button"
                   className={`profile-picker-btn${
-                    highlightUserId === p.user_id ? " profile-picker-btn--active" : ""
+                    highlightUserId === p.user_id
+                      ? " profile-picker-btn--active"
+                      : ""
                   }`}
                   disabled={busy !== null}
                   onClick={() => handlePick(p)}
                 >
                   <ProfileAvatar
                     userId={p.user_id}
-                    name={p.username}
+                    name={p.is_admin ? "Admin" : p.username}
                     avatar={p.avatar}
                     isAdmin={p.is_admin}
                     className="profile-picker-avatar"
@@ -100,23 +107,24 @@ export default function ProfilePickerModal({
                     <span className="profile-picker-busy">…</span>
                   )}
                 </button>
-                {!p.is_admin && (
-                  <button
-                    type="button"
-                    className="profile-picker-edit"
-                    aria-label={`Edit ${p.username}`}
-                    disabled={busy !== null}
-                    onClick={() => setEditProfile(p)}
-                  >
-                    ✎
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="profile-picker-edit"
+                  aria-label={`Edit ${p.is_admin ? "Admin" : p.username}`}
+                  disabled={busy !== null}
+                  onClick={() => setEditProfile(p)}
+                >
+                  ✎
+                </button>
               </li>
             ))}
           </ul>
           {error && !adminPwOpen && <p className="error-inline">{error}</p>}
           {!profiles.length && !error && (
-            <PlaylistBoot className="playlist-boot--compact" label="Loading profiles…" />
+            <PlaylistBoot
+              className="playlist-boot--compact"
+              label="Loading profiles…"
+            />
           )}
         </div>
       </div>
@@ -136,6 +144,7 @@ export default function ProfilePickerModal({
       {editProfile && (
         <ProfileEditModal
           profile={editProfile}
+          lockName={Boolean(editProfile.is_admin)}
           onClose={() => setEditProfile(null)}
           onSaved={handleProfileSaved}
         />

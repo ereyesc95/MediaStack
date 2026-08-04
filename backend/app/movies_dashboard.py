@@ -82,10 +82,17 @@ def build_movies_dashboard(db: Session, user_id: int) -> dict:
             work_counts[wid] += plays(r)
 
     by_work = {f.get("id"): f for f in franchises if f.get("id")}
+
+    def _is_saga_card(card: dict | None) -> bool:
+        """True multi-film franchises only — standalones belong in Best Movies."""
+        if not card or card.get("is_standalone"):
+            return False
+        return int(card.get("film_count") or 0) > 1
+
     top_franchises: list[dict] = []
     for wid, count in work_counts.most_common(10):
         card = by_work.get(wid)
-        if not card:
+        if not _is_saga_card(card):
             continue
         top_franchises.append(
             {
@@ -103,7 +110,7 @@ def build_movies_dashboard(db: Session, user_id: int) -> dict:
     if len(top_franchises) < 10:
         seen = {t["id"] for t in top_franchises}
         ranked = sorted(
-            franchises,
+            (f for f in franchises if _is_saga_card(f)),
             key=lambda f: (
                 -int(f.get("film_count") or 0),
                 (f.get("name") or "").casefold(),

@@ -54,6 +54,21 @@ def slot_default_name(user_id: int) -> str:
 
 def list_profiles(db: Session) -> list[dict]:
     ensure_profiles(db)
+    from pathlib import Path
+
+    from app.paths import DATA_DIR
+
+    def _avatar_for(row: User) -> str | None:
+        avatar = row.usr_image
+        if avatar == "photo":
+            av_dir = DATA_DIR / "avatars"
+            if not any(
+                (av_dir / f"{row.usr_id}{ext}").is_file()
+                for ext in (".jpg", ".jpeg", ".png", ".webp")
+            ):
+                return None
+        return avatar
+
     out: list[dict] = []
     for slot in PROFILE_SLOTS:
         uid = int(slot["id"])
@@ -67,7 +82,7 @@ def list_profiles(db: Session) -> list[dict]:
                 "username": profile_display_name(row, str(slot["name"])),
                 "role_id": role_id,
                 "is_admin": is_admin_role(role_id),
-                "avatar": None if row.usr_id == ADMIN_USER_ID else row.usr_image,
+                "avatar": _avatar_for(row),
             }
         )
     return out

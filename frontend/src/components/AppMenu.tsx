@@ -826,7 +826,7 @@ export default function AppMenu({
               )}
             </>
           )}
-          {!isAdmin && onEditProfile && (
+          {onEditProfile && (
             <button
               type="button"
               onClick={() => {

@@ -402,6 +402,27 @@ def search_roster_artists(db: Session, query: str, *, limit: int = 25) -> list[d
     return out
 
 
+def continents_for_country_ids(
+    db: Session, country_ids: set[int] | None
+) -> list[dict]:
+    """Continents that have at least one country in ``country_ids`` (catalog-used)."""
+    if not country_ids:
+        return []
+    used_cont: set[int] = set()
+    for c in db.scalars(select(Country)).all():
+        if c.cou_id not in country_ids:
+            continue
+        cont_id = getattr(c, "cou_continent_id", None)
+        if cont_id is None or cont_id == ANTARCTICA_ID:
+            continue
+        used_cont.add(int(cont_id))
+    return [
+        {"id": c.con_id, "name": c.con_name}
+        for c in db.scalars(select(Continent).order_by(Continent.con_name)).all()
+        if c.con_name and c.con_id in used_cont
+    ]
+
+
 def _country_groups_from_ids(
     db: Session,
     country_ids: set[int] | None = None,
@@ -507,9 +528,11 @@ def filter_options(db: Session) -> dict:
     ]
 
     country_groups = _country_groups_from_ids(db, used_country_ids)
+    continents = continents_for_country_ids(db, used_country_ids)
 
     labels: set[str] = set()
     producers: dict[str, str] = {}
+    decades: set[int] = set()
     for rel in db.scalars(select(Release)).all():
         rel_band_ids = _parse_ids(rel.rel_fk_bands)
         if not any(bid in band_ids for bid in rel_band_ids):
@@ -520,6 +543,9 @@ def filter_options(db: Session) -> dict:
         prod = (rel.rel_fk_artists or "").strip()
         if prod:
             producers[prod] = prod
+        iso = (rel.rel_date or "").strip()
+        if len(iso) >= 4 and iso[:4].isdigit():
+            decades.add((int(iso[:4]) // 10) * 10)
 
     producer_list = []
     for pid in sorted(producers, key=lambda x: (not x.isdigit(), x.lower())):
@@ -530,11 +556,21 @@ def filter_options(db: Session) -> dict:
                 name = (artist.art_stage_name or artist.art_name or "").strip() or pid
         producer_list.append({"id": pid, "name": name})
 
+    letters: set[str] = set()
+    for b in bands:
+        raw = (b.bnd_name or "").strip()[:1].upper()
+        if raw and "A" <= raw <= "Z":
+            letters.add(raw)
+        elif raw:
+            letters.add("#")
+
     return {
         "subgenre_groups": subgenre_groups,
         "country_groups": country_groups,
         "all_country_groups": all_country_groups(db),
-        "decades": decade_options(),
+        "continents": continents,
+        "decades": sorted(decades),
         "labels": sorted(labels, key=str.lower),
         "producers": producer_list,
+        "letters": sorted(letters, key=lambda x: (x == "#", x)),
     }

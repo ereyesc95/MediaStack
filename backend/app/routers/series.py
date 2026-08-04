@@ -28,21 +28,16 @@ def series_filter_options(db: Session = Depends(get_db)):
     from sqlalchemy import select
 
     from app.media_item_admin import list_people_for_kind, list_publishers_for_kind
-    from app.models import Continent, Country, Genre, Series, Subgenre
+    from app.models import Country, Genre, Series, Subgenre
     from app.music_filters import (
         _country_groups_from_ids,
         all_country_groups,
-        decade_options,
+        continents_for_country_ids,
     )
     from app.seed_music import ensure_music_lookup_data
     from app.series_index import build_series_catalog
 
     ensure_music_lookup_data(db)
-    continents = [
-        {"id": c.con_id, "name": c.con_name}
-        for c in db.scalars(select(Continent).order_by(Continent.con_name)).all()
-        if c.con_name and c.con_id != 1007
-    ]
 
     # Full taxonomy (Movies 300 + Series 400) for Edit about
     parent_genres = {
@@ -155,9 +150,10 @@ def series_filter_options(db: Session = Depends(get_db)):
     country_groups = _country_groups_from_ids(db, used_country_ids or None)
     if not used_isos:
         country_groups = []
+    continents = continents_for_country_ids(db, used_country_ids)
 
     catalog = build_series_catalog()
-    decades: set[int] = set(decade_options())
+    decades: set[int] = set()
     for f in catalog.get("franchises") or []:
         for s in f.get("subseries") or []:
             iso = s.get("date_iso") or ""

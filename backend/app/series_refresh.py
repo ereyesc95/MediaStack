@@ -252,9 +252,19 @@ async def refresh_series_metadata(
 
     # Same-creator + similar series from TMDb
     creator_credits: list = []
+    via_by_id = {
+        int(c["id"]): (c.get("name") or "").strip()
+        for c in (raw.get("created_by") or [])
+        if isinstance(c, dict) and isinstance(c.get("id"), int) and c.get("name")
+    }
     for cid in (data.get("creator_ids") or [])[:3]:
         try:
-            creator_credits.extend(await fetch_person_tv_credits(int(cid), api_key))
+            person_id = int(cid)
+            person_name = via_by_id.get(person_id) or ""
+            for credit in await fetch_person_tv_credits(person_id, api_key):
+                if person_name and isinstance(credit, dict):
+                    credit = {**credit, "_via_person": person_name}
+                creator_credits.append(credit)
         except Exception:
             continue
     related = build_related_from_tv(

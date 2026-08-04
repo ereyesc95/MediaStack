@@ -198,9 +198,15 @@ export default function SeriesHome({
   const dashClass = DASH_LAYOUT_CLASS[layout];
 
   return (
-    <div className={`music-dashboard series-dashboard${dashClass}`}>
+    <div
+      className={`music-dashboard series-dashboard${dashClass}${
+        loading ? "" : " dash-appear-ready"
+      }`}
+    >
       {loading ? <p className="muted dash-status">Updating…</p> : null}
 
+      {!loading ? (
+        <>
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
           logo="/api/assets/icons/pane-on-repeat"
@@ -375,6 +381,8 @@ export default function SeriesHome({
           />
         </div>
       </section>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.franchise_index import normalize_franchise_slug
 from app.gallery import IMAGE_EXTS, _media_url
-from app.models import Universe, UniverseMember
+from app.models import Universe, UniverseFranchiseSync, UniverseMember
 
 ModuleKind = Literal["movies", "series"]
 ART_KINDS = ("Portrait", "Landscape", "Banner", "Logo")
@@ -102,11 +102,12 @@ def _serialize_universe(
     *,
     include_members: bool = True,
     cover_fallback: str | None = None,
+    expand_cover: bool = False,
 ) -> dict:
     art = resolve_universe_art(u)
     members = _member_rows(db, u.uni_id) if include_members else []
     cover = art.get("cover_url") or cover_fallback
-    if not cover and include_members:
+    if not cover and include_members and expand_cover:
         cards = expand_universe_cards(db, u.uni_id)
         for c in cards:
             cover = (
@@ -129,7 +130,12 @@ def _serialize_universe(
         "cover_url": cover,
         "member_count": len(members),
         "members": [
-            {"module": m.ume_module, "slug": m.ume_slug, "source": m.ume_source}
+            {
+                "module": m.ume_module,
+                "slug": m.ume_slug,
+                "leaf_id": m.ume_leaf_id or m.ume_slug,
+                "source": m.ume_source,
+            }
             for m in members
         ]
         if include_members
@@ -139,7 +145,8 @@ def _serialize_universe(
 
 def list_universes(db: Session) -> list[dict]:
     rows = db.scalars(select(Universe).order_by(Universe.uni_name)).all()
-    return [_serialize_universe(db, u) for u in rows]
+    # Skip per-universe disk expands for list covers — keeps home/catalog snappy.
+    return [_serialize_universe(db, u, expand_cover=False) for u in rows]
 
 
 def get_universe(db: Session, universe_id: int) -> dict | None:
@@ -152,31 +159,467 @@ def get_universe(db: Session, universe_id: int) -> dict | None:
 def universe_for_franchise(
     db: Session, module: ModuleKind, slug: str
 ) -> dict | None:
-    norm = _norm_slug(slug)
-    member = db.scalar(
-        select(UniverseMember).where(
-            UniverseMember.ume_module == module,
-            UniverseMember.ume_slug == norm,
+    """Return the first universe for a franchise (compat). Prefer universes_for_franchise."""
+    rows = universes_for_franchise(db, module, slug)
+    return rows[0] if rows else None
+
+
+def _norm_leaf_id(leaf_id: str | None, franchise_slug: str) -> str:
+    lid = (leaf_id or "").strip()
+    return lid or franchise_slug
+
+
+_leaf_cards_cache: dict[tuple[str, str], list[dict]] = {}
+_expand_cards_cache: dict[int, list[dict]] = {}
+
+
+def clear_universe_card_caches() -> None:
+    _leaf_cards_cache.clear()
+    _expand_cards_cache.clear()
+
+
+def _leaf_card(
+    module: ModuleKind, franchise_slug: str, leaf_id: str
+) -> dict | None:
+    want = (leaf_id or "").casefold().strip()
+    for card in _leaf_cards_for_member(module, franchise_slug):
+        cid = (card.get("leaf_id") or card.get("id") or "").casefold()
+        if cid == want:
+            return card
+    return None
+
+
+def migrate_legacy_universe_members(db: Session) -> int:
+    """Expand pre-leaf franchise rows into leaf members + sync rules."""
+    legacy = list(
+        db.scalars(
+            select(UniverseMember).where(
+                (UniverseMember.ume_leaf_id == "")
+                | (UniverseMember.ume_leaf_id.is_(None))  # type: ignore[union-attr]
+            )
+        ).all()
+    )
+    if not legacy:
+        return 0
+    changed = 0
+    for row in legacy:
+        module = row.ume_module
+        if module not in ("movies", "series"):
+            db.delete(row)
+            changed += 1
+            continue
+        franchise = _norm_slug(row.ume_slug)
+        universe_id = row.ume_universe_id
+        cards = _leaf_cards_for_member(module, franchise)  # type: ignore[arg-type]
+        leaf_ids = [
+            str(c.get("leaf_id") or c.get("id") or franchise) for c in cards
+        ] or [franchise]
+        for lid in leaf_ids:
+            _ensure_leaf_member(
+                db,
+                universe_id=universe_id,
+                module=module,  # type: ignore[arg-type]
+                franchise_slug=franchise,
+                leaf_id=lid,
+                source=row.ume_source or "manual",
+                commit=False,
+            )
+        _ensure_sync_rule(
+            db,
+            universe_id=universe_id,
+            module=module,  # type: ignore[arg-type]
+            franchise_slug=franchise,
+            commit=False,
+        )
+        db.delete(row)
+        changed += 1
+    db.commit()
+    return changed
+
+
+def _ensure_sync_rule(
+    db: Session,
+    *,
+    universe_id: int,
+    module: ModuleKind,
+    franchise_slug: str,
+    commit: bool = True,
+) -> None:
+    norm = _norm_slug(franchise_slug)
+    existing = db.scalar(
+        select(UniverseFranchiseSync).where(
+            UniverseFranchiseSync.ufs_universe_id == universe_id,
+            UniverseFranchiseSync.ufs_module == module,
+            UniverseFranchiseSync.ufs_franchise_slug == norm,
         )
     )
-    if not member:
-        # Also try raw slug if normalize differed
-        if slug and slug != norm:
-            member = db.scalar(
+    if not existing:
+        db.add(
+            UniverseFranchiseSync(
+                ufs_universe_id=universe_id,
+                ufs_module=module,
+                ufs_franchise_slug=norm,
+            )
+        )
+    if commit:
+        db.commit()
+
+
+def _clear_sync_rule(
+    db: Session,
+    *,
+    universe_id: int,
+    module: ModuleKind,
+    franchise_slug: str,
+    commit: bool = True,
+) -> None:
+    norm = _norm_slug(franchise_slug)
+    rows = list(
+        db.scalars(
+            select(UniverseFranchiseSync).where(
+                UniverseFranchiseSync.ufs_universe_id == universe_id,
+                UniverseFranchiseSync.ufs_module == module,
+                UniverseFranchiseSync.ufs_franchise_slug == norm,
+            )
+        ).all()
+    )
+    for row in rows:
+        db.delete(row)
+    if commit:
+        db.commit()
+
+
+def _ensure_leaf_member(
+    db: Session,
+    *,
+    universe_id: int,
+    module: ModuleKind,
+    franchise_slug: str,
+    leaf_id: str,
+    source: str = "manual",
+    commit: bool = True,
+) -> bool:
+    """Insert leaf membership if missing. Returns True when a row was added."""
+    norm = _norm_slug(franchise_slug)
+    lid = _norm_leaf_id(leaf_id, norm)
+    existing = db.scalar(
+        select(UniverseMember).where(
+            UniverseMember.ume_universe_id == universe_id,
+            UniverseMember.ume_module == module,
+            UniverseMember.ume_slug == norm,
+            UniverseMember.ume_leaf_id == lid,
+        )
+    )
+    if existing:
+        return False
+    db.add(
+        UniverseMember(
+            ume_universe_id=universe_id,
+            ume_module=module,
+            ume_slug=norm,
+            ume_leaf_id=lid,
+            ume_source=source,
+        )
+    )
+    if commit:
+        db.commit()
+    _expand_cards_cache.pop(universe_id, None)
+    return True
+
+
+def apply_franchise_syncs(db: Session, module: ModuleKind, franchise_slug: str) -> int:
+    """Materialize missing leaves for active sync rules on this franchise."""
+    norm = _norm_slug(franchise_slug)
+    rules = list(
+        db.scalars(
+            select(UniverseFranchiseSync).where(
+                UniverseFranchiseSync.ufs_module == module,
+                UniverseFranchiseSync.ufs_franchise_slug == norm,
+            )
+        ).all()
+    )
+    if not rules:
+        return 0
+    cards = _leaf_cards_for_member(module, norm)
+    leaf_ids = [str(c.get("leaf_id") or c.get("id") or norm) for c in cards] or [
+        norm
+    ]
+    added = 0
+    for rule in rules:
+        for lid in leaf_ids:
+            if _ensure_leaf_member(
+                db,
+                universe_id=rule.ufs_universe_id,
+                module=module,
+                franchise_slug=norm,
+                leaf_id=lid,
+                source="sync",
+                commit=False,
+            ):
+                added += 1
+    if added:
+        db.commit()
+    return added
+
+
+def universes_for_leaf(
+    db: Session,
+    module: ModuleKind,
+    franchise_slug: str,
+    leaf_id: str | None = None,
+) -> list[dict]:
+    """Universes this specific leaf belongs to."""
+    apply_franchise_syncs(db, module, franchise_slug)
+    norm = _norm_slug(franchise_slug)
+    lid = _norm_leaf_id(leaf_id, norm)
+    members = list(
+        db.scalars(
+            select(UniverseMember).where(
+                UniverseMember.ume_module == module,
+                UniverseMember.ume_slug == norm,
+                UniverseMember.ume_leaf_id == lid,
+            )
+        ).all()
+    )
+    # Compat: legacy empty leaf_id rows matching franchise
+    if not members:
+        members = list(
+            db.scalars(
                 select(UniverseMember).where(
                     UniverseMember.ume_module == module,
-                    UniverseMember.ume_slug == slug.casefold().strip(),
+                    UniverseMember.ume_slug == norm,
+                    UniverseMember.ume_leaf_id == "",
                 )
+            ).all()
+        )
+    out: list[dict] = []
+    seen: set[int] = set()
+    for member in members:
+        if member.ume_universe_id in seen:
+            continue
+        u = db.get(Universe, member.ume_universe_id)
+        if not u:
+            continue
+        seen.add(u.uni_id)
+        data = _serialize_universe(db, u)
+        data["parent_module"] = module
+        data["parent_slug"] = member.ume_slug
+        data["leaf_id"] = member.ume_leaf_id or lid
+        out.append(data)
+    out.sort(key=lambda x: (x.get("name") or "").casefold())
+    return out
+
+
+def universes_for_franchise(
+    db: Session, module: ModuleKind, slug: str
+) -> list[dict]:
+    """Union of universes any leaf of this franchise belongs to."""
+    apply_franchise_syncs(db, module, slug)
+    norm = _norm_slug(slug)
+    members = list(
+        db.scalars(
+            select(UniverseMember).where(
+                UniverseMember.ume_module == module,
+                UniverseMember.ume_slug == norm,
             )
-    if not member:
-        return None
-    u = db.get(Universe, member.ume_universe_id)
+        ).all()
+    )
+    out: list[dict] = []
+    seen: set[int] = set()
+    for member in members:
+        if member.ume_universe_id in seen:
+            continue
+        u = db.get(Universe, member.ume_universe_id)
+        if not u:
+            continue
+        seen.add(u.uni_id)
+        data = _serialize_universe(db, u)
+        data["parent_module"] = module
+        data["parent_slug"] = member.ume_slug
+        out.append(data)
+    out.sort(key=lambda x: (x.get("name") or "").casefold())
+    return out
+
+
+def franchise_has_sync(
+    db: Session, module: ModuleKind, franchise_slug: str, universe_id: int
+) -> bool:
+    norm = _norm_slug(franchise_slug)
+    return (
+        db.scalar(
+            select(UniverseFranchiseSync).where(
+                UniverseFranchiseSync.ufs_universe_id == universe_id,
+                UniverseFranchiseSync.ufs_module == module,
+                UniverseFranchiseSync.ufs_franchise_slug == norm,
+            )
+        )
+        is not None
+    )
+
+
+def franchise_universe_bundle(
+    db: Session,
+    module: ModuleKind,
+    slug: str,
+    *,
+    prefer_universe_id: int | None = None,
+) -> tuple[list[dict], dict | None, list[dict], list[dict], list[dict]]:
+    """
+    Returns (universes, active_universe, active_cards, merged_cards, groups).
+    universes = union across franchise leaves. Cards are always leaf-level.
+    """
+    universes = universes_for_franchise(db, module, slug)
+    active: dict | None = None
+    if prefer_universe_id is not None:
+        active = next((u for u in universes if u.get("id") == prefer_universe_id), None)
+    if active is None and universes:
+        active = universes[0]
+
+    groups: list[dict] = []
+    merged: list[dict] = []
+    seen: set[tuple] = set()
+    for u in universes:
+        cards = expand_universe_cards(db, u["id"])
+        for c in cards:
+            c.setdefault("universe_id", u["id"])
+        groups.append(
+            {
+                "id": u["id"],
+                "name": u["name"],
+                "count": len(cards),
+                "items": cards,
+            }
+        )
+        for c in cards:
+            key = (
+                c.get("module"),
+                (c.get("franchise_id") or "").casefold(),
+                (c.get("leaf_id") or c.get("id") or "").casefold(),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(c)
+
+    active_cards = (
+        next((g["items"] for g in groups if g["id"] == active["id"]), [])
+        if active
+        else []
+    )
+    return universes, active, active_cards, merged, groups
+
+
+def link_franchise(
+    db: Session,
+    *,
+    universe_id: int,
+    module: ModuleKind,
+    slug: str,
+    source: str = "manual",
+    leaf_id: str | None = None,
+) -> dict:
+    """Link a franchise (bulk + sync) or a single leaf when leaf_id is set."""
+    if module not in ("movies", "series"):
+        raise ValueError("module must be movies or series")
+    u = db.get(Universe, universe_id)
     if not u:
-        return None
-    data = _serialize_universe(db, u)
-    data["parent_module"] = module
-    data["parent_slug"] = member.ume_slug
-    return data
+        raise ValueError("Universe not found")
+    norm = _norm_slug(slug)
+    if leaf_id:
+        _ensure_leaf_member(
+            db,
+            universe_id=universe_id,
+            module=module,
+            franchise_slug=norm,
+            leaf_id=leaf_id,
+            source=source,
+            commit=True,
+        )
+        return _serialize_universe(db, u)
+
+    # Bulk: sync rule + all current leaves (skip existing).
+    _ensure_sync_rule(
+        db,
+        universe_id=universe_id,
+        module=module,
+        franchise_slug=norm,
+        commit=False,
+    )
+    cards = _leaf_cards_for_member(module, norm)
+    leaf_ids = [str(c.get("leaf_id") or c.get("id") or norm) for c in cards] or [
+        norm
+    ]
+    for lid in leaf_ids:
+        _ensure_leaf_member(
+            db,
+            universe_id=universe_id,
+            module=module,
+            franchise_slug=norm,
+            leaf_id=lid,
+            source=source,
+            commit=False,
+        )
+    db.commit()
+    return _serialize_universe(db, u)
+
+
+def unlink_franchise(
+    db: Session,
+    *,
+    module: ModuleKind,
+    slug: str,
+    universe_id: int | None = None,
+    leaf_id: str | None = None,
+) -> None:
+    """Unlink a leaf (demotes sync) or all franchise leaves in a universe."""
+    norm = _norm_slug(slug)
+    if leaf_id and universe_id is not None:
+        lid = _norm_leaf_id(leaf_id, norm)
+        rows = list(
+            db.scalars(
+                select(UniverseMember).where(
+                    UniverseMember.ume_universe_id == universe_id,
+                    UniverseMember.ume_module == module,
+                    UniverseMember.ume_slug == norm,
+                    UniverseMember.ume_leaf_id == lid,
+                )
+            ).all()
+        )
+        for row in rows:
+            db.delete(row)
+        # Demote: clear sync so new children no longer auto-join.
+        _clear_sync_rule(
+            db,
+            universe_id=universe_id,
+            module=module,
+            franchise_slug=norm,
+            commit=False,
+        )
+        db.commit()
+        _expand_cards_cache.pop(universe_id, None)
+        return
+
+    q = select(UniverseMember).where(
+        UniverseMember.ume_module == module,
+        UniverseMember.ume_slug == norm,
+    )
+    if universe_id is not None:
+        q = q.where(UniverseMember.ume_universe_id == universe_id)
+    rows = list(db.scalars(q).all())
+    for row in rows:
+        db.delete(row)
+        _expand_cards_cache.pop(row.ume_universe_id, None)
+    sync_q = select(UniverseFranchiseSync).where(
+        UniverseFranchiseSync.ufs_module == module,
+        UniverseFranchiseSync.ufs_franchise_slug == norm,
+    )
+    if universe_id is not None:
+        sync_q = sync_q.where(
+            UniverseFranchiseSync.ufs_universe_id == universe_id
+        )
+    for rule in list(db.scalars(sync_q).all()):
+        db.delete(rule)
+    db.commit()
 
 
 def create_universe(
@@ -266,63 +709,6 @@ def _rename_universe_art_files(old_name: str, new_name: str) -> None:
             pass
 
 
-def link_franchise(
-    db: Session,
-    *,
-    universe_id: int,
-    module: ModuleKind,
-    slug: str,
-    source: str = "manual",
-) -> dict:
-    if module not in ("movies", "series"):
-        raise ValueError("module must be movies or series")
-    u = db.get(Universe, universe_id)
-    if not u:
-        raise ValueError("Universe not found")
-    norm = _norm_slug(slug)
-    # One universe per franchise: drop any prior membership
-    prior = list(
-        db.scalars(
-            select(UniverseMember).where(
-                UniverseMember.ume_module == module,
-                UniverseMember.ume_slug == norm,
-            )
-        ).all()
-    )
-    for row in prior:
-        db.delete(row)
-    db.add(
-        UniverseMember(
-            ume_universe_id=universe_id,
-            ume_module=module,
-            ume_slug=norm,
-            ume_source=source,
-        )
-    )
-    db.commit()
-    return _serialize_universe(db, u)
-
-
-def unlink_franchise(
-    db: Session,
-    *,
-    module: ModuleKind,
-    slug: str,
-    universe_id: int | None = None,
-) -> None:
-    norm = _norm_slug(slug)
-    q = select(UniverseMember).where(
-        UniverseMember.ume_module == module,
-        UniverseMember.ume_slug == norm,
-    )
-    if universe_id is not None:
-        q = q.where(UniverseMember.ume_universe_id == universe_id)
-    rows = list(db.scalars(q).all())
-    for row in rows:
-        db.delete(row)
-    db.commit()
-
-
 def save_universe_art_bytes(
     universe: Universe,
     kind: str,
@@ -361,11 +747,17 @@ def _franchise_earliest_date(module: ModuleKind, slug: str) -> str:
 
 
 def _leaf_cards_for_member(module: ModuleKind, slug: str) -> list[dict]:
+    cache_key = (module, (slug or "").casefold().strip())
+    cached = _leaf_cards_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     if module == "movies":
         from app.movies_index import build_work_detail
 
         detail = build_work_detail(slug)
         if not detail:
+            _leaf_cards_cache[cache_key] = []
             return []
         work_id = detail.get("id") or detail.get("slug") or slug
         films = detail.get("films") or []
@@ -380,16 +772,18 @@ def _leaf_cards_for_member(module: ModuleKind, slug: str) -> list[dict]:
                     "kind": "film",
                 }
             )
+        _leaf_cards_cache[cache_key] = out
         return out
 
     from app.series_index import build_franchise_detail
 
     detail = build_franchise_detail(slug)
     if not detail:
+        _leaf_cards_cache[cache_key] = []
         return []
     franchise_id = detail.get("id") or slug
     subseries = detail.get("subseries") or []
-    out = []
+    out: list[dict] = []
     if subseries:
         for s in subseries:
             out.append(
@@ -398,79 +792,179 @@ def _leaf_cards_for_member(module: ModuleKind, slug: str) -> list[dict]:
                     "module": "series",
                     "franchise_id": franchise_id,
                     "leaf_id": s.get("id"),
-                    "kind": "subseries",
+                    "kind": "subseries"
+                    if not s.get("is_standalone")
+                    else "show",
                     "title": s.get("title") or s.get("name"),
                 }
             )
-        return out
-    # No subseries: treat franchise itself as one card when it has seasons/episodes
-    seasons = detail.get("seasons") or []
-    if seasons or detail.get("episode_count"):
-        out.append(
-            {
-                "id": franchise_id,
-                "title": detail.get("name") or franchise_id,
-                "name": detail.get("name"),
-                "date_iso": detail.get("date_iso")
-                or detail.get("starting_date")
-                or None,
-                "display_date": detail.get("display_date"),
-                "cover_url": detail.get("cover_url"),
-                "portrait_url": detail.get("portrait_url") or detail.get("cover_url"),
-                "landscape_url": detail.get("landscape_url"),
-                "banner_url": detail.get("banner_url"),
-                "logo_url": detail.get("logo_url"),
-                "folder_path": detail.get("folder_path"),
-                "module": "series",
-                "franchise_id": franchise_id,
-                "leaf_id": franchise_id,
-                "kind": "franchise",
-            }
-        )
+    else:
+        # No subseries: treat franchise itself as one card when it has seasons/episodes
+        seasons = detail.get("seasons") or []
+        if seasons or detail.get("episode_count"):
+            date_iso = detail.get("date_iso") or detail.get("starting_date")
+            display_date = detail.get("display_date")
+            if not date_iso and seasons:
+                dated = [s for s in seasons if s.get("date_iso")]
+                if dated:
+                    best = min(dated, key=lambda s: str(s.get("date_iso") or "9999"))
+                    date_iso = best.get("date_iso")
+                    display_date = best.get("display_date")
+            out.append(
+                {
+                    "id": franchise_id,
+                    "title": detail.get("name") or franchise_id,
+                    "name": detail.get("name"),
+                    "date_iso": date_iso,
+                    "display_date": display_date,
+                    "cover_url": detail.get("cover_url"),
+                    "portrait_url": detail.get("portrait_url") or detail.get("cover_url"),
+                    "landscape_url": detail.get("landscape_url"),
+                    "banner_url": detail.get("banner_url"),
+                    "logo_url": detail.get("logo_url"),
+                    "folder_path": detail.get("folder_path"),
+                    "module": "series",
+                    "franchise_id": franchise_id,
+                    "leaf_id": franchise_id,
+                    "kind": "show",
+                }
+            )
+    _leaf_cards_cache[cache_key] = out
     return out
 
 
 def expand_universe_cards(db: Session, universe_id: int) -> list[dict]:
+    cached = _expand_cards_cache.get(universe_id)
+    if cached is not None:
+        return cached
     members = _member_rows(db, universe_id)
     cards: list[dict] = []
+    seen: set[tuple] = set()
     for m in members:
         if m.ume_module not in ("movies", "series"):
             continue
-        cards.extend(_leaf_cards_for_member(m.ume_module, m.ume_slug))  # type: ignore[arg-type]
+        module = m.ume_module  # type: ignore[assignment]
+        leaf_id = (m.ume_leaf_id or "").strip()
+        if leaf_id:
+            card = _leaf_card(module, m.ume_slug, leaf_id)
+            if not card:
+                # Leaf missing on disk — skip rather than expand whole franchise.
+                continue
+            key = (module, m.ume_slug.casefold(), leaf_id.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            cards.append({**card, "universe_id": universe_id})
+            continue
+        # Legacy franchise-only row: expand all children once.
+        for card in _leaf_cards_for_member(module, m.ume_slug):
+            lid = str(card.get("leaf_id") or card.get("id") or m.ume_slug)
+            key = (module, m.ume_slug.casefold(), lid.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            cards.append({**card, "universe_id": universe_id})
     cards.sort(
         key=lambda c: (
             c.get("date_iso") or "9999",
             (c.get("title") or c.get("name") or "").casefold(),
         )
     )
+    _expand_cards_cache[universe_id] = cards
     return cards
 
 
 def landing_franchise(
     db: Session, universe_id: int, prefer_module: ModuleKind
 ) -> dict | None:
-    """Prefer current module, else other; within module earliest release."""
+    """Pick a landing page for a universe card click.
+
+    Prefer the earliest multi-leaf franchise hub when one exists; otherwise the
+    earliest standalone leaf page.
+    """
     members = _member_rows(db, universe_id)
     if not members:
         return None
 
-    def pick(module: ModuleKind) -> UniverseMember | None:
-        pool = [m for m in members if m.ume_module == module]
-        if not pool:
-            return None
-        pool.sort(key=lambda m: _franchise_earliest_date(module, m.ume_slug))
-        return pool[0]
+    def module_pool(module: ModuleKind) -> list[UniverseMember]:
+        return [m for m in members if m.ume_module == module]
 
-    chosen = pick(prefer_module) or pick(
+    def franchise_groups(
+        module: ModuleKind,
+    ) -> dict[str, list[UniverseMember]]:
+        groups: dict[str, list[UniverseMember]] = {}
+        for m in module_pool(module):
+            groups.setdefault(_norm_slug(m.ume_slug), []).append(m)
+        return groups
+
+    def earliest_date(module: ModuleKind, slug: str) -> str:
+        return _franchise_earliest_date(module, slug)
+
+    def is_multi_leaf(module: ModuleKind, slug: str, rows: list[UniverseMember]) -> bool:
+        """True when this work is a franchise hub (2+ films/shows), not a standalone."""
+        if len(rows) > 1:
+            return True
+        cards = _leaf_cards_for_member(module, slug)
+        if len(cards) > 1:
+            return True
+        if len(cards) == 1 and cards[0].get("is_standalone"):
+            return False
+        # Single leaf whose title differs from the work name → treat as franchise folder
+        if module == "movies":
+            from app.movies_index import build_work_detail
+
+            detail = build_work_detail(slug)
+            if detail and int(detail.get("film_count") or 0) > 1:
+                return True
+            if detail and detail.get("is_standalone"):
+                return False
+            # film_count == 1 and not standalone (e.g. HIM/Poison Arrow) → hub ok
+            if detail and int(detail.get("film_count") or 0) == 1:
+                return not bool(detail.get("is_standalone"))
+        return False
+
+    def pick(module: ModuleKind) -> dict | None:
+        groups = franchise_groups(module)
+        if not groups:
+            return None
+        hubs: list[tuple[str, str]] = []
+        standalones: list[tuple[str, str, str]] = []
+        for slug, rows in groups.items():
+            date = earliest_date(module, slug)
+            if is_multi_leaf(module, slug, rows):
+                hubs.append((date, slug))
+                continue
+            # Standalone leaf
+            leaf = (rows[0].ume_leaf_id or "").strip() or slug
+            cards = _leaf_cards_for_member(module, slug)
+            if cards:
+                leaf = str(cards[0].get("leaf_id") or cards[0].get("id") or leaf)
+                date = str(cards[0].get("date_iso") or date)
+            standalones.append((date, slug, leaf))
+
+        if hubs:
+            hubs.sort(key=lambda x: (x[0], x[1].casefold()))
+            _date, slug = hubs[0]
+            return {
+                "module": module,
+                "franchise_id": slug,
+                "leaf_id": None,
+                "universe_id": universe_id,
+            }
+        if standalones:
+            standalones.sort(key=lambda x: (x[0], x[1].casefold()))
+            _date, slug, leaf = standalones[0]
+            return {
+                "module": module,
+                "franchise_id": slug,
+                "leaf_id": leaf,
+                "universe_id": universe_id,
+            }
+        return None
+
+    return pick(prefer_module) or pick(
         "series" if prefer_module == "movies" else "movies"
     )
-    if not chosen:
-        return None
-    return {
-        "module": chosen.ume_module,
-        "franchise_id": chosen.ume_slug,
-        "universe_id": universe_id,
-    }
 
 
 def universe_member_slugs(db: Session, universe_id: int) -> set[tuple[str, str]]:
@@ -491,33 +985,29 @@ def filter_similar_against_universe(
     franchise_slug: str,
     similar: list[dict],
 ) -> list[dict]:
-    """Drop similar entries that match any franchise in the same universe."""
-    uni = universe_for_franchise(db, module, franchise_slug)
-    if not uni:
+    """Drop similar entries that match any franchise in any shared universe."""
+    universes = universes_for_franchise(db, module, franchise_slug)
+    if not universes:
         return similar
-    member_slugs = {
-        m["slug"].casefold()
-        for m in (uni.get("members") or [])
-        if m.get("slug")
-    }
+    member_slugs: set[str] = set()
     member_name_keys: set[str] = set()
-    if uni.get("name"):
-        member_name_keys.add(_norm_title_key(uni["name"]))
-    for m in uni.get("members") or []:
-        slug = (m.get("slug") or "").strip()
-        if slug:
-            member_name_keys.add(_norm_title_key(slug))
-
-    # Also collect leaf titles for loose matching against TMDb similar titles
     leaf_keys: set[str] = set()
-    for c in expand_universe_cards(db, uni["id"]):
-        t = (c.get("title") or c.get("name") or "").strip()
-        if t:
-            leaf_keys.add(_norm_title_key(t))
-        fid = (c.get("franchise_id") or "").casefold()
-        if fid:
-            member_slugs.add(fid)
-            member_name_keys.add(_norm_title_key(fid))
+    for uni in universes:
+        if uni.get("name"):
+            member_name_keys.add(_norm_title_key(uni["name"]))
+        for m in uni.get("members") or []:
+            slug = (m.get("slug") or "").strip()
+            if slug:
+                member_slugs.add(slug.casefold())
+                member_name_keys.add(_norm_title_key(slug))
+        for c in expand_universe_cards(db, uni["id"]):
+            t = (c.get("title") or c.get("name") or "").strip()
+            if t:
+                leaf_keys.add(_norm_title_key(t))
+            fid = (c.get("franchise_id") or "").casefold()
+            if fid:
+                member_slugs.add(fid)
+                member_name_keys.add(_norm_title_key(fid))
 
     out = []
     for item in similar:
@@ -528,8 +1018,6 @@ def filter_similar_against_universe(
             continue
         if sid and sid in member_slugs:
             continue
-        # Franchise / universe name is a substantial substring of the similar title
-        # (e.g. "Fantastic Beasts: …" vs member "fantastic beasts").
         if title_key and any(
             len(mk) >= 8 and (mk in title_key or title_key in mk)
             for mk in member_name_keys

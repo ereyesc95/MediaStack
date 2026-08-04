@@ -1,6 +1,11 @@
+@import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
 import { addSeriesRelated, removeSeriesRelated } from "../../api";
-import type { ArtistCard as ArtistCardType, CardOrientation, SeriesRelatedShow } from "../../types";
+import type {
+  ArtistCard as ArtistCardType,
+  CardOrientation,
+  SeriesRelatedShow,
+} from "../../types";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import ArtistCard from "../ArtistCard";
 import ModalPortal from "../ModalPortal";
@@ -8,6 +13,8 @@ import ConfirmDialog from "../ConfirmDialog";
 
 export type SeriesRelatedTab = "universe" | "creator" | "similar";
 type SeriesRelatedTmdbTab = "creator" | "similar";
+
+type ViaTag = { text: string; x: number; y: number };
 
 type Props = {
   franchiseId: string;
@@ -21,6 +28,8 @@ type Props = {
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
+  /** Prefer in-app navigation when the title exists on disk. Return true if handled. */
+  onOpenLocal?: (item: SeriesRelatedShow) => boolean;
 };
 
 function toArtistCard(it: SeriesRelatedShow): ArtistCardType {
@@ -39,6 +48,13 @@ function toArtistCard(it: SeriesRelatedShow): ArtistCardType {
     show_name_on_hover: true,
     starting_dates: it.date_iso || null,
   };
+}
+
+function viaMembersTag(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 }
 
 function AddRelatedModal({
@@ -88,7 +104,7 @@ function AddRelatedModal({
       >
         <div className="modal-panel-header">
           <h3>
-            Add {bucket === "creator" ? "same author" : "similar"} series
+            Add {bucket === "creator" ? "same talent" : "similar"} title
           </h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
@@ -154,6 +170,7 @@ export default function SeriesRelatedPanel({
   addOpen,
   onAddClose,
   onDataChanged,
+  onOpenLocal,
 }: Props) {
   const isPhone = usePhoneLayout();
   const items = useMemo(
@@ -165,6 +182,8 @@ export default function SeriesRelatedPanel({
   );
   const [removeBusy, setRemoveBusy] = useState(false);
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
+  const [viaTag, setViaTag] = useState<ViaTag | null>(null);
+  const [mobileViaTag, setMobileViaTag] = useState<string | null>(null);
 
   const confirmRemove = async () => {
     if (!removeTarget || tab === "universe") return;
@@ -182,6 +201,11 @@ export default function SeriesRelatedPanel({
     }
   };
 
+  const showViaTag = (e: MouseEvent, text: string) => {
+    setViaTag({ text, x: e.clientX + 12, y: e.clientY + 14 });
+  };
+  const hideViaTag = () => setViaTag(null);
+
   if (tab === "universe") {
     return null;
   }
@@ -192,11 +216,11 @@ export default function SeriesRelatedPanel({
         <p className="muted artist-section-empty artist-related__empty">
           {tab === "creator"
             ? isAdmin
-              ? "No other series by the same author yet. Refresh metadata or add one from the menu."
-              : "No other series by the same author yet. Refresh metadata from TMDb."
+              ? "No other titles by the same talent yet. Refresh metadata or add one from the menu."
+              : "No other titles by the same talent yet. Refresh metadata from TMDb."
             : isAdmin
-              ? "No similar series yet. Refresh metadata or add one from the menu."
-              : "No similar series yet. Refresh metadata from TMDb."}
+              ? "No similar titles yet. Refresh metadata or add one from the menu."
+              : "No similar titles yet. Refresh metadata from TMDb."}
         </p>
         {addOpen && onAddClose ? (
           <AddRelatedModal
@@ -221,19 +245,34 @@ export default function SeriesRelatedPanel({
           const href = it.tmdb_id
             ? `https://www.themoviedb.org/${tmdbKind}/${it.tmdb_id}`
             : undefined;
+          const viaText =
+            tab === "creator" ? viaMembersTag(it.via_members ?? []) : "";
           const open = () => {
+            const go = () => {
+              if (onOpenLocal?.(it)) return;
+              if (href) window.open(href, "_blank", "noreferrer");
+            };
             if (isPhone) {
               if (revealedId === cardId) {
-                if (href) window.open(href, "_blank", "noreferrer");
+                go();
               } else {
                 setRevealedId(cardId);
+                setMobileViaTag(viaText || null);
               }
               return;
             }
-            if (href) window.open(href, "_blank", "noreferrer");
+            go();
           };
           return (
-            <div key={`${tab}-${cardId}`} className="artist-related-card-wrap">
+            <div
+              key={`${tab}-${cardId}`}
+              className="artist-related-card-wrap"
+              onMouseEnter={
+                viaText ? (e) => showViaTag(e, viaText) : undefined
+              }
+              onMouseMove={viaText ? (e) => showViaTag(e, viaText) : undefined}
+              onMouseLeave={viaText ? hideViaTag : undefined}
+            >
               <ArtistCard
                 artist={card}
                 orientation={orientation}
@@ -241,6 +280,11 @@ export default function SeriesRelatedPanel({
                 revealed={isPhone && revealedId === cardId}
                 onClick={open}
               />
+              {isPhone && revealedId === cardId && mobileViaTag ? (
+                <span className="artist-related-card__via-mobile">
+                  via {mobileViaTag}
+                </span>
+              ) : null}
               {isAdmin ? (
                 <button
                   type="button"
@@ -261,12 +305,21 @@ export default function SeriesRelatedPanel({
         })}
       </div>
 
+      {viaTag ? (
+        <span
+          className="artist-related-via-tag"
+          style={{ left: viaTag.x, top: viaTag.y }}
+        >
+          via {viaTag.text}
+        </span>
+      ) : null}
+
       {removeTarget ? (
         <ConfirmDialog
           title={
             tab === "creator"
-              ? "Remove same-author series"
-              : "Remove similar series"
+              ? "Remove same-talent title"
+              : "Remove similar title"
           }
           message={`Remove “${removeTarget.title || removeTarget.name}”? Manual entries stay removed after refresh.`}
           confirmLabel="Remove"

@@ -269,3 +269,52 @@ def migrate_schema(eng: Engine) -> None:
                     conn.execute(text("ALTER TABLE movie_works DROP COLUMN mwk_universe_id"))
                 except Exception:
                     pass
+
+        # Universe leaf members + franchise sync rules
+        if "universe_members" in tables:
+            ume_cols = {c["name"] for c in inspect(eng).get_columns("universe_members")}
+            if "ume_leaf_id" not in ume_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE universe_members '
+                        'ADD COLUMN "ume_leaf_id" VARCHAR(512) DEFAULT \'\''
+                    )
+                )
+            # Drop legacy franchise-only unique index (replaced by leaf unique)
+            conn.execute(text("DROP INDEX IF EXISTS uq_universe_member"))
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_universe_member_leaf "
+                    "ON universe_members "
+                    "(ume_universe_id, ume_module, ume_slug, ume_leaf_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_universe_members_leaf "
+                    "ON universe_members (ume_module, ume_slug, ume_leaf_id)"
+                )
+            )
+
+        if "universe_franchise_syncs" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE universe_franchise_syncs (
+                        ufs_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        ufs_universe_id INTEGER NOT NULL,
+                        ufs_module VARCHAR(32) NOT NULL,
+                        ufs_franchise_slug VARCHAR(255) NOT NULL,
+                        CONSTRAINT uq_universe_franchise_sync
+                            UNIQUE (ufs_universe_id, ufs_module, ufs_franchise_slug)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_universe_franchise_syncs_lookup "
+                    "ON universe_franchise_syncs "
+                    "(ufs_module, ufs_franchise_slug)"
+                )
+            )

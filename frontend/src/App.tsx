@@ -494,9 +494,10 @@ export default function App() {
         />
       )}
 
-      {editProfileOpen && profile && !isAdmin && (
+      {editProfileOpen && profile && (
         <ProfileEditModal
           profile={profile}
+          lockName={Boolean(isAdmin)}
           onClose={() => setEditProfileOpen(false)}
           onSaved={(user) => {
             handleProfileUpdated(user);

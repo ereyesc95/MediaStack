@@ -214,6 +214,52 @@ export default function ArtistBrowse({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const paginated = filterMode === "most_played" || filterMode === "gender";
 
+  const availableLetters = useMemo(() => {
+    const fromApi = filterOptions?.letters;
+    if (fromApi?.length) return fromApi;
+    return [...LETTERS, HASH];
+  }, [filterOptions]);
+
+  const visibleFilterModes = useMemo(() => {
+    return FILTER_MODES.filter((f) => {
+      if (!filterOptions) {
+        return f.id === "name" || f.id === "group" || f.id === "members" || f.id === "most_played" || f.id === "gender";
+      }
+      switch (f.id) {
+        case "continent":
+          return (filterOptions.continents?.length ?? 0) > 0;
+        case "country":
+          return (filterOptions.country_groups?.length ?? 0) > 0;
+        case "start":
+        case "end":
+          return (filterOptions.decades?.length ?? 0) > 0;
+        case "genre":
+          return (filterOptions.subgenre_groups?.length ?? 0) > 0;
+        case "label":
+          return (filterOptions.labels?.length ?? 0) > 0;
+        case "producer":
+          return (filterOptions.producers?.length ?? 0) > 0;
+        default:
+          return true;
+      }
+    });
+  }, [filterOptions]);
+
+  useEffect(() => {
+    if (!visibleFilterModes.some((m) => m.id === filterMode)) {
+      const fallback = visibleFilterModes[0]?.id;
+      if (fallback) onFilterModeChange(fallback);
+    }
+  }, [visibleFilterModes, filterMode, onFilterModeChange]);
+
+  useEffect(() => {
+    if (filterMode !== "name") return;
+    if (!letter || (availableLetters.length && !availableLetters.includes(letter))) {
+      const first = availableLetters[0];
+      if (first) onLetterChange(first);
+    }
+  }, [filterMode, letter, availableLetters, onLetterChange]);
+
   const commitPageInput = () => {
     const n = parseInt(pageInput.trim(), 10);
     if (!Number.isFinite(n)) {
@@ -279,7 +325,7 @@ export default function ArtistBrowse({
       case "name":
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {LETTERS.map((l) => (
+            {availableLetters.map((l) => (
               <button
                 key={l}
                 type="button"
@@ -289,13 +335,6 @@ export default function ArtistBrowse({
                 {l}
               </button>
             ))}
-            <button
-              type="button"
-              className={letter === HASH ? "active" : ""}
-              onClick={() => onLetterChange(HASH)}
-            >
-              {HASH}
-            </button>
             <input
               className="filter-subbar-search"
               placeholder="Search"
@@ -438,6 +477,7 @@ export default function ArtistBrowse({
     filterOptions,
     letter,
     search,
+    availableLetters,
     continentId,
     startDecade,
     endDecade,
@@ -472,7 +512,7 @@ export default function ArtistBrowse({
     >
       <div className="artist-browse-sticky">
         <nav className="sub-nav sub-nav--spread sub-nav--compact">
-          {FILTER_MODES.map((f) => (
+          {visibleFilterModes.map((f) => (
             <div key={f.id} className="sub-nav-item-wrap">
               {f.id === "group" ? (
                 <div className="sub-nav-group" ref={groupRef}>
@@ -635,7 +675,7 @@ export default function ArtistBrowse({
         )}
         {!artists.length && !loading && (
           <div className="artist-browse-empty">
-            <p className="muted">No artists match this filter.</p>
+            <p className="muted">No media found</p>
           </div>
         )}
       </div>

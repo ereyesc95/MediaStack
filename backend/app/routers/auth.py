@@ -13,6 +13,7 @@ from app.deps import _bearer_token, get_current_user
 from app.models import User
 from app.paths import DATA_DIR, ensure_data_dir
 from app.profiles import (
+    ADMIN_DISPLAY_NAME,
     ADMIN_USER_ID,
     get_profile_user,
     is_admin_role,
@@ -37,6 +38,25 @@ _EMOJI_RE = re.compile(
     r"^[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0000FE00-\U0000FE0F"
     r"a-zA-Z0-9]{1,4}$"
 )
+_ICON_RE = re.compile(r"^icon:[a-z][a-z0-9-]{0,24}$")
+_AVATAR_ICON_IDS = frozenset(
+    {
+        "admin",
+        "mystack",
+        "music",
+        "games",
+        "books",
+        "universe",
+        "star",
+        "headphones",
+        "heart",
+        "disc",
+        # Legacy tokens still render if already saved
+        "movies",
+        "series",
+        "books",
+    }
+)
 
 
 def avatars_dir() -> Path:
@@ -55,11 +75,9 @@ def avatar_file(user_id: int) -> Path:
 
 def _user_out(user: User) -> LoginResponse:
     default = slot_default_name(user.usr_id)
-    avatar = None
-    if user.usr_id != ADMIN_USER_ID:
-        avatar = user.usr_image
-        if avatar == AVATAR_PHOTO_MARKER and not avatar_file(user.usr_id).is_file():
-            avatar = None
+    avatar = user.usr_image
+    if avatar == AVATAR_PHOTO_MARKER and not avatar_file(user.usr_id).is_file():
+        avatar = None
     return LoginResponse(
         user_id=user.usr_id,
         username=profile_display_name(user, default),
@@ -79,9 +97,52 @@ def _validate_guest_avatar(value: str | None) -> str | None:
         return AVATAR_PHOTO_MARKER
     if v.startswith("#") and len(v) in (4, 7):
         return v
+    if _ICON_RE.match(v):
+        icon_id = v[5:]
+        if icon_id not in _AVATAR_ICON_IDS:
+            raise HTTPException(400, "Invalid avatar icon")
+        return v
     if _EMOJI_RE.match(v):
         return v
     raise HTTPException(400, "Invalid avatar value")
+
+
+def _apply_profile_update(
+    user: User,
+    *,
+    display_name: str | None,
+    avatar: str | None,
+    set_avatar: bool,
+) -> None:
+    """Mutate user in-place. Admin name is always locked to Admin."""
+    if user.usr_id == ADMIN_USER_ID:
+        user.usr_name = ADMIN_DISPLAY_NAME
+    elif display_name is not None:
+        name = display_name.strip()
+        if not name or len(name) > 32:
+            raise HTTPException(400, "Display name must be 1–32 characters")
+        user.usr_name = name
+    if set_avatar:
+        user.usr_image = _validate_guest_avatar(avatar)
+
+
+async def _save_avatar_upload(user: User, file: UploadFile) -> None:
+    raw = await file.read()
+    if not raw or len(raw) > 2_000_000:
+        raise HTTPException(400, "Image must be under 2 MB")
+    content_type = (file.content_type or "").lower()
+    ext = ".jpg"
+    if "png" in content_type:
+        ext = ".png"
+    elif "webp" in content_type:
+        ext = ".webp"
+    ensure_data_dir()
+    dest = avatars_dir() / f"{user.usr_id}{ext}"
+    for old in avatars_dir().glob(f"{user.usr_id}.*"):
+        if old != dest:
+            old.unlink(missing_ok=True)
+    dest.write_bytes(raw)
+    user.usr_image = AVATAR_PHOTO_MARKER
 
 
 @router.get("/profiles", response_model=list[ProfileOut])
@@ -102,21 +163,56 @@ def select_profile(body: SelectProfileRequest, db: Session = Depends(get_db)):
     return _user_out(user).model_copy(update={"token": token})
 
 
+@router.patch("/profiles/{user_id}", response_model=LoginResponse)
+def update_profile_slot(
+    user_id: int,
+    body: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+):
+    """Update a local profile slot (picker / switcher; no session required)."""
+    user = get_profile_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "Profile not found")
+    fields = body.model_dump(exclude_unset=True)
+    _apply_profile_update(
+        user,
+        display_name=fields.get("display_name"),
+        avatar=fields.get("avatar"),
+        set_avatar="avatar" in fields,
+    )
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
+@router.post("/profiles/{user_id}/avatar", response_model=LoginResponse)
+async def upload_profile_slot_avatar(
+    user_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    user = get_profile_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "Profile not found")
+    await _save_avatar_upload(user, file)
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)
+
+
 @router.patch("/profile", response_model=LoginResponse)
 def update_profile(
     body: UpdateProfileRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if is_admin_role(user.usr_role_id):
-        raise HTTPException(403, "Admin profile cannot be customized")
-    if body.display_name is not None:
-        name = body.display_name.strip()
-        if not name or len(name) > 32:
-            raise HTTPException(400, "Display name must be 1–32 characters")
-        user.usr_name = name
-    if body.avatar is not None:
-        user.usr_image = _validate_guest_avatar(body.avatar)
+    fields = body.model_dump(exclude_unset=True)
+    _apply_profile_update(
+        user,
+        display_name=fields.get("display_name"),
+        avatar=fields.get("avatar"),
+        set_avatar="avatar" in fields,
+    )
     db.commit()
     db.refresh(user)
     return _user_out(user)
@@ -128,24 +224,7 @@ async def upload_profile_avatar(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if is_admin_role(user.usr_role_id):
-        raise HTTPException(403, "Admin profile cannot be customized")
-    raw = await file.read()
-    if not raw or len(raw) > 2_000_000:
-        raise HTTPException(400, "Image must be under 2 MB")
-    content_type = (file.content_type or "").lower()
-    ext = ".jpg"
-    if "png" in content_type:
-        ext = ".png"
-    elif "webp" in content_type:
-        ext = ".webp"
-    ensure_data_dir()
-    dest = avatars_dir() / f"{user.usr_id}{ext}"
-    for old in avatars_dir().glob(f"{user.usr_id}.*"):
-        if old != dest:
-            old.unlink(missing_ok=True)
-    dest.write_bytes(raw)
-    user.usr_image = AVATAR_PHOTO_MARKER
+    await _save_avatar_upload(user, file)
     db.commit()
     db.refresh(user)
     return _user_out(user)

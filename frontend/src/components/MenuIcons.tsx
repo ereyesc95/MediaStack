@@ -508,6 +508,76 @@ export function IconMediaGames({ className }: IconProps) {
   );
 }
 
+/** Shield badge — default admin profile mark. */
+export function IconAdmin({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4.2c1.38 0 2.5 1.12 2.5 2.5S13.38 10.2 12 10.2 9.5 9.08 9.5 7.7 10.62 5.2 12 5.2zm0 6.3c2.33 0 4.25 1.07 4.25 2.4v1.1H7.75V13.9c0-1.33 1.92-2.4 4.25-2.4z"
+      />
+    </svg>
+  );
+}
+
+export function IconStar({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 2.5 14.9 9h6.6l-5.3 4 2 6.5L12 15.8 5.8 19.5l2-6.5L2.5 9h6.6L12 2.5z"
+      />
+    </svg>
+  );
+}
+
+export function IconHeadphones({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 3c-4.97 0-9 4.03-9 9v7c0 1.1.9 2 2 2h3v-8H5v-1c0-3.87 3.13-7 7-7s7 3.13 7 7v1h-3v8h3c1.1 0 2-.9 2-2v-7c0-4.97-4.03-9-9-9z"
+      />
+    </svg>
+  );
+}
+
+/** Vinyl / disc mark — concentric grooves + center label. */
+export function IconDisc({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="5.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.35"
+      />
+      <circle cx="12" cy="12" r="2.05" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function IconHeart({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 21.35 10.55 20.03C5.4 15.36 2 12.27 2 8.5 2 5.41 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.08C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.41 22 8.5c0 3.77-3.4 6.86-8.55 11.54L12 21.35z"
+      />
+    </svg>
+  );
+}
+
 /** Orbit / galaxy glyph for shared universes. */
 export function IconUniverse({ className }: IconProps) {
   return (

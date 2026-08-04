@@ -27,7 +27,8 @@ from app.movies_refresh import ensure_movie_work, find_movie_work, _load_meta
 from app.universes import (
     expand_universe_cards,
     filter_similar_against_universe,
-    universe_for_franchise,
+    franchise_universe_bundle,
+    universes_for_leaf,
 )
 from app.series_artwork import build_local_eras, ensure_artwork_cached
 from app.series_overview import _enrich_cast_member, _enrich_related_cards
@@ -318,13 +319,13 @@ def build_work_overview(
 
     bio = row.mwk_bio or meta.get("bio")
     # Prefer universe overview when work bio empty
-    universe = universe_for_franchise(db, "movies", slug)
+    universes, universe, universe_cards, merged_universe_cards, universe_groups = (
+        franchise_universe_bundle(db, "movies", slug)
+    )
     if not bio and universe and universe.get("overview"):
         bio = universe["overview"]
     similar = filter_similar_against_universe(db, "movies", slug, similar)
-    universe_cards = (
-        expand_universe_cards(db, universe["id"]) if universe else []
-    )
+    display_universe_cards = merged_universe_cards or universe_cards
 
     films = detail.get("films") or []
     # Map films → subseries-shaped for SeriesAbout filmography strip
@@ -396,6 +397,7 @@ def build_work_overview(
             "media": media,
             "related": related,
             "universe": universe,
+            "universes": universes,
             "is_standalone": detail.get("is_standalone"),
             "primary_film_id": detail.get("primary_film_id"),
             "film_count": detail.get("film_count") or len(films),
@@ -453,13 +455,18 @@ def build_work_overview(
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
-            "universe": universe_cards,
-            "universe_count": len(universe_cards),
+            "universe": display_universe_cards,
+            "universe_count": len(display_universe_cards),
+            "universe_groups": [
+                {"id": g["id"], "name": g["name"], "count": g["count"]}
+                for g in universe_groups
+            ],
         },
         "subseries": films_as_subseries,
         "films": films,
         "seasons": [],
         "universe": universe,
+        "universes": universes,
         "metadata_refreshed_at": row.mwk_refreshed_at,
         "needs_metadata": not bool(row.mwk_refreshed_at),
         "orientation": orientation,
@@ -647,11 +654,27 @@ def build_film_overview(
             [{"label": str(rd)[:4], "start": rd, "end": rd}] if rd else []
         )
 
-    universe = universe_for_franchise(db, "movies", work_slug)
+    universes = universes_for_leaf(db, "movies", work_slug, fid)
+    universe = universes[0] if universes else None
     similar = filter_similar_against_universe(db, "movies", work_slug, similar)
-    universe_cards = (
-        expand_universe_cards(db, universe["id"]) if universe else []
-    )
+    display_universe_cards: list[dict] = []
+    universe_groups: list[dict] = []
+    seen_cards: set[tuple] = set()
+    for u in universes:
+        cards = expand_universe_cards(db, u["id"])
+        universe_groups.append(
+            {"id": u["id"], "name": u["name"], "count": len(cards)}
+        )
+        for c in cards:
+            key = (
+                c.get("module"),
+                (c.get("franchise_id") or "").casefold(),
+                (c.get("leaf_id") or c.get("id") or "").casefold(),
+            )
+            if key in seen_cards:
+                continue
+            seen_cards.add(key)
+            display_universe_cards.append(c)
 
     return {
         "id": fid,
@@ -704,14 +727,19 @@ def build_film_overview(
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
-            "universe": universe_cards,
-            "universe_count": len(universe_cards),
+            "universe": display_universe_cards,
+            "universe_count": len(display_universe_cards),
+            "universe_groups": [
+                {"id": g["id"], "name": g["name"], "count": g["count"]}
+                for g in universe_groups
+            ],
         },
         "subseries": [],
         "seasons": [],
         "versions": detail.get("versions") or [],
         "work": work,
         "universe": universe,
+        "universes": universes,
         "metadata_refreshed_at": film_meta.get("refreshed_at") or row.mwk_refreshed_at,
         "needs_metadata": not bool(film_meta.get("tmdb_id")),
         "orientation": orientation,

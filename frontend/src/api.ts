@@ -94,18 +94,28 @@ export async function selectProfile(
   });
 }
 
-export async function updateProfile(body: {
-  display_name?: string;
-  avatar?: string | null;
-}): Promise<ProfileUser> {
-  return request(`${API}/auth/profile`, {
+export async function updateProfile(
+  body: {
+    display_name?: string;
+    avatar?: string | null;
+  },
+  userId?: number
+): Promise<ProfileUser> {
+  const path =
+    userId != null
+      ? `${API}/auth/profiles/${userId}`
+      : `${API}/auth/profile`;
+  return request(path, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-export async function uploadProfileAvatar(file: File): Promise<ProfileUser> {
+export async function uploadProfileAvatar(
+  file: File,
+  userId?: number
+): Promise<ProfileUser> {
   const form = new FormData();
   form.append("file", file);
   const controller = new AbortController();
@@ -114,9 +124,13 @@ export async function uploadProfileAvatar(file: File): Promise<ProfileUser> {
   for (const [k, v] of Object.entries(authHeaders())) {
     headers.set(k, v);
   }
+  const path =
+    userId != null
+      ? `${API}/auth/profiles/${userId}/avatar`
+      : `${API}/auth/profile/avatar`;
   let res: Response;
   try {
-    res = await fetch(`${API}/auth/profile/avatar`, {
+    res = await fetch(path, {
       method: "POST",
       headers,
       body: form,
@@ -1860,10 +1874,23 @@ export async function fetchUniverse(universeId: number) {
   );
 }
 
-export async function lookupUniverse(module: "movies" | "series", slug: string) {
-  return request<{ universe: import("./types").Universe | null }>(
-    `${API}/universes/lookup?module=${encodeURIComponent(module)}&slug=${encodeURIComponent(slug)}`
-  );
+export async function lookupUniverse(
+  module: "movies" | "series",
+  slug: string,
+  leafId?: string | null
+) {
+  const q = new URLSearchParams({
+    module,
+    slug,
+  });
+  if (leafId) q.set("leaf_id", leafId);
+  return request<{
+    universe: import("./types").Universe | null;
+    universes: import("./types").Universe[];
+    leaf_id?: string | null;
+    sync_universe_ids?: number[];
+    scope?: "leaf" | "franchise";
+  }>(`${API}/universes/lookup?${q.toString()}`);
 }
 
 export async function createUniverse(body: {
@@ -1913,22 +1940,30 @@ export async function fetchUniverseLanding(
 export async function linkUniverseMember(
   universeId: number,
   module: "movies" | "series",
-  slug: string
+  slug: string,
+  leafId?: string | null
 ) {
   return request(`${API}/universes/${universeId}/members`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ module, slug }),
+    body: JSON.stringify({
+      module,
+      slug,
+      ...(leafId ? { leaf_id: leafId } : {}),
+    }),
   });
 }
 
 export async function unlinkUniverseMember(
   universeId: number,
   module: "movies" | "series",
-  slug: string
+  slug: string,
+  leafId?: string | null
 ) {
+  const q = new URLSearchParams({ module, slug });
+  if (leafId) q.set("leaf_id", leafId);
   return request(
-    `${API}/universes/${universeId}/members?module=${encodeURIComponent(module)}&slug=${encodeURIComponent(slug)}`,
+    `${API}/universes/${universeId}/members?${q.toString()}`,
     { method: "DELETE" }
   );
 }

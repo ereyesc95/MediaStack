@@ -24,6 +24,7 @@ import {
   fetchSeriesOverview,
   fetchUniverse,
   fetchUniverseCards,
+  lookupUniverse,
   refreshMoviesFilmMetadata,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
@@ -48,6 +49,8 @@ import {
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
+  ArtistCard as ArtistCardType,
+  CardOrientation,
   MoviesFilmCard,
   MoviesFilmDetail,
   ReleaseCardLayout,
@@ -55,6 +58,8 @@ import type {
   SeriesFilterMode,
   SeriesFolderDetail,
   SeriesOverview,
+  SeriesOverviewTab,
+  SeriesRelatedShow,
   SeriesSection,
   SeriesSeasonCard,
   SeriesSubseriesCard,
@@ -68,6 +73,9 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import AddToUniverseModal from "../AddToUniverseModal";
+import ArtistCard from "../ArtistCard";
+import CardOrientationPicker from "../CardOrientationPicker";
 import PlaylistBoot from "../PlaylistBoot";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import {
@@ -75,6 +83,7 @@ import {
   IconCardCover,
   IconCheck,
   IconMediaMusic,
+  IconUniverse,
   IconVideo,
 } from "../MenuIcons";
 import MediaBeatFx from "../music/MediaBeatFx";
@@ -102,6 +111,9 @@ import SeriesMediaGrid, {
   useSeriesAudioCategories,
 } from "./SeriesMediaGrid";
 import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
+import SeriesRelatedPanel, {
+  type SeriesRelatedTab,
+} from "./SeriesRelatedPanel";
 
 export type SubseriesTab =
   | "overview"
@@ -130,12 +142,17 @@ type Props = {
   subseriesId: string;
   seasonId?: string;
   section?: SeriesSection;
+  overviewTab?: SeriesOverviewTab;
   universeId?: number;
   busy?: string;
   isAdmin?: boolean;
   userId?: number;
   /** Movie pages reuse this layout with film-scoped APIs. */
   variant?: "subseries" | "film";
+  cardOrientation?: CardOrientation;
+  onSetOrientation?: (next: CardOrientation) => void;
+  /** Match related TMDb cards to on-disk titles and navigate in-app. */
+  onOpenRelatedLocal?: (item: SeriesRelatedShow) => boolean;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -161,6 +178,7 @@ type Props = {
     subseriesId?: string;
     seasonId?: string;
     section?: SeriesSection;
+    overviewTab?: SeriesOverviewTab;
     universeId?: number;
   }) => void;
 };
@@ -437,11 +455,15 @@ export default function SeriesSubseriesPage({
   subseriesId,
   seasonId,
   section = "overview",
+  overviewTab = "about",
   universeId,
   busy,
   isAdmin = false,
   userId,
   variant = "subseries",
+  cardOrientation = "portrait",
+  onSetOrientation,
+  onOpenRelatedLocal,
   onImport,
   onSync,
   onChooseSource,
@@ -454,7 +476,6 @@ export default function SeriesSubseriesPage({
   onOpenMoviesPath,
   onOpenFilm,
   backLabelOverride,
-  onOpenUniverseParent,
   onOpenUniverseLeaf,
   onNavigate,
 }: Props) {
@@ -479,6 +500,8 @@ export default function SeriesSubseriesPage({
   );
   const [universeInfo, setUniverseInfo] = useState<Universe | null>(null);
   const [universeCards, setUniverseCards] = useState<UniverseCard[]>([]);
+  const [leafUniverses, setLeafUniverses] = useState<Universe[]>([]);
+  const [addUniverseOpen, setAddUniverseOpen] = useState(false);
   const [overview, setOverview] = useState<SeriesOverview | null>(
     () => initialCached?.overview ?? null
   );
@@ -491,6 +514,10 @@ export default function SeriesSubseriesPage({
   const [loading, setLoading] = useState(() => !subseriesPageCache.has(pageCacheKey));
   const [error, setError] = useState<string | null>(null);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("creator");
+  const [universeRevealedId, setUniverseRevealedId] = useState<string | null>(
+    null
+  );
   const [expandedSeasonId, setExpandedSeasonId] = useState<string | null>(null);
   const [moviesExpanded, setMoviesExpanded] = useState(false);
   const [extrasExpanded, setExtrasExpanded] = useState(false);
@@ -887,7 +914,17 @@ export default function SeriesSubseriesPage({
     setFocusBgUrl(null);
     setMoviesExpanded(false);
     setGamePlatform("all");
-    setMediaReady(false);
+    const mediaKey = cacheKey(isFilm, franchiseId, subseriesId);
+    const cachedMedia = subseriesMediaCache.get(mediaKey);
+    if (cachedMedia) {
+      setMovieCards(cachedMedia.movieCards);
+      setAudioCards(cachedMedia.audioCards);
+      setLibraryCards(cachedMedia.libraryCards);
+      setGameCards(cachedMedia.gameCards);
+      setMediaReady(true);
+    } else {
+      setMediaReady(false);
+    }
     setSeasonEpisodes({});
     setBgLayers({});
     setExtraVideos([]);
@@ -1000,6 +1037,27 @@ export default function SeriesSubseriesPage({
       cancelled = true;
     };
   }, [universeId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const module = isFilm ? "movies" : "series";
+    void lookupUniverse(module, franchiseId, subseriesId)
+      .then((res) => {
+        if (cancelled) return;
+        const many = res.universes?.length
+          ? res.universes
+          : res.universe
+            ? [res.universe]
+            : [];
+        setLeafUniverses(many);
+      })
+      .catch(() => {
+        if (!cancelled) setLeafUniverses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFilm, franchiseId, subseriesId]);
 
   const title =
     detail?.title || card?.title || (isFilm ? overview?.name || "" : "") || "";
@@ -1741,11 +1799,25 @@ export default function SeriesSubseriesPage({
     return all.filter((t) => {
       if (t.id === "overview") return true;
       if (t.id === "episodes") return !isFilm && (hasEpisodes || loading);
-      if (t.id === "gallery") return hasGallery || loading;
-      if (t.id === "movies" && isFilm) {
-        return siblingMovieCount > 0 || (!mediaReady && loading);
+      // Prefer overview media flags so empty tabs never flash before folder scans finish.
+      const media = overview?.media;
+      if (t.id === "gallery") {
+        return (
+          hasGallery ||
+          Boolean(media?.has_gallery) ||
+          (loading && !overview && Boolean(card?.folder_path || detail?.folder_path))
+        );
       }
-      if (!mediaReady) return true;
+      if (t.id === "movies" && isFilm) {
+        return siblingMovieCount > 0;
+      }
+      if (!mediaReady) {
+        if (t.id === "movies") return Boolean(media?.has_movies);
+        if (t.id === "audio") return Boolean(media?.has_audio);
+        if (t.id === "library") return Boolean(media?.has_library);
+        if (t.id === "games") return Boolean(media?.has_games);
+        return false;
+      }
       if (t.id === "movies") return hasMovies;
       if (t.id === "audio") return hasAudio;
       if (t.id === "library") return hasLibrary;
@@ -1764,7 +1836,61 @@ export default function SeriesSubseriesPage({
     hasAudio,
     hasLibrary,
     hasGames,
+    overview?.media,
+    overview,
+    card?.folder_path,
+    detail?.folder_path,
   ]);
+
+  /** Leaf pages get Related when there is anything to show (universes / talent / similar). */
+  const leafUniverseMemberships = useMemo(() => {
+    if (leafUniverses.length) return leafUniverses;
+    if (overview?.universes?.length) return overview.universes;
+    if (overview?.universe) return [overview.universe];
+    return [] as Universe[];
+  }, [leafUniverses, overview?.universes, overview?.universe]);
+
+  const relatedUniverseRows = useMemo(() => {
+    return leafUniverseMemberships
+      .map((u) => {
+        const groupCount =
+          overview?.related?.universe_groups?.find((g) => g.id === u.id)
+            ?.count ??
+          overview?.related?.universe?.filter(
+            (c) => c.universe_id == null || c.universe_id === u.id
+          ).length ??
+          0;
+        if (groupCount <= 0) return null;
+        return [
+          "universe",
+          u.name.toLocaleUpperCase(),
+          groupCount,
+          u.id,
+        ] as const;
+      })
+      .filter(
+        (row): row is readonly ["universe", string, number, number] =>
+          row != null
+      );
+  }, [leafUniverseMemberships, overview?.related]);
+
+  const showLeafRelated =
+    isFilm ||
+    siblings.length <= 1 ||
+    relatedUniverseRows.length > 0 ||
+    Boolean(overview?.related?.creator_count) ||
+    Boolean(overview?.related?.similar_count) ||
+    Boolean(overview?.related?.creator?.length) ||
+    Boolean(overview?.related?.similar?.length);
+
+  useEffect(() => {
+    if (overviewTab !== "related") return;
+    if (relatedUniverseRows.length) {
+      setRelatedTab("universe");
+      return;
+    }
+    setRelatedTab((prev) => (prev === "universe" ? "creator" : prev));
+  }, [overviewTab, relatedUniverseRows]);
 
   useEffect(() => {
     if (loading) return;
@@ -2013,6 +2139,9 @@ export default function SeriesSubseriesPage({
     tabletLayout ? "release-page--tablet" : "",
     tabletPortrait ? "release-page--tablet-portrait" : "",
     tab === "overview" ? "release-page--overview" : "",
+    tab === "overview" && overviewTab === "related"
+      ? "release-page--related-open release-page--scroll"
+      : "",
     bgLayers.current ? "release-page--has-bg" : "",
     seriesPlaying ? "release-page--beat-ready release-page--playing" : "",
   ]
@@ -2146,6 +2275,15 @@ export default function SeriesSubseriesPage({
                 onChange={setCardLayoutPersisted}
               />
             ) : null}
+            {!stacked &&
+            tab === "overview" &&
+            overviewTab === "related" &&
+            onSetOrientation ? (
+              <CardOrientationPicker
+                value={cardOrientation}
+                onChange={onSetOrientation}
+              />
+            ) : null}
             {!isFilm || hasAudio ? (
               !stacked ? (
                 <SeriesAudioPlayer
@@ -2192,7 +2330,17 @@ export default function SeriesSubseriesPage({
               editDataFlat
               refreshLocalFlat
               menuChrome={
-                stacked ? (
+                <>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setAddUniverseOpen(true)}
+                    >
+                      <IconUniverse className="menu-item-icon" />
+                      Add to universe
+                    </button>
+                  ) : null}
+                  {stacked ? (
                   <>
                     {showMediaLayoutPicker ? (
                       <button
@@ -2228,7 +2376,8 @@ export default function SeriesSubseriesPage({
                       </button>
                     ) : null}
                   </>
-                ) : null
+                ) : null}
+                </>
               }
               onEditAbout={
                 isAdmin && overview
@@ -2317,6 +2466,118 @@ export default function SeriesSubseriesPage({
               </button>
             ))}
           </div>
+        ) : null}
+
+        {tab === "overview" && showLeafRelated ? (
+          <nav className="artist-page__subtabs" aria-label="Overview sections">
+            {(
+              [
+                ["about", "ABOUT"] as const,
+                ...(overview?.links?.categories?.length
+                  ? ([["links", "LINKS"]] as const)
+                  : []),
+                ["related", "RELATED"] as const,
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={overviewTab === id ? "active" : ""}
+                onClick={() => {
+                  if (id === "related") {
+                    const firstUniverse = relatedUniverseRows[0]?.[3];
+                    setRelatedTab(
+                      relatedUniverseRows.length ? "universe" : "creator"
+                    );
+                    onNavigate({
+                      subseriesId,
+                      seasonId: expandedSeasonId || seasonId,
+                      section: "overview",
+                      overviewTab: "related",
+                      universeId: firstUniverse,
+                    });
+                    return;
+                  }
+                  onNavigate({
+                    subseriesId,
+                    seasonId: expandedSeasonId || seasonId,
+                    section: "overview",
+                    overviewTab: id,
+                    universeId: undefined,
+                  });
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+
+        {tab === "overview" &&
+        showLeafRelated &&
+        overviewTab === "related" ? (
+          <nav className="artist-page__subtabs artist-page__related-subtabs">
+            {(
+              [
+                ...relatedUniverseRows,
+                [
+                  "creator",
+                  "SAME TALENT",
+                  overview?.related?.creator_count ??
+                    overview?.related?.creator?.length ??
+                    0,
+                  null,
+                ] as const,
+                [
+                  "similar",
+                  isFilm ? "SIMILAR MOVIES" : "SIMILAR SERIES",
+                  overview?.related?.similar_count ??
+                    overview?.related?.similar?.length ??
+                    0,
+                  null,
+                ] as const,
+              ] as const
+            ).map((row) => {
+              const [id, label, count, tabUniverseId] = row;
+              const active =
+                id === "universe"
+                  ? relatedTab === "universe" &&
+                    (universeId === tabUniverseId ||
+                      (universeId == null &&
+                        tabUniverseId === relatedUniverseRows[0]?.[3]))
+                  : relatedTab === id;
+              return (
+                <button
+                  key={id === "universe" ? `universe-${tabUniverseId}` : id}
+                  type="button"
+                  className={active ? "active" : ""}
+                  onClick={() => {
+                    setRelatedTab(id);
+                    if (id === "universe" && tabUniverseId != null) {
+                      onNavigate({
+                        subseriesId,
+                        section: "overview",
+                        overviewTab: "related",
+                        universeId: tabUniverseId,
+                      });
+                    } else if (universeId != null) {
+                      onNavigate({
+                        subseriesId,
+                        section: "overview",
+                        overviewTab: "related",
+                        universeId: undefined,
+                      });
+                    }
+                  }}
+                >
+                  <span>
+                    {label}
+                    <span className="artist-page__lineup-count">{count}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
         ) : null}
 
         {tab === "audio" && audioCategories.length > 1 ? (
@@ -2473,13 +2734,21 @@ export default function SeriesSubseriesPage({
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
                   ) : null}
-                  {universeInfo ? (
+                  {universeInfo && leafUniverses.length === 0 ? (
                     <p className="release-page__type-line">
                       Part of the{" "}
                       <button
                         type="button"
                         className="release-page__artist-link release-page__artist-link--inline"
-                        onClick={() => onOpenUniverseParent?.()}
+                        onClick={() =>
+                          onNavigate({
+                            subseriesId,
+                            seasonId: undefined,
+                            section: "overview",
+                            overviewTab: "related",
+                            universeId: universeInfo.id,
+                          })
+                        }
                       >
                         {universeInfo.name}
                       </button>{" "}
@@ -2517,30 +2786,48 @@ export default function SeriesSubseriesPage({
                       </>
                     ) : null}
                   </p>
-                  {overview?.universe?.name ? (
-                    <p className="release-page__type-line series-subseries-page__universe-line">
-                      Part of the{" "}
-                      <button
-                        type="button"
-                        className="release-page__artist-link release-page__artist-link--inline"
-                        onClick={() => {
-                          if (onOpenUniverseParent) {
-                            onOpenUniverseParent();
-                            return;
-                          }
-                          onNavigate({
-                            subseriesId: undefined,
-                            seasonId: undefined,
-                            section: "overview",
-                            universeId: overview.universe?.id,
-                          });
-                        }}
-                      >
-                        {overview.universe.name}
-                      </button>{" "}
-                      universe
-                    </p>
-                  ) : null}
+                  {(() => {
+                    const memberships =
+                      leafUniverses.length > 0
+                        ? leafUniverses
+                        : overview?.universes?.length
+                          ? overview.universes
+                          : overview?.universe
+                            ? [overview.universe]
+                            : [];
+                    if (!memberships.length) return null;
+                    const plural = memberships.length > 1;
+                    return (
+                      <p className="release-page__type-line series-subseries-page__universe-line">
+                        Part of the{" "}
+                        {memberships.map((u, i) => (
+                          <span key={u.id}>
+                            {i > 0
+                              ? i === memberships.length - 1
+                                ? " and "
+                                : ", "
+                              : null}
+                            <button
+                              type="button"
+                              className="release-page__artist-link release-page__artist-link--inline"
+                              onClick={() => {
+                                onNavigate({
+                                  subseriesId,
+                                  seasonId: undefined,
+                                  section: "overview",
+                                  overviewTab: "related",
+                                  universeId: u.id,
+                                });
+                              }}
+                            >
+                              {u.name}
+                            </button>
+                          </span>
+                        ))}{" "}
+                        {plural ? "universes" : "universe"}
+                      </p>
+                    );
+                  })()}
                 </div>
                 {genres.length > 0 ? (
                   <div className="release-page__panel-credits">
@@ -2932,7 +3219,8 @@ export default function SeriesSubseriesPage({
 
           {!error &&
           (card || detail || overview) &&
-          tab === "overview" ? (
+          tab === "overview" &&
+          (!showLeafRelated || overviewTab === "about") ? (
             <div className="release-page__overview release-page__overview--no-singles series-subseries-overview">
               <div className="release-page__overview-top">
                 <div className="release-page__desc-block">
@@ -3036,6 +3324,139 @@ export default function SeriesSubseriesPage({
                 </div>
               ) : null}
             </div>
+          ) : null}
+
+          {!error &&
+          overview &&
+          tab === "overview" &&
+          showLeafRelated &&
+          overviewTab === "related" ? (
+            relatedTab === "universe" && relatedUniverseRows.length > 0 ? (
+              (() => {
+                const orient: CardOrientation =
+                  cardOrientation === "badge" ? "banner" : cardOrientation;
+                const activeUniverseId =
+                  universeId ?? relatedUniverseRows[0]?.[3] ?? null;
+                const members = (overview.related?.universe || []).filter(
+                  (c) =>
+                    activeUniverseId == null ||
+                    c.universe_id == null ||
+                    c.universe_id === activeUniverseId
+                );
+                if (!members.length) {
+                  return (
+                    <p className="muted artist-section-empty">
+                      No other members in this universe yet.
+                    </p>
+                  );
+                }
+                const openUniverseMember = (u: (typeof members)[number]) => {
+                  const leaf = u.leaf_id || u.id || "";
+                  const fid = u.franchise_id || franchiseId;
+                  const mod = u.module || (isFilm ? "movies" : "series");
+                  if (onOpenUniverseLeaf) {
+                    onOpenUniverseLeaf({
+                      module: mod === "movies" ? "movies" : "series",
+                      franchiseId: fid,
+                      leafId: leaf,
+                    });
+                    return;
+                  }
+                  onNavigate({
+                    franchiseId: fid,
+                    subseriesId: leaf,
+                    seasonId: undefined,
+                    section: "overview",
+                    overviewTab: "about",
+                    universeId: u.universe_id ?? activeUniverseId ?? undefined,
+                  });
+                };
+                return (
+                  <div className="series-related artist-related">
+                    <div
+                      className={`artist-grid artist-grid--${orient} artist-related__grid`}
+                    >
+                      {members.map((u) => {
+                        const leaf = u.leaf_id || u.id || "";
+                        const fid = u.franchise_id || "";
+                        const cardId = `${u.module}:${fid}:${leaf}`;
+                        const titleText = u.title || u.name || "Untitled";
+                        const portrait =
+                          u.portrait_url || u.cover_url || null;
+                        const landscape =
+                          u.landscape_url || u.banner_url || portrait;
+                        const banner =
+                          u.banner_url || u.landscape_url || portrait;
+                        const photo =
+                          orient === "banner"
+                            ? banner
+                            : orient === "landscape"
+                              ? landscape
+                              : orient === "icons"
+                                ? null
+                                : portrait;
+                        const year =
+                          u.date_iso && u.date_iso.length >= 4
+                            ? Number(u.date_iso.slice(0, 4)) || null
+                            : null;
+                        const cardItem: ArtistCardType = {
+                          id: 0,
+                          name: titleText,
+                          photo_url: photo,
+                          logo_url: u.logo_url || null,
+                          icon_url: null,
+                          era_year: year,
+                          show_name_on_hover: true,
+                          starting_dates: u.date_iso || null,
+                        };
+                        return (
+                          <div
+                            key={cardId}
+                            className="artist-related-card-wrap"
+                          >
+                            <ArtistCard
+                              artist={cardItem}
+                              orientation={orient}
+                              showDateOnHover
+                              tapReveal={mobilePortrait}
+                              revealed={
+                                mobilePortrait &&
+                                universeRevealedId === cardId
+                              }
+                              onClick={() => {
+                                if (mobilePortrait) {
+                                  if (universeRevealedId === cardId) {
+                                    openUniverseMember(u);
+                                  } else {
+                                    setUniverseRevealedId(cardId);
+                                  }
+                                  return;
+                                }
+                                openUniverseMember(u);
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <SeriesRelatedPanel
+                franchiseId={franchiseId}
+                creator={overview.related?.creator || []}
+                similar={overview.related?.similar || []}
+                tab={relatedTab === "universe" ? "creator" : relatedTab}
+                orientation={
+                  cardOrientation === "badge" ? "banner" : cardOrientation
+                }
+                tmdbKind={isFilm ? "movie" : "tv"}
+                isAdmin={isAdmin && !isFilm}
+                onDataChanged={() => void loadCard()}
+                onOpenLocal={onOpenRelatedLocal}
+              />
+            )
           ) : null}
 
           {!error && (card || detail) && tab === "episodes" ? (
@@ -3267,6 +3688,37 @@ export default function SeriesSubseriesPage({
           }}
           onCastChanged={() => void loadCard()}
           isAdmin={isAdmin}
+        />
+      ) : null}
+
+      {addUniverseOpen && isAdmin ? (
+        <AddToUniverseModal
+          module={isFilm ? "movies" : "series"}
+          franchiseId={franchiseId}
+          leafId={subseriesId}
+          leafLabel={title || subseriesId}
+          onClose={() => setAddUniverseOpen(false)}
+          onSaved={() => {
+            void lookupUniverse(
+              isFilm ? "movies" : "series",
+              franchiseId,
+              subseriesId
+            )
+              .then((res) =>
+                setLeafUniverses(
+                  res.universes?.length
+                    ? res.universes
+                    : res.universe
+                      ? [res.universe]
+                      : []
+                )
+              )
+              .catch(() => {});
+            subseriesPageCache.delete(
+              cacheKey(isFilm, franchiseId, subseriesId)
+            );
+            void loadCard();
+          }}
         />
       ) : null}
     </div>

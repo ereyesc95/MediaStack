@@ -93,11 +93,23 @@ async def _related_for_movie(
     raw: dict, data: dict, api_key: str, *, self_id: int | None
 ) -> dict:
     creator_credits: list = []
+    via_by_id: dict[int, str] = {}
+    crew = (raw.get("credits") or {}).get("crew") or []
+    for c in crew:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id")
+        name = (c.get("name") or "").strip()
+        if isinstance(cid, int) and name:
+            via_by_id.setdefault(cid, name)
     for cid in (data.get("creator_ids") or [])[:3]:
         try:
-            creator_credits.extend(
-                await fetch_person_movie_credits(int(cid), api_key)
-            )
+            person_id = int(cid)
+            person_name = via_by_id.get(person_id) or ""
+            for credit in await fetch_person_movie_credits(person_id, api_key):
+                if person_name and isinstance(credit, dict):
+                    credit = {**credit, "_via_person": person_name}
+                creator_credits.append(credit)
         except Exception:
             continue
     return build_related_from_movie(

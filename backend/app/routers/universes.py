@@ -19,7 +19,6 @@ from app.universes import (
     pull_tmdb_portrait,
     save_universe_art_bytes,
     unlink_franchise,
-    universe_for_franchise,
     update_universe,
 )
 
@@ -34,6 +33,8 @@ class CreateUniverseBody(BaseModel):
 class LinkMemberBody(BaseModel):
     module: str
     slug: str
+    """Franchise / work id. When leaf_id is omitted, bulk-adds all children + sync."""
+    leaf_id: str | None = None
 
 
 class OverviewBody(BaseModel):
@@ -63,12 +64,34 @@ def api_create_universe(
 def api_lookup_universe(
     module: str = Query(...),
     slug: str = Query(...),
+    leaf_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     if module not in ("movies", "series"):
         raise HTTPException(400, "module must be movies or series")
-    data = universe_for_franchise(db, module, slug)  # type: ignore[arg-type]
-    return {"universe": data}
+    from app.universes import (
+        franchise_has_sync,
+        universes_for_franchise,
+        universes_for_leaf,
+    )
+
+    if leaf_id:
+        many = universes_for_leaf(db, module, slug, leaf_id)  # type: ignore[arg-type]
+    else:
+        many = universes_for_franchise(db, module, slug)  # type: ignore[arg-type]
+    data = many[0] if many else None
+    synced = []
+    if not leaf_id and data:
+        for u in many:
+            if franchise_has_sync(db, module, slug, u["id"]):  # type: ignore[arg-type]
+                synced.append(u["id"])
+    return {
+        "universe": data,
+        "universes": many,
+        "leaf_id": leaf_id,
+        "sync_universe_ids": synced,
+        "scope": "leaf" if leaf_id else "franchise",
+    }
 
 
 @router.get("/{universe_id}")
@@ -143,6 +166,7 @@ def api_link_member(
             universe_id=universe_id,
             module=body.module,  # type: ignore[arg-type]
             slug=body.slug,
+            leaf_id=body.leaf_id,
             source="manual",
         )
     except ValueError as exc:
@@ -154,13 +178,18 @@ def api_unlink_member(
     universe_id: int,
     module: str = Query(...),
     slug: str = Query(...),
+    leaf_id: str | None = Query(None),
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ):
     if module not in ("movies", "series"):
         raise HTTPException(400, "module must be movies or series")
     unlink_franchise(
-        db, module=module, slug=slug, universe_id=universe_id  # type: ignore[arg-type]
+        db,
+        module=module,  # type: ignore[arg-type]
+        slug=slug,
+        universe_id=universe_id,
+        leaf_id=leaf_id,
     )
     return {"ok": True}
 

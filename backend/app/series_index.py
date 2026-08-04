@@ -727,16 +727,79 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
     return episodes
 
 
+def _earliest_season_date(
+    seasons: list[dict],
+) -> tuple[str | None, str | None]:
+    dated = [s for s in seasons if s.get("date_iso")]
+    if not dated:
+        return None, None
+    best = min(dated, key=lambda s: str(s.get("date_iso") or "9999"))
+    return best.get("date_iso"), best.get("display_date")
+
+
+def _synthetic_standalone_show(
+    franchise_dir: Path,
+    media_root: Path,
+    seasons: list[dict],
+) -> dict:
+    """Single-show franchise (no dated subseries hubs): the work folder is the show leaf.
+
+    Date comes from the earliest dated season under Episodes/, e.g.
+    ``Episodes/2011.04.17. Season One/``.
+    """
+    from app.series_paths import find_badge_file, find_logo_file
+
+    date_iso, display_date = _earliest_season_date(seasons)
+    fid = (
+        normalize_franchise_slug(franchise_dir.name)
+        or franchise_dir.name.casefold()
+    )
+    logo_url, icon_url = find_logo_file(franchise_dir, media_root)
+    return {
+        "id": fid,
+        "title": franchise_dir.name,
+        "date_iso": date_iso,
+        "display_date": display_date,
+        "folder_path": franchise_dir.relative_to(media_root).as_posix(),
+        "cover_url": _series_folder_cover(franchise_dir, media_root),
+        "portrait_url": _series_folder_cover(franchise_dir, media_root),
+        "landscape_url": _series_folder_landscape(franchise_dir, media_root),
+        "banner_url": _series_folder_banner(franchise_dir, media_root),
+        "logo_url": logo_url,
+        "icon_url": icon_url,
+        "badge_url": find_badge_file(franchise_dir, media_root),
+        "season_count": len(seasons),
+        "has_gallery": _has_gallery(franchise_dir),
+        "is_standalone": True,
+    }
+
+
 def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
     from app.series_paths import find_badge_file, find_logo_file
 
     rel = franchise_dir.relative_to(media_root).as_posix()
     subseries = _list_subseries(franchise_dir, media_root)
     seasons = _list_seasons(franchise_dir, media_root)
+    date_iso, display_date = _earliest_season_date(seasons)
+    # Prefer earliest dated subseries when present
+    if subseries:
+        sub_dates = [s for s in subseries if s.get("date_iso")]
+        if sub_dates:
+            best = min(sub_dates, key=lambda s: str(s.get("date_iso") or "9999"))
+            date_iso = best.get("date_iso")
+            display_date = best.get("display_date")
+    is_standalone = not subseries and bool(seasons)
+    if is_standalone:
+        subseries = [_synthetic_standalone_show(franchise_dir, media_root, seasons)]
+        date_iso = subseries[0].get("date_iso") or date_iso
+        display_date = subseries[0].get("display_date") or display_date
     logo_url, icon_url = find_logo_file(franchise_dir, media_root)
+    fid = (
+        normalize_franchise_slug(franchise_dir.name)
+        or franchise_dir.name.casefold()
+    )
     return {
-        "id": normalize_franchise_slug(franchise_dir.name)
-        or franchise_dir.name.casefold(),
+        "id": fid,
         "name": franchise_dir.name,
         "letter": letter,
         "slug": normalize_franchise_slug(franchise_dir.name),
@@ -754,6 +817,10 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
         "logo_url": logo_url,
         "icon_url": icon_url,
         "badge_url": find_badge_file(franchise_dir, media_root),
+        "date_iso": date_iso,
+        "display_date": display_date,
+        "is_standalone": is_standalone,
+        "primary_subseries_id": fid if is_standalone else None,
         "subseries": [
             {
                 "id": s["id"],
@@ -764,24 +831,35 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
                 "cover_url": s["cover_url"],
                 "portrait_url": _series_folder_cover(
                     _path_from_rel(s["folder_path"], media_root), media_root
-                ),
+                )
+                if s.get("folder_path")
+                else s.get("portrait_url"),
                 "landscape_url": _series_folder_landscape(
                     _path_from_rel(s["folder_path"], media_root), media_root
-                ),
+                )
+                if s.get("folder_path")
+                else s.get("landscape_url"),
                 "banner_url": _series_folder_banner(
                     _path_from_rel(s["folder_path"], media_root), media_root
-                ),
+                )
+                if s.get("folder_path")
+                else s.get("banner_url"),
                 "logo_url": s.get("logo_url"),
                 "icon_url": s.get("icon_url"),
                 "badge_url": s.get("badge_url"),
                 "season_count": s["season_count"],
                 "has_gallery": s.get("has_gallery"),
+                "is_standalone": s.get("is_standalone"),
             }
             for s in subseries
         ],
-        "season_count": len(seasons)
-        + sum(int(s.get("season_count") or 0) for s in subseries),
-        "subseries_count": len(subseries),
+        "season_count": (
+            len(seasons)
+            if is_standalone
+            else len(seasons)
+            + sum(int(s.get("season_count") or 0) for s in subseries)
+        ),
+        "subseries_count": 0 if is_standalone else len(subseries),
     }
 
 
@@ -853,7 +931,8 @@ def build_franchise_detail(
     franchise_dir, letter = found
     card = _franchise_card(franchise_dir, letter, root)
     seasons = _list_seasons(franchise_dir, root)
-    subseries = _list_subseries(franchise_dir, root)
+    # Prefer card.subseries (includes synthetic standalone show leaf).
+    subseries = card.get("subseries") or _list_subseries(franchise_dir, root)
     return {
         **card,
         "seasons": seasons,

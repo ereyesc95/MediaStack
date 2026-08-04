@@ -227,7 +227,7 @@ def build_movies_filter_options(db: Session, catalog: dict | None = None) -> dic
     from app.music_filters import (
         _country_groups_from_ids,
         all_country_groups,
-        decade_options,
+        continents_for_country_ids,
     )
     from app.movies_index import build_movies_catalog
     from app.seed_music import ensure_music_lookup_data
@@ -331,16 +331,10 @@ def build_movies_filter_options(db: Session, catalog: dict | None = None) -> dic
     if not used_isos:
         country_groups = []
 
-    from app.models import Continent
-
-    continents = [
-        {"id": c.con_id, "name": c.con_name}
-        for c in db.scalars(select(Continent).order_by(Continent.con_name)).all()
-        if c.con_name and c.con_id != 1007
-    ]
+    continents = continents_for_country_ids(db, used_country_ids)
 
     cat = catalog if catalog is not None else build_movies_catalog()
-    decades: set[int] = set(decade_options())
+    decades: set[int] = set()
     for f in cat.get("films") or []:
         iso = (f.get("date_iso") or "") if isinstance(f, dict) else ""
         if len(iso) >= 4 and iso[:4].isdigit():

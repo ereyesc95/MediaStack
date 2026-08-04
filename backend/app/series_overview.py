@@ -948,6 +948,14 @@ def build_series_overview(
         row.ser_status,
         images if isinstance(images, dict) else None,
     )
+    # Standalone / unscanned shows: use earliest disk season date when DB empty.
+    if not activity_periods and detail.get("date_iso"):
+        activity_periods = _activity_periods(
+            detail.get("date_iso"),
+            None,
+            row.ser_status,
+            None,
+        )
 
     # Franchise About fields roll up from per-subseries overrides when present
     if subseries_meta and subseries_cards:
@@ -1086,18 +1094,19 @@ def build_series_overview(
         }
 
     from app.universes import (
-        expand_universe_cards,
         filter_similar_against_universe,
-        universe_for_franchise,
+        franchise_universe_bundle,
     )
 
-    universe = universe_for_franchise(db, "series", detail.get("id") or franchise_id)
+    universes, universe, universe_cards, merged_universe_cards, universe_groups = (
+        franchise_universe_bundle(db, "series", detail.get("id") or franchise_id)
+    )
     similar_cards = filter_similar_against_universe(
         db, "series", detail.get("id") or franchise_id, similar_cards
     )
-    universe_cards = (
-        expand_universe_cards(db, universe["id"]) if universe else []
-    )
+    # Always expose merged cards (tagged with universe_id) so multi-universe
+    # Related tabs can filter client-side without a second fetch.
+    display_cards = merged_universe_cards or universe_cards
 
     return {
         "id": detail["id"],
@@ -1146,10 +1155,15 @@ def build_series_overview(
             "similar": similar_cards,
             "creator_count": len(creator_cards),
             "similar_count": len(similar_cards),
-            "universe": universe_cards,
-            "universe_count": len(universe_cards),
+            "universe": display_cards,
+            "universe_count": len(display_cards),
+            "universe_groups": [
+                {"id": g["id"], "name": g["name"], "count": g["count"]}
+                for g in universe_groups
+            ],
         },
         "universe": universe,
+        "universes": universes,
         "metadata_refreshed_at": row.ser_metadata_refreshed_at,
         "needs_metadata": not bool(row.ser_metadata_refreshed_at),
     }

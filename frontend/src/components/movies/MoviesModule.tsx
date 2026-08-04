@@ -170,9 +170,14 @@ export default function MoviesModule({
   useEffect(() => {
     let cancelled = false;
     setDashLoading(true);
-    void fetchMoviesDashboard()
-      .then((d) => {
-        if (!cancelled) setDashboard(d);
+    void Promise.all([
+      fetchMoviesDashboard(),
+      fetchUniverses().catch(() => ({ universes: [] as Universe[] })),
+    ])
+      .then(([d, u]) => {
+        if (cancelled) return;
+        setDashboard(d);
+        setUniverses(u.universes || []);
       })
       .catch((e) => {
         if (!cancelled)
@@ -201,38 +206,49 @@ export default function MoviesModule({
   }, []);
 
   useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  useEffect(() => {
     if (tab === "catalog" || franchiseId) loadCatalog();
   }, [tab, franchiseId, loadCatalog]);
 
-  useEffect(() => {
-    void fetchUniverses()
-      .then((res) => setUniverses(res.universes || []))
-      .catch(() => setUniverses([]));
-  }, []);
-
   const openUniverseLanding = useCallback(
     (id: number) => {
+      const go = (
+        module: "movies" | "series",
+        franchiseId: string,
+        leafId?: string | null
+      ) => {
+        setEntrySource("catalog");
+        setTab("catalog");
+        if (module === "movies") {
+          pushMoviesRoute({
+            franchiseId,
+            filmId: leafId || undefined,
+            section: "overview",
+            overviewTab: leafId ? "about" : "related",
+            universeId: id,
+          });
+          onNavigate({
+            franchiseId,
+            filmId: leafId || undefined,
+            section: "overview",
+            overviewTab: leafId ? "about" : "related",
+            universeId: id,
+          });
+          return;
+        }
+        onOpenSeriesFranchise?.(franchiseId, leafId || undefined, id);
+      };
+
       void fetchUniverseLanding(id, "movies")
         .then((landing) => {
-          setEntrySource("catalog");
-          setTab("catalog");
-          if (landing.module === "movies") {
-            pushMoviesRoute({
-              franchiseId: landing.franchise_id,
-              section: "overview",
-              overviewTab: "related",
-              universeId: id,
-            });
-            onNavigate({
-              franchiseId: landing.franchise_id,
-              filmId: undefined,
-              section: "overview",
-              overviewTab: "related",
-              universeId: id,
-            });
-            return;
-          }
-          onOpenSeriesFranchise?.(landing.franchise_id, undefined, id);
+          go(
+            landing.module === "series" ? "series" : "movies",
+            landing.franchise_id,
+            landing.leaf_id
+          );
         })
         .catch(() => {});
     },
@@ -276,7 +292,9 @@ export default function MoviesModule({
 
   const browseFranchises = useMemo((): SeriesFranchiseCard[] => {
     if (catalogScope === "franchises") {
-      return franchises.map((f) => {
+      return franchises
+        .filter((f) => !(f as SeriesFranchiseCard & { is_standalone?: boolean }).is_standalone)
+        .map((f) => {
         const workFilms =
           (f as SeriesFranchiseCard & { films?: MoviesFilmCard[] }).films ||
           films.filter((film) => film.work_id === f.id);
@@ -309,10 +327,14 @@ export default function MoviesModule({
         publishers?: string[];
         writers?: string[];
       };
+      const titleLetter = (() => {
+        const ch = (film.title || "").trim().charAt(0).toUpperCase();
+        return ch && ch >= "A" && ch <= "Z" ? ch : "#";
+      })();
       return {
         id: film.id,
         name: film.title,
-        letter: film.letter || "#",
+        letter: titleLetter,
         slug: film.work_id || film.id,
         folder_path: film.folder_path,
         cover_url: film.cover_url,
@@ -454,10 +476,32 @@ export default function MoviesModule({
         franchiseIconUrl={workCard?.icon_url}
         subseriesId={filmId}
         section={filmSection}
+        overviewTab={overviewTab}
         universeId={universeId}
         busy={busy}
         isAdmin={isAdmin}
         userId={userId}
+        cardOrientation={cardOrientation}
+        onSetOrientation={onSetOrientation}
+        onOpenRelatedLocal={(it) => {
+          const title = (it.title || it.name || "").trim().toLowerCase();
+          if (!title) return false;
+          const film = films.find(
+            (f) => (f.title || "").trim().toLowerCase() === title
+          );
+          if (film) {
+            openFilm(film.id, film.work_id);
+            return true;
+          }
+          const work = franchises.find(
+            (f) => (f.name || "").trim().toLowerCase() === title
+          );
+          if (work) {
+            openWork(work.id);
+            return true;
+          }
+          return false;
+        }}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}
@@ -581,7 +625,8 @@ export default function MoviesModule({
             .catch(() => {});
         }}
         onNavigate={(patch) => {
-          const nextFilmId = patch.subseriesId ?? filmId;
+          const nextFilmId =
+            "subseriesId" in patch ? patch.subseriesId : filmId;
           const rawSection = (patch.section || section) as string;
           const nextSection: MoviesSection =
             rawSection === "episodes" || rawSection === "series"
@@ -591,27 +636,29 @@ export default function MoviesModule({
             "franchiseId" in patch && patch.franchiseId
               ? patch.franchiseId
               : franchiseId;
+          const nextUniverseId =
+            "universeId" in patch ? patch.universeId : universeId;
+          const nextOverviewTab =
+            "overviewTab" in patch && patch.overviewTab != null
+              ? patch.overviewTab
+              : nextUniverseId != null && !nextFilmId
+                ? "related"
+                : !patch.section || patch.section === "overview"
+                  ? "about"
+                  : overviewTab;
           pushMoviesRoute({
             franchiseId: nextFranchise,
             filmId: nextFilmId,
             section: nextSection,
-            overviewTab:
-              !patch.section || patch.section === "overview"
-                ? "about"
-                : undefined,
-            universeId:
-              "universeId" in patch ? patch.universeId : universeId,
+            overviewTab: nextOverviewTab,
+            universeId: nextUniverseId,
           });
           onNavigate({
             franchiseId: nextFranchise,
             filmId: nextFilmId,
             section: nextSection,
-            overviewTab:
-              !patch.section || patch.section === "overview"
-                ? "about"
-                : overviewTab,
-            universeId:
-              "universeId" in patch ? patch.universeId : universeId,
+            overviewTab: nextOverviewTab,
+            universeId: nextUniverseId,
           });
         }}
       />

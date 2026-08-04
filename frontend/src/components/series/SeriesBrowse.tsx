@@ -167,10 +167,65 @@ export default function SeriesBrowse({
 
   const decades = filterOptions?.decades ?? [];
 
+  const availableLetters = useMemo(() => {
+    const set = new Set<string>();
+    const add = (raw: string) => {
+      const L = (raw || "").trim().charAt(0).toUpperCase();
+      if (/[A-Z]/.test(L)) set.add(L);
+      else if (raw.trim()) set.add(HASH);
+    };
+    if (catalogScope === "universes") {
+      for (const u of universes) add(u.name || "");
+    } else if (catalogScope === "shows") {
+      for (const f of franchises) {
+        for (const s of f.subseries || []) add(s.title || "");
+      }
+    } else {
+      for (const f of franchises) {
+        add(f.letter || f.name || "");
+      }
+    }
+    const letters = LETTERS.filter((l) => set.has(l));
+    if (set.has(HASH)) letters.push(HASH);
+    return letters;
+  }, [catalogScope, franchises, universes]);
+
+  const visibleFilterModes = useMemo(() => {
+    return filterModes.filter((f) => {
+      switch (f.id) {
+        case "continent":
+          return (filterOptions?.continents?.length ?? 0) > 0;
+        case "country":
+          return (filterOptions?.country_groups?.length ?? 0) > 0;
+        case "start":
+        case "end":
+          return decades.length > 0;
+        case "genre":
+          return (filterOptions?.subgenre_groups?.length ?? 0) > 0;
+        case "publisher":
+          return (filterOptions?.publishers?.length ?? 0) > 0;
+        case "writer":
+          return (filterOptions?.writers?.length ?? 0) > 0;
+        default:
+          return true;
+      }
+    });
+  }, [filterModes, filterOptions, decades]);
+
+  useEffect(() => {
+    if (!visibleFilterModes.some((m) => m.id === filterMode)) {
+      const fallback = visibleFilterModes[0]?.id;
+      if (fallback) onFilterModeChange(fallback);
+    }
+  }, [visibleFilterModes, filterMode, onFilterModeChange]);
+
   // Auto-select first subbar option when entering a filter tab (Music catalog parity)
   useEffect(() => {
-    if (filterMode === "name" && !letter) {
-      onLetterChange("A");
+    if (filterMode === "name") {
+      if (!letter || (availableLetters.length && !availableLetters.includes(letter))) {
+        const first = availableLetters[0];
+        if (first) onLetterChange(first);
+      }
       return;
     }
     if (!filterOptions) return;
@@ -210,6 +265,7 @@ export default function SeriesBrowse({
     filterMode,
     filterOptions,
     letter,
+    availableLetters,
     continentId,
     countryId,
     startDecade,
@@ -441,7 +497,10 @@ export default function SeriesBrowse({
           }
           if (filterMode === "name" && letter) {
             const want = letter === HASH ? "#" : letter.toUpperCase();
-            const L = (f.letter || s.title.slice(0, 1)).toUpperCase();
+            // Films/shows A–Z must use the leaf title, not the parent work letter
+            // (e.g. Poison Arrow under HIM → P, not H).
+            const raw = (s.title || "").trim().charAt(0).toUpperCase();
+            const L = /[A-Z]/.test(raw) ? raw : "#";
             if (want === "#") {
               if (/[A-Z]/.test(L)) continue;
             } else if (L !== want) {
@@ -459,7 +518,10 @@ export default function SeriesBrowse({
             franchiseId: f.id,
             subseriesId: f.subseries.length > 0 ? s.id : undefined,
             name: s.title,
-            letter: f.letter,
+            letter: (() => {
+              const raw = (s.title || "").trim().charAt(0).toUpperCase();
+              return /[A-Z]/.test(raw) ? raw : "#";
+            })(),
             cover_url: s.cover_url || f.cover_url,
             portrait_url: s.portrait_url || f.portrait_url || s.cover_url || f.cover_url,
             landscape_url:
@@ -594,7 +656,7 @@ export default function SeriesBrowse({
       case "name":
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {LETTERS.map((l) => (
+            {availableLetters.map((l) => (
               <button
                 key={l}
                 type="button"
@@ -604,13 +666,6 @@ export default function SeriesBrowse({
                 {l}
               </button>
             ))}
-            <button
-              type="button"
-              className={letter === HASH ? "active" : ""}
-              onClick={() => onLetterChange(HASH)}
-            >
-              {HASH}
-            </button>
             <input
               className="filter-subbar-search"
               placeholder="Search"
@@ -720,6 +775,7 @@ export default function SeriesBrowse({
     filterOptions,
     letter,
     search,
+    availableLetters,
     continentId,
     countryId,
     startDecade,
@@ -747,7 +803,7 @@ export default function SeriesBrowse({
     <div className="series-browse artist-browse">
       <div className="artist-browse-sticky">
         <nav className="sub-nav sub-nav--spread sub-nav--compact">
-          {filterModes.map((f) => (
+          {visibleFilterModes.map((f) => (
             <button
               key={f.id}
               type="button"
@@ -767,7 +823,7 @@ export default function SeriesBrowse({
         ) : null}
         {!loading && !filterReady ? (
           <div className="artist-browse-empty">
-            <p className="muted">Choose a filter value to browse series.</p>
+            <p className="muted">Choose a filter value to browse.</p>
           </div>
         ) : null}
         {filterReady && filtered.length > 0 ? (
@@ -845,7 +901,7 @@ export default function SeriesBrowse({
         ) : null}
         {filterReady && !loading && !filtered.length ? (
           <div className="artist-browse-empty">
-            <p className="muted">No series match this filter.</p>
+            <p className="muted">No media found</p>
           </div>
         ) : null}
       </div>
