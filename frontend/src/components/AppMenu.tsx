@@ -493,7 +493,7 @@ export default function AppMenu({
         onClick={toggleEditData}
       >
         <IconEditRelease className="menu-item-icon" />
-        Edit Data
+        Edit data
         <span className="menu-chevron">{editDataOpen ? "▴" : "▾"}</span>
       </button>
       {editDataOpen && (
