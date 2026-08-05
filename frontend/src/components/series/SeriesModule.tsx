@@ -7,6 +7,7 @@ import {
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
+import { getMediaEntrySource, setMediaEntrySource } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -228,26 +229,33 @@ export default function SeriesModule({
   }, []);
 
   useEffect(() => {
+    if (universeId != null) {
+      setEntrySource(getMediaEntrySource());
+    }
+  }, [universeId]);
+
+  useEffect(() => {
     void loadCatalog();
     void loadDashboard();
     void loadFilters();
   }, [loadCatalog, loadDashboard, loadFilters]);
 
   const openUniverseLanding = useCallback(
-    (id: number) => {
+    (id: number, from: "home" | "catalog" = "catalog") => {
       const go = (
         module: "movies" | "series",
         franchiseId: string,
         leafId?: string | null
       ) => {
-        setEntrySource("catalog");
+        setMediaEntrySource(from);
+        setEntrySource(from);
         setTab("catalog");
         if (module === "series") {
           pushSeriesRoute({
             franchiseId,
             subseriesId: leafId || undefined,
             section: "overview",
-            overviewTab: leafId ? "about" : "related",
+            overviewTab: "related",
             universeId: id,
           });
           onNavigate({
@@ -255,7 +263,7 @@ export default function SeriesModule({
             subseriesId: leafId || undefined,
             seasonId: undefined,
             section: "overview",
-            overviewTab: leafId ? "about" : "related",
+            overviewTab: "related",
             universeId: id,
           });
           return;
@@ -331,6 +339,7 @@ export default function SeriesModule({
     shellHint?: SeriesFranchiseShell | null,
     from: "home" | "catalog" = "catalog"
   ) => {
+    setMediaEntrySource(from);
     setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
     setTab("catalog");
@@ -376,7 +385,8 @@ export default function SeriesModule({
   };
 
   const backFromFranchise = () => {
-    if (entrySource === "home") {
+    const from = getMediaEntrySource() || entrySource;
+    if (from === "home") {
       backToHome();
       return;
     }
@@ -398,6 +408,15 @@ export default function SeriesModule({
     if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
       clearSeriesEntryReferrer();
       onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
+      return;
+    }
+    const from = getMediaEntrySource() || entrySource;
+    // Synthetics still have one subseries — use is_standalone, not empty subseries list.
+    const card = franchises.find((f) => f.id === franchiseId);
+    const isStandaloneLeaf = Boolean(card?.is_standalone);
+    if (universeId != null || isStandaloneLeaf) {
+      if (from === "home") backToHome();
+      else backToCatalog();
       return;
     }
     onNavigate({
@@ -500,16 +519,20 @@ export default function SeriesModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBack={() => {
+            const from = getMediaEntrySource() || entrySource;
             if (universeId != null) {
-              if (entrySource === "home") backToHome();
+              if (from === "home") backToHome();
               else backToCatalog();
               return;
             }
             backFromSubseries();
           }}
           backLabelOverride={
-            universeId != null
-              ? entrySource === "home"
+            universeId != null ||
+            Boolean(
+              franchises.find((f) => f.id === franchiseId)?.is_standalone
+            )
+              ? (getMediaEntrySource() || entrySource) === "home"
                 ? "HOME"
                 : "CATALOG"
               : undefined
@@ -852,7 +875,7 @@ export default function SeriesModule({
                 "home"
               );
             }}
-            onOpenUniverse={openUniverseLanding}
+            onOpenUniverse={(id) => openUniverseLanding(id, "home")}
             onGenre={(id) => {
               setTab("catalog");
               pushSeriesCatalogRoute();
@@ -921,7 +944,7 @@ export default function SeriesModule({
           onSubgenreIdChange={setSubgenreId}
           onPublisherChange={setPublisher}
           onWriterChange={setWriter}
-          onOpenUniverse={openUniverseLanding}
+          onOpenUniverse={(id) => openUniverseLanding(id, "catalog")}
           onOpen={(id, nextSubseriesId, shell) =>
             openFranchise(id, nextSubseriesId, shell)
           }

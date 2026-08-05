@@ -122,6 +122,15 @@ def build_series_dashboard(db: Session, user_id: int) -> dict:
     def plays(r: Reproduction) -> int:
         return _rep_weight(r)
 
+    def _is_saga_card(card: dict | None) -> bool:
+        """True multi-show franchises only — standalones belong in Best Series."""
+        if not card or card.get("is_standalone"):
+            return False
+        n = int(card.get("subseries_count") or 0)
+        if not n:
+            n = len(card.get("subseries") or [])
+        return n > 1
+
     # BEST SAGAS — top franchises by play count (fill from catalog)
     franchise_counts: Counter[str] = Counter()
     for r in series_reps:
@@ -134,7 +143,7 @@ def build_series_dashboard(db: Session, user_id: int) -> dict:
     top_franchises: list[dict] = []
     for fid, count in franchise_counts.most_common(10):
         card = by_id.get(fid)
-        if not card:
+        if not _is_saga_card(card):
             continue
         top_franchises.append(
             {
@@ -155,7 +164,7 @@ def build_series_dashboard(db: Session, user_id: int) -> dict:
     if len(top_franchises) < 10:
         seen = {t["id"] for t in top_franchises}
         ranked = sorted(
-            franchises,
+            (f for f in franchises if _is_saga_card(f)),
             key=lambda f: (
                 -int(f.get("season_count") or 0),
                 -int(f.get("subseries_count") or 0),

@@ -203,8 +203,6 @@ export default function SeriesHome({
         loading ? "" : " dash-appear-ready"
       }`}
     >
-      {loading ? <p className="muted dash-status">Updating…</p> : null}
-
       {!loading ? (
         <>
       <section className="dash-row dash-row--icons">

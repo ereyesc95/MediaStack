@@ -844,18 +844,19 @@ export default function App() {
               });
             }}
             onOpenMoviesFranchise={(franchiseId, filmId, section, universeId) => {
-              const isLanding = !filmId && universeId != null;
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
               pushMoviesRoute({
                 franchiseId,
                 filmId,
-                section: (section as
-                  | "overview"
-                  | "movies"
-                  | "series"
-                  | "audio"
-                  | "library"
-                  | "games"
-                  | "gallery") || "overview",
+                section: nextSection,
                 overviewTab: isLanding ? "related" : "about",
                 universeId,
               });
@@ -863,14 +864,7 @@ export default function App() {
                 kind: "movies",
                 franchiseId,
                 filmId,
-                section: (section as
-                  | "overview"
-                  | "movies"
-                  | "series"
-                  | "audio"
-                  | "library"
-                  | "games"
-                  | "gallery") || "overview",
+                section: nextSection,
                 overviewTab: isLanding ? "related" : "about",
                 universeId,
               });
@@ -916,7 +910,7 @@ export default function App() {
               })
             }
             onOpenSeriesFranchise={(franchiseId, subseriesId, universeId) => {
-              const isLanding = !subseriesId && universeId != null;
+              const isLanding = universeId != null;
               pushSeriesRoute({
                 franchiseId,
                 subseriesId,

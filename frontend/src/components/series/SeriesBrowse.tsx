@@ -167,23 +167,49 @@ export default function SeriesBrowse({
 
   const catalogMetaPool = useMemo(() => {
     /** Unfiltered catalog cards used to derive which filter chips have media. */
-    if (catalogScope === "universes") {
-      return {
-        continentIds: new Set<number>(),
-        decades: new Set<number>(),
-      };
-    }
     const continentIds = new Set<number>();
     const decadeSet = new Set<number>();
-    for (const f of franchises) {
+
+    const addFranchiseMeta = (f: SeriesFranchiseCard) => {
       if (f.continent_id != null) continentIds.add(f.continent_id);
       for (const s of f.subseries || []) {
         const d = decadeFromIso(s.date_iso);
         if (d != null) decadeSet.add(d);
       }
+    };
+
+    if (catalogScope === "universes") {
+      const bySlug = new Map(
+        franchises.map((f) => [f.id.toLowerCase(), f])
+      );
+      // MoviesModule maps films into franchise-shaped cards for "shows"; also
+      // keep work-level franchises for group/universe member slug lookup.
+      for (const u of universes) {
+        for (const m of u.members || []) {
+          const slug = (m.slug || "").toLowerCase();
+          const leaf = (m.leaf_id || "").toLowerCase();
+          const hit =
+            bySlug.get(slug) ||
+            (leaf ? bySlug.get(leaf) : undefined) ||
+            franchises.find(
+              (f) =>
+                f.id.toLowerCase() === slug ||
+                f.subseries?.some((s) => s.id.toLowerCase() === leaf)
+            );
+          if (hit) addFranchiseMeta(hit);
+        }
+        // Legacy work_slugs on movie universes
+        for (const slug of u.work_slugs || []) {
+          const hit = bySlug.get(slug.toLowerCase());
+          if (hit) addFranchiseMeta(hit);
+        }
+      }
+      return { continentIds, decades: decadeSet };
     }
+
+    for (const f of franchises) addFranchiseMeta(f);
     return { continentIds, decades: decadeSet };
-  }, [catalogScope, franchises]);
+  }, [catalogScope, franchises, universes]);
 
   const availableContinents = useMemo(() => {
     const opts = filterOptions?.continents ?? [];
@@ -517,6 +543,57 @@ export default function SeriesBrowse({
           return L === want;
         });
       }
+      if (filterMode === "continent" && continentId !== "") {
+        const bySlug = new Map(
+          franchises.map((f) => [f.id.toLowerCase(), f])
+        );
+        list = list.filter((u) => {
+          const slugs = [
+            ...(u.members || []).map((m) => m.slug),
+            ...(u.work_slugs || []),
+          ];
+          return slugs.some((slug) => {
+            const f = bySlug.get((slug || "").toLowerCase());
+            return f?.continent_id === continentId;
+          });
+        });
+      }
+      if (filterMode === "country" && countryId !== "") {
+        const bySlug = new Map(
+          franchises.map((f) => [f.id.toLowerCase(), f])
+        );
+        list = list.filter((u) => {
+          const slugs = [
+            ...(u.members || []).map((m) => m.slug),
+            ...(u.work_slugs || []),
+          ];
+          return slugs.some((slug) => {
+            const f = bySlug.get((slug || "").toLowerCase());
+            if (!f) return false;
+            if (f.country_id != null && f.country_id === countryId) return true;
+            const iso = selectedCountryOption?.iso?.toLowerCase();
+            return Boolean(iso && (f.country_iso || "").toLowerCase() === iso);
+          });
+        });
+      }
+      if (
+        (filterMode === "start" || filterMode === "end") &&
+        (filterMode === "start" ? startDecade : endDecade) !== ""
+      ) {
+        const bySlug = new Map(
+          franchises.map((f) => [f.id.toLowerCase(), f])
+        );
+        list = list.filter((u) => {
+          const slugs = [
+            ...(u.members || []).map((m) => m.slug),
+            ...(u.work_slugs || []),
+          ];
+          return slugs.some((slug) => {
+            const f = bySlug.get((slug || "").toLowerCase());
+            return (f?.subseries || []).some((s) => matchesDate(s.date_iso));
+          });
+        });
+      }
       list.sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
       );
@@ -683,6 +760,9 @@ export default function SeriesBrowse({
     filterMode,
     startDecade,
     endDecade,
+    continentId,
+    countryId,
+    selectedCountryOption,
     matchesDate,
     matchesFranchiseMeta,
     unitNoun,
@@ -885,7 +965,7 @@ export default function SeriesBrowse({
       </div>
 
       <div className="artist-browse-scroll">
-        {loading ? (
+        {loading && filtered.length === 0 ? (
           <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
         ) : null}
         {!loading && !filterReady ? (

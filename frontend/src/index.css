@@ -7758,6 +7758,66 @@ button.media-release-card--banner {
   font-size: clamp(0.58rem, 1.05vw, 0.74rem);
 }
 
+/* Series/movie media banners: logo sizing (portrait .logo max-height % is too small here) */
+.media-release-card__banner-logo.media-release-card__logo {
+  max-height: clamp(1.85rem, 3.8vw, 2.85rem);
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+  align-self: flex-start;
+}
+
+/* Leaf movie/subseries panels are narrower — give hover meta more room */
+.series-subseries-page .media-release-card__banner-overlay {
+  width: min(72%, 28rem);
+}
+
+.series-subseries-page .media-release-card__banner-logo.media-release-card__logo {
+  max-height: clamp(2.15rem, 4.6vw, 3.35rem);
+}
+
+.series-subseries-page
+  .media-release-card__banner-date-row
+  .media-release-card__banner-date {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.release-page__fetch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.72);
+  color: #f2f2f2;
+  pointer-events: all;
+}
+
+.release-page__fetch-overlay-logo {
+  color: var(--accent, #c9a227);
+  animation: mystack-logo-pulse 2.6s ease-in-out infinite;
+}
+
+.release-page__fetch-overlay-msg {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
 .media-release-card--button {
   border: none;
   padding: 0;
@@ -9935,6 +9995,9 @@ button.media-release-card--banner {
 .release-page__neighbor-text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
@@ -14908,10 +14971,17 @@ button.lyrics-status-badge--icon-only {
 }
 
 .release-page__neighbor-title {
-  display: block;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  max-width: 100%;
 }
 
 .release-page__neighbor-date {
@@ -14923,6 +14993,7 @@ button.lyrics-status-badge--icon-only {
 
 .release-page__neighbor--next .release-page__neighbor-text {
   align-items: flex-end;
+  text-align: right;
 }
 
 .series-subseries-page .release-page__overview-top {

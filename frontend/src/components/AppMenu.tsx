@@ -32,6 +32,7 @@ import {
   IconTheme,
   IconTrackData,
   IconTrash,
+  IconUniverse,
   IconVideo,
 } from "./MenuIcons";
 
@@ -62,12 +63,16 @@ type Props = {
   onWriteFileTags?: () => void;
   onRefreshTracklist?: () => void;
   menuVariant?: "artist" | "release" | "media-item";
-  /** Override label for the release "Edit Release" menu (e.g. "Edit series"). */
+  /** Override label for Update movie/series under Edit Data (leaf pages). */
   editDataLabel?: string;
-  /** Flat single button (no submenu) for series subseries edit. */
+  /**
+   * Leaf movie/subseries menu: Refresh data + Edit Data parents
+   * (instead of flat edit / cast / refresh-local buttons).
+   */
   editDataFlat?: boolean;
-  /** Single top-level "Refresh local data" (no Refresh data submenu). */
+  /** @deprecated Duplicate of Local files under Refresh data — ignored. */
   refreshLocalFlat?: boolean;
+  onAddToUniverse?: () => void;
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -125,7 +130,8 @@ export default function AppMenu({
   menuVariant = "artist",
   editDataLabel,
   editDataFlat = false,
-  refreshLocalFlat = false,
+  refreshLocalFlat: _refreshLocalFlat = false,
+  onAddToUniverse,
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -143,9 +149,11 @@ export default function AppMenu({
   artistThemeActive = false,
   menuChrome,
 }: Props) {
+  void _refreshLocalFlat;
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
+  const [editDataOpen, setEditDataOpen] = useState(false);
   const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -178,6 +186,7 @@ export default function AppMenu({
         setOpen(false);
         setSettingsOpen(false);
         setArtistDataOpen(false);
+        setEditDataOpen(false);
         setTrackDataOpen(false);
         setThemeOpen(false);
         setCustomOpen(false);
@@ -234,6 +243,7 @@ export default function AppMenu({
       const next = !o;
       if (next) {
         setArtistDataOpen(false);
+        setEditDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
       }
@@ -245,6 +255,20 @@ export default function AppMenu({
     setArtistDataOpen((o) => {
       const next = !o;
       if (next) {
+        setEditDataOpen(false);
+        setTrackDataOpen(false);
+        setThemeOpen(false);
+        setSettingsOpen(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleEditData() {
+    setEditDataOpen((o) => {
+      const next = !o;
+      if (next) {
+        setArtistDataOpen(false);
         setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
@@ -258,6 +282,7 @@ export default function AppMenu({
       const next = !o;
       if (next) {
         setArtistDataOpen(false);
+        setEditDataOpen(false);
         setSettingsOpen(false);
       }
       return next;
@@ -269,6 +294,7 @@ export default function AppMenu({
       const next = !o;
       if (next) {
         setArtistDataOpen(false);
+        setEditDataOpen(false);
         setThemeOpen(false);
       }
       return next;
@@ -290,13 +316,19 @@ export default function AppMenu({
     ((!editDataFlat && onEditAbout) ||
       (menuVariant === "release" && !editDataFlat && onAddMember) ||
       onRefreshMetadata ||
-      (!refreshLocalFlat && onRescanLibrary) ||
+      onRescanLibrary ||
       onRefreshLineup ||
       onRefreshPhotos ||
       onRefreshLinks ||
       onRefreshRelatedSimilar ||
       onRefreshRelatedParticipations ||
-      onRefreshIncludeBioChange);
+      onRefreshIncludeBioChange ||
+      (editDataFlat && onEditAbout));
+
+  const showEditDataGroup =
+    editDataFlat &&
+    isAdmin &&
+    (onAddToUniverse || onEditAbout || onAddMember);
 
   const refreshMenuLabel = editDataFlat
     ? "Refresh data"
@@ -307,6 +339,205 @@ export default function AppMenu({
     editDataFlat || menuVariant !== "release" ? IconMetadata : IconEditRelease;
   const aboutLabel = menuVariant === "release" ? "About" : "Edit about";
   const AboutIcon = menuVariant === "release" ? IconAbout : IconEditProfile;
+  const updateLeafLabel = editDataLabel || "Update series";
+
+  const refreshDataBlock =
+    isAdmin && showRefreshData ? (
+      <>
+        <button
+          type="button"
+          className="menu-item-with-sub"
+          onClick={toggleArtistData}
+        >
+          <RefreshMenuIcon className="menu-item-icon" />
+          {refreshMenuLabel}
+          <span className="menu-chevron">
+            {artistDataOpen ? "▴" : "▾"}
+          </span>
+        </button>
+        {artistDataOpen && (
+          <div className="app-menu-submenu">
+            {onEditAbout && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEditAbout();
+                  setOpen(false);
+                }}
+              >
+                <AboutIcon className="menu-item-icon" />
+                {aboutLabel}
+              </button>
+            )}
+            {menuVariant === "release" &&
+              isAdmin &&
+              onAddMember &&
+              !editDataFlat && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddMember();
+                    setOpen(false);
+                  }}
+                >
+                  <IconAddArtist className="menu-item-icon" />
+                  Edit cast
+                </button>
+              )}
+            {onRefreshMetadata && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshMetadata();
+                  setOpen(false);
+                }}
+              >
+                <IconDownload className="menu-item-icon" />
+                Metadata
+              </button>
+            )}
+            {onRefreshIncludeBioChange && (
+              <label className="app-menu-checkbox app-menu-checkbox--sub">
+                <input
+                  type="checkbox"
+                  checked={refreshIncludeBio}
+                  onChange={(e) =>
+                    onRefreshIncludeBioChange(e.target.checked)
+                  }
+                />
+                {refreshIncludeLabel}
+              </label>
+            )}
+            {onRescanLibrary && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRescanLibrary();
+                  setOpen(false);
+                }}
+              >
+                <IconFolder className="menu-item-icon" />
+                Local files
+              </button>
+            )}
+            {onRefreshLineup && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshLineup();
+                  setOpen(false);
+                }}
+              >
+                <IconLineup className="menu-item-icon" />
+                Lineup
+              </button>
+            )}
+            {onRefreshPhotos && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshPhotos();
+                  setOpen(false);
+                }}
+              >
+                <IconCamera className="menu-item-icon" />
+                Photos
+              </button>
+            )}
+            {onRefreshLinks && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshLinks();
+                  setOpen(false);
+                }}
+              >
+                <IconLinks className="menu-item-icon" />
+                Links
+              </button>
+            )}
+            {onRefreshRelatedSimilar && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshRelatedSimilar();
+                  setOpen(false);
+                }}
+              >
+                <IconCards className="menu-item-icon" />
+                Similar
+              </button>
+            )}
+            {onRefreshRelatedParticipations && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRefreshRelatedParticipations();
+                  setOpen(false);
+                }}
+              >
+                <IconLineup className="menu-item-icon" />
+                Participations
+              </button>
+            )}
+          </div>
+        )}
+      </>
+    ) : null;
+
+  const editDataBlock = showEditDataGroup ? (
+    <>
+      <button
+        type="button"
+        className="menu-item-with-sub"
+        onClick={toggleEditData}
+      >
+        <IconEditRelease className="menu-item-icon" />
+        Edit Data
+        <span className="menu-chevron">{editDataOpen ? "▴" : "▾"}</span>
+      </button>
+      {editDataOpen && (
+        <div className="app-menu-submenu">
+          {onAddToUniverse && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddToUniverse();
+                setOpen(false);
+              }}
+            >
+              <IconUniverse className="menu-item-icon" />
+              Add to Universe
+            </button>
+          )}
+          {onEditAbout && (
+            <button
+              type="button"
+              onClick={() => {
+                onEditAbout();
+                setOpen(false);
+              }}
+            >
+              <IconEditProfile className="menu-item-icon" />
+              {updateLeafLabel}
+            </button>
+          )}
+          {onAddMember && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddMember();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              Update cast
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  ) : null;
 
   return (
     <div className="app-menu" ref={ref}>
@@ -322,6 +553,12 @@ export default function AppMenu({
       </button>
       {open && (
         <div className="app-menu-dropdown">
+          {editDataFlat ? (
+            <>
+              {refreshDataBlock}
+              {editDataBlock}
+            </>
+          ) : null}
           {menuChrome ? (
             <div
               className="app-menu-chrome"
@@ -330,19 +567,7 @@ export default function AppMenu({
               {menuChrome}
             </div>
           ) : null}
-          {isAdmin && editDataFlat && onEditAbout && (
-            <button
-              type="button"
-              onClick={() => {
-                onEditAbout();
-                setOpen(false);
-              }}
-            >
-              <IconEditProfile className="menu-item-icon" />
-              {editDataLabel || "Edit series"}
-            </button>
-          )}
-          {isAdmin && onAddMember && (menuVariant !== "release" || editDataFlat) && (
+          {!editDataFlat && isAdmin && onAddMember && menuVariant !== "release" && (
             <button
               type="button"
               onClick={() => {
@@ -352,18 +577,6 @@ export default function AppMenu({
             >
               <IconAddArtist className="menu-item-icon" />
               Edit cast
-            </button>
-          )}
-          {isAdmin && refreshLocalFlat && onRescanLibrary && (
-            <button
-              type="button"
-              onClick={() => {
-                onRescanLibrary();
-                setOpen(false);
-              }}
-            >
-              <IconFolder className="menu-item-icon" />
-              Refresh local data
             </button>
           )}
           {isAdmin && onAddLink && (
@@ -515,145 +728,7 @@ export default function AppMenu({
               Fetch lyrics
             </button>
           )}
-          {isAdmin && showRefreshData && (
-            <>
-              <button
-                type="button"
-                className="menu-item-with-sub"
-                onClick={toggleArtistData}
-              >
-                <RefreshMenuIcon className="menu-item-icon" />
-                {refreshMenuLabel}
-                <span className="menu-chevron">
-                  {artistDataOpen ? "▴" : "▾"}
-                </span>
-              </button>
-              {artistDataOpen && (
-                <div className="app-menu-submenu">
-                  {onEditAbout && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onEditAbout();
-                        setOpen(false);
-                      }}
-                    >
-                      <AboutIcon className="menu-item-icon" />
-                      {aboutLabel}
-                    </button>
-                  )}
-                  {menuVariant === "release" && isAdmin && onAddMember && !editDataFlat && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onAddMember();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconAddArtist className="menu-item-icon" />
-                      Edit cast
-                    </button>
-                  )}
-                  {onRefreshMetadata && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshMetadata();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconDownload className="menu-item-icon" />
-                      Metadata (TMDb)
-                    </button>
-                  )}
-                  {onRefreshIncludeBioChange && (
-                    <label className="app-menu-checkbox app-menu-checkbox--sub">
-                      <input
-                        type="checkbox"
-                        checked={refreshIncludeBio}
-                        onChange={(e) =>
-                          onRefreshIncludeBioChange(e.target.checked)
-                        }
-                      />
-                      {refreshIncludeLabel}
-                    </label>
-                  )}
-                  {onRescanLibrary && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRescanLibrary();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconFolder className="menu-item-icon" />
-                      Local files
-                    </button>
-                  )}
-                  {onRefreshLineup && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshLineup();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconLineup className="menu-item-icon" />
-                      Lineup
-                    </button>
-                  )}
-                  {onRefreshPhotos && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshPhotos();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconCamera className="menu-item-icon" />
-                      Photos
-                    </button>
-                  )}
-                  {onRefreshLinks && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshLinks();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconLinks className="menu-item-icon" />
-                      Links
-                    </button>
-                  )}
-                  {onRefreshRelatedSimilar && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshRelatedSimilar();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconCards className="menu-item-icon" />
-                      Similar
-                    </button>
-                  )}
-                  {onRefreshRelatedParticipations && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onRefreshRelatedParticipations();
-                        setOpen(false);
-                      }}
-                    >
-                      <IconLineup className="menu-item-icon" />
-                      Participations
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+          {!editDataFlat ? refreshDataBlock : null}
           {isAdmin && showAddArtist && onAddArtist && (
             <button
               type="button"

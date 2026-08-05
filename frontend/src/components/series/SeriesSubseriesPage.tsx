@@ -76,6 +76,7 @@ import AppMenu from "../AppMenu";
 import AddToUniverseModal from "../AddToUniverseModal";
 import ArtistCard from "../ArtistCard";
 import CardOrientationPicker from "../CardOrientationPicker";
+import MyStackIcon from "../MyStackIcon";
 import PlaylistBoot from "../PlaylistBoot";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import {
@@ -83,7 +84,6 @@ import {
   IconCardCover,
   IconCheck,
   IconMediaMusic,
-  IconUniverse,
   IconVideo,
 } from "../MenuIcons";
 import MediaBeatFx from "../music/MediaBeatFx";
@@ -590,6 +590,7 @@ export default function SeriesSubseriesPage({
   const [extrasMenuOpen, setExtrasMenuOpen] = useState(false);
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [refreshBio, setRefreshBio] = useState(true);
+  const [metadataFetching, setMetadataFetching] = useState(false);
   useEffect(() => {
     setOverviewDescExpanded(false);
     setCastGlassMin(0);
@@ -778,7 +779,7 @@ export default function SeriesSubseriesPage({
           franchiseId,
           filmId: subseriesId,
           section,
-          overviewTab: tab === "overview" ? "about" : undefined,
+          overviewTab: tab === "overview" ? overviewTab : undefined,
           universeId,
         },
         true
@@ -791,12 +792,12 @@ export default function SeriesSubseriesPage({
         subseriesId,
         seasonId,
         section: tabToSection(tab),
-        overviewTab: tab === "overview" ? "about" : undefined,
+        overviewTab: tab === "overview" ? overviewTab : undefined,
         universeId,
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, tab, isFilm, universeId]);
+  }, [franchiseId, subseriesId, seasonId, tab, isFilm, universeId, overviewTab]);
 
   const seasons: SeriesSeasonCard[] = useMemo(
     () => detail?.seasons || [],
@@ -2326,21 +2327,14 @@ export default function SeriesSubseriesPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
-              editDataLabel={isFilm ? "Edit movie" : "Edit series"}
+              editDataLabel={isFilm ? "Update movie" : "Update series"}
               editDataFlat
-              refreshLocalFlat
+              onAddToUniverse={
+                isAdmin ? () => setAddUniverseOpen(true) : undefined
+              }
               menuChrome={
-                <>
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      onClick={() => setAddUniverseOpen(true)}
-                    >
-                      <IconUniverse className="menu-item-icon" />
-                      Add to universe
-                    </button>
-                  ) : null}
-                  {stacked ? (
+                stacked &&
+                (showMediaLayoutPicker || !isFilm || hasAudio) ? (
                   <>
                     {showMediaLayoutPicker ? (
                       <button
@@ -2376,8 +2370,7 @@ export default function SeriesSubseriesPage({
                       </button>
                     ) : null}
                   </>
-                ) : null}
-                </>
+                ) : undefined
               }
               onEditAbout={
                 isAdmin && overview
@@ -2392,19 +2385,21 @@ export default function SeriesSubseriesPage({
               onRefreshMetadata={
                 isAdmin
                   ? () => {
+                      setMetadataFetching(true);
                       void (isFilm
                         ? refreshMoviesFilmMetadata(subseriesId, true)
                         : refreshSeriesMetadata(franchiseId, refreshBio)
                       )
                         .then(() => {
                           setRescanTick((t) => t + 1);
-                          void loadCard();
+                          return loadCard();
                         })
                         .catch((e) =>
                           setError(
                             e instanceof Error ? e.message : String(e)
                           )
-                        );
+                        )
+                        .finally(() => setMetadataFetching(false));
                     }
                   : undefined
               }
@@ -2428,6 +2423,22 @@ export default function SeriesSubseriesPage({
             />
           </div>
         </header>
+
+        {metadataFetching ? (
+          <div
+            className="release-page__fetch-overlay"
+            role="status"
+            aria-live="polite"
+          >
+            <MyStackIcon
+              className="release-page__fetch-overlay-logo"
+              size={52}
+            />
+            <p className="release-page__fetch-overlay-msg">
+              Fetching data, please wait...
+            </p>
+          </div>
+        ) : null}
 
         <nav className="release-page__tabs" aria-label="Subseries sections">
           {tabs.map((t) => (
@@ -2503,7 +2514,6 @@ export default function SeriesSubseriesPage({
                     seasonId: expandedSeasonId || seasonId,
                     section: "overview",
                     overviewTab: id,
-                    universeId: undefined,
                   });
                 }}
               >
