@@ -3,7 +3,6 @@ import {
   fetchMoviesCatalog,
   fetchMoviesDashboard,
   fetchMoviesFilterOptions,
-  fetchUniverseLanding,
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
@@ -102,6 +101,10 @@ type Props = {
     universeId?: number
   ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenUniversePage?: (
+    universeId: number,
+    from: "home" | "catalog"
+  ) => void;
 };
 
 export default function MoviesModule({
@@ -125,6 +128,7 @@ export default function MoviesModule({
   onNavigate,
   onOpenSeriesFranchise,
   onOpenMusicRelease,
+  onOpenUniversePage,
 }: Props) {
   const deviceLayout = useDeviceLayout();
   const portraitMenuChrome =
@@ -216,46 +220,11 @@ export default function MoviesModule({
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {
-      const go = (
-        module: "movies" | "series",
-        franchiseId: string,
-        leafId?: string | null
-      ) => {
-        setMediaEntrySource(from);
-        setEntrySource(from);
-        setTab("catalog");
-        // Universe card landings always open Related with that universe selected.
-        if (module === "movies") {
-          pushMoviesRoute({
-            franchiseId,
-            filmId: leafId || undefined,
-            section: "overview",
-            overviewTab: "related",
-            universeId: id,
-          });
-          onNavigate({
-            franchiseId,
-            filmId: leafId || undefined,
-            section: "overview",
-            overviewTab: "related",
-            universeId: id,
-          });
-          return;
-        }
-        onOpenSeriesFranchise?.(franchiseId, leafId || undefined, id);
-      };
-
-      void fetchUniverseLanding(id, "movies")
-        .then((landing) => {
-          go(
-            landing.module === "series" ? "series" : "movies",
-            landing.franchise_id,
-            landing.leaf_id
-          );
-        })
-        .catch(() => {});
+      setMediaEntrySource(from);
+      setEntrySource(from);
+      onOpenUniversePage?.(id, from);
     },
-    [onNavigate, onOpenSeriesFranchise]
+    [onOpenUniversePage]
   );
 
   useEffect(() => {
@@ -549,14 +518,18 @@ export default function MoviesModule({
         onEditProfile={onEditProfile}
         onBack={() => {
           const from = getMediaEntrySource() || entrySource;
-          // Universe landings and standalones have no franchise hub to return to.
+          if (universeId != null) {
+            onOpenUniversePage?.(universeId, from);
+            return;
+          }
+          // Standalones have no franchise hub to return to.
           const work = franchises.find((f) => f.id === franchiseId) as
             | (SeriesFranchiseCard & { is_standalone?: boolean })
             | undefined;
           const filmCount = films.filter((f) => f.work_id === franchiseId).length;
           const isStandalone =
             Boolean(work?.is_standalone) || filmCount <= 1;
-          if (universeId != null || isStandalone) {
+          if (isStandalone) {
             if (from === "home") backToMoviesHome();
             else backToMoviesCatalog();
             return;
@@ -572,19 +545,20 @@ export default function MoviesModule({
           });
         }}
         backLabelOverride={
-          universeId != null ||
-          Boolean(
-            (franchises.find((f) => f.id === franchiseId) as
-              | { is_standalone?: boolean }
-              | undefined)?.is_standalone
-          ) ||
-          films.filter((f) => f.work_id === franchiseId).length <= 1
-            ? (getMediaEntrySource() || entrySource) === "home"
-              ? "HOME"
-              : "CATALOG"
-            : entrySource === "home"
-              ? "HOME"
-              : undefined
+          universeId != null
+            ? "UNIVERSE"
+            : Boolean(
+                  (franchises.find((f) => f.id === franchiseId) as
+                    | { is_standalone?: boolean }
+                    | undefined)?.is_standalone
+                ) ||
+                films.filter((f) => f.work_id === franchiseId).length <= 1
+              ? (getMediaEntrySource() || entrySource) === "home"
+                ? "HOME"
+                : "CATALOG"
+              : entrySource === "home"
+                ? "HOME"
+                : undefined
         }
         onBrowseCatalog={(target) => {
           setEntrySource("catalog");
@@ -647,13 +621,10 @@ export default function MoviesModule({
         }}
         onOpenUniverseParent={() => {
           if (universeId == null) return;
-          onNavigate({
-            franchiseId,
-            filmId: undefined,
-            section: "overview",
-            overviewTab: "related",
+          onOpenUniversePage?.(
             universeId,
-          });
+            getMediaEntrySource() || entrySource
+          );
         }}
         onOpenMoviesPath={(path) => {
           void resolveMoviesPath(path)
@@ -730,11 +701,19 @@ export default function MoviesModule({
         onBack={() => {
           const from = getMediaEntrySource() || entrySource;
           if (entrySource !== from) setEntrySource(from);
+          if (universeId != null) {
+            onOpenUniversePage?.(universeId, from);
+            return;
+          }
           if (from === "home") backToMoviesHome();
           else backToMoviesCatalog();
         }}
         backLabel={
-          (getMediaEntrySource() || entrySource) === "home" ? "HOME" : "CATALOG"
+          universeId != null
+            ? "UNIVERSE"
+            : (getMediaEntrySource() || entrySource) === "home"
+              ? "HOME"
+              : "CATALOG"
         }
         onNavigate={(patch) => {
           const next: {

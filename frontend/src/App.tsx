@@ -40,6 +40,7 @@ import {
   parseMoviesCatalogPath,
   parseMoviesPath,
   parseMoviesRootPath,
+  pushMoviesCatalogRoute,
   pushMoviesRootRoute,
   pushMoviesRoute,
 } from "./moviesRoute";
@@ -47,10 +48,22 @@ import {
   parseSeriesCatalogPath,
   parseSeriesPath,
   parseSeriesRootPath,
+  pushSeriesCatalogRoute,
   pushSeriesRootRoute,
   pushSeriesRoute,
 } from "./seriesRoute";
+import {
+  parseUniversePath,
+  pushUniverseRoute,
+} from "./universeRoute";
+import {
+  getMediaEntrySource,
+  getUniverseReturnTarget,
+  setMediaEntrySource,
+  setUniverseReturnTarget,
+} from "./mediaEntry";
 import type { CardOrientation, MusicTab, View } from "./types";
+import UniversePage from "./components/UniversePage";
 
 
 
@@ -151,6 +164,7 @@ export default function App() {
         tab: "playlists",
       });
     } else {
+      const universeRoute = parseUniversePath(window.location.pathname);
       const seriesRoute = parseSeriesPath(
         window.location.pathname,
         window.location.search
@@ -159,7 +173,14 @@ export default function App() {
         window.location.pathname,
         window.location.search
       );
-      if (seriesRoute) {
+      if (universeRoute) {
+        setView({
+          kind: "universe",
+          universeId: universeRoute.universeId,
+          section: universeRoute.section,
+          overviewTab: universeRoute.overviewTab,
+        });
+      } else if (seriesRoute) {
         setView({
           kind: "series",
           franchiseId: seriesRoute.franchiseId,
@@ -262,6 +283,16 @@ export default function App() {
                 playlistSlug: route.playlistSlug,
               }
         );
+        return;
+      }
+      const universeRoute = parseUniversePath(window.location.pathname);
+      if (universeRoute) {
+        setView({
+          kind: "universe",
+          universeId: universeRoute.universeId,
+          section: universeRoute.section,
+          overviewTab: universeRoute.overviewTab,
+        });
         return;
       }
       const seriesRoute = parseSeriesPath(
@@ -440,6 +471,40 @@ export default function App() {
 
     if (opt.kind === "books") setView({ kind: "books" });
     else if (opt.kind === "games") setView({ kind: "games" });
+  }
+
+  function openUniversePage(
+    universeId: number,
+    fromModule: "series" | "movies",
+    from: "home" | "catalog" = "catalog"
+  ) {
+    setMediaEntrySource(from);
+    setUniverseReturnTarget({ module: fromModule, source: from });
+    pushUniverseRoute({
+      universeId,
+      section: "overview",
+      overviewTab: "about",
+    });
+    setView({
+      kind: "universe",
+      universeId,
+      section: "overview",
+      overviewTab: "about",
+    });
+  }
+
+  function backFromUniverse() {
+    const ret = getUniverseReturnTarget();
+    const from = getMediaEntrySource() || ret.source;
+    if (ret.module === "movies") {
+      if (from === "home") pushMoviesRootRoute();
+      else pushMoviesCatalogRoute();
+      setView({ kind: "movies" });
+      return;
+    }
+    if (from === "home") pushSeriesRootRoute();
+    else pushSeriesCatalogRoute();
+    setView({ kind: "series" });
   }
 
 
@@ -760,6 +825,76 @@ export default function App() {
 
 
 
+        {appReady && view.kind === "universe" && (
+          <UniversePage
+            key={`universe-${profile.user_id}-${view.universeId}`}
+            universeId={view.universeId}
+            section={view.section}
+            overviewTab={view.overviewTab}
+            busy={busy}
+            isAdmin={isAdmin}
+            userId={profile?.user_id}
+            onImport={handleImport}
+            onSync={handleSync}
+            onChooseSource={
+              isAdmin ? () => setSourceModal("settings") : undefined
+            }
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+            onBack={backFromUniverse}
+            backLabel={
+              (getMediaEntrySource() || getUniverseReturnTarget().source) ===
+              "home"
+                ? "HOME"
+                : "CATALOG"
+            }
+            onNavigate={(patch) =>
+              setView({
+                kind: "universe",
+                universeId: view.universeId,
+                section: patch.section ?? view.section,
+                overviewTab: patch.overviewTab ?? view.overviewTab,
+              })
+            }
+            onOpenSeriesLeaf={(franchiseId, subseriesId) => {
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
+            onOpenMoviesLeaf={(franchiseId, filmId) => {
+              pushMoviesRoute({
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
+          />
+        )}
+
         {appReady && view.kind === "series" && (
           <SeriesModule
             key={`series-${profile.user_id}`}
@@ -869,6 +1004,9 @@ export default function App() {
                 universeId,
               });
             }}
+            onOpenUniversePage={(id, from) =>
+              openUniversePage(id, "series", from)
+            }
           />
         )}
 
@@ -953,6 +1091,9 @@ export default function App() {
                 releaseTab: "overview",
               });
             }}
+            onOpenUniversePage={(id, from) =>
+              openUniversePage(id, "movies", from)
+            }
           />
         )}
 
@@ -960,7 +1101,8 @@ export default function App() {
           view.kind !== "hub" &&
           view.kind !== "music" &&
           view.kind !== "series" &&
-          view.kind !== "movies" && (
+          view.kind !== "movies" &&
+          view.kind !== "universe" && (
 
           <>
 

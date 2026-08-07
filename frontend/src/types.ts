@@ -1019,6 +1019,12 @@ export type View =
       overviewTab?: import("./moviesRoute").MoviesOverviewTab;
       universeId?: number;
     }
+  | {
+      kind: "universe";
+      universeId: number;
+      section?: import("./universeRoute").UniverseSection;
+      overviewTab?: import("./universeRoute").UniverseOverviewTab;
+    }
   | { kind: "books" }
   | { kind: "games" };
 
@@ -1101,6 +1107,16 @@ export type UniverseLanding = {
   franchise_id: string;
   leaf_id?: string | null;
   universe_id: number;
+};
+
+export type UniverseHub = {
+  universe: Universe;
+  series: UniverseCard[];
+  movies: UniverseCard[];
+  media: {
+    has_series?: boolean;
+    has_movies?: boolean;
+  };
 };
 
 export type MoviesWorkDetail = SeriesFranchiseCard & {

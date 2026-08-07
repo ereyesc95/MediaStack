@@ -10,6 +10,7 @@ from app.deps import require_admin
 from app.database import get_db
 from app.universes import (
     ART_KINDS,
+    build_universe_hub,
     create_universe,
     expand_universe_cards,
     get_universe,
@@ -135,6 +136,14 @@ def api_universe_cards(universe_id: int, db: Session = Depends(get_db)):
     if not get_universe(db, universe_id):
         raise HTTPException(404, "Universe not found")
     return {"items": expand_universe_cards(db, universe_id)}
+
+
+@router.get("/{universe_id}/hub")
+def api_universe_hub(universe_id: int, db: Session = Depends(get_db)):
+    hub = build_universe_hub(db, universe_id)
+    if not hub:
+        raise HTTPException(404, "Universe not found")
+    return hub
 
 
 @router.get("/{universe_id}/landing")

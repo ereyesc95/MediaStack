@@ -1928,6 +1928,12 @@ export async function fetchUniverseCards(universeId: number) {
   );
 }
 
+export async function fetchUniverseHub(universeId: number) {
+  return request<import("./types").UniverseHub>(
+    `${API}/universes/${universeId}/hub`
+  );
+}
+
 export async function fetchUniverseLanding(
   universeId: number,
   preferModule: "movies" | "series" = "movies"

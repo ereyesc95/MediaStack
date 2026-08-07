@@ -3,7 +3,6 @@ import {
   fetchSeriesCatalog,
   fetchSeriesDashboard,
   fetchSeriesFilterOptions,
-  fetchUniverseLanding,
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
@@ -18,7 +17,6 @@ import {
   getSeriesEntryReferrer,
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
-  pushSeriesRoute,
   parseSeriesCatalogPath,
   parseSeriesRootPath,
 } from "../../seriesRoute";
@@ -97,6 +95,10 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  onOpenUniversePage?: (
+    universeId: number,
+    from: "home" | "catalog"
+  ) => void;
 };
 
 export default function SeriesModule({
@@ -122,6 +124,7 @@ export default function SeriesModule({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenMoviesFranchise,
+  onOpenUniversePage,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
     if (franchiseId) return "catalog";
@@ -242,51 +245,11 @@ export default function SeriesModule({
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {
-      const go = (
-        module: "movies" | "series",
-        franchiseId: string,
-        leafId?: string | null
-      ) => {
-        setMediaEntrySource(from);
-        setEntrySource(from);
-        setTab("catalog");
-        if (module === "series") {
-          pushSeriesRoute({
-            franchiseId,
-            subseriesId: leafId || undefined,
-            section: "overview",
-            overviewTab: "related",
-            universeId: id,
-          });
-          onNavigate({
-            franchiseId,
-            subseriesId: leafId || undefined,
-            seasonId: undefined,
-            section: "overview",
-            overviewTab: "related",
-            universeId: id,
-          });
-          return;
-        }
-        onOpenMoviesFranchise?.(
-          franchiseId,
-          leafId || undefined,
-          "overview",
-          id
-        );
-      };
-
-      void fetchUniverseLanding(id, "series")
-        .then((landing) => {
-          go(
-            landing.module === "movies" ? "movies" : "series",
-            landing.franchise_id,
-            landing.leaf_id
-          );
-        })
-        .catch(() => {});
+      setMediaEntrySource(from);
+      setEntrySource(from);
+      onOpenUniversePage?.(id, from);
     },
-    [onNavigate, onOpenMoviesFranchise]
+    [onOpenUniversePage]
   );
 
   useEffect(() => {
@@ -386,6 +349,10 @@ export default function SeriesModule({
 
   const backFromFranchise = () => {
     const from = getMediaEntrySource() || entrySource;
+    if (universeId != null) {
+      onOpenUniversePage?.(universeId, from);
+      return;
+    }
     if (from === "home") {
       backToHome();
       return;
@@ -411,10 +378,14 @@ export default function SeriesModule({
       return;
     }
     const from = getMediaEntrySource() || entrySource;
+    if (universeId != null) {
+      onOpenUniversePage?.(universeId, from);
+      return;
+    }
     // Synthetics still have one subseries — use is_standalone, not empty subseries list.
     const card = franchises.find((f) => f.id === franchiseId);
     const isStandaloneLeaf = Boolean(card?.is_standalone);
-    if (universeId != null || isStandaloneLeaf) {
+    if (isStandaloneLeaf) {
       if (from === "home") backToHome();
       else backToCatalog();
       return;
@@ -521,21 +492,21 @@ export default function SeriesModule({
           onBack={() => {
             const from = getMediaEntrySource() || entrySource;
             if (universeId != null) {
-              if (from === "home") backToHome();
-              else backToCatalog();
+              onOpenUniversePage?.(universeId, from);
               return;
             }
             backFromSubseries();
           }}
           backLabelOverride={
-            universeId != null ||
-            Boolean(
-              franchises.find((f) => f.id === franchiseId)?.is_standalone
-            )
-              ? (getMediaEntrySource() || entrySource) === "home"
-                ? "HOME"
-                : "CATALOG"
-              : undefined
+            universeId != null
+              ? "UNIVERSE"
+              : Boolean(
+                    franchises.find((f) => f.id === franchiseId)?.is_standalone
+                  )
+                ? (getMediaEntrySource() || entrySource) === "home"
+                  ? "HOME"
+                  : "CATALOG"
+                : undefined
           }
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
@@ -571,14 +542,10 @@ export default function SeriesModule({
           }}
           onOpenUniverseParent={() => {
             if (universeId == null) return;
-            onNavigate({
-              franchiseId,
-              subseriesId: undefined,
-              seasonId: undefined,
-              section: "overview",
-              overviewTab: "related",
+            onOpenUniversePage?.(
               universeId,
-            });
+              getMediaEntrySource() || entrySource
+            );
           }}
           onNavigate={(patch) => {
             const nextSub =
@@ -630,7 +597,13 @@ export default function SeriesModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBack={backFromDeepLink}
-          backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
+          backLabel={
+            universeId != null
+              ? "UNIVERSE"
+              : entrySource === "home"
+                ? "HOME"
+                : "CATALOG"
+          }
           menuExtra={
             isAdmin ? (
               <button type="button" onClick={() => setAddUniverseOpen(true)}>

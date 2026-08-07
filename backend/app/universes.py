@@ -874,6 +874,69 @@ def expand_universe_cards(db: Session, universe_id: int) -> list[dict]:
     return cards
 
 
+def build_universe_hub(db: Session, universe_id: int) -> dict | None:
+    """Franchise-like hub payload: universe record + leaf cards by module (name sort)."""
+    u = db.get(Universe, universe_id)
+    if not u:
+        return None
+    data = _serialize_universe(db, u, expand_cover=True)
+    cards = expand_universe_cards(db, universe_id)
+
+    def title_key(c: dict) -> str:
+        return (c.get("title") or c.get("name") or "").casefold()
+
+    series = sorted(
+        (c for c in cards if c.get("module") == "series"),
+        key=title_key,
+    )
+    movies = sorted(
+        (c for c in cards if c.get("module") == "movies"),
+        key=title_key,
+    )
+
+    # Prefer universe art; fall back to earliest member for page chrome.
+    banner = data.get("banner_url") or data.get("landscape_url")
+    portrait = data.get("portrait_url") or data.get("cover_url")
+    if not banner or not portrait:
+        dated = sorted(
+            cards,
+            key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
+        )
+        for c in dated:
+            if not portrait:
+                portrait = (
+                    c.get("portrait_url")
+                    or c.get("cover_url")
+                    or c.get("landscape_url")
+                )
+            if not banner:
+                banner = (
+                    c.get("banner_url")
+                    or c.get("landscape_url")
+                    or c.get("cover_url")
+                )
+            if portrait and banner:
+                break
+        if portrait and not data.get("cover_url"):
+            data["cover_url"] = portrait
+        if portrait and not data.get("portrait_url"):
+            data["portrait_url"] = portrait
+        if banner and not data.get("banner_url"):
+            data["banner_url"] = banner
+        if banner and not data.get("landscape_url"):
+            data["landscape_url"] = banner
+
+    return {
+        "universe": data,
+        "series": series,
+        "movies": movies,
+        "media": {
+            "has_series": bool(series),
+            "has_movies": bool(movies),
+        },
+    }
+
+
 def landing_franchise(
     db: Session, universe_id: int, prefer_module: ModuleKind
 ) -> dict | None:

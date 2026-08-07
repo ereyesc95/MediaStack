@@ -73,6 +73,8 @@ type Props = {
   /** @deprecated Duplicate of Local files under Refresh data — ignored. */
   refreshLocalFlat?: boolean;
   onAddToUniverse?: () => void;
+  /** Label for onAddToUniverse (default: Add to Universe). */
+  addToUniverseLabel?: string;
   onRescanLibrary?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -132,6 +134,7 @@ export default function AppMenu({
   editDataFlat = false,
   refreshLocalFlat: _refreshLocalFlat = false,
   onAddToUniverse,
+  addToUniverseLabel = "Add to Universe",
   onRescanLibrary,
   onRefreshLineup,
   onRefreshPhotos,
@@ -507,7 +510,7 @@ export default function AppMenu({
               }}
             >
               <IconUniverse className="menu-item-icon" />
-              Add to Universe
+              {addToUniverseLabel}
             </button>
           )}
           {onEditAbout && (
