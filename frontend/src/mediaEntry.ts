@@ -4,6 +4,8 @@ export type MediaEntrySource = "home" | "catalog";
 export type UniverseReturnTarget = {
   module: "series" | "movies";
   source: MediaEntrySource;
+  universeId?: number;
+  universeName?: string;
 };
 
 let entrySource: MediaEntrySource = "catalog";

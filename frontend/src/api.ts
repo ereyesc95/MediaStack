@@ -1862,9 +1862,10 @@ export async function fetchMoviesGallery(path: string) {
   }>(`${API}/movies/gallery?path=${encodeURIComponent(path)}`);
 }
 
-export async function fetchUniverses() {
+export async function fetchUniverses(module?: "movies" | "series") {
+  const q = module ? `?module=${encodeURIComponent(module)}` : "";
   return request<{ universes: import("./types").Universe[] }>(
-    `${API}/universes`
+    `${API}/universes${q}`
   );
 }
 

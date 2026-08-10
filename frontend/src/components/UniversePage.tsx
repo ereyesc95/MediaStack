@@ -12,7 +12,17 @@ import {
   colorsFromImageUrl,
   isPlaybackThemeActive,
 } from "../mediaTheme";
-import type { Universe, UniverseCard, UniverseHub } from "../types";
+import {
+  getUniverseReturnTarget,
+  setUniverseReturnTarget,
+} from "../mediaEntry";
+import type {
+  SeriesOverview,
+  SeriesSubseriesCard,
+  Universe,
+  UniverseCard,
+  UniverseHub,
+} from "../types";
 import {
   pushUniverseRoute,
   type UniverseOverviewTab,
@@ -31,6 +41,8 @@ import PlaylistBoot from "./PlaylistBoot";
 import UniverseAboutEditModal from "./UniverseAboutEditModal";
 import UniverseAddMemberModal from "./UniverseAddMemberModal";
 import MediaBeatFx from "./music/MediaBeatFx";
+import SeriesAbout from "./series/SeriesAbout";
+import SeriesGalleryPanel from "./series/SeriesGalleryPanel";
 import SeriesMediaGrid, { type SeriesMediaCard } from "./series/SeriesMediaGrid";
 
 type Props = {
@@ -55,16 +67,6 @@ type Props = {
   onOpenMoviesLeaf: (franchiseId: string, filmId: string) => void;
 };
 
-function bioParagraphs(bio: string): string[] {
-  const text = bio.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").trim();
-  if (!text) return [];
-  const parts = text
-    .split(/\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return parts.length ? parts : [text];
-}
-
 function toMediaCard(c: UniverseCard): SeriesMediaCard {
   return {
     id: String(c.leaf_id || c.id || c.franchise_id),
@@ -79,6 +81,43 @@ function toMediaCard(c: UniverseCard): SeriesMediaCard {
     universe_module: c.module,
     universe_franchise_id: c.franchise_id,
     universe_leaf_id: c.leaf_id || c.id,
+  };
+}
+
+function emptyOverview(name: string): SeriesOverview {
+  return {
+    id: "universe",
+    name,
+    letter: (name || "?").slice(0, 1).toUpperCase(),
+    folder_path: "",
+    cover_url: null,
+    bio: null,
+    writers: [],
+    aliases: [],
+    languages: [],
+    activity_periods: [],
+    genres: [],
+    publishers: [],
+    eras: [],
+    cast: { characters: [], staff: [] },
+    media: {
+      has_audio: false,
+      has_series: false,
+      has_movies: false,
+      has_library: false,
+      has_games: false,
+      has_gallery: false,
+    },
+    links: { categories: [], groups: {}, total: 0 },
+    subseries: [],
+    seasons: [],
+    related: {
+      movies: [],
+      series: [],
+      books: [],
+      games: [],
+      music: [],
+    },
   };
 }
 
@@ -113,6 +152,9 @@ export default function UniversePage({
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [metadataFetching, setMetadataFetching] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [eraIndex, setEraIndex] = useState(0);
+  const [activeLanguage, setActiveLanguage] = useState<string | null>(null);
+  const [gallerySectionKey, setGallerySectionKey] = useState("all");
   const [cardLayout] = useState(() =>
     userId ? getStoredReleaseCardLayout(userId) : "cover"
   );
@@ -123,6 +165,18 @@ export default function UniversePage({
     try {
       const data = await fetchUniverseHub(universeId);
       setHub(data);
+      const name = data.universe?.name;
+      if (name) {
+        const prev = getUniverseReturnTarget();
+        setUniverseReturnTarget({
+          ...prev,
+          universeId,
+          universeName: name,
+        });
+      }
+      const langs = data.overview?.languages || [];
+      setActiveLanguage(langs[0] || null);
+      setEraIndex(0);
     } catch (e) {
       setHub(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -135,12 +189,25 @@ export default function UniversePage({
     void load();
   }, [load]);
 
+  const universe = hub?.universe;
+  const overview = hub?.overview;
+  const title = universe?.name || overview?.name || "Universe";
+
+  const displayLogoUrl = useMemo(() => {
+    if (!overview) return universe?.logo_url || null;
+    const byLang = overview.logo_by_language;
+    if (activeLanguage && byLang) {
+      const want = activeLanguage.toLowerCase();
+      if (byLang[activeLanguage]) return byLang[activeLanguage];
+      const key = Object.keys(byLang).find((k) => k.toLowerCase() === want);
+      if (key) return byLang[key];
+    }
+    return overview.logo_url || byLang?.default || universe?.logo_url || null;
+  }, [overview, activeLanguage, universe?.logo_url]);
+
   useEffect(() => {
     setLogoFailed(false);
-  }, [universeId, hub?.universe?.logo_url]);
-
-  const universe = hub?.universe;
-  const title = universe?.name || "Universe";
+  }, [universeId, displayLogoUrl]);
 
   const bgUrl =
     universe?.banner_url ||
@@ -182,38 +249,47 @@ export default function UniversePage({
     () => (hub?.movies || []).map(toMediaCard),
     [hub?.movies]
   );
+  const audioCards = useMemo(
+    () => (hub?.carousel || [...(hub?.series || []), ...(hub?.movies || [])]).map(toMediaCard),
+    [hub?.carousel, hub?.series, hub?.movies]
+  );
 
+  const galleryFolders = useMemo(() => {
+    const fromOverview = (
+      overview as (SeriesOverview & { gallery_folder_paths?: string[] }) | undefined
+    )?.gallery_folder_paths;
+    if (fromOverview?.length) return fromOverview;
+    return (hub?.carousel || [])
+      .map((c) => (c as UniverseCard & { folder_path?: string }).folder_path)
+      .filter((p): p is string => Boolean(p));
+  }, [overview, hub?.carousel]);
+
+  const media = hub?.media;
   const navSections = useMemo(() => {
     const items: { id: UniverseSection; label: string; mobileLabel?: string }[] =
       [{ id: "overview", label: "OVERVIEW", mobileLabel: "INFO" }];
-    if (hub?.media.has_series || seriesCards.length > 0) {
-      items.push({ id: "series", label: "SERIES" });
-    }
-    if (hub?.media.has_movies || movieCards.length > 0) {
+    if (media?.has_movies || movieCards.length > 0) {
       items.push({ id: "movies", label: "MOVIES" });
     }
+    if (media?.has_series || seriesCards.length > 0) {
+      items.push({ id: "series", label: "SERIES" });
+    }
+    if (media?.has_audio) {
+      items.push({ id: "audio", label: "AUDIO" });
+    }
+    if (media?.has_gallery) {
+      items.push({ id: "gallery", label: "GALLERY", mobileLabel: "ART" });
+    }
     return items;
-  }, [hub?.media, seriesCards.length, movieCards.length]);
+  }, [media, seriesCards.length, movieCards.length]);
 
   useEffect(() => {
-    if (section === "series" && seriesCards.length === 0 && hub && !loading) {
-      onNavigate({ section: "overview", overviewTab: "about" });
-    } else if (
-      section === "movies" &&
-      movieCards.length === 0 &&
-      hub &&
-      !loading
-    ) {
+    if (!hub || loading) return;
+    const allowed = new Set(navSections.map((s) => s.id));
+    if (!allowed.has(section)) {
       onNavigate({ section: "overview", overviewTab: "about" });
     }
-  }, [
-    section,
-    seriesCards.length,
-    movieCards.length,
-    hub,
-    loading,
-    onNavigate,
-  ]);
+  }, [hub, loading, section, navSections, onNavigate]);
 
   const pageClass = [
     "artist-page",
@@ -226,10 +302,12 @@ export default function UniversePage({
     .filter(Boolean)
     .join(" ");
 
-  const paragraphs = bioParagraphs(universe?.overview || "");
-  const heroUrl = stacked
-    ? universe?.landscape_url || universe?.banner_url || universe?.cover_url
-    : universe?.portrait_url || universe?.cover_url || universe?.banner_url;
+  const aboutData = overview || emptyOverview(title);
+  const logosSwitchable = Boolean(
+    aboutData.logos_switchable ||
+      (aboutData.logo_by_language &&
+        Object.keys(aboutData.logo_by_language).length > 1)
+  );
 
   function openCard(card: SeriesMediaCard) {
     const franchiseId = card.universe_franchise_id;
@@ -242,12 +320,31 @@ export default function UniversePage({
     onOpenMoviesLeaf(franchiseId, leafId);
   }
 
+  function openSubseries(sub: SeriesSubseriesCard) {
+    const franchiseId = sub.franchise_id;
+    if (!franchiseId) return;
+    if (sub.module === "series") {
+      onOpenSeriesLeaf(franchiseId, sub.id);
+      return;
+    }
+    onOpenMoviesLeaf(franchiseId, sub.id);
+  }
+
   function onUniverseSaved(next: Universe) {
     setHub((prev) =>
       prev
         ? {
             ...prev,
             universe: { ...prev.universe, ...next },
+            overview: prev.overview
+              ? {
+                  ...prev.overview,
+                  name: next.name || prev.overview.name,
+                  bio: next.overview ?? prev.overview.bio,
+                  logo_url: next.logo_url ?? prev.overview.logo_url,
+                  cover_url: next.cover_url ?? prev.overview.cover_url,
+                }
+              : prev.overview,
           }
         : prev
     );
@@ -294,10 +391,10 @@ export default function UniversePage({
             </button>
           </div>
           <div className="artist-page__top-center">
-            {universe?.logo_url && !logoFailed ? (
+            {displayLogoUrl && !logoFailed ? (
               <img
                 className="artist-page__brand-logo"
-                src={universe.logo_url}
+                src={displayLogoUrl}
                 alt={title}
                 onError={() => setLogoFailed(true)}
               />
@@ -387,14 +484,6 @@ export default function UniversePage({
             </button>
           ))}
         </nav>
-
-        {section === "overview" ? (
-          <nav className="artist-page__subtabs" aria-label="Overview">
-            <button type="button" className="active">
-              ABOUT
-            </button>
-          </nav>
-        ) : null}
       </div>
 
       <div className="artist-page__body">
@@ -404,36 +493,17 @@ export default function UniversePage({
         ) : null}
         {error ? <p className="error artist-section-empty">{error}</p> : null}
 
-        {hub && section === "overview" && overviewTab === "about" ? (
-          <div
-            className={`artist-about${stacked ? " artist-about--stacked" : ""}`}
-          >
-            {heroUrl ? (
-              <div className="artist-about__carousel">
-                <div
-                  className="artist-about__slide"
-                  style={
-                    { backgroundImage: `url("${heroUrl}")` } as CSSProperties
-                  }
-                />
-              </div>
-            ) : null}
-            <div className="artist-about__bio-block">
-              <div className="artist-about__bio-scroll">
-                {paragraphs.length ? (
-                  paragraphs.map((p, i) => (
-                    <p key={i} className="artist-about__bio">
-                      {p}
-                    </p>
-                  ))
-                ) : (
-                  <p className="artist-about__bio muted">
-                    No overview yet. Use Edit data → Update universe to add one.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+        {hub && section === "overview" ? (
+          <SeriesAbout
+            data={aboutData}
+            eraIndex={eraIndex}
+            stacked={stacked}
+            onEraChange={setEraIndex}
+            onOpenSubseries={openSubseries}
+            activeLanguage={activeLanguage}
+            logosSwitchable={logosSwitchable}
+            onLanguageSelect={setActiveLanguage}
+          />
         ) : null}
 
         {hub && section === "series" ? (
@@ -456,6 +526,33 @@ export default function UniversePage({
             coverAspect="portrait"
             onOpen={openCard}
           />
+        ) : null}
+
+        {hub && section === "audio" ? (
+          <SeriesMediaGrid
+            items={audioCards}
+            loading={loading && audioCards.length === 0}
+            emptyMessage="No audio in this universe yet."
+            cardLayout={cardLayout}
+            squareCovers={cardLayout === "cover"}
+            coverAspect="square"
+            onOpen={openCard}
+          />
+        ) : null}
+
+        {hub && section === "gallery" ? (
+          galleryFolders.length ? (
+            <SeriesGalleryPanel
+              folderPaths={galleryFolders}
+              hideSubbar
+              sectionKey={gallerySectionKey}
+              onSectionKeyChange={setGallerySectionKey}
+            />
+          ) : (
+            <p className="muted artist-section-empty">
+              No gallery folders found for this universe.
+            </p>
+          )
         ) : null}
       </div>
 

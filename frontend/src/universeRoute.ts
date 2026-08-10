@@ -1,4 +1,9 @@
-export type UniverseSection = "overview" | "series" | "movies";
+export type UniverseSection =
+  | "overview"
+  | "series"
+  | "movies"
+  | "audio"
+  | "gallery";
 export type UniverseOverviewTab = "about";
 
 export type UniverseRoute = {
@@ -7,7 +12,13 @@ export type UniverseRoute = {
   overviewTab?: UniverseOverviewTab;
 };
 
-const SECTIONS: UniverseSection[] = ["overview", "series", "movies"];
+const SECTIONS: UniverseSection[] = [
+  "overview",
+  "series",
+  "movies",
+  "audio",
+  "gallery",
+];
 const OVERVIEW_TABS: UniverseOverviewTab[] = ["about"];
 
 export const UNIVERSE_PATH_PREFIX = "/universe";

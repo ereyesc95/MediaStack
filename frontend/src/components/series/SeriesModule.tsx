@@ -6,7 +6,7 @@ import {
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
-import { getMediaEntrySource, setMediaEntrySource } from "../../mediaEntry";
+import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -97,7 +97,8 @@ type Props = {
   ) => void;
   onOpenUniversePage?: (
     universeId: number,
-    from: "home" | "catalog"
+    from: "home" | "catalog",
+    universeName?: string
   ) => void;
 };
 
@@ -212,7 +213,7 @@ export default function SeriesModule({
     try {
       const [dash, uni] = await Promise.all([
         fetchSeriesDashboard(),
-        fetchUniverses().catch(() => ({ universes: [] as Universe[] })),
+        fetchUniverses("series").catch(() => ({ universes: [] as Universe[] })),
       ]);
       setDashboard(dash);
       setUniverses(uni.universes || []);
@@ -238,18 +239,25 @@ export default function SeriesModule({
   }, [universeId]);
 
   useEffect(() => {
-    void loadCatalog();
     void loadDashboard();
-    void loadFilters();
-  }, [loadCatalog, loadDashboard, loadFilters]);
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    // Catalog + filters are heavy — only load when browsing catalog or a franchise.
+    if (tab === "catalog" || franchiseId) {
+      void loadCatalog();
+      void loadFilters();
+    }
+  }, [tab, franchiseId, loadCatalog, loadFilters]);
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {
       setMediaEntrySource(from);
       setEntrySource(from);
-      onOpenUniversePage?.(id, from);
+      const name = universes.find((u) => u.id === id)?.name;
+      onOpenUniversePage?.(id, from, name);
     },
-    [onOpenUniversePage]
+    [onOpenUniversePage, universes]
   );
 
   useEffect(() => {
@@ -350,7 +358,11 @@ export default function SeriesModule({
   const backFromFranchise = () => {
     const from = getMediaEntrySource() || entrySource;
     if (universeId != null) {
-      onOpenUniversePage?.(universeId, from);
+      onOpenUniversePage?.(
+        universeId,
+        from,
+        getUniverseReturnTarget().universeName
+      );
       return;
     }
     if (from === "home") {
@@ -379,7 +391,11 @@ export default function SeriesModule({
     }
     const from = getMediaEntrySource() || entrySource;
     if (universeId != null) {
-      onOpenUniversePage?.(universeId, from);
+      onOpenUniversePage?.(
+        universeId,
+        from,
+        getUniverseReturnTarget().universeName
+      );
       return;
     }
     // Synthetics still have one subseries — use is_standalone, not empty subseries list.
@@ -492,14 +508,18 @@ export default function SeriesModule({
           onBack={() => {
             const from = getMediaEntrySource() || entrySource;
             if (universeId != null) {
-              onOpenUniversePage?.(universeId, from);
+              onOpenUniversePage?.(
+                universeId,
+                from,
+                getUniverseReturnTarget().universeName
+              );
               return;
             }
             backFromSubseries();
           }}
           backLabelOverride={
             universeId != null
-              ? "UNIVERSE"
+              ? getUniverseReturnTarget().universeName || "UNIVERSE"
               : Boolean(
                     franchises.find((f) => f.id === franchiseId)?.is_standalone
                   )
@@ -544,7 +564,8 @@ export default function SeriesModule({
             if (universeId == null) return;
             onOpenUniversePage?.(
               universeId,
-              getMediaEntrySource() || entrySource
+              getMediaEntrySource() || entrySource,
+              getUniverseReturnTarget().universeName
             );
           }}
           onNavigate={(patch) => {
@@ -599,7 +620,7 @@ export default function SeriesModule({
           onBack={backFromDeepLink}
           backLabel={
             universeId != null
-              ? "UNIVERSE"
+              ? getUniverseReturnTarget().universeName || "UNIVERSE"
               : entrySource === "home"
                 ? "HOME"
                 : "CATALOG"

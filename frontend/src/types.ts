@@ -1113,9 +1113,15 @@ export type UniverseHub = {
   universe: Universe;
   series: UniverseCard[];
   movies: UniverseCard[];
+  carousel?: UniverseCard[];
+  overview?: SeriesOverview;
   media: {
     has_series?: boolean;
     has_movies?: boolean;
+    has_audio?: boolean;
+    has_gallery?: boolean;
+    has_library?: boolean;
+    has_games?: boolean;
   };
 };
 
@@ -1191,6 +1197,9 @@ export type SeriesSubseriesCard = {
   badge_url?: string | null;
   season_count: number;
   has_gallery?: boolean;
+  /** Present on universe hub carousel miniatures. */
+  module?: "movies" | "series";
+  franchise_id?: string;
 };
 
 export type SeriesSeasonCard = {

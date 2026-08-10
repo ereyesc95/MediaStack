@@ -69,6 +69,8 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
             return _first_existing(root / "playlists", stem)
         if folder == "labels":
             return _first_existing(root / "labels", stem)
+        if folder in ("universes", "universe"):
+            return _first_existing(root / "universes", stem)
         if folder == "default":
             return _resolve_default_asset(root, name)
         if folder in NESTED_PREFIXES:

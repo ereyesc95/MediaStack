@@ -43,19 +43,62 @@ def universes_dir(media_root: Path | None = None) -> Path | None:
     return root / "Universes"
 
 
-def _art_file(universe_name: str, kind: str, media_root: Path) -> Path | None:
-    folder = universes_dir(media_root)
-    if not folder or not folder.is_dir():
-        return None
-    stem = f"{universe_name} - {kind}".casefold()
+def _universe_art_dirs(media_root: Path | None = None) -> list[Path]:
+    """Candidate folders for universe artwork."""
+    dirs: list[Path] = []
+    root = media_root or _media_root()
+    if root:
+        dirs.append(root / "Universes")
+        dirs.append(root / "universes")
+        dirs.append(root / "assets" / "universes")
+        dirs.append(root / "Assets" / "Universes")
+    # Project assets (repo-local), if present
     try:
-        for p in folder.iterdir():
-            if (
-                p.is_file()
-                and p.suffix.lower() in IMAGE_EXTS
-                and p.stem.casefold() == stem
-            ):
-                return p
+        from app.paths import PROJECT_ROOT
+
+        dirs.append(PROJECT_ROOT / "assets" / "universes")
+        dirs.append(PROJECT_ROOT / "Assets" / "Universes")
+        dirs.append(PROJECT_ROOT / "data" / "assets" / "universes")
+    except Exception:
+        pass
+    out: list[Path] = []
+    seen: set[str] = set()
+    for d in dirs:
+        key = str(d).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        if d.is_dir():
+            out.append(d)
+    return out
+
+
+def _art_file(universe_name: str, kind: str, media_root: Path | None = None) -> Path | None:
+    """Resolve art file for a universe.
+
+    Accepts legacy `{Name} - {Kind}.*` and newer `universe_{kind}.*` /
+    `{slug}_{kind}.*` stems under Media/Universes or assets/universes.
+    """
+    folders = _universe_art_dirs(media_root)
+    if not folders:
+        return None
+    kind_l = (kind or "").casefold().strip()
+    name = (universe_name or "").strip()
+    slug = _slugify(name)
+    stems = {
+        f"{name} - {kind}".casefold(),
+        f"universe_{kind_l}",
+        f"{slug}_{kind_l}",
+        f"{slug}-{kind_l}",
+        f"{name.casefold()}_{kind_l}",
+    }
+    try:
+        for folder in folders:
+            for p in folder.iterdir():
+                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
+                    continue
+                if p.stem.casefold() in stems:
+                    return p
     except OSError:
         return None
     return None
@@ -70,8 +113,6 @@ def resolve_universe_art(universe: Universe, media_root: Path | None = None) -> 
         "logo_url": None,
         "cover_url": None,
     }
-    if not root:
-        return out
     name = universe.uni_name
     for kind, key in (
         ("Portrait", "portrait_url"),
@@ -81,11 +122,44 @@ def resolve_universe_art(universe: Universe, media_root: Path | None = None) -> 
     ):
         f = _art_file(name, kind, root)
         if f:
-            out[key] = _media_url(f, root)
+            under_media = False
+            if root:
+                try:
+                    f.resolve().relative_to(root.resolve())
+                    under_media = True
+                except ValueError:
+                    under_media = False
+            out[key] = _media_url(f, root) if under_media and root else _file_url(f)
     out["cover_url"] = (
         out["portrait_url"] or out["landscape_url"] or out["banner_url"] or out["logo_url"]
     )
     return out
+
+
+def _file_url(path: Path) -> str | None:
+    """Serve project-local art via /api/assets when outside media root."""
+    try:
+        from app.paths import PROJECT_ROOT
+
+        resolved = path.resolve()
+        assets_root = (PROJECT_ROOT / "assets").resolve()
+        try:
+            # Prefer /api/assets/universes/... (assets router roots at assets/)
+            rel = resolved.relative_to(assets_root)
+            return f"/api/assets/{rel.as_posix()}"
+        except ValueError:
+            pass
+        rel = resolved.relative_to(PROJECT_ROOT.resolve())
+        # Drop leading assets/ so router does not double-nest
+        parts = rel.parts
+        if parts and parts[0].casefold() == "assets":
+            rel = Path(*parts[1:]) if len(parts) > 1 else Path()
+        return f"/api/assets/{rel.as_posix()}"
+    except Exception:
+        try:
+            return _media_url(path, path.parent)
+        except Exception:
+            return None
 
 
 def _member_rows(db: Session, universe_id: int) -> list[UniverseMember]:
@@ -143,10 +217,26 @@ def _serialize_universe(
     }
 
 
-def list_universes(db: Session) -> list[dict]:
+def list_universes(
+    db: Session, module: ModuleKind | None = None
+) -> list[dict]:
     rows = db.scalars(select(Universe).order_by(Universe.uni_name)).all()
-    # Skip per-universe disk expands for list covers — keeps home/catalog snappy.
-    return [_serialize_universe(db, u, expand_cover=False) for u in rows]
+    out: list[dict] = []
+    for u in rows:
+        members = _member_rows(db, u.uni_id)
+        has_series = any(m.ume_module == "series" for m in members)
+        has_movies = any(m.ume_module == "movies" for m in members)
+        if module == "series" and not has_series:
+            continue
+        if module == "movies" and not has_movies:
+            continue
+        # Keep list payloads light — home panes only need art + flags.
+        data = _serialize_universe(db, u, include_members=False, expand_cover=False)
+        data["has_series"] = has_series
+        data["has_movies"] = has_movies
+        data["member_count"] = len(members)
+        out.append(data)
+    return out
 
 
 def get_universe(db: Session, universe_id: int) -> dict | None:
@@ -874,6 +964,220 @@ def expand_universe_cards(db: Session, universe_id: int) -> list[dict]:
     return cards
 
 
+def _json_obj(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        import json
+
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _years_from_isos(isos: list[str | None]) -> tuple[str | None, str | None]:
+    years: list[int] = []
+    for iso in isos:
+        y = (iso or "")[:4]
+        if y.isdigit():
+            years.append(int(y))
+    if not years:
+        return None, None
+    return str(min(years)), str(max(years))
+
+
+def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
+    """Union writers/genres/publishers/languages + air-date span from member cards."""
+    from app.models import MovieWork, Series as SeriesRow
+
+    writers: list[str] = []
+    publishers: list[str] = []
+    languages: list[str] = []
+    genre_map: dict[str, dict] = {}
+    seen_w: set[str] = set()
+    seen_p: set[str] = set()
+    seen_l: set[str] = set()
+
+    def add_writer(v: str) -> None:
+        key = v.casefold().strip()
+        if not key or key in seen_w:
+            return
+        seen_w.add(key)
+        writers.append(v.strip())
+
+    def add_pub(v: str) -> None:
+        key = v.casefold().strip()
+        if not key or key in seen_p:
+            return
+        seen_p.add(key)
+        publishers.append(v.strip())
+
+    def add_lang(v: str) -> None:
+        key = v.casefold().strip()
+        if not key or key in seen_l:
+            return
+        seen_l.add(key)
+        languages.append(v.strip())
+
+    def add_genre(g: object) -> None:
+        if isinstance(g, dict):
+            name = str(g.get("name") or "").strip()
+            gid = g.get("id") if g.get("id") is not None else name
+        else:
+            name = str(g or "").strip()
+            gid = name
+        if not name:
+            return
+        key = name.casefold()
+        if key not in genre_map:
+            genre_map[key] = {"id": gid, "name": name}
+
+    # Cache work meta by slug
+    movie_meta_cache: dict[str, dict] = {}
+    for c in cards:
+        module = c.get("module")
+        slug = (c.get("franchise_id") or "").strip()
+        leaf = str(c.get("leaf_id") or c.get("id") or "")
+        if module == "movies" and slug:
+            if slug not in movie_meta_cache:
+                row = db.scalar(
+                    select(MovieWork).where(MovieWork.mwk_slug == slug)
+                )
+                movie_meta_cache[slug] = _json_obj(
+                    row.mwk_metadata_json if row else None
+                )
+            meta = movie_meta_cache[slug]
+            films = meta.get("films") if isinstance(meta.get("films"), dict) else {}
+            film = films.get(leaf) if isinstance(films.get(leaf), dict) else None
+            src = film or meta
+            for w in src.get("writers") or []:
+                if isinstance(w, str):
+                    add_writer(w)
+            for p in src.get("publishers") or []:
+                if isinstance(p, str):
+                    add_pub(p)
+            for g in src.get("genres") or []:
+                add_genre(g)
+            langs = src.get("languages")
+            if isinstance(langs, list):
+                for lang in langs:
+                    if isinstance(lang, str):
+                        add_lang(lang)
+            elif isinstance(src.get("original_language"), str):
+                add_lang(src["original_language"])
+        elif module == "series" and slug:
+            title_hint = (
+                c.get("name") or c.get("title") or slug.replace("-", " ")
+            ).strip()
+            row = db.scalar(
+                select(SeriesRow).where(SeriesRow.ser_name == title_hint)
+            )
+            if not row and title_hint:
+                # Loose match on code/name
+                rows = db.scalars(select(SeriesRow)).all()
+                for cand in rows:
+                    n = (cand.ser_name or "").casefold()
+                    if n and (
+                        n == title_hint.casefold()
+                        or n in title_hint.casefold()
+                        or title_hint.casefold() in n
+                    ):
+                        row = cand
+                        break
+            if not row:
+                continue
+            for w in (row.ser_writers or "").split(";"):
+                if w.strip():
+                    add_writer(w)
+            try:
+                import json
+
+                raw_g = row.ser_genres_json
+                parsed = json.loads(raw_g) if raw_g else []
+                if isinstance(parsed, list):
+                    for g in parsed:
+                        add_genre(g)
+            except Exception:
+                pass
+            for p in (row.ser_publishers or "").split(";"):
+                if p.strip():
+                    add_pub(p)
+
+    y0, y1 = _years_from_isos([c.get("date_iso") for c in cards])
+    periods: list[dict] = []
+    if y0 and y1:
+        label = y0 if y0 == y1 else f"{y0}-{y1}"
+        periods.append({"label": label, "start": f"{y0}-01-01", "end": f"{y1}-12-31"})
+
+    return {
+        "writers": writers,
+        "publishers": publishers,
+        "languages": languages,
+        "genres": list(genre_map.values()),
+        "activity_periods": periods,
+    }
+
+
+def _hub_media_flags(cards: list[dict]) -> dict:
+    """Best-effort media tab flags from member folders (audio/gallery)."""
+    has_audio = False
+    has_gallery = False
+    root = _media_root()
+    if not root:
+        return {
+            "has_series": any(c.get("module") == "series" for c in cards),
+            "has_movies": any(c.get("module") == "movies" for c in cards),
+            "has_audio": False,
+            "has_gallery": False,
+            "has_library": False,
+            "has_games": False,
+        }
+    for c in cards:
+        folder = (c.get("folder_path") or "").strip()
+        if not folder:
+            continue
+        base = root / folder.replace("\\", "/")
+        if not base.is_dir():
+            continue
+        if not has_audio:
+            for name in ("Audio", "audio"):
+                if (base / name).is_dir():
+                    try:
+                        if any((base / name).iterdir()):
+                            has_audio = True
+                            break
+                    except OSError:
+                        pass
+            parent_audio = base.parent / "Audio"
+            if not has_audio and parent_audio.is_dir():
+                try:
+                    if any(parent_audio.iterdir()):
+                        has_audio = True
+                except OSError:
+                    pass
+        if not has_gallery:
+            for name in ("Gallery", "gallery"):
+                gdir = base / name
+                if gdir.is_dir():
+                    try:
+                        if any(gdir.rglob("*")):
+                            has_gallery = True
+                            break
+                    except OSError:
+                        pass
+        if has_audio and has_gallery:
+            break
+    return {
+        "has_series": any(c.get("module") == "series" for c in cards),
+        "has_movies": any(c.get("module") == "movies" for c in cards),
+        "has_audio": has_audio,
+        "has_gallery": has_gallery,
+        "has_library": False,
+        "has_games": False,
+    }
+
+
 def build_universe_hub(db: Session, universe_id: int) -> dict | None:
     """Franchise-like hub payload: universe record + leaf cards by module (name sort)."""
     u = db.get(Universe, universe_id)
@@ -893,16 +1197,17 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
         (c for c in cards if c.get("module") == "movies"),
         key=title_key,
     )
+    # Overview carousel: chronological (franchise-like), all leaves
+    carousel = sorted(
+        cards,
+        key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
+    )
 
     # Prefer universe art; fall back to earliest member for page chrome.
     banner = data.get("banner_url") or data.get("landscape_url")
     portrait = data.get("portrait_url") or data.get("cover_url")
     if not banner or not portrait:
-        dated = sorted(
-            cards,
-            key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
-        )
-        for c in dated:
+        for c in carousel:
             if not portrait:
                 portrait = (
                     c.get("portrait_url")
@@ -926,14 +1231,121 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
         if banner and not data.get("landscape_url"):
             data["landscape_url"] = banner
 
+    agg = _hub_aggregate_meta(db, cards)
+    media = _hub_media_flags(cards)
+    media["has_series"] = bool(series)
+    media["has_movies"] = bool(movies)
+
+    # Logo-by-language stubs (universe_logo / universe_logo_{code})
+    logo_by_language: dict[str, str] = {}
+    if data.get("logo_url"):
+        logo_by_language["default"] = data["logo_url"]
+    for code in agg.get("languages") or []:
+        f = _art_file(u.uni_name, f"Logo_{code}", None) or _art_file(
+            u.uni_name, f"logo_{code}", None
+        )
+        if f:
+            url = resolve_universe_art(u).get("logo_url")
+            # Resolve language-specific file directly
+            root = _media_root()
+            under_media = False
+            if root:
+                try:
+                    f.resolve().relative_to(root.resolve())
+                    under_media = True
+                except ValueError:
+                    under_media = False
+            url = _media_url(f, root) if under_media and root else _file_url(f)
+            if url:
+                logo_by_language[code.casefold()] = url
+
+    eras = []
+    if portrait:
+        eras.append(
+            {
+                "orientation": "portrait",
+                "portrait_url": portrait,
+                "slide_url": portrait,
+            }
+        )
+    if banner:
+        eras.append(
+            {
+                "orientation": "landscape",
+                "landscape_url": banner,
+                "slide_url": banner,
+            }
+        )
+
+    overview = {
+        "id": f"universe-{universe_id}",
+        "name": data.get("name") or "",
+        "letter": (data.get("name") or "?")[:1].upper(),
+        "folder_path": "",
+        "cover_url": portrait,
+        "bio": data.get("overview"),
+        "writers": agg["writers"],
+        "aliases": [],
+        "languages": agg["languages"],
+        "origin_language": (agg["languages"][0] if agg["languages"] else None),
+        "language_options": [
+            {
+                "code": lang,
+                "label": lang,
+                "selected": i == 0,
+                "is_origin": i == 0,
+            }
+            for i, lang in enumerate(agg["languages"])
+        ],
+        "activity_periods": agg["activity_periods"],
+        "genres": agg["genres"],
+        "publishers": agg["publishers"],
+        "eras": eras,
+        "logo_url": data.get("logo_url"),
+        "logo_by_language": logo_by_language,
+        "logos_switchable": len(logo_by_language) > 1,
+        "cast": {"characters": [], "staff": []},
+        "media": media,
+        "links": {"categories": [], "groups": {}, "total": 0},
+        "seasons": [],
+        "related": {
+            "movies": [],
+            "series": [],
+            "books": [],
+            "games": [],
+            "music": [],
+        },
+        "subseries": [
+            {
+                "id": str(c.get("leaf_id") or c.get("id") or ""),
+                "title": c.get("title") or c.get("name") or "",
+                "date_iso": c.get("date_iso"),
+                "display_date": c.get("display_date"),
+                "folder_path": c.get("folder_path") or "",
+                "cover_url": c.get("portrait_url") or c.get("cover_url"),
+                "logo_url": c.get("logo_url"),
+                "season_count": 0,
+                "module": c.get("module"),
+                "franchise_id": c.get("franchise_id"),
+            }
+            for c in carousel
+        ],
+        "gallery_folder_paths": [
+            p
+            for p in (
+                (c.get("folder_path") or "").strip() for c in carousel
+            )
+            if p
+        ],
+    }
+
     return {
         "universe": data,
         "series": series,
         "movies": movies,
-        "media": {
-            "has_series": bool(series),
-            "has_movies": bool(movies),
-        },
+        "carousel": carousel,
+        "overview": overview,
+        "media": media,
     }
 
 

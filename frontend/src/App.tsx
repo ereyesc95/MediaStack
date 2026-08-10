@@ -476,10 +476,16 @@ export default function App() {
   function openUniversePage(
     universeId: number,
     fromModule: "series" | "movies",
-    from: "home" | "catalog" = "catalog"
+    from: "home" | "catalog" = "catalog",
+    universeName?: string
   ) {
     setMediaEntrySource(from);
-    setUniverseReturnTarget({ module: fromModule, source: from });
+    setUniverseReturnTarget({
+      module: fromModule,
+      source: from,
+      universeId,
+      universeName,
+    });
     pushUniverseRoute({
       universeId,
       section: "overview",
@@ -1004,8 +1010,8 @@ export default function App() {
                 universeId,
               });
             }}
-            onOpenUniversePage={(id, from) =>
-              openUniversePage(id, "series", from)
+            onOpenUniversePage={(id, from, name) =>
+              openUniversePage(id, "series", from, name)
             }
           />
         )}
@@ -1091,8 +1097,8 @@ export default function App() {
                 releaseTab: "overview",
               });
             }}
-            onOpenUniversePage={(id, from) =>
-              openUniversePage(id, "movies", from)
+            onOpenUniversePage={(id, from, name) =>
+              openUniversePage(id, "movies", from, name)
             }
           />
         )}

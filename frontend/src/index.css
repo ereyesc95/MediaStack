@@ -7732,11 +7732,11 @@ button.media-release-card--banner {
 
 .media-release-card__banner-date-row {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   flex-wrap: nowrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.45rem;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.2rem;
   max-width: 100%;
   min-width: 0;
 }
@@ -7746,6 +7746,7 @@ button.media-release-card--banner {
   text-align: left;
   flex: 0 1 auto;
   min-width: 0;
+  order: 0;
 }
 
 .media-release-card__banner-date-row .media-release-card__banner-date {
@@ -7756,6 +7757,7 @@ button.media-release-card--banner {
   text-overflow: ellipsis;
   text-align: left;
   font-size: clamp(0.58rem, 1.05vw, 0.74rem);
+  order: 1;
 }
 
 /* Series/movie media banners: logo sizing (portrait .logo max-height % is too small here) */
@@ -15445,14 +15447,39 @@ button.lyrics-status-badge--icon-only {
 .series-subseries-page.release-page:not(.release-page--stacked) .release-page__panel-meta {
   overflow: hidden;
   justify-content: flex-start;
-  gap: 0.15rem;
+  gap: 0.08rem;
 }
 
 .series-subseries-page.release-page:not(.release-page--stacked) .release-page__panel-body {
   flex: 0 1 auto;
   min-height: 0;
-  overflow: hidden;
-  gap: 0.08rem;
+  overflow: visible;
+  gap: 0.04rem;
+}
+
+.series-subseries-page .release-page__album-title {
+  font-size: clamp(0.95rem, 1.35vw, 1.2rem);
+  line-height: 1.2;
+  margin: 0.2rem 0 0.06rem;
+}
+
+.series-subseries-page .release-page__date {
+  margin: 0.04rem 0;
+  font-size: 0.78rem;
+}
+
+.series-subseries-page .release-page__type-line,
+.series-subseries-page .release-page__track-panel-line,
+.series-subseries-page .series-subseries-page__lang-line,
+.series-subseries-page .series-subseries-page__country {
+  margin: 0.04rem 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.series-subseries-page .series-subseries-page__lang-line {
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .series-film-play-actions {
@@ -15461,7 +15488,7 @@ button.lyrics-status-badge--icon-only {
   align-items: center;
   gap: 0.02rem;
   width: 100%;
-  margin: 0.08rem 0 0.12rem;
+  margin: 0.04rem 0 0.08rem;
   flex: 0 0 auto;
   position: relative;
 }
@@ -16274,15 +16301,16 @@ button.lyrics-status-badge--icon-only {
 }
 
 .series-subseries-page .release-page__album-title {
-  font-size: 1.35rem;
-  margin: 0.35rem 0 0.15rem;
+  font-size: clamp(0.95rem, 1.35vw, 1.2rem);
+  line-height: 1.2;
+  margin: 0.2rem 0 0.06rem;
 }
 
 .series-subseries-page .release-page__album-date,
 .series-subseries-page .release-page__album-type {
-  margin: 0.15rem 0;
+  margin: 0.06rem 0;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
 }
 
 .series-franchise__drill-back {

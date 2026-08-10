@@ -6,7 +6,7 @@ import {
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
-import { getMediaEntrySource, setMediaEntrySource } from "../../mediaEntry";
+import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -103,7 +103,8 @@ type Props = {
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenUniversePage?: (
     universeId: number,
-    from: "home" | "catalog"
+    from: "home" | "catalog",
+    universeName?: string
   ) => void;
 };
 
@@ -177,7 +178,7 @@ export default function MoviesModule({
     setDashLoading(true);
     void Promise.all([
       fetchMoviesDashboard(),
-      fetchUniverses().catch(() => ({ universes: [] as Universe[] })),
+      fetchUniverses("movies").catch(() => ({ universes: [] as Universe[] })),
     ])
       .then(([d, u]) => {
         if (cancelled) return;
@@ -222,9 +223,10 @@ export default function MoviesModule({
     (id: number, from: "home" | "catalog" = "catalog") => {
       setMediaEntrySource(from);
       setEntrySource(from);
-      onOpenUniversePage?.(id, from);
+      const name = universes.find((u) => u.id === id)?.name;
+      onOpenUniversePage?.(id, from, name);
     },
-    [onOpenUniversePage]
+    [onOpenUniversePage, universes]
   );
 
   useEffect(() => {
@@ -519,7 +521,11 @@ export default function MoviesModule({
         onBack={() => {
           const from = getMediaEntrySource() || entrySource;
           if (universeId != null) {
-            onOpenUniversePage?.(universeId, from);
+            onOpenUniversePage?.(
+              universeId,
+              from,
+              getUniverseReturnTarget().universeName
+            );
             return;
           }
           // Standalones have no franchise hub to return to.
@@ -546,7 +552,7 @@ export default function MoviesModule({
         }}
         backLabelOverride={
           universeId != null
-            ? "UNIVERSE"
+            ? getUniverseReturnTarget().universeName || "UNIVERSE"
             : Boolean(
                   (franchises.find((f) => f.id === franchiseId) as
                     | { is_standalone?: boolean }
@@ -623,7 +629,8 @@ export default function MoviesModule({
           if (universeId == null) return;
           onOpenUniversePage?.(
             universeId,
-            getMediaEntrySource() || entrySource
+            getMediaEntrySource() || entrySource,
+            getUniverseReturnTarget().universeName
           );
         }}
         onOpenMoviesPath={(path) => {
@@ -702,7 +709,11 @@ export default function MoviesModule({
           const from = getMediaEntrySource() || entrySource;
           if (entrySource !== from) setEntrySource(from);
           if (universeId != null) {
-            onOpenUniversePage?.(universeId, from);
+            onOpenUniversePage?.(
+              universeId,
+              from,
+              getUniverseReturnTarget().universeName
+            );
             return;
           }
           if (from === "home") backToMoviesHome();
@@ -710,7 +721,7 @@ export default function MoviesModule({
         }}
         backLabel={
           universeId != null
-            ? "UNIVERSE"
+            ? getUniverseReturnTarget().universeName || "UNIVERSE"
             : (getMediaEntrySource() || entrySource) === "home"
               ? "HOME"
               : "CATALOG"

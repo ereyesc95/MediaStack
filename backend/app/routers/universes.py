@@ -44,8 +44,14 @@ class OverviewBody(BaseModel):
 
 
 @router.get("")
-def api_list_universes(db: Session = Depends(get_db)):
-    return {"universes": list_universes(db)}
+def api_list_universes(
+    module: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    prefer: str | None = None
+    if module in ("movies", "series"):
+        prefer = module
+    return {"universes": list_universes(db, prefer)}  # type: ignore[arg-type]
 
 
 @router.post("")
