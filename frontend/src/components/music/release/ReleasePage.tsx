@@ -56,6 +56,7 @@ import {
 import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem, TrackYoutubeVideo } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
 import AppMenu from "../../AppMenu";
+import ConfirmDialog from "../../ConfirmDialog";
 import MediaInlineSearch from "../MediaInlineSearch";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
 import NotInLibraryDialog from "../artist/NotInLibraryDialog";
@@ -76,6 +77,9 @@ import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { useBeatPulse } from "../../../useBeatPulse";
 import ReleaseGallery, { type ReleaseGalleryTab } from "./ReleaseGallery";
+import GalleryViewerModal, {
+  type GalleryViewerItem,
+} from "../artist/GalleryViewerModal";
 import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
@@ -375,6 +379,9 @@ export default function ReleasePage({
   const [lyricsSetOpen, setLyricsSetOpen] = useState(false);
   const [fileTagsOpen, setFileTagsOpen] = useState(false);
   const [videoFetchOpen, setVideoFetchOpen] = useState(false);
+  const [coverViewerIndex, setCoverViewerIndex] = useState<number | null>(null);
+  const [coverViewerItems, setCoverViewerItems] = useState<GalleryViewerItem[]>([]);
+  const [lyricsFetchConfirmOpen, setLyricsFetchConfirmOpen] = useState(false);
   const [videoFetchItems, setVideoFetchItems] = useState<YoutubeFetchItem[]>([]);
   const [busy, setBusy] = useState("");
   const [refreshWiki, setRefreshWiki] = useState(true);
@@ -1013,11 +1020,11 @@ export default function ReleasePage({
     window.setTimeout(() => setBusy(""), 2500);
   }, [bandId, releaseId]);
 
-  const handleFetchLyrics = async () => {
+  const runFetchLyrics = async (force: boolean) => {
     setBusy("Fetching lyrics, please wait… This may take a few minutes.");
     setError(null);
     try {
-      const res = await fetchReleaseLyrics(bandId, releaseId);
+      const res = await fetchReleaseLyrics(bandId, releaseId, force);
       if (!res.ok) {
         setBusy("");
         setError(res.error ?? "Lyrics fetch failed");
@@ -1032,6 +1039,66 @@ export default function ReleasePage({
     } catch (e) {
       setBusy("");
       setError(formatFetchError(e, "Lyrics fetch failed"));
+    }
+  };
+
+  const releaseHasLyrics = () => {
+    const cached = getCachedReleaseTracklist(bandId, releaseId);
+    const editions = cached?.editions || [];
+    return editions.some((ed) =>
+      (ed.groups || []).some((g) =>
+        (g.tracks || []).some((t) => Boolean(t.has_lrc || t.has_synced_lrc))
+      )
+    );
+  };
+
+  const handleFetchLyrics = async () => {
+    let has = releaseHasLyrics();
+    if (!has) {
+      try {
+        const tl = await fetchReleaseTracklist(bandId, releaseId);
+        has = (tl.editions || []).some((ed) =>
+          (ed.groups || []).some((g) =>
+            (g.tracks || []).some((t) => Boolean(t.has_lrc || t.has_synced_lrc))
+          )
+        );
+      } catch {
+        /* fall through to fetch */
+      }
+    }
+    if (has) {
+      setLyricsFetchConfirmOpen(true);
+      return;
+    }
+    await runFetchLyrics(false);
+  };
+
+  const openCoverArtworkViewer = async () => {
+    try {
+      const payload = await prefetchReleaseGallery(bandId, releaseId);
+      const artwork = payload?.artwork || [];
+      if (!artwork.length) return;
+      const items: GalleryViewerItem[] = artwork.map((item) => ({
+        id: item.id,
+        url: item.url,
+        caption: item.title,
+        subcaption:
+          "year" in item && item.year != null ? String(item.year) : undefined,
+      }));
+      let start = 0;
+      if (effectivePanelCover) {
+        const hit = items.findIndex(
+          (it) =>
+            it.url === effectivePanelCover ||
+            /cover/i.test(it.caption) ||
+            /front/i.test(it.caption)
+        );
+        if (hit >= 0) start = hit;
+      }
+      setCoverViewerItems(items);
+      setCoverViewerIndex(start);
+    } catch {
+      /* no artwork available */
     }
   };
 
@@ -1488,10 +1555,13 @@ export default function ReleasePage({
           ) : null}
           {effectivePanelCover &&
             (panelCoverIsVideo ? (
-              <span
-                className={`release-page__cover-wrap${
+              <button
+                type="button"
+                className={`release-page__cover-wrap release-page__cover-wrap--clickable${
                   bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
                 }`}
+                onClick={() => void openCoverArtworkViewer()}
+                aria-label="Browse release artwork"
               >
                 <video
                   key={effectivePanelCover}
@@ -1504,12 +1574,15 @@ export default function ReleasePage({
                   draggable={false}
                   onError={() => setCoverFailed(true)}
                 />
-              </span>
+              </button>
             ) : (
-              <span
-                className={`release-page__cover-wrap${
+              <button
+                type="button"
+                className={`release-page__cover-wrap release-page__cover-wrap--clickable${
                   bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
                 }`}
+                onClick={() => void openCoverArtworkViewer()}
+                aria-label="Browse release artwork"
               >
                 <img
                   key={effectivePanelCover}
@@ -1519,7 +1592,7 @@ export default function ReleasePage({
                   draggable={false}
                   onError={() => setCoverFailed(true)}
                 />
-              </span>
+              </button>
             ))}
           {(!hasActiveTrack ? data.playback_kind !== "tape" : !isTapePlayback) && (
             <img
@@ -1812,7 +1885,6 @@ export default function ReleasePage({
                               >
                                 <span className="release-page__youtube-picker-label">
                                   {video.label}
-                                  {video.primary ? " · Primary" : ""}
                                 </span>
                               </button>
                             ))}
@@ -2044,7 +2116,6 @@ export default function ReleasePage({
                         >
                           <span className="release-page__youtube-picker-label">
                             {video.label}
-                            {video.primary ? " · Primary" : ""}
                           </span>
                         </button>
                       ))}
@@ -2670,6 +2741,29 @@ export default function ReleasePage({
           onSaved={handleVideoSaved}
         />
       )}
+
+      {coverViewerIndex != null && coverViewerItems.length > 0 ? (
+        <GalleryViewerModal
+          items={coverViewerItems}
+          index={coverViewerIndex}
+          onIndexChange={setCoverViewerIndex}
+          onClose={() => setCoverViewerIndex(null)}
+        />
+      ) : null}
+
+      {lyricsFetchConfirmOpen ? (
+        <ConfirmDialog
+          title="Fetch lyrics?"
+          message="This release already has lyrics for one or more tracks. Fetching again can overwrite existing lyrics files. Continue?"
+          confirmLabel="Fetch & overwrite"
+          destructive
+          onClose={() => setLyricsFetchConfirmOpen(false)}
+          onConfirm={() => {
+            setLyricsFetchConfirmOpen(false);
+            void runFetchLyrics(true);
+          }}
+        />
+      ) : null}
 
       {lyricsSetOpen && data && (
         <ReleaseLyricsSetModal

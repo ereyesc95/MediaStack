@@ -247,21 +247,30 @@ export default function SeriesBrowse({
   }, [catalogScope, franchises, universes]);
 
   const visibleFilterModes = useMemo(() => {
+    // While options are still loading, keep the active mode visible so pending
+    // writer/publisher/genre jumps are not wiped by the fallback effect.
+    if (!filterOptions) {
+      return filterModes;
+    }
     return filterModes.filter((f) => {
       switch (f.id) {
         case "continent":
           return availableContinents.length > 0;
         case "country":
-          return (filterOptions?.country_groups?.length ?? 0) > 0;
+          return (filterOptions.country_groups?.length ?? 0) > 0;
         case "start":
         case "end":
           return availableDecades.length > 0;
         case "genre":
-          return (filterOptions?.subgenre_groups?.length ?? 0) > 0;
+          return (filterOptions.subgenre_groups?.length ?? 0) > 0;
         case "publisher":
-          return (filterOptions?.publishers?.length ?? 0) > 0;
+          return (
+            (filterOptions.publishers?.length ?? 0) > 0 || Boolean(publisher.trim())
+          );
         case "writer":
-          return (filterOptions?.writers?.length ?? 0) > 0;
+          return (
+            (filterOptions.writers?.length ?? 0) > 0 || Boolean(writer.trim())
+          );
         default:
           return true;
       }
@@ -271,14 +280,19 @@ export default function SeriesBrowse({
     filterOptions,
     availableContinents,
     availableDecades,
+    publisher,
+    writer,
   ]);
 
   useEffect(() => {
+    // Never auto-fallback while filter options are loading — that clears
+    // writer/publisher values set by in-app browse jumps.
+    if (!filterOptions) return;
     if (!visibleFilterModes.some((m) => m.id === filterMode)) {
       const fallback = visibleFilterModes[0]?.id;
       if (fallback) onFilterModeChange(fallback);
     }
-  }, [visibleFilterModes, filterMode, onFilterModeChange]);
+  }, [visibleFilterModes, filterMode, onFilterModeChange, filterOptions]);
 
   // Auto-select first subbar option when entering a filter tab (Music catalog parity)
   useEffect(() => {
@@ -797,7 +811,9 @@ export default function SeriesBrowse({
   );
 
   const subBar = useMemo(() => {
-    if (!filterOptions && filterMode !== "name") return null;
+    if (!filterOptions && filterMode !== "name" && filterMode !== "writer" && filterMode !== "publisher" && filterMode !== "genre") {
+      return null;
+    }
     switch (filterMode) {
       case "name":
         return (
@@ -901,18 +917,36 @@ export default function SeriesBrowse({
             />
           </div>
         );
-      case "writer":
+      case "writer": {
+        const writerLabel =
+          filterModes.find((m) => m.id === "writer")?.label || "WRITER";
+        const writerPlaceholder =
+          writerLabel.charAt(0) + writerLabel.slice(1).toLowerCase();
+        const writerOpts =
+          writer &&
+          !(filterOptions?.writers || []).some(
+            (w) => w.toLowerCase() === writer.toLowerCase()
+          )
+            ? [
+                { value: writer, label: writer },
+                ...(filterOptions?.writers || []).map((w) => ({
+                  value: w,
+                  label: w,
+                })),
+              ]
+            : writerOptions;
         return (
           <div className="filter-subbar filter-subbar--single">
             <SearchableDropdown
-              options={writerOptions}
+              options={writerOpts}
               value={writer}
               onChange={(v) => onWriterChange(v)}
-              placeholder="Writer"
+              placeholder={writerPlaceholder}
               visibleRows={7}
             />
           </div>
         );
+      }
       default:
         return null;
     }
@@ -935,6 +969,7 @@ export default function SeriesBrowse({
     genreOptions,
     publisherOptions,
     writerOptions,
+    filterModes,
     onLetterChange,
     onSearchChange,
     onContinentIdChange,

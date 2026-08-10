@@ -60,8 +60,10 @@ import {
   getMediaEntrySource,
   getUniverseReturnTarget,
   setMediaEntrySource,
+  setPendingCatalogBrowse,
   setUniverseReturnTarget,
 } from "./mediaEntry";
+import { clearMediaTheme } from "./mediaTheme";
 import type { CardOrientation, MusicTab, View } from "./types";
 import UniversePage from "./components/UniversePage";
 
@@ -502,6 +504,7 @@ export default function App() {
   function backFromUniverse() {
     const ret = getUniverseReturnTarget();
     const from = getMediaEntrySource() || ret.source;
+    clearMediaTheme(profile?.user_id);
     if (ret.module === "movies") {
       if (from === "home") pushMoviesRootRoute();
       else pushMoviesCatalogRoute();
@@ -897,6 +900,52 @@ export default function App() {
                 overviewTab: "about",
                 universeId: view.universeId,
               });
+            }}
+            onOpenSeriesFranchise={(franchiseId) => {
+              pushSeriesRoute({
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
+            onOpenMoviesFranchise={(franchiseId) => {
+              pushMoviesRoute({
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
+            onBrowseCatalog={(target) => {
+              const module =
+                getUniverseReturnTarget().module === "movies"
+                  ? "movies"
+                  : "series";
+              clearMediaTheme(profile?.user_id);
+              setMediaEntrySource("catalog");
+              setPendingCatalogBrowse({ module, ...target });
+              if (module === "movies") {
+                pushMoviesCatalogRoute();
+                setView({ kind: "movies" });
+              } else {
+                pushSeriesCatalogRoute();
+                setView({ kind: "series" });
+              }
             }}
           />
         )}

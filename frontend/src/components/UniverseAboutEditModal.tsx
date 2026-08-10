@@ -88,93 +88,89 @@ export default function UniverseAboutEditModal({
 
   return (
     <ModalPortal onClose={onClose}>
-      <div className="modal add-universe-modal" role="dialog" aria-modal>
-        <header className="modal__header">
-          <h2>Update universe</h2>
+      <div
+        className="modal-panel artist-admin-modal add-universe-modal"
+        role="dialog"
+        aria-modal
+        aria-labelledby="universe-about-edit-title"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-panel-header">
+          <h3 id="universe-about-edit-title">Update universe</h3>
           <button
             type="button"
-            className="modal__close"
+            className="modal-close-x"
             onClick={onClose}
             disabled={busy}
             aria-label="Close"
           >
             ×
           </button>
-        </header>
-        <div className="modal__body">
-          <div className="artist-admin-form">
-            <label className="artist-admin-form__inline">
-              <span className="artist-admin-form__inline-label">Name</span>
-              <input
-                className="artist-admin-form__inline-field"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={busy}
-                autoFocus
-              />
-            </label>
-            <label className="artist-admin-form__inline artist-admin-form__inline--top">
-              <span className="artist-admin-form__inline-label">Overview</span>
-              <textarea
-                className="artist-admin-form__inline-field"
-                value={overview}
-                onChange={(e) => setOverview(e.target.value)}
-                rows={6}
-                disabled={busy}
-                placeholder="Optional"
-              />
-            </label>
-            {ART_KINDS.map((kind) => (
-              <label key={kind} className="artist-admin-form__inline">
-                <span className="artist-admin-form__inline-label">{kind}</span>
-                <span className="artist-admin-form__inline-field add-universe-modal__file">
-                  <span className="add-universe-modal__file-label">
-                    {artFiles[kind]?.name || artHint(current, kind)}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="add-universe-modal__file-input"
-                    disabled={busy}
-                    onChange={(e) =>
-                      setArtFiles((prev) => ({
-                        ...prev,
-                        [kind]: e.target.files?.[0] ?? null,
-                      }))
-                    }
-                  />
-                </span>
-              </label>
-            ))}
-            {error ? <p className="error">{error}</p> : null}
-          </div>
         </div>
-        <footer className="modal__footer">
+        <div className="artist-admin-form">
+          <label className="artist-admin-form__inline">
+            <span className="artist-admin-form__inline-label">Name</span>
+            <input
+              className="artist-admin-form__inline-field"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+              autoFocus
+            />
+          </label>
+          <label className="artist-admin-form__inline artist-admin-form__inline--top">
+            <span className="artist-admin-form__inline-label">Overview</span>
+            <textarea
+              className="artist-admin-form__inline-field"
+              value={overview}
+              onChange={(e) => setOverview(e.target.value)}
+              rows={6}
+              disabled={busy}
+              placeholder="Optional"
+            />
+          </label>
+          {ART_KINDS.map((kind) => (
+            <label key={kind} className="artist-admin-form__inline">
+              <span className="artist-admin-form__inline-label">{kind}</span>
+              <span className="artist-admin-form__inline-field add-universe-modal__file">
+                <span className="add-universe-modal__file-label">
+                  {artFiles[kind]?.name || artHint(current, kind)}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="add-universe-modal__file-input"
+                  disabled={busy}
+                  onChange={(e) =>
+                    setArtFiles((prev) => ({
+                      ...prev,
+                      [kind]: e.target.files?.[0] ?? null,
+                    }))
+                  }
+                />
+              </span>
+            </label>
+          ))}
+          {error ? <p className="error">{error}</p> : null}
+        </div>
+        <div className="modal-panel-actions modal-panel-actions--end add-universe-modal__actions">
           <button
             type="button"
             className="btn btn--small"
             disabled={busy}
             onClick={() => void fetchPortrait()}
           >
-            Fetch portrait (TMDb)
+            Fetch portrait
           </button>
           <button
             type="button"
-            className="btn"
-            disabled={busy}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
+            className="btn btn--small btn--primary"
             disabled={busy}
             onClick={() => void save()}
           >
             {busy ? "Saving…" : "Save"}
           </button>
-        </footer>
+        </div>
       </div>
     </ModalPortal>
   );

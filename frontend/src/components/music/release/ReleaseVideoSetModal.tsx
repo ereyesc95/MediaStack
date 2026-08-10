@@ -211,8 +211,8 @@ export default function ReleaseVideoSetModal({
                           name={`video-primary-${track.play_path}`}
                           checked={Boolean(row.primary)}
                           onChange={() => setPrimary(track.play_path, index)}
+                          aria-label={`Select video ${index + 1}`}
                         />
-                        <span>Primary</span>
                       </label>
                       <input
                         type="text"

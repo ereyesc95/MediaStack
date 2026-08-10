@@ -101,6 +101,25 @@ def resolve_movie_subgenre(
     return None
 
 
+def _people_list(blob: dict, *keys: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        raw = blob.get(key)
+        values: list[str] = []
+        if isinstance(raw, list):
+            values = [str(v).strip() for v in raw if v and str(v).strip()]
+        elif isinstance(raw, str):
+            values = [p.strip() for p in raw.split(";") if p.strip()]
+        for name in values:
+            k = name.casefold()
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(name)
+    return out
+
+
 def extract_work_filter_fields(
     row: MovieWork,
     by_name: dict[str, dict],
@@ -112,6 +131,10 @@ def extract_work_filter_fields(
     genre_names: list[str] = []
     seen: set[int] = set()
     isos: list[str] = []
+    publishers: list[str] = []
+    writers: list[str] = []
+    seen_p: set[str] = set()
+    seen_w: set[str] = set()
 
     for blob in _iter_meta_blobs(meta):
         for g in blob.get("genres") or []:
@@ -133,6 +156,19 @@ def extract_work_filter_fields(
             code = str(iso).strip().lower()[:2]
             if code and code not in isos:
                 isos.append(code)
+        # Directors first for movies catalog “director” filter (stored as writers).
+        for name in _people_list(blob, "directors", "writers"):
+            key = name.casefold()
+            if key in seen_w:
+                continue
+            seen_w.add(key)
+            writers.append(name)
+        for name in _people_list(blob, "publishers"):
+            key = name.casefold()
+            if key in seen_p:
+                continue
+            seen_p.add(key)
+            publishers.append(name)
 
     primary_iso = isos[0] if isos else None
     crow = iso_to_country.get(primary_iso) if primary_iso else None
@@ -143,8 +179,8 @@ def extract_work_filter_fields(
         "continent_id": getattr(crow, "cou_continent_id", None) if crow else None,
         "genre_ids": genre_ids,
         "genre_names": genre_names,
-        "publishers": [],
-        "writers": [],
+        "publishers": publishers,
+        "writers": writers,
     }
 
 
@@ -216,8 +252,19 @@ def enrich_movies_catalog(db: Session, catalog: dict) -> dict:
                 "writers": [],
             }
         )
+        meta = _load_meta(row) if row else {}
+        film_map = meta.get("films") if isinstance(meta.get("films"), dict) else {}
         for film in group:
             film.update(fields)
+            leaf = str(film.get("id") or "")
+            film_meta = film_map.get(leaf) if isinstance(film_map.get(leaf), dict) else None
+            if isinstance(film_meta, dict):
+                people = _people_list(film_meta, "directors", "writers")
+                pubs = _people_list(film_meta, "publishers")
+                if people:
+                    film["writers"] = people
+                if pubs:
+                    film["publishers"] = pubs
 
     return catalog
 
@@ -249,6 +296,8 @@ def build_movies_filter_options(db: Session, catalog: dict | None = None) -> dic
 
     used_sub_ids: set[int] = set()
     used_isos: set[str] = set()
+    publishers_map: dict[str, str] = {}
+    writers_map: dict[str, str] = {}
     for row in db.scalars(select(MovieWork)).all():
         fields = extract_work_filter_fields(
             row, by_name, iso_to_country, parents_by_name
@@ -260,6 +309,12 @@ def build_movies_filter_options(db: Session, catalog: dict | None = None) -> dic
         ):
             if iso:
                 used_isos.add(str(iso))
+        for name in fields.get("publishers") or []:
+            if isinstance(name, str) and name.strip():
+                publishers_map.setdefault(name.casefold(), name.strip())
+        for name in fields.get("writers") or []:
+            if isinstance(name, str) and name.strip():
+                writers_map.setdefault(name.casefold(), name.strip())
 
     used_by_parent: dict[str, list[dict]] = {}
     for sid in used_sub_ids:
@@ -347,8 +402,8 @@ def build_movies_filter_options(db: Session, catalog: dict | None = None) -> dic
         "subgenre_groups": subgenre_groups,
         "all_subgenre_groups": all_subgenre_groups,
         "decades": sorted(decades),
-        "publishers": [],
-        "writers": [],
+        "publishers": sorted(publishers_map.values(), key=str.casefold),
+        "writers": sorted(writers_map.values(), key=str.casefold),
     }
 
 

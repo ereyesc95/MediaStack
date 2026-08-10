@@ -136,6 +136,86 @@ def resolve_universe_art(universe: Universe, media_root: Path | None = None) -> 
     return out
 
 
+def _art_url(path: Path, media_root: Path | None = None) -> str | None:
+    root = media_root or _media_root()
+    under_media = False
+    if root:
+        try:
+            path.resolve().relative_to(root.resolve())
+            under_media = True
+        except ValueError:
+            under_media = False
+    return _media_url(path, root) if under_media and root else _file_url(path)
+
+
+def list_universe_gallery(
+    universe: Universe, media_root: Path | None = None
+) -> list[dict]:
+    """All art images for a universe under Universes/assets folders.
+
+    Accepts stems like ``Wizarding World - Portrait``, ``Wizarding World_portrait``,
+    ``wizarding-world_banner``, ``universe_logo``, etc.
+    """
+    folders = _universe_art_dirs(media_root)
+    if not folders:
+        return []
+    name = (universe.uni_name or "").strip()
+    slug = _slugify(name)
+    name_cf = name.casefold()
+    prefixes = (
+        f"{name_cf} - ",
+        f"{name_cf}_",
+        f"{name_cf}-",
+        f"{slug}_",
+        f"{slug}-",
+        "universe_",
+    )
+    exact = {
+        name_cf,
+        slug,
+        f"{name_cf} - portrait",
+        f"{name_cf} - landscape",
+        f"{name_cf} - banner",
+        f"{name_cf} - logo",
+    }
+    seen: set[str] = set()
+    items: list[dict] = []
+    root = media_root or _media_root()
+    try:
+        for folder in folders:
+            for p in sorted(folder.iterdir(), key=lambda x: x.name.casefold()):
+                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
+                    continue
+                stem = p.stem.casefold()
+                if stem not in exact and not any(stem.startswith(pref) for pref in prefixes):
+                    continue
+                key = str(p.resolve())
+                if key in seen:
+                    continue
+                seen.add(key)
+                url = _art_url(p, root)
+                if not url:
+                    continue
+                # Title from stem after name/slug prefix
+                title = p.stem
+                for sep in (f"{name} - ", f"{name}_", f"{name}-", f"{slug}_", f"{slug}-", "universe_"):
+                    if title.casefold().startswith(sep.casefold()):
+                        title = title[len(sep) :].strip() or p.stem
+                        break
+                items.append(
+                    {
+                        "id": f"universe-art-{len(items)}-{p.stem}",
+                        "url": url,
+                        "title": title.replace("_", " ").strip() or p.stem,
+                        "folder_path": str(folder),
+                        "section": "art",
+                    }
+                )
+    except OSError:
+        return items
+    return items
+
+
 def _file_url(path: Path) -> str | None:
     """Serve project-local art via /api/assets when outside media root."""
     try:
@@ -181,7 +261,7 @@ def _serialize_universe(
     art = resolve_universe_art(u)
     members = _member_rows(db, u.uni_id) if include_members else []
     cover = art.get("cover_url") or cover_fallback
-    if not cover and include_members and expand_cover:
+    if not cover and expand_cover:
         cards = expand_universe_cards(db, u.uni_id)
         for c in cards:
             cover = (
@@ -192,12 +272,37 @@ def _serialize_universe(
             )
             if cover:
                 break
+        # Franchise/work-level art when leaf cards lack images
+        if not cover:
+            for m in _member_rows(db, u.uni_id):
+                try:
+                    if m.ume_module == "movies":
+                        from app.movies_index import build_work_detail
+
+                        detail = build_work_detail(m.ume_slug)
+                    else:
+                        from app.series_index import build_franchise_detail
+
+                        detail = build_franchise_detail(m.ume_slug)
+                except Exception:
+                    detail = None
+                if not detail:
+                    continue
+                cover = (
+                    detail.get("portrait_url")
+                    or detail.get("cover_url")
+                    or detail.get("banner_url")
+                    or detail.get("landscape_url")
+                )
+                if cover:
+                    break
+    portrait = art.get("portrait_url") or (cover if expand_cover else None)
     return {
         "id": u.uni_id,
         "name": u.uni_name,
         "slug": u.uni_slug,
         "overview": u.uni_overview,
-        "portrait_url": art.get("portrait_url"),
+        "portrait_url": portrait or art.get("portrait_url"),
         "landscape_url": art.get("landscape_url"),
         "banner_url": art.get("banner_url"),
         "logo_url": art.get("logo_url"),
@@ -230,8 +335,10 @@ def list_universes(
             continue
         if module == "movies" and not has_movies:
             continue
-        # Keep list payloads light — home panes only need art + flags.
-        data = _serialize_universe(db, u, include_members=False, expand_cover=False)
+        # Home panes: prefer universe art, else any member franchise/film/show cover.
+        data = _serialize_universe(db, u, include_members=False, expand_cover=True)
+        if not data.get("portrait_url") and data.get("cover_url"):
+            data["portrait_url"] = data["cover_url"]
         data["has_series"] = has_series
         data["has_movies"] = has_movies
         data["member_count"] = len(members)
@@ -991,20 +1098,23 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
     """Union writers/genres/publishers/languages + air-date span from member cards."""
     from app.models import MovieWork, Series as SeriesRow
 
-    writers: list[str] = []
+    writer_dates: dict[str, str] = {}
+    writer_labels: dict[str, str] = {}
     publishers: list[str] = []
     languages: list[str] = []
     genre_map: dict[str, dict] = {}
-    seen_w: set[str] = set()
     seen_p: set[str] = set()
     seen_l: set[str] = set()
 
-    def add_writer(v: str) -> None:
+    def add_writer(v: str, date_iso: str | None = None) -> None:
         key = v.casefold().strip()
-        if not key or key in seen_w:
+        if not key:
             return
-        seen_w.add(key)
-        writers.append(v.strip())
+        if key not in writer_labels:
+            writer_labels[key] = v.strip()
+        iso = (date_iso or "").strip()
+        if iso and (key not in writer_dates or iso < writer_dates[key]):
+            writer_dates[key] = iso
 
     def add_pub(v: str) -> None:
         key = v.casefold().strip()
@@ -1039,6 +1149,7 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
         module = c.get("module")
         slug = (c.get("franchise_id") or "").strip()
         leaf = str(c.get("leaf_id") or c.get("id") or "")
+        date_iso = str(c.get("date_iso") or "") or None
         if module == "movies" and slug:
             if slug not in movie_meta_cache:
                 row = db.scalar(
@@ -1053,7 +1164,10 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
             src = film or meta
             for w in src.get("writers") or []:
                 if isinstance(w, str):
-                    add_writer(w)
+                    add_writer(w, date_iso)
+            for d in src.get("directors") or []:
+                if isinstance(d, str):
+                    add_writer(d, date_iso)
             for p in src.get("publishers") or []:
                 if isinstance(p, str):
                     add_pub(p)
@@ -1089,7 +1203,7 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
                 continue
             for w in (row.ser_writers or "").split(";"):
                 if w.strip():
-                    add_writer(w)
+                    add_writer(w, date_iso)
             try:
                 import json
 
@@ -1104,6 +1218,14 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
                 if p.strip():
                     add_pub(p)
 
+    writers = [
+        writer_labels[k]
+        for k in sorted(
+            writer_labels.keys(),
+            key=lambda k: (writer_dates.get(k) or "9999", writer_labels[k].casefold()),
+        )
+    ]
+
     y0, y1 = _years_from_isos([c.get("date_iso") for c in cards])
     periods: list[dict] = []
     if y0 and y1:
@@ -1117,6 +1239,198 @@ def _hub_aggregate_meta(db: Session, cards: list[dict]) -> dict:
         "genres": list(genre_map.values()),
         "activity_periods": periods,
     }
+
+
+def _natural_join(parts: list[str]) -> str:
+    items = [p.strip() for p in parts if p and str(p).strip()]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _hub_generated_bio(
+    name: str,
+    *,
+    franchise_names: list[str],
+    genres: list[dict],
+    periods: list[dict],
+    writers: list[str],
+    publishers: list[str],
+) -> str:
+    """Human-readable blurb when the universe has no overview text."""
+    genre_names = [
+        str(g.get("name") or "").strip().lower()
+        for g in genres
+        if isinstance(g, dict) and g.get("name")
+    ]
+    genre_bit = _natural_join(genre_names[:4])
+    subject = (name or "This").strip() or "This"
+    if genre_bit:
+        lead = f"{subject} is an {genre_bit} universe"
+        # "an adventure" vs "a fantasy" — simple vowel check on first genre word
+        first = genre_names[0] if genre_names else ""
+        if first and first[0] not in "aeiou":
+            lead = f"{subject} is a {genre_bit} universe"
+    else:
+        lead = f"{subject} is a universe"
+
+    bits = [lead]
+    franchises = _natural_join(franchise_names)
+    if franchises:
+        bits.append(f"comprised by {franchises}")
+
+    label = ""
+    if periods:
+        label = str(periods[0].get("label") or "").strip()
+    if label:
+        if "-" in label:
+            bits.append(f"released between {label.replace('-', ' and ')}")
+        else:
+            bits.append(f"released in {label}")
+
+    people = _natural_join(writers[:6])
+    if people:
+        bits.append(f"with the participation of {people}")
+
+    pubs = _natural_join(publishers[:6])
+    if pubs:
+        bits.append(f"and published by {pubs}")
+
+    # Join with commas then period
+    if len(bits) == 1:
+        return bits[0] + "."
+    body = bits[0]
+    for i, bit in enumerate(bits[1:]):
+        if i == 0:
+            body = f"{body} {bit}"
+        elif i == len(bits) - 2:
+            # last connective already includes "and" for published
+            body = f"{body}, {bit}" if not bit.startswith("and ") else f"{body}, {bit}"
+        else:
+            body = f"{body}, {bit}"
+    if not body.endswith("."):
+        body += "."
+    return body
+
+
+def _franchise_hub_miniatures(db: Session, cards: list[dict]) -> list[dict]:
+    """One carousel card per franchise (not per leaf)."""
+    from app.models import MovieWork
+
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for c in cards:
+        module = c.get("module")
+        slug = (c.get("franchise_id") or "").strip()
+        if module not in ("movies", "series") or not slug:
+            continue
+        groups.setdefault((module, slug), []).append(c)
+
+    out: list[dict] = []
+    for (module, slug), leaves in groups.items():
+        leaves_sorted = sorted(
+            leaves,
+            key=lambda c: (
+                str(c.get("date_iso") or "9999"),
+                (c.get("title") or c.get("name") or "").casefold(),
+            ),
+        )
+        first = leaves_sorted[0]
+        last = leaves_sorted[-1]
+        title = slug.replace("-", " ").title()
+        cover = None
+        logo = None
+        folder = ""
+
+        if module == "movies":
+            row = db.scalar(select(MovieWork).where(MovieWork.mwk_slug == slug))
+            if row and row.mwk_name:
+                title = row.mwk_name
+            try:
+                from app.movies_index import build_work_detail
+
+                detail = build_work_detail(slug)
+                if detail:
+                    title = detail.get("name") or title
+                    cover = (
+                        detail.get("portrait_url")
+                        or detail.get("cover_url")
+                        or cover
+                    )
+                    logo = detail.get("logo_url") or logo
+                    folder = detail.get("folder_path") or folder
+            except Exception:
+                pass
+        else:
+            try:
+                from app.series_index import build_franchise_detail
+
+                detail = build_franchise_detail(slug)
+                if detail:
+                    title = detail.get("name") or title
+                    cover = (
+                        detail.get("portrait_url")
+                        or detail.get("cover_url")
+                        or cover
+                    )
+                    logo = detail.get("logo_url") or logo
+                    folder = detail.get("folder_path") or folder
+            except Exception:
+                pass
+
+        if not cover:
+            for leaf in leaves_sorted:
+                cover = (
+                    leaf.get("portrait_url")
+                    or leaf.get("cover_url")
+                    or leaf.get("landscape_url")
+                )
+                if cover:
+                    break
+        if not logo:
+            for leaf in leaves_sorted:
+                if leaf.get("logo_url"):
+                    logo = leaf.get("logo_url")
+                    break
+        if not folder:
+            folder = first.get("folder_path") or ""
+
+        date_iso = first.get("date_iso")
+        display = first.get("display_date")
+        y0, y1 = _years_from_isos(
+            [leaf.get("date_iso") for leaf in leaves_sorted]
+        )
+        if y0 and y1 and y0 != y1:
+            display = f"{y0}–{y1}"
+        elif y0:
+            display = y0
+
+        out.append(
+            {
+                "id": slug,
+                "title": title,
+                "date_iso": date_iso,
+                "display_date": display,
+                "folder_path": folder or "",
+                "cover_url": cover,
+                "logo_url": logo,
+                "season_count": len(leaves_sorted),
+                "module": module,
+                "franchise_id": slug,
+                "kind": "franchise",
+            }
+        )
+
+    out.sort(
+        key=lambda c: (
+            str(c.get("date_iso") or "9999"),
+            (c.get("title") or "").casefold(),
+        )
+    )
+    return out
 
 
 def _hub_media_flags(cards: list[dict]) -> dict:
@@ -1179,7 +1493,7 @@ def _hub_media_flags(cards: list[dict]) -> dict:
 
 
 def build_universe_hub(db: Session, universe_id: int) -> dict | None:
-    """Franchise-like hub payload: universe record + leaf cards by module (name sort)."""
+    """Franchise-like hub payload: universe record + leaf cards by module (date sort)."""
     u = db.get(Universe, universe_id)
     if not u:
         return None
@@ -1191,11 +1505,11 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
 
     series = sorted(
         (c for c in cards if c.get("module") == "series"),
-        key=title_key,
+        key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
     )
     movies = sorted(
         (c for c in cards if c.get("module") == "movies"),
-        key=title_key,
+        key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
     )
     # Overview carousel: chronological (franchise-like), all leaves
     carousel = sorted(
@@ -1236,17 +1550,45 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
     media["has_series"] = bool(series)
     media["has_movies"] = bool(movies)
 
+    franchise_cards = _franchise_hub_miniatures(db, cards)
+    franchise_names = [
+        str(c.get("title") or "").strip()
+        for c in franchise_cards
+        if c.get("title")
+    ]
+    gallery_items = list_universe_gallery(u)
+    if gallery_items:
+        media["has_gallery"] = True
+
+    from app.series_languages import catalog_label, normalize_lang_code
+
+    lang_codes: list[str] = []
+    for raw in agg.get("languages") or []:
+        code = normalize_lang_code(str(raw)) or str(raw).strip()
+        if code and code not in lang_codes:
+            lang_codes.append(code)
+
+    overview_text = (data.get("overview") or "").strip()
+    bio_manual = bool(overview_text)
+    if not overview_text:
+        overview_text = _hub_generated_bio(
+            data.get("name") or "",
+            franchise_names=franchise_names,
+            genres=agg["genres"],
+            periods=agg["activity_periods"],
+            writers=agg["writers"],
+            publishers=agg["publishers"],
+        )
+
     # Logo-by-language stubs (universe_logo / universe_logo_{code})
     logo_by_language: dict[str, str] = {}
     if data.get("logo_url"):
         logo_by_language["default"] = data["logo_url"]
-    for code in agg.get("languages") or []:
+    for code in lang_codes:
         f = _art_file(u.uni_name, f"Logo_{code}", None) or _art_file(
             u.uni_name, f"logo_{code}", None
         )
         if f:
-            url = resolve_universe_art(u).get("logo_url")
-            # Resolve language-specific file directly
             root = _media_root()
             under_media = False
             if root:
@@ -1283,19 +1625,20 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
         "letter": (data.get("name") or "?")[:1].upper(),
         "folder_path": "",
         "cover_url": portrait,
-        "bio": data.get("overview"),
+        "bio": overview_text or None,
+        "bio_manual": bio_manual,
         "writers": agg["writers"],
         "aliases": [],
-        "languages": agg["languages"],
-        "origin_language": (agg["languages"][0] if agg["languages"] else None),
+        "languages": lang_codes,
+        "origin_language": (lang_codes[0] if lang_codes else None),
         "language_options": [
             {
-                "code": lang,
-                "label": lang,
-                "selected": i == 0,
+                "code": code,
+                "label": catalog_label(code),
+                "selected": True,
                 "is_origin": i == 0,
             }
-            for i, lang in enumerate(agg["languages"])
+            for i, code in enumerate(lang_codes)
         ],
         "activity_periods": agg["activity_periods"],
         "genres": agg["genres"],
@@ -1315,21 +1658,7 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
             "games": [],
             "music": [],
         },
-        "subseries": [
-            {
-                "id": str(c.get("leaf_id") or c.get("id") or ""),
-                "title": c.get("title") or c.get("name") or "",
-                "date_iso": c.get("date_iso"),
-                "display_date": c.get("display_date"),
-                "folder_path": c.get("folder_path") or "",
-                "cover_url": c.get("portrait_url") or c.get("cover_url"),
-                "logo_url": c.get("logo_url"),
-                "season_count": 0,
-                "module": c.get("module"),
-                "franchise_id": c.get("franchise_id"),
-            }
-            for c in carousel
-        ],
+        "subseries": franchise_cards,
         "gallery_folder_paths": [
             p
             for p in (
@@ -1337,6 +1666,7 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
             )
             if p
         ],
+        "gallery_items": gallery_items,
     }
 
     return {
@@ -1346,6 +1676,7 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
         "carousel": carousel,
         "overview": overview,
         "media": media,
+        "gallery_items": gallery_items,
     }
 
 

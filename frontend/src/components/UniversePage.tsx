@@ -17,6 +17,7 @@ import {
   setUniverseReturnTarget,
 } from "../mediaEntry";
 import type {
+  ReleaseCardLayout,
   SeriesOverview,
   SeriesSubseriesCard,
   Universe,
@@ -34,10 +35,12 @@ import {
   isTabletLayout,
   useDeviceLayout,
 } from "../usePhoneLayout";
-import { getStoredReleaseCardLayout } from "../themes";
+import { getStoredReleaseCardLayout, saveReleaseCardLayout } from "../themes";
 import AppMenu from "./AppMenu";
+import { IconCardBanner, IconCardCover } from "./MenuIcons";
 import MyStackIcon from "./MyStackIcon";
 import PlaylistBoot from "./PlaylistBoot";
+import ReleaseCardLayoutPicker from "./ReleaseCardLayoutPicker";
 import UniverseAboutEditModal from "./UniverseAboutEditModal";
 import UniverseAddMemberModal from "./UniverseAddMemberModal";
 import MediaBeatFx from "./music/MediaBeatFx";
@@ -65,9 +68,19 @@ type Props = {
   }) => void;
   onOpenSeriesLeaf: (franchiseId: string, subseriesId: string) => void;
   onOpenMoviesLeaf: (franchiseId: string, filmId: string) => void;
+  onOpenSeriesFranchise?: (franchiseId: string) => void;
+  onOpenMoviesFranchise?: (franchiseId: string) => void;
+  onBrowseCatalog?: (target: {
+    mode: "name" | "genre" | "country" | "publisher" | "writer";
+    countryId?: number;
+    subgenreId?: number;
+    publisher?: string;
+    writer?: string;
+  }) => void;
 };
 
 function toMediaCard(c: UniverseCard): SeriesMediaCard {
+  const openUrl = c.open_url || c.file_url || null;
   return {
     id: String(c.leaf_id || c.id || c.franchise_id),
     title: c.title || c.name || c.leaf_id || c.franchise_id,
@@ -78,6 +91,11 @@ function toMediaCard(c: UniverseCard): SeriesMediaCard {
     logo_url: c.logo_url,
     date_iso: c.date_iso,
     display_date: c.display_date,
+    date_label: c.display_date || c.date_iso || null,
+    open_url: openUrl,
+    open_mode: openUrl ? (c.open_mode || "local") : null,
+    open_label:
+      c.open_label || (openUrl ? "Play video" : null),
     universe_module: c.module,
     universe_franchise_id: c.franchise_id,
     universe_leaf_id: c.leaf_id || c.id,
@@ -138,6 +156,9 @@ export default function UniversePage({
   onNavigate,
   onOpenSeriesLeaf,
   onOpenMoviesLeaf,
+  onOpenSeriesFranchise,
+  onOpenMoviesFranchise,
+  onBrowseCatalog,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -155,9 +176,19 @@ export default function UniversePage({
   const [eraIndex, setEraIndex] = useState(0);
   const [activeLanguage, setActiveLanguage] = useState<string | null>(null);
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
-  const [cardLayout] = useState(() =>
+  const [cardLayout, setCardLayout] = useState<ReleaseCardLayout>(() =>
     userId ? getStoredReleaseCardLayout(userId) : "cover"
   );
+  const setCardLayoutPersisted = useCallback(
+    (next: ReleaseCardLayout) => {
+      setCardLayout(next);
+      if (userId) saveReleaseCardLayout(userId, next);
+    },
+    [userId]
+  );
+  useEffect(() => {
+    if (userId) setCardLayout(getStoredReleaseCardLayout(userId));
+  }, [userId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -321,13 +352,15 @@ export default function UniversePage({
   }
 
   function openSubseries(sub: SeriesSubseriesCard) {
-    const franchiseId = sub.franchise_id;
+    const franchiseId = sub.franchise_id || sub.id;
     if (!franchiseId) return;
     if (sub.module === "series") {
-      onOpenSeriesLeaf(franchiseId, sub.id);
+      if (onOpenSeriesFranchise) onOpenSeriesFranchise(franchiseId);
+      else onOpenSeriesLeaf(franchiseId, franchiseId);
       return;
     }
-    onOpenMoviesLeaf(franchiseId, sub.id);
+    if (onOpenMoviesFranchise) onOpenMoviesFranchise(franchiseId);
+    else onOpenMoviesLeaf(franchiseId, franchiseId);
   }
 
   function onUniverseSaved(next: Universe) {
@@ -403,6 +436,15 @@ export default function UniversePage({
             )}
           </div>
           <div className="artist-page__top-right">
+            {!mobilePortrait &&
+            (section === "movies" ||
+              section === "series" ||
+              section === "audio") ? (
+              <ReleaseCardLayoutPicker
+                value={cardLayout}
+                onChange={setCardLayoutPersisted}
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -415,6 +457,28 @@ export default function UniversePage({
               menuVariant="release"
               editDataLabel="Update universe"
               editDataFlat
+              menuChrome={
+                mobilePortrait &&
+                (section === "movies" ||
+                  section === "series" ||
+                  section === "audio") ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCardLayoutPersisted(
+                        cardLayout === "cover" ? "banner" : "cover"
+                      )
+                    }
+                  >
+                    {cardLayout === "cover" ? (
+                      <IconCardCover className="menu-item-icon" />
+                    ) : (
+                      <IconCardBanner className="menu-item-icon" />
+                    )}
+                    {cardLayout === "cover" ? "Cover view" : "Banner view"}
+                  </button>
+                ) : null
+              }
               onAddToUniverse={
                 isAdmin ? () => setAddMemberOpen(true) : undefined
               }
@@ -471,16 +535,9 @@ export default function UniversePage({
                 })
               }
             >
-              <span className="artist-page__section-label-full">{s.label}</span>
-              {s.mobileLabel ? (
-                <span className="artist-page__section-label-mobile">
-                  {s.mobileLabel}
-                </span>
-              ) : (
-                <span className="artist-page__section-label-mobile">
-                  {s.label}
-                </span>
-              )}
+              <span>
+                {mobilePortrait && s.mobileLabel ? s.mobileLabel : s.label}
+              </span>
             </button>
           ))}
         </nav>
@@ -498,11 +555,25 @@ export default function UniversePage({
             data={aboutData}
             eraIndex={eraIndex}
             stacked={stacked}
+            tapRevealSubs={false}
             onEraChange={setEraIndex}
             onOpenSubseries={openSubseries}
+            photoNav={false}
             activeLanguage={activeLanguage}
             logosSwitchable={logosSwitchable}
             onLanguageSelect={setActiveLanguage}
+            onGenre={(id) =>
+              onBrowseCatalog?.({
+                mode: "genre",
+                subgenreId: typeof id === "number" ? id : undefined,
+              })
+            }
+            onPublisher={(name) =>
+              onBrowseCatalog?.({ mode: "publisher", publisher: name })
+            }
+            onWriter={(name) =>
+              onBrowseCatalog?.({ mode: "writer", writer: name })
+            }
           />
         ) : null}
 
@@ -541,16 +612,22 @@ export default function UniversePage({
         ) : null}
 
         {hub && section === "gallery" ? (
+          (hub.gallery_items && hub.gallery_items.length) ||
           galleryFolders.length ? (
             <SeriesGalleryPanel
-              folderPaths={galleryFolders}
+              presetItems={
+                hub.gallery_items?.length ? hub.gallery_items : undefined
+              }
+              folderPaths={
+                hub.gallery_items?.length ? undefined : galleryFolders
+              }
               hideSubbar
               sectionKey={gallerySectionKey}
               onSectionKeyChange={setGallerySectionKey}
             />
           ) : (
             <p className="muted artist-section-empty">
-              No gallery folders found for this universe.
+              No gallery images found for this universe.
             </p>
           )
         ) : null}

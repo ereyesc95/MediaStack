@@ -588,6 +588,7 @@ def build_film_overview(
             root,
             posters=posters,
             backdrops=backdrops,
+            film=True,
         )
     local_eras = build_local_eras(film_dir, root)
     from app.language_logos import resolve_language_logos

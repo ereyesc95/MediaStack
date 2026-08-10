@@ -29,6 +29,7 @@ export type SeriesMediaCard = {
   universe_module?: "movies" | "series" | string;
   universe_franchise_id?: string;
   universe_leaf_id?: string;
+  subseries_id?: string | null;
 };
 
 type Props = {

@@ -244,6 +244,7 @@ async def refresh_film_metadata(
         or ([film_blob["poster_url"]] if film_blob.get("poster_url") else []),
         backdrops=film_blob["backdrops"]
         or ([film_blob["backdrop_url"]] if film_blob.get("backdrop_url") else []),
+        film=True,
     )
 
     row.mwk_refreshed_at = _now()

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState } from "react";
 import type { SeriesDashboard, Universe } from "../../types";
 import { EMPTY_SERIES_DASHBOARD } from "../../types";
-import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
+import MyStackIcon from "../MyStackIcon";
 
 const PHONE_MAX_WIDTH = 900;
 const PHONE_PORTRAIT_MAX_WIDTH = 480;
@@ -96,6 +96,24 @@ function placeholderCount(itemCount: number, limit: number) {
 }
 
 type PlaceholderVariant = "square" | "landscape" | "circle" | "flag";
+
+function DashCover({ url }: { url?: string | null }) {
+  if (url) {
+    return (
+      <span className="dash-icon-item-cover">
+        <span
+          className="card-bg-layer"
+          style={{ backgroundImage: `url("${url}")` }}
+        />
+      </span>
+    );
+  }
+  return (
+    <span className="dash-icon-item-cover dash-icon-item-cover--empty">
+      <MyStackIcon className="dash-icon-item-cover__mark" size={22} />
+    </span>
+  );
+}
 
 function DashPlaceholder({ variant }: { variant: PlaceholderVariant }) {
   if (variant === "landscape") {
@@ -210,8 +228,8 @@ export default function MoviesHome({
         loading ? "" : " dash-appear-ready"
       }`}
     >
-      {!loading ? (
-        <>
+      {loading ? <p className="muted dash-status">Updating…</p> : null}
+      <>
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
           logo="/api/assets/icons/pane-on-repeat"
@@ -220,7 +238,7 @@ export default function MoviesHome({
         />
         <div className="dash-scroll dash-scroll--icons">
           {topFranchises.map((s) => {
-            const cover = s.cover_url || s.photo_url || DEFAULT_DISC_URL;
+            const cover = s.cover_url || s.photo_url || null;
             return (
               <button
                 key={s.id}
@@ -228,12 +246,7 @@ export default function MoviesHome({
                 className="dash-icon-item"
                 onClick={() => onFranchise(s.id)}
               >
-                <span className="dash-icon-item-cover">
-                  <span
-                    className="card-bg-layer"
-                    style={{ backgroundImage: `url("${cover}")` }}
-                  />
-                </span>
+                <DashCover url={cover} />
                 <span className="dash-item-label dash-icon-item-name" title={s.name}>
                   {s.name}
                 </span>
@@ -255,7 +268,7 @@ export default function MoviesHome({
         />
         <div className="dash-scroll dash-scroll--icons">
           {topFilms.map((s) => {
-            const cover = s.cover_url || s.photo_url || DEFAULT_DISC_URL;
+            const cover = s.cover_url || s.photo_url || null;
             return (
               <button
                 key={s.id}
@@ -263,12 +276,7 @@ export default function MoviesHome({
                 className="dash-icon-item"
                 onClick={() => onFilm(s.id, s.work_id)}
               >
-                <span className="dash-icon-item-cover">
-                  <span
-                    className="card-bg-layer"
-                    style={{ backgroundImage: `url("${cover}")` }}
-                  />
-                </span>
+                <DashCover url={cover} />
                 <span className="dash-item-label dash-icon-item-name" title={s.name}>
                   {s.name}
                 </span>
@@ -292,7 +300,7 @@ export default function MoviesHome({
           <div className="dash-scroll dash-scroll--icons">
             {topUniverses.map((u) => {
               const cover =
-                u.portrait_url || u.cover_url || u.landscape_url || DEFAULT_DISC_URL;
+                u.portrait_url || u.cover_url || u.landscape_url || null;
               return (
                 <button
                   key={u.id}
@@ -300,12 +308,7 @@ export default function MoviesHome({
                   className="dash-icon-item"
                   onClick={() => onOpenUniverse?.(u.id)}
                 >
-                  <span className="dash-icon-item-cover">
-                    <span
-                      className="card-bg-layer"
-                      style={{ backgroundImage: `url("${cover}")` }}
-                    />
-                  </span>
+                  <DashCover url={cover} />
                   <span
                     className="dash-item-label dash-icon-item-name"
                     title={u.name}
@@ -383,8 +386,7 @@ export default function MoviesHome({
           />
         </div>
       </section>
-        </>
-      ) : null}
+      </>
     </div>
   );
 }

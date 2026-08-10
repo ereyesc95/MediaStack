@@ -167,7 +167,7 @@ const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: null },
-  { id: "audio", label: "AUDIO", flag: null },
+  { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "library", label: "LIBRARY", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
@@ -178,7 +178,7 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "movies", label: "MOVIES", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
-  { id: "audio", label: "AUDIO", flag: null },
+  { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "library", label: "LIBRARY", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
@@ -537,6 +537,7 @@ export default function SeriesFranchisePage({
           folder_path?: string | null;
           subseries_path?: string | null;
           subseries_title?: string | null;
+          subseries_id?: string | null;
           source_artist_name?: string | null;
           is_series_playlist?: boolean;
           playlist_kind?: string | null;
@@ -561,6 +562,7 @@ export default function SeriesFranchisePage({
             meta: [r.subseries_title, r.source_artist_name, r.meta]
               .filter(Boolean)
               .join(" · ") || undefined,
+            subseries_id: r.subseries_id || undefined,
             navigate_band_id: r.navigate_band_id,
             navigate_release_id: r.navigate_release_id,
             category: r.is_series_playlist
@@ -660,6 +662,9 @@ export default function SeriesFranchisePage({
             date_label: m.display_date || m.date_iso,
             path: m.path,
             meta: m.subseries || undefined,
+            subseries_id:
+              (m as { subseries_id?: string | null }).subseries_id ||
+              undefined,
           }))
         );
       })
@@ -931,6 +936,14 @@ export default function SeriesFranchisePage({
     return navSections.filter((s) => !s.flag || data.media[s.flag]);
   }, [data, navSections]);
 
+  useEffect(() => {
+    if (!data) return;
+    const allowed = new Set(visibleSections.map((s) => s.id));
+    if (!allowed.has(section)) {
+      onNavigate({ section: "overview", overviewTab: "about" });
+    }
+  }, [data, section, visibleSections, onNavigate]);
+
   const era = currentAboutEra ?? data?.eras?.[0];
   const listedLangs = useMemo(() => {
     if (!data) return [] as string[];
@@ -1019,10 +1032,14 @@ export default function SeriesFranchisePage({
     staff: data?.cast?.staff?.length ?? data?.cast?.people?.length ?? 0,
   };
 
-  const subseriesList =
-    isMovies && sharedSeries && seriesShows.length
-      ? seriesShows
-      : data?.subseries || [];
+  const subseriesList = useMemo(() => {
+    // Movies works map films into `data.subseries` — those are not filter scopes.
+    // Only real Series hubs (Dragon Ball / DBZ / …) should drive this control.
+    if (isMovies) return [];
+    const list = data?.subseries || [];
+    const hubs = list.filter((s) => !(s as { is_standalone?: boolean }).is_standalone);
+    return hubs.length > 1 ? hubs : [];
+  }, [isMovies, data?.subseries]);
   const showSubseriesSubbar = subseriesList.length > 1;
   const subseriesTabs = useMemo(() => {
     if (subseriesList.length <= 1) return [];
@@ -1052,7 +1069,14 @@ export default function SeriesFranchisePage({
 
   const filterBySubseries = (items: SeriesMediaCard[]) => {
     if (mediaSubFilter === "all") return items;
-    const key = mediaSubFilter.toLowerCase();
+    const wantId = mediaSubFilter.toLowerCase();
+    const wantSub = subseriesList.find(
+      (s) => s.id.toLowerCase() === wantId
+    );
+    const wantTitle = (wantSub?.title || "").toLowerCase();
+    const wantPath = (wantSub?.folder_path || "")
+      .replace(/\\/g, "/")
+      .toLowerCase();
     return items.filter((item) => {
       // Openings & Endings only on All (when multiple subseries exist)
       if (
@@ -1062,8 +1086,15 @@ export default function SeriesFranchisePage({
       ) {
         return false;
       }
-      const hay = `${item.meta || ""} ${item.path || ""} ${item.id}`.toLowerCase();
-      return hay.includes(key);
+      const sid = (item.subseries_id || "").toLowerCase();
+      if (sid && (sid === wantId || sid === wantTitle)) return true;
+      const meta = (item.meta || "").toLowerCase();
+      if (wantTitle && meta.includes(wantTitle)) return true;
+      if (wantId && meta.includes(wantId)) return true;
+      const path = (item.path || "").replace(/\\/g, "/").toLowerCase();
+      if (wantPath && path.includes(wantPath)) return true;
+      if (wantId && path.includes(wantId)) return true;
+      return false;
     });
   };
 
@@ -1688,6 +1719,7 @@ export default function SeriesFranchisePage({
                 seasonId: undefined,
               })
             }
+            writersLabel={isMovies ? "Directors" : "Writers"}
             onGenre={(id) =>
               onBrowseCatalog?.({
                 mode: "genre",
@@ -1929,7 +1961,7 @@ export default function SeriesFranchisePage({
 
         {section === "movies" ? (
           <SeriesMediaGrid
-            items={isMovies ? movieCards : filterBySubseries(movieCards)}
+            items={filterBySubseries(movieCards)}
             loading={movieLoading && movieCards.length === 0}
             emptyMessage={
               isMovies

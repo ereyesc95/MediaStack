@@ -167,7 +167,7 @@ type Props = {
   onOpenFilm?: (filmId: string) => void;
   /** Override back chip text (e.g. HOME when opened from a home pane). */
   backLabelOverride?: string | null;
-  onOpenUniverseParent?: () => void;
+  onOpenUniverseParent?: (universeId: number, universeName?: string) => void;
   onOpenUniverseLeaf?: (leaf: {
     module: "movies" | "series";
     franchiseId: string;
@@ -476,6 +476,7 @@ export default function SeriesSubseriesPage({
   onOpenMoviesPath,
   onOpenFilm,
   backLabelOverride,
+  onOpenUniverseParent,
   onOpenUniverseLeaf,
   onNavigate,
 }: Props) {
@@ -2751,13 +2752,10 @@ export default function SeriesSubseriesPage({
                         type="button"
                         className="release-page__artist-link release-page__artist-link--inline"
                         onClick={() =>
-                          onNavigate({
-                            subseriesId,
-                            seasonId: undefined,
-                            section: "overview",
-                            overviewTab: "related",
-                            universeId: universeInfo.id,
-                          })
+                          onOpenUniverseParent?.(
+                            universeInfo.id,
+                            universeInfo.name
+                          )
                         }
                       >
                         {universeInfo.name}
@@ -2821,13 +2819,7 @@ export default function SeriesSubseriesPage({
                               type="button"
                               className="release-page__artist-link release-page__artist-link--inline"
                               onClick={() => {
-                                onNavigate({
-                                  subseriesId,
-                                  seasonId: undefined,
-                                  section: "overview",
-                                  overviewTab: "related",
-                                  universeId: u.id,
-                                });
+                                onOpenUniverseParent?.(u.id, u.name);
                               }}
                             >
                               {u.name}

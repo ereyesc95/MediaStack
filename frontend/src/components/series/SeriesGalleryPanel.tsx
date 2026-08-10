@@ -13,6 +13,8 @@ type Props = {
   folderPath?: string;
   /** Merge gallery images from multiple folders (franchise All = root + subseries). */
   folderPaths?: string[];
+  /** Prebuilt items (e.g. universe assets) — skips folder fetch when set. */
+  presetItems?: SeriesGalleryItem[];
   sectionKey?: string;
   onSectionKeyChange?: (key: string) => void;
   onSectionsChange?: (sections: SectionMeta[], hasMultiple: boolean) => void;
@@ -47,6 +49,7 @@ function mergeSections(
 export default function SeriesGalleryPanel({
   folderPath,
   folderPaths,
+  presetItems,
   sectionKey: controlledKey,
   onSectionKeyChange,
   onSectionsChange,
@@ -74,6 +77,11 @@ export default function SeriesGalleryPanel({
     return paths.join("|");
   }, [folderPath, folderPaths]);
 
+  const presetKey = useMemo(
+    () => (presetItems || []).map((it) => it.id).join("|"),
+    [presetItems]
+  );
+
   const sectionKey = controlledKey ?? internalKey;
   const setSectionKey = (key: string) => {
     if (onSectionKeyChangeRef.current) onSectionKeyChangeRef.current(key);
@@ -81,6 +89,22 @@ export default function SeriesGalleryPanel({
   };
 
   const load = useCallback(async () => {
+    if (presetItems && presetItems.length) {
+      const sec: SeriesGallerySection = {
+        key: "art",
+        label: "Art",
+        items: presetItems,
+      };
+      setSections([sec]);
+      setItems(presetItems);
+      setLoading(false);
+      setError(null);
+      onSectionsChangeRef.current?.(
+        [{ key: "art", label: "Art" }],
+        false
+      );
+      return;
+    }
     const paths = pathsKey ? pathsKey.split("|").filter(Boolean) : [];
     if (!paths.length) {
       setSections([]);
@@ -128,8 +152,8 @@ export default function SeriesGalleryPanel({
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload on path set
-  }, [pathsKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload on path/preset set
+  }, [pathsKey, presetKey]);
 
   useEffect(() => {
     void load();

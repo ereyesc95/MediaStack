@@ -6,7 +6,7 @@ import {
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
-import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource } from "../../mediaEntry";
+import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -55,7 +55,7 @@ const MOVIES_FILTER_MODES_GROUPS: { id: SeriesFilterMode; label: string }[] = [
   { id: "end", label: "END DATE" },
   { id: "genre", label: "GENRE" },
   { id: "publisher", label: "PUBLISHER" },
-  { id: "writer", label: "WRITER" },
+  { id: "writer", label: "DIRECTOR" },
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
@@ -66,7 +66,7 @@ const MOVIES_FILTER_MODES_FILMS: { id: SeriesFilterMode; label: string }[] = [
   { id: "start", label: "RELEASE DATE" },
   { id: "genre", label: "GENRE" },
   { id: "publisher", label: "PUBLISHER" },
-  { id: "writer", label: "WRITER" },
+  { id: "writer", label: "DIRECTOR" },
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
@@ -176,22 +176,25 @@ export default function MoviesModule({
   useEffect(() => {
     let cancelled = false;
     setDashLoading(true);
-    void Promise.all([
-      fetchMoviesDashboard(),
-      fetchUniverses("movies").catch(() => ({ universes: [] as Universe[] })),
-    ])
-      .then(([d, u]) => {
+    void (async () => {
+      try {
+        const [dash, uni] = await Promise.all([
+          fetchMoviesDashboard(),
+          fetchUniverses("movies").catch(() => ({
+            universes: [] as Universe[],
+          })),
+        ]);
         if (cancelled) return;
-        setDashboard(d);
-        setUniverses(u.universes || []);
-      })
-      .catch((e) => {
-        if (!cancelled)
+        setDashboard(dash);
+        setUniverses(uni.universes || []);
+      } catch (e) {
+        if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
+        }
+      } finally {
         if (!cancelled) setDashLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -212,10 +215,7 @@ export default function MoviesModule({
   }, []);
 
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
-
-  useEffect(() => {
+    // Catalog is heavy — only load when browsing catalog or a franchise.
     if (tab === "catalog" || franchiseId) loadCatalog();
   }, [tab, franchiseId, loadCatalog]);
 
@@ -234,6 +234,40 @@ export default function MoviesModule({
       setEntrySource(getMediaEntrySource());
     }
   }, [universeId]);
+
+  useEffect(() => {
+    const pending = takePendingCatalogBrowse("movies");
+    if (!pending) return;
+    clearMediaTheme(userId);
+    setEntrySource("catalog");
+    setTab("catalog");
+    // Directors apply to individual films.
+    if (pending.mode === "writer" || pending.mode === "publisher") {
+      setCatalogScope("shows");
+    }
+    pushMoviesCatalogRoute();
+    onNavigate({
+      franchiseId: undefined,
+      filmId: undefined,
+      section: undefined,
+      overviewTab: undefined,
+      universeId: undefined,
+    });
+    setFilterMode(pending.mode);
+    setSearch("");
+    setLetter(pending.mode === "name" ? "A" : "");
+    setContinentId("");
+    if (pending.countryId != null) setCountryId(pending.countryId);
+    else setCountryId("");
+    setStartDecade("");
+    setEndDecade("");
+    if (pending.subgenreId != null) setSubgenreId(pending.subgenreId);
+    else setSubgenreId("");
+    setPublisher(pending.publisher ?? "");
+    setWriter(pending.writer ?? "");
+    loadCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot pending browse
+  }, []);
 
   useEffect(() => {
     if (catalogScope === "shows" && filterMode === "end") {
@@ -567,8 +601,12 @@ export default function MoviesModule({
                 : undefined
         }
         onBrowseCatalog={(target) => {
+          clearMediaTheme(userId);
           setEntrySource("catalog");
           setTab("catalog");
+          if (target.mode === "writer" || target.mode === "publisher") {
+            setCatalogScope("shows");
+          }
           pushMoviesCatalogRoute();
           onNavigate({
             franchiseId: undefined,
@@ -577,11 +615,16 @@ export default function MoviesModule({
             overviewTab: undefined,
             universeId: undefined,
           });
-          if (target.mode) setFilterMode(target.mode);
-          if (target.countryId != null) setCountryId(target.countryId);
-          if (target.subgenreId != null) setSubgenreId(target.subgenreId);
-          if (target.publisher) setPublisher(target.publisher);
-          if (target.writer) setWriter(target.writer);
+          setFilterMode(target.mode);
+          setSearch("");
+          setLetter(target.mode === "name" ? "A" : "");
+          setContinentId("");
+          setCountryId(target.countryId ?? "");
+          setStartDecade("");
+          setEndDecade("");
+          setSubgenreId(target.subgenreId ?? "");
+          setPublisher(target.publisher ?? "");
+          setWriter(target.writer ?? "");
           loadCatalog();
         }}
         onOpenMusicRelease={onOpenMusicRelease}
@@ -625,12 +668,11 @@ export default function MoviesModule({
             universeId,
           });
         }}
-        onOpenUniverseParent={() => {
-          if (universeId == null) return;
+        onOpenUniverseParent={(id, name) => {
           onOpenUniversePage?.(
-            universeId,
+            id,
             getMediaEntrySource() || entrySource,
-            getUniverseReturnTarget().universeName
+            name || getUniverseReturnTarget().universeName
           );
         }}
         onOpenMoviesPath={(path) => {
@@ -747,6 +789,33 @@ export default function MoviesModule({
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
+        onBrowseCatalog={(target) => {
+          clearMediaTheme(userId);
+          setEntrySource("catalog");
+          setTab("catalog");
+          if (target.mode === "writer" || target.mode === "publisher") {
+            setCatalogScope("shows");
+          }
+          pushMoviesCatalogRoute();
+          onNavigate({
+            franchiseId: undefined,
+            filmId: undefined,
+            section: undefined,
+            overviewTab: undefined,
+            universeId: undefined,
+          });
+          setFilterMode(target.mode);
+          setSearch("");
+          setLetter(target.mode === "name" ? "A" : "");
+          setContinentId("");
+          setCountryId(target.countryId ?? "");
+          setStartDecade("");
+          setEndDecade("");
+          setSubgenreId(target.subgenreId ?? "");
+          setPublisher(target.publisher ?? "");
+          setWriter(target.writer ?? "");
+          loadCatalog();
+        }}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}

@@ -33,6 +33,13 @@ type Props = {
     universeId?: number
   ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onBrowseCatalog?: (target: {
+    mode: "name" | "genre" | "country" | "publisher" | "writer";
+    countryId?: number;
+    subgenreId?: number;
+    publisher?: string;
+    writer?: string;
+  }) => void;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -54,6 +61,7 @@ export default function MoviesFranchisePage({
   onNavigate,
   onOpenSeriesFranchise,
   onOpenMusicRelease,
+  onBrowseCatalog,
   onImport,
   onSync,
   onChooseSource,
@@ -110,6 +118,7 @@ export default function MoviesFranchisePage({
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
+        onBrowseCatalog={onBrowseCatalog}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}

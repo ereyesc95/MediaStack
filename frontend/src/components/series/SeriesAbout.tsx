@@ -18,6 +18,14 @@ type Props = {
   activeLanguage?: string | null;
   logosSwitchable?: boolean;
   onLanguageSelect?: (code: string) => void;
+  /** When false, left portrait is static (no era click / hover zoom). */
+  photoNav?: boolean;
+  /** Override empty-bio message (e.g. generated universe blurb). */
+  emptyBioMessage?: string;
+  /** Meta row label for writers/directors. */
+  writersLabel?: string;
+  /** Override stacked tap-to-reveal on franchise miniatures. */
+  tapRevealSubs?: boolean;
 };
 
 function normalizeBio(bio: string): string {
@@ -97,17 +105,59 @@ export default function SeriesAbout({
   activeLanguage,
   logosSwitchable,
   onLanguageSelect,
+  photoNav = true,
+  emptyBioMessage,
+  writersLabel = "Writers",
+  tapRevealSubs: tapRevealSubsProp,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioNeedsToggle, setBioNeedsToggle] = useState(false);
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
     null
   );
   const [revealedSubId, setRevealedSubId] = useState<string | null>(null);
   /** Portrait phone/tablet: hide under-card labels; tap to reveal then open. */
-  const tapRevealSubs = stacked;
+  const tapRevealSubs = tapRevealSubsProp ?? stacked;
+  const bioScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setBioExpanded(false);
   }, [data.folder_path, data.name]);
+  useEffect(() => {
+    if (!stacked || !data.bio) {
+      setBioNeedsToggle(false);
+      return;
+    }
+    const el = bioScrollRef.current;
+    if (!el) return;
+    // Measure natural height vs ~15-line collapse cap (22.5rem).
+    const measure = () => {
+      const cap = 22.5 * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+      const natural = el.scrollHeight;
+      setBioNeedsToggle(natural > cap + 2);
+    };
+    // Temporarily drop collapse constraints so scrollHeight is natural.
+    const prevHeight = el.style.height;
+    const prevMax = el.style.maxHeight;
+    const prevOverflow = el.style.overflow;
+    el.style.height = "auto";
+    el.style.maxHeight = "none";
+    el.style.overflow = "visible";
+    measure();
+    el.style.height = prevHeight;
+    el.style.maxHeight = prevMax;
+    el.style.overflow = prevOverflow;
+    const ro = new ResizeObserver(() => {
+      el.style.height = "auto";
+      el.style.maxHeight = "none";
+      el.style.overflow = "visible";
+      measure();
+      el.style.height = prevHeight;
+      el.style.maxHeight = prevMax;
+      el.style.overflow = prevOverflow;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stacked, data.bio]);
   const slides = useMemo(
     () => carouselEras(data.eras, stacked),
     [data.eras, stacked]
@@ -191,9 +241,7 @@ export default function SeriesAbout({
   const originText = originLabel(data.country?.name);
   const hasBio = Boolean(data.bio);
   const writers =
-    data.writers.length > 0 ? data.writers : data.aliases.length > 0
-      ? data.aliases
-      : [];
+    data.writers.length > 0 ? data.writers : [];
   const hasSubseriesCarousel = data.subseries.length > 6;
 
   const advanceSubseriesCarousel = () => {
@@ -216,19 +264,33 @@ export default function SeriesAbout({
       <div className="artist-about__layout">
         <div
           ref={photoColRef}
-          className="artist-about__photo-col"
-          onMouseMove={(e) => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            setPhotoHoverSide(
-              e.clientX - rect.left < rect.width / 2 ? "left" : "right"
-            );
-          }}
-          onMouseLeave={() => setPhotoHoverSide(null)}
-          onClick={(e) => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            stepEra(x < rect.width / 2 ? 1 : -1);
-          }}
+          className={`artist-about__photo-col${
+            photoNav ? "" : " artist-about__photo-col--static"
+          }`}
+          onMouseMove={
+            photoNav
+              ? (e) => {
+                  const rect = (
+                    e.currentTarget as HTMLElement
+                  ).getBoundingClientRect();
+                  setPhotoHoverSide(
+                    e.clientX - rect.left < rect.width / 2 ? "left" : "right"
+                  );
+                }
+              : undefined
+          }
+          onMouseLeave={photoNav ? () => setPhotoHoverSide(null) : undefined}
+          onClick={
+            photoNav
+              ? (e) => {
+                  const rect = (
+                    e.currentTarget as HTMLElement
+                  ).getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  stepEra(x < rect.width / 2 ? 1 : -1);
+                }
+              : undefined
+          }
           role="presentation"
         >
           {photoLayers.current ? (
@@ -273,11 +335,14 @@ export default function SeriesAbout({
         <div ref={contentRef} className="artist-about__content">
           <div className="artist-about__bio-block">
             <div
+              ref={bioScrollRef}
               className={`artist-about__bio-scroll${
                 stacked
                   ? bioExpanded
                     ? " artist-about__bio-scroll--expanded"
-                    : " artist-about__bio-scroll--collapsed"
+                    : bioNeedsToggle
+                      ? " artist-about__bio-scroll--collapsed"
+                      : " artist-about__bio-scroll--fit"
                   : ""
               }`}
             >
@@ -289,12 +354,12 @@ export default function SeriesAbout({
                 ))
               ) : (
                 <p className="muted">
-                  No description yet. Use Refresh data → Metadata (TMDb) in the
-                  menu.
+                  {emptyBioMessage ||
+                    "No description yet. Use Refresh data → Metadata in the menu."}
                 </p>
               )}
             </div>
-            {stacked && hasBio && (
+            {stacked && hasBio && bioNeedsToggle && (
               <button
                 type="button"
                 className="artist-about__bio-toggle"
@@ -308,7 +373,7 @@ export default function SeriesAbout({
             <dl className="artist-about__meta">
               {writers.length > 0 && (
                 <div className="artist-about__meta-row">
-                  <dt>Writers</dt>
+                  <dt>{writersLabel}</dt>
                   <dd>
                     {writers.map((w) => (
                       <MetaValue

@@ -6,7 +6,7 @@ import {
   fetchUniverses,
   resolveMoviesPath,
 } from "../../api";
-import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource } from "../../mediaEntry";
+import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -239,6 +239,33 @@ export default function SeriesModule({
   }, [universeId]);
 
   useEffect(() => {
+    const pending = takePendingCatalogBrowse("series");
+    if (!pending) return;
+    clearMediaTheme(userId);
+    setEntrySource("catalog");
+    setTab("catalog");
+    pushSeriesCatalogRoute(true);
+    onNavigate({
+      franchiseId: undefined,
+      subseriesId: undefined,
+      seasonId: undefined,
+      section: "overview",
+      universeId: undefined,
+    });
+    setFilterMode(pending.mode);
+    setSearch("");
+    setLetter(pending.mode === "name" ? "A" : "");
+    setContinentId("");
+    setCountryId(pending.countryId ?? "");
+    setStartDecade("");
+    setEndDecade("");
+    setSubgenreId(pending.subgenreId ?? "");
+    setPublisher(pending.publisher ?? "");
+    setWriter(pending.writer ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot pending browse
+  }, []);
+
+  useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
@@ -425,6 +452,7 @@ export default function SeriesModule({
       subseriesId: undefined,
       seasonId: undefined,
       section: "overview",
+      universeId: undefined,
     });
     setFilterMode(target.mode);
     setSearch("");
@@ -560,12 +588,11 @@ export default function SeriesModule({
               universeId,
             });
           }}
-          onOpenUniverseParent={() => {
-            if (universeId == null) return;
+          onOpenUniverseParent={(id, name) => {
             onOpenUniversePage?.(
-              universeId,
+              id,
               getMediaEntrySource() || entrySource,
-              getUniverseReturnTarget().universeName
+              name || getUniverseReturnTarget().universeName
             );
           }}
           onNavigate={(patch) => {

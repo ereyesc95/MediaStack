@@ -1965,7 +1965,6 @@ export default function SystemPlaylistPage({
                                       >
                                         <span className="release-page__youtube-picker-label">
                                           {video.label}
-                                          {video.primary ? " · Primary" : ""}
                                         </span>
                                       </button>
                                     ))}
@@ -2109,7 +2108,6 @@ export default function SystemPlaylistPage({
                               >
                                 <span className="release-page__youtube-picker-label">
                                   {video.label}
-                                  {video.primary ? " · Primary" : ""}
                                 </span>
                               </button>
                             ))}

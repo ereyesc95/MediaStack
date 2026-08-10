@@ -1100,6 +1100,10 @@ export type UniverseCard = {
   leaf_id?: string;
   kind?: "film" | "subseries" | "franchise" | string;
   universe_id?: number;
+  open_url?: string | null;
+  file_url?: string | null;
+  open_mode?: "tab" | "local" | null;
+  open_label?: string | null;
 };
 
 export type UniverseLanding = {
@@ -1115,6 +1119,7 @@ export type UniverseHub = {
   movies: UniverseCard[];
   carousel?: UniverseCard[];
   overview?: SeriesOverview;
+  gallery_items?: SeriesGalleryItem[];
   media: {
     has_series?: boolean;
     has_movies?: boolean;

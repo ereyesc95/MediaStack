@@ -14,7 +14,22 @@ _PORTRAIT_RE = re.compile(r"portrait", re.I)
 _LANDSCAPE_RE = re.compile(r"landscape", re.I)
 
 
-def artwork_dir(franchise_dir: Path) -> Path:
+def artwork_dir(franchise_dir: Path, *, film: bool = False) -> Path:
+    """Return folder for TMDb-downloaded posters/backdrops.
+
+    - Franchise / work folders → ``[Artwork]`` (create if missing).
+    - Individual film folders → ``Gallery/Covers`` (never create ``[Artwork]``).
+    """
+    if film:
+        from app.series_paths import find_covers_dir
+
+        existing = find_covers_dir(franchise_dir)
+        if existing and existing.name.casefold() == "covers":
+            return existing
+        covers = franchise_dir / "Gallery" / "Covers"
+        covers.mkdir(parents=True, exist_ok=True)
+        return covers
+
     preferred = franchise_dir / "[Artwork]"
     if preferred.is_dir():
         return preferred
@@ -33,14 +48,15 @@ def _list_named(
 
     needle = _PORTRAIT_RE if want == "portrait" else _LANDSCAPE_RE
     out: list[Path] = []
-    dirs = cover_search_dirs(franchise_dir)
+    dirs = list(cover_search_dirs(franchise_dir))
+    covers = franchise_dir / "Gallery" / "Covers"
+    if covers.is_dir() and covers not in dirs:
+        dirs.append(covers)
     if not dirs:
-        dirs = [
-            d
-            for name in ("[Artwork]", "Artwork")
-            for d in [franchise_dir / name]
-            if d.is_dir()
-        ]
+        for name in ("[Artwork]", "Artwork"):
+            d = franchise_dir / name
+            if d.is_dir():
+                dirs.append(d)
     for d in dirs:
         if not d.is_dir():
             continue
@@ -90,12 +106,14 @@ def ensure_artwork_cached(
     *,
     posters: list[str],
     backdrops: list[str],
+    film: bool = False,
 ) -> dict:
     """
-    If no local portrait/landscape files exist in [Artwork], download TMDb
-    images and save them with Portrait / Landscape in the filename.
+    If no local portrait/landscape files exist, download TMDb images.
+
+    Franchise/work → ``[Artwork]``. Individual film → ``Gallery/Covers``.
     """
-    art = artwork_dir(franchise_dir)
+    art = artwork_dir(franchise_dir, film=film)
     saved_portraits: list[str] = []
     saved_landscapes: list[str] = []
 

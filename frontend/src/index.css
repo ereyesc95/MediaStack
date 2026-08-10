@@ -1362,6 +1362,17 @@ input {
   overflow: hidden;
 }
 
+.dash-icon-item-cover--empty {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg-elevated, #1a1a1a) 88%, transparent);
+  color: color-mix(in srgb, var(--text-muted, #888) 70%, transparent);
+}
+
+.dash-icon-item-cover__mark {
+  opacity: 0.55;
+}
+
 .dash-icon-item-name {
   flex-shrink: 0;
   font-size: 0.68rem;
@@ -2366,9 +2377,9 @@ input {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2381,11 +2392,11 @@ input {
 }
 
 .modal-panel {
-  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
-  backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
-  border-radius: calc(var(--radius) + 2px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
   box-shadow: none;
   /* No top padding — sticky header must sit flush at the scrollport top
      so scrolled fields cannot paint into a gap above the title. */
@@ -2414,10 +2425,10 @@ input {
   z-index: 20;
   margin: 0 -1.25rem 0.75rem;
   padding: 0.7rem 1.25rem 0.5rem;
-  background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-radius: calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
   box-shadow: none;
   isolation: isolate;
 }
@@ -4969,6 +4980,14 @@ input {
   transform: scale(1.08);
 }
 
+.artist-about__photo-col--static {
+  cursor: default;
+}
+
+.artist-about__photo-col--static:hover .artist-about__photo--layer:not(.artist-about__photo--layer-out) {
+  transform: none;
+}
+
 .artist-about__photo--layer-in {
   animation: artist-photo-fade-in 0.35s ease-out forwards;
   will-change: opacity;
@@ -5194,7 +5213,7 @@ input {
 }
 
 .artist-about__bio-scroll--collapsed {
-  max-height: 10.5rem;
+  max-height: 22.5rem;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, #000 62%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
@@ -6242,11 +6261,11 @@ input {
 .modal-panel.artist-admin-modal > .modal-panel-actions {
   flex-shrink: 0;
   margin-top: 0;
-  padding: 0.65rem 1.25rem 1.1rem;
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  padding: 1.15rem 1.25rem 1.1rem;
+  border-top: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .modal-panel.artist-admin-modal > .error,
@@ -6276,13 +6295,16 @@ input {
 .add-universe-modal.modal-panel.artist-admin-modal {
   max-width: min(40rem, calc(100vw - 2rem));
   width: min(40rem, calc(100vw - 2rem));
-  max-height: none;
-  overflow: visible;
+  max-height: min(85vh, 40rem);
+  overflow: hidden;
 }
 
 .modal-panel.artist-admin-modal.add-universe-modal > .artist-admin-form {
-  overflow: visible;
-  flex: 0 0 auto;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding-top: 0.55rem;
 }
 
@@ -6292,6 +6314,109 @@ input {
 
 .modal-panel.artist-admin-modal.add-universe-modal > .modal-panel-actions {
   overflow: visible;
+}
+
+.add-universe-modal__actions {
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.add-universe-modal__member-form {
+  gap: 0.65rem;
+}
+
+.add-universe-modal__scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.35rem;
+}
+
+.add-universe-modal__scope button {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.28rem 0.75rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.add-universe-modal__scope button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.add-universe-modal__list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(48vh, 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.add-universe-modal__list li {
+  margin: 0;
+  padding: 0;
+}
+
+.add-universe-modal__list button {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 35%, transparent);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+}
+
+.add-universe-modal__list button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.add-universe-modal__list img,
+.add-universe-modal__thumb-fallback {
+  width: 2.6rem;
+  height: 3.6rem;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+}
+
+.add-universe-modal__list-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.add-universe-modal__list-title {
+  font-size: 0.9rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-universe-modal__list-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .add-universe-modal__header {
@@ -8115,9 +8240,9 @@ button.media-release-card--banner {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  background: rgba(8, 10, 16, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -8127,8 +8252,8 @@ button.media-release-card--banner {
   right: 0.55rem;
   z-index: 3;
   border: none;
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--text);
+  background: transparent;
+  color: var(--text-muted);
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -8137,29 +8262,33 @@ button.media-release-card--banner {
   line-height: 1;
 }
 
+.gallery-viewer__close:hover {
+  color: var(--text);
+}
+
 .gallery-viewer__stage {
   flex: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2.25rem 3rem 1rem;
+  padding: 2.25rem 3rem 0.75rem;
   cursor: pointer;
 }
 
 .gallery-viewer__image {
   max-width: 100%;
-  max-height: calc(92vh - 7rem);
+  max-height: calc(92vh - 11rem);
   object-fit: contain;
 }
 
 .gallery-viewer__nav {
   position: absolute;
-  top: 50%;
+  top: 42%;
   transform: translateY(-50%);
   z-index: 2;
   border: none;
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.28);
   color: var(--text);
   width: 2.25rem;
   height: 3.25rem;
@@ -8176,16 +8305,76 @@ button.media-release-card--banner {
   right: 0.35rem;
 }
 
+.gallery-viewer__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.35rem 0.75rem 0.95rem;
+}
+
+.gallery-viewer__thumbs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: 0.35rem calc(50% - 1.55rem) 0.15rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gallery-viewer__thumbs--loop {
+  /* Endless strip: no end-padding needed; middle copy stays centered. */
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.gallery-viewer__thumbs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.gallery-viewer__thumb {
+  flex: 0 0 auto;
+  width: 3.1rem;
+  height: 3.1rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
+  cursor: pointer;
+  opacity: 0.72;
+  transform: scale(0.92);
+  transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.gallery-viewer__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-viewer__thumb.is-active {
+  opacity: 1;
+  transform: scale(1.12);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  z-index: 1;
+}
+
 .gallery-viewer__caption {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
   gap: 0.35rem 0.65rem;
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.15rem 0.5rem 0;
   font-size: 0.82rem;
   text-align: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: none;
 }
 
 .gallery-viewer__sub,
@@ -8280,11 +8469,22 @@ button.media-release-card--banner {
 .artist-about--stacked .artist-about__bio-scroll--collapsed {
   flex: none;
   min-height: 0;
-  height: 10.5rem;
-  max-height: 10.5rem;
+  height: 22.5rem;
+  max-height: 22.5rem;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, #000 62%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+}
+
+.artist-page--stacked .artist-about__bio-scroll--fit,
+.artist-about--stacked .artist-about__bio-scroll--fit {
+  flex: none;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 .artist-page--stacked .artist-about__bio-scroll--expanded,
@@ -8919,6 +9119,21 @@ button.media-release-card--banner {
   z-index: 2;
   flex-shrink: 0;
   filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
+}
+
+.release-page__cover-wrap--clickable {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.release-page__cover-wrap--clickable:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
 }
 
 .release-page__cover {
@@ -12447,6 +12662,7 @@ button.lyrics-status-badge--icon-only {
 .release-about-edit-modal .modal-actions-row,
 .release-video-set-modal .modal-actions-row {
   margin-top: auto;
+  padding-top: 1rem;
 }
 
 .release-about-edit-modal__form {
@@ -12473,7 +12689,7 @@ button.lyrics-status-badge--icon-only {
 .release-video-set-modal__list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -14305,6 +14521,34 @@ button.lyrics-status-badge--icon-only {
 .artist-page--stacked .series-about__subseries-card .artist-about__track-title,
 .artist-page--stacked .series-about__subseries-card .artist-about__track-date {
   display: none;
+}
+
+/* Universe hub: keep franchise titles/dates visible and scrollable on mobile. */
+.universe-page.artist-page--mobile-portrait .series-about__subseries-card .artist-about__track-title,
+.universe-page.artist-page--mobile-portrait .series-about__subseries-card .artist-about__track-date,
+.universe-page.artist-page--stacked .series-about__subseries-card .artist-about__track-title,
+.universe-page.artist-page--stacked .series-about__subseries-card .artist-about__track-date {
+  display: block;
+}
+
+.universe-page .artist-page__body {
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+.universe-page .artist-about {
+  flex: 0 0 auto;
+  min-height: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.universe-page.artist-page--mobile-portrait .artist-about__tracks,
+.universe-page.artist-page--stacked .artist-about__tracks {
+  padding-bottom: 1.25rem;
+}
+
+.universe-page.artist-page--stacked .artist-about__layout {
+  padding-bottom: 2.25rem;
 }
 
 .series-about__subseries-cover .artist-about__track-cover-bg {
@@ -17472,9 +17716,9 @@ button.lyrics-status-badge--icon-only {
 .artist-word-cloud-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .artist-word-cloud-modal__panel {
@@ -17483,11 +17727,11 @@ button.lyrics-status-badge--icon-only {
   width: min(42rem, 100%);
   max-height: min(80vh, 36rem);
   overflow-y: auto;
-  background: color-mix(in srgb, var(--accent) 14%, rgba(0, 0, 0, 0.78));
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, rgba(255, 255, 255, 0.1));
-  border-radius: 14px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
   padding: 1rem 1.15rem 1.35rem;
   box-shadow: none;
 }
@@ -17499,7 +17743,7 @@ button.lyrics-status-badge--icon-only {
   gap: 0.75rem;
   margin-bottom: 0.85rem;
   padding-bottom: 0.65rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 28%, rgba(255, 255, 255, 0.08));
+  border-bottom: none;
   cursor: default;
 }
 
