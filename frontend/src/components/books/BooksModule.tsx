@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  fetchMoviesCatalog,
-  fetchMoviesDashboard,
-  fetchMoviesFilterOptions,
+  fetchBooksCatalog,
+  fetchBooksDashboard,
+  fetchBooksFilterOptions,
   fetchUniverses,
   resolveBooksPath,
   resolveMoviesPath,
@@ -14,15 +14,15 @@ import {
 } from "../../catalogBackdrop";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
-  pushMoviesCatalogRoute,
-  pushMoviesRootRoute,
-  pushMoviesRoute,
-  type MoviesOverviewTab,
-  type MoviesSection,
-} from "../../moviesRoute";
+  pushBooksCatalogRoute,
+  pushBooksRootRoute,
+  pushBooksRoute,
+  type BooksOverviewTab,
+  type BooksSection,
+} from "../../booksRoute";
 import type {
   CardOrientation,
-  MoviesFilmCard,
+  MoviesFilmCard as BooksBookCard,
   SeriesDashboard,
   SeriesFilterMode,
   SeriesFilterOptions,
@@ -43,12 +43,12 @@ import SeriesBrowse, {
   type SeriesCatalogScope,
 } from "../series/SeriesBrowse";
 import SeriesSubseriesPage from "../series/SeriesSubseriesPage";
-import MoviesFranchisePage from "./MoviesFranchisePage";
-import MoviesHome from "./MoviesHome";
+import BooksFranchisePage from "./BooksFranchisePage";
+import BooksHome from "./BooksHome";
 
-type MoviesTab = "home" | "catalog";
+type BooksTab = "home" | "catalog";
 
-const MOVIES_FILTER_MODES_GROUPS: { id: SeriesFilterMode; label: string }[] = [
+const BOOKS_FILTER_MODES_GROUPS: { id: SeriesFilterMode; label: string }[] = [
   { id: "name", label: "NAME" },
   { id: "continent", label: "CONTINENT" },
   { id: "country", label: "COUNTRY" },
@@ -56,18 +56,18 @@ const MOVIES_FILTER_MODES_GROUPS: { id: SeriesFilterMode; label: string }[] = [
   { id: "end", label: "END DATE" },
   { id: "genre", label: "GENRE" },
   { id: "publisher", label: "PUBLISHER" },
-  { id: "writer", label: "DIRECTOR" },
+  { id: "writer", label: "AUTHOR" },
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
-const MOVIES_FILTER_MODES_FILMS: { id: SeriesFilterMode; label: string }[] = [
+const BOOKS_FILTER_MODES_BOOKS: { id: SeriesFilterMode; label: string }[] = [
   { id: "name", label: "NAME" },
   { id: "continent", label: "CONTINENT" },
   { id: "country", label: "COUNTRY" },
   { id: "start", label: "RELEASE DATE" },
   { id: "genre", label: "GENRE" },
   { id: "publisher", label: "PUBLISHER" },
-  { id: "writer", label: "DIRECTOR" },
+  { id: "writer", label: "AUTHOR" },
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
@@ -85,15 +85,15 @@ type Props = {
   cardOrientation?: CardOrientation;
   onSetOrientation?: (next: CardOrientation) => void;
   franchiseId?: string;
-  filmId?: string;
-  section?: MoviesSection;
-  overviewTab?: MoviesOverviewTab;
+  bookId?: string;
+  section?: BooksSection;
+  overviewTab?: BooksOverviewTab;
   universeId?: number;
   onNavigate: (patch: {
     franchiseId?: string;
-    filmId?: string;
-    section?: MoviesSection;
-    overviewTab?: MoviesOverviewTab;
+    bookId?: string;
+    section?: BooksSection;
+    overviewTab?: BooksOverviewTab;
     universeId?: number;
   }) => void;
   onOpenSeriesFranchise?: (
@@ -101,9 +101,9 @@ type Props = {
     subseriesId?: string,
     universeId?: number
   ) => void;
-  onOpenBooksFranchise?: (
+  onOpenMoviesFranchise?: (
     franchiseId: string,
-    bookId?: string,
+    filmId?: string,
     section?: string,
     universeId?: number
   ) => void;
@@ -115,7 +115,7 @@ type Props = {
   ) => void;
 };
 
-export default function MoviesModule({
+export default function BooksModule({
   mediaOptions,
   busy,
   onImport,
@@ -129,13 +129,13 @@ export default function MoviesModule({
   cardOrientation = "portrait",
   onSetOrientation,
   franchiseId,
-  filmId,
+  bookId,
   section = "overview",
   overviewTab = "about",
   universeId,
   onNavigate,
   onOpenSeriesFranchise,
-  onOpenBooksFranchise,
+  onOpenMoviesFranchise,
   onOpenMusicRelease,
   onOpenUniversePage,
 }: Props) {
@@ -144,9 +144,9 @@ export default function MoviesModule({
     isMobilePortraitLayout(deviceLayout) ||
     deviceLayout === "tablet-portrait";
 
-  const [tab, setTab] = useState<MoviesTab>("home");
+  const [tab, setTab] = useState<BooksTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
-  const [films, setFilms] = useState<MoviesFilmCard[]>([]);
+  const [films, setFilms] = useState<BooksBookCard[]>([]);
   const [dashLoading, setDashLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export default function MoviesModule({
         franchise_count?: number;
         film_count?: number;
         top_franchises?: SeriesFranchiseCard[];
-        top_films?: MoviesFilmCard[];
+        top_films?: BooksBookCard[];
       })
     | null
   >(null);
@@ -187,8 +187,8 @@ export default function MoviesModule({
     void (async () => {
       try {
         const [dash, uni] = await Promise.all([
-          fetchMoviesDashboard(),
-          fetchUniverses("movies").catch(() => ({
+          fetchBooksDashboard(),
+          fetchUniverses("books").catch(() => ({
             universes: [] as Universe[],
           })),
         ]);
@@ -210,14 +210,14 @@ export default function MoviesModule({
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
-    void fetchMoviesCatalog()
+    void fetchBooksCatalog()
       .then((res) => {
         setFranchises(res.franchises || []);
-        setFilms(res.films || []);
+        setFilms(res.books || res.films || []);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
-    void fetchMoviesFilterOptions()
+    void fetchBooksFilterOptions()
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
   }, []);
@@ -244,19 +244,19 @@ export default function MoviesModule({
   }, [universeId]);
 
   useEffect(() => {
-    const pending = takePendingCatalogBrowse("movies");
+    const pending = takePendingCatalogBrowse("books");
     if (!pending) return;
     clearMediaTheme(userId);
     setEntrySource("catalog");
     setTab("catalog");
-    // Directors apply to individual films.
+    // Authors apply to individual books.
     if (pending.mode === "writer" || pending.mode === "publisher") {
       setCatalogScope("shows");
     }
-    pushMoviesCatalogRoute();
+    pushBooksCatalogRoute();
     onNavigate({
       franchiseId: undefined,
-      filmId: undefined,
+      bookId: undefined,
       section: undefined,
       overviewTab: undefined,
       universeId: undefined,
@@ -318,7 +318,7 @@ export default function MoviesModule({
         .filter((f) => !(f as SeriesFranchiseCard & { is_standalone?: boolean }).is_standalone)
         .map((f) => {
         const workFilms =
-          (f as SeriesFranchiseCard & { films?: MoviesFilmCard[] }).films ||
+          (f as SeriesFranchiseCard & { films?: BooksBookCard[] }).films ||
           films.filter((film) => film.work_id === f.id);
         return {
           ...f,
@@ -343,7 +343,7 @@ export default function MoviesModule({
       // Work-level cards so universe member slugs resolve continent/date filters.
       return franchises.map((f) => {
         const workFilms = films.filter((film) => film.work_id === f.id);
-        const enrichedFilms = workFilms as (MoviesFilmCard & {
+        const enrichedFilms = workFilms as (BooksBookCard & {
           country_iso?: string | null;
           country_id?: number | null;
           continent_id?: number | null;
@@ -369,7 +369,7 @@ export default function MoviesModule({
       });
     }
     return films.map((film) => {
-      const enriched = film as MoviesFilmCard & {
+      const enriched = film as BooksBookCard & {
         country_iso?: string | null;
         country_id?: number | null;
         continent_id?: number | null;
@@ -427,33 +427,33 @@ export default function MoviesModule({
     const card = franchises.find((f) => f.id === workId) as
       | (SeriesFranchiseCard & {
           is_standalone?: boolean;
-          primary_film_id?: string | null;
+          primary_book_id?: string | null;
         })
       | undefined;
-    if (card?.is_standalone && card.primary_film_id) {
-      pushMoviesRoute({
+    if (card?.is_standalone && card.primary_book_id) {
+      pushBooksRoute({
         franchiseId: workId,
-        filmId: card.primary_film_id,
+        bookId: card.primary_book_id,
         section: "overview",
         overviewTab: "about",
       });
       onNavigate({
         franchiseId: workId,
-        filmId: card.primary_film_id,
+        bookId: card.primary_book_id,
         section: "overview",
         overviewTab: "about",
         universeId: undefined,
       });
       return;
     }
-    pushMoviesRoute({
+    pushBooksRoute({
       franchiseId: workId,
       section: "overview",
       overviewTab: "about",
     });
     onNavigate({
       franchiseId: workId,
-      filmId: undefined,
+      bookId: undefined,
       section: "overview",
       overviewTab: "about",
       universeId: undefined,
@@ -461,7 +461,7 @@ export default function MoviesModule({
     void shell;
   };
 
-  const openFilm = (
+  const openBook = (
     nextFilmId: string,
     workId?: string | null,
     from: "home" | "catalog" = "catalog"
@@ -471,27 +471,27 @@ export default function MoviesModule({
     const film = films.find((f) => f.id === nextFilmId);
     const wid = workId || film?.work_id;
     if (!wid) return;
-    pushMoviesRoute({
+    pushBooksRoute({
       franchiseId: wid,
-      filmId: nextFilmId,
+      bookId: nextFilmId,
       section: "overview",
       overviewTab: "about",
     });
     onNavigate({
       franchiseId: wid,
-      filmId: nextFilmId,
+      bookId: nextFilmId,
       section: "overview",
       overviewTab: "about",
       universeId: undefined,
     });
   };
 
-  const backToMoviesHome = () => {
+  const backToBooksHome = () => {
     clearMediaTheme(userId);
-    pushMoviesRootRoute();
+    pushBooksRootRoute();
     onNavigate({
       franchiseId: undefined,
-      filmId: undefined,
+      bookId: undefined,
       section: undefined,
       overviewTab: undefined,
       universeId: undefined,
@@ -499,12 +499,12 @@ export default function MoviesModule({
     setTab("home");
   };
 
-  const backToMoviesCatalog = () => {
+  const backToBooksCatalog = () => {
     clearMediaTheme(userId);
-    pushMoviesCatalogRoute();
+    pushBooksCatalogRoute();
     onNavigate({
       franchiseId: undefined,
-      filmId: undefined,
+      bookId: undefined,
       section: undefined,
       overviewTab: undefined,
       universeId: undefined,
@@ -512,22 +512,22 @@ export default function MoviesModule({
     setTab("catalog");
   };
 
-  if (franchiseId && filmId) {
+  if (franchiseId && bookId) {
     const workName =
       franchises.find((f) => f.id === franchiseId)?.name ||
-      films.find((f) => f.id === filmId)?.work_name ||
+      films.find((f) => f.id === bookId)?.work_name ||
       undefined;
     const workCard = franchises.find((f) => f.id === franchiseId);
     const filmSection: SeriesSection =
       section === "series" ? "overview" : (section as SeriesSection);
     return (
       <SeriesSubseriesPage
-        variant="film"
+        variant="book"
         franchiseId={franchiseId}
         franchiseName={workName}
         franchiseLogoUrl={workCard?.logo_url}
         franchiseIconUrl={workCard?.icon_url}
-        subseriesId={filmId}
+        subseriesId={bookId}
         section={filmSection}
         overviewTab={overviewTab}
         universeId={universeId}
@@ -543,7 +543,7 @@ export default function MoviesModule({
             (f) => (f.title || "").trim().toLowerCase() === title
           );
           if (film) {
-            openFilm(film.id, film.work_id);
+            openBook(film.id, film.work_id);
             return true;
           }
           const work = franchises.find(
@@ -578,17 +578,17 @@ export default function MoviesModule({
           const isStandalone =
             Boolean(work?.is_standalone) || filmCount <= 1;
           if (isStandalone) {
-            if (from === "home") backToMoviesHome();
-            else backToMoviesCatalog();
+            if (from === "home") backToBooksHome();
+            else backToBooksCatalog();
             return;
           }
           if (from === "home") {
-            backToMoviesHome();
+            backToBooksHome();
             return;
           }
           onNavigate({
             franchiseId,
-            filmId: undefined,
+            bookId: undefined,
             section: "movies",
           });
         }}
@@ -615,10 +615,10 @@ export default function MoviesModule({
           if (target.mode === "writer" || target.mode === "publisher") {
             setCatalogScope("shows");
           }
-          pushMoviesCatalogRoute();
+          pushBooksCatalogRoute();
           onNavigate({
             franchiseId: undefined,
-            filmId: undefined,
+            bookId: undefined,
             section: undefined,
             overviewTab: undefined,
             universeId: undefined,
@@ -637,16 +637,16 @@ export default function MoviesModule({
         }}
         onOpenMusicRelease={onOpenMusicRelease}
         onOpenFilm={(id) => {
-          pushMoviesRoute({
+          pushBooksRoute({
             franchiseId,
-            filmId: id,
+            bookId: id,
             section: "overview",
             overviewTab: "about",
             universeId,
           });
           onNavigate({
             franchiseId,
-            filmId: id,
+            bookId: id,
             section: "overview",
             overviewTab: "about",
             universeId,
@@ -661,8 +661,8 @@ export default function MoviesModule({
             );
             return;
           }
-          if (leaf.module === "books") {
-            onOpenBooksFranchise?.(
+          if (leaf.module === "movies") {
+            onOpenMoviesFranchise?.(
               leaf.franchiseId,
               leaf.leafId,
               "overview",
@@ -670,16 +670,16 @@ export default function MoviesModule({
             );
             return;
           }
-          pushMoviesRoute({
+          pushBooksRoute({
             franchiseId: leaf.franchiseId,
-            filmId: leaf.leafId,
+            bookId: leaf.leafId,
             section: "overview",
             overviewTab: "about",
             universeId,
           });
           onNavigate({
             franchiseId: leaf.franchiseId,
-            filmId: leaf.leafId,
+            bookId: leaf.leafId,
             section: "overview",
             overviewTab: "about",
             universeId,
@@ -695,38 +695,38 @@ export default function MoviesModule({
         onOpenMoviesPath={(path) => {
           void resolveMoviesPath(path)
             .then((hit) => {
-              pushMoviesRoute({
-                franchiseId: hit.work_id,
-                filmId: hit.film_id ?? undefined,
-                section: "overview",
-                overviewTab: "about",
-                universeId,
-              });
-              onNavigate({
-                franchiseId: hit.work_id,
-                filmId: hit.film_id ?? undefined,
-                section: "overview",
-                overviewTab: "about",
-                universeId,
-              });
+              onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
             })
             .catch(() => {});
         }}
         onOpenBooksPath={(path) => {
           void resolveBooksPath(path)
             .then((hit) => {
-              onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              pushBooksRoute({
+                franchiseId: hit.work_id,
+                bookId: hit.book_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+                universeId,
+              });
+              onNavigate({
+                franchiseId: hit.work_id,
+                bookId: hit.book_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+                universeId,
+              });
             })
             .catch(() => {});
         }}
         onNavigate={(patch) => {
           const nextFilmId =
-            "subseriesId" in patch ? patch.subseriesId : filmId;
+            "subseriesId" in patch ? patch.subseriesId : bookId;
           const rawSection = (patch.section || section) as string;
-          const nextSection: MoviesSection =
-            rawSection === "episodes" || rawSection === "series"
+          const nextSection: BooksSection =
+            rawSection === "series"
               ? "overview"
-              : (rawSection as MoviesSection);
+              : (rawSection as BooksSection);
           const nextFranchise =
             "franchiseId" in patch && patch.franchiseId
               ? patch.franchiseId
@@ -741,16 +741,16 @@ export default function MoviesModule({
                 : !patch.section || patch.section === "overview"
                   ? "about"
                   : overviewTab;
-          pushMoviesRoute({
+          pushBooksRoute({
             franchiseId: nextFranchise,
-            filmId: nextFilmId,
+            bookId: nextFilmId,
             section: nextSection,
             overviewTab: nextOverviewTab,
             universeId: nextUniverseId,
           });
           onNavigate({
             franchiseId: nextFranchise,
-            filmId: nextFilmId,
+            bookId: nextFilmId,
             section: nextSection,
             overviewTab: nextOverviewTab,
             universeId: nextUniverseId,
@@ -762,7 +762,7 @@ export default function MoviesModule({
 
   if (franchiseId) {
     return (
-      <MoviesFranchisePage
+      <BooksFranchisePage
         workId={franchiseId}
         section={section}
         overviewTab={overviewTab}
@@ -782,8 +782,8 @@ export default function MoviesModule({
             );
             return;
           }
-          if (from === "home") backToMoviesHome();
-          else backToMoviesCatalog();
+          if (from === "home") backToBooksHome();
+          else backToBooksCatalog();
         }}
         backLabel={
           universeId != null
@@ -795,7 +795,7 @@ export default function MoviesModule({
         onNavigate={(patch) => {
           const next: {
             franchiseId?: string;
-            filmId?: string;
+            bookId?: string;
             section?: typeof section;
             overviewTab?: typeof overviewTab;
             universeId?: number;
@@ -806,17 +806,37 @@ export default function MoviesModule({
           // Preserve franchise context unless the patch explicitly changes it.
           if ("franchiseId" in patch) next.franchiseId = patch.franchiseId;
           else next.franchiseId = franchiseId;
-          if ("filmId" in patch) next.filmId = patch.filmId;
+          if ("bookId" in patch) next.bookId = patch.bookId;
           if ("universeId" in patch) next.universeId = patch.universeId;
           else next.universeId = universeId;
           onNavigate(next);
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
+        onOpenMoviesPath={(path) => {
+          void resolveMoviesPath(path)
+            .then((hit) => {
+              onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
+            })
+            .catch(() => {});
+        }}
         onOpenBooksPath={(path) => {
           void resolveBooksPath(path)
             .then((hit) => {
-              onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              pushBooksRoute({
+                franchiseId: hit.work_id,
+                bookId: hit.book_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+                universeId,
+              });
+              onNavigate({
+                franchiseId: hit.work_id,
+                bookId: hit.book_id ?? undefined,
+                section: "overview",
+                overviewTab: "about",
+                universeId,
+              });
             })
             .catch(() => {});
         }}
@@ -827,10 +847,10 @@ export default function MoviesModule({
           if (target.mode === "writer" || target.mode === "publisher") {
             setCatalogScope("shows");
           }
-          pushMoviesCatalogRoute();
+          pushBooksCatalogRoute();
           onNavigate({
             franchiseId: undefined,
-            filmId: undefined,
+            bookId: undefined,
             section: undefined,
             overviewTab: undefined,
             universeId: undefined,
@@ -879,10 +899,10 @@ export default function MoviesModule({
       ) : null}
       <ModuleTopBar
         media={
-          mediaOptions.find((m) => m.kind === "movies") ?? {
+          mediaOptions.find((m) => m.kind === "books") ?? {
             id: 300,
-            kind: "movies",
-            label: "Movies",
+            kind: "books",
+            label: "Books",
           }
         }
         mediaOptions={mediaOptions}
@@ -894,7 +914,7 @@ export default function MoviesModule({
             active: tab === "home",
             onClick: () => {
               setTab("home");
-              pushMoviesRootRoute();
+              pushBooksRootRoute();
             },
           },
           {
@@ -903,7 +923,7 @@ export default function MoviesModule({
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");
-              pushMoviesCatalogRoute();
+              pushBooksCatalogRoute();
               loadCatalog();
             },
           },
@@ -960,7 +980,7 @@ export default function MoviesModule({
                       ? "Groups"
                       : catalogScope === "universes"
                         ? "Universes"
-                        : "Films"}
+                        : "Books"}
                   </button>
                 ) : null
               }
@@ -973,7 +993,7 @@ export default function MoviesModule({
 
       {tab === "home" ? (
         <div className="music-module__body music-module__body--home">
-          <MoviesHome
+          <BooksHome
             data={dashboard}
             loading={dashLoading}
             universes={universes}
@@ -981,14 +1001,14 @@ export default function MoviesModule({
               if (!franchises.length) loadCatalog();
               openWork(workId, undefined, undefined, "home");
             }}
-            onFilm={(id, workId) => {
+            onBook={(id, workId) => {
               if (!films.length) loadCatalog();
-              openFilm(id, workId, "home");
+              openBook(id, workId, "home");
             }}
             onOpenUniverse={(id) => openUniverseLanding(id, "home")}
             onGenre={(id) => {
               setTab("catalog");
-              pushMoviesCatalogRoute();
+              pushBooksCatalogRoute();
               setFilterMode("genre");
               setContinentId("");
               setCountryId("");
@@ -1005,7 +1025,7 @@ export default function MoviesModule({
             }}
             onCountry={(c) => {
               setTab("catalog");
-              pushMoviesCatalogRoute();
+              pushBooksCatalogRoute();
               setFilterMode("country");
               setContinentId("");
               setSubgenreId("");
@@ -1026,8 +1046,8 @@ export default function MoviesModule({
           catalogScope={catalogScope}
           filterModes={
             catalogScope === "franchises"
-              ? MOVIES_FILTER_MODES_GROUPS
-              : MOVIES_FILTER_MODES_FILMS
+              ? BOOKS_FILTER_MODES_GROUPS
+              : BOOKS_FILTER_MODES_BOOKS
           }
           search={search}
           letter={letter}
@@ -1038,7 +1058,7 @@ export default function MoviesModule({
           subgenreId={subgenreId}
           publisher={publisher}
           writer={writer}
-          unitNoun="film"
+          unitNoun="book"
           loading={catalogLoading}
           onSearchChange={setSearch}
           onLetterChange={setLetter}
@@ -1068,7 +1088,7 @@ export default function MoviesModule({
                 (f) => f.id === id || f.work_id === id || f.title === shell?.name
               );
               if (film?.work_id) {
-                openFilm(film.id, film.work_id, "catalog");
+                openBook(film.id, film.work_id, "catalog");
                 return;
               }
             }

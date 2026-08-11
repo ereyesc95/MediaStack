@@ -312,6 +312,8 @@ def _scan_books(media_root: Path, index: FranchiseIndex) -> None:
     root = media_root / "Books"
     if not root.is_dir():
         return
+    from app.books_index import _list_books, _list_pdfs
+
     for letter_dir in sorted(root.iterdir()):
         if not letter_dir.is_dir() or _is_meta_folder(letter_dir.name):
             continue
@@ -319,6 +321,27 @@ def _scan_books(media_root: Path, index: FranchiseIndex) -> None:
             if not work_dir.is_dir() or _is_meta_folder(work_dir.name):
                 continue
             slug = normalize_franchise_slug(work_dir.name)
+            books = _list_books(work_dir, media_root)
+            if books:
+                for book in books:
+                    rel = book.get("folder_path") or ""
+                    _register_entry(
+                        index,
+                        slug=slug,
+                        display_name=work_dir.name,
+                        letter=letter_dir.name,
+                        entry=FranchiseEntry(
+                            kind="book",
+                            path=rel,
+                            title=book.get("title") or work_dir.name,
+                            date_iso=book.get("date_iso"),
+                            letter=letter_dir.name,
+                            subseries=None,
+                            franchise_display=work_dir.name,
+                        ),
+                    )
+                continue
+            # Fallback: dated leaves (legacy) or PDF-at-root via iterator
             for item_dir, date_iso, title, subseries in _iter_work_leaf_items(work_dir):
                 rel = item_dir.relative_to(media_root).as_posix()
                 _register_entry(
@@ -333,6 +356,23 @@ def _scan_books(media_root: Path, index: FranchiseIndex) -> None:
                         date_iso=date_iso,
                         letter=letter_dir.name,
                         subseries=subseries,
+                        franchise_display=work_dir.name,
+                    ),
+                )
+            if _list_pdfs(work_dir):
+                rel = work_dir.relative_to(media_root).as_posix()
+                _register_entry(
+                    index,
+                    slug=slug,
+                    display_name=work_dir.name,
+                    letter=letter_dir.name,
+                    entry=FranchiseEntry(
+                        kind="book",
+                        path=rel,
+                        title=work_dir.name,
+                        date_iso=None,
+                        letter=letter_dir.name,
+                        subseries=None,
                         franchise_display=work_dir.name,
                     ),
                 )
@@ -499,12 +539,16 @@ _KIND_BUCKETS: dict[EntryKind, str] = {
 
 
 def franchise_slug_for_path(index: FranchiseIndex, rel_path: str) -> str | None:
-    """Resolve franchise slug for a catalog path (exact or ancestor match)."""
+    """Resolve franchise slug for a catalog path (exact, descendant, or ancestor)."""
     norm = rel_path.replace("\\", "/").casefold().rstrip("/")
     for group in index.franchises.values():
         for entry in group.entries:
             entry_norm = entry.path.casefold().rstrip("/")
-            if norm == entry_norm or norm.startswith(entry_norm + "/"):
+            if (
+                norm == entry_norm
+                or norm.startswith(entry_norm + "/")
+                or entry_norm.startswith(norm + "/")
+            ):
                 return group.slug
     return None
 

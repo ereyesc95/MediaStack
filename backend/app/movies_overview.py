@@ -387,7 +387,30 @@ def build_work_overview(
             "mwk_id": row.mwk_id,
             "slug": slug,
             "letter": letter,
+            "folder_path": folder_path,
             "movies_folder_path": folder_path,
+            # Keep Movies-local artwork for About strip / theme (not Series art).
+            "cover_url": detail.get("cover_url") or series_ov.get("cover_url"),
+            "portrait_url": detail.get("portrait_url")
+            or series_ov.get("portrait_url"),
+            "landscape_url": detail.get("landscape_url")
+            or series_ov.get("landscape_url"),
+            "banner_url": detail.get("banner_url") or series_ov.get("banner_url"),
+            "logo_url": detail.get("logo_url") or series_ov.get("logo_url"),
+            "icon_url": detail.get("icon_url") or series_ov.get("icon_url"),
+            "eras": local_eras or series_ov.get("eras") or [],
+            # Movies-owned bio / authors (independent from Series writers).
+            "bio": meta.get("bio")
+            if meta.get("bio_manual")
+            else series_ov.get("bio"),
+            "writers": meta.get("writers")
+            or meta.get("authors")
+            or series_ov.get("writers")
+            or [],
+            "authors": meta.get("authors")
+            or meta.get("writers")
+            or series_ov.get("writers")
+            or [],
             # About strip + MOVIES tab = films; SERIES tab uses series_shows
             "subseries": films_as_subseries,
             "films": films,

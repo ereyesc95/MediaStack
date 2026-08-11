@@ -8,6 +8,9 @@ import {
   type CSSProperties,
 } from "react";
 import {
+  fetchBooksBook,
+  fetchBooksBookOverview,
+  fetchBooksFranchiseOverview,
   fetchMoviesFilm,
   fetchMoviesFilmAudio,
   fetchMoviesFilmOverview,
@@ -46,6 +49,7 @@ import {
   pushMoviesRoute,
   type MoviesSection,
 } from "../../moviesRoute";
+import { pushBooksRoute } from "../../booksRoute";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import { pushSeriesRoute } from "../../seriesRoute";
 import type {
@@ -147,8 +151,8 @@ type Props = {
   busy?: string;
   isAdmin?: boolean;
   userId?: number;
-  /** Movie pages reuse this layout with film-scoped APIs. */
-  variant?: "subseries" | "film";
+  /** Movie/book pages reuse this layout with leaf-scoped APIs. */
+  variant?: "subseries" | "film" | "book";
   cardOrientation?: CardOrientation;
   onSetOrientation?: (next: CardOrientation) => void;
   /** Match related TMDb cards to on-disk titles and navigate in-app. */
@@ -163,13 +167,14 @@ type Props = {
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
   onOpenMoviesPath?: (path: string) => void;
+  onOpenBooksPath?: (path: string) => void;
   /** More Movies sibling navigation (film variant). */
   onOpenFilm?: (filmId: string) => void;
   /** Override back chip text (e.g. HOME when opened from a home pane). */
   backLabelOverride?: string | null;
   onOpenUniverseParent?: (universeId: number, universeName?: string) => void;
   onOpenUniverseLeaf?: (leaf: {
-    module: "movies" | "series";
+    module: "movies" | "series" | "books";
     franchiseId: string;
     leafId: string;
   }) => void;
@@ -474,6 +479,7 @@ export default function SeriesSubseriesPage({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenMoviesPath,
+  onOpenBooksPath,
   onOpenFilm,
   backLabelOverride,
   onOpenUniverseParent,
@@ -488,7 +494,8 @@ export default function SeriesSubseriesPage({
   /** Banner + More info panel: phone portrait and tablet portrait. */
   const bannerLayout = mobilePortrait || tabletPortrait;
   const stacked = bannerLayout;
-  const isFilm = variant === "film";
+  const isBook = variant === "book";
+  const isFilm = variant === "film" || isBook;
   const tab = sectionToTab(section);
   const pageCacheKey = cacheKey(isFilm, franchiseId, subseriesId);
   const initialCached = subseriesPageCache.get(pageCacheKey);
@@ -590,6 +597,7 @@ export default function SeriesSubseriesPage({
   const [trailerSaveError, setTrailerSaveError] = useState<string | null>(null);
   const [extrasMenuOpen, setExtrasMenuOpen] = useState(false);
   const [addCastOpen, setAddCastOpen] = useState(false);
+  const [activeVolumeId, setActiveVolumeId] = useState<string | null>(null);
   const [refreshBio, setRefreshBio] = useState(true);
   const [metadataFetching, setMetadataFetching] = useState(false);
   useEffect(() => {
@@ -634,11 +642,15 @@ export default function SeriesSubseriesPage({
       if (isFilm) {
         const orientation = stackedRef.current ? "landscape" : "portrait";
         const [filmOv, filmDetail, workOv] = await Promise.all([
-          fetchMoviesFilmOverview(subseriesId, orientation).catch(() => null),
-          fetchMoviesFilm(subseriesId),
-          fetchMoviesFranchiseOverview(franchiseId, orientation).catch(
-            () => null
-          ),
+          (isBook
+            ? fetchBooksBookOverview(subseriesId, orientation)
+            : fetchMoviesFilmOverview(subseriesId, orientation)
+          ).catch(() => null),
+          isBook ? fetchBooksBook(subseriesId) : fetchMoviesFilm(subseriesId),
+          (isBook
+            ? fetchBooksFranchiseOverview(franchiseId, orientation)
+            : fetchMoviesFranchiseOverview(franchiseId, orientation)
+          ).catch(() => null),
         ]);
         const nextOverview = filmOv || workOv || null;
         setOverview(nextOverview);
@@ -667,12 +679,22 @@ export default function SeriesSubseriesPage({
         setCard(found);
         const folder = filmDetailToFolder(filmDetail);
         setDetail(folder);
-        const nextVersions = filmDetail.versions || filmOv?.versions || [];
+        const nextVersions =
+          filmDetail.versions ||
+          (filmDetail as { volumes?: typeof filmDetail.versions }).volumes ||
+          filmOv?.versions ||
+          (filmOv as { volumes?: typeof filmDetail.versions } | null)?.volumes ||
+          [];
         const nextHasVideo = Boolean(
-          filmDetail.has_video || filmOv?.has_video || filmDetail.versions?.length
+          filmDetail.has_video ||
+            (filmOv as { has_video?: boolean } | null)?.has_video ||
+            nextVersions.length ||
+            (filmDetail as { has_pdf?: boolean }).has_pdf
         );
         const nextTrailer =
-          filmDetail.trailer_url ?? filmOv?.trailer_url ?? null;
+          filmDetail.trailer_url ??
+          (filmOv as { trailer_url?: string | null } | null)?.trailer_url ??
+          null;
         const nextWorkName =
           filmDetail.work?.name ||
           filmOv?.work?.name ||
@@ -769,6 +791,24 @@ export default function SeriesSubseriesPage({
   }, [userId]);
 
   useEffect(() => {
+    if (isBook) {
+      const moviesSection = tabToSection(tab);
+      const section: import("../../booksRoute").BooksSection =
+        moviesSection === "series"
+          ? "overview"
+          : (moviesSection as import("../../booksRoute").BooksSection);
+      pushBooksRoute(
+        {
+          franchiseId,
+          bookId: subseriesId,
+          section,
+          overviewTab: tab === "overview" ? overviewTab : undefined,
+          universeId,
+        },
+        true
+      );
+      return;
+    }
     if (isFilm) {
       const moviesSection = tabToSection(tab);
       const section: MoviesSection =
@@ -798,7 +838,7 @@ export default function SeriesSubseriesPage({
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, tab, isFilm, universeId, overviewTab]);
+  }, [franchiseId, subseriesId, seasonId, tab, isFilm, isBook, universeId, overviewTab]);
 
   const seasons: SeriesSeasonCard[] = useMemo(
     () => detail?.seasons || [],
@@ -1042,7 +1082,7 @@ export default function SeriesSubseriesPage({
 
   useEffect(() => {
     let cancelled = false;
-    const module = isFilm ? "movies" : "series";
+    const module = isBook ? "books" : isFilm ? "movies" : "series";
     void lookupUniverse(module, franchiseId, subseriesId)
       .then((res) => {
         if (cancelled) return;
@@ -1059,7 +1099,7 @@ export default function SeriesSubseriesPage({
     return () => {
       cancelled = true;
     };
-  }, [isFilm, franchiseId, subseriesId]);
+  }, [isFilm, isBook, franchiseId, subseriesId]);
 
   const title =
     detail?.title || card?.title || (isFilm ? overview?.name || "" : "") || "";
@@ -1788,10 +1828,18 @@ export default function SeriesSubseriesPage({
   const tabs: { id: SubseriesTab; label: string }[] = useMemo(() => {
     const all: { id: SubseriesTab; label: string }[] = [
       { id: "overview", label: stacked ? "INFO" : "OVERVIEW" },
-      { id: "episodes", label: stacked ? "EPS" : "EPISODES" },
+      { id: "episodes", label: isBook ? (stacked ? "VOLS" : "VOLUMES") : stacked ? "EPS" : "EPISODES" },
       {
         id: "movies",
-        label: isFilm ? (stacked ? "MORE" : "MORE MOVIES") : "MOVIES",
+        label: isBook
+          ? stacked
+            ? "MORE"
+            : "MORE BOOKS"
+          : isFilm
+            ? stacked
+              ? "MORE"
+              : "MORE MOVIES"
+            : "MOVIES",
       },
       { id: "audio", label: "AUDIO" },
       { id: "library", label: "LIBRARY" },
@@ -1800,7 +1848,10 @@ export default function SeriesSubseriesPage({
     ];
     return all.filter((t) => {
       if (t.id === "overview") return true;
-      if (t.id === "episodes") return !isFilm && (hasEpisodes || loading);
+      if (t.id === "episodes")
+        return isBook
+          ? filmVersions.length > 1
+          : !isFilm && (hasEpisodes || loading);
       // Prefer overview media flags so empty tabs never flash before folder scans finish.
       const media = overview?.media;
       if (t.id === "gallery") {
@@ -2008,6 +2059,21 @@ export default function SeriesSubseriesPage({
     setFocusBgUrl(wide);
   };
 
+  const selectVolumeCover = (v: {
+    id?: string;
+    cover_url?: string | null;
+    portrait_url?: string | null;
+    banner_url?: string | null;
+    landscape_url?: string | null;
+  }) => {
+    const portrait = v.portrait_url || v.cover_url || null;
+    const wide =
+      v.banner_url || v.landscape_url || v.portrait_url || v.cover_url || null;
+    setActiveVolumeId(v.id || null);
+    setFocusCoverUrl(portrait);
+    setFocusBgUrl(wide);
+  };
+
   useEffect(() => {
     if (tab !== "episodes") return;
     if (!expandedSeasonId || moviesExpanded || extrasExpanded) return;
@@ -2070,6 +2136,13 @@ export default function SeriesSubseriesPage({
       diskPath.toLowerCase().startsWith("movies/")
     ) {
       onOpenMoviesPath(diskPath);
+      return;
+    }
+    if (
+      onOpenBooksPath &&
+      diskPath.toLowerCase().startsWith("books/")
+    ) {
+      onOpenBooksPath(diskPath);
       return;
     }
     if (isFilm && tab === "movies" && item.id) {
@@ -2328,7 +2401,13 @@ export default function SeriesSubseriesPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
-              editDataLabel={isFilm ? "Update movie" : "Update series"}
+              editDataLabel={
+                isBook
+                  ? "Update book"
+                  : isFilm
+                    ? "Update movie"
+                    : "Update series"
+              }
               editDataFlat
               onAddToUniverse={
                 isAdmin ? () => setAddUniverseOpen(true) : undefined
@@ -2771,7 +2850,11 @@ export default function SeriesSubseriesPage({
                         onBrowseCatalog?.({ mode: "name" })
                       }
                     >
-                      {isFilm ? "Movie" : "Series"}
+                      {isBook
+                        ? "Book"
+                        : isFilm
+                          ? "Movie"
+                          : "Series"}
                     </button>
                     {creators.length ? (
                       <>
@@ -2959,7 +3042,22 @@ export default function SeriesSubseriesPage({
               </div>
 
               <div className="release-page__panel-bottom">
+                {isBook && canPlayFilm && filmPlayUrl && filmVersions.length <= 1 ? (
+                  <div className="series-film-play-actions">
+                    <div className="series-film-play-actions__primary">
+                      <button
+                        type="button"
+                        className="series-film-play-actions__btn series-film-play-actions__btn--primary"
+                        onClick={() => playFilmInTab(filmPlayUrl)}
+                      >
+                        {stacked ? "Read" : "Read"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
                 {isFilm &&
+                !isBook &&
                 (canPlayFilm ||
                   filmExtraItems.length > 0 ||
                   trailerUrl ||
@@ -2973,7 +3071,13 @@ export default function SeriesSubseriesPage({
                           onClick={() => playFilmInTab(filmPlayUrl)}
                         >
                           <IconVideo className="series-film-play-actions__btn-icon" />
-                          {stacked ? "Play" : "Play video"}
+                          {isBook
+                            ? stacked
+                              ? "Read"
+                              : "Read"
+                            : stacked
+                              ? "Play"
+                              : "Play video"}
                         </button>
                       </div>
                     ) : null}
@@ -3317,10 +3421,14 @@ export default function SeriesSubseriesPage({
                       tab={castTab}
                       isAdmin={isAdmin}
                       onDataChanged={() => void loadCard()}
-                      castApi={isFilm ? "movies" : "series"}
-                      filmId={isFilm ? subseriesId : undefined}
+                      castApi={isBook ? "books" : isFilm ? "movies" : "series"}
+                      filmId={isFilm || isBook ? subseriesId : undefined}
+                      characterOnly={isBook}
                       addOpen={addCastOpen}
                       onAddClose={() => setAddCastOpen(false)}
+                      onAddEmptyClick={
+                        isAdmin ? () => setAddCastOpen(true) : undefined
+                      }
                     />
                   </section>
                 </div>
@@ -3462,7 +3570,97 @@ export default function SeriesSubseriesPage({
             )
           ) : null}
 
-          {!error && (card || detail) && tab === "episodes" ? (
+          {!error && (card || detail) && tab === "episodes" && isBook ? (
+            <div className="release-tracklist series-subseries-episodes series-book-volumes">
+              <div className="release-tracklist__body">
+                {filmVersions.length === 0 ? (
+                  <p className="muted artist-section-empty">
+                    No PDF volumes found in this book folder.
+                  </p>
+                ) : (
+                  <ul className="series-book-volumes__list">
+                    {filmVersions.map((v, i) => {
+                      const meta = v as {
+                        id: string;
+                        label?: string;
+                        file_name?: string;
+                        file_url?: string | null;
+                        display_date?: string | null;
+                        number?: number | null;
+                        cover_url?: string | null;
+                        portrait_url?: string | null;
+                        banner_url?: string | null;
+                        landscape_url?: string | null;
+                        page_count?: number | null;
+                        pages?: string | null;
+                      };
+                      const pagesLabel =
+                        meta.pages ||
+                        (meta.page_count != null && meta.page_count > 0
+                          ? `${meta.page_count} page${
+                              meta.page_count === 1 ? "" : "s"
+                            }`
+                          : null);
+                      const title =
+                        meta.label ||
+                        meta.file_name ||
+                        `Volume ${i + 1}`;
+                      const active = activeVolumeId === meta.id;
+                      return (
+                        <li key={meta.id || String(i)}>
+                          <button
+                            type="button"
+                            className={`series-book-volumes__row${
+                              active ? " is-active" : ""
+                            }`}
+                            onClick={() => selectVolumeCover(meta)}
+                          >
+                            {meta.cover_url || meta.portrait_url ? (
+                              <span
+                                className="series-book-volumes__cover"
+                                style={{
+                                  backgroundImage: `url("${
+                                    meta.cover_url || meta.portrait_url
+                                  }")`,
+                                }}
+                              />
+                            ) : (
+                              <span className="series-book-volumes__cover series-book-volumes__cover--empty" />
+                            )}
+                            <span className="series-book-volumes__meta">
+                              <span className="series-book-volumes__title">
+                                {meta.number != null
+                                  ? `${String(meta.number).padStart(2, "0")}. `
+                                  : ""}
+                                {title}
+                              </span>
+                              {meta.display_date ? (
+                                <span className="series-book-volumes__date series-book-volumes__date--under">
+                                  {meta.display_date}
+                                </span>
+                              ) : null}
+                            </span>
+                            {meta.display_date ? (
+                              <span className="series-book-volumes__date series-book-volumes__date--center">
+                                {meta.display_date}
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            <span className="series-book-volumes__pages">
+                              {pagesLabel || ""}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {!error && (card || detail) && tab === "episodes" && !isBook ? (
             <div className="release-tracklist series-subseries-episodes">
               <div className="release-tracklist__body">
                 {seasons.length === 0 && episodeMovies.length === 0 ? (
@@ -3679,8 +3877,8 @@ export default function SeriesSubseriesPage({
           franchiseId={franchiseId}
           data={overview}
           subseriesId={subseriesId}
-          filmId={isFilm ? subseriesId : undefined}
-          variant={isFilm ? "film" : "series"}
+          filmId={isFilm || isBook ? subseriesId : undefined}
+          variant={isBook ? "book" : isFilm ? "film" : "series"}
           onClose={() => setAboutEditOpen(false)}
           onSaved={() => {
             setAboutEditOpen(false);

@@ -188,27 +188,27 @@ function DashPaneLabel({
   );
 }
 
-export type MoviesDashboardFilm = SeriesDashboard["top_series"][number] & {
+export type BooksDashboardBook = SeriesDashboard["top_series"][number] & {
   work_id?: string | null;
 };
 
 type Props = {
-  data: (SeriesDashboard & { top_series?: MoviesDashboardFilm[] }) | null;
+  data: (SeriesDashboard & { top_series?: BooksDashboardBook[] }) | null;
   loading?: boolean;
   universes?: Universe[];
   onFranchise: (workId: string) => void;
-  onFilm: (filmId: string, workId?: string | null) => void;
+  onBook: (filmId: string, workId?: string | null) => void;
   onOpenUniverse?: (universeId: number) => void;
   onGenre?: (id: number | string) => void;
   onCountry?: (country: { id?: number; name: string }) => void;
 };
 
-export default function MoviesHome({
+export default function BooksHome({
   data,
   loading,
   universes = [],
   onFranchise,
-  onFilm,
+  onBook,
   onOpenUniverse,
   onGenre,
   onCountry,
@@ -241,8 +241,10 @@ export default function MoviesHome({
   };
 
   const topFranchises = slicePane(dash.top_franchises || [], paneLimit);
-  const topFilms = slicePane(
-    (dash.top_series || []) as MoviesDashboardFilm[],
+  const topBooks = slicePane(
+    ((dash as { top_books?: BooksDashboardBook[] }).top_books ||
+      dash.top_series ||
+      []) as BooksDashboardBook[],
     paneLimit
   );
   const topUniverses = slicePane(universes, paneLimit);
@@ -250,7 +252,7 @@ export default function MoviesHome({
   const topCountries = slicePane(dash.top_countries, paneLimit);
 
   const franchisePlaceholders = placeholderCount(topFranchises.length, paneLimit);
-  const filmPlaceholders = placeholderCount(topFilms.length, paneLimit);
+  const bookPlaceholders = placeholderCount(topBooks.length, paneLimit);
   const universePlaceholders = placeholderCount(topUniverses.length, paneLimit);
   const genrePlaceholders = placeholderCount(topGenres.length, paneLimit);
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
@@ -259,7 +261,7 @@ export default function MoviesHome({
 
   return (
     <div
-      className={`music-dashboard series-dashboard movies-dashboard${dashClass}${
+      className={`music-dashboard series-dashboard books-dashboard${dashClass}${
         loading ? "" : " dash-appear-ready"
       }`}
     >
@@ -301,18 +303,18 @@ export default function MoviesHome({
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
           logo="/api/assets/icons/pane-icons"
-          title="BEST MOVIES"
-          subtitle="Your top content"
+          title="BEST BOOKS"
+          subtitle="Your top books"
         />
         <div className="dash-scroll dash-scroll--icons">
-          {topFilms.map((s) => {
+          {topBooks.map((s) => {
             const cover = pickCover(s);
             return (
               <button
                 key={s.id}
                 type="button"
                 className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
-                onClick={() => onFilm(s.id, s.work_id)}
+                onClick={() => onBook(s.id, s.work_id)}
               >
                 <DashCover
                   url={cover}
@@ -325,7 +327,7 @@ export default function MoviesHome({
             );
           })}
           <PlaceholderTiles
-            count={topFilms.length ? filmPlaceholders : paneLimit}
+            count={topBooks.length ? bookPlaceholders : paneLimit}
             variant="landscape"
           />
         </div>
@@ -372,7 +374,7 @@ export default function MoviesHome({
       <section className="dash-row dash-row--genres">
         <DashPaneLabel
           logo="/api/assets/icons/pane-vibes"
-          title="FILM VIBES"
+          title="BOOK VIBES"
           subtitle="Genres on rotation"
         />
         <div className="dash-scroll dash-scroll--genres">

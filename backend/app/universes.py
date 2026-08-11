@@ -14,7 +14,7 @@ from app.franchise_index import normalize_franchise_slug
 from app.gallery import IMAGE_EXTS, _media_url
 from app.models import Universe, UniverseFranchiseSync, UniverseMember
 
-ModuleKind = Literal["movies", "series"]
+ModuleKind = Literal["movies", "series", "books"]
 ART_KINDS = ("Portrait", "Landscape", "Banner", "Logo")
 
 
@@ -331,9 +331,12 @@ def list_universes(
         members = _member_rows(db, u.uni_id)
         has_series = any(m.ume_module == "series" for m in members)
         has_movies = any(m.ume_module == "movies" for m in members)
+        has_books = any(m.ume_module == "books" for m in members)
         if module == "series" and not has_series:
             continue
         if module == "movies" and not has_movies:
+            continue
+        if module == "books" and not has_books:
             continue
         # Home panes: prefer universe art, else any member franchise/film/show cover.
         data = _serialize_universe(db, u, include_members=False, expand_cover=True)
@@ -341,6 +344,7 @@ def list_universes(
             data["portrait_url"] = data["cover_url"]
         data["has_series"] = has_series
         data["has_movies"] = has_movies
+        data["has_books"] = has_books
         data["member_count"] = len(members)
         out.append(data)
     return out
@@ -972,6 +976,29 @@ def _leaf_cards_for_member(module: ModuleKind, slug: str) -> list[dict]:
         _leaf_cards_cache[cache_key] = out
         return out
 
+    if module == "books":
+        from app.books_index import build_work_detail as build_books_work_detail
+
+        detail = build_books_work_detail(slug)
+        if not detail:
+            _leaf_cards_cache[cache_key] = []
+            return []
+        work_id = detail.get("id") or detail.get("slug") or slug
+        books = detail.get("books") or detail.get("films") or []
+        out = []
+        for b in books:
+            out.append(
+                {
+                    **b,
+                    "module": "books",
+                    "franchise_id": work_id,
+                    "leaf_id": b.get("id"),
+                    "kind": "book",
+                }
+            )
+        _leaf_cards_cache[cache_key] = out
+        return out
+
     from app.series_index import build_franchise_detail
 
     detail = build_franchise_detail(slug)
@@ -1485,9 +1512,10 @@ def _hub_media_flags(cards: list[dict]) -> dict:
     return {
         "has_series": any(c.get("module") == "series" for c in cards),
         "has_movies": any(c.get("module") == "movies" for c in cards),
+        "has_books": any(c.get("module") == "books" for c in cards),
         "has_audio": has_audio,
         "has_gallery": has_gallery,
-        "has_library": False,
+        "has_library": any(c.get("module") == "books" for c in cards),
         "has_games": False,
     }
 
@@ -1509,6 +1537,10 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
     )
     movies = sorted(
         (c for c in cards if c.get("module") == "movies"),
+        key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
+    )
+    books = sorted(
+        (c for c in cards if c.get("module") == "books"),
         key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
     )
     # Overview carousel: chronological (franchise-like), all leaves
@@ -1549,6 +1581,8 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
     media = _hub_media_flags(cards)
     media["has_series"] = bool(series)
     media["has_movies"] = bool(movies)
+    media["has_books"] = bool(books)
+    media["has_library"] = bool(books)
 
     franchise_cards = _franchise_hub_miniatures(db, cards)
     franchise_names = [
@@ -1673,6 +1707,7 @@ def build_universe_hub(db: Session, universe_id: int) -> dict | None:
         "universe": data,
         "series": series,
         "movies": movies,
+        "books": books,
         "carousel": carousel,
         "overview": overview,
         "media": media,

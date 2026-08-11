@@ -4,6 +4,7 @@ import {
   fetchSeriesDashboard,
   fetchSeriesFilterOptions,
   fetchUniverses,
+  resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
@@ -95,6 +96,12 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  onOpenBooksFranchise?: (
+    franchiseId: string,
+    bookId?: string,
+    section?: string,
+    universeId?: number
+  ) => void;
   onOpenUniversePage?: (
     universeId: number,
     from: "home" | "catalog",
@@ -125,6 +132,7 @@ export default function SeriesModule({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenMoviesFranchise,
+  onOpenBooksFranchise,
   onOpenUniversePage,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
@@ -568,9 +576,25 @@ export default function SeriesModule({
                 /* fall through — keep series movies tab usable offline */
               });
           }}
+          onOpenBooksPath={(path) => {
+            void resolveBooksPath(path)
+              .then((hit) => {
+                onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              })
+              .catch(() => {});
+          }}
           onOpenUniverseLeaf={(leaf) => {
             if (leaf.module === "movies") {
               onOpenMoviesFranchise?.(
+                leaf.franchiseId,
+                leaf.leafId,
+                "overview",
+                universeId
+              );
+              return;
+            }
+            if (leaf.module === "books") {
+              onOpenBooksFranchise?.(
                 leaf.franchiseId,
                 leaf.leafId,
                 "overview",
@@ -687,6 +711,13 @@ export default function SeriesModule({
               .catch(() => {
                 /* fall through — keep series movies tab usable offline */
               });
+          }}
+          onOpenBooksPath={(path) => {
+            void resolveBooksPath(path)
+              .then((hit) => {
+                onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              })
+              .catch(() => {});
           }}
           onOpenMoviesFranchise={(fid, filmId, uid) => {
             onOpenMoviesFranchise?.(fid, filmId, "overview", uid);

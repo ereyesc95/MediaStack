@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  addBooksBookCastMember,
   addMoviesFilmCastMember,
   addSeriesCastMember,
   patchMoviesFilmCastMember,
@@ -41,10 +42,14 @@ type Props = {
   isAdmin?: boolean;
   addOpen?: boolean;
   onAddClose?: () => void;
+  /** Open Update cast when empty-state CTA is clicked. */
+  onAddEmptyClick?: () => void;
   onDataChanged: () => void;
-  /** Use movies film cast endpoints when set to "movies". */
-  castApi?: "series" | "movies";
+  /** Use movies/books leaf cast endpoints when set. */
+  castApi?: "series" | "movies" | "books";
   filmId?: string;
+  /** Books: character-only form (no actors). */
+  characterOnly?: boolean;
 };
 
 /** Language code → flag-icons country ISO */
@@ -1023,8 +1028,7 @@ export function AddCastModal({
   defaultSubseriesIds,
   castApi = "series",
   filmId,
-  onClose,
-  onSaved,
+  characterOnly = false,
 }: {
   franchiseId: string;
   bucket: SeriesCastTab;
@@ -1032,8 +1036,9 @@ export function AddCastModal({
   defaultLanguage: string | null;
   subseries: SeriesSubseriesCard[];
   defaultSubseriesIds?: string[];
-  castApi?: "series" | "movies";
+  castApi?: "series" | "movies" | "books";
   filmId?: string;
+  characterOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1103,6 +1108,24 @@ export function AddCastModal({
             language: lang,
           });
         }
+      } else if (castApi === "books") {
+        if (!filmId) throw new Error("Missing book id");
+        await addBooksBookCastMember(filmId, {
+          kind: bucket,
+          bucket,
+          name: charName.trim(),
+          character: characterCentered ? charName.trim() : undefined,
+          photo_url: photoUrl.trim() || undefined,
+          character_photo_url: characterCentered
+            ? photoUrl.trim() || undefined
+            : undefined,
+          roles: characterCentered
+            ? undefined
+            : staffRoles.length
+              ? staffRoles
+              : undefined,
+          language: characterCentered ? lang : undefined,
+        });
       } else {
         const created = await addSeriesCastMember(franchiseId, {
           bucket,
@@ -1202,13 +1225,17 @@ export function AddCastModal({
               <label>
                 Language
                 <select value={lang} onChange={(e) => setLang(e.target.value)}>
-                  {languageOptions.map((o) => (
+                  {(languageOptions.length
+                    ? languageOptions
+                    : [{ code: "en", label: "English" }]
+                  ).map((o) => (
                     <option key={o.code} value={o.code}>
                       {o.label.replace(/\s*\(origin\)\s*$/i, "")}
                     </option>
                   ))}
                 </select>
               </label>
+              {!characterOnly ? (
               <div className="series-cast-edit__actors">
                 <span className="series-cast-edit__actors-label">Actors</span>
                 {actorEntries.map((entry, idx) => (
@@ -1265,6 +1292,7 @@ export function AddCastModal({
                   Add actor
                 </button>
               </div>
+              ) : null}
             </>
           ) : (
             <label>
@@ -1276,7 +1304,7 @@ export function AddCastModal({
               />
             </label>
           )}
-          {subseries.length > 0 ? (
+          {subseries.length > 0 && !characterOnly ? (
             <fieldset className="series-cast-edit__subseries">
               <legend>Appears in subseries</legend>
               <p className="muted series-cast-edit__hint">
@@ -1336,9 +1364,11 @@ export default function SeriesCast({
   isAdmin,
   addOpen,
   onAddClose,
+  onAddEmptyClick,
   onDataChanged,
   castApi = "series",
   filmId,
+  characterOnly = false,
 }: Props) {
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
@@ -1440,26 +1470,40 @@ export default function SeriesCast({
   };
 
   if (!members.length && !addOpen) {
+    const emptyLabel =
+      tab === "characters" ? "+ Add characters" : "+ Add personnel";
     return (
       <div className="artist-lineup">
-        <p className="muted artist-lineup__empty">
-          No {tab === "characters" ? "characters" : "staff"} yet
-          {castSubFilter !== "all" ? " for this subseries" : ""}. Use the menu:
-          Edit cast{isAdmin ? "" : " (admin)"}, or get it from TMDb.
-        </p>
-        {addOpen && onAddClose ? (
-          <AddCastModal
-            franchiseId={franchiseId}
-            bucket={tab}
-            languageOptions={franchiseLangOptions}
-            defaultLanguage={franchiseLangs[0] || null}
-            subseries={subseries}
-            castApi={castApi}
-            filmId={filmId}
-            onClose={onAddClose}
-            onSaved={onDataChanged}
-          />
-        ) : null}
+        {onAddEmptyClick && isAdmin ? (
+          <button
+            type="button"
+            className="series-cast__empty-cta"
+            onClick={onAddEmptyClick}
+          >
+            {emptyLabel}
+          </button>
+        ) : (
+          <p className="muted artist-lineup__empty">{emptyLabel}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (!members.length && addOpen && onAddClose) {
+    return (
+      <div className="artist-lineup">
+        <AddCastModal
+          franchiseId={franchiseId}
+          bucket={tab}
+          languageOptions={franchiseLangOptions}
+          defaultLanguage={franchiseLangs[0] || null}
+          subseries={characterOnly || castApi === "books" ? [] : subseries}
+          castApi={castApi}
+          filmId={filmId}
+          characterOnly={characterOnly || castApi === "books"}
+          onClose={onAddClose}
+          onSaved={onDataChanged}
+        />
       </div>
     );
   }
@@ -1599,6 +1643,7 @@ export default function SeriesCast({
           subseries={subseries}
           castApi={castApi}
           filmId={filmId}
+          characterOnly={characterOnly || castApi === "books"}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

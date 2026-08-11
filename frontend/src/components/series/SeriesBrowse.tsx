@@ -73,10 +73,10 @@ function showMeta(s: SeriesSubseriesCard): string {
 
 function franchiseMeta(
   f: SeriesFranchiseCard,
-  unitNoun: "season" | "film" = "season"
+  unitNoun: "season" | "film" | "book" = "season"
 ): string {
   const unit = `${f.season_count} ${unitNoun}${f.season_count === 1 ? "" : "s"}`;
-  if (unitNoun === "film") return unit;
+  if (unitNoun === "film" || unitNoun === "book") return unit;
   return f.subseries_count > 0
     ? `${f.subseries_count} subseries · ${unit}`
     : unit;
@@ -98,8 +98,8 @@ type Props = {
   subgenreId: number | "";
   publisher: string;
   writer: string;
-  /** Movies catalog uses film counts mapped onto season_count. */
-  unitNoun?: "season" | "film";
+  /** Movies catalog uses film counts; Books uses book counts (mapped onto season_count). */
+  unitNoun?: "season" | "film" | "book";
   /** Override filter tabs (e.g. Films scope hides END DATE, renames START). */
   filterModes?: { id: SeriesFilterMode; label: string }[];
   loading?: boolean;

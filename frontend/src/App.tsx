@@ -27,6 +27,7 @@ import type { MediaOption } from "./components/ModuleTopBar";
 
 import MusicModule from "./components/music/MusicModule";
 import MoviesModule from "./components/movies/MoviesModule";
+import BooksModule from "./components/books/BooksModule";
 import SeriesModule from "./components/series/SeriesModule";
 
 import { toStackName } from "./mediaStack";
@@ -44,6 +45,14 @@ import {
   pushMoviesRootRoute,
   pushMoviesRoute,
 } from "./moviesRoute";
+import {
+  parseBooksCatalogPath,
+  parseBooksPath,
+  parseBooksRootPath,
+  pushBooksCatalogRoute,
+  pushBooksRootRoute,
+  pushBooksRoute,
+} from "./booksRoute";
 import {
   parseSeriesCatalogPath,
   parseSeriesPath,
@@ -175,6 +184,10 @@ export default function App() {
         window.location.pathname,
         window.location.search
       );
+      const booksRoute = parseBooksPath(
+        window.location.pathname,
+        window.location.search
+      );
       if (universeRoute) {
         setView({
           kind: "universe",
@@ -211,6 +224,20 @@ export default function App() {
         parseMoviesRootPath(window.location.pathname)
       ) {
         setView({ kind: "movies" });
+      } else if (booksRoute) {
+        setView({
+          kind: "books",
+          franchiseId: booksRoute.franchiseId,
+          bookId: booksRoute.bookId,
+          section: booksRoute.section,
+          overviewTab: booksRoute.overviewTab,
+          universeId: booksRoute.universeId,
+        });
+      } else if (
+        parseBooksCatalogPath(window.location.pathname) ||
+        parseBooksRootPath(window.location.pathname)
+      ) {
+        setView({ kind: "books" });
       } else {
         const route = parseArtistPath(window.location.pathname);
         if (route) {
@@ -319,6 +346,50 @@ export default function App() {
       }
       if (parseSeriesRootPath(window.location.pathname)) {
         setView({ kind: "series" });
+        return;
+      }
+      const moviesRoute = parseMoviesPath(
+        window.location.pathname,
+        window.location.search
+      );
+      if (moviesRoute) {
+        setView({
+          kind: "movies",
+          franchiseId: moviesRoute.franchiseId,
+          filmId: moviesRoute.filmId,
+          section: moviesRoute.section,
+          overviewTab: moviesRoute.overviewTab,
+          universeId: moviesRoute.universeId,
+        });
+        return;
+      }
+      if (
+        parseMoviesCatalogPath(window.location.pathname) ||
+        parseMoviesRootPath(window.location.pathname)
+      ) {
+        setView({ kind: "movies" });
+        return;
+      }
+      const booksRoute = parseBooksPath(
+        window.location.pathname,
+        window.location.search
+      );
+      if (booksRoute) {
+        setView({
+          kind: "books",
+          franchiseId: booksRoute.franchiseId,
+          bookId: booksRoute.bookId,
+          section: booksRoute.section,
+          overviewTab: booksRoute.overviewTab,
+          universeId: booksRoute.universeId,
+        });
+        return;
+      }
+      if (
+        parseBooksCatalogPath(window.location.pathname) ||
+        parseBooksRootPath(window.location.pathname)
+      ) {
+        setView({ kind: "books" });
         return;
       }
       if (window.location.pathname === "/" || window.location.pathname === "") {
@@ -471,13 +542,18 @@ export default function App() {
       return;
     }
 
-    if (opt.kind === "books") setView({ kind: "books" });
-    else if (opt.kind === "games") setView({ kind: "games" });
+    if (opt.kind === "books") {
+      pushBooksRootRoute();
+      setView({ kind: "books" });
+      return;
+    }
+
+    if (opt.kind === "games") setView({ kind: "games" });
   }
 
   function openUniversePage(
     universeId: number,
-    fromModule: "series" | "movies",
+    fromModule: "series" | "movies" | "books",
     from: "home" | "catalog" = "catalog",
     universeName?: string
   ) {
@@ -509,6 +585,12 @@ export default function App() {
       if (from === "home") pushMoviesRootRoute();
       else pushMoviesCatalogRoute();
       setView({ kind: "movies" });
+      return;
+    }
+    if (ret.module === "books") {
+      if (from === "home") pushBooksRootRoute();
+      else pushBooksCatalogRoute();
+      setView({ kind: "books" });
       return;
     }
     if (from === "home") pushSeriesRootRoute();
@@ -901,6 +983,23 @@ export default function App() {
                 universeId: view.universeId,
               });
             }}
+            onOpenBooksLeaf={(franchiseId, bookId) => {
+              pushBooksRoute({
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
             onOpenSeriesFranchise={(franchiseId) => {
               pushSeriesRoute({
                 franchiseId,
@@ -925,6 +1024,21 @@ export default function App() {
               });
               setView({
                 kind: "movies",
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+            }}
+            onOpenBooksFranchise={(franchiseId) => {
+              pushBooksRoute({
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+                universeId: view.universeId,
+              });
+              setView({
+                kind: "books",
                 franchiseId,
                 section: "overview",
                 overviewTab: "about",
@@ -1059,6 +1173,32 @@ export default function App() {
                 universeId,
               });
             }}
+            onOpenBooksFranchise={(franchiseId, bookId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushBooksRoute({
+                franchiseId,
+                bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "series", from, name)
             }
@@ -1120,6 +1260,32 @@ export default function App() {
                 universeId,
               });
             }}
+            onOpenBooksFranchise={(franchiseId, bookId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushBooksRoute({
+                franchiseId,
+                bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
             onOpenMusicRelease={(bandId, releaseId) => {
               if (view.franchiseId) {
                 saveReleaseReferrer({
@@ -1152,11 +1318,99 @@ export default function App() {
           />
         )}
 
+        {appReady && view.kind === "books" && (
+          <BooksModule
+            key={`books-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            busy={busy}
+            onImport={handleImport}
+            onSync={handleSync}
+            onSelectMedia={selectMedia}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            userId={profile?.user_id}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+            franchiseId={view.franchiseId}
+            bookId={view.bookId}
+            section={view.section}
+            overviewTab={view.overviewTab}
+            universeId={view.universeId}
+            cardOrientation={cardOrientation}
+            onSetOrientation={setOrientation}
+            onNavigate={(patch) =>
+              setView({
+                kind: "books",
+                franchiseId:
+                  "franchiseId" in patch ? patch.franchiseId : view.franchiseId,
+                bookId: "bookId" in patch ? patch.bookId : view.bookId,
+                section: patch.section ?? view.section,
+                overviewTab:
+                  "overviewTab" in patch
+                    ? patch.overviewTab
+                    : view.overviewTab,
+                universeId:
+                  "universeId" in patch ? patch.universeId : view.universeId,
+              })
+            }
+            onOpenSeriesFranchise={(franchiseId, subseriesId, universeId) => {
+              const isLanding = universeId != null;
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
+            onOpenMoviesFranchise={(franchiseId, filmId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushMoviesRoute({
+                franchiseId,
+                filmId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
+            onOpenUniversePage={(id, from, name) =>
+              openUniversePage(id, "books", from, name)
+            }
+          />
+        )}
+
         {appReady &&
           view.kind !== "hub" &&
           view.kind !== "music" &&
           view.kind !== "series" &&
           view.kind !== "movies" &&
+          view.kind !== "books" &&
           view.kind !== "universe" && (
 
           <>

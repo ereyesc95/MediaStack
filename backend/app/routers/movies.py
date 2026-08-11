@@ -353,6 +353,26 @@ def movies_film_trailer_get(film_id: str, db: Session = Depends(get_db)):
     return {"trailer_url": url}
 
 
+@router.patch("/franchises/{work_id}/about")
+def movies_work_patch_about(
+    work_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import patch_movie_work_about
+
+    try:
+        return patch_movie_work_about(
+            db,
+            work_id,
+            bio=body.get("bio"),
+            writers=body.get("writers"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.patch("/films/{film_id}/about")
 def movies_film_patch_about(
     film_id: str,

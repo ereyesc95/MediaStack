@@ -360,7 +360,7 @@ export default function AppMenu({
         </button>
         {artistDataOpen && (
           <div className="app-menu-submenu">
-            {onEditAbout && (
+            {onEditAbout && !editDataFlat && (
               <button
                 type="button"
                 onClick={() => {

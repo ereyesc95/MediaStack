@@ -223,26 +223,28 @@ Films tied to the show are canonical under **`Movies/{Letter}/{Work}/…`** with
 
 ---
 
-## Books — `Books/{Letter}/{Work Title}/{date}. {Volume or Edition}/`
+## Books — `Books/{Letter}/{Work Title}/` (A+C)
 
 (The Books **module** root is `Books/`, not `Library/`. Music’s `Library/` tab is artist ephemera only.)
+
+**Work cards** are dated/undated title folders under the franchise (structure C). **Volumes** are PDF files **directly in the work folder** (structure A) — not one folder per volume. Franchise-root PDFs become a single work card. Standalone books (not only multi-title hubs) are supported.
 
 ```
 Books/D/Dragon Ball/
 ├── [Artwork]/…
 ├── 1985.12.03. Vol. 01/
-│   ├── [Artwork]/…
-│   └── 01. Chapter 1.cbz
+│   ├── Gallery/Covers/…
+│   ├── 01. Chapter 1.pdf
+│   └── 02. Chapter 2.pdf
 └── 2022.01.01. Vol. 1-3 Omnibus/
+    └── omnibus.pdf
 
 Books/H/Harry Potter/
 ├── [Artwork]/…
 ├── 1997.06.26. Philosopher's Stone/
-│   ├── [Artwork]/…
-│   └── 1997.06.26. Philosopher's Stone.epub
+│   └── Philosopher's Stone.pdf
 └── 2016.07.31. Cursed Child/
-    ├── [Artwork]/…
-    └── 2016.07.31. Cursed Child.epub
+    └── Cursed Child.pdf
 ```
 
 Magazine issues as catalog entries:

@@ -68,8 +68,10 @@ type Props = {
   }) => void;
   onOpenSeriesLeaf: (franchiseId: string, subseriesId: string) => void;
   onOpenMoviesLeaf: (franchiseId: string, filmId: string) => void;
+  onOpenBooksLeaf: (franchiseId: string, bookId: string) => void;
   onOpenSeriesFranchise?: (franchiseId: string) => void;
   onOpenMoviesFranchise?: (franchiseId: string) => void;
+  onOpenBooksFranchise?: (franchiseId: string) => void;
   onBrowseCatalog?: (target: {
     mode: "name" | "genre" | "country" | "publisher" | "writer";
     countryId?: number;
@@ -122,6 +124,7 @@ function emptyOverview(name: string): SeriesOverview {
       has_audio: false,
       has_series: false,
       has_movies: false,
+      has_books: false,
       has_library: false,
       has_games: false,
       has_gallery: false,
@@ -131,8 +134,8 @@ function emptyOverview(name: string): SeriesOverview {
     seasons: [],
     related: {
       movies: [],
-      series: [],
       books: [],
+      series: [],
       games: [],
       music: [],
     },
@@ -156,8 +159,10 @@ export default function UniversePage({
   onNavigate,
   onOpenSeriesLeaf,
   onOpenMoviesLeaf,
+  onOpenBooksLeaf,
   onOpenSeriesFranchise,
   onOpenMoviesFranchise,
+  onOpenBooksFranchise,
   onBrowseCatalog,
 }: Props) {
   const layout = useDeviceLayout();
@@ -280,9 +285,18 @@ export default function UniversePage({
     () => (hub?.movies || []).map(toMediaCard),
     [hub?.movies]
   );
+  const bookCards = useMemo(
+    () => (hub?.books || []).map(toMediaCard),
+    [hub?.books]
+  );
   const audioCards = useMemo(
-    () => (hub?.carousel || [...(hub?.series || []), ...(hub?.movies || [])]).map(toMediaCard),
-    [hub?.carousel, hub?.series, hub?.movies]
+    () =>
+      (hub?.carousel || [
+        ...(hub?.series || []),
+        ...(hub?.movies || []),
+        ...(hub?.books || []),
+      ]).map(toMediaCard),
+    [hub?.carousel, hub?.series, hub?.movies, hub?.books]
   );
 
   const galleryFolders = useMemo(() => {
@@ -302,6 +316,9 @@ export default function UniversePage({
     if (media?.has_movies || movieCards.length > 0) {
       items.push({ id: "movies", label: "MOVIES" });
     }
+    if (media?.has_books || bookCards.length > 0) {
+      items.push({ id: "books", label: "BOOKS" });
+    }
     if (media?.has_series || seriesCards.length > 0) {
       items.push({ id: "series", label: "SERIES" });
     }
@@ -312,7 +329,7 @@ export default function UniversePage({
       items.push({ id: "gallery", label: "GALLERY", mobileLabel: "ART" });
     }
     return items;
-  }, [media, seriesCards.length, movieCards.length]);
+  }, [media, seriesCards.length, movieCards.length, bookCards.length]);
 
   useEffect(() => {
     if (!hub || loading) return;
@@ -348,6 +365,10 @@ export default function UniversePage({
       onOpenSeriesLeaf(franchiseId, leafId);
       return;
     }
+    if (card.universe_module === "books") {
+      onOpenBooksLeaf(franchiseId, leafId);
+      return;
+    }
     onOpenMoviesLeaf(franchiseId, leafId);
   }
 
@@ -357,6 +378,11 @@ export default function UniversePage({
     if (sub.module === "series") {
       if (onOpenSeriesFranchise) onOpenSeriesFranchise(franchiseId);
       else onOpenSeriesLeaf(franchiseId, franchiseId);
+      return;
+    }
+    if (sub.module === "books") {
+      if (onOpenBooksFranchise) onOpenBooksFranchise(franchiseId);
+      else onOpenBooksLeaf(franchiseId, franchiseId);
       return;
     }
     if (onOpenMoviesFranchise) onOpenMoviesFranchise(franchiseId);
@@ -438,6 +464,7 @@ export default function UniversePage({
           <div className="artist-page__top-right">
             {!mobilePortrait &&
             (section === "movies" ||
+              section === "books" ||
               section === "series" ||
               section === "audio") ? (
               <ReleaseCardLayoutPicker
@@ -460,6 +487,7 @@ export default function UniversePage({
               menuChrome={
                 mobilePortrait &&
                 (section === "movies" ||
+                  section === "books" ||
                   section === "series" ||
                   section === "audio") ? (
                   <button
@@ -599,6 +627,17 @@ export default function UniversePage({
           />
         ) : null}
 
+        {hub && section === "books" ? (
+          <SeriesMediaGrid
+            items={bookCards}
+            loading={loading && bookCards.length === 0}
+            emptyMessage="No books in this universe yet."
+            cardLayout={cardLayout}
+            coverAspect="portrait"
+            onOpen={openCard}
+          />
+        ) : null}
+
         {hub && section === "audio" ? (
           <SeriesMediaGrid
             items={audioCards}
@@ -647,7 +686,11 @@ export default function UniversePage({
       {addMemberOpen ? (
         <UniverseAddMemberModal
           universeId={universeId}
-          existing={[...(hub?.series || []), ...(hub?.movies || [])]}
+          existing={[
+            ...(hub?.series || []),
+            ...(hub?.movies || []),
+            ...(hub?.books || []),
+          ]}
           onClose={() => setAddMemberOpen(false)}
           onSaved={() => void load()}
         />

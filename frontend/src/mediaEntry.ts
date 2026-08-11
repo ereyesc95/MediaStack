@@ -2,14 +2,14 @@
 export type MediaEntrySource = "home" | "catalog";
 
 export type UniverseReturnTarget = {
-  module: "series" | "movies";
+  module: "series" | "movies" | "books";
   source: MediaEntrySource;
   universeId?: number;
   universeName?: string;
 };
 
 export type PendingCatalogBrowse = {
-  module: "series" | "movies";
+  module: "series" | "movies" | "books";
   mode: "name" | "genre" | "country" | "publisher" | "writer";
   countryId?: number;
   subgenreId?: number;
@@ -46,7 +46,7 @@ export function setPendingCatalogBrowse(next: PendingCatalogBrowse): void {
 
 /** Consume a one-shot catalog filter jump (universe/franchise pill clicks). */
 export function takePendingCatalogBrowse(
-  module: "series" | "movies"
+  module: "series" | "movies" | "books"
 ): PendingCatalogBrowse | null {
   if (!pendingCatalogBrowse || pendingCatalogBrowse.module !== module) {
     return null;

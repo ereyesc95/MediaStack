@@ -69,6 +69,42 @@ def _split_semicolon(raw: str | None) -> list[str]:
     return [p.strip() for p in text.split(";") if p.strip()]
 
 
+def patch_movie_work_about(
+    db: Session,
+    work_id: str,
+    *,
+    bio: str | None = None,
+    writers: str | None = None,
+) -> dict:
+    """Patch franchise-level bio / authors for a Movies work (independent of Series)."""
+    root = Path(settings.media_root or "")
+    from app.movies_index import find_work_dir, build_work_detail
+
+    found = find_work_dir(work_id, root if root.is_dir() else None)
+    if not found:
+        raise ValueError(f"Movies franchise not found: {work_id}")
+    work_dir, _letter = found
+    detail = build_work_detail(work_id, root if root.is_dir() else None) or {}
+    slug = detail.get("slug") or normalize_franchise_slug(work_dir.name) or work_dir.name.casefold()
+    row = find_movie_work(db, slug) or ensure_movie_work(
+        db,
+        work_slug=slug,
+        name=work_dir.name,
+        folder_path=detail.get("folder_path"),
+    )
+    meta = _load_meta(row)
+    if bio is not None:
+        meta["bio"] = bio.strip()
+        meta["bio_manual"] = True
+        meta["bio_source"] = "manual"
+    if writers is not None:
+        meta["writers"] = _split_semicolon(writers)
+        meta["authors"] = meta["writers"]
+    _save_meta(row, meta)
+    db.commit()
+    return {"ok": True, "work_id": slug}
+
+
 def _apply_country(db: Session, film_meta: dict, country_id: int | None) -> None:
     if country_id is None:
         return

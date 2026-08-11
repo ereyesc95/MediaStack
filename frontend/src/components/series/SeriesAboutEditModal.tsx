@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchBooksFilterOptions,
   fetchMoviesPublishers,
   fetchSeriesFilterOptions,
+  patchBooksBookAbout,
   patchMoviesFilmAbout,
   patchSeriesAbout,
 } from "../../api";
@@ -23,7 +25,7 @@ type Props = {
   subseriesId?: string;
   /** Film id when variant is film (defaults to subseriesId). */
   filmId?: string;
-  variant?: "series" | "film";
+  variant?: "series" | "film" | "book";
   title?: string;
   isAdmin?: boolean;
   onClose: () => void;
@@ -87,18 +89,25 @@ export default function SeriesAboutEditModal({
   onCastChanged,
 }: Props) {
   const isFilm = variant === "film";
+  const isBook = variant === "book";
   const aboutFilmId = filmId || subseriesId || "";
   const scoped =
-    !isFilm && subseriesId
+    !isFilm && !isBook && subseriesId
       ? data.subseries_meta?.[subseriesId] ?? null
       : null;
-  const writersSeed = isFilm
-    ? asWriterList(
-        (data as SeriesOverview & { directors?: string[] }).directors?.length
-          ? (data as SeriesOverview & { directors?: string[] }).directors
-          : data.writers
-      )
-    : asWriterList(scoped?.writers ?? data.writers);
+  const writersSeed =
+    isFilm || isBook
+      ? asWriterList(
+          isBook
+            ? (data as SeriesOverview & { authors?: string[] }).authors?.length
+              ? (data as SeriesOverview & { authors?: string[] }).authors
+              : data.writers
+            : (data as SeriesOverview & { directors?: string[] }).directors
+                  ?.length
+              ? (data as SeriesOverview & { directors?: string[] }).directors
+              : data.writers
+        )
+      : asWriterList(scoped?.writers ?? data.writers);
 
   const [bio, setBio] = useState(
     (scoped?.bio != null ? scoped.bio : data.bio) ?? ""
@@ -144,11 +153,13 @@ export default function SeriesAboutEditModal({
 
   const modalTitle =
     title ||
-    (isFilm
-      ? "Edit movie"
-      : subseriesId
-        ? "Edit series"
-        : "Edit about");
+    (isBook
+      ? "Edit book"
+      : isFilm
+        ? "Edit movie"
+        : subseriesId
+          ? "Edit series"
+          : "Edit about");
 
   const languageCatalog = useMemo(() => {
     const opts = data.language_options?.length
@@ -200,14 +211,15 @@ export default function SeriesAboutEditModal({
   );
 
   useEffect(() => {
-    fetchSeriesFilterOptions()
+    const load = isBook ? fetchBooksFilterOptions : fetchSeriesFilterOptions;
+    load()
       .then((opts) => {
         const countries =
           opts.all_country_groups?.length
             ? opts.all_country_groups
             : opts.country_groups;
         setCountryOptions(
-          countries.flatMap((g) =>
+          (countries || []).flatMap((g) =>
             g.items.map((c) => ({
               value: String(c.id),
               label: c.name ?? String(c.id),
@@ -220,18 +232,29 @@ export default function SeriesAboutEditModal({
           opts.all_subgenre_groups?.length
             ? opts.all_subgenre_groups
             : opts.subgenre_groups;
-        setGenreDropdownOptions(
-          genres.flatMap((g) =>
-            g.items.map((s) => ({
-              value: String(s.id),
-              label: s.name ?? "",
-              group: g.genre,
-            }))
-          )
+        const fromGroups = (genres || []).flatMap((g) =>
+          g.items.map((s) => ({
+            value: String(s.id),
+            label: s.name ?? "",
+            group: g.genre,
+          }))
         );
+        if (fromGroups.length) {
+          setGenreDropdownOptions(fromGroups);
+          return;
+        }
+        // Flat genres fallback (books filters always include this)
+        const flat = (opts.genres || [])
+          .map((g) => ({
+            value: String(g.id ?? g.name),
+            label: g.name ?? "",
+            group: undefined as string | undefined,
+          }))
+          .filter((o) => o.label);
+        setGenreDropdownOptions(flat);
       })
       .catch(() => {});
-  }, []);
+  }, [isBook]);
 
   useEffect(() => {
     fetchMoviesPublishers()
@@ -320,17 +343,29 @@ export default function SeriesAboutEditModal({
     setSaving(true);
     setError(null);
     try {
-      const starts = isFilm
+      const starts = isFilm || isBook
         ? (activityRows[0]?.start ?? "").trim()
         : activityRows.map((r) => r.start.trim()).join(";");
-      const ends = isFilm
+      const ends = isFilm || isBook
         ? starts
         : activityRows.map((r) => r.end.trim()).join(";");
       const genrePayload = selectedGenres.map((g) => ({
         id: Number.isFinite(Number(g.id)) ? Number(g.id) : g.id,
         name: g.name,
       }));
-      if (isFilm) {
+      if (isBook) {
+        if (!aboutFilmId) throw new Error("Missing book id");
+        await patchBooksBookAbout(aboutFilmId, {
+          bio,
+          writers,
+          publishers,
+          country_id: countryId ? Number(countryId) : null,
+          activity_start: starts,
+          activity_end: ends,
+          languages: selectedLangs,
+          genres: genrePayload,
+        });
+      } else if (isFilm) {
         if (!aboutFilmId) throw new Error("Missing film id");
         const directorList = writers
           .split(";")
@@ -541,7 +576,7 @@ export default function SeriesAboutEditModal({
           </label>
 
           <div className="artist-about-edit__periods">
-            {isFilm ? (
+            {isFilm || isBook ? (
               <label className="series-about-edit__release-date-row">
                 <span className="series-about-edit__label">Release date</span>
                 <input

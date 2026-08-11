@@ -1063,6 +1063,7 @@ def build_series_gallery(rel_path: str, media_root: Path | None = None) -> dict:
         return {"folder_path": rel_path, "items": [], "sections": []}
     under_series = True
     under_movies = True
+    under_books = True
     try:
         folder.relative_to(root / "Series")
     except ValueError:
@@ -1071,7 +1072,11 @@ def build_series_gallery(rel_path: str, media_root: Path | None = None) -> dict:
         folder.relative_to(root / "Movies")
     except ValueError:
         under_movies = False
-    if not under_series and not under_movies:
+    try:
+        folder.relative_to(root / "Books")
+    except ValueError:
+        under_books = False
+    if not under_series and not under_movies and not under_books:
         return {"folder_path": rel_path, "items": [], "sections": []}
 
     sections = gallery_sections(folder, root)

@@ -975,6 +975,7 @@ export type SeriesSection =
   | "overview"
   | "series"
   | "movies"
+  | "books"
   | "audio"
   | "library"
   | "games"
@@ -1025,7 +1026,14 @@ export type View =
       section?: import("./universeRoute").UniverseSection;
       overviewTab?: import("./universeRoute").UniverseOverviewTab;
     }
-  | { kind: "books" }
+  | {
+      kind: "books";
+      franchiseId?: string;
+      bookId?: string;
+      section?: import("./booksRoute").BooksSection;
+      overviewTab?: import("./booksRoute").BooksOverviewTab;
+      universeId?: number;
+    }
   | { kind: "games" };
 
 export type MoviesFilmCard = {
@@ -1095,10 +1103,10 @@ export type UniverseCard = {
   banner_url?: string | null;
   logo_url?: string | null;
   folder_path?: string;
-  module: "movies" | "series";
+  module: "movies" | "series" | "books";
   franchise_id: string;
   leaf_id?: string;
-  kind?: "film" | "subseries" | "franchise" | string;
+  kind?: "film" | "subseries" | "franchise" | "book" | string;
   universe_id?: number;
   open_url?: string | null;
   file_url?: string | null;
@@ -1107,7 +1115,7 @@ export type UniverseCard = {
 };
 
 export type UniverseLanding = {
-  module: "movies" | "series";
+  module: "movies" | "series" | "books";
   franchise_id: string;
   leaf_id?: string | null;
   universe_id: number;
@@ -1117,12 +1125,14 @@ export type UniverseHub = {
   universe: Universe;
   series: UniverseCard[];
   movies: UniverseCard[];
+  books?: UniverseCard[];
   carousel?: UniverseCard[];
   overview?: SeriesOverview;
   gallery_items?: SeriesGalleryItem[];
   media: {
     has_series?: boolean;
     has_movies?: boolean;
+    has_books?: boolean;
     has_audio?: boolean;
     has_gallery?: boolean;
     has_library?: boolean;
@@ -1203,7 +1213,7 @@ export type SeriesSubseriesCard = {
   season_count: number;
   has_gallery?: boolean;
   /** Present on universe hub carousel miniatures. */
-  module?: "movies" | "series";
+  module?: "movies" | "series" | "books";
   franchise_id?: string;
 };
 
@@ -1457,6 +1467,8 @@ export type SeriesFilterOptions = {
     genre: string;
     items: { id: number; name: string; genre_id?: number | null }[];
   }[];
+  /** Flat genre/subgenre list (books filters). */
+  genres?: { id: number | string; name: string }[];
   decades: number[];
   publishers: string[];
   writers: string[];
@@ -1592,6 +1604,7 @@ export type SeriesOverview = {
     has_audio: boolean;
     has_series: boolean;
     has_movies?: boolean;
+    has_books?: boolean;
     has_library: boolean;
     has_games: boolean;
     has_gallery: boolean;

@@ -1,17 +1,17 @@
 import { useCallback, useState } from "react";
 import type { CardOrientation } from "../../types";
 import type {
-  MoviesOverviewTab,
-  MoviesSection,
-} from "../../moviesRoute";
+  BooksOverviewTab,
+  BooksSection,
+} from "../../booksRoute";
 import SeriesFranchisePage from "../series/SeriesFranchisePage";
 import type { SeriesSection } from "../../types";
 import AddToUniverseModal from "../AddToUniverseModal";
 
 type Props = {
   workId: string;
-  section?: MoviesSection;
-  overviewTab?: MoviesOverviewTab;
+  section?: BooksSection;
+  overviewTab?: BooksOverviewTab;
   universeId?: number;
   isAdmin?: boolean;
   userId?: number;
@@ -21,9 +21,9 @@ type Props = {
   backLabel?: string;
   onNavigate: (patch: {
     franchiseId?: string;
-    filmId?: string;
-    section?: MoviesSection;
-    overviewTab?: MoviesOverviewTab;
+    bookId?: string;
+    section?: BooksSection;
+    overviewTab?: BooksOverviewTab;
     universeId?: number;
   }) => void;
   onOpenSeriesFranchise?: (
@@ -48,7 +48,7 @@ type Props = {
   onEditProfile?: () => void;
 };
 
-export default function MoviesFranchisePage({
+export default function BooksFranchisePage({
   workId,
   section = "overview",
   overviewTab = "about",
@@ -82,7 +82,7 @@ export default function MoviesFranchisePage({
     <>
       <SeriesFranchisePage
         key={`${workId}-${reloadKey}`}
-        module="movies"
+        module="books"
         franchiseId={workId}
         section={section as SeriesSection}
         overviewTab={overviewTab}
@@ -96,16 +96,16 @@ export default function MoviesFranchisePage({
         onNavigate={(patch) => {
           const next: {
             franchiseId?: string;
-            filmId?: string;
-            section?: MoviesSection;
-            overviewTab?: MoviesOverviewTab;
+            bookId?: string;
+            section?: BooksSection;
+            overviewTab?: BooksOverviewTab;
             universeId?: number;
           } = {
-            section: patch.section as MoviesSection | undefined,
-            overviewTab: patch.overviewTab as MoviesOverviewTab | undefined,
+            section: patch.section as BooksSection | undefined,
+            overviewTab: patch.overviewTab as BooksOverviewTab | undefined,
           };
           if ("franchiseId" in patch) next.franchiseId = patch.franchiseId;
-          if ("subseriesId" in patch) next.filmId = patch.subseriesId;
+          if ("subseriesId" in patch) next.bookId = patch.subseriesId;
           if ("universeId" in patch) next.universeId = patch.universeId;
           onNavigate(next);
         }}
@@ -124,7 +124,7 @@ export default function MoviesFranchisePage({
 
       {universeOpen && isAdmin ? (
         <AddToUniverseModal
-          module="movies"
+          module="books"
           franchiseId={workId}
           onClose={() => setUniverseOpen(false)}
           onSaved={() => {

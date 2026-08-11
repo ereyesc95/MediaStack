@@ -97,20 +97,32 @@ function placeholderCount(itemCount: number, limit: number) {
 
 type PlaceholderVariant = "square" | "landscape" | "circle" | "flag";
 
-function DashCover({ url }: { url?: string | null }) {
+function DashCover({
+  url,
+  position = "top",
+}: {
+  url?: string | null;
+  position?: "top" | "center";
+}) {
   if (url) {
     return (
       <span className="dash-icon-item-cover">
         <span
           className="card-bg-layer"
-          style={{ backgroundImage: `url("${url}")` }}
+          style={{
+            backgroundImage: `url("${url}")`,
+            backgroundPosition:
+              position === "center" ? "center center" : "center top",
+          }}
         />
+        <span className="dash-icon-item-cover__scrim" aria-hidden />
       </span>
     );
   }
   return (
     <span className="dash-icon-item-cover dash-icon-item-cover--empty">
       <MyStackIcon className="dash-icon-item-cover__mark" size={22} />
+      <span className="dash-icon-item-cover__scrim" aria-hidden />
     </span>
   );
 }
@@ -200,6 +212,29 @@ export default function SeriesHome({
   const dash = data ?? EMPTY_SERIES_DASHBOARD;
   const layout = useDashboardLayout();
   const paneLimit = paneItemLimit(layout);
+  const isMobileShell =
+    layout === "mobile-portrait" || layout === "mobile-landscape";
+  const useBannerArt = layout === "mobile-landscape";
+
+  const pickCover = (s: {
+    portrait_url?: string | null;
+    cover_url?: string | null;
+    photo_url?: string | null;
+    banner_url?: string | null;
+    landscape_url?: string | null;
+  }) => {
+    if (useBannerArt) {
+      return (
+        s.banner_url ||
+        s.landscape_url ||
+        s.portrait_url ||
+        s.cover_url ||
+        s.photo_url ||
+        null
+      );
+    }
+    return s.portrait_url || s.cover_url || s.photo_url || null;
+  };
 
   const topFranchises = slicePane(dash.top_franchises || [], paneLimit);
   const topSeries = slicePane(dash.top_series, paneLimit);
@@ -231,16 +266,18 @@ export default function SeriesHome({
         />
         <div className="dash-scroll dash-scroll--icons">
           {topFranchises.map((s) => {
-            const cover =
-              s.portrait_url || s.cover_url || s.photo_url || null;
+            const cover = pickCover(s);
             return (
               <button
                 key={s.id}
                 type="button"
-                className="dash-icon-item"
+                className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
                 onClick={() => onOpenFranchise(s.id)}
               >
-                <DashCover url={cover} />
+                <DashCover
+                  url={cover}
+                  position={useBannerArt ? "center" : "top"}
+                />
                 <span className="dash-item-label dash-icon-item-name" title={s.name}>
                   {s.name}
                 </span>
@@ -262,17 +299,19 @@ export default function SeriesHome({
         />
         <div className="dash-scroll dash-scroll--icons">
           {topSeries.map((s) => {
-            const cover =
-              s.portrait_url || s.cover_url || s.photo_url || null;
+            const cover = pickCover(s);
             const franchiseId = s.franchise_id || s.id;
             return (
               <button
                 key={s.id}
                 type="button"
-                className="dash-icon-item"
+                className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
                 onClick={() => onOpenShow(franchiseId, s.subseries_id)}
               >
-                <DashCover url={cover} />
+                <DashCover
+                  url={cover}
+                  position={useBannerArt ? "center" : "top"}
+                />
                 <span className="dash-item-label dash-icon-item-name" title={s.name}>
                   {s.name}
                 </span>
@@ -295,16 +334,18 @@ export default function SeriesHome({
           />
           <div className="dash-scroll dash-scroll--icons">
             {topUniverses.map((u) => {
-              const cover =
-                u.portrait_url || u.cover_url || u.landscape_url || null;
+              const cover = pickCover(u);
               return (
                 <button
                   key={u.id}
                   type="button"
-                  className="dash-icon-item"
+                  className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
                   onClick={() => onOpenUniverse?.(u.id)}
                 >
-                  <DashCover url={cover} />
+                  <DashCover
+                    url={cover}
+                    position={useBannerArt ? "center" : "top"}
+                  />
                   <span
                     className="dash-item-label dash-icon-item-name"
                     title={u.name}

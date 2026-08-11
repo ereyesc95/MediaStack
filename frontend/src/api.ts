@@ -1624,6 +1624,104 @@ export async function fetchMoviesDashboard() {
   >(`${API}/movies/dashboard`);
 }
 
+export async function fetchBooksCatalog() {
+  return request<{
+    franchises: import("./types").SeriesFranchiseCard[];
+    books?: import("./types").MoviesFilmCard[];
+    films?: import("./types").MoviesFilmCard[];
+    scanned_at: string | null;
+  }>(`${API}/books/catalog`);
+}
+
+export async function fetchBooksDashboard() {
+  return request<
+    import("./types").SeriesDashboard & {
+      franchise_count?: number;
+      book_count?: number;
+      top_franchises?: import("./types").SeriesFranchiseCard[];
+      top_books?: import("./types").MoviesFilmCard[];
+      top_films?: import("./types").MoviesFilmCard[];
+      scanned_at?: string | null;
+    }
+  >(`${API}/books/dashboard`);
+}
+
+export async function fetchBooksFilterOptions() {
+  return request<SeriesFilterOptions>(`${API}/books/filters/options`);
+}
+
+export async function resolveBooksPath(path: string) {
+  return request<{
+    work_id: string;
+    book_id: string | null;
+    letter: string;
+    name: string;
+    book_title?: string;
+  }>(`${API}/books/resolve?path=${encodeURIComponent(path)}`);
+}
+
+export async function fetchBooksFranchiseOverview(
+  workId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<import("./types").SeriesOverview>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function fetchBooksFranchiseSeries(workId: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/media/series`
+  );
+}
+
+export async function fetchBooksFranchiseAudio(workId: string) {
+  return request<{ releases: Array<Record<string, unknown>> }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/media/audio`
+  );
+}
+
+export async function fetchBooksFranchiseLibrary(workId: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/media/library`
+  );
+}
+
+export async function fetchBooksFranchiseGames(workId: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/media/games`
+  );
+}
+
+export async function fetchBooksBook(bookId: string) {
+  return request<import("./types").MoviesFilmDetail>(
+    `${API}/books/books/${encodeURIComponent(bookId)}`
+  );
+}
+
+export async function fetchBooksBookOverview(
+  bookId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<
+    import("./types").SeriesOverview & {
+      versions?: import("./types").MoviesFilmDetail["versions"];
+      volumes?: import("./types").MoviesFilmDetail["versions"];
+      work?: import("./types").MoviesFilmDetail["work"];
+      open_url?: string | null;
+      open_label?: string | null;
+    }
+  >(
+    `${API}/books/books/${encodeURIComponent(bookId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function fetchBooksBookAudio(bookId: string) {
+  return request<{ releases: Array<Record<string, unknown>> }>(
+    `${API}/books/franchises/${encodeURIComponent(bookId)}/media/audio`
+  );
+}
+
 export async function fetchMoviesFilterOptions() {
   return request<SeriesFilterOptions>(`${API}/movies/filters/options`);
 }
@@ -1755,6 +1853,103 @@ export async function patchMoviesFilmAbout(
   );
 }
 
+export async function patchMoviesWorkAbout(
+  workId: string,
+  body: { bio?: string; writers?: string }
+) {
+  return request<{ ok: boolean; work_id?: string }>(
+    `${API}/movies/franchises/${encodeURIComponent(workId)}/about`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchBooksWorkAbout(
+  workId: string,
+  body: { bio?: string; writers?: string }
+) {
+  return request<{ ok: boolean; work_id?: string }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/about`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchBooksBookAbout(
+  bookId: string,
+  body: {
+    bio?: string;
+    writers?: string;
+    country_id?: number | null;
+    activity_start?: string;
+    activity_end?: string;
+    publishers?: string;
+    languages?: string[];
+    genres?: { id?: number | string | null; name: string }[];
+  }
+) {
+  return request<{ ok: boolean; book_id?: string }>(
+    `${API}/books/books/${encodeURIComponent(bookId)}/about`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function addBooksBookCastMember(
+  bookId: string,
+  body: {
+    kind?: string;
+    bucket?: string;
+    name: string;
+    character?: string;
+    photo_url?: string;
+    character_photo_url?: string;
+    roles?: string[];
+    language?: string;
+  }
+) {
+  return request<{ id?: string }>(
+    `${API}/books/books/${encodeURIComponent(bookId)}/cast`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchBooksBookCastMember(
+  bookId: string,
+  memberId: string | number,
+  body: Record<string, unknown>
+) {
+  return request(
+    `${API}/books/books/${encodeURIComponent(bookId)}/cast/${encodeURIComponent(String(memberId))}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function refreshBooksWorkMetadata(workId: string) {
+  return request<{ ok: boolean; work_id?: string }>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}/refresh-metadata`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function addMoviesFilmCastMember(
   filmId: string,
   body: {
@@ -1862,7 +2057,7 @@ export async function fetchMoviesGallery(path: string) {
   }>(`${API}/movies/gallery?path=${encodeURIComponent(path)}`);
 }
 
-export async function fetchUniverses(module?: "movies" | "series") {
+export async function fetchUniverses(module?: "movies" | "series" | "books") {
   const q = module ? `?module=${encodeURIComponent(module)}` : "";
   return request<{ universes: import("./types").Universe[] }>(
     `${API}/universes${q}`
@@ -1876,7 +2071,7 @@ export async function fetchUniverse(universeId: number) {
 }
 
 export async function lookupUniverse(
-  module: "movies" | "series",
+  module: "movies" | "series" | "books",
   slug: string,
   leafId?: string | null
 ) {
@@ -1946,7 +2141,7 @@ export async function fetchUniverseLanding(
 
 export async function linkUniverseMember(
   universeId: number,
-  module: "movies" | "series",
+  module: "movies" | "series" | "books",
   slug: string,
   leafId?: string | null
 ) {
@@ -1963,7 +2158,7 @@ export async function linkUniverseMember(
 
 export async function unlinkUniverseMember(
   universeId: number,
-  module: "movies" | "series",
+  module: "movies" | "series" | "books",
   slug: string,
   leafId?: string | null
 ) {
