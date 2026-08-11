@@ -1029,6 +1029,8 @@ export function AddCastModal({
   castApi = "series",
   filmId,
   characterOnly = false,
+  onClose,
+  onSaved,
 }: {
   franchiseId: string;
   bucket: SeriesCastTab;
@@ -1042,7 +1044,10 @@ export function AddCastModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const characterCentered = bucket === "characters";
+  const [activeBucket, setActiveBucket] = useState<SeriesCastTab>(() =>
+    characterOnly ? "characters" : bucket
+  );
+  const characterCentered = activeBucket === "characters";
   const [charName, setCharName] = useState("");
   const [actorEntries, setActorEntries] = useState<
     { name: string; photo_url: string }[]
@@ -1076,8 +1081,8 @@ export function AddCastModal({
       if (castApi === "movies") {
         if (!filmId) throw new Error("Missing film id");
         const created = await addMoviesFilmCastMember(filmId, {
-          kind: bucket,
-          bucket,
+          kind: activeBucket,
+          bucket: activeBucket,
           name: characterCentered
             ? actors[0]?.name || charName.trim()
             : charName.trim(),
@@ -1099,8 +1104,8 @@ export function AddCastModal({
         });
         if (characterCentered && created?.id != null && actors.length > 0) {
           await patchMoviesFilmCastMember(filmId, created.id, {
-            kind: bucket,
-            bucket,
+            kind: activeBucket,
+            bucket: activeBucket,
             character: charName.trim(),
             photo_url: photoUrl.trim() || null,
             actor_photo_url: actors[0]?.photo_url || null,
@@ -1111,8 +1116,8 @@ export function AddCastModal({
       } else if (castApi === "books") {
         if (!filmId) throw new Error("Missing book id");
         await addBooksBookCastMember(filmId, {
-          kind: bucket,
-          bucket,
+          kind: activeBucket,
+          bucket: activeBucket,
           name: charName.trim(),
           character: characterCentered ? charName.trim() : undefined,
           photo_url: photoUrl.trim() || undefined,
@@ -1128,7 +1133,7 @@ export function AddCastModal({
         });
       } else {
         const created = await addSeriesCastMember(franchiseId, {
-          bucket,
+          bucket: activeBucket,
           name: characterCentered
             ? actors[0]?.name || charName.trim()
             : charName.trim(),
@@ -1155,7 +1160,7 @@ export function AddCastModal({
           (actors.length > 0 || selectedSubs.length)
         ) {
           await patchSeriesCastMember(franchiseId, created.id, {
-            bucket,
+            bucket: activeBucket,
             character: charName.trim(),
             photo_url: photoUrl.trim() || null,
             actor_photo_url: actors[0]?.photo_url || null,
@@ -1169,7 +1174,7 @@ export function AddCastModal({
           selectedSubs.length
         ) {
           await patchSeriesCastMember(franchiseId, created.id, {
-            bucket,
+            bucket: activeBucket,
             name: charName.trim(),
             photo_url: photoUrl.trim() || null,
             roles: staffRoles,
@@ -1200,6 +1205,32 @@ export function AddCastModal({
             ×
           </button>
         </div>
+        {!characterOnly ? (
+          <div
+            className="series-subseries-overview__cast-tabs series-cast-add__tabs"
+            role="tablist"
+            aria-label="Cast bucket"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeBucket === "characters"}
+              className={activeBucket === "characters" ? "active" : ""}
+              onClick={() => setActiveBucket("characters")}
+            >
+              Characters
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeBucket === "staff"}
+              className={activeBucket === "staff" ? "active" : ""}
+              onClick={() => setActiveBucket("staff")}
+            >
+              Staff
+            </button>
+          </div>
+        ) : null}
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
           <div className="series-cast-edit__char-row">
@@ -1236,62 +1267,62 @@ export function AddCastModal({
                 </select>
               </label>
               {!characterOnly ? (
-              <div className="series-cast-edit__actors">
-                <span className="series-cast-edit__actors-label">Actors</span>
-                {actorEntries.map((entry, idx) => (
-                  <div key={idx} className="series-cast-edit__actor-row">
-                    <input
-                      value={entry.name}
-                      onChange={(e) => {
-                        const next = [...actorEntries];
-                        next[idx] = { ...next[idx], name: e.target.value };
-                        setActorEntries(next);
-                      }}
-                      placeholder={
-                        idx === 0 ? "Actor name" : "Additional actor"
-                      }
-                    />
-                    <input
-                      value={entry.photo_url}
-                      onChange={(e) => {
-                        const next = [...actorEntries];
-                        next[idx] = {
-                          ...next[idx],
-                          photo_url: e.target.value,
-                        };
-                        setActorEntries(next);
-                      }}
-                      placeholder="Actor photo URL"
-                    />
-                    {actorEntries.length > 1 ? (
-                      <button
-                        type="button"
-                        className="btn link-form__delete"
-                        aria-label="Remove actor"
-                        onClick={() =>
-                          setActorEntries(
-                            actorEntries.filter((_, i) => i !== idx)
-                          )
+                <div className="series-cast-edit__actors">
+                  <span className="series-cast-edit__actors-label">Actors</span>
+                  {actorEntries.map((entry, idx) => (
+                    <div key={idx} className="series-cast-edit__actor-row">
+                      <input
+                        value={entry.name}
+                        onChange={(e) => {
+                          const next = [...actorEntries];
+                          next[idx] = { ...next[idx], name: e.target.value };
+                          setActorEntries(next);
+                        }}
+                        placeholder={
+                          idx === 0 ? "Actor name" : "Additional actor"
                         }
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="btn series-cast-edit__add-actor"
-                  onClick={() =>
-                    setActorEntries([
-                      ...actorEntries,
-                      { name: "", photo_url: "" },
-                    ])
-                  }
-                >
-                  Add actor
-                </button>
-              </div>
+                      />
+                      <input
+                        value={entry.photo_url}
+                        onChange={(e) => {
+                          const next = [...actorEntries];
+                          next[idx] = {
+                            ...next[idx],
+                            photo_url: e.target.value,
+                          };
+                          setActorEntries(next);
+                        }}
+                        placeholder="Actor photo URL"
+                      />
+                      {actorEntries.length > 1 ? (
+                        <button
+                          type="button"
+                          className="btn link-form__delete"
+                          aria-label="Remove actor"
+                          onClick={() =>
+                            setActorEntries(
+                              actorEntries.filter((_, i) => i !== idx)
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn series-cast-edit__add-actor"
+                    onClick={() =>
+                      setActorEntries([
+                        ...actorEntries,
+                        { name: "", photo_url: "" },
+                      ])
+                    }
+                  >
+                    Add actor
+                  </button>
+                </div>
               ) : null}
             </>
           ) : (
@@ -1473,7 +1504,7 @@ export default function SeriesCast({
     const emptyLabel =
       tab === "characters" ? "+ Add characters" : "+ Add personnel";
     return (
-      <div className="artist-lineup">
+      <div className="artist-lineup artist-lineup--empty-cta">
         {onAddEmptyClick && isAdmin ? (
           <button
             type="button"
@@ -1491,7 +1522,7 @@ export default function SeriesCast({
 
   if (!members.length && addOpen && onAddClose) {
     return (
-      <div className="artist-lineup">
+      <div className="artist-lineup artist-lineup--empty-cta">
         <AddCastModal
           franchiseId={franchiseId}
           bucket={tab}

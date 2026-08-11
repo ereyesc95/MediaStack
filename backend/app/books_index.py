@@ -64,6 +64,10 @@ _VOLUME_TITLE_RE = re.compile(
     r"^(?:vol(?:ume)?|tome|tom[eo]|book)\s*\.?\s*\d+",
     re.I,
 )
+_VOLUME_NUM_EXTRACT_RE = re.compile(
+    r"^(?:vol(?:ume)?|tome|tom[eo]|book)\s*\.?\s*(?P<num>\d+)\b",
+    re.I,
+)
 
 
 def _is_meta_dir(name: str) -> bool:
@@ -160,6 +164,15 @@ def parse_volume_filename(filename: str) -> dict:
                 num = None
             title = m2.group("title").strip()
 
+    # ``1985.12.03. Volume 1`` → date + number from Volume/Vol/Tome/Book N
+    if num is None:
+        m3 = _VOLUME_NUM_EXTRACT_RE.match(title)
+        if m3:
+            try:
+                num = int(m3.group("num"))
+            except ValueError:
+                num = None
+
     return {
         "stem": stem,
         "title": title or stem,
@@ -232,29 +245,12 @@ def _match_volume_cover(
 
 
 def _list_volumes(book_dir: Path, media_root: Path) -> list[dict]:
+    """List PDF volumes directly inside a book leaf folder (no nested books)."""
     volumes: list[dict] = []
-    pdfs = list(_list_pdfs(book_dir))
-    # Mid-tier hubs: PDFs live in nested volume folders, not the hub itself.
-    if not pdfs:
-        try:
-            nested_dirs = sorted(
-                (
-                    p
-                    for p in book_dir.iterdir()
-                    if p.is_dir() and not _is_skip_dir(p.name)
-                ),
-                key=lambda p: p.name.casefold(),
-            )
-        except OSError:
-            nested_dirs = []
-        for nested in nested_dirs:
-            pdfs.extend(_list_pdfs(nested))
-    for pdf in pdfs:
+    for pdf in _list_pdfs(book_dir):
         rel = safe_relative(pdf, media_root)
         meta = parse_volume_filename(pdf.name)
-        cover = _match_volume_cover(pdf.parent, media_root, meta, pdf.name)
-        if not cover:
-            cover = _match_volume_cover(book_dir, media_root, meta, pdf.name)
+        cover = _match_volume_cover(book_dir, media_root, meta, pdf.name)
         banner = None
         landscape = None
         try:
@@ -263,8 +259,8 @@ def _list_volumes(book_dir: Path, media_root: Path) -> list[dict]:
                 _series_folder_landscape,
             )
 
-            banner = _series_folder_banner(pdf.parent, media_root)
-            landscape = _series_folder_landscape(pdf.parent, media_root)
+            banner = _series_folder_banner(book_dir, media_root)
+            landscape = _series_folder_landscape(book_dir, media_root)
         except Exception:
             pass
         from app.media_item_overview import _format_pages, _pdf_page_count
@@ -302,6 +298,76 @@ def _list_volumes(book_dir: Path, media_root: Path) -> list[dict]:
         )
     )
     return volumes
+
+
+def _pdf_as_book_card(
+    pdf: Path,
+    hub_dir: Path,
+    hub_title: str,
+    media_root: Path,
+) -> dict:
+    """Promote a lone PDF under a hub into its own book leaf card."""
+    from app.series_index import (
+        _series_folder_banner,
+        _series_folder_cover,
+        _series_folder_landscape,
+    )
+    from app.series_paths import find_badge_file, find_logo_file
+
+    rel = safe_relative(pdf, media_root)
+    meta = parse_volume_filename(pdf.name)
+    title = meta.get("title") or pdf.stem
+    date_iso = meta.get("date_iso")
+    cover = _match_volume_cover(hub_dir, media_root, meta, pdf.name) or _book_cover(
+        hub_dir, media_root
+    )
+    logo_url, icon_url = find_logo_file(hub_dir, media_root)
+    from app.media_item_overview import _format_pages, _pdf_page_count
+
+    page_count = _pdf_page_count(pdf)
+    vol = {
+        "id": f"vol_{hashlib.sha1(rel.encode()).hexdigest()[:10]}",
+        "label": title,
+        "file_name": pdf.name,
+        "play_path": rel,
+        "file_url": _file_url(pdf, media_root),
+        "open_url": _file_url(pdf, media_root),
+        "open_mode": "tab",
+        "open_label": "Read",
+        "date_iso": date_iso,
+        "display_date": meta.get("display_date"),
+        "number": meta.get("number"),
+        "cover_url": cover,
+        "banner_url": _series_folder_banner(hub_dir, media_root),
+        "portrait_url": cover,
+        "landscape_url": _series_folder_landscape(hub_dir, media_root),
+        "page_count": page_count,
+        "pages": _format_pages(page_count),
+    }
+    return {
+        "id": _book_id(rel),
+        "title": title,
+        "date_iso": date_iso,
+        "display_date": format_display_date(date_iso) if date_iso else None,
+        "folder_path": hub_dir.relative_to(media_root).as_posix(),
+        "folder_name": pdf.stem,
+        "path": rel,
+        "cover_url": cover,
+        "portrait_url": _series_folder_cover(hub_dir, media_root) or cover,
+        "landscape_url": _series_folder_landscape(hub_dir, media_root),
+        "banner_url": _series_folder_banner(hub_dir, media_root),
+        "logo_url": logo_url,
+        "icon_url": icon_url,
+        "badge_url": find_badge_file(hub_dir, media_root),
+        "has_pdf": True,
+        "volume_count": 1,
+        "open_url": vol["file_url"],
+        "open_mode": "tab",
+        "open_label": "Read",
+        "volumes": [vol],
+        "hub_title": hub_title,
+        "primary_pdf": rel,
+    }
 
 
 def _book_cover(book_dir: Path, media_root: Path) -> str | None:
@@ -351,6 +417,7 @@ def _book_card_from_dir(
     *,
     title: str | None = None,
     date_iso: str | None = None,
+    hub_title: str | None = None,
 ) -> dict:
     from app.series_index import (
         _series_folder_banner,
@@ -397,11 +464,22 @@ def _book_card_from_dir(
         "open_mode": "tab" if primary else None,
         "open_label": "Read" if primary else None,
         "volumes": volumes,
+        "hub_title": hub_title or title,
     }
 
 
 def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
-    """Discover book works under a franchise/work folder (A+C + mid-tier)."""
+    """Discover book leaves under a franchise/work folder.
+
+    Layout::
+      Work/
+        [Artwork]/                 # franchise art
+        1986.02.26. Hub/            # series hub (selector)
+          1985.12.03. Vol. 01/      # leaf book (Gallery + PDFs)
+          2003.01.01. Other Book/
+        1996.02.07. Other Hub/
+          1997.02.07. Anecdotes/
+    """
     books: list[dict] = []
     root_pdfs = _list_pdfs(work_dir)
 
@@ -417,59 +495,97 @@ def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
     except OSError:
         children = []
 
-    work_children: list[Path] = []
     for child in children:
         date_iso, title = parse_dated_folder_name(child.name)
-        # Skip pure volume-named dated folders as separate cards only when
-        # they have no PDFs of their own weirdness — user said no vol folders;
-        # any child with PDFs (or nested) is a work card.
-        if _folder_has_pdf(child):
-            work_children.append(child)
-            continue
-        # Mid-tier hub (dated/undated) with nested PDF folders → one card for
-        # the hub; volumes are aggregated from nested folders in _list_volumes.
+        hub_title = title or child.name
+        direct_pdfs = _list_pdfs(child)
         try:
-            nested = [
+            nested_leaves = [
                 n
                 for n in child.iterdir()
-                if n.is_dir() and not _is_skip_dir(n.name) and _folder_has_pdf(n)
+                if n.is_dir()
+                and not _is_skip_dir(n.name)
+                and (
+                    _folder_has_pdf(n)
+                    or any(
+                        (n / bucket).is_dir()
+                        for bucket in (
+                            "Gallery",
+                            "gallery",
+                            "Audio",
+                            "audio",
+                            "[Artwork]",
+                            "Artwork",
+                            "artwork",
+                        )
+                    )
+                    or bool(parse_dated_folder_name(n.name)[0])
+                )
             ]
         except OSError:
-            nested = []
-        if nested:
-            work_children.append(child)
-        elif _is_volume_like_title(title or child.name):
-            # Legacy empty volume folder — ignore
-            continue
-        elif date_iso:
-            # Dated folder without PDFs yet — still a card placeholder
-            work_children.append(child)
+            nested_leaves = []
 
-    for child in work_children:
-        date_iso, title = parse_dated_folder_name(child.name)
-        books.append(
-            _book_card_from_dir(
-                child, media_root, title=title or child.name, date_iso=date_iso
+        if nested_leaves:
+            # Mid-tier hub: every nested content folder is a leaf book.
+            for leaf in nested_leaves:
+                _ld, ltitle = parse_dated_folder_name(leaf.name)
+                books.append(
+                    _book_card_from_dir(
+                        leaf,
+                        media_root,
+                        title=ltitle or leaf.name,
+                        date_iso=_ld,
+                        hub_title=hub_title,
+                    )
+                )
+            # Loose PDFs sitting on the hub alongside nested books.
+            for pdf in direct_pdfs:
+                books.append(
+                    _pdf_as_book_card(pdf, child, hub_title, media_root)
+                )
+            continue
+
+        if direct_pdfs:
+            # Flat mid-tier book (PDFs directly in dated folder).
+            books.append(
+                _book_card_from_dir(
+                    child,
+                    media_root,
+                    title=hub_title,
+                    date_iso=date_iso,
+                    hub_title=hub_title,
+                )
             )
-        )
+            continue
+
+        if date_iso and not _is_volume_like_title(hub_title):
+            # Empty dated hub placeholder.
+            books.append(
+                _book_card_from_dir(
+                    child,
+                    media_root,
+                    title=hub_title,
+                    date_iso=date_iso,
+                    hub_title=hub_title,
+                )
+            )
 
     if root_pdfs:
-        # A: PDFs at franchise/work root → one card for the work itself
         books.append(
             _book_card_from_dir(
                 work_dir,
                 media_root,
                 title=work_dir.name,
                 date_iso=None,
+                hub_title=work_dir.name,
             )
         )
 
-    # Dedupe by folder_path (root card + child shouldn't collide)
     seen: set[str] = set()
     unique: list[dict] = []
     for b in books:
-        key = (b.get("folder_path") or "").casefold()
-        if key in seen:
+        key = (b.get("id") or b.get("folder_path") or "").casefold()
+        if not key or key in seen:
             continue
         seen.add(key)
         unique.append(b)
@@ -573,11 +689,12 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
     primary_book_id = None
     if len(books) == 1:
         only = books[0]
-        standalone = _names_match(work_dir.name, only.get("title") or "") or (
-            (only.get("folder_path") or "").casefold()
-            == work_dir.relative_to(media_root).as_posix().casefold()
-        )
-        primary_book_id = only.get("id")
+        work_rel = work_dir.relative_to(media_root).as_posix().casefold()
+        # Standalone only when the single book folder IS the work root
+        # (PDFs at franchise root). A mid-tier dated series like
+        # ``1986.02.26. Dragon Ball`` must keep the franchise card.
+        standalone = (only.get("folder_path") or "").casefold() == work_rel
+        primary_book_id = only.get("id") if standalone else None
     # No child books but also no PDFs — empty franchise card
     return {
         "id": normalize_franchise_slug(work_dir.name) or work_dir.name.casefold(),
@@ -604,8 +721,8 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
         "books": books,
         "films": books,  # reuse movies-shaped franchise page mapping
         "is_standalone": standalone,
-        "primary_book_id": primary_book_id if standalone else None,
-        "primary_film_id": primary_book_id if standalone else None,
+        "primary_book_id": primary_book_id,
+        "primary_film_id": primary_book_id,
         "subseries_count": 0,
         "season_count": len(books),
         "subseries": [],

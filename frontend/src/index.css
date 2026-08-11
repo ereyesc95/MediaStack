@@ -1395,22 +1395,23 @@ input {
   max-width: calc((100% - 0.8rem) / 3);
   min-width: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+  justify-items: center;
   gap: 0.12rem;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
 .movies-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
 .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-placeholder--landscape,
 .movies-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-placeholder--landscape {
+  /* Keep pane height; shrink width for true 2:3 portrait (not square). */
   aspect-ratio: 2 / 3 !important;
-  width: 100% !important;
+  height: 100% !important;
+  width: auto !important;
   max-width: 100%;
-  height: auto !important;
   max-height: 100%;
   margin-inline: auto;
   flex-shrink: 0;
@@ -4044,7 +4045,7 @@ input {
   .music-dashboard--mobile-portrait .dash-icon-item-cover {
     width: 100%;
     max-width: min(26vw, 88px);
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 2 / 3;
     height: auto;
   }
 
@@ -4052,10 +4053,10 @@ input {
   .movies-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
   .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-placeholder--landscape,
   .movies-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-placeholder--landscape {
-    max-width: 100%;
     aspect-ratio: 2 / 3 !important;
-    width: 100% !important;
-    height: auto !important;
+    height: 100% !important;
+    width: auto !important;
+    max-width: 100%;
     max-height: 100%;
     margin-inline: auto;
     flex-shrink: 0;
@@ -4070,6 +4071,9 @@ input {
     width: calc((100% - 0.8rem) / 3);
     max-width: calc((100% - 0.8rem) / 3);
     height: 100%;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    justify-items: center;
   }
 
   .series-dashboard.music-dashboard--mobile-portrait .dash-row--icons .dash-scroll,
@@ -6440,13 +6444,30 @@ input {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
-  background: var(--bg-elevated, var(--bg, #161616));
-  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--text) 20%);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  border-radius: 10px;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--text);
 }
 
-/* Fixed chrome: title + close stay put; only the form scrolls. */
+/* Glass chrome: transparent panel; dim/blur comes from .modal-backdrop. */
+.modal-panel.artist-admin-modal {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--text);
+  padding: 0;
+  max-height: min(80vh, 36rem);
+  overflow: hidden;
+}
+
+/* Fixed chrome: title + close stay put; only the form scrolls when needed. */
 .modal-panel.artist-admin-modal > .modal-panel-header {
   position: relative;
   top: auto;
@@ -6454,6 +6475,13 @@ input {
   z-index: 2;
   margin: 0;
   padding: 0.7rem 1.25rem 0.5rem;
+  background: transparent;
+}
+
+.modal-panel.artist-admin-modal > .series-cast-add__tabs {
+  flex-shrink: 0;
+  margin: 0 1.25rem 0.55rem;
+  padding: 0;
 }
 
 .modal-panel.artist-admin-modal > .artist-admin-form {
@@ -8473,7 +8501,7 @@ button.media-release-card--banner {
 }
 
 .gallery-viewer__stage {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -8482,15 +8510,20 @@ button.media-release-card--banner {
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  /* Explicit stage height so img max-height:100% can contain without cropping. */
+  height: min(72vh, calc(92vh - 9.5rem));
+  max-height: min(72vh, calc(92vh - 9.5rem));
 }
 
 .gallery-viewer__image,
 .gallery-viewer__img {
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
+  max-width: min(100%, calc(96vw - 6rem));
+  max-height: min(100%, calc(92vh - 10rem));
   width: auto;
   height: auto;
   object-fit: contain;
+  object-position: center;
 }
 
 .gallery-viewer__nav {
@@ -15676,10 +15709,49 @@ button.lyrics-status-badge--icon-only {
   min-height: 0;
   overflow: visible;
   width: 100%;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding-top: 0.65rem;
   padding-bottom: 0.65rem;
   box-sizing: border-box;
+}
+
+.series-subseries-page .series-subseries-overview__cast .release-page__section-glass.release-page__lineup .artist-lineup,
+.release-page__section-glass.release-page__lineup > .artist-lineup,
+.artist-lineup.artist-lineup--empty-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: inherit;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.series-cast__empty-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--accent, #c9a227);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.series-cast__empty-cta:hover {
+  text-decoration: underline;
+  background: none;
 }
 
 /* Portrait cover: size the image, not an empty stage. Centered in the panel. */
@@ -21237,11 +21309,11 @@ button.lyrics-status-badge--icon-only {
 
 .series-book-volumes__row {
   display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
   width: 100%;
-  padding: 0.5rem 0.3rem;
+  padding: 0.28rem 0.3rem;
   border: 0;
   border-radius: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -21265,13 +21337,22 @@ button.lyrics-status-badge--icon-only {
   cursor: default;
 }
 
+.series-book-volumes__leading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  justify-self: start;
+}
+
 .series-book-volumes__cover {
   display: block;
-  width: 2.35rem;
-  height: 2.35rem;
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 2.3rem;
   border-radius: 2px;
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   background-color: color-mix(in srgb, var(--bg) 70%, #333);
 }
 
@@ -21283,11 +21364,12 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.05rem;
 }
 
 .series-book-volumes__title {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21303,16 +21385,23 @@ button.lyrics-status-badge--icon-only {
   display: none;
 }
 
+.series-book-volumes__date--center {
+  justify-self: center;
+  text-align: center;
+}
+
 .series-book-volumes__pages {
   font-size: 0.75rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding-right: 0.2rem;
+  justify-self: end;
+  text-align: right;
 }
 
 .release-page--stacked .series-book-volumes__row {
-  grid-template-columns: 2.35rem minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .release-page--stacked .series-book-volumes__date--center {
@@ -21323,21 +21412,6 @@ button.lyrics-status-badge--icon-only {
   display: block;
 }
 
-.series-cast__empty-cta {
-  display: inline;
-  margin: 0.75rem 0.25rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  color: var(--accent, #c9a227);
-  font: inherit;
-  font-size: 0.92rem;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.series-cast__empty-cta:hover {
-  text-decoration: underline;
-  background: none;
+.release-page--stacked .series-book-volumes__pages {
+  justify-self: end;
 }

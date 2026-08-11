@@ -157,12 +157,15 @@ export function pushSeriesRootRoute(replace = false) {
 const SERIES_ENTRY_REFERRER_KEY = "mystack_series_entry_referrer";
 
 export type SeriesEntryReferrer = {
-  kind: "movies";
+  kind: "movies" | "books";
   franchiseId: string;
   filmId?: string;
+  bookId?: string;
   section?: string;
   overviewTab?: string;
   universeId?: number;
+  /** Display name for back button (e.g. book franchise title). */
+  title?: string;
 };
 
 export function saveSeriesEntryReferrer(ref: SeriesEntryReferrer) {

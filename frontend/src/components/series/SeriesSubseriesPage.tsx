@@ -9,8 +9,10 @@ import {
 } from "react";
 import {
   fetchBooksBook,
+  fetchBooksBookAudio,
   fetchBooksBookOverview,
   fetchBooksFranchiseOverview,
+  fetchBooksFranchiseGames,
   fetchMoviesFilm,
   fetchMoviesFilmAudio,
   fetchMoviesFilmOverview,
@@ -93,6 +95,7 @@ import {
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import MediaInlineSearch from "../music/MediaInlineSearch";
+import SeriesScopeControl from "./SeriesScopeControl";
 import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
@@ -227,7 +230,10 @@ function filmCardToSubseries(f: MoviesFilmCard | SeriesSubseriesCard): SeriesSub
         ? f.season_count
         : (f as MoviesFilmCard).version_count ?? 1,
     has_gallery: "has_gallery" in f ? Boolean(f.has_gallery) : undefined,
-  };
+    ...(("hub_title" in f && (f as { hub_title?: string }).hub_title)
+      ? { hub_title: (f as { hub_title?: string }).hub_title }
+      : {}),
+  } as SeriesSubseriesCard;
 }
 
 function sectionToTab(section: SeriesSection | undefined): SubseriesTab {
@@ -598,19 +604,26 @@ export default function SeriesSubseriesPage({
   const [extrasMenuOpen, setExtrasMenuOpen] = useState(false);
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [activeVolumeId, setActiveVolumeId] = useState<string | null>(null);
+  const [volumeDateLabel, setVolumeDateLabel] = useState<string | null>(null);
+  const [bookHubFilter, setBookHubFilter] = useState("all");
   const [refreshBio, setRefreshBio] = useState(true);
   const [metadataFetching, setMetadataFetching] = useState(false);
   useEffect(() => {
     setOverviewDescExpanded(false);
-    setCastGlassMin(0);
+    setVolumeDateLabel(null);
+    setActiveVolumeId(null);
   }, [subseriesId]);
+
+  useEffect(() => {
+    setCastGlassMin(0);
+  }, [subseriesId, castTab]);
 
   useLayoutEffect(() => {
     if (tab !== "overview") return;
     const el = castGlassRef.current;
     if (!el) return;
     const h = Math.ceil(el.getBoundingClientRect().height);
-    if (h > 0) setCastGlassMin((prev) => Math.max(prev, h));
+    if (h > 0) setCastGlassMin(h);
   }, [tab, castTab, overview?.cast, subseriesId]);
 
   const setCardLayoutPersisted = useCallback(
@@ -1104,7 +1117,13 @@ export default function SeriesSubseriesPage({
   const title =
     detail?.title || card?.title || (isFilm ? overview?.name || "" : "") || "";
   const scopedMeta = overview?.subseries_meta?.[subseriesId] ?? null;
-  const dateLabel = isFilm
+  const dateLabel = isBook
+    ? volumeDateLabel ||
+      detail?.display_date ||
+      card?.display_date ||
+      formatTrackDate(detail?.date_iso || card?.date_iso) ||
+      null
+    : isFilm
     ? detail?.display_date ||
       card?.display_date ||
       formatTrackDate(detail?.date_iso || card?.date_iso) ||
@@ -1356,6 +1375,161 @@ export default function SeriesSubseriesPage({
     const run = async () => {
       try {
         if (isFilm) {
+          if (isBook) {
+            const [workOv, audioData, gamesData] = await Promise.all([
+              fetchBooksFranchiseOverview(franchiseId).catch(() => null),
+              fetchBooksBookAudio(subseriesId).catch(() => ({
+                releases: [],
+              })),
+              fetchBooksFranchiseGames(franchiseId).catch(() => ({
+                items: [],
+              })),
+            ]);
+            if (cancelled) return;
+
+            const bookItems = (workOv?.films ||
+              workOv?.books ||
+              workOv?.subseries ||
+              []) as MoviesFilmCard[];
+            const siblingBooks = bookItems.filter((f) => f.id !== subseriesId);
+
+            setMovieCards(
+              toMediaCards(
+                siblingBooks.map((m) => {
+                  const film = m as MoviesFilmCard & {
+                    portrait_url?: string | null;
+                    landscape_url?: string | null;
+                    hub_title?: string | null;
+                  };
+                  return {
+                    ...film,
+                    path: film.folder_path,
+                    portrait_url: film.portrait_url || film.cover_url,
+                    landscape_url: film.landscape_url || null,
+                    banner_url:
+                      film.banner_url ||
+                      film.landscape_url ||
+                      film.portrait_url ||
+                      film.cover_url ||
+                      null,
+                    open_label:
+                      film.open_label || (film.open_url ? "Read" : null),
+                    open_mode:
+                      film.open_mode ||
+                      (film.open_url ? ("tab" as const) : null),
+                    meta: film.hub_title || undefined,
+                    subseries_id: film.hub_title || null,
+                  };
+                })
+              )
+            );
+
+            // Library = other books in this franchise (not volumes of this leaf).
+            setLibraryCards(
+              toMediaCards(
+                siblingBooks.map((m) => {
+                  const film = m as MoviesFilmCard & {
+                    portrait_url?: string | null;
+                    landscape_url?: string | null;
+                    hub_title?: string | null;
+                  };
+                  return {
+                    ...film,
+                    path: film.folder_path,
+                    portrait_url: film.portrait_url || film.cover_url,
+                    landscape_url: film.landscape_url || null,
+                    banner_url:
+                      film.banner_url ||
+                      film.landscape_url ||
+                      film.portrait_url ||
+                      film.cover_url ||
+                      null,
+                    open_label:
+                      film.open_label || (film.open_url ? "Read" : null),
+                    open_mode:
+                      film.open_mode ||
+                      (film.open_url ? ("tab" as const) : null),
+                    meta: film.hub_title || undefined,
+                    subseries_id: film.hub_title || null,
+                  };
+                })
+              )
+            );
+
+            const releases = (audioData.releases || []) as {
+              id?: string;
+              title?: string;
+              name?: string;
+              cover_url?: string | null;
+              banner_url?: string | null;
+              logo_url?: string | null;
+              date_iso?: string | null;
+              display_date?: string | null;
+              release_date?: string | null;
+              folder_path?: string | null;
+              source_artist_name?: string | null;
+              navigate_band_id?: number | null;
+              navigate_release_id?: string | null;
+              category?: string | null;
+              meta?: string | null;
+            }[];
+            setAudioCards(
+              toMediaCards(
+                releases.map((r) => ({
+                  id: r.id,
+                  title: r.title || r.name,
+                  cover_url: r.cover_url,
+                  banner_url: r.banner_url,
+                  logo_url: r.logo_url,
+                  date_iso: r.date_iso,
+                  display_date: r.display_date || r.release_date,
+                  folder_path: r.folder_path || undefined,
+                  path: r.folder_path || undefined,
+                  meta:
+                    [r.source_artist_name, r.meta].filter(Boolean).join(" · ") ||
+                    undefined,
+                  navigate_band_id: r.navigate_band_id,
+                  navigate_release_id: r.navigate_release_id,
+                  category: r.category || undefined,
+                }))
+              )
+            );
+
+            setGameCards(
+              filterCardsForSubseries(
+                toMediaCards(
+                  (gamesData.items || []).map((it) => {
+                    const row = it as {
+                      id?: string;
+                      title?: string;
+                      name?: string;
+                      cover_url?: string | null;
+                      banner_url?: string | null;
+                      logo_url?: string | null;
+                      path?: string;
+                      folder_path?: string;
+                      date_iso?: string | null;
+                      display_date?: string | null;
+                      platform?: string | null;
+                      open_url?: string | null;
+                      open_mode?: "tab" | "local" | null;
+                      open_label?: string | null;
+                    };
+                    return {
+                      ...row,
+                      open_label: row.open_label || "Play game",
+                      open_mode: row.open_mode || "local",
+                    };
+                  })
+                ),
+                title,
+                galleryPath
+              )
+            );
+            setMediaReady(true);
+            return;
+          }
+
           const [workOv, audioData, libraryData, gamesData] =
             await Promise.all([
               fetchMoviesFranchiseOverview(franchiseId).catch(() => null),
@@ -1812,6 +1986,38 @@ export default function SeriesSubseriesPage({
       episodeMovies.length > 0 ||
       (card?.season_count ?? 0) > 0);
   const siblingMovieCount = siblings.filter((s) => s.id !== subseriesId).length;
+
+  const bookHubOptions = useMemo(() => {
+    if (!isBook) return [] as { id: string; title: string }[];
+    const byTitle = new Map<string, string>();
+    for (const s of siblings) {
+      const hub = (
+        (s as { hub_title?: string }).hub_title ||
+        s.title ||
+        ""
+      ).trim();
+      if (!hub) continue;
+      const key = hub.toLowerCase();
+      if (!byTitle.has(key)) byTitle.set(key, hub);
+    }
+    const hubs = Array.from(byTitle.values());
+    if (hubs.length <= 1) return [];
+    return [
+      { id: "all", title: "All" },
+      ...hubs.map((t) => ({ id: `hub:${t}`, title: t })),
+    ];
+  }, [isBook, siblings]);
+
+  const filteredLibraryCards = useMemo(() => {
+    if (!isBook || bookHubFilter === "all") return libraryCards;
+    const want = bookHubOptions
+      .find((o) => o.id === bookHubFilter)
+      ?.title?.toLowerCase();
+    if (!want) return libraryCards;
+    return libraryCards.filter(
+      (c) => (c.meta || c.subseries_id || "").toLowerCase() === want
+    );
+  }, [isBook, bookHubFilter, bookHubOptions, libraryCards]);
   const hasMovies = isFilm
     ? siblingMovieCount > 0 || movieCards.length > 0
     : movieCards.length > 0;
@@ -1862,18 +2068,24 @@ export default function SeriesSubseriesPage({
         );
       }
       if (t.id === "movies" && isFilm) {
+        // Books use Library for sibling books; hide MORE BOOKS duplicate.
+        if (isBook) return false;
         return siblingMovieCount > 0;
       }
       if (!mediaReady) {
         if (t.id === "movies") return Boolean(media?.has_movies);
         if (t.id === "audio") return Boolean(media?.has_audio);
-        if (t.id === "library") return Boolean(media?.has_library);
+        if (t.id === "library")
+          return isBook
+            ? siblingMovieCount > 0 || Boolean(media?.has_library)
+            : Boolean(media?.has_library);
         if (t.id === "games") return Boolean(media?.has_games);
         return false;
       }
       if (t.id === "movies") return hasMovies;
       if (t.id === "audio") return hasAudio;
-      if (t.id === "library") return hasLibrary;
+      if (t.id === "library")
+        return isBook ? siblingMovieCount > 0 || hasLibrary : hasLibrary;
       if (t.id === "games") return hasGames;
       return true;
     });
@@ -2065,6 +2277,10 @@ export default function SeriesSubseriesPage({
     portrait_url?: string | null;
     banner_url?: string | null;
     landscape_url?: string | null;
+    display_date?: string | null;
+    date_iso?: string | null;
+    file_url?: string | null;
+    open_url?: string | null;
   }) => {
     const portrait = v.portrait_url || v.cover_url || null;
     const wide =
@@ -2072,6 +2288,15 @@ export default function SeriesSubseriesPage({
     setActiveVolumeId(v.id || null);
     setFocusCoverUrl(portrait);
     setFocusBgUrl(wide);
+    if (v.display_date || v.date_iso) {
+      setVolumeDateLabel(
+        v.display_date || formatTrackDate(v.date_iso) || null
+      );
+    }
+    const url = (v.file_url || v.open_url || "").trim();
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   useEffect(() => {
@@ -2381,10 +2606,42 @@ export default function SeriesSubseriesPage({
                 />
               )
             ) : null}
+            {isBook && bookHubOptions.length > 1 ? (
+              <SeriesScopeControl
+                variant="icon"
+                label="Series"
+                options={bookHubOptions}
+                value={bookHubFilter}
+                onChange={(id) => {
+                  setBookHubFilter(id);
+                  if (id === "all") return;
+                  const hubTitle = bookHubOptions.find((o) => o.id === id)?.title;
+                  if (!hubTitle) return;
+                  const target = siblings.find(
+                    (s) =>
+                      s.id !== subseriesId &&
+                      (
+                        (s as { hub_title?: string }).hub_title || s.title
+                      ).toLowerCase() === hubTitle.toLowerCase()
+                  );
+                  if (target) openSibling(target.id);
+                }}
+              />
+            ) : null}
             {siblings.length > 1 ? (
               <MediaInlineSearch
                 mode="series-subseries"
-                items={siblings.map((s) => ({ id: s.id, title: s.title }))}
+                items={siblings
+                  .filter((s) => {
+                    if (!isBook || bookHubFilter === "all") return true;
+                    const hub =
+                      (s as { hub_title?: string }).hub_title || s.title;
+                    const want = bookHubOptions.find(
+                      (o) => o.id === bookHubFilter
+                    )?.title;
+                    return !want || hub.toLowerCase() === want.toLowerCase();
+                  })
+                  .map((s) => ({ id: s.id, title: s.title }))}
                 onSelectSubseries={(id) => {
                   if (id === subseriesId) return;
                   openSibling(id);
@@ -2459,7 +2716,9 @@ export default function SeriesSubseriesPage({
               }
               onAddMember={
                 isAdmin
-                  ? () => setAddCastOpen(true)
+                  ? () => {
+                      window.setTimeout(() => setAddCastOpen(true), 0);
+                    }
                   : undefined
               }
               onRefreshMetadata={
@@ -3605,6 +3864,10 @@ export default function SeriesSubseriesPage({
                         meta.label ||
                         meta.file_name ||
                         `Volume ${i + 1}`;
+                      const volNum =
+                        meta.number != null && meta.number > 0
+                          ? meta.number
+                          : i + 1;
                       const active = activeVolumeId === meta.id;
                       return (
                         <li key={meta.id || String(i)}>
@@ -3615,30 +3878,30 @@ export default function SeriesSubseriesPage({
                             }`}
                             onClick={() => selectVolumeCover(meta)}
                           >
-                            {meta.cover_url || meta.portrait_url ? (
-                              <span
-                                className="series-book-volumes__cover"
-                                style={{
-                                  backgroundImage: `url("${
-                                    meta.cover_url || meta.portrait_url
-                                  }")`,
-                                }}
-                              />
-                            ) : (
-                              <span className="series-book-volumes__cover series-book-volumes__cover--empty" />
-                            )}
-                            <span className="series-book-volumes__meta">
-                              <span className="series-book-volumes__title">
-                                {meta.number != null
-                                  ? `${String(meta.number).padStart(2, "0")}. `
-                                  : ""}
-                                {title}
-                              </span>
-                              {meta.display_date ? (
-                                <span className="series-book-volumes__date series-book-volumes__date--under">
-                                  {meta.display_date}
+                            <span className="series-book-volumes__leading">
+                              {meta.cover_url || meta.portrait_url ? (
+                                <span
+                                  className="series-book-volumes__cover"
+                                  style={{
+                                    backgroundImage: `url("${
+                                      meta.cover_url || meta.portrait_url
+                                    }")`,
+                                  }}
+                                />
+                              ) : (
+                                <span className="series-book-volumes__cover series-book-volumes__cover--empty" />
+                              )}
+                              <span className="series-book-volumes__meta">
+                                <span className="series-book-volumes__title">
+                                  {`${String(volNum).padStart(2, "0")}. `}
+                                  {title}
                                 </span>
-                              ) : null}
+                                {meta.display_date ? (
+                                  <span className="series-book-volumes__date series-book-volumes__date--under">
+                                    {meta.display_date}
+                                  </span>
+                                ) : null}
+                              </span>
                             </span>
                             {meta.display_date ? (
                               <span className="series-book-volumes__date series-book-volumes__date--center">
@@ -3832,16 +4095,22 @@ export default function SeriesSubseriesPage({
 
           {!error && (card || detail) && tab === "library" ? (
             <SeriesMediaGrid
-              items={libraryCards}
+              items={filteredLibraryCards}
               loading={mediaLoading && libraryCards.length === 0}
               emptyMessage={
-                isFilm
-                  ? "No library items for this movie."
-                  : "No library items for this series."
+                isBook
+                  ? "No other books in this franchise."
+                  : isFilm
+                    ? "No library items for this movie."
+                    : "No library items for this series."
               }
               cardLayout={cardLayout}
               coverAspect="portrait"
-              onOpen={openMediaCard}
+              onOpen={
+                isBook
+                  ? (item) => openSiblingFilm(item.id)
+                  : openMediaCard
+              }
             />
           ) : null}
 

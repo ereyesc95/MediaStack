@@ -6,9 +6,9 @@ type Props = {
 };
 
 export default function DashIconCard({ artist, onClick }: Props) {
-  const hasPhoto = Boolean(artist.photo_url);
-  const bg = hasPhoto
-    ? `url("${artist.photo_url}")`
+  const coverUrl = artist.icon_url || artist.photo_url;
+  const bg = coverUrl
+    ? `url("${coverUrl}")`
     : "linear-gradient(135deg, #1a1f2e, #2d3548)";
   const name = (artist.name ?? "Untitled")
     .replace(/■/g, ",")

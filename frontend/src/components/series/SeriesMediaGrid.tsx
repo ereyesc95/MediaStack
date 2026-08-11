@@ -30,6 +30,8 @@ export type SeriesMediaCard = {
   universe_franchise_id?: string;
   universe_leaf_id?: string;
   subseries_id?: string | null;
+  navigate_franchise_id?: string;
+  navigate_subseries_id?: string;
 };
 
 type Props = {

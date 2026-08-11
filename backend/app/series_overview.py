@@ -527,6 +527,21 @@ def _enrich_related_cards(
                 cover = portrait or landscape or _folder_cover(folder, media_root)
                 logo_url, _icon = find_logo_file(folder, media_root)
                 logo = logo_url
+            elif kind == "series" or path.replace("\\", "/").lower().startswith(
+                "series/"
+            ):
+                portrait = _series_folder_cover(folder, media_root) or _folder_cover(
+                    folder, media_root
+                )
+                landscape = _series_folder_landscape(folder, media_root)
+                banner = (
+                    _series_folder_banner(folder, media_root)
+                    or landscape
+                    or portrait
+                )
+                cover = portrait or landscape or _folder_cover(folder, media_root)
+                logo_url, _icon = find_logo_file(folder, media_root)
+                logo = logo_url
             else:
                 cover = _folder_cover(folder, media_root)
                 art = _find_artwork_subdir(folder)
@@ -595,6 +610,22 @@ def _enrich_related_cards(
                     duration = (
                         _format_duration(duration_sec) if duration_sec else None
                     )
+        nav_franchise_id = e.get("navigate_franchise_id")
+        nav_subseries_id = e.get("navigate_subseries_id") or e.get("subseries_id")
+        norm_path = path.replace("\\", "/")
+        if (
+            not nav_franchise_id
+            and norm_path.lower().startswith("series/")
+        ):
+            from app.franchise_index import normalize_franchise_slug
+
+            parts = [p for p in norm_path.split("/") if p]
+            # Series / Letter / Franchise [/ dated subseries]
+            if len(parts) >= 3:
+                nav_franchise_id = normalize_franchise_slug(parts[2])
+            if len(parts) >= 4 and not nav_subseries_id:
+                # Prefer dated subseries folder name as show id candidate
+                nav_subseries_id = parts[3]
         out.append(
             {
                 **e,
@@ -608,6 +639,12 @@ def _enrich_related_cards(
                 "display_date": format_display_date(e.get("date_iso")),
                 "duration": duration,
                 "duration_sec": duration_sec,
+                "navigate_franchise_id": nav_franchise_id,
+                "navigate_subseries_id": nav_subseries_id,
+                "is_franchise_root": bool(
+                    norm_path.lower().startswith("series/")
+                    and len([p for p in norm_path.split("/") if p]) == 3
+                ),
             }
         )
     return out

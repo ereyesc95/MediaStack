@@ -812,6 +812,67 @@ export default function SeriesFranchisePage({
     if (section !== "series") return;
     let cancelled = false;
 
+    // Books: use enriched related.series (correct covers + series franchise ids).
+    // Skip franchise-root cards — only dated/subseries entries.
+    if (isBooks) {
+      const related =
+        (
+          data as {
+            related?: {
+              series?: Array<Record<string, unknown>>;
+            };
+          } | null
+        )?.related?.series || [];
+      setShowCards(
+        related
+          .filter((raw) => !raw.is_franchise_root)
+          .map((raw) => {
+            const s = raw as {
+              id?: string;
+              title?: string;
+              cover_url?: string | null;
+              portrait_url?: string | null;
+              banner_url?: string | null;
+              logo_url?: string | null;
+              badge_url?: string | null;
+              display_date?: string | null;
+              date_iso?: string | null;
+              path?: string;
+              navigate_franchise_id?: string;
+              navigate_subseries_id?: string;
+              is_franchise_root?: boolean;
+            };
+            const path = (s.path || "").replace(/\\/g, "/");
+            const parts = path.split("/").filter(Boolean);
+            // Series/Letter/Franchise[/Sub]
+            const isRoot = parts.length <= 3;
+            if (isRoot) return null;
+            return {
+              id: String(
+                s.navigate_franchise_id ||
+                  s.id ||
+                  (parts[2] ? parts[2] : "")
+              ),
+              title: s.title || "Untitled",
+              cover_url: s.portrait_url || s.cover_url || null,
+              portrait_url: s.portrait_url || s.cover_url || null,
+              banner_url: s.banner_url || s.cover_url || null,
+              logo_url: s.logo_url || null,
+              badge_url: s.badge_url || null,
+              date_label: s.display_date || s.date_iso || null,
+              path: s.path,
+              navigate_franchise_id: s.navigate_franchise_id,
+              navigate_subseries_id:
+                s.navigate_subseries_id ||
+                (parts.length >= 4 ? parts[3] : undefined),
+            };
+          })
+          .filter(Boolean) as typeof showCards
+      );
+      setShowLoading(false);
+      return;
+    }
+
     // Shared movies↔series overview already includes show cards — sync without a
     // loading flash. Avoid `seriesShows` array identity in deps (|| [] flicker).
     if (isMovies && sharedSeries && seriesShowsKey) {
@@ -836,11 +897,8 @@ export default function SeriesFranchisePage({
     }
 
     setShowLoading(true);
-    if (isMovies) {
-      void (isBooks
-        ? fetchBooksFranchiseSeries(franchiseId)
-        : fetchMoviesFranchiseSeries(franchiseId)
-      )
+    if (isMoviesOnly) {
+      void fetchMoviesFranchiseSeries(franchiseId)
         .then((payload) => {
           if (cancelled) return;
           setShowCards(
@@ -909,9 +967,12 @@ export default function SeriesFranchisePage({
     section,
     franchiseId,
     isMovies,
+    isMoviesOnly,
+    isBooks,
     sharedSeries,
     seriesShowsKey,
     seriesShows,
+    data,
   ]);
 
   useEffect(() => {
@@ -1197,16 +1258,24 @@ export default function SeriesFranchisePage({
     // Prefer real Series hubs (series_shows) or film hub_title groups.
     const shows = seriesShows || [];
     const filmHubs = (() => {
-      if (!isMoviesOnly) return [] as SeriesSubseriesCard[];
+      if (!isMoviesOnly && !isBooks) return [] as SeriesSubseriesCard[];
       const films =
         (data as { films?: Array<{ hub_title?: string | null; id?: string }> } | null)
           ?.films || [];
+      const relatedMovies =
+        (
+          data as {
+            related?: {
+              movies?: Array<{ subseries?: string | null; hub_title?: string | null }>;
+            };
+          } | null
+        )?.related?.movies || [];
       const byTitle = new Map<string, SeriesSubseriesCard>();
-      for (const f of films) {
-        const title = (f.hub_title || "").trim();
-        if (!title) continue;
+      const addHub = (titleRaw: string | null | undefined) => {
+        const title = (titleRaw || "").trim();
+        if (!title) return;
         const key = title.toLowerCase();
-        if (byTitle.has(key)) continue;
+        if (byTitle.has(key)) return;
         const matched = shows.find(
           (s) => (s.title || "").trim().toLowerCase() === key
         );
@@ -1218,14 +1287,25 @@ export default function SeriesFranchisePage({
               title,
             } as SeriesSubseriesCard)
         );
+      };
+      for (const f of films) addHub(f.hub_title);
+      for (const m of relatedMovies) addHub(m.hub_title || m.subseries);
+      // Books mid-tier hubs from leaf hub_title
+      if (isBooks) {
+        for (const s of data?.subseries || []) {
+          addHub(
+            (s as { hub_title?: string | null }).hub_title || s.title
+          );
+        }
       }
       return Array.from(byTitle.values());
     })();
-    const list = isMoviesOnly
-      ? filmHubs.length
-        ? filmHubs
-        : shows
-      : data?.subseries || [];
+    const list =
+      isMoviesOnly || isBooks
+        ? filmHubs.length
+          ? filmHubs
+          : shows
+        : data?.subseries || [];
     let hubs = list.filter(
       (s) => !(s as { is_standalone?: boolean }).is_standalone
     );
@@ -1262,6 +1342,7 @@ export default function SeriesFranchisePage({
     return hubs.length > 1 ? hubs : [];
   }, [
     isMoviesOnly,
+    isBooks,
     data,
     data?.subseries,
     seriesShows,
@@ -1351,6 +1432,14 @@ export default function SeriesFranchisePage({
       onOpenMoviesPath &&
       diskPath.toLowerCase().startsWith("movies/")
     ) {
+      if (isBooks) {
+        saveSeriesEntryReferrer({
+          kind: "books",
+          franchiseId,
+          section: "movies",
+          title: data?.name || title,
+        });
+      }
       onOpenMoviesPath(diskPath);
       return;
     }
@@ -1664,14 +1753,16 @@ export default function SeriesFranchisePage({
                 !isMovies &&
                 section === "overview" &&
                 overviewTab === "cast"
-                  ? () => setAddCastOpen(true)
+                  ? () => {
+                      window.setTimeout(() => setAddCastOpen(true), 0);
+                    }
                   : undefined
               }
               onAddLink={
                 isAdmin &&
-                !isMovies &&
                 section === "overview" &&
-                overviewTab === "links"
+                overviewTab === "links" &&
+                (!isMoviesOnly || isBooks)
                   ? () => setAddLinkOpen(true)
                   : undefined
               }
@@ -1701,7 +1792,10 @@ export default function SeriesFranchisePage({
                   : undefined
               }
               onRefreshLinks={
-                isAdmin && section === "overview" && overviewTab === "links"
+                isAdmin &&
+                !isBooks &&
+                section === "overview" &&
+                overviewTab === "links"
                   ? () => void handleRefreshMetadata()
                   : undefined
               }
@@ -1731,7 +1825,19 @@ export default function SeriesFranchisePage({
 
         {section === "overview" ? (
           <nav className="artist-page__subtabs" aria-label="Overview">
-            {(isBooks ? BOOKS_OVERVIEW_TABS : OVERVIEW_TABS).map((t) => (
+            {(isBooks
+              ? BOOKS_OVERVIEW_TABS.filter((t) => {
+                  if (t.id !== "cast") return true;
+                  const c = data?.cast;
+                  const n =
+                    (c?.characters?.length || 0) +
+                    (c?.staff?.length || 0) +
+                    (c?.animated?.length || 0) +
+                    (c?.people?.length || 0);
+                  return n > 0;
+                })
+              : OVERVIEW_TABS
+            ).map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -2024,7 +2130,7 @@ export default function SeriesFranchisePage({
             franchiseId={franchiseId}
             links={data.links}
             tab={linkTab}
-            isAdmin={isAdmin && !isMovies}
+            isAdmin={isAdmin && (!isMoviesOnly || isBooks)}
             addOpen={addLinkOpen}
             onAddClose={() => setAddLinkOpen(false)}
             onDataChanged={() => void load()}
@@ -2257,11 +2363,27 @@ export default function SeriesFranchisePage({
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
             onOpen={(item) => {
+              if (isBooks) {
+                const seriesId =
+                  item.navigate_franchise_id || item.id;
+                saveSeriesEntryReferrer({
+                  kind: "books",
+                  franchiseId,
+                  section: "series",
+                  title: data?.name || title,
+                });
+                onOpenSeriesFranchise?.(
+                  seriesId,
+                  item.navigate_subseries_id
+                );
+                return;
+              }
               if (isMovies && sharedSeries) {
                 saveSeriesEntryReferrer({
                   kind: "movies",
                   franchiseId,
                   section: "series",
+                  title: data?.name || title,
                 });
                 onOpenSeriesFranchise?.(seriesFranchiseId, item.id);
                 return;
@@ -2271,6 +2393,7 @@ export default function SeriesFranchisePage({
                   kind: "movies",
                   franchiseId,
                   section: "series",
+                  title: data?.name || title,
                 });
                 onOpenSeriesFranchise?.(item.id);
                 return;

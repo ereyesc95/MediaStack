@@ -9,6 +9,10 @@ import {
 } from "../../api";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
+  clearSeriesEntryReferrer,
+  getSeriesEntryReferrer,
+} from "../../seriesRoute";
+import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
 } from "../../catalogBackdrop";
@@ -561,6 +565,17 @@ export default function MoviesModule({
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
         onBack={() => {
+          const ref = getSeriesEntryReferrer();
+          if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
+            clearSeriesEntryReferrer();
+            onOpenBooksFranchise(
+              ref.franchiseId,
+              ref.bookId,
+              ref.section || "movies",
+              ref.universeId
+            );
+            return;
+          }
           const from = getMediaEntrySource() || entrySource;
           if (universeId != null) {
             onOpenUniversePage?.(
@@ -595,18 +610,24 @@ export default function MoviesModule({
         backLabelOverride={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : Boolean(
+            : (() => {
+                const ref = getSeriesEntryReferrer();
+                if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
+                  return (ref.title || "BOOKS").toLocaleUpperCase();
+                }
+                return Boolean(
                   (franchises.find((f) => f.id === franchiseId) as
                     | { is_standalone?: boolean }
                     | undefined)?.is_standalone
                 ) ||
-                films.filter((f) => f.work_id === franchiseId).length <= 1
-              ? (getMediaEntrySource() || entrySource) === "home"
-                ? "HOME"
-                : "CATALOG"
-              : entrySource === "home"
-                ? "HOME"
-                : undefined
+                  films.filter((f) => f.work_id === franchiseId).length <= 1
+                  ? (getMediaEntrySource() || entrySource) === "home"
+                    ? "HOME"
+                    : "CATALOG"
+                  : entrySource === "home"
+                    ? "HOME"
+                    : undefined;
+              })()
         }
         onBrowseCatalog={(target) => {
           clearMediaTheme(userId);
@@ -772,6 +793,17 @@ export default function MoviesModule({
         cardOrientation={cardOrientation}
         onSetOrientation={onSetOrientation}
         onBack={() => {
+          const ref = getSeriesEntryReferrer();
+          if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
+            clearSeriesEntryReferrer();
+            onOpenBooksFranchise(
+              ref.franchiseId,
+              ref.bookId,
+              ref.section || "movies",
+              ref.universeId
+            );
+            return;
+          }
           const from = getMediaEntrySource() || entrySource;
           if (entrySource !== from) setEntrySource(from);
           if (universeId != null) {
@@ -788,9 +820,15 @@ export default function MoviesModule({
         backLabel={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : (getMediaEntrySource() || entrySource) === "home"
-              ? "HOME"
-              : "CATALOG"
+            : (() => {
+                const ref = getSeriesEntryReferrer();
+                if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
+                  return (ref.title || "BOOKS").toLocaleUpperCase();
+                }
+                return (getMediaEntrySource() || entrySource) === "home"
+                  ? "HOME"
+                  : "CATALOG";
+              })()
         }
         onNavigate={(patch) => {
           const next: {

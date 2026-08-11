@@ -574,9 +574,7 @@ export default function BooksModule({
           const work = franchises.find((f) => f.id === franchiseId) as
             | (SeriesFranchiseCard & { is_standalone?: boolean })
             | undefined;
-          const filmCount = films.filter((f) => f.work_id === franchiseId).length;
-          const isStandalone =
-            Boolean(work?.is_standalone) || filmCount <= 1;
+          const isStandalone = Boolean(work?.is_standalone);
           if (isStandalone) {
             if (from === "home") backToBooksHome();
             else backToBooksCatalog();
@@ -599,8 +597,7 @@ export default function BooksModule({
                   (franchises.find((f) => f.id === franchiseId) as
                     | { is_standalone?: boolean }
                     | undefined)?.is_standalone
-                ) ||
-                films.filter((f) => f.work_id === franchiseId).length <= 1
+                )
               ? (getMediaEntrySource() || entrySource) === "home"
                 ? "HOME"
                 : "CATALOG"

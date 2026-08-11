@@ -170,6 +170,7 @@ def build_work_overview(
             "badge_url": b.get("badge_url"),
             "folder_path": b.get("folder_path"),
             "season_count": b.get("volume_count") or 0,
+            "hub_title": b.get("hub_title"),
         }
         for b in books
     ]
@@ -178,7 +179,7 @@ def build_work_overview(
         "has_audio": _has_audio(work_dir),
         "has_series": bool(related_disk.get("series")),
         "has_movies": bool(related_disk.get("movies") or related_disk.get("movie")),
-        "has_library": False,
+        "has_library": len(books) > 1,
         "has_books": len(books) > 0,
         "has_games": bool(related_disk.get("games")),
         "has_gallery": has_gallery,

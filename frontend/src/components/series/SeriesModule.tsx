@@ -414,6 +414,16 @@ export default function SeriesModule({
       onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
       return;
     }
+    if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
+      clearSeriesEntryReferrer();
+      onOpenBooksFranchise(
+        ref.franchiseId,
+        ref.bookId,
+        ref.section || "series",
+        ref.universeId
+      );
+      return;
+    }
     backFromFranchise();
   };
 
@@ -422,6 +432,16 @@ export default function SeriesModule({
     if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
       clearSeriesEntryReferrer();
       onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
+      return;
+    }
+    if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
+      clearSeriesEntryReferrer();
+      onOpenBooksFranchise(
+        ref.franchiseId,
+        ref.bookId,
+        ref.section || "series",
+        ref.universeId
+      );
       return;
     }
     const from = getMediaEntrySource() || entrySource;
@@ -556,13 +576,22 @@ export default function SeriesModule({
           backLabelOverride={
             universeId != null
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
-              : Boolean(
+              : (() => {
+                  const ref = getSeriesEntryReferrer();
+                  if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
+                    return (ref.title || "BOOKS").toLocaleUpperCase();
+                  }
+                  if (ref?.kind === "movies" && (ref.title || ref.franchiseId)) {
+                    return (ref.title || "MOVIES").toLocaleUpperCase();
+                  }
+                  return Boolean(
                     franchises.find((f) => f.id === franchiseId)?.is_standalone
                   )
-                ? (getMediaEntrySource() || entrySource) === "home"
-                  ? "HOME"
-                  : "CATALOG"
-                : undefined
+                    ? (getMediaEntrySource() || entrySource) === "home"
+                      ? "HOME"
+                      : "CATALOG"
+                    : undefined;
+                })()
           }
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
@@ -672,9 +701,16 @@ export default function SeriesModule({
           backLabel={
             universeId != null
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
-              : entrySource === "home"
-                ? "HOME"
-                : "CATALOG"
+              : (() => {
+                  const ref = getSeriesEntryReferrer();
+                  if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
+                    return (ref.title || "BOOKS").toLocaleUpperCase();
+                  }
+                  if (ref?.kind === "movies" && (ref.title || ref.franchiseId)) {
+                    return (ref.title || "MOVIES").toLocaleUpperCase();
+                  }
+                  return entrySource === "home" ? "HOME" : "CATALOG";
+                })()
           }
           menuExtra={
             isAdmin ? (
