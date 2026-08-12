@@ -518,8 +518,6 @@ export default function BooksModule({
       films.find((f) => f.id === bookId)?.work_name ||
       undefined;
     const workCard = franchises.find((f) => f.id === franchiseId);
-    const filmSection: SeriesSection =
-      section === "series" ? "overview" : (section as SeriesSection);
     return (
       <SeriesSubseriesPage
         variant="book"
@@ -528,7 +526,7 @@ export default function BooksModule({
         franchiseLogoUrl={workCard?.logo_url}
         franchiseIconUrl={workCard?.icon_url}
         subseriesId={bookId}
-        section={filmSection}
+        section={section as SeriesSection}
         overviewTab={overviewTab}
         universeId={universeId}
         busy={busy}
@@ -580,14 +578,10 @@ export default function BooksModule({
             else backToBooksCatalog();
             return;
           }
-          if (from === "home") {
-            backToBooksHome();
-            return;
-          }
           onNavigate({
             franchiseId,
             bookId: undefined,
-            section: "movies",
+            section: "books",
           });
         }}
         backLabelOverride={
@@ -601,9 +595,7 @@ export default function BooksModule({
               ? (getMediaEntrySource() || entrySource) === "home"
                 ? "HOME"
                 : "CATALOG"
-              : entrySource === "home"
-                ? "HOME"
-                : undefined
+              : undefined
         }
         onBrowseCatalog={(target) => {
           clearMediaTheme(userId);
@@ -633,6 +625,7 @@ export default function BooksModule({
           loadCatalog();
         }}
         onOpenMusicRelease={onOpenMusicRelease}
+        onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenFilm={(id) => {
           pushBooksRoute({
             franchiseId,
@@ -720,10 +713,7 @@ export default function BooksModule({
           const nextFilmId =
             "subseriesId" in patch ? patch.subseriesId : bookId;
           const rawSection = (patch.section || section) as string;
-          const nextSection: BooksSection =
-            rawSection === "series"
-              ? "overview"
-              : (rawSection as BooksSection);
+          const nextSection = rawSection as BooksSection;
           const nextFranchise =
             "franchiseId" in patch && patch.franchiseId
               ? patch.franchiseId

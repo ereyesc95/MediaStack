@@ -219,3 +219,227 @@ def patch_book_cast_member(
     about["cast"] = cast
     _save_book_about(book_dir, about)
     return member
+
+
+def _resolve_work_about(work_id: str) -> tuple[Path, dict]:
+    from app.books_index import find_work_dir
+    from app.books_refresh import load_work_about
+
+    root = Path(settings.media_root or "")
+    found = find_work_dir(work_id, root if root.is_dir() else None)
+    if not found:
+        raise ValueError(f"Books franchise not found: {work_id}")
+    work_dir, _letter = found
+    return work_dir, load_work_about(work_dir)
+
+
+def _save_work_about(work_dir: Path, about: dict) -> None:
+    path = work_dir / ".mystack" / "about.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(about, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def add_book_work_related(
+    work_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    work_dir, about = _resolve_work_about(work_id)
+    item = add_related_card(
+        about,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    _save_work_about(work_dir, about)
+    return item
+
+
+def remove_book_work_related(
+    work_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    work_dir, about = _resolve_work_about(work_id)
+    ok = remove_related_card(about, bucket=bucket, item_id=item_id)
+    if ok:
+        _save_work_about(work_dir, about)
+    return ok
+
+
+def add_book_related(
+    book_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    book_dir, _work_dir, about = _resolve_book(book_id)
+    item = add_related_card(
+        about,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    _save_book_about(book_dir, about)
+    return item
+
+
+def remove_book_related(
+    book_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    book_dir, _work_dir, about = _resolve_book(book_id)
+    ok = remove_related_card(about, bucket=bucket, item_id=item_id)
+    if ok:
+        _save_book_about(book_dir, about)
+    return ok
+
+
+def add_book_work_link(
+    work_id: str,
+    *,
+    category: str,
+    label: str,
+    url: str,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+) -> dict:
+    from app.related_cards import add_link_item
+
+    work_dir, about = _resolve_work_about(work_id)
+    item = add_link_item(
+        about,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+    )
+    _save_work_about(work_dir, about)
+    return item
+
+
+def patch_book_work_link(
+    work_id: str,
+    link_id: str,
+    *,
+    category: str | None = None,
+    label: str | None = None,
+    url: str | None = None,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+    clear_logo_key: bool = False,
+) -> dict | None:
+    from app.related_cards import patch_link_item
+
+    work_dir, about = _resolve_work_about(work_id)
+    item = patch_link_item(
+        about,
+        link_id,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+        clear_logo_key=clear_logo_key,
+    )
+    if item:
+        _save_work_about(work_dir, about)
+    return item
+
+
+def delete_book_work_link(work_id: str, link_id: str) -> bool:
+    from app.related_cards import delete_link_item
+
+    work_dir, about = _resolve_work_about(work_id)
+    ok = delete_link_item(about, link_id)
+    if ok:
+        _save_work_about(work_dir, about)
+    return ok
+
+
+def add_book_link(
+    book_id: str,
+    *,
+    category: str,
+    label: str,
+    url: str,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+) -> dict:
+    from app.related_cards import add_link_item
+
+    book_dir, _work_dir, about = _resolve_book(book_id)
+    item = add_link_item(
+        about,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+    )
+    _save_book_about(book_dir, about)
+    return item
+
+
+def patch_book_link(
+    book_id: str,
+    link_id: str,
+    *,
+    category: str | None = None,
+    label: str | None = None,
+    url: str | None = None,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+    clear_logo_key: bool = False,
+) -> dict | None:
+    from app.related_cards import patch_link_item
+
+    book_dir, _work_dir, about = _resolve_book(book_id)
+    item = patch_link_item(
+        about,
+        link_id,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+        clear_logo_key=clear_logo_key,
+    )
+    if item:
+        _save_book_about(book_dir, about)
+    return item
+
+
+def delete_book_link(book_id: str, link_id: str) -> bool:
+    from app.related_cards import delete_link_item
+
+    book_dir, _work_dir, about = _resolve_book(book_id)
+    ok = delete_link_item(about, link_id)
+    if ok:
+        _save_book_about(book_dir, about)
+    return ok

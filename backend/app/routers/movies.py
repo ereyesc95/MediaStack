@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.config import settings
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, get_nsfw_unlocked, require_admin
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -81,21 +81,44 @@ def list_movies(
 
 
 @router.get("/catalog")
-def movies_catalog(db: Session = Depends(get_db)):
+def movies_catalog(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     try:
+        from app.adult_content import filter_adult_cards
         from app.movies_catalog_meta import enrich_movies_catalog
 
-        return enrich_movies_catalog(db, build_movies_catalog())
+        catalog = enrich_movies_catalog(db, build_movies_catalog())
+        catalog["franchises"] = filter_adult_cards(
+            catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+        )
+        catalog["films"] = filter_adult_cards(
+            catalog.get("films") or [], nsfw_unlocked=nsfw_unlocked
+        )
+        return catalog
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
 
 
 @router.get("/filters/options")
-def movies_filter_options(db: Session = Depends(get_db)):
+def movies_filter_options(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Catalog filter options for Movies home/catalog panes."""
+    from app.adult_content import filter_subgenre_groups
     from app.movies_catalog_meta import build_movies_filter_options
 
-    return build_movies_filter_options(db)
+    opts = build_movies_filter_options(db)
+    opts["subgenre_groups"] = filter_subgenre_groups(
+        opts.get("subgenre_groups") or [], nsfw_unlocked=nsfw_unlocked
+    )
+    if "all_subgenre_groups" in opts:
+        opts["all_subgenre_groups"] = filter_subgenre_groups(
+            opts.get("all_subgenre_groups") or [], nsfw_unlocked=nsfw_unlocked
+        )
+    return opts
 
 
 @router.get("/publishers")
@@ -479,3 +502,247 @@ def movies_film_patch_cast(
     if not member:
         raise HTTPException(404, "Cast member not found")
     return member
+
+@router.post("/franchises/{work_id}/related")
+def movies_work_add_related(
+    work_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import add_movie_work_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_movie_work_related(
+            db,
+            work_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{work_id}/related/{item_id}")
+def movies_work_remove_related(
+    work_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import remove_movie_work_related
+
+    try:
+        ok = remove_movie_work_related(
+            db, work_id, bucket=bucket, item_id=item_id
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
+@router.post("/films/{film_id}/related")
+def movies_film_add_related(
+    film_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import add_film_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_film_related(
+            db,
+            film_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/films/{film_id}/related/{item_id}")
+def movies_film_remove_related(
+    film_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import remove_film_related
+
+    try:
+        ok = remove_film_related(db, film_id, bucket=bucket, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
+@router.post("/franchises/{work_id}/links")
+def movies_work_add_link(
+    work_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import add_movie_work_link
+
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url required")
+    try:
+        item = add_movie_work_link(
+            db,
+            work_id,
+            category=body.get("category") or "databases",
+            label=body.get("label") or "Link",
+            url=url,
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "id": item.get("id"), "item": item}
+
+
+@router.patch("/franchises/{work_id}/links/{link_id}")
+def movies_work_patch_link(
+    work_id: str,
+    link_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import patch_movie_work_link
+
+    try:
+        item = patch_movie_work_link(
+            db,
+            work_id,
+            link_id,
+            category=body.get("category"),
+            label=body.get("label"),
+            url=body.get("url"),
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+            clear_logo_key=bool(body.get("clear_logo_upload")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not item:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{work_id}/links/{link_id}")
+def movies_work_delete_link(
+    work_id: str,
+    link_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import delete_movie_work_link
+
+    try:
+        ok = delete_movie_work_link(db, work_id, link_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}
+
+@router.post("/films/{film_id}/links")
+def movies_film_add_link(
+    film_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import add_film_link
+
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url required")
+    try:
+        item = add_film_link(
+            db,
+            film_id,
+            category=body.get("category") or "databases",
+            label=body.get("label") or "Link",
+            url=url,
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "id": item.get("id"), "item": item}
+
+
+@router.patch("/films/{film_id}/links/{link_id}")
+def movies_film_patch_link(
+    film_id: str,
+    link_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import patch_film_link
+
+    try:
+        item = patch_film_link(
+            db,
+            film_id,
+            link_id,
+            category=body.get("category"),
+            label=body.get("label"),
+            url=body.get("url"),
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+            clear_logo_key=bool(body.get("clear_logo_upload")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not item:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True, "item": item}
+
+
+@router.delete("/films/{film_id}/links/{link_id}")
+def movies_film_delete_link(
+    film_id: str,
+    link_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.movies_admin import delete_film_link
+
+    try:
+        ok = delete_film_link(db, film_id, link_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createSeriesLink,
-  deleteSeriesLink,
+  createMediaLink,
+  deleteMediaLink,
   fetchLinkCatalog,
-  patchSeriesLink,
+  patchMediaLink,
+  type RelatedMediaApi,
 } from "../../api";
 import type { LinkCatalogEntry, LinkCategory } from "../../types";
 import ModalPortal from "../ModalPortal";
@@ -32,6 +33,8 @@ type Props = {
   franchiseId: string;
   link?: SeriesLinkEditItem;
   defaultCategory?: LinkCategory | string;
+  linkApi?: RelatedMediaApi;
+  leafId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -40,6 +43,8 @@ export default function SeriesLinkFormModal({
   franchiseId,
   link,
   defaultCategory = "databases",
+  linkApi = "series",
+  leafId,
   onClose,
   onSaved,
 }: Props) {
@@ -76,10 +81,16 @@ export default function SeriesLinkFormModal({
     setSaving(true);
     setError(null);
     try {
+      const normalizedUrl = (() => {
+        const raw = url.trim();
+        if (!raw) return "";
+        if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return raw;
+        return `https://${raw}`;
+      })();
       const body = {
         category,
         label: label.trim() || "Link",
-        url: url.trim(),
+        url: normalizedUrl,
         logo_key: logoMode === "catalog" ? logoKey || null : null,
         logo_url:
           logoMode === "catalog" && logoKey
@@ -94,9 +105,9 @@ export default function SeriesLinkFormModal({
         return;
       }
       if (isEdit && link?.id) {
-        await patchSeriesLink(franchiseId, link.id, body);
+        await patchMediaLink(linkApi, franchiseId, link.id, body, leafId);
       } else {
-        await createSeriesLink(franchiseId, body);
+        await createMediaLink(linkApi, franchiseId, body, leafId);
       }
       onSaved();
       onClose();
@@ -112,7 +123,7 @@ export default function SeriesLinkFormModal({
     setSaving(true);
     setError(null);
     try {
-      await deleteSeriesLink(franchiseId, link.id);
+      await deleteMediaLink(linkApi, franchiseId, link.id, leafId);
       onSaved();
       onClose();
     } catch (e) {

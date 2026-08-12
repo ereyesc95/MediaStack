@@ -3,6 +3,8 @@ export type ProfileUser = {
   username: string;
   role_id: number | null;
   is_admin: boolean;
+  /** Admin unlocked adult catalog via mystacknsfw password. */
+  nsfw_unlocked?: boolean;
   avatar?: string | null;
   token?: string | null;
 };

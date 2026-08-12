@@ -25,7 +25,7 @@ from app.books_refresh import (
     search_work_metadata,
 )
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, get_nsfw_unlocked, require_admin
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -79,18 +79,47 @@ def list_books(
 
 
 @router.get("/catalog")
-def books_catalog():
+def books_catalog(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     try:
-        return build_books_catalog()
+        from app.adult_content import filter_adult_cards
+
+        catalog = build_books_catalog()
+        # Prefer DB-enriched genre fields when available (movies-style meta on works).
+        try:
+            from app.movies_catalog_meta import enrich_movies_catalog
+
+            # Books catalog may already carry genre_names; still filter adult names.
+            _ = enrich_movies_catalog  # kept for parity / future books enrich
+        except Exception:
+            pass
+        catalog["franchises"] = filter_adult_cards(
+            catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+        )
+        catalog["films"] = filter_adult_cards(
+            catalog.get("films") or catalog.get("books") or [],
+            nsfw_unlocked=nsfw_unlocked,
+        )
+        if "books" in catalog:
+            catalog["books"] = filter_adult_cards(
+                catalog.get("books") or [], nsfw_unlocked=nsfw_unlocked
+            )
+        return catalog
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
 
 
 @router.get("/filters/options")
-def books_filter_options(db: Session = Depends(get_db)):
+def books_filter_options(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Book taxonomy (media type 500) for catalog filters + Edit book genres."""
     from sqlalchemy import select
 
+    from app.adult_content import filter_subgenre_groups
     from app.models import Country, Genre, Subgenre
     from app.music_filters import all_country_groups
     from app.seed_music import ensure_music_lookup_data
@@ -132,6 +161,9 @@ def books_filter_options(db: Session = Depends(get_db)):
             all_by_parent.items(), key=lambda x: x[0].casefold()
         )
     ]
+    all_subgenre_groups = filter_subgenre_groups(
+        all_subgenre_groups, nsfw_unlocked=nsfw_unlocked
+    )
     return {
         "continents": [],
         "countries": [],
@@ -375,3 +407,229 @@ def books_refresh_metadata(
     _admin: User = Depends(require_admin),
 ):
     return apply_book_metadata_stub(book_id, volume_id)
+
+@router.post("/franchises/{work_id}/related")
+def books_work_add_related(
+    work_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import add_book_work_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_book_work_related(
+            work_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{work_id}/related/{item_id}")
+def books_work_remove_related(
+    work_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import remove_book_work_related
+
+    try:
+        ok = remove_book_work_related(work_id, bucket=bucket, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
+@router.post("/books/{book_id}/related")
+def books_book_add_related(
+    book_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import add_book_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_book_related(
+            book_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/books/{book_id}/related/{item_id}")
+def books_book_remove_related(
+    book_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import remove_book_related
+
+    try:
+        ok = remove_book_related(book_id, bucket=bucket, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
+@router.post("/franchises/{work_id}/links")
+def books_work_add_link(
+    work_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import add_book_work_link
+
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url required")
+    try:
+        item = add_book_work_link(
+            work_id,
+            category=body.get("category") or "databases",
+            label=body.get("label") or "Link",
+            url=url,
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "id": item.get("id"), "item": item}
+
+
+@router.patch("/franchises/{work_id}/links/{link_id}")
+def books_work_patch_link(
+    work_id: str,
+    link_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import patch_book_work_link
+
+    try:
+        item = patch_book_work_link(
+            work_id,
+            link_id,
+            category=body.get("category"),
+            label=body.get("label"),
+            url=body.get("url"),
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+            clear_logo_key=bool(body.get("clear_logo_upload")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not item:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{work_id}/links/{link_id}")
+def books_work_delete_link(
+    work_id: str,
+    link_id: str,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import delete_book_work_link
+
+    try:
+        ok = delete_book_work_link(work_id, link_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}
+
+@router.post("/books/{book_id}/links")
+def books_book_add_link(
+    book_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import add_book_link
+
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url required")
+    try:
+        item = add_book_link(
+            book_id,
+            category=body.get("category") or "databases",
+            label=body.get("label") or "Link",
+            url=url,
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "id": item.get("id"), "item": item}
+
+
+@router.patch("/books/{book_id}/links/{link_id}")
+def books_book_patch_link(
+    book_id: str,
+    link_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import patch_book_link
+
+    try:
+        item = patch_book_link(
+            book_id,
+            link_id,
+            category=body.get("category"),
+            label=body.get("label"),
+            url=body.get("url"),
+            logo_key=body.get("logo_key"),
+            logo_url=body.get("logo_url"),
+            clear_logo_key=bool(body.get("clear_logo_upload")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not item:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True, "item": item}
+
+
+@router.delete("/books/{book_id}/links/{link_id}")
+def books_book_delete_link(
+    book_id: str,
+    link_id: str,
+    _admin: User = Depends(require_admin),
+):
+    from app.books_admin import delete_book_link
+
+    try:
+        ok = delete_book_link(book_id, link_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Link not found")
+    return {"ok": True}

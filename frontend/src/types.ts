@@ -1277,6 +1277,7 @@ export type SeriesFranchiseCard = {
   continent_id?: number | null;
   genre_ids?: (number | string)[];
   genre_names?: string[];
+  parent_genre_names?: string[];
   publishers?: string[];
   writers?: string[];
 };

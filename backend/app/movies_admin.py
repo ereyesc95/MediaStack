@@ -391,3 +391,258 @@ def patch_film_cast_member(
         db.commit()
         return member
     return None
+
+
+def _resolve_work_row(db: Session, work_id: str):
+    root = Path(settings.media_root or "")
+    from app.movies_index import find_work_dir, build_work_detail
+
+    found = find_work_dir(work_id, root if root.is_dir() else None)
+    if not found:
+        raise ValueError(f"Movies franchise not found: {work_id}")
+    work_dir, _letter = found
+    detail = build_work_detail(work_id, root if root.is_dir() else None) or {}
+    slug = (
+        detail.get("slug")
+        or normalize_franchise_slug(work_dir.name)
+        or work_dir.name.casefold()
+    )
+    row = find_movie_work(db, slug) or ensure_movie_work(
+        db,
+        work_slug=slug,
+        name=work_dir.name,
+        folder_path=detail.get("folder_path"),
+    )
+    return row, _load_meta(row), slug
+
+
+def add_movie_work_related(
+    db: Session,
+    work_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    row, meta, _slug = _resolve_work_row(db, work_id)
+    item = add_related_card(
+        meta,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    _save_meta(row, meta)
+    db.commit()
+    return item
+
+
+def remove_movie_work_related(
+    db: Session, work_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    row, meta, _slug = _resolve_work_row(db, work_id)
+    ok = remove_related_card(meta, bucket=bucket, item_id=item_id)
+    if ok:
+        _save_meta(row, meta)
+        db.commit()
+    return ok
+
+
+def add_film_related(
+    db: Session,
+    film_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(db, film_id)
+    item = add_related_card(
+        film_meta,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    films_meta[fid] = film_meta
+    meta["films"] = films_meta
+    _save_meta(row, meta)
+    db.commit()
+    return item
+
+
+def remove_film_related(
+    db: Session, film_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(db, film_id)
+    ok = remove_related_card(film_meta, bucket=bucket, item_id=item_id)
+    if ok:
+        films_meta[fid] = film_meta
+        meta["films"] = films_meta
+        _save_meta(row, meta)
+        db.commit()
+    return ok
+
+
+def add_movie_work_link(
+    db: Session,
+    work_id: str,
+    *,
+    category: str,
+    label: str,
+    url: str,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+) -> dict:
+    from app.related_cards import add_link_item
+
+    row, meta, _slug = _resolve_work_row(db, work_id)
+    item = add_link_item(
+        meta,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+    )
+    _save_meta(row, meta)
+    db.commit()
+    return item
+
+
+def patch_movie_work_link(
+    db: Session,
+    work_id: str,
+    link_id: str,
+    *,
+    category: str | None = None,
+    label: str | None = None,
+    url: str | None = None,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+    clear_logo_key: bool = False,
+) -> dict | None:
+    from app.related_cards import patch_link_item
+
+    row, meta, _slug = _resolve_work_row(db, work_id)
+    item = patch_link_item(
+        meta,
+        link_id,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+        clear_logo_key=clear_logo_key,
+    )
+    if item:
+        _save_meta(row, meta)
+        db.commit()
+    return item
+
+
+def delete_movie_work_link(db: Session, work_id: str, link_id: str) -> bool:
+    from app.related_cards import delete_link_item
+
+    row, meta, _slug = _resolve_work_row(db, work_id)
+    ok = delete_link_item(meta, link_id)
+    if ok:
+        _save_meta(row, meta)
+        db.commit()
+    return ok
+
+
+def add_film_link(
+    db: Session,
+    film_id: str,
+    *,
+    category: str,
+    label: str,
+    url: str,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+) -> dict:
+    from app.related_cards import add_link_item
+
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(db, film_id)
+    item = add_link_item(
+        film_meta,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+    )
+    films_meta[fid] = film_meta
+    meta["films"] = films_meta
+    _save_meta(row, meta)
+    db.commit()
+    return item
+
+
+def patch_film_link(
+    db: Session,
+    film_id: str,
+    link_id: str,
+    *,
+    category: str | None = None,
+    label: str | None = None,
+    url: str | None = None,
+    logo_key: str | None = None,
+    logo_url: str | None = None,
+    clear_logo_key: bool = False,
+) -> dict | None:
+    from app.related_cards import patch_link_item
+
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(db, film_id)
+    item = patch_link_item(
+        film_meta,
+        link_id,
+        category=category,
+        label=label,
+        url=url,
+        logo_key=logo_key,
+        logo_url=logo_url,
+        clear_logo_key=clear_logo_key,
+    )
+    if item:
+        films_meta[fid] = film_meta
+        meta["films"] = films_meta
+        _save_meta(row, meta)
+        db.commit()
+    return item
+
+
+def delete_film_link(db: Session, film_id: str, link_id: str) -> bool:
+    from app.related_cards import delete_link_item
+
+    row, meta, films_meta, film_meta, fid, _film_dir = _resolve_film_row(db, film_id)
+    ok = delete_link_item(film_meta, link_id)
+    if ok:
+        films_meta[fid] = film_meta
+        meta["films"] = films_meta
+        _save_meta(row, meta)
+        db.commit()
+    return ok

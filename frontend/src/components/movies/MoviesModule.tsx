@@ -522,8 +522,6 @@ export default function MoviesModule({
       films.find((f) => f.id === filmId)?.work_name ||
       undefined;
     const workCard = franchises.find((f) => f.id === franchiseId);
-    const filmSection: SeriesSection =
-      section === "series" ? "overview" : (section as SeriesSection);
     return (
       <SeriesSubseriesPage
         variant="film"
@@ -532,7 +530,7 @@ export default function MoviesModule({
         franchiseLogoUrl={workCard?.logo_url}
         franchiseIconUrl={workCard?.icon_url}
         subseriesId={filmId}
-        section={filmSection}
+        section={section as SeriesSection}
         overviewTab={overviewTab}
         universeId={universeId}
         busy={busy}
@@ -597,10 +595,6 @@ export default function MoviesModule({
             else backToMoviesCatalog();
             return;
           }
-          if (from === "home") {
-            backToMoviesHome();
-            return;
-          }
           onNavigate({
             franchiseId,
             filmId: undefined,
@@ -615,18 +609,18 @@ export default function MoviesModule({
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();
                 }
-                return Boolean(
-                  (franchises.find((f) => f.id === franchiseId) as
-                    | { is_standalone?: boolean }
-                    | undefined)?.is_standalone
-                ) ||
-                  films.filter((f) => f.work_id === franchiseId).length <= 1
+                const standalone =
+                  Boolean(
+                    (franchises.find((f) => f.id === franchiseId) as
+                      | { is_standalone?: boolean }
+                      | undefined)?.is_standalone
+                  ) ||
+                  films.filter((f) => f.work_id === franchiseId).length <= 1;
+                return standalone
                   ? (getMediaEntrySource() || entrySource) === "home"
                     ? "HOME"
                     : "CATALOG"
-                  : entrySource === "home"
-                    ? "HOME"
-                    : undefined;
+                  : undefined;
               })()
         }
         onBrowseCatalog={(target) => {
@@ -657,6 +651,7 @@ export default function MoviesModule({
           loadCatalog();
         }}
         onOpenMusicRelease={onOpenMusicRelease}
+        onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenFilm={(id) => {
           pushMoviesRoute({
             franchiseId,
@@ -745,7 +740,7 @@ export default function MoviesModule({
             "subseriesId" in patch ? patch.subseriesId : filmId;
           const rawSection = (patch.section || section) as string;
           const nextSection: MoviesSection =
-            rawSection === "episodes" || rawSection === "series"
+            rawSection === "episodes"
               ? "overview"
               : (rawSection as MoviesSection);
           const nextFranchise =

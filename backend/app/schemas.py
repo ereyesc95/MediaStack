@@ -135,6 +135,7 @@ class LoginResponse(BaseModel):
     username: str
     role_id: int | None = None
     is_admin: bool = False
+    nsfw_unlocked: bool = False
     avatar: str | None = None
     token: str | None = None
 

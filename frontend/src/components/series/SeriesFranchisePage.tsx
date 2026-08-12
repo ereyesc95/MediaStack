@@ -198,7 +198,7 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
 /** Books-centered path: BOOKS for works, then related SERIES / MOVIES. */
 const BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
-  { id: "books", label: "LIBRARY", flag: null },
+  { id: "books", label: "MORE BOOKS", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
@@ -1328,13 +1328,22 @@ export default function SeriesFranchisePage({
           .replace(/\\/g, "/")
           .toLowerCase();
         return sectionItems.some((item) => {
-          const sid = (item.subseries_id || "").toLowerCase();
-          if (sid && (sid === wantId || sid === wantTitle)) return true;
-          const meta = (item.meta || "").toLowerCase();
-          if (wantTitle && meta.includes(wantTitle)) return true;
+          const sid = (item.subseries_id || "").toLowerCase().trim();
+          const meta = (item.meta || "").toLowerCase().trim();
+          // Exact hub title match only — "Dragon Ball" must not match "Dragon Ball GT".
+          if (wantTitle && (sid === wantTitle || meta === wantTitle)) return true;
+          if (
+            wantId &&
+            !wantId.startsWith("hub:") &&
+            (sid === wantId || meta === wantId)
+          )
+            return true;
           const path = (item.path || "").replace(/\\/g, "/").toLowerCase();
-          if (wantPath && path.includes(wantPath)) return true;
-          if (wantTitle && path.includes(wantTitle)) return true;
+          if (
+            wantPath &&
+            (path === wantPath || path.startsWith(`${wantPath}/`))
+          )
+            return true;
           return false;
         });
       });
@@ -1398,14 +1407,19 @@ export default function SeriesFranchisePage({
       ) {
         return false;
       }
-      const sid = (item.subseries_id || "").toLowerCase();
-      if (sid && (sid === wantId || sid === wantTitle)) return true;
-      const meta = (item.meta || "").toLowerCase();
-      if (wantTitle && meta.includes(wantTitle)) return true;
-      if (wantId && meta.includes(wantId)) return true;
+      const sid = (item.subseries_id || "").toLowerCase().trim();
+      const meta = (item.meta || "").toLowerCase().trim();
+      // Exact hub title match — avoid "Dragon Ball" matching "Dragon Ball GT".
+      if (wantTitle && (sid === wantTitle || meta === wantTitle)) return true;
+      if (
+        wantId &&
+        !wantId.startsWith("hub:") &&
+        (sid === wantId || meta === wantId)
+      )
+        return true;
       const path = (item.path || "").replace(/\\/g, "/").toLowerCase();
-      if (wantPath && path.includes(wantPath)) return true;
-      if (wantId && path.includes(wantId)) return true;
+      if (wantPath && (path === wantPath || path.startsWith(`${wantPath}/`)))
+        return true;
       return false;
     });
   };
@@ -1761,27 +1775,30 @@ export default function SeriesFranchisePage({
               onAddLink={
                 isAdmin &&
                 section === "overview" &&
-                overviewTab === "links" &&
-                (!isMoviesOnly || isBooks)
+                overviewTab === "links"
                   ? () => setAddLinkOpen(true)
                   : undefined
               }
               onAddSimilar={
                 isAdmin &&
-                !isMovies &&
                 section === "overview" &&
-                overviewTab === "related"
+                overviewTab === "related" &&
+                relatedTab !== "universe"
                   ? () => setAddRelatedOpen(true)
                   : undefined
               }
               addSimilarLabel={
                 relatedTab === "creator"
-                  ? isMovies
-                    ? "Add same crew film"
-                    : "Add same author series"
-                  : isMovies
-                    ? "Add similar film"
-                    : "Add similar series"
+                  ? isBooks
+                    ? "Add same author book"
+                    : isMoviesOnly
+                      ? "Add same crew film"
+                      : "Add same author series"
+                  : isBooks
+                    ? "Add similar book"
+                    : isMoviesOnly
+                      ? "Add similar film"
+                      : "Add similar series"
               }
               onRefreshLineup={
                 isAdmin &&
@@ -1985,7 +2002,11 @@ export default function SeriesFranchisePage({
                 ] as const,
                 [
                   "similar",
-                  isMovies ? "SIMILAR MOVIES" : "SIMILAR SERIES",
+                  isBooks
+                    ? "SIMILAR BOOKS"
+                    : isMoviesOnly
+                      ? "SIMILAR MOVIES"
+                      : "SIMILAR SERIES",
                   data?.related?.similar_count ??
                     data?.related?.similar?.length ??
                     0,
@@ -2115,11 +2136,11 @@ export default function SeriesFranchisePage({
             subseries={subseriesList}
             castSubFilter={castSubFilter}
             tab={castTab}
-            isAdmin={isAdmin && !isMovies}
+            isAdmin={isAdmin}
             addOpen={addCastOpen}
             onAddClose={() => setAddCastOpen(false)}
             onAddEmptyClick={
-              isAdmin && !isMovies ? () => setAddCastOpen(true) : undefined
+              isAdmin ? () => setAddCastOpen(true) : undefined
             }
             onDataChanged={() => void load()}
           />
@@ -2130,7 +2151,10 @@ export default function SeriesFranchisePage({
             franchiseId={franchiseId}
             links={data.links}
             tab={linkTab}
-            isAdmin={isAdmin && (!isMoviesOnly || isBooks)}
+            isAdmin={isAdmin}
+            linkApi={
+              isBooks ? "books" : isMoviesOnly && !sharedSeries ? "movies" : "series"
+            }
             addOpen={addLinkOpen}
             onAddClose={() => setAddLinkOpen(false)}
             onDataChanged={() => void load()}
@@ -2277,9 +2301,16 @@ export default function SeriesFranchisePage({
               orientation={
                 cardOrientation === "badge" ? "banner" : cardOrientation
               }
-              tmdbKind={isMovies && !sharedSeries ? "movie" : "tv"}
+              tmdbKind={isMoviesOnly && !sharedSeries ? "movie" : "tv"}
               fallbackViaMembers={data.writers || []}
-              isAdmin={isAdmin && !isMovies}
+              talentOptions={data.writers || []}
+              talentLabel={
+                isBooks ? "Author" : isMoviesOnly ? "Director / writer" : "Creator"
+              }
+              isAdmin={isAdmin}
+              relatedApi={
+                isBooks ? "books" : isMoviesOnly && !sharedSeries ? "movies" : "series"
+              }
               addOpen={addRelatedOpen}
               onAddClose={() => setAddRelatedOpen(false)}
               onDataChanged={() => void load()}

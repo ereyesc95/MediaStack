@@ -129,6 +129,7 @@ def extract_work_filter_fields(
     meta = _load_meta(row)
     genre_ids: list[int] = []
     genre_names: list[str] = []
+    parent_names_set: set[str] = set()
     seen: set[int] = set()
     isos: list[str] = []
     publishers: list[str] = []
@@ -152,6 +153,9 @@ def extract_work_filter_fields(
             seen.add(sid)
             genre_ids.append(sid)
             genre_names.append(resolved["name"])
+            parent = (resolved.get("genre_name") or "").strip()
+            if parent:
+                parent_names_set.add(parent)
         for iso in blob.get("origin_countries") or []:
             code = str(iso).strip().lower()[:2]
             if code and code not in isos:
@@ -179,6 +183,7 @@ def extract_work_filter_fields(
         "continent_id": getattr(crow, "cou_continent_id", None) if crow else None,
         "genre_ids": genre_ids,
         "genre_names": genre_names,
+        "parent_genre_names": sorted(parent_names_set),
         "publishers": publishers,
         "writers": writers,
     }
@@ -222,6 +227,7 @@ def enrich_movies_catalog(db: Session, catalog: dict) -> dict:
             card.setdefault("continent_id", None)
             card.setdefault("genre_ids", [])
             card.setdefault("genre_names", [])
+            card.setdefault("parent_genre_names", [])
             card.setdefault("publishers", [])
             card.setdefault("writers", [])
             continue

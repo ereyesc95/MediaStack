@@ -529,7 +529,7 @@ function CastMemberModal({
   languageOptions: SeriesLanguageOption[];
   subseries: SeriesSubseriesCard[];
   castSubFilter?: string;
-  castApi?: "series" | "movies";
+  castApi?: "series" | "movies" | "books";
   filmId?: string;
   onClose: () => void;
   onDataChanged: () => void;
@@ -1253,20 +1253,22 @@ export function AddCastModal({
           </div>
           {characterCentered ? (
             <>
-              <label>
-                Language
-                <select value={lang} onChange={(e) => setLang(e.target.value)}>
-                  {(languageOptions.length
-                    ? languageOptions
-                    : [{ code: "en", label: "English" }]
-                  ).map((o) => (
-                    <option key={o.code} value={o.code}>
-                      {o.label.replace(/\s*\(origin\)\s*$/i, "")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!characterOnly ? (
+              {castApi !== "books" ? (
+                <label>
+                  Language
+                  <select value={lang} onChange={(e) => setLang(e.target.value)}>
+                    {(languageOptions.length
+                      ? languageOptions
+                      : [{ code: "en", label: "English" }]
+                    ).map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {!characterOnly && castApi !== "books" ? (
                 <div className="series-cast-edit__actors">
                   <span className="series-cast-edit__actors-label">Actors</span>
                   {actorEntries.map((entry, idx) => (
@@ -1528,10 +1530,10 @@ export default function SeriesCast({
           bucket={tab}
           languageOptions={franchiseLangOptions}
           defaultLanguage={franchiseLangs[0] || null}
-          subseries={characterOnly || castApi === "books" ? [] : subseries}
+          subseries={castApi === "books" ? [] : subseries}
           castApi={castApi}
           filmId={filmId}
-          characterOnly={characterOnly || castApi === "books"}
+          characterOnly={characterOnly}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />
@@ -1674,7 +1676,7 @@ export default function SeriesCast({
           subseries={subseries}
           castApi={castApi}
           filmId={filmId}
-          characterOnly={characterOnly || castApi === "books"}
+          characterOnly={characterOnly}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

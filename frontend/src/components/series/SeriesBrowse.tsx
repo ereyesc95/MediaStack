@@ -18,6 +18,8 @@ import SearchableDropdown, {
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
 import PlaylistBoot from "../PlaylistBoot";
 import { usePhoneLayout } from "../../usePhoneLayout";
+import { getStoredProfile } from "../../auth";
+import { filterAdultCards } from "../../adultContent";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const HASH = "#";
@@ -542,6 +544,7 @@ export default function SeriesBrowse({
   const filtered = useMemo(() => {
     if (!filterReady) return [] as SeriesCatalogCard[];
 
+    const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
     const q = search.trim().toLowerCase();
 
     if (catalogScope === "universes") {
@@ -631,7 +634,7 @@ export default function SeriesBrowse({
 
     if (catalogScope === "shows") {
       const cards: SeriesCatalogCard[] = [];
-      for (const f of franchises) {
+      for (const f of filterAdultCards(franchises, nsfwUnlocked)) {
         if (!matchesFranchiseMeta(f)) continue;
         const shows =
           f.subseries.length > 0
@@ -713,7 +716,7 @@ export default function SeriesBrowse({
     }
 
     // Franchise scope
-    let list = [...franchises];
+    let list = [...filterAdultCards(franchises, nsfwUnlocked)];
     if (q) {
       list = list.filter((f) => f.name.toLowerCase().includes(q));
     }

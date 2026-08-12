@@ -275,3 +275,81 @@ def participation_for_band(
         if not (arp.arp_end_dates or "").strip():
             return arp
     return rows[-1]
+
+
+def _next_band_id(db: Session) -> int:
+    return (db.scalar(select(func.max(Band.bnd_id))) or 0) + 1
+
+
+def add_project_for_members(
+    db: Session,
+    current_band: Band,
+    *,
+    member_artist_ids: list[int],
+    project_name: str,
+    project_mbid: str | None = None,
+) -> dict:
+    """Link current band members to another project band (manual participations)."""
+    ids = [int(x) for x in member_artist_ids if x]
+    if not ids:
+        raise ValueError("Select at least one member of this band")
+    name = (project_name or "").strip()
+    if not name and not project_mbid:
+        raise ValueError("project name or mbid required")
+
+    member_set = {
+        arp.arp_fk_artists
+        for arp in db.scalars(
+            select(ArtistParticipation).where(
+                ArtistParticipation.arp_fk_bands == current_band.bnd_id
+            )
+        ).all()
+        if arp.arp_fk_artists
+    }
+    for mid in ids:
+        if mid not in member_set:
+            raise ValueError(f"Artist {mid} is not a member of this band")
+
+    target: Band | None = None
+    mbid = (project_mbid or "").strip() or None
+    if mbid:
+        target = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
+    if not target and name:
+        target = db.scalars(
+            select(Band).where(func.lower(Band.bnd_name) == name.casefold())
+        ).first()
+    if not target:
+        target = Band(
+            bnd_id=_next_band_id(db),
+            bnd_name=name or "Unknown",
+            bnd_code=mbid,
+        )
+        db.add(target)
+        db.flush()
+
+    created = 0
+    for mid in ids:
+        existing = db.scalars(
+            select(ArtistParticipation).where(
+                ArtistParticipation.arp_fk_bands == target.bnd_id,
+                ArtistParticipation.arp_fk_artists == mid,
+            )
+        ).first()
+        if existing:
+            continue
+        db.add(
+            ArtistParticipation(
+                arp_id=_next_arp_id(db),
+                arp_fk_bands=target.bnd_id,
+                arp_fk_artists=mid,
+                arp_manual=1,
+            )
+        )
+        created += 1
+    db.commit()
+    return {
+        "ok": True,
+        "project_band_id": target.bnd_id,
+        "project_name": target.bnd_name,
+        "created": created,
+    }

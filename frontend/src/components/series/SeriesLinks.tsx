@@ -1,15 +1,25 @@
 import { useState } from "react";
+import type { RelatedMediaApi } from "../../api";
 import { IconEditProfile } from "../MenuIcons";
 import SeriesLinkFormModal, {
   type SeriesLinkEditItem,
 } from "./SeriesLinkFormModal";
 import type { SeriesOverview } from "../../types";
 
+function absoluteLinkUrl(raw: string): string {
+  const url = (raw || "").trim();
+  if (!url) return "#";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
+  return `https://${url}`;
+}
+
 type Props = {
   franchiseId: string;
   links: SeriesOverview["links"];
   tab: string;
   isAdmin?: boolean;
+  linkApi?: RelatedMediaApi;
+  leafId?: string | null;
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
@@ -20,6 +30,8 @@ export default function SeriesLinks({
   links,
   tab,
   isAdmin,
+  linkApi = "series",
+  leafId,
   addOpen,
   onAddClose,
   onDataChanged,
@@ -50,7 +62,7 @@ export default function SeriesLinks({
             className="artist-link-card-wrap"
           >
             <a
-              href={item.url}
+              href={absoluteLinkUrl(item.url)}
               target="_blank"
               rel="noreferrer"
               className="artist-link-card"
@@ -91,6 +103,8 @@ export default function SeriesLinks({
           franchiseId={franchiseId}
           link={editLink}
           defaultCategory={tab}
+          linkApi={linkApi}
+          leafId={leafId}
           onClose={() => setEditLink(null)}
           onSaved={onDataChanged}
         />
@@ -100,6 +114,8 @@ export default function SeriesLinks({
         <SeriesLinkFormModal
           franchiseId={franchiseId}
           defaultCategory={tab}
+          linkApi={linkApi}
+          leafId={leafId}
           onClose={onAddClose}
           onSaved={() => {
             onAddClose();

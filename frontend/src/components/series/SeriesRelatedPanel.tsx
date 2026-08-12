@@ -1,6 +1,10 @@
 import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
-import { addSeriesRelated, removeSeriesRelated } from "../../api";
+import {
+  addMediaRelated,
+  removeMediaRelated,
+  type RelatedMediaApi,
+} from "../../api";
 import type {
   ArtistCard as ArtistCardType,
   CardOrientation,
@@ -26,7 +30,14 @@ type Props = {
   tmdbKind?: "tv" | "movie";
   /** Fallback via names when stored related cards lack via_members. */
   fallbackViaMembers?: string[];
+  /** Page talent names for the same-talent via dropdown (authors/directors/etc). */
+  talentOptions?: string[];
+  /** Label for the via dropdown (Author / Director / Creator…). */
+  talentLabel?: string;
   isAdmin?: boolean;
+  relatedApi?: RelatedMediaApi;
+  /** When set, use leaf film/book related endpoints instead of franchise. */
+  leafId?: string | null;
   addOpen?: boolean;
   onAddClose?: () => void;
   onDataChanged: () => void;
@@ -62,33 +73,59 @@ function viaMembersTag(names: string[]): string {
 function AddRelatedModal({
   franchiseId,
   bucket,
+  relatedApi,
+  leafId,
+  talentOptions,
+  talentLabel,
   onClose,
   onSaved,
 }: {
   franchiseId: string;
   bucket: SeriesRelatedTmdbTab;
+  relatedApi: RelatedMediaApi;
+  leafId?: string | null;
+  talentOptions: string[];
+  talentLabel: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [activeBucket, setActiveBucket] =
+    useState<SeriesRelatedTmdbTab>(bucket);
   const [title, setTitle] = useState("");
   const [tmdbId, setTmdbId] = useState("");
   const [year, setYear] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
+  const [viaTalent, setViaTalent] = useState(() =>
+    talentOptions.length === 1 ? talentOptions[0]! : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
     if (!title.trim()) return;
+    if (activeBucket === "creator" && !viaTalent.trim()) {
+      setError(`Select a ${talentLabel.toLowerCase()}`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await addSeriesRelated(franchiseId, {
-        bucket,
-        title: title.trim(),
-        tmdb_id: tmdbId.trim() || null,
-        date_iso: year.trim() ? `${year.trim().slice(0, 4)}-01-01` : null,
-        poster_url: posterUrl.trim() || null,
-      });
+      await addMediaRelated(
+        relatedApi,
+        franchiseId,
+        {
+          bucket: activeBucket,
+          title: title.trim(),
+          tmdb_id: tmdbId.trim() || null,
+          date_iso: year.trim() ? `${year.trim().slice(0, 4)}-01-01` : null,
+          poster_url: posterUrl.trim() || null,
+          via_members:
+            activeBucket === "creator" && viaTalent.trim()
+              ? [viaTalent.trim()]
+              : null,
+        },
+        leafId
+      );
       onSaved();
       onClose();
     } catch (e) {
@@ -106,20 +143,62 @@ function AddRelatedModal({
       >
         <div className="modal-panel-header">
           <h3>
-            Add {bucket === "creator" ? "same talent" : "similar"} title
+            Add{" "}
+            {activeBucket === "creator" ? "same talent" : "similar"} title
           </h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
         </div>
+        <div className="series-cast-add__tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            className={activeBucket === "creator" ? "active" : ""}
+            aria-selected={activeBucket === "creator"}
+            onClick={() => setActiveBucket("creator")}
+          >
+            Same talent
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={activeBucket === "similar" ? "active" : ""}
+            aria-selected={activeBucket === "similar"}
+            onClick={() => setActiveBucket("similar")}
+          >
+            Similar
+          </button>
+        </div>
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
+          {activeBucket === "creator" ? (
+            <label>
+              {talentLabel} *
+              <select
+                value={viaTalent}
+                onChange={(e) => setViaTalent(e.target.value)}
+                required
+              >
+                <option value="">
+                  {talentOptions.length
+                    ? `Select ${talentLabel.toLowerCase()}…`
+                    : `No ${talentLabel.toLowerCase()}s on this page — edit About first`}
+                </option>
+                {talentOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             Title
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              autoFocus
+              autoFocus={activeBucket !== "creator"}
             />
           </label>
           <label>
@@ -150,7 +229,11 @@ function AddRelatedModal({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={saving || !title.trim()}
+            disabled={
+              saving ||
+              !title.trim() ||
+              (activeBucket === "creator" && !viaTalent.trim())
+            }
             onClick={() => void save()}
           >
             {saving ? "Adding…" : "Add"}
@@ -169,13 +252,34 @@ export default function SeriesRelatedPanel({
   orientation = "portrait",
   tmdbKind = "tv",
   fallbackViaMembers,
+  talentOptions,
+  talentLabel = "Creator",
   isAdmin,
+  relatedApi = "series",
+  leafId,
   addOpen,
   onAddClose,
   onDataChanged,
   onOpenLocal,
 }: Props) {
   const isPhone = usePhoneLayout();
+  const talentList = useMemo(() => {
+    const raw = [
+      ...(talentOptions || []),
+      ...(fallbackViaMembers || []),
+    ];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const n of raw) {
+      const name = (n || "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+    return out;
+  }, [talentOptions, fallbackViaMembers]);
   const items = useMemo(
     () => (tab === "creator" ? creator : tab === "similar" ? similar : []),
     [tab, creator, similar]
@@ -194,7 +298,7 @@ export default function SeriesRelatedPanel({
     if (id == null) return;
     setRemoveBusy(true);
     try {
-      await removeSeriesRelated(franchiseId, id, tab);
+      await removeMediaRelated(relatedApi, franchiseId, id, tab, leafId);
       setRemoveTarget(null);
       onDataChanged();
     } catch {
@@ -209,11 +313,25 @@ export default function SeriesRelatedPanel({
   };
   const hideViaTag = () => setViaTag(null);
 
+  const addModal =
+    addOpen && onAddClose && tab !== "universe" ? (
+      <AddRelatedModal
+        franchiseId={franchiseId}
+        bucket={tab}
+        relatedApi={relatedApi}
+        leafId={leafId}
+        talentOptions={talentList}
+        talentLabel={talentLabel}
+        onClose={onAddClose}
+        onSaved={onDataChanged}
+      />
+    ) : null;
+
   if (tab === "universe") {
     return null;
   }
 
-  if (!items.length && !addOpen) {
+  if (!items.length) {
     return (
       <>
         <p className="muted artist-section-empty artist-related__empty">
@@ -225,14 +343,7 @@ export default function SeriesRelatedPanel({
               ? "No similar titles yet. Refresh metadata or add one from the menu."
               : "No similar titles yet. Refresh metadata from TMDb."}
         </p>
-        {addOpen && onAddClose ? (
-          <AddRelatedModal
-            franchiseId={franchiseId}
-            bucket={tab}
-            onClose={onAddClose}
-            onSaved={onDataChanged}
-          />
-        ) : null}
+        {addModal}
       </>
     );
   }
@@ -339,14 +450,7 @@ export default function SeriesRelatedPanel({
         />
       ) : null}
 
-      {addOpen && onAddClose ? (
-        <AddRelatedModal
-          franchiseId={franchiseId}
-          bucket={tab}
-          onClose={onAddClose}
-          onSaved={onDataChanged}
-        />
-      ) : null}
+      {addModal}
     </div>
   );
 }

@@ -290,6 +290,7 @@ export default function MusicHome({
             <DashIconCard
               key={a.id}
               artist={a}
+              preferPortrait={layout === "mobile-portrait"}
               onClick={() => onArtist(a.id)}
             />
           ))}

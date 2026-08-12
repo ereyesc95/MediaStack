@@ -142,6 +142,7 @@ function albumFolderDisplayTitle(folder: string | null | undefined): string | nu
 import ArtistQuiz, { QUIZ_MODES, type QuizMode } from "./ArtistQuiz";
 import ArtistRelated from "./ArtistRelated";
 import AddSimilarModal from "./AddSimilarModal";
+import AddProjectModal from "./AddProjectModal";
 import ArtistMemberModal from "./ArtistMemberModal";
 import MemberFormModal from "./MemberFormModal";
 import PlaylistBoot from "../../PlaylistBoot";
@@ -281,6 +282,7 @@ export default function ArtistPage({
   const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
   const [quizMode, setQuizMode] = useState<QuizMode>("discography");
   const [addSimilarOpen, setAddSimilarOpen] = useState(false);
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [audioRefreshKey, setAudioRefreshKey] = useState(0);
   const relatedFetchStarted = useRef(false);
   const lineupImportStarted = useRef(false);
@@ -1030,6 +1032,8 @@ export default function ArtistPage({
               artistThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              editDataFlat
+              editDataLabel="Artist data"
               menuChrome={
                 portraitMenuChrome ? (
                   <>
@@ -1124,11 +1128,18 @@ export default function ArtistPage({
                   : undefined
               }
               onAddSimilar={
-                isAdmin &&
-                overviewTab === "related" &&
-                relatedTab === "similar"
-                  ? () => setAddSimilarOpen(true)
+                isAdmin && overviewTab === "related"
+                  ? relatedTab === "similar"
+                    ? () => setAddSimilarOpen(true)
+                    : relatedTab === "participations"
+                      ? () => setAddProjectOpen(true)
+                      : undefined
                   : undefined
+              }
+              addSimilarLabel={
+                relatedTab === "participations"
+                  ? "Add project"
+                  : "Add similar artist"
               }
               onRefreshRelatedSimilar={
                 isAdmin && overviewTab === "related"
@@ -1479,6 +1490,23 @@ export default function ArtistPage({
             onClose={() => setAddSimilarOpen(false)}
             onSaved={() => {
               setAddSimilarOpen(false);
+              load();
+            }}
+          />
+        )}
+
+        {addProjectOpen && (
+          <AddProjectModal
+            bandId={bandId}
+            members={(data?.lineup?.all || [])
+              .map((m) => ({
+                id: m.id,
+                name: m.name || "Member",
+              }))
+              .filter((m) => m.id > 0)}
+            onClose={() => setAddProjectOpen(false)}
+            onSaved={() => {
+              setAddProjectOpen(false);
               load();
             }}
           />

@@ -141,6 +141,8 @@ def build_work_overview(
         franchise_universe_bundle(db, "books", slug)
     )
     from app.books_refresh import load_work_about
+    from app.related_cards import visible_related
+    from app.movies_overview import _group_links
 
     about = load_work_about(work_dir)
     authors = about.get("authors") or about.get("writers") or []
@@ -185,6 +187,10 @@ def build_work_overview(
         "has_gallery": has_gallery,
     }
 
+    creator = visible_related(about, "creator")
+    similar = filter_similar_against_universe(
+        db, "books", slug, visible_related(about, "similar")
+    )
     related = {
         "movies": _enrich_related_cards(
             related_disk.get("movies") or related_disk.get("movie") or [], root
@@ -192,9 +198,12 @@ def build_work_overview(
         "series": _enrich_related_cards(related_disk.get("series") or [], root),
         "books": [],
         "games": _enrich_related_cards(related_disk.get("games") or [], root),
-        "creator": [],
-        "similar": filter_similar_against_universe(db, "books", slug, []),
+        "creator": creator,
+        "similar": similar,
     }
+    links_payload = _group_links(about.get("links") or [])
+    links_payload["entity_type"] = "books"
+    links_payload["entity_id"] = 0
 
     return {
         "id": detail["id"],
@@ -225,7 +234,7 @@ def build_work_overview(
         "seasons": [],
         "media": media,
         "related": related,
-        "links": {"entity_id": 0, "groups": []},
+        "links": links_payload,
         "universes": universes,
         "universe": universe,
         "universe_cards": merged_universe_cards or universe_cards,
@@ -312,6 +321,13 @@ def build_book_overview(
             if b.get("id") != book_id
         ]
 
+    from app.related_cards import visible_related
+    from app.movies_overview import _group_links
+
+    leaf_links = _group_links(about.get("links") or [])
+    leaf_links["entity_type"] = "books"
+    leaf_links["entity_id"] = 0
+
     return {
         "id": detail["id"],
         "name": detail.get("title"),
@@ -353,10 +369,10 @@ def build_book_overview(
             "series": _enrich_related_cards(related_disk.get("series") or [], root),
             "books": [],
             "games": _enrich_related_cards(related_disk.get("games") or [], root),
-            "creator": [],
-            "similar": [],
+            "creator": visible_related(about, "creator"),
+            "similar": visible_related(about, "similar"),
         },
-        "links": {"entity_id": 0, "groups": []},
+        "links": leaf_links,
         "universes": universes,
         "universe": universe,
         "universe_cards": merged_universe_cards or universe_cards,

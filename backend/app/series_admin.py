@@ -718,11 +718,17 @@ def add_series_related(
     date_iso: str | None = None,
     poster_url: str | None = None,
     overview: str | None = None,
+    via_members: list[str] | None = None,
 ) -> dict:
     row = ensure_series_row(db, franchise_name)
     images = _load_images(row)
     key = "creator" if bucket == "creator" else "similar"
     items = _related_bucket(images, key)
+    vias = [
+        str(v).strip()
+        for v in (via_members or [])
+        if v and str(v).strip()
+    ]
     # Un-hide if already present
     want = str(tmdb_id) if tmdb_id is not None else None
     for item in items:
@@ -737,6 +743,8 @@ def add_series_related(
                 item["cover_url"] = poster_url
             if overview is not None:
                 item["overview"] = overview
+            if vias:
+                item["via_members"] = vias
             _save_images(db, row, images)
             return item
     card = {
@@ -751,6 +759,8 @@ def add_series_related(
         "manual": True,
         "hidden": False,
     }
+    if vias:
+        card["via_members"] = vias
     items.append(card)
     _save_images(db, row, images)
     return card
@@ -812,13 +822,15 @@ def add_series_link(
     logo_key: str | None = None,
     logo_url: str | None = None,
 ) -> dict:
+    from app.related_cards import normalize_external_url
+
     row = ensure_series_row(db, franchise_name)
     links = _load_links(row)
     item = {
         "id": f"lnk-{uuid.uuid4().hex[:10]}",
         "category": category or "databases",
         "label": (label or "").strip() or "Link",
-        "url": (url or "").strip(),
+        "url": normalize_external_url(url),
         "logo_key": logo_key,
         "logo_url": logo_url
         or (f"/assets/links/{logo_key}.svg" if logo_key else "/assets/links/link.svg"),
@@ -853,7 +865,9 @@ def patch_series_link(
         if label is not None:
             item["label"] = label.strip() or item.get("label") or "Link"
         if url is not None:
-            item["url"] = url.strip()
+            from app.related_cards import normalize_external_url
+
+            item["url"] = normalize_external_url(url)
         if clear_logo_key:
             item["logo_key"] = None
         elif logo_key is not None:

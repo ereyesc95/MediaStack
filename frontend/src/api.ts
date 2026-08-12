@@ -2381,6 +2381,7 @@ export async function addSeriesRelated(
     date_iso?: string | null;
     poster_url?: string | null;
     overview?: string | null;
+    via_members?: string[] | null;
   }
 ) {
   return request<{ ok: boolean; item: SeriesRelatedShow }>(
@@ -2402,6 +2403,144 @@ export async function removeSeriesRelated(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}/related/${encodeURIComponent(String(itemId))}?bucket=${encodeURIComponent(bucket)}`,
     { method: "DELETE" }
   );
+}
+
+export type RelatedMediaApi = "series" | "movies" | "books";
+
+function relatedBase(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  leafId?: string | null
+) {
+  if (api === "movies") {
+    return leafId
+      ? `${API}/movies/films/${encodeURIComponent(leafId)}`
+      : `${API}/movies/franchises/${encodeURIComponent(franchiseId)}`;
+  }
+  if (api === "books") {
+    return leafId
+      ? `${API}/books/books/${encodeURIComponent(leafId)}`
+      : `${API}/books/franchises/${encodeURIComponent(franchiseId)}`;
+  }
+  return `${API}/series/franchises/${encodeURIComponent(franchiseId)}`;
+}
+
+export async function addMediaRelated(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  body: {
+    bucket: "creator" | "similar";
+    title: string;
+    tmdb_id?: number | string | null;
+    date_iso?: string | null;
+    poster_url?: string | null;
+    overview?: string | null;
+    via_members?: string[] | null;
+  },
+  leafId?: string | null
+) {
+  return request<{ ok: boolean; item: SeriesRelatedShow }>(
+    `${relatedBase(api, franchiseId, leafId)}/related`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function removeMediaRelated(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  itemId: string | number,
+  bucket: "creator" | "similar" = "similar",
+  leafId?: string | null
+) {
+  return request<{ ok: boolean }>(
+    `${relatedBase(api, franchiseId, leafId)}/related/${encodeURIComponent(String(itemId))}?bucket=${encodeURIComponent(bucket)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function createMediaLink(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  body: {
+    category: string;
+    label: string;
+    url: string;
+    logo_key?: string | null;
+    logo_url?: string | null;
+  },
+  leafId?: string | null
+) {
+  if (api === "series") return createSeriesLink(franchiseId, body);
+  const base = relatedBase(api, franchiseId, leafId);
+  return request<{ ok: boolean; id: string }>(`${base}/links`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchMediaLink(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  linkId: string,
+  body: {
+    category?: string;
+    label?: string;
+    url?: string;
+    logo_key?: string | null;
+    logo_url?: string | null;
+    clear_logo_upload?: boolean;
+  },
+  leafId?: string | null
+) {
+  if (api === "series") return patchSeriesLink(franchiseId, linkId, body);
+  const base = relatedBase(api, franchiseId, leafId);
+  return request<{ ok: boolean }>(
+    `${base}/links/${encodeURIComponent(linkId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function deleteMediaLink(
+  api: RelatedMediaApi,
+  franchiseId: string,
+  linkId: string,
+  leafId?: string | null
+) {
+  if (api === "series") return deleteSeriesLink(franchiseId, linkId);
+  const base = relatedBase(api, franchiseId, leafId);
+  return request<{ ok: boolean }>(
+    `${base}/links/${encodeURIComponent(linkId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function addBandProject(
+  bandId: number,
+  body: {
+    name: string;
+    mbid?: string | null;
+    member_artist_ids: number[];
+  }
+) {
+  return request<{
+    ok: boolean;
+    project_band_id: number;
+    project_name: string;
+    created: number;
+  }>(`${API}/music/bands/${bandId}/projects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function createSeriesLink(

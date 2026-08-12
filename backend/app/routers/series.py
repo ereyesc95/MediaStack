@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_nsfw_unlocked
 from app.models import User
 from app.schemas import EpisodeOut, SeasonOut, SeriesListOut, SeriesOut
 
@@ -11,22 +11,34 @@ router = APIRouter(prefix="/api/series", tags=["series"])
 
 
 @router.get("/catalog")
-def series_catalog(db: Session = Depends(get_db)):
+def series_catalog(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ DB filter metadata)."""
+    from app.adult_content import filter_adult_cards
     from app.series_catalog_meta import enrich_catalog_metadata
     from app.series_index import build_series_catalog
 
-    return enrich_catalog_metadata(db, build_series_catalog())
+    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    catalog["franchises"] = filter_adult_cards(
+        catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+    )
+    return catalog
 
 
 @router.get("/filters/options")
-def series_filter_options(db: Session = Depends(get_db)):
+def series_filter_options(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Catalog filter options — used genres/countries for catalog; full lists for editors."""
     import json
     import re
 
     from sqlalchemy import select
 
+    from app.adult_content import filter_subgenre_groups
     from app.media_item_admin import list_people_for_kind, list_publishers_for_kind
     from app.models import Country, Genre, Series, Subgenre
     from app.music_filters import (
@@ -208,8 +220,12 @@ def series_filter_options(db: Session = Depends(get_db)):
         "continents": continents,
         "country_groups": country_groups,
         "all_country_groups": all_country_groups(db),
-        "subgenre_groups": subgenre_groups,
-        "all_subgenre_groups": all_subgenre_groups,
+        "subgenre_groups": filter_subgenre_groups(
+            subgenre_groups, nsfw_unlocked=nsfw_unlocked
+        ),
+        "all_subgenre_groups": filter_subgenre_groups(
+            all_subgenre_groups, nsfw_unlocked=nsfw_unlocked
+        ),
         "decades": sorted(decades),
         "publishers": used_publishers,
         "writers": used_writers,
@@ -452,6 +468,7 @@ def series_add_related(
         date_iso=body.get("date_iso"),
         poster_url=body.get("poster_url") or body.get("cover_url"),
         overview=body.get("overview"),
+        via_members=body.get("via_members"),
     )
     return {"ok": True, "item": item}
 

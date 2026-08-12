@@ -6,7 +6,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Country, Series
+from app.models import Country, Genre, Series, Subgenre
 from app.series_refresh import find_series_row
 
 
@@ -29,6 +29,15 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
         if iso:
             iso_to_country[iso] = c
 
+    sub_by_id: dict[int, Subgenre] = {
+        s.sgn_id: s for s in db.scalars(select(Subgenre)).all() if s.sgn_id
+    }
+    parent_by_id: dict[int, str] = {
+        g.gen_id: (g.gen_name or "").strip()
+        for g in db.scalars(select(Genre)).all()
+        if g.gen_id and g.gen_name
+    }
+
     for card in franchises:
         if not isinstance(card, dict):
             continue
@@ -40,6 +49,7 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
             card.setdefault("continent_id", None)
             card.setdefault("genre_ids", [])
             card.setdefault("genre_names", [])
+            card.setdefault("parent_genre_names", [])
             card.setdefault("publishers", [])
             card.setdefault("writers", [])
             continue
@@ -52,6 +62,7 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
 
         genre_ids: list = []
         genre_names: list[str] = []
+        parent_names: set[str] = set()
         try:
             raw = json.loads(row.ser_genres_json or "[]")
         except (json.JSONDecodeError, TypeError):
@@ -65,9 +76,20 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
                     genre_names.append(name_g)
                 gid = g.get("id")
                 if gid is not None:
-                    genre_ids.append(gid)
+                    try:
+                        gid_i = int(gid)
+                    except (TypeError, ValueError):
+                        gid_i = None
+                    if gid_i is not None:
+                        genre_ids.append(gid_i)
+                        sub = sub_by_id.get(gid_i)
+                        if sub and sub.sgn_genre_id:
+                            pname = parent_by_id.get(int(sub.sgn_genre_id))
+                            if pname:
+                                parent_names.add(pname)
         card["genre_ids"] = genre_ids
         card["genre_names"] = genre_names
+        card["parent_genre_names"] = sorted(parent_names)
         card["publishers"] = _split_semi(row.ser_publishers)
         card["writers"] = _split_semi(row.ser_writers)
 

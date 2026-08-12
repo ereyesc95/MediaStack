@@ -3,10 +3,18 @@ import type { ArtistCard as ArtistCardType } from "../../types";
 type Props = {
   artist: ArtistCardType;
   onClick: () => void;
+  /** Prefer square/portrait icon art on phone portrait; landscape photo otherwise. */
+  preferPortrait?: boolean;
 };
 
-export default function DashIconCard({ artist, onClick }: Props) {
-  const coverUrl = artist.icon_url || artist.photo_url;
+export default function DashIconCard({
+  artist,
+  onClick,
+  preferPortrait = false,
+}: Props) {
+  const coverUrl = preferPortrait
+    ? artist.icon_url || artist.photo_url
+    : artist.photo_url || artist.icon_url;
   const bg = coverUrl
     ? `url("${coverUrl}")`
     : "linear-gradient(135deg, #1a1f2e, #2d3548)";

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.auth_session import create_session, resolve_session, revoke_session
+from app.auth_session import create_session, resolve_session, revoke_session, session_nsfw_unlocked
 from app.config import settings
 from app.database import get_db
 from app.deps import _bearer_token, get_current_user
@@ -157,10 +157,16 @@ def select_profile(body: SelectProfileRequest, db: Session = Depends(get_db)):
         raise HTTPException(404, "Profile not found")
     if user.usr_id == ADMIN_USER_ID:
         pwd = (body.password or "").strip()
-        if pwd != settings.admin_password:
+        allowed = {settings.admin_password, settings.admin_nsfw_password}
+        if pwd not in allowed:
             raise HTTPException(403, "Incorrect admin password")
-    token = create_session(user.usr_id)
-    return _user_out(user).model_copy(update={"token": token})
+        nsfw = pwd == settings.admin_nsfw_password
+        token = create_session(user.usr_id, nsfw_unlocked=nsfw)
+        return _user_out(user).model_copy(
+            update={"token": token, "nsfw_unlocked": nsfw}
+        )
+    token = create_session(user.usr_id, nsfw_unlocked=False)
+    return _user_out(user).model_copy(update={"token": token, "nsfw_unlocked": False})
 
 
 @router.patch("/profiles/{user_id}", response_model=LoginResponse)
@@ -257,7 +263,9 @@ def session(
     if user_id is not None:
         user = get_profile_user(db, user_id)
         if user:
-            user_out = _user_out(user)
+            user_out = _user_out(user).model_copy(
+                update={"nsfw_unlocked": session_nsfw_unlocked(token)}
+            )
     return SessionOut(
         device_id=None,
         user=user_out,

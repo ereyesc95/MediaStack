@@ -526,6 +526,7 @@ export default function App() {
   function selectMedia(opt: MediaOption) {
 
     if (opt.kind === "music") {
+      window.history.pushState({}, "", "/");
       setView({ kind: "music", tab: "home" });
       return;
     }

@@ -1269,6 +1269,33 @@ def create_participation_endpoint(
     return {"ok": True, "participation_id": arp.arp_id, "artist_id": arp.arp_fk_artists}
 
 
+@router.post("/bands/{band_id}/projects")
+def add_band_project_endpoint(
+    band_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.artist_admin import add_project_for_members
+
+    band = crud.get_band(db, band_id)
+    if not band:
+        raise HTTPException(404, "Band not found")
+    member_ids = body.get("member_artist_ids") or body.get("artist_ids") or []
+    if not isinstance(member_ids, list):
+        raise HTTPException(400, "member_artist_ids must be a list")
+    try:
+        return add_project_for_members(
+            db,
+            band,
+            member_artist_ids=[int(x) for x in member_ids],
+            project_name=(body.get("name") or body.get("project_name") or "").strip(),
+            project_mbid=(body.get("mbid") or body.get("project_mbid") or None),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.patch("/bands/{band_id}/participations/{arp_id}")
 def patch_participation_endpoint(
     band_id: int,

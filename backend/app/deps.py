@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth_session import resolve_session
+from app.auth_session import resolve_session, session_nsfw_unlocked
 from app.database import get_db
 from app.models import User
 from app.profiles import get_profile_user, is_admin_role
@@ -16,6 +16,12 @@ def _bearer_token(authorization: str | None) -> str | None:
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return parts[1].strip() or None
     return None
+
+
+def get_nsfw_unlocked(
+    authorization: str | None = Header(None),
+) -> bool:
+    return session_nsfw_unlocked(_bearer_token(authorization))
 
 
 def get_current_user(

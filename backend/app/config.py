@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     ]
     default_port: int = 8766
     admin_password: str = "mystack"
+    admin_nsfw_password: str = "mystacknsfw"
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
     spotify_redirect_uri: str = ""

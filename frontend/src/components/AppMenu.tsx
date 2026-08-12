@@ -331,7 +331,7 @@ export default function AppMenu({
   const showEditDataGroup =
     editDataFlat &&
     isAdmin &&
-    (onAddToUniverse || onEditAbout || onAddMember);
+    (onAddToUniverse || onEditAbout || onAddMember || onAddLink || onAddSimilar);
 
   const refreshMenuLabel = editDataFlat
     ? "Refresh data"
@@ -537,6 +537,30 @@ export default function AppMenu({
               Update cast
             </button>
           )}
+          {onAddLink && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddLink();
+                setOpen(false);
+              }}
+            >
+              <IconLinks className="menu-item-icon" />
+              Add link
+            </button>
+          )}
+          {onAddSimilar && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddSimilar();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              {addSimilarLabel}
+            </button>
+          )}
         </div>
       )}
     </>
@@ -582,7 +606,7 @@ export default function AppMenu({
               Edit cast
             </button>
           )}
-          {isAdmin && onAddLink && (
+          {!editDataFlat && isAdmin && onAddLink && (
             <button
               type="button"
               onClick={() => {
@@ -594,7 +618,7 @@ export default function AppMenu({
               Add link
             </button>
           )}
-          {isAdmin && onAddSimilar && (
+          {!editDataFlat && isAdmin && onAddSimilar && (
             <button
               type="button"
               onClick={() => {
