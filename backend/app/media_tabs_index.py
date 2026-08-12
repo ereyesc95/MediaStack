@@ -25,7 +25,17 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 5
+MEDIA_TAB_SCAN_VERSION = 6
+
+# Artist media tabs now prefer sibling module franchise folders:
+# video → Movies/{L}/{Artist}/, library → Books/{L}/{Artist}/, series → Series/…
+_KIND_MODULE = {
+    "video": "movies",
+    "library": "books",
+    "series": "series",
+    "movies": "movies",
+    "books": "books",
+}
 
 _SKIP_NAMES = frozenset({"desktop.ini", "thumbs.db", ".ds_store"})
 _SKIP_ITEM_NAMES = frozenset({"[artwork]", "artwork"})
@@ -202,13 +212,13 @@ def _scan_items_in_container(
 
 
 def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]:
-    """Scan Video/ or Library/.
+    """Scan Video/Library or a Movies/Series/Books franchise root.
 
     Pattern A: known category folders (Documentaries/, Articles/, …) each become a
     sub-tab with item cards inside.
 
-    Flat layout (HIM today): dated folders and .lnk/.path shortcuts sit directly
-    under Video/Library and each becomes a portrait card — no fake category sub-bar.
+    Flat layout: dated folders and .lnk/.path shortcuts sit directly under the
+    root and each becomes a portrait card — no fake category sub-bar.
     """
     if not section.is_dir():
         return []
@@ -224,6 +234,8 @@ def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]
 
     for entry in children:
         if entry.name.casefold() in _SKIP_NAMES or entry.name.startswith("."):
+            continue
+        if entry.name.casefold() in _SKIP_ITEM_NAMES:
             continue
         if entry.is_dir() and entry.name.casefold() in known:
             category_dirs.append(entry)
@@ -265,22 +277,59 @@ def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]
     return categories
 
 
+def _section_root_for_kind(
+    band: Band, media_root: Path, kind: str
+) -> Path | None:
+    """Resolve tab root: Movies/Series/Books franchise folder, else legacy Video/Library."""
+    norm = (kind or "").casefold()
+    module = _KIND_MODULE.get(norm)
+    if module and band.bnd_name:
+        try:
+            from app.franchise_identity import franchise_letter_dir
+
+            folder = {
+                "movies": "Movies",
+                "series": "Series",
+                "books": "Books",
+            }.get(module)
+            if folder:
+                d = franchise_letter_dir(media_root, folder, band.bnd_name)
+                if d and d.is_dir():
+                    return d
+        except Exception:
+            pass
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return None
+    if norm in ("video", "movies"):
+        legacy = _resolve_child_dir(artist_dir, VIDEO_ROOT)
+        return legacy if legacy.is_dir() else None
+    if norm in ("library", "books"):
+        legacy = _resolve_child_dir(artist_dir, LIBRARY_ROOT)
+        return legacy if legacy.is_dir() else None
+    return None
+
+
 def iter_resolved_media_items(
     band: Band,
     media_root: Path,
     *,
     kind: str,
 ) -> list[tuple[dict, Path, Path]]:
-    """Return (card, display_entry, resolved_folder) for every Video/Library item."""
-    artist_dir = _artist_dir(media_root, band.bnd_name)
-    if not artist_dir:
+    """Return (card, display_entry, resolved_folder) for every media-tab item."""
+    section = _section_root_for_kind(band, media_root, kind)
+    if not section or not section.is_dir():
         return []
-    root_name = VIDEO_ROOT if kind == "video" else LIBRARY_ROOT
-    section = _resolve_child_dir(artist_dir, root_name)
-    if not section.is_dir():
-        return []
+    # Normalize kind for category vocabulary (movies→video, books→library)
+    scan_kind = kind
+    if kind in ("movies", "video"):
+        scan_kind = "video"
+    elif kind in ("books", "library"):
+        scan_kind = "library"
+    elif kind == "series":
+        scan_kind = "video"  # reuse dated-folder card shape
 
-    known = _known_categories(kind)
+    known = _known_categories(scan_kind)
     out: list[tuple[dict, Path, Path]] = []
 
     try:
@@ -290,6 +339,8 @@ def iter_resolved_media_items(
 
     for entry in children:
         if entry.name.casefold() in _SKIP_NAMES or entry.name.startswith("."):
+            continue
+        if entry.name.casefold() in _SKIP_ITEM_NAMES:
             continue
         if entry.is_dir() and entry.name.casefold() in known:
             try:
@@ -304,7 +355,7 @@ def iter_resolved_media_items(
                     continue
                 work = refine_resolved_work_folder(child, resolved)
                 card = _item_card(
-                    kind,
+                    scan_kind,
                     display_entry=child,
                     resolved=resolved,
                     media_root=media_root,
@@ -317,7 +368,7 @@ def iter_resolved_media_items(
             continue
         work = refine_resolved_work_folder(entry, resolved)
         card = _item_card(
-            kind, display_entry=entry, resolved=resolved, media_root=media_root
+            scan_kind, display_entry=entry, resolved=resolved, media_root=media_root
         )
         if card:
             out.append((card, entry, work))
@@ -348,21 +399,35 @@ def build_media_tab_index(
     *,
     kind: str,
 ) -> dict:
-    artist_dir = _artist_dir(media_root, band.bnd_name)
-    if not artist_dir:
-        return {
-            "band_id": band.bnd_id,
-            "kind": kind,
-            "categories": [],
-            "scanned_at": _now(),
-            "scan_version": MEDIA_TAB_SCAN_VERSION,
-        }
-    root_name = VIDEO_ROOT if kind == "video" else LIBRARY_ROOT
-    section = _resolve_child_dir(artist_dir, root_name)
+    section = _section_root_for_kind(band, media_root, kind)
+    scan_kind = kind
+    if kind in ("movies", "video"):
+        scan_kind = "video"
+    elif kind in ("books", "library"):
+        scan_kind = "library"
+    elif kind == "series":
+        scan_kind = "video"
+    categories = (
+        _scan_section_root(section, media_root, scan_kind)
+        if section and section.is_dir()
+        else []
+    )
+    # Drop pure meta buckets from franchise roots ([Artwork], Gallery, …)
+    cleaned: list[dict] = []
+    for cat in categories:
+        items = [
+            it
+            for it in (cat.get("items") or [])
+            if isinstance(it, dict)
+            and (it.get("title") or "").casefold()
+            not in _SKIP_ITEM_NAMES
+        ]
+        if items:
+            cleaned.append({**cat, "items": items})
     return {
         "band_id": band.bnd_id,
         "kind": kind,
-        "categories": _scan_section_root(section, media_root, kind),
+        "categories": cleaned,
         "scanned_at": _now(),
         "scan_version": MEDIA_TAB_SCAN_VERSION,
     }

@@ -155,8 +155,9 @@ import { useBeatPulse } from "../../../useBeatPulse";
 const SECTIONS: { id: ArtistSection; label: string }[] = [
   { id: "overview", label: "OVERVIEW" },
   { id: "audio", label: "AUDIO" },
-  { id: "video", label: "VIDEO" },
-  { id: "library", label: "LIBRARY" },
+  { id: "video", label: "MOVIES" },
+  { id: "series", label: "SERIES" },
+  { id: "library", label: "BOOKS" },
   { id: "gallery", label: "GALLERY" },
   { id: "quiz", label: "QUIZ" },
 ];
@@ -316,11 +317,13 @@ export default function ArtistPage({
   const cachedAudio = getCachedArtistAudio(bandId);
   const cachedGallery = getCachedArtistGallery(bandId);
   const cachedVideo = getCachedArtistMediaTab(bandId, "video");
+  const cachedSeries = getCachedArtistMediaTab(bandId, "series");
   const cachedLibrary = getCachedArtistMediaTab(bandId, "library");
   const sectionHasCache = Boolean(
     (section === "audio" && cachedAudio) ||
       (section === "gallery" && cachedGallery) ||
       (section === "video" && cachedVideo) ||
+      (section === "series" && cachedSeries) ||
       (section === "library" && cachedLibrary)
   );
   const audioEnabled =
@@ -333,17 +336,43 @@ export default function ArtistPage({
   const galleryState = useArtistGallery(bandId, galleryEnabled);
 
   const visibleSections = useMemo(() => {
-    if (!data?.media) return SECTIONS;
-    const m = data.media;
-    return SECTIONS.filter((s) => {
-      if (s.id === "overview") return true;
-      if (s.id === "quiz") return !data.is_various_artists;
-      if (s.id === "audio") return m.has_audio;
-      if (s.id === "video") return m.has_video;
-      if (s.id === "library") return m.has_library;
-      if (s.id === "gallery") return m.has_gallery;
-      return false;
-    });
+    const m = data?.media;
+    const base = !m
+      ? SECTIONS
+      : SECTIONS.filter((s) => {
+          if (s.id === "overview") return true;
+          if (s.id === "quiz") return !data?.is_various_artists;
+          if (s.id === "audio") return m.has_audio;
+          if (s.id === "video") return m.has_video;
+          if (s.id === "series") return Boolean(m.has_series);
+          if (s.id === "library") return m.has_library;
+          if (s.id === "gallery") return m.has_gallery;
+          return false;
+        });
+    // Entry module tab sits directly next to Overview.
+    let prefer: ArtistSection | null = null;
+    try {
+      const raw = sessionStorage.getItem("mystack_artist_entry_referrer");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { section?: ArtistSection };
+        if (parsed?.section && parsed.section !== "overview") {
+          prefer = parsed.section;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!prefer) return base;
+    const overview = base.find((s) => s.id === "overview");
+    const preferred = base.find((s) => s.id === prefer);
+    const rest = base.filter(
+      (s) => s.id !== "overview" && s.id !== prefer
+    );
+    const out: typeof base = [];
+    if (overview) out.push(overview);
+    if (preferred) out.push(preferred);
+    out.push(...rest);
+    return out;
   }, [data?.media, data?.is_various_artists]);
 
   const visibleOverviewTabs = useMemo(() => {
@@ -401,6 +430,7 @@ export default function ArtistPage({
     if (section === "audio") void prefetchArtistAudio(bandId);
     else if (section === "gallery") void prefetchArtistGallery(bandId);
     else if (section === "video") void prefetchArtistMediaTab(bandId, "video");
+    else if (section === "series") void prefetchArtistMediaTab(bandId, "series");
     else if (section === "library") void prefetchArtistMediaTab(bandId, "library");
   }, [bandId, section]);
 
@@ -1016,6 +1046,7 @@ export default function ArtistPage({
             />
             {(section === "audio" ||
               section === "video" ||
+              section === "series" ||
               section === "library") &&
               !portraitMenuChrome && (
               <ReleaseCardLayoutPicker
@@ -1053,6 +1084,7 @@ export default function ArtistPage({
                     ) : null}
                     {(section === "audio" ||
                       section === "video" ||
+                      section === "series" ||
                       section === "library") && (
                       <button
                         type="button"
@@ -1539,8 +1571,23 @@ export default function ArtistPage({
           />
         )}
         {data && section === "video" && !data.media?.has_video && !cachedVideo && (
-          <p className="muted artist-section-empty">No video folders found.</p>
+          <p className="muted artist-section-empty">No movies found.</p>
         )}
+        {section === "series" && (data?.media?.has_series || cachedSeries) && (
+          <ArtistMediaGrid
+            bandId={bandId}
+            kind="series"
+            cardLayout={releaseCardLayout}
+            artistName={data?.name ?? shell?.name ?? undefined}
+            onOpenItem={(id) => onOpenMediaItem?.("video", id)}
+          />
+        )}
+        {data &&
+          section === "series" &&
+          !data.media?.has_series &&
+          !cachedSeries && (
+            <p className="muted artist-section-empty">No series found.</p>
+          )}
         {section === "library" && (data?.media?.has_library || cachedLibrary) && (
           <ArtistMediaGrid
             bandId={bandId}
@@ -1551,7 +1598,7 @@ export default function ArtistPage({
           />
         )}
         {data && section === "library" && !data.media?.has_library && !cachedLibrary && (
-          <p className="muted artist-section-empty">No library folders found.</p>
+          <p className="muted artist-section-empty">No books found.</p>
         )}
         {section === "gallery" && (data?.media?.has_gallery || cachedGallery) && (
           <ArtistGallery state={galleryState} />

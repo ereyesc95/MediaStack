@@ -20,7 +20,12 @@ def series_catalog(
     from app.series_catalog_meta import enrich_catalog_metadata
     from app.series_index import build_series_catalog
 
+    from app.franchise_identity import enrich_catalog_with_music_identity
+
     catalog = enrich_catalog_metadata(db, build_series_catalog())
+    catalog = enrich_catalog_with_music_identity(
+        db, catalog, orientation="portrait"
+    )
     catalog["franchises"] = filter_adult_cards(
         catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
     )

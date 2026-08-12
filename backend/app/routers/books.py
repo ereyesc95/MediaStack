@@ -86,15 +86,14 @@ def books_catalog(
     try:
         from app.adult_content import filter_adult_cards
 
-        catalog = build_books_catalog()
-        # Prefer DB-enriched genre fields when available (movies-style meta on works).
-        try:
-            from app.movies_catalog_meta import enrich_movies_catalog
+        from app.books_catalog_meta import enrich_books_catalog
+        from app.franchise_identity import enrich_catalog_with_music_identity
 
-            # Books catalog may already carry genre_names; still filter adult names.
-            _ = enrich_movies_catalog  # kept for parity / future books enrich
-        except Exception:
-            pass
+        catalog = build_books_catalog()
+        catalog = enrich_books_catalog(db, catalog)
+        catalog = enrich_catalog_with_music_identity(
+            db, catalog, orientation="portrait"
+        )
         catalog["franchises"] = filter_adult_cards(
             catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
         )

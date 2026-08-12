@@ -798,7 +798,7 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
         normalize_franchise_slug(franchise_dir.name)
         or franchise_dir.name.casefold()
     )
-    return {
+    card = {
         "id": fid,
         "name": franchise_dir.name,
         "letter": letter,
@@ -861,6 +861,15 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
         ),
         "subseries_count": 0 if is_standalone else len(subseries),
     }
+    try:
+        from app.franchise_identity import apply_shared_artwork_to_card
+
+        apply_shared_artwork_to_card(
+            card, franchise_dir, media_root, franchise_name=franchise_dir.name
+        )
+    except Exception:
+        pass
+    return card
 
 
 def iter_franchise_dirs(media_root: Path | None = None) -> list[tuple[Path, str]]:

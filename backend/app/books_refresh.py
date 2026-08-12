@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.books_index import find_book_dir, find_work_dir
+from app.books_store import load_work_about, save_work_about
 from app.services.google_books import get_google_book, search_google_books
 
 
@@ -50,23 +51,6 @@ def search_work_metadata(work_id: str, query: str | None = None) -> dict:
     return {"results": search_google_books(query or name)}
 
 
-def _about_path(work_dir: Path) -> Path:
-    return work_dir / ".mystack" / "about.json"
-
-
-def load_work_about(work_dir: Path) -> dict:
-    import json
-
-    path = _about_path(work_dir)
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
 def patch_work_about(
     db,
     work_id: str,
@@ -74,9 +58,7 @@ def patch_work_about(
     bio: str | None = None,
     writers: str | None = None,
 ) -> dict:
-    """Persist franchise-level bio / authors for a Books work."""
-    import json
-
+    """Persist franchise-level bio / authors for a Books work in the DB."""
     from app.config import settings
     from app.universes import universe_for_franchise, update_universe
 
@@ -85,7 +67,7 @@ def patch_work_about(
     if not found:
         raise ValueError(f"Books franchise not found: {work_id}")
     work_dir, _letter = found
-    about = load_work_about(work_dir)
+    about = load_work_about(work_dir, db=db)
     if writers is not None:
         text = str(writers).strip().replace(",", ";")
         authors = [p.strip() for p in text.split(";") if p.strip()]
@@ -94,7 +76,6 @@ def patch_work_about(
     if bio is not None:
         about["bio"] = bio.strip()
         about["bio_manual"] = True
-        # Prefer universe overview when linked; also keep local sidecar.
         uni = universe_for_franchise(db, "books", work_id)
         if uni and hasattr(uni, "id"):
             try:
@@ -103,7 +84,5 @@ def patch_work_about(
                 )
             except Exception:
                 pass
-    path = _about_path(work_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(about, indent=2, ensure_ascii=False), encoding="utf-8")
+    save_work_about(work_dir, about, db=db)
     return {"ok": True, "work_id": work_id}

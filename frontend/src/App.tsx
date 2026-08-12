@@ -883,6 +883,18 @@ export default function App() {
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
             }
             onBackToSeries={(franchiseId, subseriesId) => {
+              // Empty franchiseId → Series catalog (artist opened from a music-linked card).
+              if (!franchiseId) {
+                pushSeriesCatalogRoute();
+                setView({
+                  kind: "series",
+                  franchiseId: undefined,
+                  subseriesId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
               pushSeriesRoute({
                 franchiseId,
                 subseriesId,
@@ -898,6 +910,17 @@ export default function App() {
               });
             }}
             onBackToMovies={(franchiseId) => {
+              if (!franchiseId) {
+                pushMoviesCatalogRoute();
+                setView({
+                  kind: "movies",
+                  franchiseId: undefined,
+                  filmId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
               pushMoviesRoute({
                 franchiseId,
                 section: "audio",
@@ -907,6 +930,30 @@ export default function App() {
                 kind: "movies",
                 franchiseId,
                 section: "audio",
+                overviewTab: "about",
+              });
+            }}
+            onBackToBooks={(franchiseId) => {
+              if (!franchiseId) {
+                pushBooksCatalogRoute();
+                setView({
+                  kind: "books",
+                  franchiseId: undefined,
+                  bookId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
+              pushBooksRoute({
+                franchiseId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                section: "overview",
                 overviewTab: "about",
               });
             }}
@@ -1134,17 +1181,17 @@ export default function App() {
                 releaseTab: "overview",
               });
             }}
-            onOpenArtist={(bandId) => {
+            onOpenArtist={(bandId, artistSection = "overview") => {
               pushArtistRoute({
                 bandId,
-                section: "overview",
+                section: artistSection,
                 overviewTab: "about",
               });
               setView({
                 kind: "music",
                 tab: "artists",
                 bandId,
-                artistSection: "overview",
+                artistSection,
                 artistOverviewTab: "about",
               });
             }}
@@ -1316,6 +1363,20 @@ export default function App() {
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "movies", from, name)
             }
+            onOpenArtist={(bandId, artistSection = "overview") => {
+              pushArtistRoute({
+                bandId,
+                section: artistSection,
+                overviewTab: "about",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection,
+                artistOverviewTab: "about",
+              });
+            }}
           />
         )}
 
@@ -1403,6 +1464,20 @@ export default function App() {
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "books", from, name)
             }
+            onOpenArtist={(bandId, artistSection = "overview") => {
+              pushArtistRoute({
+                bandId,
+                section: artistSection,
+                overviewTab: "about",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection,
+                artistOverviewTab: "about",
+              });
+            }}
           />
         )}
 

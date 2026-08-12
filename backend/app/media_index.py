@@ -634,8 +634,9 @@ def media_visibility_flags(
 ) -> dict:
     flags = {
         "has_audio": False,
-        "has_video": False,
-        "has_library": False,
+        "has_video": False,  # Movies franchise content (legacy key)
+        "has_series": False,
+        "has_library": False,  # Books franchise content (legacy key)
         "has_gallery": False,
         "has_playlists": False,
         "audio_categories": [],
@@ -652,13 +653,29 @@ def media_visibility_flags(
                 flags["audio_categories"].append(key)
         flags["has_audio"] = bool(flags["audio_categories"])
 
+    # Legacy Video/Library under Music (still honored if present)
     video = _resolve_child_dir(artist_dir, "Video")
-    flags["has_video"] = _dir_has_entries(video)
-
     library = _resolve_child_dir(artist_dir, "Library")
+    flags["has_video"] = _dir_has_entries(video)
     flags["has_library"] = _dir_has_entries(library)
 
-    gallery = _resolve_child_dir(artist_dir, "Gallery")
+    # New layout: Movies / Series / Books franchise folders for this artist name
+    try:
+        from app.franchise_identity import has_module_franchise_content
+
+        name = band_name or ""
+        if has_module_franchise_content(media_root, "movies", name):
+            flags["has_video"] = True
+        if has_module_franchise_content(media_root, "series", name):
+            flags["has_series"] = True
+        if has_module_franchise_content(media_root, "books", name):
+            flags["has_library"] = True
+    except Exception:
+        pass
+
+    from app.gallery import _gallery_dir
+
+    gallery = _gallery_dir(artist_dir)
     if gallery.is_dir():
         photos = _resolve_child_dir(gallery, "Photos")
         logos = _resolve_child_dir(gallery, "Logos")
@@ -667,6 +684,7 @@ def media_visibility_flags(
             _dir_has_gallery_entries(photos)
             or _dir_has_gallery_entries(logos)
             or _dir_has_gallery_entries(covers)
+            or _dir_has_gallery_entries(gallery)
         )
 
     if flags["has_audio"] and db is not None and band is not None:

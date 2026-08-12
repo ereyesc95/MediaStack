@@ -7,6 +7,10 @@ import {
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  defaultSectionForSource,
+  saveArtistEntryReferrer,
+} from "../../artistEntry";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   clearSeriesEntryReferrer,
@@ -112,6 +116,10 @@ type Props = {
     universeId?: number
   ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (
+    bandId: number,
+    section?: import("../../types").ArtistSection
+  ) => void;
   onOpenUniversePage?: (
     universeId: number,
     from: "home" | "catalog",
@@ -141,6 +149,7 @@ export default function MoviesModule({
   onOpenSeriesFranchise,
   onOpenBooksFranchise,
   onOpenMusicRelease,
+  onOpenArtist,
   onOpenUniversePage,
 }: Props) {
   const deviceLayout = useDeviceLayout();
@@ -1104,6 +1113,23 @@ export default function MoviesModule({
                 openFilm(film.id, film.work_id, "catalog");
                 return;
               }
+            }
+            const card = franchises.find((f) => f.id === id);
+            if (
+              card?.is_music_franchise &&
+              card.music_band_id != null &&
+              onOpenArtist
+            ) {
+              const section = defaultSectionForSource("movies");
+              saveArtistEntryReferrer({
+                source: "movies",
+                section,
+                franchiseId: id,
+                franchiseName: card.name,
+                backLabel: "MOVIES",
+              });
+              onOpenArtist(card.music_band_id, section);
+              return;
             }
             openWork(id, undefined, shell, "catalog");
           }}

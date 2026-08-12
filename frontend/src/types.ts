@@ -199,6 +199,7 @@ export type ArtistSection =
   | "overview"
   | "audio"
   | "video"
+  | "series"
   | "library"
   | "gallery"
   | "quiz";
@@ -447,6 +448,8 @@ export type ArtistDetails = {
 export type MediaFlags = {
   has_audio: boolean;
   has_video: boolean;
+  /** Series franchise folder content for this artist (Music ↔ Series). */
+  has_series?: boolean;
   has_library: boolean;
   has_gallery: boolean;
   has_playlists?: boolean;
@@ -1280,6 +1283,9 @@ export type SeriesFranchiseCard = {
   parent_genre_names?: string[];
   publishers?: string[];
   writers?: string[];
+  /** Same-named Music artist folder exists — open Artist page instead of franchise. */
+  is_music_franchise?: boolean;
+  music_band_id?: number | null;
 };
 
 export type SeriesFranchiseDetail = SeriesFranchiseCard & {

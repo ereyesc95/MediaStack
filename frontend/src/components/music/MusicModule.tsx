@@ -22,6 +22,11 @@ import { prefetchReleaseTracklist } from "../../releaseTracklistCache";
 import { prefetchArtistAudio } from "../../artistAudioCache";
 import { prefetchArtistGallery } from "../../artistGalleryCache";
 import { prefetchArtistMediaTab } from "../../artistMediaTabCache";
+import {
+  clearArtistEntryReferrer,
+  getArtistEntryReferrer,
+  saveArtistEntryReferrer,
+} from "../../artistEntry";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
 import {
   getCachedMusicDashboard,
@@ -100,6 +105,7 @@ type Props = {
   onCountryFilter: (id?: number, name?: string) => void;
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
   onBackToMovies?: (franchiseId: string) => void;
+  onBackToBooks?: (franchiseId: string) => void;
 };
 
 export default function MusicModule({
@@ -138,6 +144,7 @@ export default function MusicModule({
   onCountryFilter,
   onBackToSeries,
   onBackToMovies,
+  onBackToBooks,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -211,6 +218,11 @@ export default function MusicModule({
     ) => {
       setEntrySource(from);
       clearPendingAudioCategory(id);
+      saveArtistEntryReferrer({
+        source: "music",
+        section: "audio",
+        backLabel: from === "home" ? "HOME" : "CATALOG",
+      });
       primeArtistShell(id, shellHint);
       onArtistNavigate("overview", "about");
       onBand(id);
@@ -279,15 +291,24 @@ export default function MusicModule({
       case "video":
         void prefetchArtistMediaTab(bandId, "video");
         break;
+      case "series":
+        void prefetchArtistMediaTab(bandId, "series");
+        break;
       case "library":
         void prefetchArtistMediaTab(bandId, "library");
         break;
     }
     if (
       mediaItemId &&
-      (artistSection === "video" || artistSection === "library")
+      (artistSection === "video" ||
+        artistSection === "series" ||
+        artistSection === "library")
     ) {
-      void prefetchMediaItemOverview(bandId, artistSection, mediaItemId);
+      void prefetchMediaItemOverview(
+        bandId,
+        artistSection === "series" ? "video" : artistSection,
+        mediaItemId
+      );
     }
   }, [bandId, artistSection, mediaItemId]);
 
@@ -1080,11 +1101,40 @@ export default function MusicModule({
           }
           onBack={() => {
             clearMediaTheme(userId);
+            const ref = getArtistEntryReferrer();
+            if (ref?.source === "series") {
+              clearArtistEntryReferrer();
+              // Always return to Series catalog (card grid), not a franchise page.
+              onBackToSeries?.("");
+              return;
+            }
+            if (ref?.source === "movies") {
+              clearArtistEntryReferrer();
+              onBackToMovies?.("");
+              return;
+            }
+            if (ref?.source === "books") {
+              clearArtistEntryReferrer();
+              onBackToBooks?.("");
+              return;
+            }
+            clearArtistEntryReferrer();
             window.history.pushState(null, "", "/");
             onBand(undefined);
             onTab(entrySource === "home" ? "home" : "artists");
           }}
-          backLabel={entrySource === "home" ? "HOME" : "CATALOG"}
+          backLabel={
+            getArtistEntryReferrer()?.backLabel ||
+            (getArtistEntryReferrer()?.source === "series"
+              ? "SERIES"
+              : getArtistEntryReferrer()?.source === "movies"
+                ? "MOVIES"
+                : getArtistEntryReferrer()?.source === "books"
+                  ? "BOOKS"
+                  : entrySource === "home"
+                    ? "HOME"
+                    : "CATALOG")
+          }
           onNavigate={(section, overviewTab) =>
             onArtistNavigate(section, overviewTab ?? artistOverviewTab)
           }

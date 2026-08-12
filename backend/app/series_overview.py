@@ -651,12 +651,9 @@ def _enrich_related_cards(
 
 
 def _find_music_band(db: Session, franchise_name: str) -> Band | None:
-    want = normalize_franchise_slug(franchise_name)
-    for band in db.scalars(select(Band)).all():
-        name = band.bnd_name or ""
-        if normalize_franchise_slug(name) == want:
-            return band
-    return None
+    from app.franchise_identity import find_music_band_for_franchise
+
+    return find_music_band_for_franchise(db, franchise_name)
 
 
 def build_series_overview(

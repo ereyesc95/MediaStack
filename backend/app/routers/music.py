@@ -801,6 +801,23 @@ def band_library_index(
     return _enrich_media_tab_banners(db, band_id, data)
 
 
+@router.get("/bands/{band_id}/media/series")
+def band_series_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.media_tabs_index import get_media_tab_index
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_media_tab_index(db, band_id, kind="series", force=force)
+    if not data:
+        raise HTTPException(404, "Series not found")
+    return _enrich_media_tab_banners(db, band_id, data)
+
+
 @router.get("/bands/{band_id}/word-cloud")
 def band_word_cloud(band_id: int, db: Session = Depends(get_db)):
     from app.artist_word_cloud import build_word_cloud

@@ -1,4 +1,8 @@
-import { fetchBandLibraryIndex, fetchBandVideoIndex } from "./api";
+import {
+  fetchBandLibraryIndex,
+  fetchBandSeriesIndex,
+  fetchBandVideoIndex,
+} from "./api";
 import {
   readSessionEntry,
   removeSessionEntry,
@@ -8,24 +12,26 @@ import {
 import type { MediaTabIndexPayload } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "artist-media-tab-v3";
+const NAMESPACE = "artist-media-tab-v4";
 
-type CacheKey = `${number}:${"video" | "library"}`;
+export type ArtistMediaTabKind = "video" | "library" | "series";
+
+type CacheKey = `${number}:${ArtistMediaTabKind}`;
 
 const store = new Map<CacheKey, MediaTabIndexPayload>();
 const inflight = new Map<CacheKey, Promise<MediaTabIndexPayload>>();
 
-function cacheKey(bandId: number, kind: "video" | "library"): CacheKey {
+function cacheKey(bandId: number, kind: ArtistMediaTabKind): CacheKey {
   return `${bandId}:${kind}`;
 }
 
-function sessionKey(bandId: number, kind: "video" | "library"): string {
+function sessionKey(bandId: number, kind: ArtistMediaTabKind): string {
   return sessionCacheKey(NAMESPACE, cacheKey(bandId, kind));
 }
 
 function remember(
   bandId: number,
-  kind: "video" | "library",
+  kind: ArtistMediaTabKind,
   data: MediaTabIndexPayload
 ): void {
   const key = cacheKey(bandId, kind);
@@ -40,7 +46,7 @@ function remember(
 
 export function getCachedArtistMediaTab(
   bandId: number,
-  kind: "video" | "library"
+  kind: ArtistMediaTabKind
 ): MediaTabIndexPayload | null {
   const key = cacheKey(bandId, kind);
   const mem = store.get(key);
@@ -57,7 +63,7 @@ export function getCachedArtistMediaTab(
 
 export function clearArtistMediaTabCache(
   bandId?: number,
-  kind?: "video" | "library"
+  kind?: ArtistMediaTabKind
 ): void {
   if (bandId != null && kind) {
     const key = cacheKey(bandId, kind);
@@ -72,7 +78,7 @@ export function clearArtistMediaTabCache(
 
 export function prefetchArtistMediaTab(
   bandId: number,
-  kind: "video" | "library",
+  kind: ArtistMediaTabKind,
   options?: { force?: boolean }
 ): Promise<MediaTabIndexPayload> {
   const key = cacheKey(bandId, kind);
@@ -86,11 +92,14 @@ export function prefetchArtistMediaTab(
   const existing = inflight.get(key);
   if (existing) return existing;
 
-  const pending = (
+  const fetcher =
     kind === "video"
-      ? fetchBandVideoIndex(bandId)
-      : fetchBandLibraryIndex(bandId)
-  )
+      ? fetchBandVideoIndex
+      : kind === "series"
+        ? fetchBandSeriesIndex
+        : fetchBandLibraryIndex;
+
+  const pending = fetcher(bandId)
     .then((data) => {
       remember(bandId, kind, data);
       return data;

@@ -59,11 +59,28 @@ class MatchedTrack:
 
 
 def _audio_root(artist_dir: Path) -> Path:
+    """Release categories live at the artist root (Albums, Singles, …).
+
+    Legacy layout kept ``Audio/{Albums,…}`` — still accepted as a fallback.
+    """
+    # Prefer artist root when any known category folder is present there.
+    for folder_name in AUDIO_CATEGORIES.values():
+        for child in (artist_dir / folder_name,):
+            if child.is_dir():
+                return artist_dir
+        # Case-insensitive probe
+        try:
+            want = folder_name.casefold()
+            for child in artist_dir.iterdir():
+                if child.is_dir() and child.name.casefold() == want:
+                    return artist_dir
+        except OSError:
+            break
     for name in ("Audio", "audio"):
         p = artist_dir / name
         if p.is_dir():
             return p
-    return artist_dir / "Audio"
+    return artist_dir
 
 
 def _parse_folder_date(name: str) -> str | None:

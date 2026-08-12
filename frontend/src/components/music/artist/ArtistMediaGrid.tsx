@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "reac
 import {
   getCachedArtistMediaTab,
   prefetchArtistMediaTab,
+  type ArtistMediaTabKind,
 } from "../../../artistMediaTabCache";
 import { prefetchMediaItemOverview } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
@@ -17,13 +18,17 @@ import PlaylistBoot from "../../PlaylistBoot";
 
 type Props = {
   bandId: number;
-  kind: "video" | "library";
+  kind: ArtistMediaTabKind;
   cardLayout?: ReleaseCardLayout;
   artistName?: string;
   onOpenItem?: (itemId: string) => void;
 };
 
-export function useArtistMediaTab(bandId: number, kind: "video" | "library", enabled: boolean) {
+export function useArtistMediaTab(
+  bandId: number,
+  kind: ArtistMediaTabKind,
+  enabled: boolean
+) {
   const [data, setData] = useState<MediaTabIndexPayload | null>(
     () => getCachedArtistMediaTab(bandId, kind)
   );
@@ -99,7 +104,7 @@ function MediaItemCard({
   onOpen,
 }: {
   item: MediaTabItem;
-  kind: "video" | "library";
+  kind: ArtistMediaTabKind;
   cardLayout: ReleaseCardLayout;
   artistName?: string;
   opening: boolean;
@@ -117,7 +122,8 @@ function MediaItemCard({
     preferCollapsed && item.era_logo_collapsed_url
       ? item.era_logo_collapsed_url
       : item.era_logo_url;
-  const openLabel = kind === "video" ? "Play video" : "Read";
+  const openLabel =
+    kind === "library" ? "Read" : kind === "series" ? "Open series" : "Play video";
   const openUrl = item.open_url?.trim() || null;
 
   const handleActivate = () => {
@@ -309,8 +315,9 @@ export default function ArtistMediaGrid({
     async (itemId: string) => {
       if (openingId) return;
       setOpeningId(itemId);
+      const overviewKind = kind === "library" ? "library" : "video";
       try {
-        await prefetchMediaItemOverview(bandId, kind, itemId, {
+        await prefetchMediaItemOverview(bandId, overviewKind, itemId, {
           force: true,
         });
         onOpenItem?.(itemId);

@@ -4,7 +4,7 @@ Disk model (v1):
 - Franchise/work root: ``Books/{L}/{Name}/``
 - Book cards (C): dated or undated child folders that contain PDFs
 - Root PDFs (A): PDFs directly under ``{Name}/`` form one book card for that work
-- Volumes: PDF files inside a book folder (no per-volume subfolders)
+- Volumes: PDF files under ``{BookFolder}/Volumes/`` (also accepts PDFs at leaf root)
 - Standalone: single book matching the franchise folder name → open leaf directly
 """
 from __future__ import annotations
@@ -35,6 +35,7 @@ _META_DIRS = frozenset(
         "[audio]",
         "covers",
         "renders",
+        "volumes",
     }
 )
 _PORTAL_DIRS = frozenset(
@@ -111,7 +112,7 @@ def _is_volume_like_title(title: str) -> bool:
     return False
 
 
-def _list_pdfs(folder: Path) -> list[Path]:
+def _list_pdfs_in_dir(folder: Path) -> list[Path]:
     try:
         return sorted(
             (
@@ -123,6 +124,36 @@ def _list_pdfs(folder: Path) -> list[Path]:
         )
     except OSError:
         return []
+
+
+def _volumes_subdir(folder: Path) -> Path | None:
+    """Return ``Volumes`` / ``volumes`` child when present."""
+    if not folder.is_dir():
+        return None
+    try:
+        for child in folder.iterdir():
+            if child.is_dir() and child.name.casefold() == "volumes":
+                return child
+    except OSError:
+        return None
+    return None
+
+
+def _list_pdfs(folder: Path) -> list[Path]:
+    """PDFs under ``Volumes/`` (preferred) plus any PDFs at the leaf root."""
+    found: list[Path] = []
+    seen: set[str] = set()
+    volumes = _volumes_subdir(folder)
+    for source in ((volumes,) if volumes else ()) + (folder,):
+        if source is None or not source.is_dir():
+            continue
+        for pdf in _list_pdfs_in_dir(source):
+            key = str(pdf.resolve()) if pdf.exists() else str(pdf)
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(pdf)
+    return sorted(found, key=lambda p: p.name.casefold())
 
 
 def _folder_has_pdf(folder: Path) -> bool:
@@ -245,7 +276,7 @@ def _match_volume_cover(
 
 
 def _list_volumes(book_dir: Path, media_root: Path) -> list[dict]:
-    """List PDF volumes directly inside a book leaf folder (no nested books)."""
+    """List PDF volumes under ``Volumes/`` (or loose PDFs at the leaf root)."""
     volumes: list[dict] = []
     for pdf in _list_pdfs(book_dir):
         rel = safe_relative(pdf, media_root)
@@ -696,7 +727,7 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
         standalone = (only.get("folder_path") or "").casefold() == work_rel
         primary_book_id = only.get("id") if standalone else None
     # No child books but also no PDFs — empty franchise card
-    return {
+    card = {
         "id": normalize_franchise_slug(work_dir.name) or work_dir.name.casefold(),
         "name": work_dir.name,
         "letter": letter,
@@ -727,6 +758,15 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
         "season_count": len(books),
         "subseries": [],
     }
+    try:
+        from app.franchise_identity import apply_shared_artwork_to_card
+
+        apply_shared_artwork_to_card(
+            card, work_dir, media_root, franchise_name=work_dir.name
+        )
+    except Exception:
+        pass
+    return card
 
 
 def _title_letter(title: str | None) -> str:

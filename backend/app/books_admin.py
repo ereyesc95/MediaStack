@@ -1,38 +1,37 @@
-"""Admin mutations for Books leaf about + cast (disk sidecar under the book folder)."""
+"""Admin mutations for Books leaf about + cast (DB-backed; no media-disk sidecars)."""
 from __future__ import annotations
 
-import json
 import uuid
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.books_index import find_book_dir
+from app.books_store import (
+    load_book_about as _load_book_about_db,
+    save_book_about as _save_book_about_db,
+    save_work_about as _save_work_about_db,
+)
 from app.config import settings
 from app.models import Country
 from app.series_admin import _clean_genres, _clean_languages, _periods_from_activity
 from app.series_languages import normalize_lang_code
 
 
-def _about_path(book_dir: Path) -> Path:
-    return book_dir / ".mystack" / "about.json"
+def load_book_about(book_dir: Path, *, book_id: str | None = None) -> dict:
+    return _load_book_about_db(book_dir, book_id=book_id)
 
 
-def load_book_about(book_dir: Path) -> dict:
-    path = _about_path(book_dir)
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def _save_book_about(book_dir: Path, about: dict) -> None:
-    path = _about_path(book_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(about, indent=2, ensure_ascii=False), encoding="utf-8")
+def _save_book_about(
+    book_dir: Path,
+    about: dict,
+    *,
+    book_id: str | None = None,
+    work_dir: Path | None = None,
+) -> None:
+    _save_book_about_db(
+        book_dir, about, book_id=book_id, work_dir=work_dir
+    )
 
 
 def _split_semicolon(raw: str | None) -> list[str]:
@@ -48,7 +47,7 @@ def _resolve_book(book_id: str) -> tuple[Path, Path, dict]:
     if not found:
         raise ValueError(f"Book not found: {book_id}")
     book_dir, work_dir, _letter = found
-    return book_dir, work_dir, load_book_about(book_dir)
+    return book_dir, work_dir, load_book_about(book_dir, book_id=book_id)
 
 
 def _load_cast(about: dict) -> dict:
@@ -85,7 +84,7 @@ def patch_book_about(
     activity_start: str | None = None,
     activity_end: str | None = None,
 ) -> dict:
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
 
     if bio is not None:
         about["bio"] = bio.strip()
@@ -123,7 +122,7 @@ def patch_book_about(
         periods = _periods_from_activity(activity_start, activity_end)
         about["activity_periods"] = periods
 
-    _save_book_about(book_dir, about)
+    _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return {"ok": True, "book_id": book_id}
 
 
@@ -138,7 +137,7 @@ def add_book_cast_member(
     roles: list[str] | None = None,
     language: str | None = None,
 ) -> dict:
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     cast = _load_cast(about)
     key = "characters" if kind in ("characters", "animated") else "staff"
     lang = normalize_lang_code(language) or language or "en"
@@ -159,7 +158,7 @@ def add_book_cast_member(
     cast["animated"] = cast.get("characters") or []
     cast["people"] = cast.get("staff") or []
     about["cast"] = cast
-    _save_book_about(book_dir, about)
+    _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return member
 
 
@@ -175,7 +174,7 @@ def patch_book_cast_member(
     language: str | None = None,
     delete: bool = False,
 ) -> dict:
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     cast = _load_cast(about)
     key = "characters" if kind in ("characters", "animated") else "staff"
     members = list(cast.get(key) or [])
@@ -196,7 +195,7 @@ def patch_book_cast_member(
         cast["animated"] = cast.get("characters") or []
         cast["people"] = cast.get("staff") or []
         about["cast"] = cast
-        _save_book_about(book_dir, about)
+        _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
         return {"ok": True, "deleted": True}
     member = dict(members[idx])
     if name is not None:
@@ -217,13 +216,13 @@ def patch_book_cast_member(
     cast["animated"] = cast.get("characters") or []
     cast["people"] = cast.get("staff") or []
     about["cast"] = cast
-    _save_book_about(book_dir, about)
+    _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return member
 
 
 def _resolve_work_about(work_id: str) -> tuple[Path, dict]:
     from app.books_index import find_work_dir
-    from app.books_refresh import load_work_about
+    from app.books_store import load_work_about
 
     root = Path(settings.media_root or "")
     found = find_work_dir(work_id, root if root.is_dir() else None)
@@ -234,9 +233,7 @@ def _resolve_work_about(work_id: str) -> tuple[Path, dict]:
 
 
 def _save_work_about(work_dir: Path, about: dict) -> None:
-    path = work_dir / ".mystack" / "about.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(about, indent=2, ensure_ascii=False), encoding="utf-8")
+    _save_work_about_db(work_dir, about)
 
 
 def add_book_work_related(
@@ -292,7 +289,7 @@ def add_book_related(
 ) -> dict:
     from app.related_cards import add_related_card
 
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     item = add_related_card(
         about,
         bucket=bucket,
@@ -303,7 +300,7 @@ def add_book_related(
         overview=overview,
         via_members=via_members,
     )
-    _save_book_about(book_dir, about)
+    _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return item
 
 
@@ -312,10 +309,10 @@ def remove_book_related(
 ) -> bool:
     from app.related_cards import remove_related_card
 
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     ok = remove_related_card(about, bucket=bucket, item_id=item_id)
     if ok:
-        _save_book_about(book_dir, about)
+        _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return ok
 
 
@@ -393,7 +390,7 @@ def add_book_link(
 ) -> dict:
     from app.related_cards import add_link_item
 
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     item = add_link_item(
         about,
         category=category,
@@ -402,7 +399,7 @@ def add_book_link(
         logo_key=logo_key,
         logo_url=logo_url,
     )
-    _save_book_about(book_dir, about)
+    _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return item
 
 
@@ -419,7 +416,7 @@ def patch_book_link(
 ) -> dict | None:
     from app.related_cards import patch_link_item
 
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     item = patch_link_item(
         about,
         link_id,
@@ -431,15 +428,15 @@ def patch_book_link(
         clear_logo_key=clear_logo_key,
     )
     if item:
-        _save_book_about(book_dir, about)
+        _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return item
 
 
 def delete_book_link(book_id: str, link_id: str) -> bool:
     from app.related_cards import delete_link_item
 
-    book_dir, _work_dir, about = _resolve_book(book_id)
+    book_dir, work_dir, about = _resolve_book(book_id)
     ok = delete_link_item(about, link_id)
     if ok:
-        _save_book_about(book_dir, about)
+        _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return ok

@@ -2,11 +2,13 @@
 
 Expected layout (under MYSTACK_MEDIA_ROOT):
 
-    Music/{Letter}/{ArtistName}/Gallery/Photos/   — year-prefixed photos
-    Music/{Letter}/{ArtistName}/Gallery/Logos/    — era Icon/Logo PNGs
-    Music/{Letter}/{ArtistName}/Gallery/Covers/   — optional playlist covers
+    Music/{Letter}/{ArtistName}/[Artwork]/Photos/   — year-prefixed photos
+    Music/{Letter}/{ArtistName}/[Artwork]/Logos/    — era Icon/Logo PNGs
+    Music/{Letter}/{ArtistName}/[Artwork]/Covers/   — optional playlist covers
 
-Example: Music/H/HIM/Gallery/Photos/1997.00. Era, Landscape.jpg
+Legacy ``Gallery/`` (same subfolders) is still accepted as a fallback.
+
+Example: Music/H/HIM/[Artwork]/Photos/1997.00. Era, Landscape.jpg
 """
 from __future__ import annotations
 
@@ -120,7 +122,20 @@ def _artist_dir(media_root: Path, artist_name: str | None) -> Path | None:
 
 
 def _gallery_dir(artist_dir: Path) -> Path:
-    return _resolve_child_dir(artist_dir, "Gallery")
+    """Prefer ``[Artwork]``; fall back to legacy ``Gallery``."""
+    for name in ("[Artwork]", "Artwork", "artwork", "Gallery", "gallery"):
+        p = artist_dir / name
+        if p.is_dir():
+            return p
+        # Case-insensitive
+        try:
+            want = name.casefold()
+            for child in artist_dir.iterdir():
+                if child.is_dir() and child.name.casefold() == want:
+                    return child
+        except OSError:
+            break
+    return _resolve_child_dir(artist_dir, "[Artwork]")
 
 
 def _gallery_subdir(artist_dir: Path, sub: str) -> Path:

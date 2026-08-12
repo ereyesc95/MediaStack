@@ -388,6 +388,34 @@ class BookSeries(Base):
     bos_creator_id: Mapped[str | None] = mapped_column("botCreatorID", Text)
 
 
+class BookWork(Base):
+    """Disk franchise/work under Books/{Letter}/{Work}/ — about metadata in DB."""
+
+    __tablename__ = "book_works"
+
+    bwk_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bwk_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    bwk_name: Mapped[str | None] = mapped_column(Text)
+    bwk_folder_path: Mapped[str | None] = mapped_column(Text)
+    bwk_bio: Mapped[str | None] = mapped_column(Text)
+    bwk_metadata_json: Mapped[str | None] = mapped_column(Text)
+    bwk_refreshed_at: Mapped[str | None] = mapped_column(Text)
+
+
+class BookLeaf(Base):
+    """Disk book leaf (PDF volume folder) about / cast / links / related."""
+
+    __tablename__ = "book_leaves"
+
+    blk_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    blk_book_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    blk_work_slug: Mapped[str | None] = mapped_column(String(255), index=True)
+    blk_folder_path: Mapped[str | None] = mapped_column(Text)
+    blk_title: Mapped[str | None] = mapped_column(Text)
+    blk_metadata_json: Mapped[str | None] = mapped_column(Text)
+    blk_refreshed_at: Mapped[str | None] = mapped_column(Text)
+
+
 class Game(Base):
     """Games module (legacy expected gamName; table added for MyStack)."""
 

@@ -446,6 +446,12 @@ export async function fetchBandLibraryIndex(
   return request(`${API}/music/bands/${bandId}/media/library`);
 }
 
+export async function fetchBandSeriesIndex(
+  bandId: number
+): Promise<import("./types").MediaTabIndexPayload> {
+  return request(`${API}/music/bands/${bandId}/media/series`);
+}
+
 export async function fetchQuizDiscography(bandId: number) {
   return request<{
     releases: { id: string; title: string; tracks: { title: string; number: number }[] }[];

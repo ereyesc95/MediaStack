@@ -4,6 +4,7 @@ export type ArtistSection =
   | "overview"
   | "audio"
   | "video"
+  | "series"
   | "library"
   | "gallery"
   | "quiz";
@@ -24,6 +25,7 @@ const SECTIONS: ArtistSection[] = [
   "overview",
   "audio",
   "video",
+  "series",
   "library",
   "gallery",
   "quiz",

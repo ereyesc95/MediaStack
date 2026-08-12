@@ -302,7 +302,7 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
         only = films[0]
         standalone = _names_match(work_dir.name, only.get("title") or "")
         primary_film_id = only.get("id")
-    return {
+    card = {
         "id": normalize_franchise_slug(work_dir.name) or work_dir.name.casefold(),
         "name": work_dir.name,
         "letter": letter,
@@ -326,6 +326,15 @@ def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
         "season_count": len(films),
         "subseries": [],
     }
+    try:
+        from app.franchise_identity import apply_shared_artwork_to_card
+
+        apply_shared_artwork_to_card(
+            card, work_dir, media_root, franchise_name=work_dir.name
+        )
+    except Exception:
+        pass
+    return card
 
 
 def _title_letter(title: str | None) -> str:

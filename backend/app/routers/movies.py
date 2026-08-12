@@ -89,7 +89,12 @@ def movies_catalog(
         from app.adult_content import filter_adult_cards
         from app.movies_catalog_meta import enrich_movies_catalog
 
+        from app.franchise_identity import enrich_catalog_with_music_identity
+
         catalog = enrich_movies_catalog(db, build_movies_catalog())
+        catalog = enrich_catalog_with_music_identity(
+            db, catalog, orientation="portrait"
+        )
         catalog["franchises"] = filter_adult_cards(
             catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
         )

@@ -468,9 +468,10 @@ def build_band_overview(
     )
 
     top_tracks: list[dict] = []
-    media: dict = {
+    media = {
         "has_audio": False,
         "has_video": False,
+        "has_series": False,
         "has_library": False,
         "has_gallery": False,
         "has_playlists": False,

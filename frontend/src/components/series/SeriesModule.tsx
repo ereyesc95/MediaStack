@@ -7,6 +7,10 @@ import {
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  defaultSectionForSource,
+  saveArtistEntryReferrer,
+} from "../../artistEntry";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
@@ -89,7 +93,10 @@ type Props = {
       franchiseIconUrl?: string | null;
     }
   ) => void;
-  onOpenArtist?: (bandId: number) => void;
+  onOpenArtist?: (
+    bandId: number,
+    section?: import("../../types").ArtistSection
+  ) => void;
   onOpenMoviesFranchise?: (
     franchiseId: string,
     filmId?: string,
@@ -1033,9 +1040,26 @@ export default function SeriesModule({
           onPublisherChange={setPublisher}
           onWriterChange={setWriter}
           onOpenUniverse={(id) => openUniverseLanding(id, "catalog")}
-          onOpen={(id, nextSubseriesId, shell) =>
-            openFranchise(id, nextSubseriesId, shell)
-          }
+          onOpen={(id, nextSubseriesId, shell) => {
+            const card = franchises.find((f) => f.id === id);
+            if (
+              card?.is_music_franchise &&
+              card.music_band_id != null &&
+              onOpenArtist
+            ) {
+              const section = defaultSectionForSource("series");
+              saveArtistEntryReferrer({
+                source: "series",
+                section,
+                franchiseId: id,
+                franchiseName: card.name,
+                backLabel: "SERIES",
+              });
+              onOpenArtist(card.music_band_id, section);
+              return;
+            }
+            openFranchise(id, nextSubseriesId, shell);
+          }}
         />
       )}
     </div>

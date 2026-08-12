@@ -94,16 +94,24 @@ def _build_top_tracks(band: Band, media_root: Path) -> dict | None:
 
 
 def _artist_has_audio_entries(artist_dir: Path) -> bool:
-    from app.band_library import _audio_root
+    from app.band_library import AUDIO_CATEGORIES, _audio_root
 
     audio = _audio_root(artist_dir)
     if not audio.is_dir():
         return False
-    for child in audio.iterdir():
-        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
-            continue
-        if child.is_dir():
+    want = {c.casefold() for c in AUDIO_CATEGORIES.values()}
+    try:
+        for child in audio.iterdir():
+            if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+                continue
+            if not child.is_dir():
+                continue
+            # Artist-root layout: only count known release category folders.
+            if audio == artist_dir and child.name.casefold() not in want:
+                continue
             return True
+    except OSError:
+        return False
     return False
 
 
