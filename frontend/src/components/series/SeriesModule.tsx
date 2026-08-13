@@ -378,6 +378,16 @@ export default function SeriesModule({
       card.primary_subseries_id
         ? card.primary_subseries_id
         : nextSubseriesId;
+    saveFranchiseHomeReferrer({
+      source: "series",
+      home: "series",
+      fromTab: from,
+      catalogLetter: from === "catalog" ? letter || "A" : undefined,
+      franchiseId: id,
+      franchiseName: card?.name,
+      preferredSection: preferredSectionForSource("series"),
+      backLabel: "SERIES",
+    });
     onNavigate({
       franchiseId: id,
       subseriesId: standaloneId,

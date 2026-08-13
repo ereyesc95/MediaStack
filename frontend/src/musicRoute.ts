@@ -5,6 +5,7 @@ import {
   isMediaItemId,
   isReleaseId,
   isReservedSegment,
+  normalizeSlug,
   RELEASE_ID_RE,
   MEDIA_ITEM_ID_RE,
 } from "./routeSlug";
@@ -298,10 +299,14 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
 }
 
 export function artistPath(route: ArtistRoute): string {
-  const artistSeg =
+  const artistRaw =
     route.artistName?.trim() ||
     route.artistSlug?.trim() ||
     (route.bandId != null ? String(route.bandId) : "artist");
+  const artistSeg =
+    route.bandId != null && /^\d+$/.test(artistRaw)
+      ? artistRaw
+      : normalizeSlug(artistRaw) || artistRaw;
 
   let path = `/music/${enc(artistSeg)}`;
   const section = route.section;
@@ -313,14 +318,17 @@ export function artistPath(route: ArtistRoute): string {
   } else if (section === "audio" && route.playlistSlug) {
     path += `/audio/playlist/${route.playlistSlug}`;
   } else if (section === "audio" && route.releaseId) {
-    const releaseSeg =
+    const titleRaw =
       route.releaseTitle?.trim() &&
       !isReleaseId(route.releaseTitle) &&
       route.releaseTitle !== route.releaseId
         ? route.releaseTitle
-        : isReleaseId(route.releaseId)
-          ? route.releaseId
-          : route.releaseTitle?.trim() || route.releaseId;
+        : !isReleaseId(route.releaseId)
+          ? route.releaseTitle?.trim() || route.releaseId
+          : route.releaseTitle?.trim() || "";
+    const releaseSeg = titleRaw
+      ? normalizeSlug(titleRaw) || titleRaw
+      : route.releaseId;
     path += `/audio/${enc(releaseSeg)}`;
     if (route.releaseTab && route.releaseTab !== "overview") {
       path += `/${route.releaseTab}`;
@@ -329,14 +337,17 @@ export function artistPath(route: ArtistRoute): string {
     (section === "video" || section === "library") &&
     route.mediaItemId
   ) {
-    const itemSeg =
+    const titleRaw =
       route.mediaItemTitle?.trim() &&
       !isMediaItemId(route.mediaItemTitle) &&
       route.mediaItemTitle !== route.mediaItemId
         ? route.mediaItemTitle
-        : isMediaItemId(route.mediaItemId)
-          ? route.mediaItemId
-          : route.mediaItemTitle?.trim() || route.mediaItemId;
+        : !isMediaItemId(route.mediaItemId)
+          ? route.mediaItemTitle?.trim() || route.mediaItemId
+          : route.mediaItemTitle?.trim() || "";
+    const itemSeg = titleRaw
+      ? normalizeSlug(titleRaw) || titleRaw
+      : route.mediaItemId;
     path += `/${section}/${enc(itemSeg)}`;
   } else {
     path += `/${section}`;

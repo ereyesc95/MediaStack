@@ -475,7 +475,9 @@ export default function BooksModule({
     if (card?.is_standalone && card.primary_book_id) {
       pushBooksRoute({
         franchiseId: workId,
+        franchiseName: card.name,
         bookId: card.primary_book_id,
+        bookTitle: card.name,
         section: "overview",
         overviewTab: "about",
       });
@@ -490,6 +492,7 @@ export default function BooksModule({
     }
     pushBooksRoute({
       franchiseId: workId,
+      franchiseName: card?.name,
       section: "overview",
       overviewTab: "about",
     });
@@ -515,7 +518,9 @@ export default function BooksModule({
     if (!wid) return;
     pushBooksRoute({
       franchiseId: wid,
+      franchiseName: film?.work_name || undefined,
       bookId: nextFilmId,
+      bookTitle: film?.title || undefined,
       section: "overview",
       overviewTab: "about",
     });
@@ -669,9 +674,12 @@ export default function BooksModule({
         onOpenMusicRelease={onOpenMusicRelease}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenFilm={(id) => {
+          const film = films.find((f) => f.id === id);
           pushBooksRoute({
             franchiseId,
+            franchiseName: film?.work_name || undefined,
             bookId: id,
+            bookTitle: film?.title || undefined,
             section: "overview",
             overviewTab: "about",
             universeId,

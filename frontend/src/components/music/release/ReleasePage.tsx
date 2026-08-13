@@ -780,14 +780,16 @@ export default function ReleasePage({
     pushArtistRoute(
       {
         bandId,
+        artistName: data?.artist_name ?? undefined,
         section: "audio",
         overviewTab: "about",
         releaseId,
+        releaseTitle: data?.title ?? undefined,
         releaseTab: tab,
       },
       true
     );
-  }, [bandId, releaseId, tab]);
+  }, [bandId, releaseId, tab, data?.artist_name, data?.title]);
 
   const resolveTrackSource = useCallback(
     async (

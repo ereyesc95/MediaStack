@@ -85,6 +85,11 @@ export default function MediaItemAboutEditModal({
   const [selectedLangs, setSelectedLangs] = useState<string[]>(
     () => (data.languages?.length ? [...data.languages] : [])
   );
+  const [customLangLabels, setCustomLangLabels] = useState<
+    Record<string, string>
+  >({});
+  const [addingCustomLang, setAddingCustomLang] = useState(false);
+  const [customLangDraft, setCustomLangDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -151,6 +156,65 @@ export default function MediaItemAboutEditModal({
     () => countryOptions.find((o) => o.value === countryId) ?? null,
     [countryOptions, countryId]
   );
+
+  const languageCatalog = useMemo(() => {
+    const opts = langOptions.map((o) => ({
+      code: o.code,
+      label: stripOrigin(o.label),
+    }));
+    for (const [code, label] of Object.entries(customLangLabels)) {
+      if (!opts.some((o) => o.code === code)) {
+        opts.push({ code, label });
+      }
+    }
+    for (const code of selectedLangs) {
+      if (!opts.some((o) => o.code === code)) {
+        opts.push({
+          code,
+          label: customLangLabels[code] || code,
+        });
+      }
+    }
+    return opts;
+  }, [langOptions, customLangLabels, selectedLangs]);
+
+  const selectedLangMeta = useMemo(
+    () =>
+      selectedLangs.map((code) => {
+        const hit = languageCatalog.find(
+          (o) => o.code.toLowerCase() === code.toLowerCase()
+        );
+        return { code, label: hit?.label || code };
+      }),
+    [selectedLangs, languageCatalog]
+  );
+
+  const addableLangs = useMemo(
+    () =>
+      languageCatalog.filter(
+        (o) =>
+          !selectedLangs.some((c) => c.toLowerCase() === o.code.toLowerCase())
+      ),
+    [languageCatalog, selectedLangs]
+  );
+
+  const removeLang = (code: string) => {
+    setSelectedLangs((prev) =>
+      prev.filter((c) => c.toLowerCase() !== code.toLowerCase())
+    );
+  };
+
+  const commitCustomLang = () => {
+    const label = customLangDraft.trim();
+    if (!label) return;
+    const code = label.toLowerCase().replace(/\s+/g, "-");
+    setCustomLangLabels((prev) => ({ ...prev, [code]: label }));
+    setSelectedLangs((prev) =>
+      prev.some((c) => c.toLowerCase() === code) ? prev : [...prev, code]
+    );
+    setAddingCustomLang(false);
+    setCustomLangDraft("");
+  };
 
   async function handleSave() {
     setSaving(true);
@@ -275,44 +339,78 @@ export default function MediaItemAboutEditModal({
               }
             />
           </label>
-          <fieldset className="series-about-edit__langs">
-            <legend>Languages</legend>
-            <div className="series-about-edit__lang-chips">
-              {langOptions.map((l) => {
-                const on = selectedLangs.some(
-                  (c) => c.toLowerCase() === l.code.toLowerCase()
-                );
-                return (
+          <div className="series-about-edit__block">
+            <span className="series-about-edit__label">Languages</span>
+            <div className="series-about-edit__chips">
+              {selectedLangMeta.map((opt) => (
+                <span key={opt.code} className="series-about-edit__chip">
+                  {opt.label}
                   <button
-                    key={l.code}
                     type="button"
-                    className={
-                      on
-                        ? "series-about-edit__lang-chip is-on"
-                        : "series-about-edit__lang-chip"
-                    }
+                    className="series-about-edit__chip-x"
+                    aria-label={`Remove ${opt.label}`}
                     disabled={saving}
-                    onClick={() => {
-                      setSelectedLangs((prev) => {
-                        if (
-                          prev.some(
-                            (c) => c.toLowerCase() === l.code.toLowerCase()
-                          )
-                        ) {
-                          return prev.filter(
-                            (c) => c.toLowerCase() !== l.code.toLowerCase()
-                          );
-                        }
-                        return [...prev, l.code];
-                      });
-                    }}
+                    onClick={() => removeLang(opt.code)}
                   >
-                    {stripOrigin(l.label)}
+                    ×
                   </button>
-                );
-              })}
+                </span>
+              ))}
+              {addingCustomLang ? (
+                <span className="series-about-edit__custom-lang">
+                  <input
+                    value={customLangDraft}
+                    onChange={(e) => setCustomLangDraft(e.target.value)}
+                    placeholder="Language name…"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitCustomLang();
+                      }
+                      if (e.key === "Escape") {
+                        setAddingCustomLang(false);
+                        setCustomLangDraft("");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    onClick={commitCustomLang}
+                  >
+                    Add
+                  </button>
+                </span>
+              ) : (
+                <select
+                  className="series-about-edit__add-select"
+                  value=""
+                  disabled={saving}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__custom__") {
+                      setAddingCustomLang(true);
+                      return;
+                    }
+                    if (v) {
+                      setSelectedLangs((prev) =>
+                        prev.includes(v) ? prev : [...prev, v]
+                      );
+                    }
+                  }}
+                >
+                  <option value="">Add language…</option>
+                  {addableLangs.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.label}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom…</option>
+                </select>
+              )}
             </div>
-          </fieldset>
+          </div>
           <GenreTagsInput
             label="Genres"
             options={genreOptions}

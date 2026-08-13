@@ -21,6 +21,8 @@ import ModalPortal from "../ModalPortal";
 
 type StaffRoleOpt = { name: string; type: string };
 
+const HIDDEN_CAST_CIRCLE_ROLES = new Set(["dub studio"]);
+
 function roleVisibleForLanguage(
   roleName: string,
   roleTypes: Record<string, string>,
@@ -33,21 +35,49 @@ function roleVisibleForLanguage(
   return true;
 }
 
+function rolesIncludeDub(
+  roles: string[],
+  roleTypes: Record<string, string>
+): boolean {
+  return roles.some(
+    (r) => (roleTypes[(r || "").trim().toLowerCase()] || "hybrid") === "dub"
+  );
+}
+
+function parseRoleTokens(text: string): string[] {
+  return text
+    .split(/[;·,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** One card per person; roles merged A–Z and filtered by language type. */
 function mergeStaffMembers(
   list: SeriesCastMember[],
   roleTypes: Record<string, string>,
-  isOriginLanguage: boolean
+  isOriginLanguage: boolean,
+  activeLanguage: string | null
 ): SeriesCastMember[] {
   const byName = new Map<string, SeriesCastMember>();
+  const active = (activeLanguage || "").trim().toLowerCase();
   for (const m of list) {
     const key = (m.name || "").trim().toLowerCase();
     if (!key) continue;
+    const memberLang = (m.language || "").trim().toLowerCase();
     const roles = (m.roles || [])
       .map((r) => String(r).trim())
       .filter(Boolean)
+      .filter((r) => !HIDDEN_CAST_CIRCLE_ROLES.has(r.toLowerCase()))
       .filter((r) => roleVisibleForLanguage(r, roleTypes, isOriginLanguage));
     if (!roles.length && (m.roles || []).length) continue;
+    if (
+      rolesIncludeDub(roles, roleTypes) &&
+      memberLang &&
+      active &&
+      memberLang !== active
+    ) {
+      continue;
+    }
     const existing = byName.get(key);
     if (!existing) {
       byName.set(key, {
@@ -65,12 +95,103 @@ function mergeStaffMembers(
       ...existing,
       roles: mergedRoles,
       photo_url: existing.photo_url || m.photo_url,
+      language: existing.language || m.language,
     });
   }
   return Array.from(byName.values()).sort((a, b) =>
     (a.name || "").localeCompare(b.name || "", undefined, {
       sensitivity: "base",
     })
+  );
+}
+
+function StaffRoleSuggest({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  options: StaffRoleOpt[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const selected = useMemo(() => parseRoleTokens(value), [value]);
+  const selectedSet = useMemo(
+    () => new Set(selected.map((r) => r.toLowerCase())),
+    [selected]
+  );
+  const draft = useMemo(() => {
+    const parts = value.split(/[;·,]/);
+    return (parts[parts.length - 1] || "").trim().toLowerCase();
+  }, [value]);
+
+  const suggestions = useMemo(() => {
+    return options
+      .filter((o) => o.name && !selectedSet.has(o.name.toLowerCase()))
+      .filter((o) => !draft || o.name.toLowerCase().includes(draft))
+      .slice(0, 12);
+  }, [options, draft, selectedSet]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const commit = (name: string) => {
+    const parts = [...selected];
+    const last = parts[parts.length - 1];
+    if (
+      last &&
+      draft &&
+      last.toLowerCase() === draft &&
+      !options.some((o) => o.name.toLowerCase() === last.toLowerCase())
+    ) {
+      parts.pop();
+    }
+    if (!parts.some((p) => p.toLowerCase() === name.toLowerCase())) {
+      parts.push(name);
+    }
+    onChange(parts.join(", "));
+    setOpen(true);
+  };
+
+  return (
+    <div className="series-staff-role-suggest" ref={wrapRef}>
+      <input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 ? (
+        <ul className="series-staff-role-suggest__list" role="listbox">
+          {suggestions.map((r) => (
+            <li key={r.name}>
+              <button
+                type="button"
+                role="option"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commit(r.name)}
+              >
+                {r.name}
+                <span className="series-staff-role-suggest__type">{r.type}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -657,6 +778,80 @@ function CastMemberModal({
   );
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removeFromFranchise, setRemoveFromFranchise] = useState(false);
+  const [roleOptionsLocal, setRoleOptionsLocal] = useState<StaffRoleOpt[]>(
+    () => roleOptions || []
+  );
+
+  useEffect(() => {
+    if (roleOptions?.length) {
+      setRoleOptionsLocal(roleOptions);
+      return;
+    }
+    if (characterCentered) return;
+    let cancelled = false;
+    void fetchStaffRoles()
+      .then((res) => {
+        if (!cancelled) setRoleOptionsLocal(res.roles || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roleOptions, characterCentered]);
+
+  const roleTypeMapEdit = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of roleOptionsLocal) {
+      if (r.name) m[r.name.toLowerCase()] = (r.type || "hybrid").toLowerCase();
+    }
+    return m;
+  }, [roleOptionsLocal]);
+
+  const staffRolesParsed = useMemo(
+    () => parseRoleTokens(rolesText),
+    [rolesText]
+  );
+  const showStaffLang = useMemo(
+    () =>
+      !characterCentered && rolesIncludeDub(staffRolesParsed, roleTypeMapEdit),
+    [characterCentered, staffRolesParsed, roleTypeMapEdit]
+  );
+
+  const dubLangOptions = useMemo(() => {
+    const origin = (franchiseLangs[0] || languageOptions[0]?.code || "")
+      .toLowerCase();
+    // Prefer franchise langs excluding origin; fall back to languageOptions.
+    const pool = (
+      franchiseLangs.length
+        ? franchiseLangs.map((c) => ({
+            code: c,
+            label: languageLabel(c, languageOptions),
+          }))
+        : languageOptions
+    ).filter((o) => o.code.toLowerCase() !== origin);
+    return pool.length
+      ? pool
+      : languageOptions.filter((o) => o.code.toLowerCase() !== origin);
+  }, [franchiseLangs, languageOptions]);
+
+  const [staffLang, setStaffLang] = useState(() => {
+    const fromMember = (member.language || "").trim();
+    if (fromMember) return fromMember;
+    return "";
+  });
+
+  useEffect(() => {
+    if (!showStaffLang) return;
+    if (
+      staffLang &&
+      dubLangOptions.some(
+        (o) => o.code.toLowerCase() === staffLang.toLowerCase()
+      )
+    ) {
+      return;
+    }
+    setStaffLang(dubLangOptions[0]?.code || "");
+  }, [showStaffLang, dubLangOptions, staffLang]);
 
   useEffect(() => {
     const people = actorsForLangDetailed(member, editLang, castSubFilter);
@@ -699,7 +894,11 @@ function CastMemberModal({
           roles: characterCentered
             ? actors.map((a) => a.name)
             : staffRoles,
-          language: characterCentered ? editLang : undefined,
+          language: characterCentered
+            ? editLang
+            : showStaffLang
+              ? staffLang
+              : undefined,
         });
       } else {
         await patchSeriesCastMember(franchiseId, member.id, {
@@ -714,7 +913,11 @@ function CastMemberModal({
           roles: characterCentered
             ? actors.map((a) => a.name)
             : staffRoles,
-          language: characterCentered ? editLang : undefined,
+          language: characterCentered
+            ? editLang
+            : showStaffLang
+              ? staffLang
+              : undefined,
           subseries_ids: selectedSubs,
           actor_subseries_ids: characterCentered ? actorScope : undefined,
         });
@@ -909,20 +1112,32 @@ function CastMemberModal({
               )}
             </div>
             {!characterCentered ? (
-              <label>
-                Roles
-                <input
-                  value={rolesText}
-                  onChange={(e) => setRolesText(e.target.value)}
-                  placeholder="Director, Writer, …"
-                  list="series-staff-role-suggestions-edit"
-                />
-                <datalist id="series-staff-role-suggestions-edit">
-                  {roleOptions.map((r) => (
-                    <option key={r.name} value={r.name} />
-                  ))}
-                </datalist>
-              </label>
+              <>
+                <label>
+                  Roles
+                  <StaffRoleSuggest
+                    value={rolesText}
+                    onChange={setRolesText}
+                    options={roleOptionsLocal}
+                    placeholder="Type to pick Director, Writer, …"
+                  />
+                </label>
+                {showStaffLang ? (
+                  <label>
+                    Language
+                    <select
+                      value={staffLang}
+                      onChange={(e) => setStaffLang(e.target.value)}
+                    >
+                      {dubLangOptions.map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {languageLabel(o.code, languageOptions)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </>
             ) : null}
             {characterCentered ? (
               <>
@@ -1180,6 +1395,57 @@ export function AddCastModal({
     };
   }, [roleOptionsProp, characterCentered]);
 
+  const roleTypeMapAdd = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of roleOptions) {
+      if (r.name) m[r.name.toLowerCase()] = (r.type || "hybrid").toLowerCase();
+    }
+    return m;
+  }, [roleOptions]);
+
+  const staffRolesParsed = useMemo(
+    () => parseRoleTokens(rolesText),
+    [rolesText]
+  );
+  const showStaffLang = useMemo(
+    () =>
+      !characterCentered && rolesIncludeDub(staffRolesParsed, roleTypeMapAdd),
+    [characterCentered, staffRolesParsed, roleTypeMapAdd]
+  );
+
+  const originCode = (
+    defaultLanguage ||
+    languageOptions.find((o) => o.is_origin)?.code ||
+    languageOptions[0]?.code ||
+    ""
+  ).toLowerCase();
+
+  const dubLangOptions = useMemo(
+    () =>
+      languageOptions.filter((o) => o.code.toLowerCase() !== originCode),
+    [languageOptions, originCode]
+  );
+
+  const [staffLang, setStaffLang] = useState(
+    () =>
+      languageOptions.find((o) => !o.is_origin && o.code.toLowerCase() !== originCode)
+        ?.code ||
+      dubLangOptions[0]?.code ||
+      ""
+  );
+
+  useEffect(() => {
+    if (!showStaffLang) return;
+    if (
+      staffLang &&
+      dubLangOptions.some(
+        (o) => o.code.toLowerCase() === staffLang.toLowerCase()
+      )
+    ) {
+      return;
+    }
+    setStaffLang(dubLangOptions[0]?.code || "");
+  }, [showStaffLang, dubLangOptions, staffLang]);
   const save = async () => {
     if (!charName.trim()) return;
     setSaving(true);
@@ -1217,7 +1483,11 @@ export function AddCastModal({
             : staffRoles.length
               ? staffRoles
               : undefined,
-          language: characterCentered ? lang : undefined,
+          language: characterCentered
+            ? lang
+            : showStaffLang
+              ? staffLang
+              : undefined,
         });
         if (characterCentered && created?.id != null && actors.length > 0) {
           await patchMoviesFilmCastMember(filmId, created.id, {
@@ -1246,7 +1516,11 @@ export function AddCastModal({
             : staffRoles.length
               ? staffRoles
               : undefined,
-          language: characterCentered ? lang : undefined,
+          language: characterCentered
+            ? lang
+            : showStaffLang
+              ? staffLang
+              : undefined,
         });
       } else {
         const created = await addSeriesCastMember(franchiseId, {
@@ -1268,7 +1542,11 @@ export function AddCastModal({
             : staffRoles.length
               ? staffRoles
               : undefined,
-          language: characterCentered ? lang : undefined,
+          language: characterCentered
+            ? lang
+            : showStaffLang
+              ? staffLang
+              : undefined,
           subseries_ids: selectedSubs.length ? selectedSubs : undefined,
         });
         if (
@@ -1288,13 +1566,14 @@ export function AddCastModal({
         } else if (
           !characterCentered &&
           created?.id != null &&
-          selectedSubs.length
+          (selectedSubs.length || showStaffLang)
         ) {
           await patchSeriesCastMember(franchiseId, created.id, {
             bucket: activeBucket,
             name: charName.trim(),
             photo_url: photoUrl.trim() || null,
             roles: staffRoles,
+            language: showStaffLang ? staffLang : undefined,
             subseries_ids: selectedSubs,
           });
         }
@@ -1445,20 +1724,37 @@ export function AddCastModal({
               ) : null}
             </>
           ) : (
-            <label>
-              Roles (optional)
-              <input
-                value={rolesText}
-                onChange={(e) => setRolesText(e.target.value)}
-                placeholder="Type to pick Director, Studio, …"
-                list="series-staff-role-suggestions-add"
-              />
-              <datalist id="series-staff-role-suggestions-add">
-                {roleOptions.map((r) => (
-                  <option key={r.name} value={r.name} />
-                ))}
-              </datalist>
-            </label>
+            <>
+              <label>
+                Roles (optional)
+                <StaffRoleSuggest
+                  value={rolesText}
+                  onChange={setRolesText}
+                  options={roleOptions}
+                  placeholder="Type to pick Director, Writer, …"
+                />
+              </label>
+              {showStaffLang ? (
+                <label>
+                  Language
+                  <select
+                    value={staffLang}
+                    onChange={(e) => setStaffLang(e.target.value)}
+                  >
+                    {(dubLangOptions.length
+                      ? dubLangOptions
+                      : languageOptions.filter(
+                          (o) => o.code.toLowerCase() !== originCode
+                        )
+                    ).map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </>
           )}
           {subseries.length > 0 && !characterOnly ? (
             <fieldset className="series-cast-edit__subseries">
@@ -1614,7 +1910,12 @@ export default function SeriesCast({
       const origin = (originLanguage || "").toLowerCase();
       const lang = (activeLanguage || originLanguage || "").toLowerCase();
       const isOrigin = !lang || !origin || lang === origin;
-      resolved = mergeStaffMembers(resolved, roleTypeMap, isOrigin);
+      resolved = mergeStaffMembers(
+        resolved,
+        roleTypeMap,
+        isOrigin,
+        activeLanguage || null
+      );
     }
     if (castLayout === "row") return resolved;
     return resolved.slice(0, 8);

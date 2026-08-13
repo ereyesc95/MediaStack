@@ -89,6 +89,10 @@ def cover_search_dirs(folder: Path) -> list[Path]:
     covers = find_covers_dir(folder)
     if covers:
         out.append(covers)
+    # Artist books often store covers directly under Gallery/ (no Covers/).
+    gal = find_gallery_root(folder)
+    if gal and gal not in out:
+        out.append(gal)
     legacy = find_artwork_legacy(folder)
     if legacy and legacy not in out:
         out.append(legacy)

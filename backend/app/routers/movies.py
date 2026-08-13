@@ -224,10 +224,30 @@ def movies_franchise_overview(
     work_id: str,
     orientation: str = Query("portrait"),
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     overview = build_work_overview(db, work_id, orientation=orientation)
     if not overview:
         raise HTTPException(404, "Franchise not found")
+    if not nsfw_unlocked:
+        from app.adult_content import filter_adult_movie_leaf_cards
+
+        films = list(overview.get("films") or [])
+        filtered = filter_adult_movie_leaf_cards(
+            db, films, nsfw_unlocked=False
+        )
+        overview = dict(overview)
+        overview["films"] = filtered
+        # Movies tab also maps films into subseries-shaped cards.
+        want = {str(f.get("id") or "") for f in filtered if isinstance(f, dict)}
+        subs = list(overview.get("subseries") or [])
+        overview["subseries"] = [
+            s
+            for s in subs
+            if not isinstance(s, dict)
+            or str(s.get("id") or "") in want
+            or not str(s.get("id") or "").startswith("film_")
+        ]
     return overview
 
 
@@ -337,35 +357,10 @@ def movies_franchise_movies(
         raise HTTPException(404, "Franchise not found")
     films = list(overview.get("films") or overview.get("subseries") or [])
     if not nsfw_unlocked and films:
-        from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
-        from app.movies_catalog_meta import enrich_movies_catalog
-        from app.movies_index import build_movies_catalog
+        from app.adult_content import filter_adult_movie_leaf_cards
 
-        catalog = enrich_movies_catalog(db, build_movies_catalog())
-        by_id = {
-            str(f.get("id") or ""): f
-            for f in (catalog.get("films") or [])
-            if isinstance(f, dict)
-        }
-        enriched: list[dict] = []
-        for film in films:
-            if not isinstance(film, dict):
-                continue
-            hit = by_id.get(str(film.get("id") or ""))
-            row = dict(film)
-            if hit:
-                for key in (
-                    "genre_names",
-                    "genre_ids",
-                    "parent_genre_names",
-                ):
-                    if hit.get(key) is not None:
-                        row[key] = hit.get(key)
-            enriched.append(row)
-        films = filter_adult_cards(
-            enriched,
-            nsfw_unlocked=False,
-            extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        films = filter_adult_movie_leaf_cards(
+            db, films, nsfw_unlocked=False
         )
     return {"items": films, "count": len(films)}
 

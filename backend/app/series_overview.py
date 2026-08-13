@@ -743,13 +743,19 @@ def build_series_overview(
     cast["animated"] = cast["characters"]
     cast["people"] = cast["staff"]
 
-    # Languages that currently have at least one character performance
+    # Languages that currently have at least one character performance or staff locale
     cast_lang_codes: set[str] = set()
     for m in cast["characters"]:
         for p in m.get("performances") or []:
             code = normalize_lang_code(p.get("language")) or p.get("language")
             if code:
                 cast_lang_codes.add(code)
+    for m in cast["staff"]:
+        if not isinstance(m, dict):
+            continue
+        code = normalize_lang_code(m.get("language")) or m.get("language")
+        if code:
+            cast_lang_codes.add(code)
 
     language_options = language_options_for_franchise(
         selected_langs, origin_code=origin_lang
@@ -829,8 +835,13 @@ def build_series_overview(
 
     posters = images.get("posters") or []
     backdrops = images.get("backdrops") or []
-    # Ensure local [Artwork] has Portrait/Landscape files (download TMDb if missing)
-    if posters or backdrops or row.ser_poster_url or row.ser_backdrop_url:
+    # Ensure local [Artwork] has Portrait/Landscape files (download TMDb if missing).
+    # Music-artist franchises already keep brand art under franchise [Artwork] — skip TMDb.
+    music_band = _find_music_band(db, name)
+    if (
+        music_band is None
+        and (posters or backdrops or row.ser_poster_url or row.ser_backdrop_url)
+    ):
         ensure_artwork_cached(
             franchise_dir,
             root,
@@ -939,7 +950,6 @@ def build_series_overview(
         != folder_path.casefold().rstrip("/")
     ]
 
-    music_band = _find_music_band(db, name)
     gallery = build_series_gallery(folder_path, root)
     has_gallery = bool(gallery.get("items"))
 

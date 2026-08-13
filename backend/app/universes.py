@@ -1546,15 +1546,14 @@ def build_universe_hub(
     cards = expand_universe_cards(db, universe_id)
     if not nsfw_unlocked:
         from app.adult_content import (
-            movie_work_is_sfw,
+            filter_adult_movie_leaf_cards,
             series_franchise_is_sfw,
-            sfw_movie_work_ids,
             sfw_series_franchise_ids,
         )
 
         sfw_series = sfw_series_franchise_ids(db)
-        sfw_movies = sfw_movie_work_ids(db)
         filtered: list[dict] = []
+        movie_cards: list[dict] = []
         for c in cards:
             mod = c.get("module")
             if mod == "series":
@@ -1568,21 +1567,15 @@ def build_universe_hub(
                     filtered.append(c)
                 continue
             if mod == "movies":
-                if movie_work_is_sfw(
-                    db,
-                    str(
-                        c.get("work_id")
-                        or c.get("franchise_id")
-                        or c.get("id")
-                        or ""
-                    ),
-                    sfw_ids=sfw_movies,
-                ):
-                    filtered.append(c)
+                movie_cards.append(c)
                 continue
             filtered.append(c)
+        filtered.extend(
+            filter_adult_movie_leaf_cards(
+                db, movie_cards, nsfw_unlocked=False
+            )
+        )
         cards = filtered
-
     def title_key(c: dict) -> str:
         return (c.get("title") or c.get("name") or "").casefold()
 

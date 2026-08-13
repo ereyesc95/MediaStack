@@ -4,6 +4,7 @@ import {
   enc,
   isFilmId,
   isReservedSegment,
+  normalizeSlug,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -143,16 +144,21 @@ export function moviesPath(route: MoviesRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg = route.franchiseName?.trim() || route.franchiseId;
+  const franchiseSeg =
+    normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
+    route.franchiseId;
   let path = `/movies/${enc(franchiseSeg)}`;
-  const filmSeg =
+  const titleRaw =
     route.filmTitle?.trim() &&
     !isFilmId(route.filmTitle) &&
     route.filmTitle !== route.filmId
       ? route.filmTitle
-      : isFilmId(route.filmId)
-        ? route.filmId
-        : route.filmTitle?.trim() || route.filmId;
+      : !isFilmId(route.filmId || "")
+        ? route.filmTitle?.trim() || route.filmId
+        : route.filmTitle?.trim() || "";
+  const filmSeg = titleRaw
+    ? normalizeSlug(titleRaw) || titleRaw
+    : route.filmId;
   path += `/${enc(filmSeg!)}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";

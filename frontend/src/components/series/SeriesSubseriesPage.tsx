@@ -1302,7 +1302,23 @@ export default function SeriesSubseriesPage({
   const publishers = scopedMeta?.publishers ?? overview?.publishers ?? [];
   const publisherFallback = publishers[0] || "";
   const country = scopedMeta?.country ?? overview?.country;
-  const languages = scopedMeta?.languages ?? overview?.languages ?? [];
+  const languages = useMemo(() => {
+    const base = [
+      ...((scopedMeta?.languages ?? overview?.languages ?? []) as string[]),
+    ];
+    const seen = new Set(base.map((c) => c.toLowerCase()));
+    for (const o of overview?.cast_languages || []) {
+      const code = (o.code || "").trim();
+      if (!code || seen.has(code.toLowerCase())) continue;
+      seen.add(code.toLowerCase());
+      base.push(code);
+    }
+    return base;
+  }, [
+    scopedMeta?.languages,
+    overview?.languages,
+    overview?.cast_languages,
+  ]);
   const overviewBio = isFilm
     ? overview?.bio ?? scopedMeta?.bio
     : scopedMeta?.bio ?? overview?.bio;
@@ -1311,6 +1327,11 @@ export default function SeriesSubseriesPage({
     const byCode = new Map(
       opts.map((o) => [o.code.toLowerCase(), o.label] as const)
     );
+    for (const o of overview?.cast_languages || []) {
+      if (o.code && !byCode.has(o.code.toLowerCase())) {
+        byCode.set(o.code.toLowerCase(), o.label);
+      }
+    }
     const origin = (overview?.origin_language || "").toLowerCase();
     const ordered = [...languages];
     if (origin) {
@@ -1327,8 +1348,12 @@ export default function SeriesSubseriesPage({
         ""
       ),
     }));
-  }, [languages, overview?.language_options, overview?.origin_language]);
-
+  }, [
+    languages,
+    overview?.language_options,
+    overview?.cast_languages,
+    overview?.origin_language,
+  ]);
   const storageScope = isFilm
     ? `film:${subseriesId}`
     : `sub:${franchiseId}:${subseriesId}`;
@@ -1346,9 +1371,7 @@ export default function SeriesSubseriesPage({
     return null;
   }, [detail?.logo_assets, languages]);
 
-  const logosSwitchable = folderLogoState
-    ? folderLogoState.logosSwitchable
-    : Boolean(overview?.logos_switchable);
+  const languagesSwitchable = languageOpts.length >= 2;
 
   const logoByLanguage = folderLogoState
     ? folderLogoState.logoByLanguage
@@ -1388,19 +1411,20 @@ export default function SeriesSubseriesPage({
     const origin = (overview?.origin_language || "").toLowerCase();
     const lang = (activeLanguage || origin || "").toLowerCase();
     const isOrigin = !lang || !origin || lang === origin;
-    const prefer = isOrigin
-      ? ["Studio", "Publisher"]
-      : ["Dub Studio", "Studio", "Publisher"];
-    for (const role of prefer) {
-      const hit = staff.find((m) =>
+    if (!isOrigin) {
+      const dubHits = staff.filter((m) =>
         (m.roles || []).some(
-          (r) => String(r).trim().toLowerCase() === role.toLowerCase()
+          (r) => String(r).trim().toLowerCase() === "dub studio"
         )
       );
-      if (hit?.name) {
+      const langHit =
+        dubHits.find(
+          (m) => (m.language || "").trim().toLowerCase() === lang
+        ) || dubHits[0];
+      if (langHit?.name) {
         return {
-          name: hit.name,
-          logo: hit.photo_url || null,
+          name: langHit.name,
+          logo: langHit.photo_url || null,
         };
       }
     }
@@ -1414,8 +1438,7 @@ export default function SeriesSubseriesPage({
     overview?.origin_language,
     activeLanguage,
     publisherFallback,
-  ]);
-  const publisher = distributor?.name || "";
+  ]);  const publisher = distributor?.name || "";
 
   const langLogo =
     (activeLanguage &&
@@ -3459,54 +3482,6 @@ export default function SeriesSubseriesPage({
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
                   ) : null}
-                  {(() => {
-                    const leafTitle = (overview?.name || title || "").trim();
-                    const parentName = (franchiseName || "").trim();
-                    const nested =
-                      Boolean(franchiseId) &&
-                      Boolean(parentName) &&
-                      Boolean(leafTitle) &&
-                      parentName.toLowerCase() !== leafTitle.toLowerCase();
-                    if (!nested) return null;
-                    return (
-                      <p className="release-page__type-line">
-                        Part of the{" "}
-                        <button
-                          type="button"
-                          className="release-page__artist-link release-page__artist-link--inline"
-                          onClick={() =>
-                            onNavigate({
-                              franchiseId,
-                              subseriesId: undefined,
-                              section: "overview",
-                              overviewTab: "about",
-                            })
-                          }
-                        >
-                          {parentName}
-                        </button>{" "}
-                        franchise
-                      </p>
-                    );
-                  })()}
-                  {universeInfo && leafUniverses.length === 0 ? (
-                    <p className="release-page__type-line">
-                      Part of the{" "}
-                      <button
-                        type="button"
-                        className="release-page__artist-link release-page__artist-link--inline"
-                        onClick={() =>
-                          onOpenUniverseParent?.(
-                            universeInfo.id,
-                            universeInfo.name
-                          )
-                        }
-                      >
-                        {universeInfo.name}
-                      </button>{" "}
-                      universe
-                    </p>
-                  ) : null}
                   <p className="release-page__type-line">
                     <button
                       type="button"
@@ -3551,6 +3526,36 @@ export default function SeriesSubseriesPage({
                     ) : null}
                   </p>
                   {(() => {
+                    const leafTitle = (overview?.name || title || "").trim();
+                    const parentName = (franchiseName || "").trim();
+                    const nested =
+                      Boolean(franchiseId) &&
+                      Boolean(parentName) &&
+                      Boolean(leafTitle) &&
+                      parentName.toLowerCase() !== leafTitle.toLowerCase();
+                    if (!nested) return null;
+                    return (
+                      <p className="release-page__type-line">
+                        Part of the{" "}
+                        <button
+                          type="button"
+                          className="release-page__artist-link release-page__artist-link--inline"
+                          onClick={() =>
+                            onNavigate({
+                              franchiseId,
+                              subseriesId: undefined,
+                              section: "overview",
+                              overviewTab: "about",
+                            })
+                          }
+                        >
+                          {parentName}
+                        </button>{" "}
+                        franchise
+                      </p>
+                    );
+                  })()}
+                  {(() => {
                     const memberships =
                       leafUniverses.length > 0
                         ? leafUniverses
@@ -3558,7 +3563,9 @@ export default function SeriesSubseriesPage({
                           ? overview.universes
                           : overview?.universe
                             ? [overview.universe]
-                            : [];
+                            : universeInfo
+                              ? [universeInfo]
+                              : [];
                     if (!memberships.length) return null;
                     const plural = memberships.length > 1;
                     return (
@@ -3688,7 +3695,7 @@ export default function SeriesSubseriesPage({
                               ·{" "}
                             </span>
                           ) : null}
-                          {logosSwitchable ? (
+                          {languagesSwitchable ? (
                             <button
                               type="button"
                               className={`series-subseries-page__lang-pill${

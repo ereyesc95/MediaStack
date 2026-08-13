@@ -586,7 +586,7 @@ export default function SeriesAboutEditModal({
           </div>
 
           <label className="series-about-edit__publishers">
-            Publishers (semicolon-separated)
+            Distributing Studio
             <input
               value={publishers}
               onChange={(e) => setPublishers(e.target.value)}

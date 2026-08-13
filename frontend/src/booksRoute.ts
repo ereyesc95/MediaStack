@@ -4,6 +4,7 @@ import {
   enc,
   isBookId,
   isReservedSegment,
+  normalizeSlug,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -145,16 +146,21 @@ export function booksPath(route: BooksRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg = route.franchiseName?.trim() || route.franchiseId;
+  const franchiseSeg =
+    normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
+    route.franchiseId;
   let path = `/books/${enc(franchiseSeg)}`;
-  const bookSeg =
+  const titleRaw =
     route.bookTitle?.trim() &&
     !isBookId(route.bookTitle) &&
     route.bookTitle !== route.bookId
       ? route.bookTitle
-      : isBookId(route.bookId)
-        ? route.bookId
-        : route.bookTitle?.trim() || route.bookId;
+      : !isBookId(route.bookId || "")
+        ? route.bookTitle?.trim() || route.bookId
+        : route.bookTitle?.trim() || "";
+  const bookSeg = titleRaw
+    ? normalizeSlug(titleRaw) || titleRaw
+    : route.bookId;
   path += `/${enc(bookSeg!)}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";

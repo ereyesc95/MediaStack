@@ -272,6 +272,11 @@ def _match_volume_cover(
             best = p
     if best and best_score > 0:
         return _media_url(best, media_root)
+    # Artist galleries often use free-form cover filenames — use first image.
+    if candidates:
+        return _media_url(
+            sorted(candidates, key=lambda p: p.name.casefold())[0], media_root
+        )
     return None
 
 

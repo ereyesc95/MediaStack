@@ -1539,6 +1539,8 @@ export type SeriesCastMember = {
     language?: string | null;
   }[];
   roles?: string[];
+  /** Locale for dub-category staff roles (excluded from origin language). */
+  language?: string | null;
   /** Empty / omitted = appears in all subseries. */
   subseries_ids?: string[];
   is_deceased?: boolean;

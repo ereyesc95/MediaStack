@@ -3,6 +3,7 @@ import {
   dec,
   enc,
   isReservedSegment,
+  normalizeSlug,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -63,7 +64,8 @@ function parseTail(parts: string[]): {
 }
 
 export function franchisePath(route: FranchiseRoute): string {
-  const slug = route.franchiseName?.trim() || route.franchiseId;
+  const raw = route.franchiseName?.trim() || route.franchiseId;
+  const slug = normalizeSlug(raw) || raw;
   let path = `${FRANCHISE_PATH_PREFIX}/${enc(slug)}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {

@@ -174,6 +174,53 @@ def movie_work_is_sfw(db, work_slug: str, *, sfw_ids: set[str] | None = None) ->
     return bool(keys & ids)
 
 
+def filter_adult_movie_leaf_cards(
+    db,
+    cards: list[dict],
+    *,
+    nsfw_unlocked: bool,
+) -> list[dict]:
+    """Drop adult film leaves using per-film genres (not work-level SFW)."""
+    if nsfw_unlocked or not cards:
+        return cards
+    from app.movies_catalog_meta import enrich_movies_catalog
+    from app.movies_index import build_movies_catalog
+
+    catalog = enrich_movies_catalog(db, build_movies_catalog())
+    by_id = {
+        str(f.get("id") or "").casefold(): f
+        for f in (catalog.get("films") or [])
+        if isinstance(f, dict) and f.get("id")
+    }
+    by_title = {
+        str(f.get("title") or f.get("name") or "").casefold(): f
+        for f in (catalog.get("films") or [])
+        if isinstance(f, dict) and (f.get("title") or f.get("name"))
+    }
+    extra = adult_subgenre_names_from_db(db)
+    enriched: list[dict] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            enriched.append(card)
+            continue
+        leaf = str(
+            card.get("leaf_id") or card.get("id") or card.get("film_id") or ""
+        ).casefold()
+        title = str(card.get("title") or card.get("name") or "").casefold()
+        hit = by_id.get(leaf) if leaf else None
+        if hit is None and title:
+            hit = by_title.get(title)
+        row = dict(card)
+        if hit:
+            for key in ("genre_names", "genre_ids", "parent_genre_names"):
+                if hit.get(key) is not None:
+                    row[key] = hit.get(key)
+        enriched.append(row)
+    return filter_adult_cards(
+        enriched, nsfw_unlocked=False, extra_adult_subgenres=extra
+    )
+
+
 def filter_adult_related_cards(
     db,
     cards: list[dict],
@@ -187,30 +234,26 @@ def filter_adult_related_cards(
     if module == "series":
         sfw_ids = sfw_series_franchise_ids(db)
         check = series_franchise_is_sfw
-    else:
-        sfw_ids = sfw_movie_work_ids(db)
-        check = movie_work_is_sfw
-    out: list[dict] = []
-    for card in cards:
-        if not isinstance(card, dict):
-            out.append(card)
-            continue
-        slug = str(
-            card.get("work_id")
-            or card.get("franchise_id")
-            or card.get("id")
-            or card.get("path")
-            or ""
-        )
-        # path like Movies/H/Harry Potter/...
-        if "/" in slug:
-            parts = [p for p in slug.replace("\\", "/").split("/") if p]
-            if len(parts) >= 3:
-                slug = parts[2]
-        if check(db, slug, sfw_ids=sfw_ids):
-            out.append(card)
-    return out
-
+        out: list[dict] = []
+        for card in cards:
+            if not isinstance(card, dict):
+                out.append(card)
+                continue
+            slug = str(
+                card.get("work_id")
+                or card.get("franchise_id")
+                or card.get("id")
+                or card.get("path")
+                or ""
+            )
+            if "/" in slug:
+                parts = [p for p in slug.replace("\\", "/").split("/") if p]
+                if len(parts) >= 3:
+                    slug = parts[2]
+            if check(db, slug, sfw_ids=sfw_ids):
+                out.append(card)
+        return out
+    return filter_adult_movie_leaf_cards(db, cards, nsfw_unlocked=False)
 
 def filter_adult_cards(
     cards: list[dict],

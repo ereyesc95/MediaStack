@@ -22,10 +22,15 @@ DEFAULT_STAFF_ROLES: list[tuple[str, str]] = [
     ("Producer", "hybrid"),
     ("Publisher", "hybrid"),
     ("Sound Director", "original"),
-    ("Studio", "hybrid"),
     ("Translator", "dub"),
     ("Writer", "hybrid"),
 ]
+
+# Retired: same meaning as Distributing Studio on series About.
+REMOVED_STAFF_ROLES = frozenset({"studio"})
+
+# Credits that feed left-panel distributor for dub langs — not cast circles.
+HIDDEN_CAST_CIRCLE_ROLES = frozenset({"dub studio"})
 
 
 def ensure_staff_roles(db: Session) -> None:
@@ -35,6 +40,11 @@ def ensure_staff_roles(db: Session) -> None:
         if (r.sro_name or "").strip()
     }
     dirty = False
+    for key in REMOVED_STAFF_ROLES:
+        row = existing.pop(key, None)
+        if row is not None:
+            db.delete(row)
+            dirty = True
     for name, role_type in DEFAULT_STAFF_ROLES:
         key = name.casefold()
         row = existing.get(key)
@@ -62,6 +72,7 @@ def list_staff_roles(db: Session) -> list[dict]:
         }
         for r in rows
         if (r.sro_name or "").strip()
+        and (r.sro_name or "").strip().casefold() not in REMOVED_STAFF_ROLES
     ]
 
 

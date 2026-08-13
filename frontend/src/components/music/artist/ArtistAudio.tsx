@@ -396,9 +396,11 @@ function ReleaseCard({
     }
     pushArtistRoute({
       bandId: targetBand,
+      artistName: referrerArtistName,
       section: "audio",
       overviewTab: "about",
       releaseId: targetRelease,
+      releaseTitle: release.title || undefined,
     });
   };
 

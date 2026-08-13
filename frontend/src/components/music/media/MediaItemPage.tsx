@@ -272,10 +272,17 @@ export default function MediaItemPage({
 
   useEffect(() => {
     pushArtistRoute(
-      { bandId, section: kind, overviewTab: "about", mediaItemId: itemId },
+      {
+        bandId,
+        artistName: data?.artist_name ?? undefined,
+        section: kind,
+        overviewTab: "about",
+        mediaItemId: itemId,
+        mediaItemTitle: data?.title ?? undefined,
+      },
       true
     );
-  }, [bandId, kind, itemId]);
+  }, [bandId, kind, itemId, data?.artist_name, data?.title]);
 
   useEffect(() => {
     beginArtistPageSession(userId);

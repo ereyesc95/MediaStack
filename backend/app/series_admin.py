@@ -342,6 +342,10 @@ def add_series_cast_member(
             member["roles"] = role_names
             member["actor_photo_url"] = actor_photo
             member["character_photo_url"] = actor_photo
+    else:
+        # Staff: language ties dub-category roles (e.g. Dub Vocalist) to a locale.
+        if language:
+            member["language"] = lang
     if subseries_ids is not None:
         member["subseries_ids"] = [
             str(s).strip() for s in subseries_ids if s and str(s).strip()
@@ -674,6 +678,8 @@ def patch_series_cast_member(
                 member["character_photo_url"] = cleaned[0]["photo_url"]
         elif roles is not None:
             member["roles"] = [r for r in roles if r]
+        if not character_centered and lang:
+            member["language"] = lang
         if actor_photo_url is not None and lang and member.get("performances"):
             for p in member["performances"]:
                 if (p.get("language") or "").casefold() == lang.casefold():

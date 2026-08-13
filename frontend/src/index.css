@@ -16556,6 +16556,58 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
 }
 
+.series-staff-role-suggest {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.series-staff-role-suggest input {
+  width: 100%;
+}
+
+.series-staff-role-suggest__list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 40;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  max-height: 14rem;
+  overflow: auto;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.series-staff-role-suggest__list button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.series-staff-role-suggest__list button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.series-staff-role-suggest__type {
+  opacity: 0.55;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
 .series-cast-card__actor-line {
   display: flex;
   flex-wrap: nowrap;
