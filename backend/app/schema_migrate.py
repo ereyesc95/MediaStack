@@ -227,8 +227,41 @@ def migrate_schema(eng: Engine) -> None:
                         "mimAuthor" TEXT,
                         "mimPublisher" TEXT,
                         "mimGenres" TEXT,
+                        "mimContentCategory" TEXT,
                         "mimUpdatedAt" TEXT,
                         UNIQUE ("mimBandID", "mimKind", "mimItemID")
+                    )
+                    """
+                )
+            )
+        else:
+            mim_cols = {c["name"] for c in inspect(eng).get_columns("media_item_meta")}
+            if "mimContentCategory" not in mim_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE media_item_meta ADD COLUMN "mimContentCategory" TEXT'
+                    )
+                )
+            if "mimCountryIso" not in mim_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE media_item_meta ADD COLUMN "mimCountryIso" TEXT'
+                    )
+                )
+            if "mimLanguages" not in mim_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE media_item_meta ADD COLUMN "mimLanguages" TEXT'
+                    )
+                )
+        if "staff_roles" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE staff_roles (
+                        "sroID" INTEGER NOT NULL PRIMARY KEY,
+                        "sroName" TEXT NOT NULL UNIQUE,
+                        "sroType" TEXT NOT NULL DEFAULT 'hybrid'
                     )
                     """
                 )

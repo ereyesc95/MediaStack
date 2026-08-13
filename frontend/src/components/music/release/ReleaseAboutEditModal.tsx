@@ -70,7 +70,7 @@ export default function ReleaseAboutEditModal({
         {error && <p className="error">{error}</p>}
 
         <div className="artist-admin-form release-about-edit-modal__form">
-          <label>
+          <label className="release-about-edit-modal__field--description">
             Description
             <textarea
               className="release-about-edit-modal__textarea ms-scrollbar"

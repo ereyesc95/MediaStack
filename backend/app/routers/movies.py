@@ -86,20 +86,29 @@ def movies_catalog(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     try:
-        from app.adult_content import filter_adult_cards
+        from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
         from app.movies_catalog_meta import enrich_movies_catalog
 
-        from app.franchise_identity import enrich_catalog_with_music_identity
+        from app.franchise_identity import (
+            enrich_catalog_with_artwork_home,
+            enrich_catalog_with_music_identity,
+        )
 
         catalog = enrich_movies_catalog(db, build_movies_catalog())
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )
+        catalog = enrich_catalog_with_artwork_home(catalog)
+        adult_subs = adult_subgenre_names_from_db(db)
         catalog["franchises"] = filter_adult_cards(
-            catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+            catalog.get("franchises") or [],
+            nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
         )
         catalog["films"] = filter_adult_cards(
-            catalog.get("films") or [], nsfw_unlocked=nsfw_unlocked
+            catalog.get("films") or [],
+            nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
         )
         return catalog
     except FileNotFoundError as exc:
@@ -175,10 +184,13 @@ def movies_resolve_path(path: str = Query(..., min_length=1)):
 def movies_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     """Home panes: On Repeat, Icons, Film Vibes, Global Acts."""
     try:
-        return build_movies_dashboard(db, user.usr_id)
+        return build_movies_dashboard(
+            db, user.usr_id, nsfw_unlocked=nsfw_unlocked
+        )
     except Exception:
         return {
             "top_episodes": [],
@@ -315,11 +327,46 @@ def movies_franchise_games(work_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/franchises/{work_id}/media/movies")
-def movies_franchise_movies(work_id: str, db: Session = Depends(get_db)):
+def movies_franchise_movies(
+    work_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     overview = build_work_overview(db, work_id)
     if not overview:
         raise HTTPException(404, "Franchise not found")
-    films = overview.get("films") or overview.get("subseries") or []
+    films = list(overview.get("films") or overview.get("subseries") or [])
+    if not nsfw_unlocked and films:
+        from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
+        from app.movies_catalog_meta import enrich_movies_catalog
+        from app.movies_index import build_movies_catalog
+
+        catalog = enrich_movies_catalog(db, build_movies_catalog())
+        by_id = {
+            str(f.get("id") or ""): f
+            for f in (catalog.get("films") or [])
+            if isinstance(f, dict)
+        }
+        enriched: list[dict] = []
+        for film in films:
+            if not isinstance(film, dict):
+                continue
+            hit = by_id.get(str(film.get("id") or ""))
+            row = dict(film)
+            if hit:
+                for key in (
+                    "genre_names",
+                    "genre_ids",
+                    "parent_genre_names",
+                ):
+                    if hit.get(key) is not None:
+                        row[key] = hit.get(key)
+            enriched.append(row)
+        films = filter_adult_cards(
+            enriched,
+            nsfw_unlocked=False,
+            extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        )
     return {"items": films, "count": len(films)}
 
 

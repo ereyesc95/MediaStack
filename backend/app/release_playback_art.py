@@ -402,6 +402,16 @@ def _find_single_edition_by_title_scan(
     return None
 
 
+def _edition_under_single_root(audio_file: Path, single_root: Path) -> Path:
+    """Prefer the track's edition folder (e.g. Deluxe) over the single's Standard art."""
+    edition = _edition_folder_for_audio(audio_file)
+    try:
+        edition.resolve().relative_to(single_root.resolve())
+        return edition
+    except (ValueError, OSError):
+        return _resolve_standard_edition(single_root)
+
+
 def _single_artwork_edition_for_audio(
     audio_file: Path,
     media_root: Path,
@@ -413,7 +423,7 @@ def _single_artwork_edition_for_audio(
 ) -> Path | None:
     single_root = _single_root_for_audio(audio_file, media_root)
     if single_root:
-        return _resolve_standard_edition(single_root)
+        return _edition_under_single_root(audio_file, single_root)
     title = track_title or _track_title_from_filename(audio_file)
     if (
         band_name
@@ -490,7 +500,7 @@ def _artwork_root_for_audio(
 ) -> Path:
     single_root = _single_root_for_audio(audio_file, media_root)
     if single_root:
-        return _resolve_standard_edition(single_root)
+        return _edition_under_single_root(audio_file, single_root)
 
     if (
         ctx
@@ -610,6 +620,7 @@ def playback_art_for_audio_file(
 
     return {
         "cover_url": urls.get("cover_front_url"),
+        "cover_back_url": urls.get("cover_back_url"),
         "cover_animation_url": urls.get("cover_animation_url"),
         "canvas_url": urls.get("canvas_url"),
         "disc_url": disc_url,

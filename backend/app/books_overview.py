@@ -12,6 +12,7 @@ from app.books_index import (
     find_work_dir,
 )
 from app.config import settings
+from app.franchise_identity import find_artwork_home
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -19,6 +20,7 @@ from app.franchise_index import (
     save_franchise_index,
 )
 from app.series_artwork import build_local_eras
+from app.series_languages import language_options_for_franchise
 from app.series_overview import _enrich_related_cards
 from app.universes import (
     filter_similar_against_universe,
@@ -243,6 +245,10 @@ def build_work_overview(
         "primary_book_id": detail.get("primary_book_id"),
         "primary_film_id": detail.get("primary_book_id"),
         "orientation": orientation,
+        "artwork_home_module": (
+            find_artwork_home(detail.get("name") or work_dir.name, root)
+            or (None, None)
+        )[0],
     }
 
 
@@ -344,7 +350,10 @@ def build_book_overview(
         "authors": authors,
         "aliases": [],
         "languages": about.get("languages") or [],
-        "language_options": [],
+        "language_options": language_options_for_franchise(
+            list(about.get("languages") or []),
+            origin_code=about.get("origin_language"),
+        ),
         "origin_language": about.get("origin_language"),
         "country": about.get("country"),
         "activity_periods": about.get("activity_periods")
@@ -355,6 +364,8 @@ def build_book_overview(
         ),
         "genres": about.get("genres") or [],
         "publishers": about.get("publishers") or [],
+        "content_category": about.get("content_category") or "Book",
+        "type": about.get("content_category") or "Book",
         "eras": local_eras,
         "cast": cast,
         "subseries": [],

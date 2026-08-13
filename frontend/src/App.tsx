@@ -36,35 +36,27 @@ import {
   getStoredOrientation,
   saveOrientation,
 } from "./themes";
-import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
+import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
 import {
-  parseMoviesCatalogPath,
-  parseMoviesPath,
-  parseMoviesRootPath,
   pushMoviesCatalogRoute,
   pushMoviesRootRoute,
   pushMoviesRoute,
 } from "./moviesRoute";
 import {
-  parseBooksCatalogPath,
-  parseBooksPath,
-  parseBooksRootPath,
   pushBooksCatalogRoute,
   pushBooksRootRoute,
   pushBooksRoute,
 } from "./booksRoute";
 import {
-  parseSeriesCatalogPath,
-  parseSeriesPath,
-  parseSeriesRootPath,
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
   pushSeriesRoute,
+  saveSeriesEntryReferrer,
 } from "./seriesRoute";
 import {
-  parseUniversePath,
   pushUniverseRoute,
 } from "./universeRoute";
+import { resolvePathToView } from "./routeResolve";
 import {
   getMediaEntrySource,
   getUniverseReturnTarget,
@@ -123,6 +115,26 @@ export default function App() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function applyLocationRoute() {
+      const resolved = await resolvePathToView(
+        window.location.pathname,
+        window.location.search
+      );
+      if (cancelled) return;
+      if (resolved) {
+        setView(resolved.view);
+        if (
+          resolved.canonicalPath &&
+          resolved.canonicalPath !==
+            `${window.location.pathname}${window.location.search}`
+        ) {
+          window.history.replaceState(null, "", resolved.canonicalPath);
+        }
+      }
+    }
+
     async function init() {
       const token = getProfileToken();
       if (token) {
@@ -161,243 +173,48 @@ export default function App() {
         setMediaRootConfigured(false);
         setSourceModal("welcome");
       }
+
+      await applyLocationRoute();
     }
-    const userPlaylistId = parseUserPlaylistPath(window.location.pathname);
-    if (userPlaylistId != null) {
-      setView({
-        kind: "music",
-        tab: "playlists",
-        playlistId: userPlaylistId,
-      });
-    } else if (parsePlaylistsGridPath(window.location.pathname)) {
-      setView({
-        kind: "music",
-        tab: "playlists",
-      });
-    } else {
-      const universeRoute = parseUniversePath(window.location.pathname);
-      const seriesRoute = parseSeriesPath(
-        window.location.pathname,
-        window.location.search
-      );
-      const moviesRoute = parseMoviesPath(
-        window.location.pathname,
-        window.location.search
-      );
-      const booksRoute = parseBooksPath(
-        window.location.pathname,
-        window.location.search
-      );
-      if (universeRoute) {
-        setView({
-          kind: "universe",
-          universeId: universeRoute.universeId,
-          section: universeRoute.section,
-          overviewTab: universeRoute.overviewTab,
-        });
-      } else if (seriesRoute) {
-        setView({
-          kind: "series",
-          franchiseId: seriesRoute.franchiseId,
-          subseriesId: seriesRoute.subseriesId,
-          seasonId: seriesRoute.seasonId,
-          section: seriesRoute.section,
-          overviewTab: seriesRoute.overviewTab,
-          universeId: seriesRoute.universeId,
-        });
-      } else if (
-        parseSeriesCatalogPath(window.location.pathname) ||
-        parseSeriesRootPath(window.location.pathname)
-      ) {
-        setView({ kind: "series" });
-      } else if (moviesRoute) {
-        setView({
-          kind: "movies",
-          franchiseId: moviesRoute.franchiseId,
-          filmId: moviesRoute.filmId,
-          section: moviesRoute.section,
-          overviewTab: moviesRoute.overviewTab,
-          universeId: moviesRoute.universeId,
-        });
-      } else if (
-        parseMoviesCatalogPath(window.location.pathname) ||
-        parseMoviesRootPath(window.location.pathname)
-      ) {
-        setView({ kind: "movies" });
-      } else if (booksRoute) {
-        setView({
-          kind: "books",
-          franchiseId: booksRoute.franchiseId,
-          bookId: booksRoute.bookId,
-          section: booksRoute.section,
-          overviewTab: booksRoute.overviewTab,
-          universeId: booksRoute.universeId,
-        });
-      } else if (
-        parseBooksCatalogPath(window.location.pathname) ||
-        parseBooksRootPath(window.location.pathname)
-      ) {
-        setView({ kind: "books" });
-      } else {
-        const route = parseArtistPath(window.location.pathname);
-        if (route) {
-          setView({
-            kind: "music",
-            tab: "artists",
-            bandId: route.bandId,
-            artistSection: route.section,
-            artistOverviewTab: route.overviewTab,
-            releaseId: route.releaseId,
-            releaseTab: route.releaseTab,
-            mediaItemId: route.mediaItemId,
-            playlistSlug: route.playlistSlug,
-          });
-        }
-      }
-    }
-    init();
+
+    void init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    function onPopState() {
-      const userPlaylistId = parseUserPlaylistPath(window.location.pathname);
-      if (userPlaylistId != null) {
-        setView({
-          kind: "music",
-          tab: "playlists",
-          playlistId: userPlaylistId,
-          bandId: undefined,
-          playlistSlug: undefined,
-        });
-        return;
-      }
-      if (parsePlaylistsGridPath(window.location.pathname)) {
-        setView((v) =>
-          v.kind === "music"
-            ? {
-                ...v,
-                tab: "playlists",
-                playlistId: undefined,
-                bandId: undefined,
-                playlistSlug: undefined,
-              }
-            : { kind: "music", tab: "playlists" }
-        );
-        return;
-      }
-      const route = parseArtistPath(window.location.pathname);
-      if (route) {
-        setView((v) =>
-          v.kind === "music"
-            ? {
-                ...v,
-                tab: "artists",
-                bandId: route.bandId,
-                artistSection: route.section,
-                artistOverviewTab: route.overviewTab,
-                releaseId: route.releaseId,
-                releaseTab: route.releaseTab,
-                mediaItemId: route.mediaItemId,
-                playlistSlug: route.playlistSlug,
-              }
-            : {
-                kind: "music",
-                tab: "artists",
-                bandId: route.bandId,
-                artistSection: route.section,
-                artistOverviewTab: route.overviewTab,
-                releaseId: route.releaseId,
-                releaseTab: route.releaseTab,
-                mediaItemId: route.mediaItemId,
-                playlistSlug: route.playlistSlug,
-              }
-        );
-        return;
-      }
-      const universeRoute = parseUniversePath(window.location.pathname);
-      if (universeRoute) {
-        setView({
-          kind: "universe",
-          universeId: universeRoute.universeId,
-          section: universeRoute.section,
-          overviewTab: universeRoute.overviewTab,
-        });
-        return;
-      }
-      const seriesRoute = parseSeriesPath(
+    let cancelled = false;
+
+    async function onPopState() {
+      const resolved = await resolvePathToView(
         window.location.pathname,
         window.location.search
       );
-      if (seriesRoute) {
-        setView({
-          kind: "series",
-          franchiseId: seriesRoute.franchiseId,
-          subseriesId: seriesRoute.subseriesId,
-          seasonId: seriesRoute.seasonId,
-          section: seriesRoute.section,
-          overviewTab: seriesRoute.overviewTab,
-          universeId: seriesRoute.universeId,
-        });
+      if (cancelled) return;
+
+      if (resolved) {
+        setView(resolved.view);
+        if (
+          resolved.canonicalPath &&
+          resolved.canonicalPath !==
+            `${window.location.pathname}${window.location.search}`
+        ) {
+          window.history.replaceState(null, "", resolved.canonicalPath);
+        }
         return;
       }
-      if (parseSeriesCatalogPath(window.location.pathname)) {
-        setView({ kind: "series" });
-        return;
-      }
-      if (parseSeriesRootPath(window.location.pathname)) {
-        setView({ kind: "series" });
-        return;
-      }
-      const moviesRoute = parseMoviesPath(
-        window.location.pathname,
-        window.location.search
-      );
-      if (moviesRoute) {
-        setView({
-          kind: "movies",
-          franchiseId: moviesRoute.franchiseId,
-          filmId: moviesRoute.filmId,
-          section: moviesRoute.section,
-          overviewTab: moviesRoute.overviewTab,
-          universeId: moviesRoute.universeId,
-        });
-        return;
-      }
-      if (
-        parseMoviesCatalogPath(window.location.pathname) ||
-        parseMoviesRootPath(window.location.pathname)
-      ) {
-        setView({ kind: "movies" });
-        return;
-      }
-      const booksRoute = parseBooksPath(
-        window.location.pathname,
-        window.location.search
-      );
-      if (booksRoute) {
-        setView({
-          kind: "books",
-          franchiseId: booksRoute.franchiseId,
-          bookId: booksRoute.bookId,
-          section: booksRoute.section,
-          overviewTab: booksRoute.overviewTab,
-          universeId: booksRoute.universeId,
-        });
-        return;
-      }
-      if (
-        parseBooksCatalogPath(window.location.pathname) ||
-        parseBooksRootPath(window.location.pathname)
-      ) {
-        setView({ kind: "books" });
-        return;
-      }
+
       if (window.location.pathname === "/" || window.location.pathname === "") {
         setView({ kind: "hub" });
       }
     }
+
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("popstate", onPopState);
+    };
   }, []);
 
   function handleProfileSelected(user: ProfileUser, token: string) {
@@ -567,6 +384,7 @@ export default function App() {
     });
     pushUniverseRoute({
       universeId,
+      universeName,
       section: "overview",
       overviewTab: "about",
     });
@@ -819,6 +637,45 @@ export default function App() {
               })
             }
 
+            onOpenSeriesFolder={(folderPath) => {
+              const parts = folderPath
+                .replace(/\\/g, "/")
+                .split("/")
+                .filter(Boolean);
+              if (
+                parts.length < 3 ||
+                parts[0].toLowerCase() !== "series"
+              ) {
+                return;
+              }
+              const franchiseName = parts[2];
+              const franchiseId = franchiseName.toLowerCase();
+              const subseriesId =
+                parts.length >= 4 ? parts[parts.length - 1] : undefined;
+              const bandId = view.kind === "music" ? view.bandId : undefined;
+              if (bandId != null) {
+                saveSeriesEntryReferrer({
+                  kind: "music",
+                  bandId,
+                  artistSection: "series",
+                  title: franchiseName,
+                });
+              }
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+
             onReleaseNavigate={(releaseId, releaseTab, patchBandId) =>
               openMusic({
                 releaseId,
@@ -882,9 +739,25 @@ export default function App() {
             onEditProfile={
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
             }
-            onBackToSeries={(franchiseId, subseriesId) => {
-              // Empty franchiseId → Series catalog (artist opened from a music-linked card).
+            onBackToSeries={(franchiseId, subseriesId, restore) => {
+              // Empty franchiseId → Series home/catalog (artist opened from a music-linked card).
               if (!franchiseId) {
+                if (restore?.tab === "home") {
+                  pushSeriesRootRoute();
+                  setView({
+                    kind: "series",
+                    franchiseId: undefined,
+                    subseriesId: undefined,
+                    section: "overview",
+                    overviewTab: "about",
+                  });
+                  return;
+                }
+                setPendingCatalogBrowse({
+                  module: "series",
+                  mode: "name",
+                  letter: restore?.letter || "A",
+                });
                 pushSeriesCatalogRoute();
                 setView({
                   kind: "series",
@@ -909,8 +782,24 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onBackToMovies={(franchiseId) => {
+            onBackToMovies={(franchiseId, restore) => {
               if (!franchiseId) {
+                if (restore?.tab === "home") {
+                  pushMoviesRootRoute();
+                  setView({
+                    kind: "movies",
+                    franchiseId: undefined,
+                    filmId: undefined,
+                    section: "overview",
+                    overviewTab: "about",
+                  });
+                  return;
+                }
+                setPendingCatalogBrowse({
+                  module: "movies",
+                  mode: "name",
+                  letter: restore?.letter || "A",
+                });
                 pushMoviesCatalogRoute();
                 setView({
                   kind: "movies",
@@ -933,8 +822,24 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onBackToBooks={(franchiseId) => {
+            onBackToBooks={(franchiseId, restore) => {
               if (!franchiseId) {
+                if (restore?.tab === "home") {
+                  pushBooksRootRoute();
+                  setView({
+                    kind: "books",
+                    franchiseId: undefined,
+                    bookId: undefined,
+                    section: "overview",
+                    overviewTab: "about",
+                  });
+                  return;
+                }
+                setPendingCatalogBrowse({
+                  module: "books",
+                  mode: "name",
+                  letter: restore?.letter || "A",
+                });
                 pushBooksCatalogRoute();
                 setView({
                   kind: "books",

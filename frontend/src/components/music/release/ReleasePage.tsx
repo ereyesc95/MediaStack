@@ -57,6 +57,7 @@ import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem, 
 import { formatTrackDate } from "../../../formatDate";
 import AppMenu from "../../AppMenu";
 import ConfirmDialog from "../../ConfirmDialog";
+import { IconZoom } from "../../MenuIcons";
 import MediaInlineSearch from "../MediaInlineSearch";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
 import NotInLibraryDialog from "../artist/NotInLibraryDialog";
@@ -117,6 +118,7 @@ const TABS: { id: ReleaseTab; label: string }[] = [
 function normalizePlaybackArt(art: ReleasePlaybackArt): ReleasePlaybackArt {
   return {
     cover_url: art.cover_url ?? null,
+    cover_back_url: art.cover_back_url ?? null,
     cover_animation_url: art.cover_animation_url ?? null,
     canvas_url: art.canvas_url ?? null,
     disc_url: art.disc_url ?? null,
@@ -387,6 +389,7 @@ export default function ReleasePage({
   const [refreshWiki, setRefreshWiki] = useState(true);
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
   const [coverFailed, setCoverFailed] = useState(false);
+  const [coverFlipped, setCoverFlipped] = useState(false);
   const [trackPhotocards, setTrackPhotocards] = useState<
     ReleaseOverview["photocards"] | null
   >(null);
@@ -567,6 +570,7 @@ export default function ReleasePage({
     setNowPlayingTitle(null);
     setPlaybackArt(null);
     setCoverFailed(false);
+    setCoverFlipped(false);
     setTrackPhotocards(null);
     setVersionSource(null);
     setPanelDateIso(null);
@@ -828,11 +832,16 @@ export default function ReleasePage({
     [resolveTrackSource]
   );
 
-  const hasActiveTrack = Boolean(playingPath);
+  // Only swap cover/disc/bg + track panel while audio is actually playing.
+  // When paused/stopped, restore the release art and "Taken from…" meta.
+  const hasActiveTrack = Boolean(playingPath && miniAudio.playing);
   const showPlaybackMotion = hasActiveTrack && isPlaying;
   const displayCover = hasActiveTrack
     ? (playbackArt?.cover_url ?? data?.cover_url ?? null)
     : (data?.cover_url ?? null);
+  const displayCoverBack = hasActiveTrack
+    ? (playbackArt?.cover_back_url ?? data?.cover_back_url ?? null)
+    : (data?.cover_back_url ?? null);
   const displayAnim =
     showPlaybackMotion ? (playbackArt?.cover_animation_url ?? null) : null;
   const displayCanvas = showPlaybackMotion
@@ -851,6 +860,9 @@ export default function ReleasePage({
       : displayCover
     : albumCover;
   const effectivePanelCover = coverFailed ? null : panelCoverSrc;
+  const canFlipCover = Boolean(
+    effectivePanelCover && displayCoverBack && displayCoverBack !== displayCover
+  );
   const panelDiscSrc = hasActiveTrack ? displayDisc : albumDisc;
   const panelGroupKind = hasActiveTrack
     ? playbackArt?.group_kind ?? data?.playback_kind ?? "disc"
@@ -873,6 +885,11 @@ export default function ReleasePage({
         undefined);
 
   const themeSampleUrl = displayCover ?? data?.cover_url ?? undefined;
+
+  useEffect(() => {
+    setCoverFlipped(false);
+    setCoverFailed(false);
+  }, [effectivePanelCover, displayCoverBack]);
 
   useEffect(() => {
     if (!themeSampleUrl) return;
@@ -1303,6 +1320,7 @@ export default function ReleasePage({
       } else if (!_art && data) {
         setPlaybackArt({
           cover_url: data.cover_url,
+          cover_back_url: data.cover_back_url,
           cover_animation_url: data.cover_animation_url,
           canvas_url: data.canvas_url,
           disc_url: data.disc_url,
@@ -1448,7 +1466,7 @@ export default function ReleasePage({
 
   const tabletLayout = isTabletLayout(layout);
 
-  const showTrackPanel = Boolean(playingPath && nowPlayingTitle);
+  const showTrackPanel = Boolean(hasActiveTrack && nowPlayingTitle);
   const panelFadedCover = displayCover ?? data?.cover_url ?? null;
   const trackPanelReleaseDate =
     versionSource?.display_date ??
@@ -1539,7 +1557,8 @@ export default function ReleasePage({
               : ""
         }`}>
           {bannerLayout ? (
-            <span
+            <button
+              type="button"
               className="release-page__banner-bg"
               style={{
                 backgroundImage: `url("${
@@ -1550,50 +1569,80 @@ export default function ReleasePage({
                   ""
                 }")`,
               }}
-              aria-hidden
+              onClick={() => void openCoverArtworkViewer()}
+              aria-label="Browse release artwork"
             />
           ) : null}
-          {effectivePanelCover &&
-            (panelCoverIsVideo ? (
+          {effectivePanelCover && (
+            <div
+              className={`release-page__cover-wrap${
+                bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
+              }${canFlipCover ? " release-page__cover-wrap--flippable" : ""}${
+                coverFlipped ? " release-page__cover-wrap--flipped" : ""
+              }`}
+            >
               <button
                 type="button"
-                className={`release-page__cover-wrap release-page__cover-wrap--clickable${
-                  bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
-                }`}
-                onClick={() => void openCoverArtworkViewer()}
-                aria-label="Browse release artwork"
+                className="release-page__cover-flip"
+                onClick={(e) => {
+                  if (canFlipCover) setCoverFlipped((f) => !f);
+                  e.currentTarget.blur();
+                }}
+                aria-label={canFlipCover ? "Flip cover" : undefined}
+                disabled={!canFlipCover}
               >
-                <video
-                  key={effectivePanelCover}
-                  src={effectivePanelCover!}
-                  className="release-page__cover release-page__cover--video"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  draggable={false}
-                  onError={() => setCoverFailed(true)}
-                />
+                <span className="release-page__cover-scene">
+                  <span className="release-page__cover-face release-page__cover-face--front">
+                    {panelCoverIsVideo ? (
+                      <video
+                        key={effectivePanelCover}
+                        src={effectivePanelCover!}
+                        className="release-page__cover release-page__cover--video"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        draggable={false}
+                        onError={() => setCoverFailed(true)}
+                      />
+                    ) : (
+                      <img
+                        key={effectivePanelCover}
+                        src={effectivePanelCover}
+                        alt=""
+                        className="release-page__cover"
+                        draggable={false}
+                        onError={() => setCoverFailed(true)}
+                      />
+                    )}
+                  </span>
+                  {canFlipCover && displayCoverBack ? (
+                    <span className="release-page__cover-face release-page__cover-face--back">
+                      <img
+                        src={displayCoverBack}
+                        alt=""
+                        className="release-page__cover release-page__cover--back"
+                        draggable={false}
+                      />
+                    </span>
+                  ) : null}
+                </span>
               </button>
-            ) : (
-              <button
-                type="button"
-                className={`release-page__cover-wrap release-page__cover-wrap--clickable${
-                  bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
-                }`}
-                onClick={() => void openCoverArtworkViewer()}
-                aria-label="Browse release artwork"
-              >
-                <img
-                  key={effectivePanelCover}
-                  src={effectivePanelCover}
-                  alt=""
-                  className="release-page__cover"
-                  draggable={false}
-                  onError={() => setCoverFailed(true)}
-                />
-              </button>
-            ))}
+              {!coverFlipped ? (
+                <button
+                  type="button"
+                  className="release-page__cover-zoom"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openCoverArtworkViewer();
+                  }}
+                  aria-label="Browse release artwork"
+                >
+                  <IconZoom />
+                </button>
+              ) : null}
+            </div>
+          )}
           {(!hasActiveTrack ? data.playback_kind !== "tape" : !isTapePlayback) && (
             <img
               key={panelDiscSrc}

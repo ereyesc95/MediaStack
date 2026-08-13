@@ -1,3 +1,13 @@
+import { franchisePath, type FranchiseRoute } from "./franchiseRoute";
+import {
+  dec,
+  enc,
+  isFilmId,
+  isReservedSegment,
+  parseUniverseId,
+  withUniverseQuery,
+} from "./routeSlug";
+
 export type MoviesSection =
   | "overview"
   | "movies"
@@ -11,10 +21,13 @@ export type MoviesOverviewTab = "about" | "cast" | "links" | "related";
 
 export type MoviesRoute = {
   franchiseId: string;
+  franchiseName?: string;
   filmId?: string;
+  filmTitle?: string;
   section: MoviesSection;
   overviewTab?: MoviesOverviewTab;
   universeId?: number;
+  franchiseOnly?: boolean;
 };
 
 const SECTIONS: MoviesSection[] = [
@@ -37,36 +50,111 @@ const OVERVIEW_TABS: MoviesOverviewTab[] = [
 export const MOVIES_ROOT_PATH = "/movies";
 export const MOVIES_CATALOG_PATH = "/movies/catalog";
 
-function enc(seg: string): string {
-  return encodeURIComponent(seg);
-}
+function parseTail(parts: string[], start: number): {
+  section: MoviesSection;
+  overviewTab: MoviesOverviewTab;
+} {
+  let section: MoviesSection = "overview";
+  let overviewTab: MoviesOverviewTab = "about";
+  const i = start;
 
-function dec(seg: string): string {
-  try {
-    return decodeURIComponent(seg);
-  } catch {
-    return seg;
+  if (parts[i] === "overview") {
+    section = "overview";
+    if (parts[i + 1]) {
+      const tab = dec(parts[i + 1]) as MoviesOverviewTab;
+      if (OVERVIEW_TABS.includes(tab)) overviewTab = tab;
+    }
+  } else if (parts[i] && SECTIONS.includes(parts[i] as MoviesSection)) {
+    section = parts[i] as MoviesSection;
   }
+
+  return { section, overviewTab };
 }
 
-function parseUniverseId(search: string): number | undefined {
-  const raw = new URLSearchParams(
-    search.startsWith("?") ? search.slice(1) : search
-  ).get("universe");
-  if (!raw || !/^\d+$/.test(raw)) return undefined;
-  return Number(raw);
+function parseLegacyMoviesPath(
+  pathname: string,
+  search: string
+): MoviesRoute | null {
+  const m = pathname.match(/^\/movies\/franchise\/([^/]+)(?:\/(.*))?\/?$/);
+  if (!m) return null;
+
+  const franchiseId = dec(m[1]);
+  const parts = (m[2] || "").split("/").filter(Boolean);
+
+  let filmId: string | undefined;
+  let i = 0;
+
+  if (parts[i] === "film" && parts[i + 1]) {
+    filmId = dec(parts[i + 1]);
+    i += 2;
+  }
+
+  const tail = parseTail(parts, i);
+  const franchiseOnly = !filmId;
+
+  return {
+    franchiseId,
+    filmId,
+    section: tail.section,
+    overviewTab: tail.overviewTab,
+    universeId: parseUniverseId(search),
+    franchiseOnly,
+  };
 }
 
-function withUniverseQuery(path: string, universeId?: number): string {
-  if (universeId == null) return path;
-  return `${path}?universe=${universeId}`;
+function parseFlatMoviesPath(pathname: string, search: string): MoviesRoute | null {
+  const m = pathname.match(/^\/movies\/([^/]+)(?:\/(.*))?\/?$/);
+  if (!m) return null;
+  const head = dec(m[1]);
+  if (head === "catalog" || head === "franchise") return null;
+
+  const franchiseId = head;
+  const parts = (m[2] || "").split("/").filter(Boolean);
+  let filmId: string | undefined;
+  let i = 0;
+
+  if (parts[i] && !isReservedSegment(parts[i])) {
+    filmId = dec(parts[i]);
+    i += 1;
+  }
+
+  const tail = parseTail(parts, i);
+  const franchiseOnly = !filmId;
+
+  return {
+    franchiseId,
+    filmId,
+    section: tail.section,
+    overviewTab: tail.overviewTab,
+    universeId: parseUniverseId(search),
+    franchiseOnly,
+  };
 }
 
 export function moviesPath(route: MoviesRoute): string {
-  let path = `/movies/franchise/${enc(route.franchiseId)}`;
-  if (route.filmId) {
-    path += `/film/${enc(route.filmId)}`;
+  if (!route.filmId) {
+    const fr: FranchiseRoute = {
+      franchiseId: route.franchiseId,
+      franchiseName: route.franchiseName,
+      section: route.section,
+      overviewTab: route.overviewTab,
+      universeId: route.universeId,
+    };
+    return franchisePath(fr);
   }
+
+  const franchiseSeg = route.franchiseName?.trim() || route.franchiseId;
+  let path = `/movies/${enc(franchiseSeg)}`;
+  const filmSeg =
+    route.filmTitle?.trim() &&
+    !isFilmId(route.filmTitle) &&
+    route.filmTitle !== route.filmId
+      ? route.filmTitle
+      : isFilmId(route.filmId)
+        ? route.filmId
+        : route.filmTitle?.trim() || route.filmId;
+  path += `/${enc(filmSeg!)}`;
+
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
     const tab =
@@ -84,37 +172,10 @@ export function parseMoviesPath(
   pathname: string,
   search = typeof window !== "undefined" ? window.location.search : ""
 ): MoviesRoute | null {
-  const m = pathname.match(/^\/movies\/franchise\/([^/]+)(?:\/(.*))?\/?$/);
-  if (!m) return null;
-
-  const franchiseId = dec(m[1]);
-  const parts = (m[2] || "").split("/").filter(Boolean);
-
-  let filmId: string | undefined;
-  let section: MoviesSection = "overview";
-  let overviewTab: MoviesOverviewTab = "about";
-  let i = 0;
-
-  if (parts[i] === "film" && parts[i + 1]) {
-    filmId = dec(parts[i + 1]);
-    i += 2;
-  }
-
-  if (parts[i] === "overview" && parts[i + 1]) {
-    section = "overview";
-    const tab = dec(parts[i + 1]) as MoviesOverviewTab;
-    if (OVERVIEW_TABS.includes(tab)) overviewTab = tab;
-  } else if (parts[i] && SECTIONS.includes(parts[i] as MoviesSection)) {
-    section = parts[i] as MoviesSection;
-  }
-
-  return {
-    franchiseId,
-    filmId,
-    section,
-    overviewTab,
-    universeId: parseUniverseId(search),
-  };
+  return (
+    parseLegacyMoviesPath(pathname, search) ??
+    parseFlatMoviesPath(pathname, search)
+  );
 }
 
 export function parseMoviesRootPath(pathname: string): boolean {

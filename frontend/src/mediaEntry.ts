@@ -15,6 +15,8 @@ export type PendingCatalogBrowse = {
   subgenreId?: number;
   publisher?: string;
   writer?: string;
+  /** Name-filter letter chip (e.g. "H"). */
+  letter?: string;
 };
 
 let entrySource: MediaEntrySource = "catalog";

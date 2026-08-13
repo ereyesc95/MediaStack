@@ -575,7 +575,23 @@ class MediaItemMeta(Base):
     mim_author: Mapped[str | None] = mapped_column("mimAuthor", Text)
     mim_publisher: Mapped[str | None] = mapped_column("mimPublisher", Text)
     mim_genres: Mapped[str | None] = mapped_column("mimGenres", Text)
+    mim_content_category: Mapped[str | None] = mapped_column(
+        "mimContentCategory", Text
+    )
+    mim_country_iso: Mapped[str | None] = mapped_column("mimCountryIso", Text)
+    mim_languages: Mapped[str | None] = mapped_column("mimLanguages", Text)
     mim_updated_at: Mapped[str | None] = mapped_column("mimUpdatedAt", Text)
+
+
+class StaffRole(Base):
+    """Canonical staff credit roles with language visibility type."""
+
+    __tablename__ = "staff_roles"
+
+    sro_id: Mapped[int] = mapped_column("sroID", Integer, primary_key=True)
+    sro_name: Mapped[str] = mapped_column("sroName", String(128), unique=True)
+    # original | dub | hybrid
+    sro_type: Mapped[str] = mapped_column("sroType", String(16), default="hybrid")
 
 
 class ApiAuth(Base):

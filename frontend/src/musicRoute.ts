@@ -1,4 +1,13 @@
 import type { ArtistOverviewTab } from "./types";
+import {
+  dec,
+  enc,
+  isMediaItemId,
+  isReleaseId,
+  isReservedSegment,
+  RELEASE_ID_RE,
+  MEDIA_ITEM_ID_RE,
+} from "./routeSlug";
 
 export type ArtistSection =
   | "overview"
@@ -12,12 +21,17 @@ export type { ArtistOverviewTab };
 export type ReleaseTab = "overview" | "tracklist" | "gallery";
 
 export type ArtistRoute = {
-  bandId: number;
+  bandId?: number;
+  /** Raw artist segment before resolve (name slug). */
+  artistSlug?: string;
+  artistName?: string;
   section: ArtistSection;
   overviewTab: ArtistOverviewTab;
   releaseId?: string;
+  releaseTitle?: string;
   releaseTab?: ReleaseTab;
   mediaItemId?: string;
+  mediaItemTitle?: string;
   playlistSlug?: string;
 };
 
@@ -38,9 +52,6 @@ const OVERVIEW_TABS: ArtistOverviewTab[] = [
   "artists",
 ];
 const RELEASE_TABS: ReleaseTab[] = ["overview", "tracklist", "gallery"];
-
-const RELEASE_ID_RE = /^rel_[0-9a-f]{12}$/;
-const MEDIA_ITEM_ID_RE = /^(vid|lib)_[0-9a-f]{12}$/;
 
 const REFERRER_KEY = "mystack_release_referrer";
 const AUDIO_CATEGORY_KEY = "mystack_audio_category";
@@ -200,12 +211,10 @@ export function consumePendingAudioCategory(bandId: number): string | null {
   }
 }
 
-export function parseArtistPath(pathname: string): ArtistRoute | null {
-  const m = pathname.match(/^\/music\/artist\/(\d+)(?:\/(.*))?\/?$/);
-  if (!m) return null;
-  const bandId = Number(m[1]);
-  const parts = (m[2] || "").split("/").filter(Boolean);
-
+function parseArtistTail(parts: string[]): Omit<
+  ArtistRoute,
+  "bandId" | "artistSlug" | "artistName"
+> {
   let section: ArtistSection = "overview";
   let overviewTab: ArtistOverviewTab = "about";
   let releaseId: string | undefined;
@@ -216,9 +225,14 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
   if (parts[0] === "audio" && parts[1] === "playlist" && parts[2]) {
     section = "audio";
     playlistSlug = parts[2];
-  } else if (parts[0] === "audio" && parts[1] && RELEASE_ID_RE.test(parts[1])) {
+  } else if (parts[0] === "audio" && parts[1]) {
     section = "audio";
-    releaseId = parts[1];
+    const seg = dec(parts[1]);
+    if (isReleaseId(seg) || RELEASE_ID_RE.test(parts[1])) {
+      releaseId = seg;
+    } else {
+      releaseId = seg;
+    }
     releaseTab = RELEASE_TABS.includes(parts[2] as ReleaseTab)
       ? (parts[2] as ReleaseTab)
       : "overview";
@@ -231,26 +245,17 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
         ? (parts[1] as ArtistOverviewTab)
         : "about";
     }
-  } else if (
-    parts[0] === "video" &&
-    parts[1] &&
-    MEDIA_ITEM_ID_RE.test(parts[1])
-  ) {
+  } else if (parts[0] === "video" && parts[1]) {
     section = "video";
-    mediaItemId = parts[1];
-  } else if (
-    parts[0] === "library" &&
-    parts[1] &&
-    MEDIA_ITEM_ID_RE.test(parts[1])
-  ) {
+    mediaItemId = dec(parts[1]);
+  } else if (parts[0] === "library" && parts[1]) {
     section = "library";
-    mediaItemId = parts[1];
+    mediaItemId = dec(parts[1]);
   } else if (parts[0] && SECTIONS.includes(parts[0] as ArtistSection)) {
     section = parts[0] as ArtistSection;
   }
 
   return {
-    bandId,
     section: SECTIONS.includes(section) ? section : "overview",
     overviewTab: OVERVIEW_TABS.includes(overviewTab) ? overviewTab : "about",
     releaseId,
@@ -260,30 +265,79 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
   };
 }
 
-export function artistPath(
-  bandId: number,
-  section: ArtistSection = "overview",
-  overviewTab: ArtistOverviewTab = "about",
-  releaseId?: string,
-  releaseTab: ReleaseTab = "overview",
-  mediaItemId?: string,
-  playlistSlug?: string
-): string {
-  let path = `/music/artist/${bandId}`;
+/** Legacy: /music/artist/{bandId}/… */
+function parseLegacyArtistPath(pathname: string): ArtistRoute | null {
+  const m = pathname.match(/^\/music\/artist\/(\d+)(?:\/(.*))?\/?$/);
+  if (!m) return null;
+  const bandId = Number(m[1]);
+  const parts = (m[2] || "").split("/").filter(Boolean);
+  return { bandId, ...parseArtistTail(parts) };
+}
+
+/** New: /music/{artistSlug}/… (also accepts numeric id segment). */
+function parseSlugArtistPath(pathname: string): ArtistRoute | null {
+  const m = pathname.match(/^\/music\/([^/]+)(?:\/(.*))?\/?$/);
+  if (!m) return null;
+  const head = dec(m[1]);
+  if (
+    head === "playlists" ||
+    head === "artist" ||
+    isReservedSegment(head)
+  ) {
+    return null;
+  }
+  const parts = (m[2] || "").split("/").filter(Boolean);
+  if (/^\d+$/.test(head)) {
+    return { bandId: Number(head), ...parseArtistTail(parts) };
+  }
+  return { artistSlug: head, ...parseArtistTail(parts) };
+}
+
+export function parseArtistPath(pathname: string): ArtistRoute | null {
+  return parseLegacyArtistPath(pathname) ?? parseSlugArtistPath(pathname);
+}
+
+export function artistPath(route: ArtistRoute): string {
+  const artistSeg =
+    route.artistName?.trim() ||
+    route.artistSlug?.trim() ||
+    (route.bandId != null ? String(route.bandId) : "artist");
+
+  let path = `/music/${enc(artistSeg)}`;
+  const section = route.section;
+
   if (section === "overview") {
-    path += `/overview/${overviewTab}`;
-  } else if (section === "audio" && playlistSlug) {
-    path += `/audio/playlist/${playlistSlug}`;
-  } else if (section === "audio" && releaseId) {
-    path += `/audio/${releaseId}`;
-    if (releaseTab !== "overview") {
-      path += `/${releaseTab}`;
+    path += `/overview/${route.overviewTab ?? "about"}`;
+  } else if (section === "quiz") {
+    path += `/overview/quiz`;
+  } else if (section === "audio" && route.playlistSlug) {
+    path += `/audio/playlist/${route.playlistSlug}`;
+  } else if (section === "audio" && route.releaseId) {
+    const releaseSeg =
+      route.releaseTitle?.trim() &&
+      !isReleaseId(route.releaseTitle) &&
+      route.releaseTitle !== route.releaseId
+        ? route.releaseTitle
+        : isReleaseId(route.releaseId)
+          ? route.releaseId
+          : route.releaseTitle?.trim() || route.releaseId;
+    path += `/audio/${enc(releaseSeg)}`;
+    if (route.releaseTab && route.releaseTab !== "overview") {
+      path += `/${route.releaseTab}`;
     }
   } else if (
     (section === "video" || section === "library") &&
-    mediaItemId
+    route.mediaItemId
   ) {
-    path += `/${section}/${mediaItemId}`;
+    const itemSeg =
+      route.mediaItemTitle?.trim() &&
+      !isMediaItemId(route.mediaItemTitle) &&
+      route.mediaItemTitle !== route.mediaItemId
+        ? route.mediaItemTitle
+        : isMediaItemId(route.mediaItemId)
+          ? route.mediaItemId
+          : route.mediaItemTitle?.trim() || route.mediaItemId;
+    path += `/${section}/${enc(itemSeg)}`;
   } else {
     path += `/${section}`;
   }
@@ -291,15 +345,7 @@ export function artistPath(
 }
 
 export function pushArtistRoute(route: ArtistRoute, replace = false) {
-  const path = artistPath(
-    route.bandId,
-    route.section,
-    route.overviewTab,
-    route.releaseId,
-    route.releaseTab ?? "overview",
-    route.mediaItemId,
-    route.playlistSlug
-  );
+  const path = artistPath(route);
   if (replace) {
     window.history.replaceState(null, "", path);
   } else {
@@ -341,3 +387,6 @@ export function parseUserPlaylistPath(pathname: string): number | null {
   const id = Number(m[1]);
   return Number.isFinite(id) ? id : null;
 }
+
+// Re-export for callers that still import from musicRoute.
+export { RELEASE_ID_RE, MEDIA_ITEM_ID_RE };

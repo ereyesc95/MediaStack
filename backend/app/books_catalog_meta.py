@@ -163,3 +163,53 @@ def enrich_books_catalog(db: Session, catalog: dict) -> dict:
     if "films" in catalog and "books" in catalog:
         catalog["films"] = catalog["books"]
     return catalog
+
+
+def filter_nsfw_book_cards(
+    db: Session, cards: list[dict], *, nsfw_unlocked: bool
+) -> list[dict]:
+    """Enrich leaf genres then drop adult cards when NSFW is locked."""
+    from app.adult_content import filter_adult_cards
+
+    if nsfw_unlocked or not cards:
+        return list(cards)
+    tmp = {
+        "books": [dict(c) for c in cards if isinstance(c, dict)],
+        "franchises": [],
+    }
+    enrich_books_catalog(db, tmp)
+    return filter_adult_cards(tmp.get("books") or [], nsfw_unlocked=False)
+
+
+def apply_nsfw_filter_to_books_payload(
+    db: Session, payload: dict, *, nsfw_unlocked: bool
+) -> dict:
+    """Filter books/films/subseries/related book lists inside an overview payload."""
+    if nsfw_unlocked or not isinstance(payload, dict):
+        return payload
+    books = payload.get("books") or payload.get("films") or []
+    if not isinstance(books, list) or not books:
+        return payload
+    filtered = filter_nsfw_book_cards(db, books, nsfw_unlocked=False)
+    keep = {b.get("id") for b in filtered if b.get("id")}
+    for key in ("books", "films"):
+        raw = payload.get(key)
+        if isinstance(raw, list):
+            payload[key] = [b for b in raw if isinstance(b, dict) and b.get("id") in keep]
+    raw_sub = payload.get("subseries")
+    if isinstance(raw_sub, list):
+        payload["subseries"] = [
+            s for s in raw_sub if isinstance(s, dict) and s.get("id") in keep
+        ]
+    related = payload.get("related")
+    if isinstance(related, dict):
+        for key in ("books", "films", "library"):
+            raw = related.get(key)
+            if isinstance(raw, list):
+                related[key] = [
+                    b
+                    for b in raw
+                    if isinstance(b, dict)
+                    and (b.get("id") in keep or not b.get("id"))
+                ]
+    return payload

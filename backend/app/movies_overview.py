@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.franchise_identity import find_artwork_home
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -417,6 +418,9 @@ def build_work_overview(
             "series_shows": series_ov.get("subseries") or [],
             "series_franchise_id": series_ov.get("id") or slug,
             "shared_series": True,
+            "artwork_home_module": (
+                find_artwork_home(name, root) or (None, None)
+            )[0],
             "media": media,
             "related": related,
             "universe": universe,
@@ -506,6 +510,9 @@ def build_work_overview(
         "film_count": detail.get("film_count") or len(films),
         "kind": "franchise",
         "shared_series": False,
+        "artwork_home_module": (
+            find_artwork_home(name, root) or (None, None)
+        )[0],
     }
 
 

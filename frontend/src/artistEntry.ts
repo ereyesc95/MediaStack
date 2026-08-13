@@ -6,11 +6,23 @@ export type ArtistEntrySource = "music" | "series" | "movies" | "books";
 
 export type ArtistEntryReferrer = {
   source: ArtistEntrySource;
-  /** Preferred media tab to show next to Overview for this entry. */
+  /**
+   * Preferred media tab that should appear next to Overview for this entry
+   * (series / movies / books). Navigation itself should open Overview.
+   */
   section: ArtistSection;
+  /** Module tab the user came from (Home vs Catalog). */
+  fromTab?: "home" | "catalog";
+  /** Catalog name-letter to restore when returning to Catalog. */
+  catalogLetter?: string;
   franchiseId?: string;
   franchiseName?: string;
   backLabel?: string;
+};
+
+export type ArtistBackRestore = {
+  tab?: "home" | "catalog";
+  letter?: string;
 };
 
 const KEY = "mystack_artist_entry_referrer";
@@ -45,6 +57,7 @@ export function clearArtistEntryReferrer(): void {
   saveArtistEntryReferrer(null);
 }
 
+/** Media tab shown beside Overview for the source module — not the landing tab. */
 export function defaultSectionForSource(
   source: ArtistEntrySource
 ): ArtistSection {

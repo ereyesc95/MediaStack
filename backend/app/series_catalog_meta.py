@@ -32,6 +32,11 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
     sub_by_id: dict[int, Subgenre] = {
         s.sgn_id: s for s in db.scalars(select(Subgenre)).all() if s.sgn_id
     }
+    sub_by_name: dict[str, Subgenre] = {}
+    for s in sub_by_id.values():
+        key = (s.sgn_name or "").strip().casefold()
+        if key and key not in sub_by_name:
+            sub_by_name[key] = s
     parent_by_id: dict[int, str] = {
         g.gen_id: (g.gen_name or "").strip()
         for g in db.scalars(select(Genre)).all()
@@ -75,6 +80,7 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
                 if name_g:
                     genre_names.append(name_g)
                 gid = g.get("id")
+                gid_i: int | None = None
                 if gid is not None:
                     try:
                         gid_i = int(gid)
@@ -82,11 +88,13 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
                         gid_i = None
                     if gid_i is not None:
                         genre_ids.append(gid_i)
-                        sub = sub_by_id.get(gid_i)
-                        if sub and sub.sgn_genre_id:
-                            pname = parent_by_id.get(int(sub.sgn_genre_id))
-                            if pname:
-                                parent_names.add(pname)
+                sub = sub_by_id.get(gid_i) if gid_i is not None else None
+                if not sub and name_g:
+                    sub = sub_by_name.get(name_g.casefold())
+                if sub and sub.sgn_genre_id:
+                    pname = parent_by_id.get(int(sub.sgn_genre_id))
+                    if pname:
+                        parent_names.add(pname)
         card["genre_ids"] = genre_ids
         card["genre_names"] = genre_names
         card["parent_genre_names"] = sorted(parent_names)

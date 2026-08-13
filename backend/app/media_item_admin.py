@@ -15,6 +15,22 @@ from app.paths import DATA_DIR
 VIDEO_GENRE_MEDIA_TYPE = 300
 LIBRARY_GENRE_MEDIA_TYPE = 500
 
+# Readable item categories shown in the library edit modal / type line.
+LIBRARY_CONTENT_CATEGORIES: tuple[str, ...] = (
+    "Book",
+    "Article",
+    "Magazine",
+    "Manga",
+    "Comic",
+    "Essay",
+    "Interview",
+    "Anthology",
+    "Guide",
+    "Script",
+    "Photobook",
+    "Zine",
+)
+
 OVERRIDE_DIR = DATA_DIR / "media_item_overrides"
 
 
@@ -175,6 +191,17 @@ def _get_row(db: Session, band_id: int, kind: str, item_id: str) -> MediaItemMet
     ).first()
 
 
+def normalize_content_category(kind: str, raw: str | None) -> str | None:
+    """Canonical library content category; video ignores this field."""
+    if kind != "library":
+        return None
+    typed = title_case_words((raw or "").strip())
+    if not typed:
+        return "Book"
+    catalog = {c.casefold(): c for c in LIBRARY_CONTENT_CATEGORIES}
+    return catalog.get(typed.casefold(), typed)
+
+
 def load_media_item_meta(db: Session, band_id: int, kind: str, item_id: str) -> dict:
     row = _get_row(db, band_id, kind, item_id)
     if row:
@@ -189,6 +216,13 @@ def load_media_item_meta(db: Session, band_id: int, kind: str, item_id: str) -> 
             "author": row.mim_author,
             "publisher": row.mim_publisher,
             "genres": genres,
+            "content_category": row.mim_content_category,
+            "country_iso": row.mim_country_iso,
+            "languages": [
+                p.strip()
+                for p in (row.mim_languages or "").split(";")
+                if p.strip()
+            ],
             "description_manual": True,
         }
 
@@ -224,6 +258,7 @@ def load_media_item_meta(db: Session, band_id: int, kind: str, item_id: str) -> 
         author=legacy.get("author"),
         publisher=legacy.get("publisher"),
         genres=legacy_genres,
+        content_category=legacy.get("content_category"),
         validate_genres=False,
     )
     try:
@@ -244,6 +279,9 @@ def save_media_item_meta(
     author: str | None = None,
     publisher: str | None = None,
     genres: list[str] | None = None,
+    content_category: str | None = None,
+    country_iso: str | None = None,
+    languages: list[str] | None = None,
     validate_genres: bool = True,
 ) -> MediaItemMeta | None:
     resolved_genres: list[str] | None = None
@@ -276,6 +314,15 @@ def save_media_item_meta(
         row.mim_publisher = resolve_publisher_name(db, kind, publisher)
     if resolved_genres is not None:
         row.mim_genres = ";".join(resolved_genres) or None
+    if content_category is not None and kind == "library":
+        row.mim_content_category = normalize_content_category(kind, content_category)
+    if country_iso is not None:
+        row.mim_country_iso = (country_iso or "").strip().lower()[:8] or None
+    if languages is not None:
+        cleaned = [
+            str(x).strip() for x in languages if x and str(x).strip()
+        ]
+        row.mim_languages = ";".join(cleaned) or None
 
     row.mim_updated_at = datetime.now(timezone.utc).isoformat()
     db.commit()
@@ -287,6 +334,12 @@ def apply_media_item_meta(
     payload: dict, db: Session, band_id: int, kind: str, item_id: str
 ) -> dict:
     meta = load_media_item_meta(db, band_id, kind, item_id)
+    if kind == "library":
+        category = normalize_content_category(
+            kind, (meta or {}).get("content_category") if meta else None
+        )
+        payload["content_category"] = category or "Book"
+        payload["release_type"] = category or "Book"
     if not meta:
         return payload
     if meta.get("description"):
@@ -300,6 +353,10 @@ def apply_media_item_meta(
         payload["publisher"] = meta["publisher"]
     if meta.get("genres"):
         payload["genres"] = list(meta["genres"])
+    if meta.get("country_iso"):
+        payload["country_iso"] = meta["country_iso"]
+    if meta.get("languages") is not None:
+        payload["languages"] = list(meta["languages"] or [])
     return payload
 
 
@@ -314,6 +371,9 @@ def patch_media_item_overview(
     author: str | None = None,
     publisher: str | None = None,
     genres: list[str] | None = None,
+    content_category: str | None = None,
+    country_iso: str | None = None,
+    languages: list[str] | None = None,
 ) -> dict | None:
     from app.media_item_overview import build_media_item_overview
 
@@ -332,6 +392,9 @@ def patch_media_item_overview(
         author=author,
         publisher=publisher,
         genres=genres,
+        content_category=content_category,
+        country_iso=country_iso,
+        languages=languages,
         validate_genres=True,
     )
     if genres is not None and saved is None:

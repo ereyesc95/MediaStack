@@ -3,6 +3,7 @@ import {
   addBooksBookCastMember,
   addMoviesFilmCastMember,
   addSeriesCastMember,
+  fetchStaffRoles,
   patchMoviesFilmCastMember,
   patchSeriesCastMember,
   removeSeriesCastMember,
@@ -17,6 +18,91 @@ import type {
 import { isPhoneLayout, useDeviceLayout } from "../../usePhoneLayout";
 import { IconEditProfile } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
+
+type StaffRoleOpt = { name: string; type: string };
+
+function roleVisibleForLanguage(
+  roleName: string,
+  roleTypes: Record<string, string>,
+  isOriginLanguage: boolean
+): boolean {
+  const rtype = roleTypes[(roleName || "").trim().toLowerCase()] || "hybrid";
+  if (rtype === "hybrid") return true;
+  if (rtype === "original") return isOriginLanguage;
+  if (rtype === "dub") return !isOriginLanguage;
+  return true;
+}
+
+/** One card per person; roles merged A–Z and filtered by language type. */
+function mergeStaffMembers(
+  list: SeriesCastMember[],
+  roleTypes: Record<string, string>,
+  isOriginLanguage: boolean
+): SeriesCastMember[] {
+  const byName = new Map<string, SeriesCastMember>();
+  for (const m of list) {
+    const key = (m.name || "").trim().toLowerCase();
+    if (!key) continue;
+    const roles = (m.roles || [])
+      .map((r) => String(r).trim())
+      .filter(Boolean)
+      .filter((r) => roleVisibleForLanguage(r, roleTypes, isOriginLanguage));
+    if (!roles.length && (m.roles || []).length) continue;
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, {
+        ...m,
+        roles: [...new Set(roles)].sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base" })
+        ),
+      });
+      continue;
+    }
+    const mergedRoles = [
+      ...new Set([...(existing.roles || []), ...roles]),
+    ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    byName.set(key, {
+      ...existing,
+      roles: mergedRoles,
+      photo_url: existing.photo_url || m.photo_url,
+    });
+  }
+  return Array.from(byName.values()).sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", undefined, {
+      sensitivity: "base",
+    })
+  );
+}
+
+const LANG_LABEL_FALLBACK: Record<string, string> = {
+  ja: "Japanese",
+  en: "English",
+  "es-es": "Spanish (Spain)",
+  "es-419": "Spanish (Latin America)",
+  "pt-br": "Portuguese (Brazil)",
+  "zh-cn": "Chinese (Simplified)",
+  "zh-tw": "Chinese (Traditional)",
+  ko: "Korean",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+};
+
+function languageLabel(
+  code: string,
+  options?: SeriesLanguageOption[] | null
+): string {
+  const key = code.trim().toLowerCase();
+  const fromOpts = (options || []).find(
+    (o) => o.code.toLowerCase() === key
+  )?.label;
+  const raw =
+    fromOpts ||
+    LANG_LABEL_FALLBACK[key] ||
+    LANG_LABEL_FALLBACK[key.replace("_", "-")] ||
+    code;
+  return raw.replace(/\s*\(origin\)\s*$/i, "").trim();
+}
 
 type Props = {
   franchiseId: string;
@@ -210,14 +296,19 @@ function actorGroupsForDisplay(
           .map((p) => p.language)
           .filter(Boolean) as string[];
 
-  const preferred = activeLanguage || originLanguage;
-  if (preferred) {
-    langs = [
-      preferred,
-      ...langs.filter(
-        (l) => l.toLowerCase() !== preferred.toLowerCase()
-      ),
-    ];
+  // When a language is selected on the left panel, only show that language's actors.
+  if (activeLanguage) {
+    langs = [activeLanguage];
+  } else {
+    const preferred = originLanguage;
+    if (preferred) {
+      langs = [
+        preferred,
+        ...langs.filter(
+          (l) => l.toLowerCase() !== preferred.toLowerCase()
+        ),
+      ];
+    }
   }
 
   for (const lang of langs) {
@@ -226,8 +317,9 @@ function actorGroupsForDisplay(
     out.push({ language: lang, people });
   }
 
-  if (!out.length && (member.roles?.length || member.actors?.length)) {
-    const lang = preferred || franchiseLangs[0] || "ja";
+  // No fallback to other languages when a specific language is active.
+  if (!activeLanguage && !out.length && (member.roles?.length || member.actors?.length)) {
+    const lang = originLanguage || franchiseLangs[0] || "ja";
     const people = actorsForLangDetailed(member, lang, subFilter);
     if (people.length) out.push({ language: lang, people });
   }
@@ -517,6 +609,7 @@ function CastMemberModal({
   castSubFilter = "all",
   castApi = "series",
   filmId,
+  roleOptions = [],
   onClose,
   onDataChanged,
 }: {
@@ -531,6 +624,7 @@ function CastMemberModal({
   castSubFilter?: string;
   castApi?: "series" | "movies" | "books";
   filmId?: string;
+  roleOptions?: StaffRoleOpt[];
   onClose: () => void;
   onDataChanged: () => void;
 }) {
@@ -821,7 +915,13 @@ function CastMemberModal({
                   value={rolesText}
                   onChange={(e) => setRolesText(e.target.value)}
                   placeholder="Director, Writer, …"
+                  list="series-staff-role-suggestions-edit"
                 />
+                <datalist id="series-staff-role-suggestions-edit">
+                  {roleOptions.map((r) => (
+                    <option key={r.name} value={r.name} />
+                  ))}
+                </datalist>
               </label>
             ) : null}
             {characterCentered ? (
@@ -833,19 +933,14 @@ function CastMemberModal({
                     onChange={(e) => setEditLang(e.target.value)}
                   >
                     {(franchiseLangs.length
-                      ? franchiseLangs.map((c) => {
-                          const opt = languageOptions.find(
-                            (o) => o.code.toLowerCase() === c.toLowerCase()
-                          );
-                          return {
-                            code: c,
-                            label: opt?.label || c,
-                          };
-                        })
+                      ? franchiseLangs.map((c) => ({
+                          code: c,
+                          label: languageLabel(c, languageOptions),
+                        }))
                       : languageOptions
                     ).map((o) => (
                       <option key={o.code} value={o.code}>
-                        {o.label.replace(/\s*\(origin\)\s*$/i, "")}
+                        {languageLabel(o.code, languageOptions)}
                       </option>
                     ))}
                   </select>
@@ -1029,6 +1124,7 @@ export function AddCastModal({
   castApi = "series",
   filmId,
   characterOnly = false,
+  roleOptions: roleOptionsProp,
   onClose,
   onSaved,
 }: {
@@ -1041,6 +1137,7 @@ export function AddCastModal({
   castApi?: "series" | "movies" | "books";
   filmId?: string;
   characterOnly?: boolean;
+  roleOptions?: StaffRoleOpt[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1062,6 +1159,26 @@ export function AddCastModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roleOptions, setRoleOptions] = useState<StaffRoleOpt[]>(
+    () => roleOptionsProp || []
+  );
+
+  useEffect(() => {
+    if (roleOptionsProp?.length) {
+      setRoleOptions(roleOptionsProp);
+      return;
+    }
+    if (characterCentered) return;
+    let cancelled = false;
+    void fetchStaffRoles()
+      .then((res) => {
+        if (!cancelled) setRoleOptions(res.roles || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roleOptionsProp, characterCentered]);
 
   const save = async () => {
     if (!charName.trim()) return;
@@ -1333,8 +1450,14 @@ export function AddCastModal({
               <input
                 value={rolesText}
                 onChange={(e) => setRolesText(e.target.value)}
-                placeholder="Director, Writer, …"
+                placeholder="Type to pick Director, Studio, …"
+                list="series-staff-role-suggestions-add"
               />
+              <datalist id="series-staff-role-suggestions-add">
+                {roleOptions.map((r) => (
+                  <option key={r.name} value={r.name} />
+                ))}
+              </datalist>
             </label>
           )}
           {subseries.length > 0 && !characterOnly ? (
@@ -1406,6 +1529,30 @@ export default function SeriesCast({
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
   const characterCentered = tab === "characters";
+  const [staffRoleOpts, setStaffRoleOpts] = useState<StaffRoleOpt[]>([]);
+
+  useEffect(() => {
+    if (characterCentered) return;
+    let cancelled = false;
+    void fetchStaffRoles()
+      .then((res) => {
+        if (!cancelled) setStaffRoleOpts(res.roles || []);
+      })
+      .catch(() => {
+        if (!cancelled) setStaffRoleOpts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [characterCentered]);
+
+  const roleTypeMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of staffRoleOpts) {
+      if (r.name) m[r.name.toLowerCase()] = (r.type || "hybrid").toLowerCase();
+    }
+    return m;
+  }, [staffRoleOpts]);
 
   const franchiseLangs = useMemo(() => {
     const langs = languages?.length
@@ -1447,10 +1594,40 @@ export default function SeriesCast({
           });
     // Prefer scoped members; if none are tagged for this subseries, show the
     // full franchise cast rather than an empty panel.
-    const resolved = filtered.length > 0 ? filtered : list;
+    let resolved = filtered.length > 0 ? filtered : list;
+    if (tab === "characters" && activeLanguage) {
+      const lang = activeLanguage.toLowerCase();
+      const forLang = resolved.filter((m) => {
+        const groups = actorGroupsForDisplay(
+          m,
+          franchiseLangs,
+          originLanguage,
+          castSubFilter,
+          activeLanguage
+        );
+        return groups.some((g) => g.language.toLowerCase() === lang && g.people.length > 0);
+      });
+      // Only keep characters that have an actor for the selected language.
+      resolved = forLang;
+    }
+    if (tab === "staff") {
+      const origin = (originLanguage || "").toLowerCase();
+      const lang = (activeLanguage || originLanguage || "").toLowerCase();
+      const isOrigin = !lang || !origin || lang === origin;
+      resolved = mergeStaffMembers(resolved, roleTypeMap, isOrigin);
+    }
     if (castLayout === "row") return resolved;
     return resolved.slice(0, 8);
-  }, [cast, tab, castSubFilter, castLayout]);
+  }, [
+    cast,
+    tab,
+    castSubFilter,
+    castLayout,
+    activeLanguage,
+    franchiseLangs,
+    originLanguage,
+    roleTypeMap,
+  ]);
 
   const rows = useMemo(
     () =>
@@ -1464,22 +1641,16 @@ export default function SeriesCast({
   );
 
   const franchiseLangOptions = useMemo(() => {
-    const byCode = new Map(
-      (languageOptions || []).map((o) => [o.code.toLowerCase(), o] as const)
-    );
     if (franchiseLangs.length) {
-      return franchiseLangs.map((code) => {
-        const opt = byCode.get(code.toLowerCase());
-        return {
-          code,
-          label: (opt?.label || code).replace(/\s*\(origin\)\s*$/i, ""),
-        };
-      });
+      return franchiseLangs.map((code) => ({
+        code,
+        label: languageLabel(code, languageOptions),
+      }));
     }
     if (languageOptions?.length) {
       return languageOptions.map((o) => ({
         ...o,
-        label: o.label.replace(/\s*\(origin\)\s*$/i, ""),
+        label: languageLabel(o.code, languageOptions),
       }));
     }
     return [] as SeriesLanguageOption[];
@@ -1662,6 +1833,7 @@ export default function SeriesCast({
           castSubFilter={castSubFilter}
           castApi={castApi}
           filmId={filmId}
+          roleOptions={staffRoleOpts}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
         />
@@ -1677,6 +1849,7 @@ export default function SeriesCast({
           castApi={castApi}
           filmId={filmId}
           characterOnly={characterOnly}
+          roleOptions={staffRoleOpts}
           onClose={onAddClose}
           onSaved={onDataChanged}
         />

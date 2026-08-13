@@ -84,36 +84,6 @@ function CreditNameList({ names }: { names: string[] }) {
   );
 }
 
-function FranchiseArtistCard({
-  artist,
-  onSelect,
-}: {
-  artist: NonNullable<MediaItemOverview["franchise_artist"]>;
-  onSelect: () => void;
-}) {
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const photoUrl = artist.photo_url ?? artist.icon_url ?? artist.logo_url;
-  const showPhoto = photoUrl && !photoFailed;
-  return (
-    <button
-      type="button"
-      className="release-lineup-card release-lineup-card--featured-artist release-lineup-card--franchise"
-      onClick={onSelect}
-    >
-      <span className="release-lineup-card__photo">
-        {showPhoto ? (
-          <img src={photoUrl!} alt="" onError={() => setPhotoFailed(true)} />
-        ) : (
-          <span className="release-lineup-card__initials">
-            {artist.name.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-      </span>
-      <span className="release-lineup-card__name">{artist.name}</span>
-    </button>
-  );
-}
-
 function LineupMiniCard({
   member,
   onSelect,
@@ -226,6 +196,7 @@ export default function MediaItemPage({
   );
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ItemTab>("overview");
+  const [overviewSub, setOverviewSub] = useState<"lineup" | "staff">("lineup");
   const [galleryTab, setGalleryTab] = useState<GalleryTab>("artwork");
   const [galleryTabsMeta, setGalleryTabsMeta] = useState<
     { id: GalleryTab; label: string; count: number }[]
@@ -405,8 +376,9 @@ export default function MediaItemPage({
   const sectionLabel = kind === "video" ? "Video" : "Library";
   const listTabLabel = kind === "video" ? "VIDEOS" : "VOLUMES";
   const releaseTypeLabel =
-    data?.release_type ??
-    (kind === "video" ? "Video release" : "Library item");
+    data?.content_category ||
+    data?.release_type ||
+    (kind === "video" ? "Video release" : "Book");
   const displayDate =
     data?.display_date || formatTrackDate(data?.date_iso) || null;
   const discUrl = data?.disc_url || DEFAULT_DISC_URL;
@@ -460,19 +432,10 @@ export default function MediaItemPage({
   );
   const showSoloLineup = Boolean(data?.is_solo && lineup.length > 0);
   const showOverviewLineup = showBandLineup || showSoloLineup;
-  const franchiseArtist = data?.franchise_artist ?? null;
-  const franchiseItems = (data?.franchise_items ?? []).filter((item) => {
-    if ((item.kind || "").toLowerCase() !== "series") return true;
-    const parts = (item.path || "").replace(/\\/g, "/").split("/").filter(Boolean);
-    // Drop Series/{Letter}/{Franchise} hub rows — show Anthology/Docuseries instead
-    return !(parts.length === 3 && !item.date_iso && !item.subseries);
-  });
-  // Franchise artist only when there is no related media to show
-  const showFranchiseArtist =
-    Boolean(franchiseArtist) && franchiseItems.length === 0;
-  const showFranchise = showFranchiseArtist || franchiseItems.length > 0;
   const hasOverviewBottom =
-    showOverviewLineup || showFranchise;
+    overviewSub === "lineup"
+      ? showOverviewLineup
+      : true;
 
   const directorNames = splitCreditNames(data?.director);
   const authorNames = splitCreditNames(data?.author);
@@ -585,6 +548,7 @@ export default function MediaItemPage({
               onEditProfile={onEditProfile}
               menuVariant="media-item"
               artistThemeActive
+              editDataLabel={kind === "library" ? "Edit book" : "Edit Release"}
               onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
               onRefreshTracklist={() => handleRefresh()}
             />
@@ -621,6 +585,27 @@ export default function MediaItemPage({
             ))}
           </nav>
         )}
+        {tab === "overview" ? (
+          <nav
+            className="release-page__subtabs"
+            aria-label="Overview sections"
+          >
+            <button
+              type="button"
+              className={overviewSub === "lineup" ? "active" : ""}
+              onClick={() => setOverviewSub("lineup")}
+            >
+              <span>LINEUP</span>
+            </button>
+            <button
+              type="button"
+              className={overviewSub === "staff" ? "active" : ""}
+              onClick={() => setOverviewSub("staff")}
+            >
+              <span>STAFF</span>
+            </button>
+          </nav>
+        ) : null}
       </div>
 
       {loading && !data && (
@@ -960,7 +945,48 @@ export default function MediaItemPage({
 
                 {hasOverviewBottom ? (
                   <div className="release-page__overview-bottom">
-                    {showOverviewLineup && showBandLineup ? (
+                    {overviewSub === "staff" ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        <div className="media-item-page__staff">
+                          {kind === "library" && authorNames.length > 0 ? (
+                            <p className="release-page__producer">
+                              Written by{" "}
+                              <CreditNameList names={authorNames} />
+                            </p>
+                          ) : null}
+                          {kind === "video" && directorNames.length > 0 ? (
+                            <p className="release-page__producer">
+                              Directed by{" "}
+                              <CreditNameList names={directorNames} />
+                            </p>
+                          ) : null}
+                          {data.publisher ? (
+                            <p className="release-page__producer">
+                              Distributed by{" "}
+                              <span className="release-page__person-link">
+                                {data.publisher}
+                              </span>
+                            </p>
+                          ) : null}
+                          {!(
+                            (kind === "library" && authorNames.length) ||
+                            (kind === "video" && directorNames.length) ||
+                            data.publisher
+                          ) ? (
+                            <p className="muted artist-section-empty">
+                              No staff credits yet
+                              {isAdmin
+                                ? " — use Edit to add credits."
+                                : "."}
+                            </p>
+                          ) : null}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {overviewSub === "lineup" &&
+                    showOverviewLineup &&
+                    showBandLineup ? (
                       <section className="release-page__section-glass release-page__lineup">
                         <div className="release-page__lineup-grid">
                           {lineup.map((m) => (
@@ -974,7 +1000,9 @@ export default function MediaItemPage({
                       </section>
                     ) : null}
 
-                    {showOverviewLineup && showSoloLineup ? (
+                    {overviewSub === "lineup" &&
+                    showOverviewLineup &&
+                    showSoloLineup ? (
                       <section className="release-page__section-glass release-page__lineup">
                         <div className="release-page__lineup-grid">
                           <LineupMiniCard
@@ -985,53 +1013,10 @@ export default function MediaItemPage({
                       </section>
                     ) : null}
 
-                    {showFranchise ? (
-                      <section className="release-page__section-glass release-page__singles release-page__franchise">
-                        {showFranchiseArtist && franchiseArtist ? (
-                          <div className="release-page__featured-artists-grid" data-count="1">
-                            <FranchiseArtistCard
-                              artist={franchiseArtist}
-                              onSelect={() => {
-                                if (franchiseArtist.band_id != null) {
-                                  onOpenArtist(franchiseArtist.band_id);
-                                }
-                              }}
-                            />
-                          </div>
-                        ) : null}
-                        {franchiseItems.length > 0 ? (
-                          <div className="release-page__singles-grid release-page__franchise-items">
-                            {franchiseItems.map((item) => {
-                              const dateLabel = formatTrackDate(
-                                item.date_iso ?? null
-                              );
-                              const cover = item.cover_url || DEFAULT_DISC_URL;
-                              return (
-                                <div
-                                  key={item.path ?? item.title}
-                                  className="release-page__single release-page__single--static"
-                                >
-                                  <span className="release-page__single-cover">
-                                    <img
-                                      src={cover}
-                                      alt=""
-                                      draggable={false}
-                                    />
-                                  </span>
-                                  <span className="release-page__single-title">
-                                    {item.title}
-                                  </span>
-                                  {dateLabel ? (
-                                    <span className="release-page__single-date">
-                                      {dateLabel}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </section>
+                    {overviewSub === "lineup" && !showOverviewLineup ? (
+                      <p className="muted artist-section-empty">
+                        No lineup for this item.
+                      </p>
                     ) : null}
                   </div>
                 ) : null}

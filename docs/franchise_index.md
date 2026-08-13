@@ -4,7 +4,7 @@ Cross-module **Related media** for Movies, Series, Books, Games, and (where appl
 
 **Layout spec:** [media_library_layout.md](./media_library_layout.md)
 
-**Implementation:** `backend/app/franchise_index.py` — Phase 1 scan/save/load done; API and UI pending (see [Implementation phases](#implementation-phases))
+**Implementation:** `backend/app/franchise_index.py` — Phase 1–2 scan/save/load + related API; Series/Movies/Books UIs consume related media. See [Implementation phases](#implementation-phases).
 
 ---
 

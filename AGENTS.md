@@ -28,29 +28,29 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 - **Exceptions:** `.path` sidecars (NAS), symlinks, or future `franchise_overrides.json` for biopics, collisions, subseries filters
 - **Music ≠ movie franchise** (e.g. HIM vs *Elvis* biopic): needs subject/DB links, not folder name alone
 
-## Implementation status (2026-07)
+## Implementation status (2026-08)
 
 | Area | Status |
 |------|--------|
-| Music Audio | Done |
-| Music Video/Library tabs | Done (`.lnk` / `.path` resolved; Play/Read card actions) |
-| `backend/app/franchise_index.py` | **Phase 1–2:** scan/save/load + `GET /api/media/related` |
-| `backend/app/routers/media.py` | Related media API |
-| `backend/app/routers/sync.py` | `POST /api/sync/franchise-index` |
-| Related media UI | **Not started** (needed for Series v1) |
-| Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` (+ legacy flat) |
-| Layout docs | Updated: dated seasons, nested films, no `[Extras]` / portal farms |
-| Series module UI | Catalog → franchise/subseries → seasons → episodes (new tab); Gallery + Related |
-| Movies/Books/Games UI | Placeholders |
+| Music Audio / Video / Library | Done |
+| Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, NSFW) |
+| Universes | Done (multi-module hubs + SFW filter) |
+| Human-readable URL slugs | Done (dual-parse legacy + slug; see README) |
+| Staff roles (Original / Dub / Hybrid) | Done (`staff_roles` + `/api/series/staff-roles`) |
+| Per-film NSFW genres | Done (`movies_catalog_meta` leaf genres) |
+| `backend/app/franchise_index.py` | Phase 1–2: scan/save/load + `GET /api/media/related` |
+| Games module UI | Placeholders |
 
-## Series module files
+## Series / Movies / Books files
 
 | File | Role |
 |------|------|
-| `backend/app/series_index.py` | Catalog + franchise/folder detail + gallery scan |
-| `backend/app/routers/series.py` | `/catalog`, `/franchises/{id}`, `/folder`, `/gallery` |
-| `frontend/src/components/series/SeriesModule.tsx` | Catalog shell |
-| `frontend/src/components/series/SeriesFranchisePage.tsx` | Overview / Gallery / Related |
+| `backend/app/series_index.py` / `movies_index.py` / `books_index.py` | Catalog + leaf detail |
+| `backend/app/staff_roles.py` | Canonical staff role seed + visibility types |
+| `backend/app/adult_content.py` | NSFW card filtering |
+| `frontend/src/routeSlug.ts` / `routeResolve.ts` / `franchiseRoute.ts` | Slug URL helpers |
+| `frontend/src/*Route.ts` | Module path parse/build |
+| `frontend/src/components/series/*` | Shared franchise/leaf UI (also used by Movies/Books) |
 
 ## Layout rules (locked 2026-07)
 
@@ -62,11 +62,11 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 
 ## Next work (in order)
 
-1. **Series polish** — URL routes, cover enrichment on Related entries, TMDb metadata later
-2. Enrich related API with cover URLs when Series/Movies scanners exist
-3. Hook franchise-index rebuild into media scan pipeline
-4. **Phase 5** — aliases/overrides; biopic/subject DB links
-5. Movies / Books / Games modules (same patterns)
+1. Pass display titles into more `push*Route` call sites so slug URLs appear immediately (not only after resolve)
+2. Enrich related API with cover URLs; hook franchise-index rebuild into media scan
+3. **Phase 5** — aliases/overrides; biopic/subject DB links
+4. Games module UI (same franchise patterns)
+5. Title-collision disambiguation for slug leaves (date/hash fallback)
 
 ## Key code files
 

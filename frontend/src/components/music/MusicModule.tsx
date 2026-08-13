@@ -26,6 +26,7 @@ import {
   clearArtistEntryReferrer,
   getArtistEntryReferrer,
   saveArtistEntryReferrer,
+  type ArtistBackRestore,
 } from "../../artistEntry";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
 import {
@@ -103,9 +104,21 @@ type Props = {
   onPlaylist: (id?: number) => void;
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
-  onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
-  onBackToMovies?: (franchiseId: string) => void;
-  onBackToBooks?: (franchiseId: string) => void;
+  onBackToSeries?: (
+    franchiseId: string,
+    subseriesId?: string,
+    restore?: ArtistBackRestore
+  ) => void;
+  onBackToMovies?: (
+    franchiseId: string,
+    restore?: ArtistBackRestore
+  ) => void;
+  onBackToBooks?: (
+    franchiseId: string,
+    restore?: ArtistBackRestore
+  ) => void;
+  /** Open Series module from an artist SERIES folder path. */
+  onOpenSeriesFolder?: (folderPath: string) => void;
 };
 
 export default function MusicModule({
@@ -145,6 +158,7 @@ export default function MusicModule({
   onBackToSeries,
   onBackToMovies,
   onBackToBooks,
+  onOpenSeriesFolder,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -1099,23 +1113,27 @@ export default function MusicModule({
           onOpenMediaItem={(kind, itemId) =>
             onMediaItemNavigate?.(itemId, kind)
           }
+          onOpenSeriesFolder={onOpenSeriesFolder}
           onBack={() => {
             clearMediaTheme(userId);
             const ref = getArtistEntryReferrer();
+            const restore: ArtistBackRestore = {
+              tab: ref?.fromTab || "catalog",
+              letter: ref?.catalogLetter,
+            };
             if (ref?.source === "series") {
               clearArtistEntryReferrer();
-              // Always return to Series catalog (card grid), not a franchise page.
-              onBackToSeries?.("");
+              onBackToSeries?.("", undefined, restore);
               return;
             }
             if (ref?.source === "movies") {
               clearArtistEntryReferrer();
-              onBackToMovies?.("");
+              onBackToMovies?.("", restore);
               return;
             }
             if (ref?.source === "books") {
               clearArtistEntryReferrer();
-              onBackToBooks?.("");
+              onBackToBooks?.("", restore);
               return;
             }
             clearArtistEntryReferrer();

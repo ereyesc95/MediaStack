@@ -83,6 +83,7 @@ def patch_book_about(
     genres: list[dict] | list[str] | None = None,
     activity_start: str | None = None,
     activity_end: str | None = None,
+    content_category: str | None = None,
 ) -> dict:
     book_dir, work_dir, about = _resolve_book(book_id)
 
@@ -106,6 +107,13 @@ def patch_book_about(
         about["languages"] = cleaned
         if cleaned:
             about["origin_language"] = cleaned[0]
+
+    if content_category is not None:
+        from app.media_item_admin import normalize_content_category
+
+        about["content_category"] = (
+            normalize_content_category("library", content_category) or "Book"
+        )
 
     if country_id is not None:
         country = db.get(Country, int(country_id)) if country_id else None

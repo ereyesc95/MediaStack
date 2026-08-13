@@ -646,6 +646,7 @@ export type ReleaseTrackItem = {
   source_date_iso?: string | null;
   source_display_date?: string | null;
   cover_url?: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
@@ -678,6 +679,7 @@ export type TrackVersionItem = {
   navigate_band_id?: number | null;
   edition_title?: string | null;
   cover_url: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
@@ -711,6 +713,7 @@ export type ReleaseEdition = {
   is_link?: boolean;
   unresolved?: boolean;
   cover_url?: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
@@ -768,12 +771,16 @@ export type MediaItemOverview = {
   era_icon_url?: string | null;
   era_logo_url?: string | null;
   release_type?: string;
+  /** Library readable category (Book, Manga, Article, …). */
+  content_category?: string | null;
   description: string | null;
   description_manual?: boolean;
   director?: string | null;
   author?: string | null;
   publisher?: string | null;
   publisher_logo_url?: string | null;
+  country_iso?: string | null;
+  languages?: string[];
   genres?: string[];
   photocards?: {
     portrait_front: string | null;
@@ -870,6 +877,7 @@ export type ReleaseTracklist = {
 
 export type ReleasePlaybackArt = {
   cover_url?: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
@@ -922,6 +930,7 @@ export type ReleaseOverview = {
   reviews: { label: string; url: string }[];
   metadata_refreshed_at?: string | null;
   cover_url: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   icon_url?: string | null;
@@ -1286,6 +1295,8 @@ export type SeriesFranchiseCard = {
   /** Same-named Music artist folder exists — open Artist page instead of franchise. */
   is_music_franchise?: boolean;
   music_band_id?: number | null;
+  /** Module that owns franchise-level [Artwork] (series/movies/books). */
+  artwork_home_module?: "series" | "movies" | "books" | "music" | null;
 };
 
 export type SeriesFranchiseDetail = SeriesFranchiseCard & {
@@ -1405,10 +1416,14 @@ export type SeriesDashboard = {
     logo_url?: string | null;
     icon_url?: string | null;
     show_name_on_hover?: boolean;
+    is_music_franchise?: boolean;
+    music_band_id?: number | null;
+    artwork_home_module?: "series" | "movies" | "books" | "music" | null;
   }[];
   top_series: {
     id: string;
     name: string;
+    title?: string | null;
     franchise_id?: string | null;
     subseries_id?: string | null;
     play_count: number;
@@ -1420,6 +1435,9 @@ export type SeriesDashboard = {
     logo_url?: string | null;
     icon_url?: string | null;
     show_name_on_hover?: boolean;
+    is_music_franchise?: boolean;
+    music_band_id?: number | null;
+    artwork_home_module?: "series" | "movies" | "books" | "music" | null;
   }[];
   top_genres: {
     id: number | string;

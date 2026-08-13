@@ -73,6 +73,7 @@ function groupBsideGroups(groups: ReleaseTrackGroup[]) {
 
 export type ReleasePlaybackArt = {
   cover_url?: string | null;
+  cover_back_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
@@ -312,6 +313,7 @@ function trackArt(
   if (hasTrackArt) {
     return {
       cover_url: track.cover_url ?? edition.cover_url ?? null,
+      cover_back_url: track.cover_back_url ?? edition.cover_back_url ?? null,
       cover_animation_url: track.cover_animation_url ?? edition.cover_animation_url ?? null,
       canvas_url: track.canvas_url ?? edition.canvas_url ?? null,
       disc_url: track.disc_url ?? groupDisc ?? edition.disc_url ?? null,
@@ -332,6 +334,7 @@ function trackArt(
     : edition.background_layers;
   return {
     cover_url: cover,
+    cover_back_url: track.cover_back_url ?? edition.cover_back_url ?? null,
     cover_animation_url: track.cover_animation_url ?? edition.cover_animation_url ?? null,
     canvas_url: track.canvas_url ?? edition.canvas_url ?? null,
     disc_url: track.disc_url ?? groupDisc ?? edition.disc_url ?? null,
@@ -342,6 +345,7 @@ function trackArt(
 function versionPlaybackArt(version: TrackVersionItem): ReleasePlaybackArt {
   return {
     cover_url: version.cover_url,
+    cover_back_url: version.cover_back_url ?? null,
     cover_animation_url: version.cover_animation_url ?? null,
     canvas_url: version.canvas_url ?? null,
     disc_url: version.disc_url ?? null,

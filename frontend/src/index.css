@@ -1220,7 +1220,8 @@ input {
 }
 
 .series-dashboard .dash-scroll--icons .dash-icon-item-name,
-.movies-dashboard .dash-scroll--icons .dash-icon-item-name {
+.movies-dashboard .dash-scroll--icons .dash-icon-item-name,
+.books-dashboard .dash-scroll--icons .dash-icon-item-name {
   display: block !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -7670,20 +7671,20 @@ button.media-release-card--banner {
   max-height: 86%;
 }
 
-/* Video/Library banners: portrait covers — keep height capped so meta fits */
+/* Video/Library banners: portrait covers — match audio idle inset (overlay padding) */
 .media-release-card--banner.media-release-card--banner-cover-portrait
   .media-release-card__banner-cover {
   aspect-ratio: 2 / 3;
-  height: 78%;
-  max-height: 78%;
+  height: 100%;
+  max-height: 100%;
 }
 
 .media-release-card--banner.media-release-card--banner-cover-portrait:hover
   .media-release-card__banner-cover,
 .media-release-card--banner.media-release-card--banner-cover-portrait.media-release-card--revealed
   .media-release-card__banner-cover {
-  height: 72%;
-  max-height: 72%;
+  height: 86%;
+  max-height: 86%;
 }
 
 .media-release-card--banner-no-cover .media-release-card__banner-cover {
@@ -9227,20 +9228,34 @@ button.media-release-card--banner {
 .release-page__subtabs button {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  font-weight: 700;
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  font-size: 0.72rem;
+  font-weight: 400;
   letter-spacing: 0.08em;
-  padding: 0.55rem 0.5rem;
+  padding: 0.3rem 0.55rem;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  line-height: 1;
+  box-shadow: inset 0 -2px 0 transparent;
+  border-bottom: none;
+  opacity: 0.88;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.release-page__subtabs button:hover:not(.active):not(:disabled) {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 .release-page__subtabs button.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--text);
+  opacity: 1;
+  box-shadow: inset 0 -2px 0 var(--accent);
+  border-bottom-color: transparent;
 }
 
 .release-page__subtabs button:disabled {
@@ -9393,6 +9408,133 @@ button.media-release-card--banner {
   z-index: 2;
   flex-shrink: 0;
   filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
+}
+
+.release-page__cover-wrap--flippable {
+  perspective: 900px;
+  /* Filter on the wrap breaks preserve-3d flip in most browsers. */
+  filter: none;
+}
+
+.release-page__cover-wrap--flippable .release-page__cover-face--front .release-page__cover,
+.release-page__cover-wrap--flippable .release-page__cover-face--back {
+  filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
+}
+
+.release-page__cover-flip {
+  display: block;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+  line-height: 0;
+}
+
+.release-page__cover-wrap--flippable .release-page__cover-flip:not(:disabled) {
+  cursor: pointer;
+}
+
+.release-page__cover-flip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.release-page__cover-scene {
+  display: block;
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.release-page__cover-wrap--flipped .release-page__cover-scene {
+  transform: rotateY(180deg);
+}
+
+.release-page__cover-face {
+  display: block;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  line-height: 0;
+}
+
+.release-page__cover-face--front {
+  position: relative;
+  z-index: 1;
+}
+
+.release-page__cover-face--back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+  z-index: 0;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.release-page__cover-face--back .release-page__cover--back {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  object-position: center;
+}
+
+.release-page__cover-zoom {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 4;
+  width: 1.85rem;
+  height: 1.85rem;
+  border: none;
+  border-radius: 999px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  color: #fff;
+  background: color-mix(in srgb, #000 42%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.release-page__cover-zoom:hover {
+  background: color-mix(in srgb, #000 58%, transparent);
+}
+
+.release-page__cover-zoom:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .release-page__cover-zoom {
+    display: inline-flex;
+  }
+
+  .release-page__cover-wrap:hover .release-page__cover-zoom {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .release-page__cover-wrap--flipped .release-page__cover-zoom {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 .release-page__cover-wrap--clickable {
@@ -12921,7 +13063,7 @@ button.lyrics-status-badge--icon-only {
 
 .release-about-edit-modal.artist-word-cloud-modal__panel,
 .release-video-set-modal.artist-word-cloud-modal__panel {
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -12944,20 +13086,31 @@ button.lyrics-status-badge--icon-only {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.release-about-edit-modal__form label:first-child {
+/* Description field — target by class so Type (or other fields) above it don't steal layout */
+.release-about-edit-modal__form label.release-about-edit-modal__field--description,
+.release-about-edit-modal__form label:first-child:has(.release-about-edit-modal__textarea) {
   flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   margin-bottom: 0.75rem;
+  position: relative;
+  z-index: 0;
 }
 
-.release-about-edit-modal__form label:first-child .release-about-edit-modal__textarea {
+.release-about-edit-modal__form
+  label.release-about-edit-modal__field--description
+  .release-about-edit-modal__textarea,
+.release-about-edit-modal__form
+  label:first-child:has(.release-about-edit-modal__textarea)
+  .release-about-edit-modal__textarea {
   max-height: min(28vh, 14rem);
   overflow-y: auto;
+  flex: 0 1 auto;
 }
 
 .release-video-set-modal__list {
@@ -13941,11 +14094,12 @@ button.lyrics-status-badge--icon-only {
 .release-gallery__tabs {
   display: flex;
   gap: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.65rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: sticky;
   top: 0;
   z-index: 5;
+  min-height: 0;
 }
 
 .release-gallery__tabs button {
@@ -13954,10 +14108,11 @@ button.lyrics-status-badge--icon-only {
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  padding: 0.5rem;
+  padding: 0.28rem 0.35rem 0.32rem;
+  line-height: 1.1;
   cursor: pointer;
 }
 
@@ -15296,18 +15451,18 @@ button.lyrics-status-badge--icon-only {
 
 .series-cast--row-scroll[data-count="1"] {
   --cast-visible: 1;
-  --lineup-photo: 4.25rem;
+  --lineup-photo: 3.25rem;
 }
 
 .series-cast--row-scroll[data-count="2"] {
   --cast-visible: 2;
-  --lineup-photo: 4rem;
+  --lineup-photo: 3.25rem;
   --cast-row-gap: 1.25rem;
 }
 
 .series-cast--row-scroll[data-count="3"] {
   --cast-visible: 3;
-  --lineup-photo: 3.65rem;
+  --lineup-photo: 3.25rem;
   --cast-row-gap: 1rem;
 }
 
@@ -21103,8 +21258,14 @@ button.lyrics-status-badge--icon-only {
 .release-page--banner-layout .release-page__banner-bg {
   position: absolute;
   inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
   background: center / cover no-repeat;
   z-index: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .release-page--banner-layout .release-page__art-stage--banner .release-page__cover-wrap--banner-cover {

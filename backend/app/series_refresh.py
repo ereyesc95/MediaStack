@@ -217,6 +217,40 @@ async def refresh_series_metadata(
         row.ser_publishers = ";".join(publishers)
         row.ser_studio = publishers[0]
     if genres:
+        # Preserve manually assigned local taxonomy genres (e.g. Adult/ASMR)
+        # so TMDb refresh does not wipe admin edits.
+        try:
+            prev = json.loads(row.ser_genres_json or "[]")
+        except (json.JSONDecodeError, TypeError):
+            prev = []
+        from app.models import Subgenre
+
+        local_ids = {
+            int(s.sgn_id)
+            for s in db.scalars(select(Subgenre)).all()
+            if s.sgn_id is not None
+        }
+        seen = {
+            str(g.get("id") or g.get("name") or "").casefold()
+            for g in genres
+            if isinstance(g, dict)
+        }
+        if isinstance(prev, list):
+            for g in prev:
+                if not isinstance(g, dict):
+                    continue
+                gid = g.get("id")
+                try:
+                    gid_i = int(gid) if gid is not None else None
+                except (TypeError, ValueError):
+                    gid_i = None
+                if gid_i is None or gid_i not in local_ids:
+                    continue
+                key = str(gid_i).casefold()
+                if key in seen:
+                    continue
+                genres.append(g)
+                seen.add(key)
         row.ser_genres_json = json.dumps(genres, ensure_ascii=False)
 
     cast = data.get("cast") or {}

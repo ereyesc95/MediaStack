@@ -10,13 +10,14 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 
 | Module   | Status |
 |----------|--------|
-| **Music** | Active development — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery |
-| Series   | API stubs / browse shell — full UI pending |
-| Movies   | API stubs / browse shell — full UI pending |
-| Books    | API stubs / browse shell — full UI pending |
+| **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, Video/Library/Series tabs |
+| **Series** | Active — franchise/show pages, cast/staff, episodes, related media, NSFW gating, slug URLs |
+| **Movies** | Active — works/films, cast, More Movies, NSFW per-film genres, slug URLs |
+| **Books** | Active — works/volumes, types (Manga/Book/…), More Books, NSFW gating, slug URLs |
+| **Universes** | Active — shared hubs across series/movies/books with SFW filtering |
 | Games    | API stubs / browse shell — full UI pending |
 
-The **music module** is the reference implementation. Folder layout, naming rules, and artwork conventions below apply primarily to music today; other modules will follow similar patterns as they are built.
+Music remains the richest playback experience; Series / Movies / Books share franchise chrome, cast UI, and human-readable routes (legacy ID/hash URLs still resolve).
 
 ### Cross-module library layout (all modules)
 
@@ -462,9 +463,39 @@ Recognized for **system playlists** and **alternate versions**:
 | **Top Tracks** | From `bndTop100` / `bndTopTracks` matched to local files |
 | **Setlists** | setlist.fm (requires MusicBrainz ID + API key); year/show picker when opening |
 
-Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Route: `/music/artist/{id}/audio/playlist/{slug}`.
+Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Preferred route: `/music/{Artist}/audio/playlist/{slug}` (legacy `/music/artist/{id}/…` still works).
 
 Default playlist card art lives in `assets/playlists/{slug}.png` (512×512 gradient tiles served at `/api/assets/playlists/{slug}`). Regenerate or add covers there when introducing new system playlist slugs.
+
+---
+
+## URL routing (slug paths)
+
+The UI uses `history.pushState` (no React Router). Prefer **display-name slugs**; parsers also accept legacy ID/hash paths and rewrite when possible.
+
+| Area | Preferred URL | Legacy (still parsed) |
+|------|---------------|------------------------|
+| Artist | `/music/HIM/overview/about` | `/music/artist/4/overview/about` |
+| Audio release | `/music/HIM/audio/Greatest%20Lovesongs%20Vol.%20666` | `/music/artist/4/audio/rel_…` |
+| Video / library item | `/music/HIM/video/The%20Video%20Collection` | `/music/artist/4/video/vid_…` |
+| Franchise hub | `/franchise/dragon%20ball/overview/about` | `/series\|movies\|books/franchise/{id}/…` (no leaf) |
+| Universe | `/universe/wizarding%20world/overview/about` | `/universe/1/…` |
+| Series show | `/series/dragon%20ball/Dragon%20Ball%20Super/overview/about` | `/series/franchise/…/show/…` |
+| Film | `/movies/dragon%20ball/Curse%20of%20the%20Blood%20Rubies/overview/about` | `/movies/franchise/…/film/film_…` |
+| Book volume | `/books/dragon%20ball/Vol.%2001/overview/about` | `/books/franchise/…/book/book_…` |
+
+Internal navigation still uses stable IDs after resolve (`bandId`, `franchiseId`, `film_…` hashes, etc.). See `frontend/src/routeSlug.ts`, `routeResolve.ts`, and the `*Route.ts` modules.
+
+---
+
+## Series / Movies / Books (shared behaviors)
+
+- **Staff roles** — canonical list in DB (`staff_roles`, seeded on startup): each role is **Original**, **Dub**, or **Hybrid**. Staff rows filter by selected language; the same person merges into one circle with roles comma-separated (A–Z). Suggest API: `GET /api/series/staff-roles`.
+- **Distributed by** — left panel uses Studio / Dub Studio / Publisher from staff when present (language-aware); falls back to about-field publishers.
+- **More Series / More Movies / More Books** — sibling leaves of the same franchise, sorted by release date.
+- **NSFW / Adult** — profiles without NSFW unlocked hide Adult parent genres and adult subgenres (including DB taxonomy under Adult). Film genres are resolved **per film** so one Adult-tagged title does not hide the whole franchise.
+- **Artist Series tab** — opens the Series module for `Series/…` folders (not the video media-item page).
+- **Back navigation** — franchise → leaf returns to the franchise hub; Best Series / Best Movies opened from Home return to Home.
 
 ### Language adaptations
 
@@ -606,8 +637,9 @@ Then `python run.py` serves the built UI from `frontend/dist` at port 8766.
 | Playback / stream / lyrics | `/api/music/play`, `/stream`, `/lyrics` |
 | Track YouTube (get/set/fetch) | `/api/music/youtube`, `.../youtube/fetch` |
 | Write file tags (admin) | `POST /api/music/bands/{id}/releases/{id}/write-file-tags` (+ `pick-cover`, `cover-preview`) |
-| Series | `/api/series` |
+| Series | `/api/series` (incl. `GET /staff-roles`) |
 | Movies / Books / Games | `/api/movies`, `/api/books`, `/api/games` |
+| Universes | `/api/universes` |
 | Import | `/api/import` |
 | Folder sync | `/api/sync` |
 

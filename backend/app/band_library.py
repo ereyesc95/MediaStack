@@ -116,16 +116,64 @@ def _find_artwork_subdir(folder: Path) -> Path | None:
 
 
 def _find_cover_front_artwork(track_dir: Path, media_root: Path) -> str | None:
-    """Cover - Front / Cover - Album inside [Artwork] in track folder, else one level up."""
+    """Cover - Front / Cover - Album inside [Artwork], walking up toward the artist."""
     from app.artwork_stems import resolve_cover_front_file
 
-    for base in (track_dir, track_dir.parent):
-        artwork = _find_artwork_subdir(base)
-        if not artwork:
+    cur = track_dir
+    for _ in range(6):
+        artwork = _find_artwork_subdir(cur)
+        if artwork:
+            cover = resolve_cover_front_file(artwork)
+            if cover:
+                return _media_url(cover, media_root)
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    return None
+
+
+def resolve_track_file_path(path: str | None, media_root: Path) -> Path | None:
+    """Resolve a play/reproduction path to an on-disk audio file.
+
+    Accepts relative Media paths, legacy ``Audio/`` layouts, and absolute media
+    server URLs (``http://host:8887/Music/...``).
+    """
+    if not path:
+        return None
+    from urllib.parse import unquote, urlparse
+
+    raw = path.strip().replace("\\", "/")
+    if "://" in raw:
+        parsed = urlparse(raw)
+        raw = unquote(parsed.path or "").lstrip("/")
+    else:
+        raw = unquote(raw).lstrip("/")
+    if not raw:
+        return None
+
+    candidates = [raw]
+    parts = raw.split("/")
+    # Music/{Letter}/{Artist}/Audio/{Category}/… → artist-root categories
+    if (
+        len(parts) >= 5
+        and parts[0].casefold() == "music"
+        and parts[3].casefold() == "audio"
+    ):
+        candidates.append("/".join(parts[:3] + parts[4:]))
+
+    root = media_root.resolve()
+    for cand in candidates:
+        try:
+            file_path = (root / cand).resolve()
+        except OSError:
             continue
-        cover = resolve_cover_front_file(artwork)
-        if cover:
-            return _media_url(cover, media_root)
+        try:
+            file_path.relative_to(root)
+        except ValueError:
+            continue
+        if file_path.is_file():
+            return file_path
     return None
 
 
@@ -139,11 +187,10 @@ def title_from_track_path(path: str | None) -> str:
 def cover_url_for_track_path(path: str | None, media_root: Path) -> str | None:
     if not path:
         return None
-    root = media_root.resolve()
-    file_path = (root / path.replace("\\", "/")).resolve()
-    if not str(file_path).startswith(str(root)) or not file_path.is_file():
+    file_path = resolve_track_file_path(path, media_root)
+    if not file_path:
         return None
-    return _find_cover_front_artwork(file_path.parent, root)
+    return _find_cover_front_artwork(file_path.parent, media_root.resolve())
 
 
 def _album_title_from_folder(name: str) -> str:

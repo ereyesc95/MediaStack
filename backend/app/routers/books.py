@@ -84,26 +84,36 @@ def books_catalog(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     try:
-        from app.adult_content import filter_adult_cards
+        from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
 
         from app.books_catalog_meta import enrich_books_catalog
-        from app.franchise_identity import enrich_catalog_with_music_identity
+        from app.franchise_identity import (
+            enrich_catalog_with_artwork_home,
+            enrich_catalog_with_music_identity,
+        )
 
         catalog = build_books_catalog()
         catalog = enrich_books_catalog(db, catalog)
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )
+        catalog = enrich_catalog_with_artwork_home(catalog)
+        adult_subs = adult_subgenre_names_from_db(db)
         catalog["franchises"] = filter_adult_cards(
-            catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+            catalog.get("franchises") or [],
+            nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
         )
         catalog["films"] = filter_adult_cards(
             catalog.get("films") or catalog.get("books") or [],
             nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
         )
         if "books" in catalog:
             catalog["books"] = filter_adult_cards(
-                catalog.get("books") or [], nsfw_unlocked=nsfw_unlocked
+                catalog.get("books") or [],
+                nsfw_unlocked=nsfw_unlocked,
+                extra_adult_subgenres=adult_subs,
             )
         return catalog
     except FileNotFoundError as exc:
@@ -119,6 +129,7 @@ def books_filter_options(
     from sqlalchemy import select
 
     from app.adult_content import filter_subgenre_groups
+    from app.media_item_admin import LIBRARY_CONTENT_CATEGORIES
     from app.models import Country, Genre, Subgenre
     from app.music_filters import all_country_groups
     from app.seed_music import ensure_music_lookup_data
@@ -179,6 +190,7 @@ def books_filter_options(
         "all_country_groups": all_country_groups(db),
         "subgenre_groups": all_subgenre_groups,
         "all_subgenre_groups": all_subgenre_groups,
+        "content_categories": list(LIBRARY_CONTENT_CATEGORIES),
     }
 
 
@@ -194,15 +206,25 @@ def books_resolve(path: str = Query(..., min_length=1)):
 def books_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    return build_books_dashboard(db, user.usr_id)
+    return build_books_dashboard(db, user.usr_id, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.get("/franchises/{work_id}")
-def books_franchise(work_id: str, db: Session = Depends(get_db)):
+def books_franchise(
+    work_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     detail = build_work_detail(work_id)
     if not detail:
         raise HTTPException(404, "Books franchise not found")
+    from app.books_catalog_meta import apply_nsfw_filter_to_books_payload
+
+    detail = apply_nsfw_filter_to_books_payload(
+        db, detail, nsfw_unlocked=nsfw_unlocked
+    )
     uni = universe_for_franchise(db, "books", work_id)
     return {**detail, "universe": uni}
 
@@ -212,11 +234,14 @@ def books_franchise_overview(
     work_id: str,
     db: Session = Depends(get_db),
     orientation: str = Query("portrait"),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     ov = build_work_overview(db, work_id, orientation=orientation)
     if not ov:
         raise HTTPException(404, "Books franchise not found")
-    return ov
+    from app.books_catalog_meta import apply_nsfw_filter_to_books_payload
+
+    return apply_nsfw_filter_to_books_payload(db, ov, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.get("/franchises/{work_id}/media/{kind}")
@@ -267,10 +292,28 @@ def book_overview(
     book_id: str,
     db: Session = Depends(get_db),
     orientation: str = Query("portrait"),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    from app.adult_content import card_has_adult_genres
+    from app.books_catalog_meta import apply_nsfw_filter_to_books_payload, enrich_books_catalog
+
     ov = build_book_overview(db, book_id, orientation=orientation)
     if not ov:
         raise HTTPException(404, "Book not found")
+    # Gate the leaf itself via genre enrichment.
+    tmp = {"books": [{"id": book_id}], "franchises": []}
+    enrich_books_catalog(db, tmp)
+    leaf = (tmp.get("books") or [{}])[0]
+    if not nsfw_unlocked and card_has_adult_genres(
+        genre_names=leaf.get("genre_names")
+        if isinstance(leaf.get("genre_names"), list)
+        else None,
+        parent_genre_names=leaf.get("parent_genre_names")
+        if isinstance(leaf.get("parent_genre_names"), list)
+        else None,
+    ):
+        raise HTTPException(404, "Book not found")
+    ov = apply_nsfw_filter_to_books_payload(db, ov, nsfw_unlocked=nsfw_unlocked)
     return ov
 
 
@@ -332,6 +375,7 @@ def books_book_patch_about(
             genres=body.get("genres"),
             activity_start=body.get("activity_start"),
             activity_end=body.get("activity_end"),
+            content_category=body.get("content_category"),
         )
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc

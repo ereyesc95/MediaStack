@@ -1,3 +1,5 @@
+import { dec, enc, isNumericId } from "./routeSlug";
+
 export type UniverseSection =
   | "overview"
   | "series"
@@ -8,7 +10,9 @@ export type UniverseSection =
 export type UniverseOverviewTab = "about";
 
 export type UniverseRoute = {
-  universeId: number;
+  universeId?: number;
+  universeSlug?: string;
+  universeName?: string;
   section: UniverseSection;
   overviewTab?: UniverseOverviewTab;
 };
@@ -25,20 +29,13 @@ const OVERVIEW_TABS: UniverseOverviewTab[] = ["about"];
 
 export const UNIVERSE_PATH_PREFIX = "/universe";
 
-function enc(seg: string): string {
-  return encodeURIComponent(seg);
-}
-
-function dec(seg: string): string {
-  try {
-    return decodeURIComponent(seg);
-  } catch {
-    return seg;
-  }
-}
-
 export function universePath(route: UniverseRoute): string {
-  let path = `${UNIVERSE_PATH_PREFIX}/${enc(String(route.universeId))}`;
+  const slug =
+    route.universeName?.trim() ||
+    route.universeSlug?.trim() ||
+    (route.universeId != null ? String(route.universeId) : "universe");
+
+  let path = `${UNIVERSE_PATH_PREFIX}/${enc(slug)}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
     const tab =
@@ -55,9 +52,8 @@ export function universePath(route: UniverseRoute): string {
 export function parseUniversePath(pathname: string): UniverseRoute | null {
   const m = pathname.match(/^\/universe\/([^/]+)(?:\/(.*))?\/?$/);
   if (!m) return null;
+
   const idRaw = dec(m[1]);
-  if (!/^\d+$/.test(idRaw)) return null;
-  const universeId = Number(idRaw);
   const parts = (m[2] || "").split("/").filter(Boolean);
 
   let section: UniverseSection = "overview";
@@ -72,7 +68,11 @@ export function parseUniversePath(pathname: string): UniverseRoute | null {
     section = parts[0] as UniverseSection;
   }
 
-  return { universeId, section, overviewTab };
+  if (isNumericId(idRaw)) {
+    return { universeId: Number(idRaw), section, overviewTab };
+  }
+
+  return { universeSlug: idRaw, section, overviewTab };
 }
 
 export function pushUniverseRoute(route: UniverseRoute, replace = false) {

@@ -138,6 +138,16 @@ export default function SeriesAboutEditModal({
       name: g.name,
     }))
   );
+  const [contentCategory, setContentCategory] = useState(
+    () =>
+      String(
+        (data as SeriesOverview & { content_category?: string | null })
+          .content_category ||
+          data.type ||
+          "Book"
+      )
+  );
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [activityRows, setActivityRows] = useState<ActivityRow[]>(() =>
     periodsToRows(scoped?.activity_periods ?? data.activity_periods)
   );
@@ -241,17 +251,22 @@ export default function SeriesAboutEditModal({
         );
         if (fromGroups.length) {
           setGenreDropdownOptions(fromGroups);
-          return;
+        } else {
+          // Flat genres fallback (books filters always include this)
+          const flat = (opts.genres || [])
+            .map((g) => ({
+              value: String(g.id ?? g.name),
+              label: g.name ?? "",
+              group: undefined as string | undefined,
+            }))
+            .filter((o) => o.label);
+          setGenreDropdownOptions(flat);
         }
-        // Flat genres fallback (books filters always include this)
-        const flat = (opts.genres || [])
-          .map((g) => ({
-            value: String(g.id ?? g.name),
-            label: g.name ?? "",
-            group: undefined as string | undefined,
-          }))
-          .filter((o) => o.label);
-        setGenreDropdownOptions(flat);
+        const cats = (opts as { content_categories?: string[] })
+          .content_categories;
+        if (Array.isArray(cats) && cats.length) {
+          setCategoryOptions(cats.filter(Boolean));
+        }
       })
       .catch(() => {});
   }, [isBook]);
@@ -364,6 +379,7 @@ export default function SeriesAboutEditModal({
           activity_end: ends,
           languages: selectedLangs,
           genres: genrePayload,
+          content_category: contentCategory,
         });
       } else if (isFilm) {
         if (!aboutFilmId) throw new Error("Missing film id");
@@ -418,6 +434,25 @@ export default function SeriesAboutEditModal({
         </div>
         {error && <p className="error">{error}</p>}
         <div className="artist-admin-form">
+          {isBook ? (
+            <label>
+              Type
+              <select
+                value={contentCategory}
+                onChange={(e) => setContentCategory(e.target.value)}
+                disabled={saving}
+              >
+                {(categoryOptions.length
+                  ? categoryOptions
+                  : [contentCategory || "Book"]
+                ).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             Description / bio
             <textarea
@@ -658,6 +693,8 @@ export default function SeriesAboutEditModal({
         <AddCastModal
           franchiseId={franchiseId}
           bucket="characters"
+          castApi={isBook ? "books" : "series"}
+          filmId={isBook ? aboutFilmId : undefined}
           languageOptions={languageCatalog.map((o) => ({
             code: o.code,
             label: o.label,

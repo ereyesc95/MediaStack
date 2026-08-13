@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.config import settings
 from app.database import get_db
-from app.deps import get_current_user, get_optional_user, require_admin
+from app.deps import get_current_user, get_nsfw_unlocked, get_optional_user, require_admin
 from app.profiles import is_admin_role
 from app.models import (
     Artist,
@@ -128,6 +128,9 @@ class PatchMediaItemBody(BaseModel):
     author: str | None = None
     publisher: str | None = None
     genres: list[str] | None = None
+    content_category: str | None = None
+    country_iso: str | None = None
+    languages: list[str] | None = None
 
 
 class PatchBandAboutBody(BaseModel):
@@ -208,11 +211,22 @@ def music_dashboard(
 
 
 @router.get("/filters/options")
-def music_filter_options(db: Session = Depends(get_db)):
+def music_filter_options(
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    from app.adult_content import filter_subgenre_groups
     from app.seed_music import ensure_music_lookup_data
 
     ensure_music_lookup_data(db)
     opts = filter_options(db)
+    opts["subgenre_groups"] = filter_subgenre_groups(
+        opts.get("subgenre_groups") or [], nsfw_unlocked=nsfw_unlocked
+    )
+    if "all_subgenre_groups" in opts:
+        opts["all_subgenre_groups"] = filter_subgenre_groups(
+            opts.get("all_subgenre_groups") or [], nsfw_unlocked=nsfw_unlocked
+        )
     return opts
 
 
@@ -952,10 +966,20 @@ def band_media_item(
 def media_genres_for_kind(
     kind: str = Query(..., pattern="^(video|library)$"),
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    from app.media_item_admin import list_genres_for_kind
+    from app.adult_content import filter_genre_entries
+    from app.media_item_admin import LIBRARY_CONTENT_CATEGORIES, list_genres_for_kind
 
-    return {"kind": kind, "genres": list_genres_for_kind(db, kind)}
+    out: dict = {
+        "kind": kind,
+        "genres": filter_genre_entries(
+            list_genres_for_kind(db, kind), nsfw_unlocked=nsfw_unlocked
+        ),
+    }
+    if kind == "library":
+        out["content_categories"] = list(LIBRARY_CONTENT_CATEGORIES)
+    return out
 
 
 @router.get("/media-publishers")
@@ -1034,6 +1058,9 @@ def patch_band_media_item(
         author=body.author,
         publisher=body.publisher,
         genres=body.genres,
+        content_category=body.content_category,
+        country_iso=body.country_iso,
+        languages=body.languages,
     )
     if not data:
         if body.genres is not None:

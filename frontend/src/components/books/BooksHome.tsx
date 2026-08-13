@@ -190,6 +190,7 @@ function DashPaneLabel({
 
 export type BooksDashboardBook = SeriesDashboard["top_series"][number] & {
   work_id?: string | null;
+  title?: string | null;
 };
 
 type Props = {
@@ -309,6 +310,7 @@ export default function BooksHome({
         <div className="dash-scroll dash-scroll--icons">
           {topBooks.map((s) => {
             const cover = pickCover(s);
+            const label = (s.title || s.name || "").trim();
             return (
               <button
                 key={s.id}
@@ -320,8 +322,8 @@ export default function BooksHome({
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
                 />
-                <span className="dash-item-label dash-icon-item-name" title={s.name}>
-                  {s.name}
+                <span className="dash-item-label dash-icon-item-name" title={label}>
+                  {label}
                 </span>
               </button>
             );

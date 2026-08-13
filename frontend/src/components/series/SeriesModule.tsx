@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchSeriesCatalog,
   fetchSeriesDashboard,
@@ -8,9 +8,16 @@ import {
   resolveMoviesPath,
 } from "../../api";
 import {
+  clearArtistEntryReferrer,
   defaultSectionForSource,
   saveArtistEntryReferrer,
 } from "../../artistEntry";
+import {
+  artworkHomeModule,
+  isArtworkHomeElsewhere,
+  preferredSectionForSource,
+  saveFranchiseHomeReferrer,
+} from "../../franchiseHome";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
@@ -176,6 +183,8 @@ export default function SeriesModule({
   const [writer, setWriter] = useState("");
   /** Where the user entered the franchise/subseries from. */
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
+  /** True when a leaf/show was opened directly from Home (Best Series), not via franchise hub. */
+  const directLeafFromHomeRef = useRef(false);
 
   const backgroundIso = useMemo(
     () => catalogBackgroundIso(filterMode, countryId, filterOptions),
@@ -269,7 +278,10 @@ export default function SeriesModule({
     });
     setFilterMode(pending.mode);
     setSearch("");
-    setLetter(pending.mode === "name" ? "A" : "");
+    setLetter(
+      pending.letter ||
+        (pending.mode === "name" ? "A" : "")
+    );
     setContinentId("");
     setCountryId(pending.countryId ?? "");
     setStartDecade("");
@@ -356,7 +368,10 @@ export default function SeriesModule({
     setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
     setTab("catalog");
-    const card = franchises.find((f) => f.id === id);
+    const card =
+      franchises.find((f) => f.id === id) ||
+      dashboard?.top_franchises?.find((f) => f.id === id) ||
+      null;
     const standaloneId =
       nextSubseriesId == null &&
       card?.is_standalone &&
@@ -369,6 +384,78 @@ export default function SeriesModule({
       seasonId: undefined,
       section: "overview",
     });
+  };
+
+  const resolveFranchiseCard = (id: string) =>
+    franchises.find((f) => f.id === id) ||
+    dashboard?.top_franchises?.find((f) => f.id === id) ||
+    null;
+
+  const franchiseShellHint = (
+    card: { name: string; cover_url?: string | null; logo_url?: string | null; icon_url?: string | null } | null
+  ): SeriesFranchiseShell | undefined =>
+    card
+      ? {
+          name: card.name,
+          cover_url: card.cover_url ?? null,
+          logo_url: card.logo_url ?? null,
+          icon_url: card.icon_url ?? null,
+        }
+      : undefined;
+
+  const tryOpenMusicArtistFromFranchise = (
+    id: string,
+    fromTab: "home" | "catalog" = "catalog"
+  ): boolean => {
+    const card = resolveFranchiseCard(id);
+    if (
+      !card?.is_music_franchise ||
+      card.music_band_id == null ||
+      !onOpenArtist
+    ) {
+      return false;
+    }
+    const mediaSection = defaultSectionForSource("series");
+    saveArtistEntryReferrer({
+      source: "series",
+      section: mediaSection,
+      fromTab,
+      catalogLetter: fromTab === "catalog" ? letter || "A" : undefined,
+      franchiseId: id,
+      franchiseName: card.name,
+      backLabel: "SERIES",
+    });
+    onOpenArtist(card.music_band_id, "overview");
+    return true;
+  };
+
+  const tryOpenArtworkHomeFranchise = (
+    id: string,
+    fromTab: "home" | "catalog" = "catalog"
+  ): boolean => {
+    const card = resolveFranchiseCard(id);
+    if (!card || !isArtworkHomeElsewhere(card, "series")) return false;
+    const home = artworkHomeModule(card);
+    if (!home) return false;
+    saveFranchiseHomeReferrer({
+      source: "series",
+      home,
+      fromTab,
+      catalogLetter: fromTab === "catalog" ? letter || "A" : undefined,
+      franchiseId: id,
+      franchiseName: card.name,
+      preferredSection: preferredSectionForSource("series"),
+      backLabel: "SERIES",
+    });
+    if (home === "movies") {
+      onOpenMoviesFranchise?.(id);
+      return true;
+    }
+    if (home === "books") {
+      onOpenBooksFranchise?.(id);
+      return true;
+    }
+    return false;
   };
 
   const backToHome = () => {
@@ -436,6 +523,14 @@ export default function SeriesModule({
 
   const backFromSubseries = () => {
     const ref = getSeriesEntryReferrer();
+    if (ref?.kind === "music" && ref.bandId != null && onOpenArtist) {
+      clearSeriesEntryReferrer();
+      onOpenArtist(
+        ref.bandId,
+        (ref.artistSection as import("../../types").ArtistSection) || "series"
+      );
+      return;
+    }
     if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
       clearSeriesEntryReferrer();
       onOpenMoviesFranchise(ref.franchiseId, ref.filmId, ref.section || "series");
@@ -460,8 +555,20 @@ export default function SeriesModule({
       );
       return;
     }
+    // Opened a show/leaf directly from Home (Best Series) → return to Home.
+    if (directLeafFromHomeRef.current || from === "home") {
+      // Nested drill from franchise hub after arriving from home: only the
+      // direct-leaf flag should force Home; franchise→show keeps hub back.
+      if (directLeafFromHomeRef.current) {
+        directLeafFromHomeRef.current = false;
+        backToHome();
+        return;
+      }
+    }
     // Synthetics still have one subseries — use is_standalone, not empty subseries list.
-    const card = franchises.find((f) => f.id === franchiseId);
+    const card =
+      franchises.find((f) => f.id === franchiseId) ||
+      dashboard?.top_franchises?.find((f) => f.id === franchiseId);
     const isStandaloneLeaf = Boolean(card?.is_standalone);
     if (isStandaloneLeaf) {
       if (from === "home") backToHome();
@@ -585,15 +692,19 @@ export default function SeriesModule({
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
               : (() => {
                   const ref = getSeriesEntryReferrer();
+                  if (ref?.kind === "music" && (ref.title || ref.bandId)) {
+                    return (ref.title || "ARTIST").toLocaleUpperCase();
+                  }
                   if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                     return (ref.title || "BOOKS").toLocaleUpperCase();
                   }
                   if (ref?.kind === "movies" && (ref.title || ref.franchiseId)) {
                     return (ref.title || "MOVIES").toLocaleUpperCase();
                   }
-                  return Boolean(
-                    franchises.find((f) => f.id === franchiseId)?.is_standalone
-                  )
+                  return directLeafFromHomeRef.current ||
+                    Boolean(
+                      franchises.find((f) => f.id === franchiseId)?.is_standalone
+                    )
                     ? (getMediaEntrySource() || entrySource) === "home"
                       ? "HOME"
                       : "CATALOG"
@@ -658,6 +769,10 @@ export default function SeriesModule({
           onNavigate={(patch) => {
             const nextSub =
               "subseriesId" in patch ? patch.subseriesId : subseriesId;
+            if ("subseriesId" in patch && patch.subseriesId) {
+              // Drilling from franchise hub into a show — back should return to hub.
+              directLeafFromHomeRef.current = false;
+            }
             const nextUniverse =
               "universeId" in patch ? patch.universeId : universeId;
             onNavigate({
@@ -728,20 +843,10 @@ export default function SeriesModule({
             ) : null
           }
           onOpenFranchise={(id) => {
-            const card = franchises.find((f) => f.id === id);
-            openFranchise(
-              id,
-              undefined,
-              card
-                ? {
-                    name: card.name,
-                    cover_url: card.cover_url,
-                    logo_url: card.logo_url,
-                    icon_url: card.icon_url,
-                  }
-                : undefined,
-              "catalog"
-            );
+            if (tryOpenMusicArtistFromFranchise(id, "catalog")) return;
+            if (tryOpenArtworkHomeFranchise(id, "catalog")) return;
+            const card = resolveFranchiseCard(id);
+            openFranchise(id, undefined, franchiseShellHint(card), "catalog");
           }}
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
@@ -778,7 +883,10 @@ export default function SeriesModule({
               return next;
             });
           }}
-          onNavigate={(patch) =>
+          onNavigate={(patch) => {
+            if ("subseriesId" in patch && patch.subseriesId) {
+              directLeafFromHomeRef.current = false;
+            }
             onNavigate({
               franchiseId:
                 "franchiseId" in patch && patch.franchiseId
@@ -791,8 +899,8 @@ export default function SeriesModule({
               overviewTab: patch.overviewTab ?? overviewTab,
               universeId:
                 "universeId" in patch ? patch.universeId : universeId,
-            })
-          }
+            });
+          }}
         />
         {addUniverseOpen && isAdmin ? (
           <AddToUniverseModal
@@ -918,7 +1026,7 @@ export default function SeriesModule({
                       <IconMediaSeries className="menu-item-icon" />
                     )}
                     {catalogScope === "franchises"
-                      ? "Groups"
+                      ? "Franchises"
                       : catalogScope === "universes"
                         ? "Universes"
                         : "Shows"}
@@ -939,34 +1047,20 @@ export default function SeriesModule({
             loading={dashLoading}
             universes={universes}
             onOpenFranchise={(id) => {
-              const card = franchises.find((f) => f.id === id);
-              openFranchise(
-                id,
-                undefined,
-                card
-                  ? {
-                      name: card.name,
-                      cover_url: card.cover_url,
-                      logo_url: card.logo_url,
-                      icon_url: card.icon_url,
-                    }
-                  : undefined,
-                "home"
-              );
+              if (tryOpenMusicArtistFromFranchise(id, "home")) return;
+              if (tryOpenArtworkHomeFranchise(id, "home")) return;
+              directLeafFromHomeRef.current = false;
+              const card = resolveFranchiseCard(id);
+              openFranchise(id, undefined, franchiseShellHint(card), "home");
             }}
             onOpenShow={(franchiseId, subseriesId) => {
-              const card = franchises.find((f) => f.id === franchiseId);
+              // Best Series / show leaves open in Series — never hijack to music artist.
+              directLeafFromHomeRef.current = true;
+              const card = resolveFranchiseCard(franchiseId);
               openFranchise(
                 franchiseId,
                 subseriesId || undefined,
-                card
-                  ? {
-                      name: card.name,
-                      cover_url: card.cover_url,
-                      logo_url: card.logo_url,
-                      icon_url: card.icon_url,
-                    }
-                  : undefined,
+                franchiseShellHint(card),
                 "home"
               );
             }}
@@ -1041,23 +1135,8 @@ export default function SeriesModule({
           onWriterChange={setWriter}
           onOpenUniverse={(id) => openUniverseLanding(id, "catalog")}
           onOpen={(id, nextSubseriesId, shell) => {
-            const card = franchises.find((f) => f.id === id);
-            if (
-              card?.is_music_franchise &&
-              card.music_band_id != null &&
-              onOpenArtist
-            ) {
-              const section = defaultSectionForSource("series");
-              saveArtistEntryReferrer({
-                source: "series",
-                section,
-                franchiseId: id,
-                franchiseName: card.name,
-                backLabel: "SERIES",
-              });
-              onOpenArtist(card.music_band_id, section);
-              return;
-            }
+            if (tryOpenMusicArtistFromFranchise(id, "catalog")) return;
+            if (tryOpenArtworkHomeFranchise(id, "catalog")) return;
             openFranchise(id, nextSubseriesId, shell);
           }}
         />

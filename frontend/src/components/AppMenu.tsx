@@ -651,7 +651,7 @@ export default function AppMenu({
               }}
             >
               <IconEditRelease className="menu-item-icon" />
-              Edit Release
+              {editDataLabel || "Edit Release"}
             </button>
           )}
           {showTrackDataMenu && (

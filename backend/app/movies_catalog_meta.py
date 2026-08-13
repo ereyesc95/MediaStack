@@ -125,6 +125,8 @@ def extract_work_filter_fields(
     by_name: dict[str, dict],
     iso_to_country: dict[str, Country],
     parents_by_name: dict[str, int],
+    *,
+    include_nested_film_genres: bool = True,
 ) -> dict[str, Any]:
     meta = _load_meta(row)
     genre_ids: list[int] = []
@@ -137,7 +139,10 @@ def extract_work_filter_fields(
     seen_p: set[str] = set()
     seen_w: set[str] = set()
 
-    for blob in _iter_meta_blobs(meta):
+    all_blobs = _iter_meta_blobs(meta)
+    genre_blobs = all_blobs if include_nested_film_genres else [meta]
+
+    for blob in genre_blobs:
         for g in blob.get("genres") or []:
             if not isinstance(g, dict):
                 continue
@@ -156,6 +161,8 @@ def extract_work_filter_fields(
             parent = (resolved.get("genre_name") or "").strip()
             if parent:
                 parent_names_set.add(parent)
+
+    for blob in all_blobs:
         for iso in blob.get("origin_countries") or []:
             code = str(iso).strip().lower()[:2]
             if code and code not in isos:
@@ -232,7 +239,11 @@ def enrich_movies_catalog(db: Session, catalog: dict) -> dict:
             card.setdefault("writers", [])
             continue
         fields = extract_work_filter_fields(
-            row, by_name, iso_to_country, parents_by_name
+            row,
+            by_name,
+            iso_to_country,
+            parents_by_name,
+            include_nested_film_genres=False,
         )
         card.update(fields)
 
@@ -246,7 +257,13 @@ def enrich_movies_catalog(db: Session, catalog: dict) -> dict:
     for wid, group in films_by_work.items():
         row = works.get(wid)
         fields = (
-            extract_work_filter_fields(row, by_name, iso_to_country, parents_by_name)
+            extract_work_filter_fields(
+                row,
+                by_name,
+                iso_to_country,
+                parents_by_name,
+                include_nested_film_genres=False,
+            )
             if row
             else {
                 "country_iso": None,
@@ -261,16 +278,48 @@ def enrich_movies_catalog(db: Session, catalog: dict) -> dict:
         meta = _load_meta(row) if row else {}
         film_map = meta.get("films") if isinstance(meta.get("films"), dict) else {}
         for film in group:
-            film.update(fields)
+            # Start from work-level fields, then prefer per-film genres/credits.
+            film.update(dict(fields))
             leaf = str(film.get("id") or "")
             film_meta = film_map.get(leaf) if isinstance(film_map.get(leaf), dict) else None
-            if isinstance(film_meta, dict):
-                people = _people_list(film_meta, "directors", "writers")
-                pubs = _people_list(film_meta, "publishers")
-                if people:
-                    film["writers"] = people
-                if pubs:
-                    film["publishers"] = pubs
+            if not isinstance(film_meta, dict):
+                continue
+            people = _people_list(film_meta, "directors", "writers")
+            pubs = _people_list(film_meta, "publishers")
+            if people:
+                film["writers"] = people
+            if pubs:
+                film["publishers"] = pubs
+            raw_genres = film_meta.get("genres")
+            if not isinstance(raw_genres, list) or not raw_genres:
+                continue
+            genre_ids: list[int] = []
+            genre_names: list[str] = []
+            parent_names_set: set[str] = set()
+            seen: set[int] = set()
+            for g in raw_genres:
+                if isinstance(g, dict):
+                    gname = (g.get("name") or "").strip()
+                else:
+                    gname = str(g).strip()
+                if not gname:
+                    continue
+                resolved = resolve_movie_subgenre(gname, by_name, parents_by_name)
+                if not resolved:
+                    continue
+                sid = int(resolved["id"])
+                if sid in seen:
+                    continue
+                seen.add(sid)
+                genre_ids.append(sid)
+                genre_names.append(resolved["name"])
+                parent = (resolved.get("genre_name") or "").strip()
+                if parent:
+                    parent_names_set.add(parent)
+            if genre_names:
+                film["genre_ids"] = genre_ids
+                film["genre_names"] = genre_names
+                film["parent_genre_names"] = sorted(parent_names_set)
 
     return catalog
 

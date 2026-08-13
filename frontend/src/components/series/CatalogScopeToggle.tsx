@@ -18,7 +18,7 @@ const ORDER_WITH_UNI: SeriesCatalogScope[] = [
   "universes",
 ];
 
-/** Single control that cycles Groups → Shows/Films → Universes (like Cover/Banner). */
+/** Single control that cycles Franchises → Shows/Films → Universes (like Cover/Banner). */
 export default function CatalogScopeToggle({
   value,
   onChange,
@@ -33,14 +33,14 @@ export default function CatalogScopeToggle({
 
   const label =
     current === "franchises"
-      ? "GROUPS"
+      ? "FRANCHISES"
       : current === "universes"
         ? "UNIVERSES"
         : itemsLabel.toLocaleUpperCase();
 
   const title =
     next === "franchises"
-      ? "Switch to Groups"
+      ? "Switch to Franchises"
       : next === "universes"
         ? "Switch to Universes"
         : `Switch to ${itemsLabel}`;

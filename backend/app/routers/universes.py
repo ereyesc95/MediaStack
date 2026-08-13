@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.deps import require_admin
+from app.deps import get_nsfw_unlocked, require_admin
 from app.database import get_db
 from app.universes import (
     ART_KINDS,
@@ -47,11 +47,16 @@ class OverviewBody(BaseModel):
 def api_list_universes(
     module: str | None = Query(None),
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     prefer: str | None = None
-    if module in ("movies", "series"):
+    if module in ("movies", "series", "books"):
         prefer = module
-    return {"universes": list_universes(db, prefer)}  # type: ignore[arg-type]
+    return {
+        "universes": list_universes(
+            db, prefer, nsfw_unlocked=nsfw_unlocked
+        )
+    }  # type: ignore[arg-type]
 
 
 @router.post("")
@@ -145,8 +150,12 @@ def api_universe_cards(universe_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{universe_id}/hub")
-def api_universe_hub(universe_id: int, db: Session = Depends(get_db)):
-    hub = build_universe_hub(db, universe_id)
+def api_universe_hub(
+    universe_id: int,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    hub = build_universe_hub(db, universe_id, nsfw_unlocked=nsfw_unlocked)
     if not hub:
         raise HTTPException(404, "Universe not found")
     return hub

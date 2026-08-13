@@ -813,6 +813,7 @@ def build_release_overview(
         "release_code": None,
         "reviews": [],
         "cover_url": urls.get("cover_front_url") or card.get("cover_url"),
+        "cover_back_url": urls.get("cover_back_url"),
         "cover_animation_url": urls.get("cover_animation_url"),
         "canvas_url": urls.get("canvas_url"),
         "icon_url": urls.get("icon_url"),

@@ -532,9 +532,11 @@ export async function fetchMediaItemGallery(
 }
 
 export async function fetchMediaGenres(kind: "video" | "library") {
-  return request<{ kind: string; genres: { id: number; name: string }[] }>(
-    `${API}/music/media-genres?kind=${encodeURIComponent(kind)}`
-  );
+  return request<{
+    kind: string;
+    genres: { id: number; name: string }[];
+    content_categories?: string[];
+  }>(`${API}/music/media-genres?kind=${encodeURIComponent(kind)}`);
 }
 
 export async function fetchMediaPublishers(kind: "video" | "library") {
@@ -565,6 +567,9 @@ export async function patchMediaItemOverview(
     author?: string | null;
     publisher?: string | null;
     genres?: string[] | null;
+    content_category?: string | null;
+    country_iso?: string | null;
+    languages?: string[] | null;
   }
 ) {
   return request<import("./types").MediaItemOverview>(
@@ -575,6 +580,12 @@ export async function patchMediaItemOverview(
       body: JSON.stringify(body),
     }
   );
+}
+
+export async function fetchStaffRoles() {
+  return request<{
+    roles: { id: number; name: string; type: string }[];
+  }>(`${API}/series/staff-roles`);
 }
 
 export async function saveQuizScore(
@@ -1675,6 +1686,12 @@ export async function fetchBooksFranchiseOverview(
   );
 }
 
+export async function fetchBooksFranchise(workId: string) {
+  return request<import("./types").MoviesWorkDetail>(
+    `${API}/books/franchises/${encodeURIComponent(workId)}`
+  );
+}
+
 export async function fetchBooksFranchiseSeries(workId: string) {
   return request<{ items: Array<Record<string, unknown>> }>(
     `${API}/books/franchises/${encodeURIComponent(workId)}/media/series`
@@ -1898,6 +1915,7 @@ export async function patchBooksBookAbout(
     publishers?: string;
     languages?: string[];
     genres?: { id?: number | string | null; name: string }[];
+    content_category?: string | null;
   }
 ) {
   return request<{ ok: boolean; book_id?: string }>(

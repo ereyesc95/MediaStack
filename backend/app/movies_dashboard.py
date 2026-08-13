@@ -9,6 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.franchise_identity import (
+    enrich_catalog_with_artwork_home,
+    enrich_catalog_with_music_identity,
+)
 from app.franchise_index import normalize_franchise_slug
 from app.models import Country, Reproduction
 from app.movies_catalog_meta import movie_vibe_rows
@@ -41,13 +45,32 @@ def _work_from_path(path: str | None) -> tuple[str | None, str | None]:
     return normalize_franchise_slug(name) or name.casefold(), name
 
 
-def build_movies_dashboard(db: Session, user_id: int) -> dict:
+def build_movies_dashboard(
+    db: Session, user_id: int, *, nsfw_unlocked: bool = False
+) -> dict:
     media_root = Path(settings.media_root) if settings.media_root else None
     catalog = (
         build_movies_catalog(media_root) if media_root else {"franchises": [], "films": []}
     )
-    franchises = catalog.get("franchises") or []
-    films = catalog.get("films") or []
+    from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
+    from app.movies_catalog_meta import enrich_movies_catalog
+
+    catalog = enrich_movies_catalog(db, catalog)
+    catalog = enrich_catalog_with_music_identity(
+        db, catalog, orientation="portrait", media_root=media_root
+    )
+    catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
+    adult_subs = adult_subgenre_names_from_db(db)
+    franchises = filter_adult_cards(
+        catalog.get("franchises") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
+    )
+    films = filter_adult_cards(
+        catalog.get("films") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
+    )
     films_by_path = {
         (f.get("folder_path") or "").casefold().rstrip("/"): f
         for f in films
@@ -104,6 +127,9 @@ def build_movies_dashboard(db: Session, user_id: int) -> dict:
                 "logo_url": card.get("logo_url"),
                 "icon_url": card.get("icon_url"),
                 "show_name_on_hover": not (card.get("logo_url") or card.get("icon_url")),
+                "is_music_franchise": bool(card.get("is_music_franchise")),
+                "music_band_id": card.get("music_band_id"),
+                "artwork_home_module": card.get("artwork_home_module"),
             }
         )
 
@@ -130,6 +156,9 @@ def build_movies_dashboard(db: Session, user_id: int) -> dict:
                     "logo_url": f.get("logo_url"),
                     "icon_url": f.get("icon_url"),
                     "show_name_on_hover": not (f.get("logo_url") or f.get("icon_url")),
+                    "is_music_franchise": bool(f.get("is_music_franchise")),
+                    "music_band_id": f.get("music_band_id"),
+                    "artwork_home_module": f.get("artwork_home_module"),
                 }
             )
             seen.add(wid)

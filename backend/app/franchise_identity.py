@@ -196,6 +196,30 @@ def enrich_catalog_with_music_identity(
     return catalog
 
 
+def enrich_catalog_with_artwork_home(
+    catalog: dict,
+    *,
+    media_root: Path | None = None,
+) -> dict:
+    """Stamp ``artwork_home_module`` so UIs can route to the franchise's art home."""
+    root = _media_root(media_root)
+    franchises = catalog.get("franchises") or []
+    for card in franchises:
+        if not isinstance(card, dict):
+            continue
+        if card.get("is_music_franchise"):
+            # Music artist identity wins over series/movies/books artwork home.
+            continue
+        name = (card.get("name") or "").strip()
+        if not name:
+            continue
+        home = find_artwork_home(name, root)
+        if home:
+            card["artwork_home_module"] = home[0]
+    catalog["franchises"] = franchises
+    return catalog
+
+
 def apply_shared_artwork_to_card(
     card: dict,
     local_folder: Path,
@@ -203,7 +227,11 @@ def apply_shared_artwork_to_card(
     *,
     franchise_name: str | None = None,
 ) -> dict:
-    """If local franchise art is missing, pull Cover/Logo from the artwork home."""
+    """Prefer Cover/Logo from the franchise artwork home across modules.
+
+    When ``[Artwork]`` lives under Series (or another module), Movies/Books
+    franchise cards reuse that home art even if they have local covers.
+    """
     name = franchise_name or card.get("name") or local_folder.name
     if card.get("is_music_franchise"):
         return card
@@ -227,23 +255,25 @@ def apply_shared_artwork_to_card(
     )
     from app.series_paths import find_badge_file, find_logo_file
 
-    if not card.get("cover_url") and not card.get("portrait_url"):
-        cover = _series_folder_cover(home_dir, media_root)
-        if cover:
-            card["cover_url"] = cover
-            card["portrait_url"] = cover
-    if not card.get("landscape_url"):
-        card["landscape_url"] = _series_folder_landscape(home_dir, media_root)
-    if not card.get("banner_url"):
-        card["banner_url"] = _series_folder_banner(home_dir, media_root)
-    if not card.get("logo_url") or not card.get("icon_url"):
-        logo, icon = find_logo_file(home_dir, media_root)
-        if logo and not card.get("logo_url"):
-            card["logo_url"] = logo
-        if icon and not card.get("icon_url"):
-            card["icon_url"] = icon
-    if not card.get("badge_url"):
-        card["badge_url"] = find_badge_file(home_dir, media_root)
+    cover = _series_folder_cover(home_dir, media_root)
+    if cover:
+        card["cover_url"] = cover
+        card["portrait_url"] = cover
+        card["photo_url"] = cover
+    landscape = _series_folder_landscape(home_dir, media_root)
+    if landscape:
+        card["landscape_url"] = landscape
+    banner = _series_folder_banner(home_dir, media_root)
+    if banner:
+        card["banner_url"] = banner
+    logo, icon = find_logo_file(home_dir, media_root)
+    if logo:
+        card["logo_url"] = logo
+    if icon:
+        card["icon_url"] = icon
+    badge = find_badge_file(home_dir, media_root)
+    if badge:
+        card["badge_url"] = badge
     card["artwork_home_module"] = module
     return card
 

@@ -323,13 +323,28 @@ def _serialize_universe(
 
 
 def list_universes(
-    db: Session, module: ModuleKind | None = None
+    db: Session,
+    module: ModuleKind | None = None,
+    *,
+    nsfw_unlocked: bool = True,
 ) -> list[dict]:
+    from app.adult_content import series_franchise_is_sfw, sfw_series_franchise_ids
+
+    sfw_ids = None if nsfw_unlocked else sfw_series_franchise_ids(db)
     rows = db.scalars(select(Universe).order_by(Universe.uni_name)).all()
     out: list[dict] = []
     for u in rows:
         members = _member_rows(db, u.uni_id)
-        has_series = any(m.ume_module == "series" for m in members)
+        series_members = [m for m in members if m.ume_module == "series"]
+        if not nsfw_unlocked and sfw_ids is not None:
+            series_members = [
+                m
+                for m in series_members
+                if series_franchise_is_sfw(
+                    db, m.ume_slug or "", sfw_ids=sfw_ids
+                )
+            ]
+        has_series = bool(series_members)
         has_movies = any(m.ume_module == "movies" for m in members)
         has_books = any(m.ume_module == "books" for m in members)
         if module == "series" and not has_series:
@@ -1520,13 +1535,53 @@ def _hub_media_flags(cards: list[dict]) -> dict:
     }
 
 
-def build_universe_hub(db: Session, universe_id: int) -> dict | None:
+def build_universe_hub(
+    db: Session, universe_id: int, *, nsfw_unlocked: bool = True
+) -> dict | None:
     """Franchise-like hub payload: universe record + leaf cards by module (date sort)."""
     u = db.get(Universe, universe_id)
     if not u:
         return None
     data = _serialize_universe(db, u, expand_cover=True)
     cards = expand_universe_cards(db, universe_id)
+    if not nsfw_unlocked:
+        from app.adult_content import (
+            movie_work_is_sfw,
+            series_franchise_is_sfw,
+            sfw_movie_work_ids,
+            sfw_series_franchise_ids,
+        )
+
+        sfw_series = sfw_series_franchise_ids(db)
+        sfw_movies = sfw_movie_work_ids(db)
+        filtered: list[dict] = []
+        for c in cards:
+            mod = c.get("module")
+            if mod == "series":
+                if series_franchise_is_sfw(
+                    db,
+                    str(
+                        c.get("franchise_id") or c.get("work_id") or c.get("id") or ""
+                    ),
+                    sfw_ids=sfw_series,
+                ):
+                    filtered.append(c)
+                continue
+            if mod == "movies":
+                if movie_work_is_sfw(
+                    db,
+                    str(
+                        c.get("work_id")
+                        or c.get("franchise_id")
+                        or c.get("id")
+                        or ""
+                    ),
+                    sfw_ids=sfw_movies,
+                ):
+                    filtered.append(c)
+                continue
+            filtered.append(c)
+        cards = filtered
 
     def title_key(c: dict) -> str:
         return (c.get("title") or c.get("name") or "").casefold()

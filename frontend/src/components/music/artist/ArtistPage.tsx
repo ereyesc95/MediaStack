@@ -217,6 +217,8 @@ type Props = {
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenPlaylist?: (slug: string) => void;
   onOpenMediaItem?: (kind: "video" | "library", itemId: string) => void;
+  /** Open a Series leaf from artist SERIES tab (folder under Series/…). */
+  onOpenSeriesFolder?: (folderPath: string) => void;
 };
 
 function pageBgUrl(
@@ -252,6 +254,7 @@ export default function ArtistPage({
   onOpenReleaseNavigate,
   onOpenPlaylist,
   onOpenMediaItem,
+  onOpenSeriesFolder,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -620,8 +623,16 @@ export default function ArtistPage({
   }, [themeSampleUrl, userId]);
 
   useEffect(() => {
-    pushArtistRoute({ bandId, section, overviewTab }, true);
-  }, [bandId, section, overviewTab]);
+    pushArtistRoute(
+      {
+        bandId,
+        artistName: shell?.name ?? undefined,
+        section,
+        overviewTab,
+      },
+      true
+    );
+  }, [bandId, section, overviewTab, shell?.name]);
 
   const [quizSongsBeat, setQuizSongsBeat] = useState({
     active: false,
@@ -1579,7 +1590,13 @@ export default function ArtistPage({
             kind="series"
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
-            onOpenItem={(id) => onOpenMediaItem?.("video", id)}
+            onOpenItem={(_id, item) => {
+              const path = item?.folder_path?.trim();
+              if (path && onOpenSeriesFolder) {
+                onOpenSeriesFolder(path);
+                return;
+              }
+            }}
           />
         )}
         {data &&

@@ -21,7 +21,7 @@ type Props = {
   kind: ArtistMediaTabKind;
   cardLayout?: ReleaseCardLayout;
   artistName?: string;
-  onOpenItem?: (itemId: string) => void;
+  onOpenItem?: (itemId: string, item?: MediaTabItem) => void;
 };
 
 export function useArtistMediaTab(
@@ -312,17 +312,23 @@ export default function ArtistMediaGrid({
   }, [isPhone, revealedId]);
 
   const handleOpen = useCallback(
-    async (itemId: string) => {
+    async (item: MediaTabItem) => {
       if (openingId) return;
+      const itemId = item.id;
       setOpeningId(itemId);
+      if (kind === "series") {
+        onOpenItem?.(itemId, item);
+        setOpeningId(null);
+        return;
+      }
       const overviewKind = kind === "library" ? "library" : "video";
       try {
         await prefetchMediaItemOverview(bandId, overviewKind, itemId, {
           force: true,
         });
-        onOpenItem?.(itemId);
+        onOpenItem?.(itemId, item);
       } catch {
-        onOpenItem?.(itemId);
+        onOpenItem?.(itemId, item);
       } finally {
         setOpeningId(null);
       }
@@ -376,7 +382,7 @@ export default function ArtistMediaGrid({
             tapReveal={isPhone}
             revealed={isPhone && revealedId === item.id}
             onReveal={() => setRevealedId(item.id)}
-            onOpen={() => void handleOpen(item.id)}
+            onOpen={() => void handleOpen(item)}
           />
         ))}
       </div>

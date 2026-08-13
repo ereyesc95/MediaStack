@@ -948,11 +948,15 @@ def build_series_overview(
     series_audio = scan_series_audio(db, franchise_id)
     has_series_audio = bool(series_audio.get("releases"))
 
+    from app.franchise_identity import find_artwork_home, has_module_franchise_content
+
+    has_books_module = has_module_franchise_content(root, "books", name)
+
     media_flags = {
         "has_audio": music_band is not None or has_series_audio,
         "has_series": bool(detail.get("subseries") or detail.get("seasons")),
         "has_movies": bool(related.get("movies")),
-        "has_library": bool(related.get("books")),
+        "has_library": bool(related.get("books")) or has_books_module,
         "has_games": bool(related.get("games")),
         "has_gallery": has_gallery or bool(local_eras),
     }
@@ -1224,4 +1228,7 @@ def build_series_overview(
         "universes": universes,
         "metadata_refreshed_at": row.ser_metadata_refreshed_at,
         "needs_metadata": not bool(row.ser_metadata_refreshed_at),
+        "artwork_home_module": (
+            find_artwork_home(name, root) or (None, None)
+        )[0],
     }

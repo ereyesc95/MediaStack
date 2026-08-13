@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMoviesCatalog,
   fetchMoviesDashboard,
@@ -11,6 +11,12 @@ import {
   defaultSectionForSource,
   saveArtistEntryReferrer,
 } from "../../artistEntry";
+import {
+  artworkHomeModule,
+  isArtworkHomeElsewhere,
+  preferredSectionForSource,
+  saveFranchiseHomeReferrer,
+} from "../../franchiseHome";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   clearSeriesEntryReferrer,
@@ -189,6 +195,8 @@ export default function MoviesModule({
   const [publisher, setPublisher] = useState("");
   const [writer, setWriter] = useState("");
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
+  /** True when a film was opened directly from Home (Best Movies), not via franchise hub. */
+  const directFilmFromHomeRef = useRef(false);
 
   useEffect(() => {
     clearMediaTheme(userId);
@@ -276,7 +284,10 @@ export default function MoviesModule({
     });
     setFilterMode(pending.mode);
     setSearch("");
-    setLetter(pending.mode === "name" ? "A" : "");
+    setLetter(
+      pending.letter ||
+        (pending.mode === "name" ? "A" : "")
+    );
     setContinentId("");
     if (pending.countryId != null) setCountryId(pending.countryId);
     else setCountryId("");
@@ -437,12 +448,36 @@ export default function MoviesModule({
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
-    const card = franchises.find((f) => f.id === workId) as
+    const card = (
+      franchises.find((f) => f.id === workId) ||
+      dashboard?.top_franchises?.find((f) => f.id === workId)
+    ) as
       | (SeriesFranchiseCard & {
           is_standalone?: boolean;
           primary_film_id?: string | null;
         })
       | undefined;
+    if (card && isArtworkHomeElsewhere(card, "movies")) {
+      const home = artworkHomeModule(card)!;
+      saveFranchiseHomeReferrer({
+        source: "movies",
+        home,
+        fromTab: from,
+        catalogLetter: from === "catalog" ? letter || "A" : undefined,
+        franchiseId: workId,
+        franchiseName: card.name,
+        preferredSection: preferredSectionForSource("movies"),
+        backLabel: "MOVIES",
+      });
+      if (home === "series") {
+        onOpenSeriesFranchise?.(workId);
+        return;
+      }
+      if (home === "books") {
+        onOpenBooksFranchise?.(workId);
+        return;
+      }
+    }
     if (card?.is_standalone && card.primary_film_id) {
       pushMoviesRoute({
         franchiseId: workId,
@@ -477,10 +512,12 @@ export default function MoviesModule({
   const openFilm = (
     nextFilmId: string,
     workId?: string | null,
-    from: "home" | "catalog" = "catalog"
+    from: "home" | "catalog" = "catalog",
+    directFromHome = false
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
+    directFilmFromHomeRef.current = Boolean(directFromHome);
     const film = films.find((f) => f.id === nextFilmId);
     const wid = workId || film?.work_id;
     if (!wid) return;
@@ -593,12 +630,20 @@ export default function MoviesModule({
             return;
           }
           // Standalones have no franchise hub to return to.
+          // Direct Best Movies opens return Home; franchise→film returns to hub.
+          if (directFilmFromHomeRef.current) {
+            directFilmFromHomeRef.current = false;
+            if (from === "home") backToMoviesHome();
+            else backToMoviesCatalog();
+            return;
+          }
           const work = franchises.find((f) => f.id === franchiseId) as
             | (SeriesFranchiseCard & { is_standalone?: boolean })
             | undefined;
           const filmCount = films.filter((f) => f.work_id === franchiseId).length;
           const isStandalone =
-            Boolean(work?.is_standalone) || filmCount <= 1;
+            Boolean(work?.is_standalone) ||
+            (filmCount > 0 && filmCount <= 1);
           if (isStandalone) {
             if (from === "home") backToMoviesHome();
             else backToMoviesCatalog();
@@ -618,13 +663,19 @@ export default function MoviesModule({
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();
                 }
+                if (directFilmFromHomeRef.current) {
+                  return (getMediaEntrySource() || entrySource) === "home"
+                    ? "HOME"
+                    : "CATALOG";
+                }
                 const standalone =
                   Boolean(
                     (franchises.find((f) => f.id === franchiseId) as
                       | { is_standalone?: boolean }
                       | undefined)?.is_standalone
                   ) ||
-                  films.filter((f) => f.work_id === franchiseId).length <= 1;
+                  (films.filter((f) => f.work_id === franchiseId).length > 0 &&
+                    films.filter((f) => f.work_id === franchiseId).length <= 1);
                 return standalone
                   ? (getMediaEntrySource() || entrySource) === "home"
                     ? "HOME"
@@ -662,6 +713,7 @@ export default function MoviesModule({
         onOpenMusicRelease={onOpenMusicRelease}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenFilm={(id) => {
+          directFilmFromHomeRef.current = false;
           pushMoviesRoute({
             franchiseId,
             filmId: id,
@@ -1021,11 +1073,51 @@ export default function MoviesModule({
             universes={universes}
             onFranchise={(workId) => {
               if (!franchises.length) loadCatalog();
+              const card =
+                franchises.find((f) => f.id === workId) ||
+                dashboard?.top_franchises?.find((f) => f.id === workId);
+              if (
+                card?.is_music_franchise &&
+                card.music_band_id != null &&
+                onOpenArtist
+              ) {
+                const mediaSection = defaultSectionForSource("movies");
+                saveArtistEntryReferrer({
+                  source: "movies",
+                  section: mediaSection,
+                  fromTab: "home",
+                  franchiseId: workId,
+                  franchiseName: card.name,
+                  backLabel: "MOVIES",
+                });
+                onOpenArtist(card.music_band_id, "overview");
+                return;
+              }
+              if (card && isArtworkHomeElsewhere(card, "movies")) {
+                const home = artworkHomeModule(card)!;
+                saveFranchiseHomeReferrer({
+                  source: "movies",
+                  home,
+                  fromTab: "home",
+                  franchiseId: workId,
+                  franchiseName: card.name,
+                  preferredSection: preferredSectionForSource("movies"),
+                  backLabel: "MOVIES",
+                });
+                if (home === "series") {
+                  onOpenSeriesFranchise?.(workId);
+                  return;
+                }
+                if (home === "books") {
+                  onOpenBooksFranchise?.(workId);
+                  return;
+                }
+              }
               openWork(workId, undefined, undefined, "home");
             }}
             onFilm={(id, workId) => {
               if (!films.length) loadCatalog();
-              openFilm(id, workId, "home");
+              openFilm(id, workId, "home", true);
             }}
             onOpenUniverse={(id) => openUniverseLanding(id, "home")}
             onGenre={(id) => {
@@ -1120,16 +1212,39 @@ export default function MoviesModule({
               card.music_band_id != null &&
               onOpenArtist
             ) {
-              const section = defaultSectionForSource("movies");
+              const mediaSection = defaultSectionForSource("movies");
               saveArtistEntryReferrer({
                 source: "movies",
-                section,
+                section: mediaSection,
+                fromTab: "catalog",
+                catalogLetter: letter || "A",
                 franchiseId: id,
                 franchiseName: card.name,
                 backLabel: "MOVIES",
               });
-              onOpenArtist(card.music_band_id, section);
+              onOpenArtist(card.music_band_id, "overview");
               return;
+            }
+            if (card && isArtworkHomeElsewhere(card, "movies")) {
+              const home = artworkHomeModule(card)!;
+              saveFranchiseHomeReferrer({
+                source: "movies",
+                home,
+                fromTab: "catalog",
+                catalogLetter: letter || "A",
+                franchiseId: id,
+                franchiseName: card.name,
+                preferredSection: preferredSectionForSource("movies"),
+                backLabel: "MOVIES",
+              });
+              if (home === "series") {
+                onOpenSeriesFranchise?.(id);
+                return;
+              }
+              if (home === "books") {
+                onOpenBooksFranchise?.(id);
+                return;
+              }
             }
             openWork(id, undefined, shell, "catalog");
           }}

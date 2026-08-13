@@ -757,7 +757,7 @@ def build_media_item_overview(
         else _filter_lineup(lineup_full, release_year)
     )
 
-    release_type = "Video release" if kind == "video" else "Library item"
+    release_type = "Video release" if kind == "video" else "Book"
     artist_name = _display_name(band.bnd_name)
 
     payload = {
@@ -775,6 +775,7 @@ def build_media_item_overview(
         "era_icon_url": era_icon_url,
         "era_logo_url": era_logo_url,
         "release_type": release_type,
+        "content_category": "Book" if kind == "library" else None,
         "description": None,
         "description_manual": False,
         "director": None,
@@ -789,9 +790,8 @@ def build_media_item_overview(
         "franchise_artist": _franchise_artist_card(
             band, date_iso=date_iso, media_root=media_root
         ),
-        "franchise_items": _related_franchise_items(
-            band_name=band.bnd_name, folder_path=rel
-        ),
+        # Artist video/library leaves use lineup/staff — no related franchise strip.
+        "franchise_items": [],
         "groups": groups,
         "files": flat_files,
         "open_url": open_url,

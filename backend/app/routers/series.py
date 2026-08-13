@@ -16,18 +16,24 @@ def series_catalog(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ DB filter metadata)."""
-    from app.adult_content import filter_adult_cards
+    from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
     from app.series_catalog_meta import enrich_catalog_metadata
     from app.series_index import build_series_catalog
 
-    from app.franchise_identity import enrich_catalog_with_music_identity
+    from app.franchise_identity import (
+        enrich_catalog_with_artwork_home,
+        enrich_catalog_with_music_identity,
+    )
 
     catalog = enrich_catalog_metadata(db, build_series_catalog())
     catalog = enrich_catalog_with_music_identity(
         db, catalog, orientation="portrait"
     )
+    catalog = enrich_catalog_with_artwork_home(catalog)
     catalog["franchises"] = filter_adult_cards(
-        catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+        catalog.get("franchises") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subgenre_names_from_db(db),
     )
     return catalog
 
@@ -241,12 +247,15 @@ def series_filter_options(
 def series_dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     """Home panes: On Repeat, Icons, Show Vibes, Global Acts."""
     from app.series_dashboard import build_series_dashboard
 
     try:
-        return build_series_dashboard(db, user.usr_id)
+        return build_series_dashboard(
+            db, user.usr_id, nsfw_unlocked=nsfw_unlocked
+        )
     except Exception:
         return {
             "top_episodes": [],
@@ -342,6 +351,14 @@ def series_patch_about(
         subseries_id=body.get("subseries_id"),
     )
     return {"ok": True, "ser_id": row.ser_id}
+
+
+@router.get("/staff-roles")
+def series_staff_roles(db: Session = Depends(get_db)):
+    """Canonical staff roles with Original / Dub / Hybrid visibility types."""
+    from app.staff_roles import list_staff_roles
+
+    return {"roles": list_staff_roles(db)}
 
 
 @router.post("/franchises/{franchise_id}/cast")
@@ -577,13 +594,22 @@ def series_delete_link(
 
 
 @router.get("/franchises/{franchise_id}/media/movies")
-def series_franchise_movies(franchise_id: str, db: Session = Depends(get_db)):
+def series_franchise_movies(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    from app.adult_content import filter_adult_related_cards
     from app.series_overview import build_series_overview
 
     overview = build_series_overview(db, franchise_id)
     if not overview:
         raise HTTPException(404, "Series franchise not found")
-    return {"items": (overview.get("related") or {}).get("movies") or []}
+    items = list((overview.get("related") or {}).get("movies") or [])
+    items = filter_adult_related_cards(
+        db, items, nsfw_unlocked=nsfw_unlocked, module="movies"
+    )
+    return {"items": items}
 
 
 @router.get("/franchises/{franchise_id}/media/audio")

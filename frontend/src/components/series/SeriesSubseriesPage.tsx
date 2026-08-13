@@ -1300,7 +1300,7 @@ export default function SeriesSubseriesPage({
   const creators = isFilm ? (directors.length ? directors : writers) : writers;
   const genres = scopedMeta?.genres ?? overview?.genres ?? [];
   const publishers = scopedMeta?.publishers ?? overview?.publishers ?? [];
-  const publisher = publishers[0] || "";
+  const publisherFallback = publishers[0] || "";
   const country = scopedMeta?.country ?? overview?.country;
   const languages = scopedMeta?.languages ?? overview?.languages ?? [];
   const overviewBio = isFilm
@@ -1311,18 +1311,23 @@ export default function SeriesSubseriesPage({
     const byCode = new Map(
       opts.map((o) => [o.code.toLowerCase(), o.label] as const)
     );
-    return languages.map((code) => ({
+    const origin = (overview?.origin_language || "").toLowerCase();
+    const ordered = [...languages];
+    if (origin) {
+      ordered.sort((a, b) => {
+        const ao = a.toLowerCase() === origin ? 0 : 1;
+        const bo = b.toLowerCase() === origin ? 0 : 1;
+        return ao - bo;
+      });
+    }
+    return ordered.map((code) => ({
       code,
       label: (byCode.get(code.toLowerCase()) || code).replace(
         /\s*\(origin\)\s*$/i,
         ""
       ),
     }));
-  }, [languages, overview?.language_options]);
-  const languageLabels = useMemo(
-    () => languageOpts.map((o) => o.label),
-    [languageOpts]
-  );
+  }, [languages, overview?.language_options, overview?.origin_language]);
 
   const storageScope = isFilm
     ? `film:${subseriesId}`
@@ -1378,6 +1383,40 @@ export default function SeriesSubseriesPage({
     [storageScope]
   );
 
+  const distributor = useMemo(() => {
+    const staff = overview?.cast?.staff || overview?.cast?.people || [];
+    const origin = (overview?.origin_language || "").toLowerCase();
+    const lang = (activeLanguage || origin || "").toLowerCase();
+    const isOrigin = !lang || !origin || lang === origin;
+    const prefer = isOrigin
+      ? ["Studio", "Publisher"]
+      : ["Dub Studio", "Studio", "Publisher"];
+    for (const role of prefer) {
+      const hit = staff.find((m) =>
+        (m.roles || []).some(
+          (r) => String(r).trim().toLowerCase() === role.toLowerCase()
+        )
+      );
+      if (hit?.name) {
+        return {
+          name: hit.name,
+          logo: hit.photo_url || null,
+        };
+      }
+    }
+    if (publisherFallback) {
+      return { name: publisherFallback, logo: null as string | null };
+    }
+    return null;
+  }, [
+    overview?.cast?.staff,
+    overview?.cast?.people,
+    overview?.origin_language,
+    activeLanguage,
+    publisherFallback,
+  ]);
+  const publisher = distributor?.name || "";
+
   const langLogo =
     (activeLanguage &&
       (logoByLanguage[activeLanguage] ||
@@ -1400,7 +1439,12 @@ export default function SeriesSubseriesPage({
         ),
       };
     }
-    const eras = overview?.eras || [];
+    const eras = (overview?.eras || []) as Array<{
+      portrait_url?: string | null;
+      landscape_url?: string | null;
+      cover_url?: string | null;
+      banner_url?: string | null;
+    }>;
     const portrait =
       eras.find((e) => e.portrait_url)?.portrait_url ||
       eras.find((e) => e.cover_url)?.cover_url ||
@@ -2267,6 +2311,10 @@ export default function SeriesSubseriesPage({
         : [
             { id: "overview", label: stacked ? "INFO" : "OVERVIEW" },
             { id: "episodes", label: stacked ? "EPS" : "EPISODES" },
+            {
+              id: "series",
+              label: stacked ? "MORE" : "MORE SERIES",
+            },
             { id: "movies", label: "MOVIES" },
             { id: "audio", label: "AUDIO" },
             { id: "library", label: "LIBRARY" },
@@ -2287,6 +2335,9 @@ export default function SeriesSubseriesPage({
           Boolean(media?.has_gallery) ||
           (loading && !overview && Boolean(card?.folder_path || detail?.folder_path))
         );
+      }
+      if (t.id === "series" && !isFilm && !isBook) {
+        return siblingMovieCount > 0;
       }
       if (t.id === "series") {
         if (!mediaReady) {
@@ -3408,6 +3459,36 @@ export default function SeriesSubseriesPage({
                   {dateLabel ? (
                     <p className="release-page__date">{dateLabel}</p>
                   ) : null}
+                  {(() => {
+                    const leafTitle = (overview?.name || title || "").trim();
+                    const parentName = (franchiseName || "").trim();
+                    const nested =
+                      Boolean(franchiseId) &&
+                      Boolean(parentName) &&
+                      Boolean(leafTitle) &&
+                      parentName.toLowerCase() !== leafTitle.toLowerCase();
+                    if (!nested) return null;
+                    return (
+                      <p className="release-page__type-line">
+                        Part of the{" "}
+                        <button
+                          type="button"
+                          className="release-page__artist-link release-page__artist-link--inline"
+                          onClick={() =>
+                            onNavigate({
+                              franchiseId,
+                              subseriesId: undefined,
+                              section: "overview",
+                              overviewTab: "about",
+                            })
+                          }
+                        >
+                          {parentName}
+                        </button>{" "}
+                        franchise
+                      </p>
+                    );
+                  })()}
                   {universeInfo && leafUniverses.length === 0 ? (
                     <p className="release-page__type-line">
                       Part of the{" "}
@@ -3435,7 +3516,15 @@ export default function SeriesSubseriesPage({
                       }
                     >
                       {isBook
-                        ? "Book"
+                        ? (
+                            overview as
+                              | (typeof overview & {
+                                  content_category?: string | null;
+                                })
+                              | null
+                          )?.content_category ||
+                          overview?.type ||
+                          "Book"
                         : isFilm
                           ? "Movie"
                           : "Series"}
@@ -3820,13 +3909,13 @@ export default function SeriesSubseriesPage({
                       aria-label={`Browse ${publisher}`}
                     >
                       <img
-                        src={DEFAULT_LABEL_URL}
+                        src={distributor?.logo || DEFAULT_LABEL_URL}
                         alt={publisher}
                         className="release-page__label-logo"
                       />
                     </button>
                     <p className="release-page__label-name">
-                      Published by{" "}
+                      Distributed by{" "}
                       <button
                         type="button"
                         className="release-page__person-link"
@@ -4434,16 +4523,48 @@ export default function SeriesSubseriesPage({
 
           {!error && (card || detail) && tab === "series" ? (
             <SeriesMediaGrid
-              items={seriesCards}
-              loading={mediaLoading && seriesCards.length === 0}
+              items={
+                !isFilm && !isBook
+                  ? siblings
+                      .filter((s) => s.id !== subseriesId)
+                      .slice()
+                      .sort((a, b) =>
+                        (a.date_iso || "9999").localeCompare(
+                          b.date_iso || "9999"
+                        )
+                      )
+                      .map((s) => ({
+                        id: s.id,
+                        title: s.title,
+                        cover_url: s.cover_url,
+                        portrait_url: s.cover_url,
+                        logo_url: s.logo_url,
+                        date_iso: s.date_iso,
+                        display_date: s.display_date,
+                        path: s.folder_path,
+                      }))
+                  : seriesCards
+              }
+              loading={
+                mediaLoading &&
+                (!isFilm && !isBook
+                  ? siblings.length <= 1
+                  : seriesCards.length === 0)
+              }
               emptyMessage={
-                isFilm
-                  ? "No matching Series franchise for this work name."
-                  : "No series linked yet."
+                !isFilm && !isBook
+                  ? "No other series in this franchise."
+                  : isFilm
+                    ? "No matching Series franchise for this work name."
+                    : "No series linked yet."
               }
               cardLayout={cardLayout}
               coverAspect="portrait"
-              onOpen={openMediaCard}
+              onOpen={
+                !isFilm && !isBook
+                  ? (item) => openSibling(item.id)
+                  : openMediaCard
+              }
             />
           ) : null}
 

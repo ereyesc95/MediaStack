@@ -46,6 +46,11 @@ import {
   pushSeriesRoute,
   saveSeriesEntryReferrer,
 } from "../../seriesRoute";
+import {
+  getFranchiseHomeReferrer,
+  preferredSectionForSource,
+  saveFranchiseHomeReferrer,
+} from "../../franchiseHome";
 import type {
   CardOrientation,
   LinkCategory,
@@ -179,7 +184,7 @@ const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: null },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
-  { id: "library", label: "LIBRARY", flag: "has_library" },
+  { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
 ];
@@ -190,7 +195,18 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
   { id: "movies", label: "MOVIES", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
-  { id: "library", label: "LIBRARY", flag: "has_library" },
+  { id: "library", label: "BOOKS", flag: "has_library" },
+  { id: "games", label: "GAMES", flag: "has_games" },
+  { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+];
+
+/** Books entry into a Series artwork-home: BOOKS next to Overview. */
+const SERIES_FROM_BOOKS_SECTIONS: FranchiseNavSection[] = [
+  { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
+  { id: "library", label: "BOOKS", flag: "has_library" },
+  { id: "series", label: "SERIES", flag: "has_series" },
+  { id: "movies", label: "MOVIES", flag: null },
+  { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
 ];
@@ -198,7 +214,7 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
 /** Books-centered path: BOOKS for works, then related SERIES / MOVIES. */
 const BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
-  { id: "books", label: "MORE BOOKS", flag: null },
+  { id: "books", label: "BOOKS", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
@@ -293,13 +309,58 @@ export default function SeriesFranchisePage({
     () => seriesShows.map((s) => s.id).join("|"),
     [seriesShows]
   );
-  const navSections = isBooks
-    ? BOOKS_SECTIONS
-    : isMovies
-      ? MOVIES_SECTIONS
-      : SERIES_SECTIONS;
+  const homeReferrer = useMemo(() => {
+    const ref = getFranchiseHomeReferrer();
+    if (!ref || ref.home !== "series") return null;
+    const rid = String(ref.franchiseId || "").trim().toLowerCase();
+    const cur = String(franchiseId || "").trim().toLowerCase();
+    if (rid && cur && rid !== cur) return null;
+    return ref;
+  }, [franchiseId]);
+  const navSections = useMemo(() => {
+    if (isBooks) return BOOKS_SECTIONS;
+    if (isMoviesOnly) return MOVIES_SECTIONS;
+    if (homeReferrer?.source === "movies") return MOVIES_SECTIONS;
+    if (homeReferrer?.source === "books") return SERIES_FROM_BOOKS_SECTIONS;
+    return SERIES_SECTIONS;
+  }, [isBooks, isMoviesOnly, homeReferrer]);
   const [loading, setLoading] = useState(() => !overviewCache.has(cacheKey));
   const [error, setError] = useState<string | null>(null);
+  const artworkHomeRedirected = useRef(false);
+
+  useEffect(() => {
+    artworkHomeRedirected.current = false;
+  }, [franchiseId, module]);
+
+  // Movies/Books franchise URL whose [Artwork] lives under Series → series URL
+  useEffect(() => {
+    if (artworkHomeRedirected.current) return;
+    if (!data || !onOpenSeriesFranchise) return;
+    if (!isMoviesOnly && !isBooks) return;
+    const home = String(
+      (data as SeriesOverview & { artwork_home_module?: string | null })
+        .artwork_home_module || ""
+    ).toLowerCase();
+    if (home !== "series") return;
+    artworkHomeRedirected.current = true;
+    const source = isBooks ? "books" : "movies";
+    saveFranchiseHomeReferrer({
+      source,
+      home: "series",
+      franchiseId,
+      franchiseName: data.name,
+      preferredSection: preferredSectionForSource(source),
+      backLabel: isBooks ? "BOOKS" : "MOVIES",
+    });
+    onOpenSeriesFranchise(franchiseId);
+  }, [
+    data,
+    franchiseId,
+    isBooks,
+    isMoviesOnly,
+    onOpenSeriesFranchise,
+  ]);
+
   const [eraIndex, setEraIndex] = useState(0);
   const [castTab, setCastTab] = useState<SeriesCastTab>("characters");
   const [linkTab, setLinkTab] = useState<LinkCategory | string>("databases");
@@ -1148,14 +1209,17 @@ export default function SeriesFranchisePage({
         return (related?.movies?.length || 0) > 0;
       }
       if (s.flag === "has_library" || s.flag === "has_books") {
-        return (related?.books?.length || 0) > 0;
+        if ((related?.books?.length || 0) > 0) return true;
+        // Cross-module entry from BookStack: keep BOOKS tab visible
+        if (homeReferrer?.source === "books") return true;
+        return false;
       }
       if (s.flag === "has_games") {
         return (related?.games?.length || 0) > 0;
       }
       return false;
     });
-  }, [data, navSections]);
+  }, [data, navSections, homeReferrer]);
 
   useEffect(() => {
     if (!data) return;

@@ -11,6 +11,12 @@ import {
   defaultSectionForSource,
   saveArtistEntryReferrer,
 } from "../../artistEntry";
+import {
+  artworkHomeModule,
+  isArtworkHomeElsewhere,
+  preferredSectionForSource,
+  saveFranchiseHomeReferrer,
+} from "../../franchiseHome";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   catalogBackgroundIso,
@@ -272,7 +278,10 @@ export default function BooksModule({
     });
     setFilterMode(pending.mode);
     setSearch("");
-    setLetter(pending.mode === "name" ? "A" : "");
+    setLetter(
+      pending.letter ||
+        (pending.mode === "name" ? "A" : "")
+    );
     setContinentId("");
     if (pending.countryId != null) setCountryId(pending.countryId);
     else setCountryId("");
@@ -433,12 +442,36 @@ export default function BooksModule({
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
-    const card = franchises.find((f) => f.id === workId) as
+    const card = (
+      franchises.find((f) => f.id === workId) ||
+      dashboard?.top_franchises?.find((f) => f.id === workId)
+    ) as
       | (SeriesFranchiseCard & {
           is_standalone?: boolean;
           primary_book_id?: string | null;
         })
       | undefined;
+    if (card && isArtworkHomeElsewhere(card, "books")) {
+      const home = artworkHomeModule(card)!;
+      saveFranchiseHomeReferrer({
+        source: "books",
+        home,
+        fromTab: from,
+        catalogLetter: from === "catalog" ? letter || "A" : undefined,
+        franchiseId: workId,
+        franchiseName: card.name,
+        preferredSection: preferredSectionForSource("books"),
+        backLabel: "BOOKS",
+      });
+      if (home === "series") {
+        onOpenSeriesFranchise?.(workId);
+        return;
+      }
+      if (home === "movies") {
+        onOpenMoviesFranchise?.(workId);
+        return;
+      }
+    }
     if (card?.is_standalone && card.primary_book_id) {
       pushBooksRoute({
         franchiseId: workId,
@@ -995,6 +1028,46 @@ export default function BooksModule({
             universes={universes}
             onFranchise={(workId) => {
               if (!franchises.length) loadCatalog();
+              const card =
+                franchises.find((f) => f.id === workId) ||
+                dashboard?.top_franchises?.find((f) => f.id === workId);
+              if (
+                card?.is_music_franchise &&
+                card.music_band_id != null &&
+                onOpenArtist
+              ) {
+                const mediaSection = defaultSectionForSource("books");
+                saveArtistEntryReferrer({
+                  source: "books",
+                  section: mediaSection,
+                  fromTab: "home",
+                  franchiseId: workId,
+                  franchiseName: card.name,
+                  backLabel: "BOOKS",
+                });
+                onOpenArtist(card.music_band_id, "overview");
+                return;
+              }
+              if (card && isArtworkHomeElsewhere(card, "books")) {
+                const home = artworkHomeModule(card)!;
+                saveFranchiseHomeReferrer({
+                  source: "books",
+                  home,
+                  fromTab: "home",
+                  franchiseId: workId,
+                  franchiseName: card.name,
+                  preferredSection: preferredSectionForSource("books"),
+                  backLabel: "BOOKS",
+                });
+                if (home === "series") {
+                  onOpenSeriesFranchise?.(workId);
+                  return;
+                }
+                if (home === "movies") {
+                  onOpenMoviesFranchise?.(workId);
+                  return;
+                }
+              }
               openWork(workId, undefined, undefined, "home");
             }}
             onBook={(id, workId) => {
@@ -1094,16 +1167,39 @@ export default function BooksModule({
               card.music_band_id != null &&
               onOpenArtist
             ) {
-              const section = defaultSectionForSource("books");
+              const mediaSection = defaultSectionForSource("books");
               saveArtistEntryReferrer({
                 source: "books",
-                section,
+                section: mediaSection,
+                fromTab: "catalog",
+                catalogLetter: letter || "A",
                 franchiseId: id,
                 franchiseName: card.name,
                 backLabel: "BOOKS",
               });
-              onOpenArtist(card.music_band_id, section);
+              onOpenArtist(card.music_band_id, "overview");
               return;
+            }
+            if (card && isArtworkHomeElsewhere(card, "books")) {
+              const home = artworkHomeModule(card)!;
+              saveFranchiseHomeReferrer({
+                source: "books",
+                home,
+                fromTab: "catalog",
+                catalogLetter: letter || "A",
+                franchiseId: id,
+                franchiseName: card.name,
+                preferredSection: preferredSectionForSource("books"),
+                backLabel: "BOOKS",
+              });
+              if (home === "series") {
+                onOpenSeriesFranchise?.(id);
+                return;
+              }
+              if (home === "movies") {
+                onOpenMoviesFranchise?.(id);
+                return;
+              }
             }
             openWork(id, undefined, shell, "catalog");
           }}
