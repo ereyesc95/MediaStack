@@ -964,6 +964,13 @@ export type ReleaseOverview = {
     in_library?: boolean;
     track_count?: number;
   }[];
+  /** Release-level staff credits (producers, writers, photographers, …). */
+  staff?: {
+    id: string;
+    name: string;
+    photo_url?: string | null;
+    roles?: string[];
+  }[];
   singles: ReleaseSingleCard[];
   appears_on?: ReleaseSingleCard[];
   taken_from?: ReleaseTakenFrom | null;

@@ -42,6 +42,13 @@ export function normalizeSlug(text: string): string {
     .toLowerCase();
 }
 
+/** Strip leading ``YYYY.MM.DD. `` / ``YYYY. `` folder date prefixes. */
+export function stripDatedFolderTitle(name: string): string {
+  const raw = (name || "").trim();
+  const m = raw.match(/^\d{4}(?:\.\d{2}){0,2}\.\s*(.+)$/);
+  return (m?.[1] || raw).trim();
+}
+
 export function slugMatch(a: string, b: string): boolean {
   return normalizeSlug(a) === normalizeSlug(b);
 }

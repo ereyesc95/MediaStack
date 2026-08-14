@@ -828,6 +828,34 @@ export async function patchReleaseOverview(
   );
 }
 
+export async function addReleaseStaffMember(
+  bandId: number,
+  releaseId: string,
+  body: { name: string; photo_url?: string | null; roles?: string[] }
+) {
+  return request<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+    roles?: string[];
+  }>(`${API}/music/bands/${bandId}/releases/${releaseId}/staff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function removeReleaseStaffMember(
+  bandId: number,
+  releaseId: string,
+  memberId: string
+) {
+  return request<{ ok: boolean }>(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/staff/${encodeURIComponent(memberId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export async function fetchTrackLyrics(
   artist: string,
   title: string,

@@ -22,6 +22,7 @@ import {
   isMediaItemId,
   isReleaseId,
   slugMatch,
+  stripDatedFolderTitle,
 } from "./routeSlug";
 import { parseBooksPath } from "./booksRoute";
 import { parseFranchisePath, parseLegacyFranchiseHubPath } from "./franchiseRoute";
@@ -41,7 +42,9 @@ function matchLeafTitle<
     (it) =>
       it.id === decoded ||
       slugMatch(it.id, decoded) ||
-      slugMatch(it.folder_name || "", decoded)
+      slugMatch(stripDatedFolderTitle(it.id), decoded) ||
+      slugMatch(it.folder_name || "", decoded) ||
+      slugMatch(stripDatedFolderTitle(it.folder_name || ""), decoded)
   );
   if (byId) return byId;
   const byTitle = items.filter((it) =>

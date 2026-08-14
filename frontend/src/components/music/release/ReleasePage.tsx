@@ -12,7 +12,10 @@ import {
   fetchReleaseOverview,
   fetchReleaseTracklist,
   fetchReleaseYoutubeCandidates,
+  fetchStaffRoles,
   fetchTrackSourceArt,
+  addReleaseStaffMember,
+  removeReleaseStaffMember,
   playTrack,
   refreshReleaseMetadata,
   resolveArtistName,
@@ -62,6 +65,7 @@ import MediaInlineSearch from "../MediaInlineSearch";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
 import NotInLibraryDialog from "../artist/NotInLibraryDialog";
 import ReleaseAboutEditModal from "./ReleaseAboutEditModal";
+import ModalPortal from "../../ModalPortal";
 import ReleaseVideoSetModal from "./ReleaseVideoSetModal";
 import ReleaseLyricsSetModal from "./ReleaseLyricsSetModal";
 import ReleaseFileTagsModal from "./ReleaseFileTagsModal";
@@ -410,6 +414,17 @@ export default function ReleasePage({
     is_single?: boolean;
   } | null>(null);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
+  const [bottomTab, setBottomTab] = useState<"lineup" | "staff" | "singles">(
+    "lineup"
+  );
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [staffName, setStaffName] = useState("");
+  const [staffPhoto, setStaffPhoto] = useState("");
+  const [staffRolesText, setStaffRolesText] = useState("");
+  const [staffRoleOpts, setStaffRoleOpts] = useState<
+    { name: string; type: string }[]
+  >([]);
+  const [staffBusy, setStaffBusy] = useState(false);
   const [externalArtist, setExternalArtist] = useState<{
     name: string;
     urls: Record<string, string>;
@@ -490,6 +505,15 @@ export default function ReleasePage({
     !isVaRelease && data?.is_solo && data?.lineup.length === 1
   );
   const showOverviewLineup = showBandLineup || showSoloLineup;
+  const releaseStaff = data?.staff ?? [];
+  const showReleaseStaff = releaseStaff.length > 0 || Boolean(isAdmin);
+  const showSinglesTab = Boolean(
+    data &&
+      (data.singles.length > 0 || (data.appears_on?.length ?? 0) > 0)
+  );
+  const showTabbedBottom = Boolean(
+    !isVaRelease && (showOverviewLineup || showReleaseStaff || showSinglesTab)
+  );
   const showOverviewPhotocards = Boolean(
     displayPhotocards.portrait_front || displayPhotocards.landscape_front
   );
@@ -506,10 +530,45 @@ export default function ReleasePage({
     data &&
       ((showVaPhotocardsInStack && showVaFeaturedArtists) ||
         (showVaFeaturedArtists && !showVaPhotocardsInStack) ||
-        showOverviewLineup ||
-        data.singles.length > 0 ||
-        (data.appears_on?.length ?? 0) > 0)
+        showTabbedBottom)
   );
+
+  useEffect(() => {
+    if (!showTabbedBottom) return;
+    if (bottomTab === "lineup" && !showOverviewLineup) {
+      setBottomTab(
+        showReleaseStaff ? "staff" : showSinglesTab ? "singles" : "lineup"
+      );
+    } else if (bottomTab === "staff" && !showReleaseStaff) {
+      setBottomTab(showOverviewLineup ? "lineup" : "singles");
+    } else if (bottomTab === "singles" && !showSinglesTab) {
+      setBottomTab(showOverviewLineup ? "lineup" : "staff");
+    }
+  }, [
+    showTabbedBottom,
+    bottomTab,
+    showOverviewLineup,
+    showReleaseStaff,
+    showSinglesTab,
+  ]);
+
+  useEffect(() => {
+    if (!showReleaseStaff || !isAdmin) return;
+    let cancelled = false;
+    void fetchStaffRoles()
+      .then((res) => {
+        if (cancelled) return;
+        setStaffRoleOpts(
+          (res.roles || []).filter(
+            (r) => (r.type || "").toLowerCase() !== "dub"
+          )
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [showReleaseStaff, isAdmin]);
 
   const openFeaturedArtist = useCallback(
     (artist: NonNullable<ReleaseOverview["featured_artists"]>[number]) => {
@@ -2626,92 +2685,211 @@ export default function ReleasePage({
                   </section>
                 )}
 
-                {showOverviewLineup && showBandLineup && (
-                  <section className="release-page__section-glass release-page__lineup">
-                    <div className="release-page__lineup-grid">
-                      {data.lineup.map((m) => (
-                        <LineupMiniCard
-                          key={m.participation_id ?? m.id}
-                          member={m}
-                          onSelect={() => setLineupMemberId(m.id)}
-                        />
-                      ))}
+                {showTabbedBottom && data ? (
+                  <div className="series-subseries-overview__cast">
+                    <div className="series-subseries-overview__cast-tabs">
+                      {showOverviewLineup ? (
+                        <button
+                          type="button"
+                          className={bottomTab === "lineup" ? "active" : ""}
+                          onClick={() => setBottomTab("lineup")}
+                        >
+                          Lineup
+                        </button>
+                      ) : null}
+                      {showReleaseStaff ? (
+                        <button
+                          type="button"
+                          className={bottomTab === "staff" ? "active" : ""}
+                          onClick={() => setBottomTab("staff")}
+                        >
+                          Staff
+                        </button>
+                      ) : null}
+                      {showSinglesTab ? (
+                        <button
+                          type="button"
+                          className={bottomTab === "singles" ? "active" : ""}
+                          onClick={() => setBottomTab("singles")}
+                        >
+                          Singles
+                        </button>
+                      ) : null}
                     </div>
-                  </section>
-                )}
 
-                {showOverviewLineup && showSoloLineup && (
-                  <section className="release-page__section-glass release-page__lineup">
-                    <div className="release-page__lineup-grid">
-                      <LineupMiniCard
-                        member={data.lineup[0]}
-                        onSelect={() => setLineupMemberId(data.lineup[0].id)}
-                      />
-                    </div>
-                  </section>
-                )}
+                    {bottomTab === "lineup" && showBandLineup ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        <div className="release-page__lineup-grid">
+                          {data.lineup.map((m) => (
+                            <LineupMiniCard
+                              key={m.participation_id ?? m.id}
+                              member={m}
+                              onSelect={() => setLineupMemberId(m.id)}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
 
-                {data.singles.length > 0 && (
-                  <section className="release-page__section-glass release-page__singles">
-                    <div className="release-page__singles-grid">
-                      {data.singles.map((s) => {
-                        const dateLabel = formatTrackDate(
-                          s.date_iso ?? s.display_date
-                        );
-                        const targetId = s.navigate_release_id ?? s.id;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            className="release-page__single"
-                            onClick={() => onOpenRelease(bandId, targetId)}
-                          >
-                            {s.cover_url && (
-                              <span className="release-page__single-cover">
-                                <img src={s.cover_url} alt="" draggable={false} />
-                              </span>
-                            )}
-                            <span className="release-page__single-title">{s.title}</span>
-                            {dateLabel && (
-                              <span className="release-page__single-date">{dateLabel}</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
+                    {bottomTab === "lineup" && showSoloLineup ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        <div className="release-page__lineup-grid">
+                          <LineupMiniCard
+                            member={data.lineup[0]}
+                            onSelect={() => setLineupMemberId(data.lineup[0].id)}
+                          />
+                        </div>
+                      </section>
+                    ) : null}
 
-                {(data.appears_on?.length ?? 0) > 0 && (
-                  <section className="release-page__section-glass release-page__singles release-page__appears-on">
-                    <div className="release-page__singles-grid">
-                      {data.appears_on!.map((s) => {
-                        const dateLabel = formatTrackDate(
-                          s.date_iso ?? s.display_date
-                        );
-                        const targetId = s.navigate_release_id ?? s.id;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            className="release-page__single"
-                            onClick={() => onOpenRelease(bandId, targetId)}
-                          >
-                            {s.cover_url && (
-                              <span className="release-page__single-cover">
-                                <img src={s.cover_url} alt="" draggable={false} />
-                              </span>
-                            )}
-                            <span className="release-page__single-title">{s.title}</span>
-                            {dateLabel && (
-                              <span className="release-page__single-date">{dateLabel}</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
+                    {bottomTab === "staff" ? (
+                      <section className="release-page__section-glass release-page__lineup">
+                        {isAdmin ? (
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => setAddStaffOpen(true)}
+                            >
+                              Add staff
+                            </button>
+                          </div>
+                        ) : null}
+                        {releaseStaff.length > 0 ? (
+                          <div className="release-page__lineup-grid">
+                            {releaseStaff.map((m) => (
+                              <div
+                                key={m.id}
+                                className="release-lineup-card"
+                              >
+                                <span className="release-lineup-card__photo">
+                                  {m.photo_url ? (
+                                    <img src={m.photo_url} alt="" draggable={false} />
+                                  ) : (
+                                    <span className="release-lineup-card__initials">
+                                      {(m.name || "?").slice(0, 2).toUpperCase()}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="release-lineup-card__name">
+                                  {m.name}
+                                </span>
+                                {(m.roles || []).length ? (
+                                  <span className="release-lineup-card__roles">
+                                    {(m.roles || []).join(" · ")}
+                                  </span>
+                                ) : null}
+                                {isAdmin ? (
+                                  <button
+                                    type="button"
+                                    className="btn link-form__delete"
+                                    aria-label={`Remove ${m.name}`}
+                                    onClick={() => {
+                                      void removeReleaseStaffMember(
+                                        bandId,
+                                        releaseId,
+                                        m.id
+                                      ).then(() =>
+                                        fetchReleaseOverview(bandId, releaseId).then(
+                                          (ov) => {
+                                            setData(ov);
+                                            setCachedReleaseOverview(
+                                              bandId,
+                                              releaseId,
+                                              ov
+                                            );
+                                          }
+                                        )
+                                      );
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="muted artist-section-empty">
+                            No staff credits yet
+                            {isAdmin ? " — add producers, writers, etc." : "."}
+                          </p>
+                        )}
+                      </section>
+                    ) : null}
+
+                    {bottomTab === "singles" && data.singles.length > 0 ? (
+                      <section className="release-page__section-glass release-page__singles">
+                        <div className="release-page__singles-grid">
+                          {data.singles.map((s) => {
+                            const dateLabel = formatTrackDate(
+                              s.date_iso ?? s.display_date
+                            );
+                            const targetId = s.navigate_release_id ?? s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                className="release-page__single"
+                                onClick={() => onOpenRelease(bandId, targetId)}
+                              >
+                                {s.cover_url && (
+                                  <span className="release-page__single-cover">
+                                    <img src={s.cover_url} alt="" draggable={false} />
+                                  </span>
+                                )}
+                                <span className="release-page__single-title">
+                                  {s.title}
+                                </span>
+                                {dateLabel && (
+                                  <span className="release-page__single-date">
+                                    {dateLabel}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {bottomTab === "singles" &&
+                    (data.appears_on?.length ?? 0) > 0 ? (
+                      <section className="release-page__section-glass release-page__singles release-page__appears-on">
+                        <div className="release-page__singles-grid">
+                          {data.appears_on!.map((s) => {
+                            const dateLabel = formatTrackDate(
+                              s.date_iso ?? s.display_date
+                            );
+                            const targetId = s.navigate_release_id ?? s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                className="release-page__single"
+                                onClick={() => onOpenRelease(bandId, targetId)}
+                              >
+                                {s.cover_url && (
+                                  <span className="release-page__single-cover">
+                                    <img src={s.cover_url} alt="" draggable={false} />
+                                  </span>
+                                )}
+                                <span className="release-page__single-title">
+                                  {s.title}
+                                </span>
+                                {dateLabel && (
+                                  <span className="release-page__single-date">
+                                    {dateLabel}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ) : null}
+                  </div>
+                ) : null}
 
                   </div>
                 )}
@@ -2782,6 +2960,91 @@ export default function ReleasePage({
           onSaved={() => void load()}
         />
       )}
+
+      {addStaffOpen ? (
+        <ModalPortal onClose={() => setAddStaffOpen(false)}>
+          <div
+            className="modal-panel artist-admin-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-panel-header">
+              <h3>Add staff member</h3>
+              <button
+                type="button"
+                className="modal-close-x"
+                onClick={() => setAddStaffOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="artist-admin-form">
+              <label>
+                Name
+                <input
+                  value={staffName}
+                  onChange={(e) => setStaffName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <label>
+                Photo URL (optional)
+                <input
+                  value={staffPhoto}
+                  onChange={(e) => setStaffPhoto(e.target.value)}
+                />
+              </label>
+              <label>
+                Roles
+                <input
+                  value={staffRolesText}
+                  onChange={(e) => setStaffRolesText(e.target.value)}
+                  list="release-staff-role-suggestions"
+                  placeholder="Producer, Writer, Lyricist…"
+                />
+                <datalist id="release-staff-role-suggestions">
+                  {staffRoleOpts.map((r) => (
+                    <option key={r.name} value={r.name} />
+                  ))}
+                </datalist>
+              </label>
+            </div>
+            <div className="modal-panel-actions modal-panel-actions--end">
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={staffBusy || !staffName.trim()}
+                onClick={() => {
+                  void (async () => {
+                    setStaffBusy(true);
+                    try {
+                      await addReleaseStaffMember(bandId, releaseId, {
+                        name: staffName.trim(),
+                        photo_url: staffPhoto.trim() || null,
+                        roles: staffRolesText
+                          .split(/[;·,]/)
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      });
+                      const ov = await fetchReleaseOverview(bandId, releaseId);
+                      setData(ov);
+                      setCachedReleaseOverview(bandId, releaseId, ov);
+                      setStaffName("");
+                      setStaffPhoto("");
+                      setStaffRolesText("");
+                      setAddStaffOpen(false);
+                      setBottomTab("staff");
+                    } finally {
+                      setStaffBusy(false);
+                    }
+                  })();
+                }}
+              >
+                {staffBusy ? "Adding…" : "Add"}
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      ) : null}
 
       {videoSetOpen && data && (
         <ReleaseVideoSetModal

@@ -439,10 +439,7 @@ export default function MediaItemPage({
   );
   const showSoloLineup = Boolean(data?.is_solo && lineup.length > 0);
   const showOverviewLineup = showBandLineup || showSoloLineup;
-  const hasOverviewBottom =
-    overviewSub === "lineup"
-      ? showOverviewLineup
-      : true;
+  const hasOverviewBottom = true;
 
   const directorNames = splitCreditNames(data?.director);
   const authorNames = splitCreditNames(data?.author);
@@ -592,27 +589,6 @@ export default function MediaItemPage({
             ))}
           </nav>
         )}
-        {tab === "overview" ? (
-          <nav
-            className="release-page__subtabs"
-            aria-label="Overview sections"
-          >
-            <button
-              type="button"
-              className={overviewSub === "lineup" ? "active" : ""}
-              onClick={() => setOverviewSub("lineup")}
-            >
-              <span>LINEUP</span>
-            </button>
-            <button
-              type="button"
-              className={overviewSub === "staff" ? "active" : ""}
-              onClick={() => setOverviewSub("staff")}
-            >
-              <span>STAFF</span>
-            </button>
-          </nav>
-        ) : null}
       </div>
 
       {loading && !data && (
@@ -951,7 +927,23 @@ export default function MediaItemPage({
                 </div>
 
                 {hasOverviewBottom ? (
-                  <div className="release-page__overview-bottom">
+                  <div className="release-page__overview-bottom series-subseries-overview__cast">
+                    <div className="series-subseries-overview__cast-tabs">
+                      <button
+                        type="button"
+                        className={overviewSub === "lineup" ? "active" : ""}
+                        onClick={() => setOverviewSub("lineup")}
+                      >
+                        Lineup
+                      </button>
+                      <button
+                        type="button"
+                        className={overviewSub === "staff" ? "active" : ""}
+                        onClick={() => setOverviewSub("staff")}
+                      >
+                        Staff
+                      </button>
+                    </div>
                     {overviewSub === "staff" ? (
                       <section className="release-page__section-glass release-page__lineup">
                         <div className="media-item-page__staff">

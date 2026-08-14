@@ -157,6 +157,10 @@ def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
                 and "portrait" in p.stem.casefold()
             ):
                 return _url(p)
+        # Artist books / loose galleries: any image in Covers/Gallery/Artwork
+        for p in files:
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+                return _url(p)
 
     # Portrait layouts can use landscape art when no dedicated portrait exists.
     landscape = _series_folder_landscape(folder, media_root)
@@ -251,6 +255,23 @@ def _series_cover_back(folder: Path, media_root: Path) -> str | None:
                 return f"{url}&v={int(back.stat().st_mtime)}"
             except OSError:
                 return url
+    # Fallback: any image whose filename contains "back"
+    for d in cover_search_dirs(folder):
+        try:
+            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
+        for p in files:
+            if (
+                p.is_file()
+                and p.suffix.lower() in IMAGE_EXTS
+                and "back" in p.stem.casefold()
+            ):
+                url = _media_url(p, media_root)
+                try:
+                    return f"{url}&v={int(p.stat().st_mtime)}"
+                except OSError:
+                    return url
     return None
 
 

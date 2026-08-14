@@ -129,11 +129,22 @@ function StaffRoleSuggest({
     return (parts[parts.length - 1] || "").trim().toLowerCase();
   }, [value]);
 
-  const suggestions = useMemo(() => {
-    return options
+  const grouped = useMemo(() => {
+    const filtered = options
       .filter((o) => o.name && !selectedSet.has(o.name.toLowerCase()))
-      .filter((o) => !draft || o.name.toLowerCase().includes(draft))
-      .slice(0, 12);
+      .filter((o) => !draft || o.name.toLowerCase().includes(draft));
+    const sortAz = (a: StaffRoleOpt, b: StaffRoleOpt) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    const general = filtered
+      .filter((o) => (o.type || "hybrid").toLowerCase() !== "dub")
+      .sort(sortAz);
+    const dubbing = filtered
+      .filter((o) => (o.type || "").toLowerCase() === "dub")
+      .sort(sortAz);
+    return [
+      { id: "general", label: "General", items: general },
+      { id: "dubbing", label: "Dubbing", items: dubbing },
+    ].filter((g) => g.items.length > 0);
   }, [options, draft, selectedSet]);
 
   useEffect(() => {
@@ -174,19 +185,27 @@ function StaffRoleSuggest({
         placeholder={placeholder}
         autoComplete="off"
       />
-      {open && suggestions.length > 0 ? (
+      {open && grouped.length > 0 ? (
         <ul className="series-staff-role-suggest__list" role="listbox">
-          {suggestions.map((r) => (
-            <li key={r.name}>
-              <button
-                type="button"
-                role="option"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => commit(r.name)}
-              >
-                {r.name}
-                <span className="series-staff-role-suggest__type">{r.type}</span>
-              </button>
+          {grouped.map((group) => (
+            <li key={group.id} className="series-staff-role-suggest__group">
+              <span className="series-staff-role-suggest__group-label">
+                {group.label}
+              </span>
+              <ul className="series-staff-role-suggest__group-list">
+                {group.items.map((r) => (
+                  <li key={r.name}>
+                    <button
+                      type="button"
+                      role="option"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => commit(r.name)}
+                    >
+                      {r.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>

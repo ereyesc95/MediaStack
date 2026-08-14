@@ -698,6 +698,72 @@ def patch_release_overview(
     return data
 
 
+@router.post("/bands/{band_id}/releases/{release_id}/staff")
+def add_release_staff(
+    band_id: int,
+    release_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_admin import add_release_staff_member
+
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    member = add_release_staff_member(
+        db,
+        band_id,
+        release_id,
+        name=name,
+        photo_url=body.get("photo_url"),
+        roles=body.get("roles"),
+    )
+    if not member:
+        raise HTTPException(404, "Release not found")
+    return member
+
+
+@router.patch("/bands/{band_id}/releases/{release_id}/staff/{member_id}")
+def patch_release_staff(
+    band_id: int,
+    release_id: str,
+    member_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_admin import patch_release_staff_member
+
+    member = patch_release_staff_member(
+        db,
+        band_id,
+        release_id,
+        member_id,
+        name=body.get("name"),
+        photo_url=body.get("photo_url"),
+        roles=body.get("roles"),
+    )
+    if not member:
+        raise HTTPException(404, "Staff member not found")
+    return member
+
+
+@router.delete("/bands/{band_id}/releases/{release_id}/staff/{member_id}")
+def delete_release_staff(
+    band_id: int,
+    release_id: str,
+    member_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.release_admin import remove_release_staff_member
+
+    if not remove_release_staff_member(db, band_id, release_id, member_id):
+        raise HTTPException(404, "Staff member not found")
+    return {"ok": True}
+
+
 @router.post("/bands/{band_id}/releases/{release_id}/lyrics/fetch")
 async def release_fetch_lyrics(
     band_id: int,

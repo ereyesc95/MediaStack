@@ -28,7 +28,9 @@ import {
   fetchSeriesFranchiseLibrary,
   fetchSeriesFranchiseMovies,
   fetchSeriesFranchiseShows,
+  fetchSeriesGallery,
   fetchSeriesOverview,
+  fetchMoviesGallery,
   fetchUniverse,
   fetchUniverseCards,
   lookupUniverse,
@@ -96,10 +98,14 @@ import {
   IconCheck,
   IconMediaMusic,
   IconVideo,
+  IconZoom,
 } from "../MenuIcons";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
 import MediaInlineSearch from "../music/MediaInlineSearch";
+import GalleryViewerModal, {
+  type GalleryViewerItem,
+} from "../music/artist/GalleryViewerModal";
 import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
@@ -650,6 +656,11 @@ export default function SeriesSubseriesPage({
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
+  const [coverFlipped, setCoverFlipped] = useState(false);
+  const [coverViewerItems, setCoverViewerItems] = useState<
+    GalleryViewerItem[]
+  >([]);
+  const [coverViewerIndex, setCoverViewerIndex] = useState(0);
   const [bgLayers, setBgLayers] = useState<{
     current?: string;
     outgoing?: string;
@@ -926,7 +937,9 @@ export default function SeriesSubseriesPage({
     pushSeriesRoute(
       {
         franchiseId,
+        franchiseName: franchiseName || undefined,
         subseriesId,
+        subseriesTitle: detail?.title || card?.title || undefined,
         seasonId,
         section: tabToSection(tab),
         overviewTab: tab === "overview" ? overviewTab : undefined,
@@ -934,7 +947,19 @@ export default function SeriesSubseriesPage({
       },
       true
     );
-  }, [franchiseId, subseriesId, seasonId, tab, isFilm, isBook, universeId, overviewTab]);
+  }, [
+    franchiseId,
+    franchiseName,
+    subseriesId,
+    seasonId,
+    tab,
+    isFilm,
+    isBook,
+    universeId,
+    overviewTab,
+    detail?.title,
+    card?.title,
+  ]);
 
   const seasons: SeriesSeasonCard[] = useMemo(
     () => detail?.seasons || [],
@@ -1009,6 +1034,11 @@ export default function SeriesSubseriesPage({
       baseCoverFront
     : baseCoverFront;
 
+  const panelCoverBack =
+    onEpisodesTab
+      ? activeSeason?.cover_back_url || detail?.cover_back_url || null
+      : detail?.cover_back_url || null;
+
   /** Wide art for mobile stacked banner panel: Banner → Landscape → Portrait. */
   const panelBannerUrl = onEpisodesTab
     ? focusBgUrl ||
@@ -1021,6 +1051,14 @@ export default function SeriesSubseriesPage({
     : baseCoverBanner || baseCoverFront;
 
   const panelArtUrl = stacked ? panelBannerUrl : panelCoverUrl;
+  const flipFrontUrl = panelArtUrl;
+  const flipBackUrl =
+    panelCoverBack && panelCoverBack !== flipFrontUrl ? panelCoverBack : null;
+  const canFlipCover = Boolean(flipFrontUrl && flipBackUrl);
+
+  useEffect(() => {
+    setCoverFlipped(false);
+  }, [flipFrontUrl, flipBackUrl, subseriesId]);
 
   const bgCoverUrl = onEpisodesTab
     ? focusBgUrl ||
@@ -1293,6 +1331,35 @@ export default function SeriesSubseriesPage({
       : null;
 
   const galleryPath = detail?.folder_path || card?.folder_path || "";
+
+  const openCoverArtworkViewer = async () => {
+    if (!galleryPath) return;
+    try {
+      const payload = isFilm
+        ? await fetchMoviesGallery(galleryPath)
+        : await fetchSeriesGallery(galleryPath);
+      const items: GalleryViewerItem[] = (payload.items || []).map((item) => ({
+        id: item.id || item.url,
+        url: item.url,
+        caption: item.title || "",
+      }));
+      if (!items.length) return;
+      let start = 0;
+      if (flipFrontUrl) {
+        const hit = items.findIndex(
+          (it) =>
+            it.url === flipFrontUrl ||
+            /cover/i.test(it.caption) ||
+            /front/i.test(it.caption)
+        );
+        if (hit >= 0) start = hit;
+      }
+      setCoverViewerItems(items);
+      setCoverViewerIndex(start);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const writers = scopedMeta?.writers ?? overview?.writers ?? [];
   const directors =
@@ -3403,22 +3470,63 @@ export default function SeriesSubseriesPage({
                     stacked && seasonLogoUrl
                       ? " release-page__cover-wrap--season-logo"
                       : ""
+                  }${canFlipCover ? " release-page__cover-wrap--flippable" : ""}${
+                    coverFlipped ? " release-page__cover-wrap--flipped" : ""
                   }`}
                 >
-                  <img
-                    key={`${panelArtUrl || "empty"}|${rescanTick}`}
-                    src={
-                      panelArtUrl
-                        ? rescanTick > 0 && !panelArtUrl.includes("&v=")
-                          ? `${panelArtUrl}${panelArtUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
-                          : panelArtUrl
-                        : undefined
-                    }
-                    alt=""
-                    className={`release-page__cover${
-                      stacked ? " release-page__cover--banner" : ""
-                    }${panelArtUrl ? "" : " release-page__cover--placeholder"}`}
-                  />
+                  <button
+                    type="button"
+                    className="release-page__cover-flip"
+                    onClick={(e) => {
+                      if (canFlipCover) setCoverFlipped((f) => !f);
+                      e.currentTarget.blur();
+                    }}
+                    aria-label={canFlipCover ? "Flip cover" : undefined}
+                    disabled={!canFlipCover}
+                  >
+                    <span className="release-page__cover-scene">
+                      <span className="release-page__cover-face release-page__cover-face--front">
+                        <img
+                          key={`${flipFrontUrl || "empty"}|${rescanTick}|front`}
+                          src={
+                            flipFrontUrl
+                              ? rescanTick > 0 && !flipFrontUrl.includes("&v=")
+                                ? `${flipFrontUrl}${flipFrontUrl.includes("?") ? "&" : "?"}_r=${rescanTick}`
+                                : flipFrontUrl
+                              : undefined
+                          }
+                          alt=""
+                          className={`release-page__cover${
+                            stacked ? " release-page__cover--banner" : ""
+                          }${flipFrontUrl ? "" : " release-page__cover--placeholder"}`}
+                          draggable={false}
+                        />
+                      </span>
+                      {canFlipCover && flipBackUrl ? (
+                        <span className="release-page__cover-face release-page__cover-face--back">
+                          <img
+                            src={flipBackUrl}
+                            alt=""
+                            className="release-page__cover release-page__cover--back"
+                            draggable={false}
+                          />
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  {!coverFlipped && galleryPath ? (
+                    <button
+                      type="button"
+                      className="release-page__cover-zoom"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openCoverArtworkViewer();
+                      }}
+                      aria-label="Browse artwork"
+                    >
+                      <IconZoom />
+                    </button>
+                  ) : null}
                   {stacked && seasonLogoUrl ? (
                     <span className="series-subseries-page__season-logo-glass">
                       <img
@@ -4708,6 +4816,15 @@ export default function SeriesSubseriesPage({
             );
             void loadCard();
           }}
+        />
+      ) : null}
+
+      {coverViewerItems.length > 0 ? (
+        <GalleryViewerModal
+          items={coverViewerItems}
+          index={coverViewerIndex}
+          onIndexChange={setCoverViewerIndex}
+          onClose={() => setCoverViewerItems([])}
         />
       ) : null}
     </div>

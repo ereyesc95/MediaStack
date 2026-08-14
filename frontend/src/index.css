@@ -16608,6 +16608,44 @@ button.lyrics-status-badge--icon-only {
   text-transform: uppercase;
 }
 
+.series-staff-role-suggest__group {
+  list-style: none;
+}
+
+.series-staff-role-suggest__group-label {
+  display: block;
+  padding: 0.35rem 0.75rem 0.15rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.series-staff-role-suggest__group-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.series-staff-role-suggest__group-list button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.series-staff-role-suggest__group-list button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .series-cast-card__actor-line {
   display: flex;
   flex-wrap: nowrap;

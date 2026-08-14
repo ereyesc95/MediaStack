@@ -205,6 +205,18 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
         }
     cover_front = resolve_cover_front_file(artwork)
     cover_back = _artwork_file(artwork, COVER_BACK_STEM)
+    if not cover_back:
+        try:
+            for p in sorted(artwork.iterdir(), key=lambda x: x.name.casefold()):
+                if (
+                    p.is_file()
+                    and p.suffix.lower() in IMAGE_EXTS
+                    and "back" in p.stem.casefold()
+                ):
+                    cover_back = p
+                    break
+        except OSError:
+            pass
     cover_inner = _artwork_file(artwork, COVER_INNER_STEM)
     cover_animation = resolve_animation_album_file(artwork)
     canvas = resolve_canvas_album_file(artwork)
@@ -833,6 +845,7 @@ def build_release_overview(
         "is_solo": solo,
         "is_various_artists": is_various_artists,
         "featured_artists": featured_artists,
+        "staff": [],
         "singles": _singles_for_release(band, content, media_root, release_title),
         "appears_on": appears_on,
         "taken_from": taken_from,

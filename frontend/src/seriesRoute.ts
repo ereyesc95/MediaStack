@@ -5,6 +5,7 @@ import {
   enc,
   isReservedSegment,
   normalizeSlug,
+  stripDatedFolderTitle,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -155,13 +156,17 @@ export function seriesPath(route: SeriesRoute): string {
     normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
     route.franchiseId;
   let path = `/series/${enc(franchiseSeg)}`;
-  const leafRaw = route.subseriesTitle?.trim() || route.subseriesId;
+  const leafRaw = stripDatedFolderTitle(
+    route.subseriesTitle?.trim() || route.subseriesId || ""
+  );
   const leafSeg = leafRaw ? normalizeSlug(leafRaw) || leafRaw : undefined;
   if (leafSeg) {
     path += `/${enc(leafSeg)}`;
   }
   if (route.seasonId) {
-    const seasonRaw = route.seasonTitle?.trim() || route.seasonId;
+    const seasonRaw = stripDatedFolderTitle(
+      route.seasonTitle?.trim() || route.seasonId
+    );
     path += `/season/${enc(normalizeSlug(seasonRaw) || seasonRaw)}`;
   }
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
