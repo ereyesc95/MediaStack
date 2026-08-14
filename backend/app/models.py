@@ -594,6 +594,21 @@ class StaffRole(Base):
     sro_type: Mapped[str] = mapped_column("sroType", String(16), default="hybrid")
 
 
+class ReleaseStaffMember(Base):
+    """Per-release staff credits (DB-backed; no JSON override files)."""
+
+    __tablename__ = "release_staff_members"
+
+    rsm_id: Mapped[int] = mapped_column("rsmID", Integer, primary_key=True)
+    rsm_band_id: Mapped[int] = mapped_column("rsmBandID", Integer, index=True)
+    rsm_release_id: Mapped[str] = mapped_column("rsmReleaseID", String(64), index=True)
+    rsm_member_key: Mapped[str] = mapped_column("rsmMemberKey", String(64), index=True)
+    rsm_name: Mapped[str] = mapped_column("rsmName", Text)
+    rsm_photo_url: Mapped[str | None] = mapped_column("rsmPhotoUrl", Text)
+    rsm_roles_json: Mapped[str | None] = mapped_column("rsmRolesJson", Text)
+    rsm_sort_order: Mapped[int | None] = mapped_column("rsmSortOrder", Integer, default=0)
+
+
 class ApiAuth(Base):
     __tablename__ = "apiauth"
 

@@ -29,12 +29,15 @@ import type {
   ReleaseNeighbor,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
+import { IconZoom } from "../../MenuIcons";
 import PlaylistBoot from "../../PlaylistBoot";
 import MediaBeatFrame from "../MediaBeatFrame";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
+import GalleryViewerModal, {
+  type GalleryViewerItem,
+} from "../artist/GalleryViewerModal";
 import {
   ChevronIcon,
-  DEFAULT_DISC_URL,
   DEFAULT_LABEL_URL,
 } from "../release/releaseTrackPanelMeta";
 import {
@@ -208,6 +211,11 @@ export default function MediaItemPage({
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [coverFlipped, setCoverFlipped] = useState(false);
+  const [coverViewerItems, setCoverViewerItems] = useState<GalleryViewerItem[]>(
+    []
+  );
+  const [coverViewerIndex, setCoverViewerIndex] = useState(0);
 
   const load = useCallback(
     async (force = false) => {
@@ -388,10 +396,47 @@ export default function MediaItemPage({
     (kind === "video" ? "Video release" : "Book");
   const displayDate =
     data?.display_date || formatTrackDate(data?.date_iso) || null;
-  const discUrl = data?.disc_url || DEFAULT_DISC_URL;
+  const coverFrontUrl = data?.cover_url || null;
+  const coverBackUrl = data?.cover_back_url || null;
+  const canFlipCover = Boolean(
+    coverFrontUrl && coverBackUrl && coverBackUrl !== coverFrontUrl
+  );
   const topLogoUrl = data?.logo_url ?? null;
   const publisherLogoSrc =
     data?.publisher_logo_url || DEFAULT_LABEL_URL;
+
+  const openCoverArtworkViewer = useCallback(async () => {
+    try {
+      const payload = await fetchMediaItemGallery(bandId, kind, itemId);
+      const artwork = payload?.artwork || [];
+      if (!artwork.length) return;
+      const items: GalleryViewerItem[] = artwork.map((item) => ({
+        id: item.id,
+        url: item.url,
+        caption: item.title,
+        subcaption:
+          "year" in item && item.year != null ? String(item.year) : undefined,
+      }));
+      let start = 0;
+      if (coverFrontUrl) {
+        const hit = items.findIndex(
+          (it) =>
+            it.url === coverFrontUrl ||
+            /cover/i.test(it.caption || "") ||
+            /front/i.test(it.caption || "")
+        );
+        if (hit >= 0) start = hit;
+      }
+      setCoverViewerItems(items);
+      setCoverViewerIndex(start);
+    } catch {
+      /* no artwork */
+    }
+  }, [bandId, coverFrontUrl, itemId, kind]);
+
+  useEffect(() => {
+    setCoverFlipped(false);
+  }, [bandId, kind, itemId, coverFrontUrl]);
 
   const year = Number((data?.date_iso ?? "").slice(0, 4));
   const cachedArtist = getCachedOverview(bandId, "landscape");
@@ -610,12 +655,7 @@ export default function MediaItemPage({
                     "release-page__art-stage",
                     bannerLayout
                       ? "release-page__art-stage--banner"
-                      : kind === "library"
-                        ? "release-page__art-stage--cover-only"
-                        : "",
-                    !bannerLayout && kind === "video" && !data.cover_url
-                      ? "release-page__art-stage--disc-only"
-                      : "",
+                      : "release-page__art-stage--cover-only",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -631,29 +671,61 @@ export default function MediaItemPage({
                       aria-hidden
                     />
                   ) : null}
-                  {data.cover_url ? (
+                  {coverFrontUrl ? (
                     <span
                       className={`release-page__cover-wrap${
                         bannerLayout
                           ? " release-page__cover-wrap--banner-cover release-page__cover-wrap--banner-cover-portrait"
                           : ""
+                      }${canFlipCover ? " release-page__cover-wrap--flippable" : ""}${
+                        coverFlipped ? " release-page__cover-wrap--flipped" : ""
                       }`}
                     >
-                      <img
-                        src={data.cover_url}
-                        alt=""
-                        className="release-page__cover"
-                        draggable={false}
-                      />
+                      <button
+                        type="button"
+                        className="release-page__cover-flip"
+                        onClick={(e) => {
+                          if (canFlipCover) setCoverFlipped((f) => !f);
+                          e.currentTarget.blur();
+                        }}
+                        aria-label={canFlipCover ? "Flip cover" : undefined}
+                        disabled={!canFlipCover}
+                      >
+                        <span className="release-page__cover-scene">
+                          <span className="release-page__cover-face release-page__cover-face--front">
+                            <img
+                              src={coverFrontUrl}
+                              alt=""
+                              className="release-page__cover"
+                              draggable={false}
+                            />
+                          </span>
+                          {canFlipCover && coverBackUrl ? (
+                            <span className="release-page__cover-face release-page__cover-face--back">
+                              <img
+                                src={coverBackUrl}
+                                alt=""
+                                className="release-page__cover release-page__cover--back"
+                                draggable={false}
+                              />
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                      {!coverFlipped ? (
+                        <button
+                          type="button"
+                          className="release-page__cover-zoom"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void openCoverArtworkViewer();
+                          }}
+                          aria-label="Browse artwork"
+                        >
+                          <IconZoom />
+                        </button>
+                      ) : null}
                     </span>
-                  ) : null}
-                  {!bannerLayout && kind === "video" ? (
-                    <img
-                      src={discUrl}
-                      alt=""
-                      className="release-page__disc"
-                      draggable={false}
-                    />
                   ) : null}
                 </div>
               </div>
@@ -1105,6 +1177,23 @@ export default function MediaItemPage({
                                   <span className="release-tracklist__num">
                                     {file.number ?? index + 1}
                                   </span>
+                                  {kind === "library" ? (
+                                    <span
+                                      className={`media-item-tracklist__cover${
+                                        file.cover_url
+                                          ? ""
+                                          : " media-item-tracklist__cover--empty"
+                                      }`}
+                                      style={
+                                        file.cover_url
+                                          ? {
+                                              backgroundImage: `url("${file.cover_url}")`,
+                                            }
+                                          : undefined
+                                      }
+                                      aria-hidden
+                                    />
+                                  ) : null}
                                   <span className="release-tracklist__title-wrap">
                                     <span className="release-tracklist__title">
                                       {title}
@@ -1164,6 +1253,15 @@ export default function MediaItemPage({
           onDataChanged={() => void load()}
         />
       )}
+
+      {coverViewerItems.length > 0 ? (
+        <GalleryViewerModal
+          items={coverViewerItems}
+          index={coverViewerIndex}
+          onIndexChange={setCoverViewerIndex}
+          onClose={() => setCoverViewerItems([])}
+        />
+      ) : null}
     </div>
   );
 }

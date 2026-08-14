@@ -1,5 +1,6 @@
 import { authHeaders, type ProfileUser } from "./auth";
 import type {
+  AlbumCard,
   ArtistCard,
   Band,
   FilterOptions,
@@ -170,6 +171,18 @@ export async function fetchArtistCards(
   params: URLSearchParams
 ): Promise<{ items: ArtistCard[]; total: number; page: number }> {
   return request(`${API}/music/artist-cards?${params}`);
+}
+
+export async function fetchAlbumCards(
+  params: URLSearchParams
+): Promise<{
+  items: AlbumCard[];
+  total: number;
+  page: number;
+  letters?: string[];
+  categories?: string[];
+}> {
+  return request(`${API}/music/album-cards?${params}`);
 }
 
 export async function fetchFilterOptions(): Promise<FilterOptions> {
@@ -843,6 +856,31 @@ export async function addReleaseStaffMember(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export async function patchReleaseStaffMember(
+  bandId: number,
+  releaseId: string,
+  memberId: string,
+  body: {
+    name?: string;
+    photo_url?: string | null;
+    roles?: string[];
+  }
+) {
+  return request<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+    roles?: string[];
+  }>(
+    `${API}/music/bands/${bandId}/releases/${releaseId}/staff/${encodeURIComponent(memberId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 export async function removeReleaseStaffMember(

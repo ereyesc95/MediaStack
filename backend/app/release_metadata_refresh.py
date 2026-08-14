@@ -354,7 +354,7 @@ async def refresh_release_metadata(
 
     overview = build_release_overview(db, band_id, release_id)
     if overview:
-        overview = apply_release_overrides(overview, band_id, release_id)
+        overview = apply_release_overrides(overview, band_id, release_id, db=db)
 
     got_metadata = bool(
         description

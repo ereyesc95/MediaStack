@@ -20,6 +20,7 @@ from app.media_index import (
 from app.media_paths_util import entry_display_name, safe_relative
 from app.media_tabs_index import (
     _folder_cover,
+    _folder_cover_back,
     _title_from_folder,
     find_resolved_media_item,
     iter_resolved_media_items,
@@ -199,7 +200,32 @@ def _file_entry(path: Path, media_root: Path, *, number: int | None = None) -> d
         "duration": duration,
         "page_count": page_count,
         "pages": pages,
+        "cover_url": None,
     }
+
+
+def _attach_library_file_covers(
+    folder: Path, media_root: Path, groups: list[dict]
+) -> list[dict]:
+    """Match Gallery images to PDF/document rows (volume miniatures)."""
+    try:
+        from app.books_index import _match_volume_cover, parse_volume_filename
+    except ImportError:
+        return groups
+    out: list[dict] = []
+    for group in groups:
+        files = []
+        for entry in group.get("files") or []:
+            row = dict(entry)
+            if not row.get("cover_url") and row.get("kind") == "document":
+                name = row.get("name") or ""
+                meta = parse_volume_filename(name)
+                cover = _match_volume_cover(folder, media_root, meta, name)
+                if cover:
+                    row["cover_url"] = cover
+            files.append(row)
+        out.append({**group, "files": files})
+    return out
 
 
 def _is_group_folder(name: str) -> bool:
@@ -722,15 +748,15 @@ def build_media_item_overview(
             date_iso = f"{y}-{mo or '01'}-{d or '01'}"
 
     groups = _build_groups(folder, media_root, kind=kind)
+    if kind == "library":
+        groups = _attach_library_file_covers(folder, media_root, groups)
     flat_files = [f for g in groups for f in (g.get("files") or [])]
     open_url = first_openable_file_url(folder, media_root, kind)
 
     cover_url = card.get("cover_url") or _folder_cover(folder, media_root)
-    # Library items are books/docs — no disc art; video keeps default disc fallback
-    if kind == "library":
-        disc_url = None
-    else:
-        disc_url = _folder_disc(folder, media_root) or DEFAULT_DISC_URL
+    cover_back_url = _folder_cover_back(folder, media_root)
+    # Video/library leaves: no disc art (cover-only stage like series)
+    disc_url = None
     logo_url = _folder_logo(folder, media_root)
 
     all_cards = [
@@ -770,6 +796,7 @@ def build_media_item_overview(
         "display_date": format_display_date(date_iso),
         "folder_path": rel,
         "cover_url": cover_url,
+        "cover_back_url": cover_back_url,
         "disc_url": disc_url,
         "logo_url": logo_url,
         "era_icon_url": era_icon_url,

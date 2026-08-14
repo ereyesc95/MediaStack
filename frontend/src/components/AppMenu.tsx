@@ -383,8 +383,8 @@ export default function AppMenu({
                     setOpen(false);
                   }}
                 >
-                  <IconAddArtist className="menu-item-icon" />
-                  Edit cast
+                  <IconLineup className="menu-item-icon" />
+                  Staff
                 </button>
               )}
             {onRefreshMetadata && (

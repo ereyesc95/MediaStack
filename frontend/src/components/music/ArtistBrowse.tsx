@@ -7,22 +7,28 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { searchRosterArtists } from "../../api";
+import { searchRosterArtists, searchRosterBands } from "../../api";
 import SearchableDropdown, { type DropdownOption } from "../SearchableDropdown";
 import type {
+  AlbumCard as AlbumCardType,
+  AlbumFilterMode,
   ArtistCard as ArtistCardType,
   ArtistFilterMode,
   CardOrientation,
   FilterOptions,
+  MusicCatalogScope,
+  ReleaseCardLayout,
 } from "../../types";
 import ArtistCard from "../ArtistCard";
+import CatalogAlbumCard from "./CatalogAlbumCard";
 import PlaylistBoot from "../PlaylistBoot";
 import { usePhoneLayout } from "../../usePhoneLayout";
+import { AUDIO_CATEGORY_META } from "./artist/ArtistAudio";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const HASH = "#";
 
-const FILTER_MODES: { id: ArtistFilterMode; label: string }[] = [
+const ARTIST_FILTER_MODES: { id: ArtistFilterMode; label: string }[] = [
   { id: "name", label: "ARTISTS" },
   { id: "group", label: "LINEUP" },
   { id: "members", label: "PEOPLE" },
@@ -32,6 +38,18 @@ const FILTER_MODES: { id: ArtistFilterMode; label: string }[] = [
   { id: "end", label: "END DATE" },
   { id: "genre", label: "GENRE" },
   { id: "gender", label: "GENDER" },
+  { id: "label", label: "LABEL" },
+  { id: "producer", label: "PRODUCER" },
+  { id: "most_played", label: "MOST PLAYED" },
+];
+
+const ALBUM_FILTER_MODES: { id: AlbumFilterMode; label: string }[] = [
+  { id: "name", label: "ALBUMS" },
+  { id: "artists", label: "ARTISTS" },
+  { id: "continent", label: "CONTINENT" },
+  { id: "country", label: "COUNTRY" },
+  { id: "start", label: "RELEASE DATE" },
+  { id: "genre", label: "GENRE" },
   { id: "label", label: "LABEL" },
   { id: "producer", label: "PRODUCER" },
   { id: "most_played", label: "MOST PLAYED" },
@@ -47,13 +65,20 @@ function decadeLabel(d: number) {
 }
 
 type Props = {
+  catalogScope?: MusicCatalogScope;
   artists: ArtistCardType[];
+  albums?: AlbumCardType[];
+  albumCardLayout?: ReleaseCardLayout;
+  albumLetters?: string[];
+  albumCategories?: string[];
+  albumCategory?: string;
+  albumArtistId?: number | "";
   total: number;
   page: number;
   orientation: CardOrientation;
   search: string;
   letter: string;
-  filterMode: ArtistFilterMode;
+  filterMode: ArtistFilterMode | AlbumFilterMode;
   filterOptions: FilterOptions | null;
   memberCount: number | "";
   memberArtistId: number | "";
@@ -69,7 +94,7 @@ type Props = {
   backgroundIso?: string | null;
   onSearchChange: (v: string) => void;
   onLetterChange: (v: string) => void;
-  onFilterModeChange: (m: ArtistFilterMode) => void;
+  onFilterModeChange: (m: ArtistFilterMode | AlbumFilterMode) => void;
   onMemberCountChange: (v: number | "") => void;
   onMemberArtistIdChange: (v: number | "") => void;
   onContinentIdChange: (v: number | "") => void;
@@ -82,13 +107,23 @@ type Props = {
   onProducerChange: (v: string) => void;
   onPageChange: (p: number) => void;
   onArtist: (id: number) => void;
+  onAlbum?: (album: AlbumCardType) => void;
+  onAlbumCategoryChange?: (key: string) => void;
+  onAlbumArtistIdChange?: (v: number | "") => void;
   filterLabel?: string;
   onClearFilter?: () => void;
   loading?: boolean;
 };
 
 export default function ArtistBrowse({
+  catalogScope = "artists",
   artists,
+  albums = [],
+  albumCardLayout = "cover",
+  albumLetters,
+  albumCategories = [],
+  albumCategory = "",
+  albumArtistId = "",
   total,
   page,
   orientation,
@@ -123,12 +158,16 @@ export default function ArtistBrowse({
   onProducerChange,
   onPageChange,
   onArtist,
+  onAlbum,
+  onAlbumCategoryChange,
+  onAlbumArtistIdChange,
   filterLabel,
   onClearFilter,
   loading,
 }: Props) {
+  const isAlbums = catalogScope === "albums";
   const isPhone = usePhoneLayout();
-  const [revealedId, setRevealedId] = useState<number | null>(null);
+  const [revealedId, setRevealedId] = useState<number | string | null>(null);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupPopoverStyle, setGroupPopoverStyle] = useState<CSSProperties>({});
   const [pageInput, setPageInput] = useState(String(page));
@@ -151,15 +190,35 @@ export default function ArtistBrowse({
     [isPhone, revealedId, onArtist]
   );
 
+  const handleAlbumCardClick = useCallback(
+    (album: AlbumCardType) => {
+      if (!onAlbum) return;
+      if (!isPhone) {
+        onAlbum(album);
+        return;
+      }
+      if (revealedId === album.id) {
+        setRevealedId(null);
+        onAlbum(album);
+      } else {
+        setRevealedId(album.id);
+      }
+    },
+    [isPhone, revealedId, onAlbum]
+  );
+
   useEffect(() => {
     setRevealedId(null);
   }, [
     artists,
+    albums,
     orientation,
+    albumCardLayout,
     search,
     letter,
     filterMode,
     page,
+    catalogScope,
     isPhone,
   ]);
 
@@ -167,7 +226,10 @@ export default function ArtistBrowse({
     if (!isPhone || revealedId == null) return;
     function dismiss(e: PointerEvent) {
       const target = e.target as Element;
-      if (!target.closest(".artist-card")) {
+      if (
+        !target.closest(".artist-card") &&
+        !target.closest(".media-release-card")
+      ) {
         setRevealedId(null);
       }
     }
@@ -212,17 +274,24 @@ export default function ArtistBrowse({
 
   const pageSize = 48;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const paginated = filterMode === "most_played" || filterMode === "gender";
+  const paginated =
+    isAlbums || filterMode === "most_played" || filterMode === "gender";
 
   const availableLetters = useMemo(() => {
+    if (isAlbums && albumLetters?.length) return albumLetters;
     const fromApi = filterOptions?.letters;
     if (fromApi?.length) return fromApi;
     return [...LETTERS, HASH];
-  }, [filterOptions]);
+  }, [filterOptions, isAlbums, albumLetters]);
+
+  const filterModeList = isAlbums ? ALBUM_FILTER_MODES : ARTIST_FILTER_MODES;
 
   const visibleFilterModes = useMemo(() => {
-    return FILTER_MODES.filter((f) => {
+    return filterModeList.filter((f) => {
       if (!filterOptions) {
+        if (isAlbums) {
+          return f.id === "name" || f.id === "artists" || f.id === "most_played";
+        }
         return (
           f.id === "name" ||
           f.id === "group" ||
@@ -249,7 +318,7 @@ export default function ArtistBrowse({
           return true;
       }
     });
-  }, [filterOptions]);
+  }, [filterOptions, filterModeList, isAlbums]);
 
   useEffect(() => {
     if (!visibleFilterModes.some((m) => m.id === filterMode)) {
@@ -260,7 +329,10 @@ export default function ArtistBrowse({
 
   useEffect(() => {
     if (filterMode !== "name") return;
-    if (!letter || (availableLetters.length && !availableLetters.includes(letter))) {
+    if (
+      !letter ||
+      (availableLetters.length && !availableLetters.includes(letter))
+    ) {
       const first = availableLetters[0];
       if (first) onLetterChange(first);
     }
@@ -312,6 +384,14 @@ export default function ArtistBrowse({
     }));
   }, []);
 
+  const searchBands = useCallback(async (q: string) => {
+    const data = await searchRosterBands(q);
+    return data.items.map((a) => ({
+      value: String(a.id),
+      label: a.name,
+    }));
+  }, []);
+
   const producerOptions: DropdownOption[] = useMemo(() => {
     if (!filterOptions) return [];
     return filterOptions.producers.map((p) => ({
@@ -325,8 +405,15 @@ export default function ArtistBrowse({
     return filterOptions.labels.map((l) => ({ value: l, label: l }));
   }, [filterOptions]);
 
+  const visibleAlbumCategories = useMemo(() => {
+    if (!albumCategories.length) return [];
+    return AUDIO_CATEGORY_META.filter((c) => albumCategories.includes(c.key));
+  }, [albumCategories]);
+
   const subBar = useMemo(() => {
-    if (!filterOptions) return null;
+    if (!filterOptions && filterMode !== "artists" && filterMode !== "name") {
+      return null;
+    }
     switch (filterMode) {
       case "name":
         return (
@@ -349,7 +436,22 @@ export default function ArtistBrowse({
             />
           </div>
         );
+      case "artists":
+        return (
+          <div className="filter-subbar filter-subbar--single">
+            <SearchableDropdown
+              options={[]}
+              value={albumArtistId === "" ? "" : String(albumArtistId)}
+              onChange={(v) => onAlbumArtistIdChange?.(v ? Number(v) : "")}
+              placeholder="Search artist…"
+              visibleRows={7}
+              minQueryLength={1}
+              onSearch={searchBands}
+            />
+          </div>
+        );
       case "continent":
+        if (!filterOptions) return null;
         return (
           <div className="filter-subbar filter-subbar--spread">
             {filterOptions.continents.map((c) => (
@@ -365,6 +467,7 @@ export default function ArtistBrowse({
           </div>
         );
       case "start":
+        if (!filterOptions) return null;
         return (
           <div className="filter-subbar filter-subbar--spread">
             {filterOptions.decades.map((d) => (
@@ -380,6 +483,7 @@ export default function ArtistBrowse({
           </div>
         );
       case "end":
+        if (!filterOptions) return null;
         return (
           <div className="filter-subbar filter-subbar--spread">
             {filterOptions.decades.map((d) => (
@@ -491,10 +595,13 @@ export default function ArtistBrowse({
     countryId,
     subgenreId,
     memberArtistId,
+    albumArtistId,
     label,
+    producer,
     countryOptions,
     genreOptions,
     searchMembers,
+    searchBands,
     labelOptions,
     producerOptions,
     onLetterChange,
@@ -506,11 +613,17 @@ export default function ArtistBrowse({
     onCountryIdChange,
     onSubgenreIdChange,
     onMemberArtistIdChange,
+    onAlbumArtistIdChange,
     onLabelChange,
     onProducerChange,
   ]);
 
   const hasBackdrop = Boolean(backgroundUrl || backgroundIso);
+  const showAlbumCategoryBar =
+    isAlbums &&
+    filterMode === "artists" &&
+    albumArtistId !== "" &&
+    visibleAlbumCategories.length > 1;
 
   return (
     <div
@@ -606,6 +719,20 @@ export default function ArtistBrowse({
           ))}
         </nav>
         {subBar}
+        {showAlbumCategoryBar ? (
+          <nav className="artist-page__subtabs artist-audio__type-bar">
+            {visibleAlbumCategories.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={albumCategory === c.key ? "active" : ""}
+                onClick={() => onAlbumCategoryChange?.(c.key)}
+              >
+                <span>{isPhone ? c.mobile : c.desktop}</span>
+              </button>
+            ))}
+          </nav>
+        ) : null}
         {paginated && totalPages > 1 && (
           <div className="filter-subbar filter-subbar--pagination">
             <button
@@ -665,24 +792,61 @@ export default function ArtistBrowse({
         {loading && (
           <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
         )}
-        {artists.length > 0 && (
-          <div className={`artist-grid artist-grid--${orientation}`}>
-            {artists.map((a) => (
-              <ArtistCard
-                key={a.id}
-                artist={a}
-                orientation={orientation}
-                tapReveal={isPhone}
-                revealed={isPhone && revealedId === a.id}
-                onClick={() => handleArtistCardClick(a.id)}
-              />
-            ))}
-          </div>
-        )}
-        {!artists.length && !loading && (
-          <div className="artist-browse-empty">
-            <p className="muted">No media found</p>
-          </div>
+        {isAlbums ? (
+          <>
+            {albums.length > 0 && (
+              <div
+                className={`media-release-grid${
+                  albumCardLayout === "banner"
+                    ? " media-release-grid--banner"
+                    : ""
+                }`}
+              >
+                {albums.map((a) => (
+                  <CatalogAlbumCard
+                    key={`${a.navigate_band_id}-${a.id}`}
+                    album={a}
+                    cardLayout={albumCardLayout}
+                    tapReveal={isPhone}
+                    revealed={isPhone && revealedId === a.id}
+                    onReveal={() => setRevealedId(a.id)}
+                    onOpen={handleAlbumCardClick}
+                  />
+                ))}
+              </div>
+            )}
+            {!albums.length && !loading && (
+              <div className="artist-browse-empty">
+                <p className="muted">
+                  {filterMode === "artists" && albumArtistId === ""
+                    ? "Pick an artist"
+                    : "No media found"}
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {artists.length > 0 && (
+              <div className={`artist-grid artist-grid--${orientation}`}>
+                {artists.map((a) => (
+                  <ArtistCard
+                    key={a.id}
+                    artist={a}
+                    orientation={orientation}
+                    tapReveal={isPhone}
+                    revealed={isPhone && revealedId === a.id}
+                    onClick={() => handleArtistCardClick(a.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {!artists.length && !loading && (
+              <div className="artist-browse-empty">
+                <p className="muted">No media found</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

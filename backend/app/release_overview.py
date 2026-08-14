@@ -861,7 +861,7 @@ def build_release_overview(
     from app.release_metadata_refresh import apply_mb_cache
 
     payload = apply_mb_cache(payload, band_id, release_id)
-    payload = apply_release_overrides(payload, band_id, release_id)
+    payload = apply_release_overrides(payload, band_id, release_id, db=db)
     # Era Banner photo matched by release title/year (same as catalog cards).
     banner_item = {
         "title": payload.get("title") or release_title,

@@ -266,6 +266,29 @@ def migrate_schema(eng: Engine) -> None:
                     """
                 )
             )
+        if "release_staff_members" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE release_staff_members (
+                        "rsmID" INTEGER NOT NULL PRIMARY KEY,
+                        "rsmBandID" INTEGER NOT NULL,
+                        "rsmReleaseID" TEXT NOT NULL,
+                        "rsmMemberKey" TEXT NOT NULL,
+                        "rsmName" TEXT NOT NULL,
+                        "rsmPhotoUrl" TEXT,
+                        "rsmRolesJson" TEXT,
+                        "rsmSortOrder" INTEGER DEFAULT 0
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_release_staff_band_release" '
+                    'ON release_staff_members ("rsmBandID", "rsmReleaseID")'
+                )
+            )
         if "series" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("series")}
             for col, typ in (

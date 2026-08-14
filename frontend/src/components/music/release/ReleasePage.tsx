@@ -16,6 +16,7 @@ import {
   fetchTrackSourceArt,
   addReleaseStaffMember,
   removeReleaseStaffMember,
+  patchReleaseStaffMember,
   playTrack,
   refreshReleaseMetadata,
   resolveArtistName,
@@ -157,6 +158,7 @@ type Props = {
   onEditProfile?: () => void;
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
   onBackToMovies?: (franchiseId: string) => void;
+  onBackToHome?: () => void;
 };
 
 function isVideoMedia(url: string | null | undefined): boolean {
@@ -347,6 +349,7 @@ export default function ReleasePage({
   onEditProfile,
   onBackToSeries,
   onBackToMovies,
+  onBackToHome,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -418,12 +421,19 @@ export default function ReleasePage({
     "lineup"
   );
   const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+    roles?: string[];
+  } | null>(null);
   const [staffName, setStaffName] = useState("");
   const [staffPhoto, setStaffPhoto] = useState("");
   const [staffRolesText, setStaffRolesText] = useState("");
   const [staffRoleOpts, setStaffRoleOpts] = useState<
     { name: string; type: string }[]
   >([]);
+  const [staffRoleMenuOpen, setStaffRoleMenuOpen] = useState(false);
   const [staffBusy, setStaffBusy] = useState(false);
   const [externalArtist, setExternalArtist] = useState<{
     name: string;
@@ -681,32 +691,13 @@ export default function ReleasePage({
       clearScale();
       if (!desc || !cards) return;
 
-      const descH = desc.scrollHeight;
-      const cardsH = cards.offsetHeight;
       const topH = top.clientHeight;
+      const cardsH = cards.offsetHeight;
       if (cardsH <= 0 || topH <= 0) return;
 
-      const descShort = descH < cardsH * 0.92;
-      const slack = topH - Math.max(descH, cardsH);
-      if (!descShort && slack <= 24) return;
-
-      let scale = 1;
-      if (descShort) {
-        const ratio = Math.min(1, descH / cardsH);
-        scale = 1 + Math.min(0.45, (1 - ratio) * 0.55);
-      }
-      if (slack > 24) {
-        scale = Math.max(scale, 1 + Math.min(0.35, (slack / topH) * 0.55));
-      }
-
-      if (cardsH > 0 && topH > 0) {
-        const maxFit = topH * 0.98;
-        if (cardsH * scale > maxFit) {
-          scale = Math.max(0.75, maxFit / cardsH);
-        }
-      }
-
-      scale = Math.min(1.5, Math.max(1, scale));
+      // Grow photocards to fill the overview-top column down to the lineup.
+      let scale = topH / cardsH;
+      scale = Math.min(2.35, Math.max(1, scale * 0.98));
       if (scale > 1.02) {
         top.style.setProperty("--overview-photocard-scale", scale.toFixed(3));
       }
@@ -980,6 +971,7 @@ export default function ReleasePage({
   }, [displayCanvas, showPanelCanvas, isPlaying, bannerLayout]);
 
   const releaseReferrer = getReleaseReferrer();
+  const homeReferrer = releaseReferrer?.source === "home" ? releaseReferrer : null;
   const seriesReferrer =
     releaseReferrer?.source === "series" && releaseReferrer.franchiseId
       ? releaseReferrer
@@ -998,24 +990,32 @@ export default function ReleasePage({
   const franchiseBackLabel = (
     franchiseReferrer?.franchiseName || "Franchise"
   ).toUpperCase();
-  const backLabel = franchiseReferrer
-    ? bannerLayout
-      ? seriesBackUsesIcon
-        ? null
-        : "Back"
-      : franchiseBackLabel
-    : releaseReferrer && releaseReferrer.bandId !== bandId
-      ? (releaseReferrer.artistName ??
-          referrerOverview?.name ??
-          "Artist")
-      : (data?.artist_name ?? "Artist");
-  const backAriaLabel = franchiseReferrer
-    ? `Back to ${franchiseBackLabel}`
-    : `Back to ${backLabel ?? "Artist"}`;
+  const backLabel = homeReferrer
+    ? "HOME"
+    : franchiseReferrer
+      ? bannerLayout
+        ? seriesBackUsesIcon
+          ? null
+          : "Back"
+        : franchiseBackLabel
+      : releaseReferrer && releaseReferrer.bandId !== bandId
+        ? (releaseReferrer.artistName ??
+            referrerOverview?.name ??
+            "Artist")
+        : (data?.artist_name ?? "Artist");
+  const backAriaLabel = homeReferrer
+    ? "Back to Home"
+    : franchiseReferrer
+      ? `Back to ${franchiseBackLabel}`
+      : `Back to ${backLabel ?? "Artist"}`;
 
   const handleBack = () => {
     const ref = releaseReferrer;
     clearReleaseReferrer();
+    if (ref?.source === "home") {
+      onBackToHome?.();
+      return;
+    }
     if (ref?.source === "series" && ref.franchiseId) {
       onBackToSeries?.(ref.franchiseId, ref.subseriesId);
       return;
@@ -2449,6 +2449,18 @@ export default function ReleasePage({
               onEditProfile={onEditProfile}
               menuVariant="release"
               onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
+              onAddMember={
+                isAdmin
+                  ? () => {
+                      setEditingStaff(null);
+                      setStaffName("");
+                      setStaffPhoto("");
+                      setStaffRolesText("");
+                      setStaffRoleMenuOpen(false);
+                      setAddStaffOpen(true);
+                    }
+                  : undefined
+              }
               onRefreshMetadata={
                 isAdmin ? () => void handleRefreshMetadata() : undefined
               }
@@ -2743,24 +2755,23 @@ export default function ReleasePage({
                     ) : null}
 
                     {bottomTab === "staff" ? (
-                      <section className="release-page__section-glass release-page__lineup">
-                        {isAdmin ? (
-                          <div style={{ marginBottom: "0.75rem" }}>
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => setAddStaffOpen(true)}
-                            >
-                              Add staff
-                            </button>
-                          </div>
-                        ) : null}
+                      <section className="release-page__section-glass release-page__lineup release-page__staff">
                         {releaseStaff.length > 0 ? (
                           <div className="release-page__lineup-grid">
                             {releaseStaff.map((m) => (
-                              <div
+                              <button
                                 key={m.id}
+                                type="button"
                                 className="release-lineup-card"
+                                onClick={() => {
+                                  if (!isAdmin) return;
+                                  setEditingStaff(m);
+                                  setStaffName(m.name || "");
+                                  setStaffPhoto(m.photo_url || "");
+                                  setStaffRolesText((m.roles || [])[0] || "");
+                                  setStaffRoleMenuOpen(false);
+                                  setAddStaffOpen(true);
+                                }}
                               >
                                 <span className="release-lineup-card__photo">
                                   {m.photo_url ? (
@@ -2779,42 +2790,27 @@ export default function ReleasePage({
                                     {(m.roles || []).join(" · ")}
                                   </span>
                                 ) : null}
-                                {isAdmin ? (
-                                  <button
-                                    type="button"
-                                    className="btn link-form__delete"
-                                    aria-label={`Remove ${m.name}`}
-                                    onClick={() => {
-                                      void removeReleaseStaffMember(
-                                        bandId,
-                                        releaseId,
-                                        m.id
-                                      ).then(() =>
-                                        fetchReleaseOverview(bandId, releaseId).then(
-                                          (ov) => {
-                                            setData(ov);
-                                            setCachedReleaseOverview(
-                                              bandId,
-                                              releaseId,
-                                              ov
-                                            );
-                                          }
-                                        )
-                                      );
-                                    }}
-                                  >
-                                    ×
-                                  </button>
-                                ) : null}
-                              </div>
+                              </button>
                             ))}
                           </div>
-                        ) : (
-                          <p className="muted artist-section-empty">
-                            No staff credits yet
-                            {isAdmin ? " — add producers, writers, etc." : "."}
-                          </p>
-                        )}
+                        ) : isAdmin ? (
+                          <div className="release-page__staff-empty">
+                            <button
+                              type="button"
+                              className="release-page__staff-add-link"
+                              onClick={() => {
+                                setEditingStaff(null);
+                                setStaffName("");
+                                setStaffPhoto("");
+                                setStaffRolesText("");
+                                setStaffRoleMenuOpen(false);
+                                setAddStaffOpen(true);
+                              }}
+                            >
+                              + Add Staff
+                            </button>
+                          </div>
+                        ) : null}
                       </section>
                     ) : null}
 
@@ -2962,17 +2958,27 @@ export default function ReleasePage({
       )}
 
       {addStaffOpen ? (
-        <ModalPortal onClose={() => setAddStaffOpen(false)}>
+        <ModalPortal
+          onClose={() => {
+            setAddStaffOpen(false);
+            setEditingStaff(null);
+            setStaffRoleMenuOpen(false);
+          }}
+        >
           <div
             className="modal-panel artist-admin-modal"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="modal-panel-header">
-              <h3>Add staff member</h3>
+              <h3>{editingStaff ? "Edit staff member" : "Add staff member"}</h3>
               <button
                 type="button"
                 className="modal-close-x"
-                onClick={() => setAddStaffOpen(false)}
+                onClick={() => {
+                  setAddStaffOpen(false);
+                  setEditingStaff(null);
+                  setStaffRoleMenuOpen(false);
+                }}
               >
                 ×
               </button>
@@ -2993,22 +2999,73 @@ export default function ReleasePage({
                   onChange={(e) => setStaffPhoto(e.target.value)}
                 />
               </label>
-              <label>
+              <label className="release-staff-role-field">
                 Roles
-                <input
-                  value={staffRolesText}
-                  onChange={(e) => setStaffRolesText(e.target.value)}
-                  list="release-staff-role-suggestions"
-                  placeholder="Producer, Writer, Lyricist…"
-                />
-                <datalist id="release-staff-role-suggestions">
-                  {staffRoleOpts.map((r) => (
-                    <option key={r.name} value={r.name} />
-                  ))}
-                </datalist>
+                <button
+                  type="button"
+                  className="release-staff-role-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded={staffRoleMenuOpen}
+                  onClick={() => setStaffRoleMenuOpen((o) => !o)}
+                >
+                  {staffRolesText || "Select a role…"}
+                </button>
+                {staffRoleMenuOpen ? (
+                  <ul className="release-staff-role-menu" role="listbox">
+                    {staffRoleOpts.map((r) => (
+                      <li key={r.name}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={staffRolesText === r.name}
+                          className={
+                            staffRolesText === r.name
+                              ? "is-selected"
+                              : undefined
+                          }
+                          onClick={() => {
+                            setStaffRolesText(r.name);
+                            setStaffRoleMenuOpen(false);
+                          }}
+                        >
+                          {r.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </label>
             </div>
             <div className="modal-panel-actions modal-panel-actions--end">
+              {editingStaff ? (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={staffBusy}
+                  onClick={() => {
+                    void (async () => {
+                      if (!editingStaff) return;
+                      setStaffBusy(true);
+                      try {
+                        await removeReleaseStaffMember(
+                          bandId,
+                          releaseId,
+                          editingStaff.id
+                        );
+                        const ov = await fetchReleaseOverview(bandId, releaseId);
+                        setData(ov);
+                        setCachedReleaseOverview(bandId, releaseId, ov);
+                        setAddStaffOpen(false);
+                        setEditingStaff(null);
+                      } finally {
+                        setStaffBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  Remove
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn--primary"
@@ -3017,21 +3074,36 @@ export default function ReleasePage({
                   void (async () => {
                     setStaffBusy(true);
                     try {
-                      await addReleaseStaffMember(bandId, releaseId, {
-                        name: staffName.trim(),
-                        photo_url: staffPhoto.trim() || null,
-                        roles: staffRolesText
-                          .split(/[;·,]/)
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      });
+                      const roles = staffRolesText.trim()
+                        ? [staffRolesText.trim()]
+                        : [];
+                      if (editingStaff) {
+                        await patchReleaseStaffMember(
+                          bandId,
+                          releaseId,
+                          editingStaff.id,
+                          {
+                            name: staffName.trim(),
+                            photo_url: staffPhoto.trim() || null,
+                            roles,
+                          }
+                        );
+                      } else {
+                        await addReleaseStaffMember(bandId, releaseId, {
+                          name: staffName.trim(),
+                          photo_url: staffPhoto.trim() || null,
+                          roles,
+                        });
+                      }
                       const ov = await fetchReleaseOverview(bandId, releaseId);
                       setData(ov);
                       setCachedReleaseOverview(bandId, releaseId, ov);
                       setStaffName("");
                       setStaffPhoto("");
                       setStaffRolesText("");
+                      setStaffRoleMenuOpen(false);
                       setAddStaffOpen(false);
+                      setEditingStaff(null);
                       setBottomTab("staff");
                     } finally {
                       setStaffBusy(false);
@@ -3039,7 +3111,13 @@ export default function ReleasePage({
                   })();
                 }}
               >
-                {staffBusy ? "Adding…" : "Add"}
+                {staffBusy
+                  ? editingStaff
+                    ? "Saving…"
+                    : "Adding…"
+                  : editingStaff
+                    ? "Save"
+                    : "Add"}
               </button>
             </div>
           </div>

@@ -105,6 +105,11 @@ type Props = {
   playingPath?: string | null;
   onPlayTrack: (path: string, artistId: number | null, title: string | null) => void;
   onArtist: (id: number) => void;
+  onRelease: (
+    artistId: number,
+    releaseId: string,
+    meta?: { artistName?: string | null; title?: string | null }
+  ) => void;
   onGenre: (id: number) => void;
   onCountry: (country: { id?: number; name: string }) => void;
 };
@@ -179,6 +184,7 @@ export default function MusicHome({
   playingPath = null,
   onPlayTrack,
   onArtist,
+  onRelease,
   onGenre,
   onCountry,
 }: Props) {
@@ -188,15 +194,19 @@ export default function MusicHome({
 
   const topTracks = slicePane(dash.top_tracks, paneLimit);
   const topArtists = slicePane(dash.top_artists, paneLimit);
+  const topReleases = slicePane(dash.top_releases ?? [], paneLimit);
   const topGenres = slicePane(dash.top_genres, paneLimit);
   const topCountries = slicePane(dash.top_countries, paneLimit);
 
   const trackPlaceholders = placeholderCount(topTracks.length, paneLimit);
   const artistPlaceholders = placeholderCount(topArtists.length, paneLimit);
+  const releasePlaceholders = placeholderCount(topReleases.length, paneLimit);
   const genrePlaceholders = placeholderCount(topGenres.length, paneLimit);
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
-  const dashClass = DASH_LAYOUT_CLASS[layout];
+  const dashClass = `${DASH_LAYOUT_CLASS[layout]}${
+    playingPath ? " music-dashboard--player-active" : ""
+  }`;
   const tracksScrollRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -297,6 +307,51 @@ export default function MusicHome({
           <PlaceholderTiles
             count={topArtists.length ? artistPlaceholders : paneLimit}
             variant="landscape"
+          />
+        </div>
+      </section>
+
+      <section className="dash-row dash-row--tracks">
+        <DashPaneLabel
+          logo="/api/assets/icons/pane-icons"
+          title="TOP RECORDS"
+          subtitle="Most played releases"
+        />
+        <div className="dash-scroll dash-scroll--tracks">
+          {topReleases.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className="dash-track"
+              onClick={() => {
+                if (r.artist_id != null) {
+                  onRelease(r.artist_id, r.id, {
+                    artistName: r.artist_name,
+                    title: r.title,
+                  });
+                }
+              }}
+            >
+              <span className="dash-track-art">
+                <span
+                  className="dash-track-art-bg card-bg-layer"
+                  style={
+                    r.cover_url
+                      ? { backgroundImage: `url("${r.cover_url}")` }
+                      : undefined
+                  }
+                />
+              </span>
+              <BillboardText
+                className="dash-track-title"
+                short={r.title ?? ""}
+                full={r.title ?? ""}
+              />
+            </button>
+          ))}
+          <PlaceholderTiles
+            count={topReleases.length ? releasePlaceholders : paneLimit}
+            variant="square"
           />
         </div>
       </section>

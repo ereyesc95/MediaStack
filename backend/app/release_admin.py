@@ -1,12 +1,14 @@
-"""Admin overrides for release overview metadata."""
+"""Admin overrides for release overview metadata + DB-backed staff credits."""
 from __future__ import annotations
 
 import json
 import uuid
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models import ReleaseStaffMember
 from app.paths import DATA_DIR
 from app.release_overview import build_release_overview, resolve_release_content
 
@@ -44,8 +46,8 @@ def save_release_override(
     producer: str | None = None,
     label: str | None = None,
     subgenres: list[str] | None = None,
-    staff: list[dict] | None = None,
 ) -> dict:
+    """Persist about-field overrides only (staff lives in the DB)."""
     data = load_release_override(band_id, release_id)
     if description is not None:
         data["description"] = description.strip() or None
@@ -55,8 +57,8 @@ def save_release_override(
         data["label"] = label.strip() or None
     if subgenres is not None:
         data["subgenres"] = [s.strip() for s in subgenres if s.strip()]
-    if staff is not None:
-        data["staff"] = staff
+    # Staff must not be written back to disk
+    data.pop("staff", None)
     return _write_override(band_id, release_id, data)
 
 
@@ -79,11 +81,98 @@ def _normalize_staff_member(raw: dict) -> dict | None:
     }
 
 
-def apply_release_overrides(payload: dict, band_id: int, release_id: str) -> dict:
+def _roles_to_json(roles: list[str] | None) -> str | None:
+    cleaned = [str(r).strip() for r in (roles or []) if r and str(r).strip()]
+    return json.dumps(cleaned) if cleaned else None
+
+
+def _roles_from_json(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(r).strip() for r in data if r and str(r).strip()]
+
+
+def _row_to_member(row: ReleaseStaffMember) -> dict:
+    return {
+        "id": row.rsm_member_key,
+        "name": row.rsm_name,
+        "photo_url": row.rsm_photo_url,
+        "roles": _roles_from_json(row.rsm_roles_json),
+    }
+
+
+def _list_staff_rows(
+    db: Session, band_id: int, release_id: str
+) -> list[ReleaseStaffMember]:
+    return list(
+        db.scalars(
+            select(ReleaseStaffMember)
+            .where(
+                ReleaseStaffMember.rsm_band_id == band_id,
+                ReleaseStaffMember.rsm_release_id == release_id,
+            )
+            .order_by(
+                ReleaseStaffMember.rsm_sort_order.asc(),
+                ReleaseStaffMember.rsm_id.asc(),
+            )
+        ).all()
+    )
+
+
+def list_release_staff(db: Session, band_id: int, release_id: str) -> list[dict]:
+    """Load staff from DB; one-time migrate legacy JSON override staff if needed."""
+    rows = _list_staff_rows(db, band_id, release_id)
+    if rows:
+        return [_row_to_member(r) for r in rows]
+
     override = load_release_override(band_id, release_id)
-    if not override:
-        payload.setdefault("staff", [])
-        return payload
+    staff_raw = override.get("staff")
+    if not isinstance(staff_raw, list) or not staff_raw:
+        return []
+
+    migrated: list[dict] = []
+    for i, entry in enumerate(staff_raw):
+        if not isinstance(entry, dict):
+            continue
+        member = _normalize_staff_member(entry)
+        if not member:
+            continue
+        db.add(
+            ReleaseStaffMember(
+                rsm_band_id=band_id,
+                rsm_release_id=release_id,
+                rsm_member_key=member["id"],
+                rsm_name=member["name"],
+                rsm_photo_url=member.get("photo_url"),
+                rsm_roles_json=_roles_to_json(member.get("roles")),
+                rsm_sort_order=i,
+            )
+        )
+        migrated.append(member)
+    if migrated:
+        db.commit()
+        # Drop staff from override file so future edits stay DB-only
+        override.pop("staff", None)
+        try:
+            _write_override(band_id, release_id, override)
+        except OSError:
+            pass
+    return migrated
+
+
+def apply_release_overrides(
+    payload: dict,
+    band_id: int,
+    release_id: str,
+    db: Session | None = None,
+) -> dict:
+    override = load_release_override(band_id, release_id)
     if override.get("description"):
         payload["description"] = override["description"]
         payload["description_manual"] = True
@@ -96,16 +185,20 @@ def apply_release_overrides(payload: dict, band_id: int, release_id: str) -> dic
         payload["subgenres"] = [
             {"id": i, "name": name} for i, name in enumerate(override["subgenres"])
         ]
-    staff_raw = override.get("staff")
-    staff: list[dict] = []
-    if isinstance(staff_raw, list):
-        for entry in staff_raw:
-            if not isinstance(entry, dict):
-                continue
-            member = _normalize_staff_member(entry)
-            if member:
-                staff.append(member)
-    payload["staff"] = staff
+    if db is not None:
+        payload["staff"] = list_release_staff(db, band_id, release_id)
+    else:
+        # Legacy callers without a session — read JSON staff only as fallback
+        staff_raw = override.get("staff")
+        staff: list[dict] = []
+        if isinstance(staff_raw, list):
+            for entry in staff_raw:
+                if not isinstance(entry, dict):
+                    continue
+                member = _normalize_staff_member(entry)
+                if member:
+                    staff.append(member)
+        payload["staff"] = staff
     return payload
 
 
@@ -132,7 +225,7 @@ def patch_release_overview(
     payload = build_release_overview(db, band_id, release_id)
     if not payload:
         return None
-    return apply_release_overrides(payload, band_id, release_id)
+    return apply_release_overrides(payload, band_id, release_id, db=db)
 
 
 def add_release_staff_member(
@@ -146,8 +239,8 @@ def add_release_staff_member(
 ) -> dict | None:
     if not resolve_release_content(db, band_id, release_id):
         return None
-    data = load_release_override(band_id, release_id)
-    staff = list(data.get("staff") or []) if isinstance(data.get("staff"), list) else []
+    # Ensure any legacy JSON staff is migrated first so sort order is correct
+    list_release_staff(db, band_id, release_id)
     member = _normalize_staff_member(
         {
             "name": name,
@@ -157,9 +250,20 @@ def add_release_staff_member(
     )
     if not member:
         return None
-    staff.append(member)
-    data["staff"] = staff
-    _write_override(band_id, release_id, data)
+    existing = _list_staff_rows(db, band_id, release_id)
+    sort_order = (existing[-1].rsm_sort_order or 0) + 1 if existing else 0
+    db.add(
+        ReleaseStaffMember(
+            rsm_band_id=band_id,
+            rsm_release_id=release_id,
+            rsm_member_key=member["id"],
+            rsm_name=member["name"],
+            rsm_photo_url=member.get("photo_url"),
+            rsm_roles_json=_roles_to_json(member.get("roles")),
+            rsm_sort_order=sort_order,
+        )
+    )
+    db.commit()
     return member
 
 
@@ -175,24 +279,26 @@ def patch_release_staff_member(
 ) -> dict | None:
     if not resolve_release_content(db, band_id, release_id):
         return None
-    data = load_release_override(band_id, release_id)
-    staff = list(data.get("staff") or []) if isinstance(data.get("staff"), list) else []
+    list_release_staff(db, band_id, release_id)
     want = str(member_id)
-    for entry in staff:
-        if not isinstance(entry, dict):
-            continue
-        if str(entry.get("id") or "") != want:
-            continue
-        if name is not None:
-            entry["name"] = name.strip()
-        if photo_url is not None:
-            entry["photo_url"] = photo_url.strip() or None
-        if roles is not None:
-            entry["roles"] = [str(r).strip() for r in roles if r and str(r).strip()]
-        data["staff"] = staff
-        _write_override(band_id, release_id, data)
-        return _normalize_staff_member(entry)
-    return None
+    row = db.scalar(
+        select(ReleaseStaffMember).where(
+            ReleaseStaffMember.rsm_band_id == band_id,
+            ReleaseStaffMember.rsm_release_id == release_id,
+            ReleaseStaffMember.rsm_member_key == want,
+        )
+    )
+    if not row:
+        return None
+    if name is not None:
+        row.rsm_name = name.strip()
+    if photo_url is not None:
+        row.rsm_photo_url = photo_url.strip() or None
+    if roles is not None:
+        row.rsm_roles_json = _roles_to_json(roles)
+    db.commit()
+    db.refresh(row)
+    return _row_to_member(row)
 
 
 def remove_release_staff_member(
@@ -200,16 +306,17 @@ def remove_release_staff_member(
 ) -> bool:
     if not resolve_release_content(db, band_id, release_id):
         return False
-    data = load_release_override(band_id, release_id)
-    staff = list(data.get("staff") or []) if isinstance(data.get("staff"), list) else []
+    list_release_staff(db, band_id, release_id)
     want = str(member_id)
-    next_staff = [
-        e
-        for e in staff
-        if isinstance(e, dict) and str(e.get("id") or "") != want
-    ]
-    if len(next_staff) == len(staff):
+    row = db.scalar(
+        select(ReleaseStaffMember).where(
+            ReleaseStaffMember.rsm_band_id == band_id,
+            ReleaseStaffMember.rsm_release_id == release_id,
+            ReleaseStaffMember.rsm_member_key == want,
+        )
+    )
+    if not row:
         return False
-    data["staff"] = next_staff
-    _write_override(band_id, release_id, data)
+    db.delete(row)
+    db.commit()
     return True

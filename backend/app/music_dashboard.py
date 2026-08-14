@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.band_library import cover_url_for_track_path, title_from_track_path
 from app.config import settings
 from app.gallery import pick_playlist_cover, resolve_artist_card
+from app.media_index import release_id_from_path
 from app.user_playlist import resolve_playlist_cover_url
 from app.models import Band, Country, Genre, Playlist, PlaylistData, Reproduction, Subgenre
 from app.play_stats import is_quiz_play_title, subgenre_image_url
@@ -231,17 +232,21 @@ def build_dashboard(db: Session, user_id: int) -> dict:
         if not band:
             continue
         card = resolve_artist_card(band.bnd_name, orientation="landscape")
+        portrait = resolve_artist_card(band.bnd_name, orientation="portrait")
         top_artists.append(
             {
                 "id": band.bnd_id,
                 "name": band.bnd_name,
                 "play_count": count,
                 "photo_url": card.photo_url,
+                "portrait_url": portrait.photo_url or card.photo_url,
                 "logo_url": card.logo_url,
                 "icon_url": card.icon_url,
                 "show_name_on_hover": False,
             }
         )
+
+    top_releases = _build_top_releases(db, reps, media_root)
 
     genre_counts: Counter[int] = Counter()
     country_counts: Counter[int] = Counter()
@@ -287,9 +292,235 @@ def build_dashboard(db: Session, user_id: int) -> dict:
     return {
         "top_tracks": top_tracks,
         "top_artists": top_artists,
+        "top_releases": top_releases,
         "top_genres": top_genres,
         "top_countries": top_countries,
     }
+
+
+def _normalize_legacy_audio_rel(release_rel: str) -> str:
+    """Strip legacy Music/{L}/{Artist}/Audio/{Category}/… → …/{Category}/…."""
+    parts = release_rel.replace("\\", "/").strip("/").split("/")
+    if (
+        len(parts) >= 5
+        and parts[0].casefold() == "music"
+        and parts[3].casefold() == "audio"
+    ):
+        return "/".join(parts[:3] + parts[4:])
+    return release_rel.replace("\\", "/")
+
+
+def _resolve_dashboard_release_ids(
+    db: Session,
+    *,
+    artist_id: int | None,
+    title: str | None,
+    release_rel: str,
+) -> tuple[str, int | None]:
+    """Map play-path folder to audio-index navigate_release_id (and band)."""
+    from app.media_index import get_audio_index
+
+    release_rel = _normalize_legacy_audio_rel(release_rel)
+    fallback_id = release_id_from_path(release_rel)
+    if not artist_id:
+        return fallback_id, artist_id
+    band = db.get(Band, artist_id)
+    if not band:
+        return fallback_id, artist_id
+
+    want_title = re.sub(r"[^a-z0-9]+", "", (title or "").casefold())
+    want_folder = Path(release_rel).name.casefold()
+    want_rel = release_rel.casefold().rstrip("/")
+
+    try:
+        index = get_audio_index(db, band)
+    except Exception:
+        return fallback_id, artist_id
+
+    for card in index.get("releases") or []:
+        folder = (card.get("folder_path") or "").replace("\\", "/").casefold().rstrip("/")
+        folder_norm = _normalize_legacy_audio_rel(folder)
+        nav_id = card.get("navigate_release_id") or card.get("id")
+        nav_band = card.get("navigate_band_id") or artist_id
+        if not nav_id:
+            continue
+        if folder == want_rel or folder_norm == want_rel:
+            return str(nav_id), int(nav_band) if nav_band else artist_id
+        if Path(folder).name.casefold() == want_folder:
+            return str(nav_id), int(nav_band) if nav_band else artist_id
+        card_title = re.sub(
+            r"[^a-z0-9]+", "", (card.get("title") or "").casefold()
+        )
+        if want_title and card_title == want_title:
+            return str(nav_id), int(nav_band) if nav_band else artist_id
+
+    return fallback_id, artist_id
+
+
+def _build_top_releases(
+    db: Session,
+    reps: list[Reproduction],
+    media_root: Path | None,
+) -> list[dict]:
+    """Aggregate play weights by release folder; one card per album (editions collapsed)."""
+    from app.band_library import _album_title_from_folder, _strip_bracket_suffix
+    from app.media_index import _release_dir_from_content_folder
+    from app.media_paths_util import entry_display_name, safe_relative
+    from app.playlist_tracks import (
+        _album_rel_path,
+        _audio_file_for_play_path,
+        _is_edition_or_disc_name,
+    )
+    from app.release_tracklist import (
+        _source_album_display,
+        _source_edition_dir_for_audio,
+    )
+
+    release_counts: Counter[str] = Counter()
+    release_meta: dict[str, dict] = {}
+
+    def _canonical_release(
+        path: str,
+    ) -> tuple[str | None, str | None]:
+        """Return (release_rel, display_title) for the album root, not an edition."""
+        if media_root is not None:
+            audio_file = _audio_file_for_play_path(path, media_root)
+            if not audio_file:
+                # Legacy play paths often still include /Audio/ — try without it
+                alt = _normalize_legacy_audio_rel(path)
+                if alt != path:
+                    audio_file = _audio_file_for_play_path(alt, media_root)
+            if audio_file:
+                release_dir = _release_dir_from_content_folder(audio_file.parent)
+                edition_dir = _source_edition_dir_for_audio(release_dir, audio_file)
+                _, release_title, _ = _source_album_display(release_dir, edition_dir)
+                rel = safe_relative(release_dir, media_root)
+                if rel:
+                    return _normalize_legacy_audio_rel(
+                        rel.replace("\\", "/")
+                    ), release_title
+        # Path-only fallback: walk up past edition/disc folder names
+        release_rel = _normalize_legacy_audio_rel(_album_rel_path(path))
+        title = None
+        if release_rel:
+            folder_name = Path(release_rel).name
+            while _is_edition_or_disc_name(folder_name) and "/" in release_rel:
+                release_rel = str(Path(release_rel).parent).replace("\\", "/")
+                folder_name = Path(release_rel).name
+            release_rel = _normalize_legacy_audio_rel(release_rel)
+            title = _strip_bracket_suffix(
+                _album_title_from_folder(entry_display_name(Path(folder_name)))
+            )
+        return release_rel or None, title
+
+    for r in reps:
+        weight = _dashboard_rep_weight(r)
+        if weight <= 0 or is_quiz_play_title(r.rep_title):
+            continue
+        path = (r.rep_path or "").strip().replace("\\", "/")
+        if not path:
+            continue
+
+        release_rel, title = _canonical_release(path)
+        if not release_rel:
+            continue
+        if not title:
+            title = (r.rep_release or "").strip() or None
+            if title and ":" in title:
+                # Drop edition suffix like "Album: Deluxe Edition"
+                head, _, tail = title.partition(":")
+                if _is_edition_or_disc_name(tail.strip()) or tail.strip().casefold().endswith(
+                    "edition"
+                ):
+                    title = head.strip()
+
+        key = release_rel.casefold().rstrip("/")
+        release_counts[key] += weight
+        existing = release_meta.get(key)
+        if existing is None:
+            release_meta[key] = {
+                "release_rel": release_rel,
+                "title": title,
+                "artist_id": r.rep_artist_id,
+                "path": path,
+            }
+        else:
+            if title and (
+                not existing.get("title")
+                or (
+                    ":" in str(existing.get("title") or "")
+                    and ":" not in title
+                )
+            ):
+                existing["title"] = title
+            if r.rep_artist_id and not existing.get("artist_id"):
+                existing["artist_id"] = r.rep_artist_id
+
+    # Collapse any remaining duplicates that share artist + normalized title
+    merged_counts: Counter[str] = Counter()
+    merged_meta: dict[str, dict] = {}
+    key_alias: dict[str, str] = {}
+
+    def _norm_title(t: str | None) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (t or "").casefold())
+
+    for key, count in release_counts.most_common():
+        meta = release_meta.get(key) or {}
+        artist_id = meta.get("artist_id")
+        tkey = f"{artist_id}|{_norm_title(meta.get('title'))}"
+        if artist_id and _norm_title(meta.get("title")) and tkey in key_alias:
+            canon = key_alias[tkey]
+            merged_counts[canon] += count
+            continue
+        if artist_id and _norm_title(meta.get("title")):
+            key_alias[tkey] = key
+        merged_counts[key] = count
+        merged_meta[key] = meta
+
+    top_releases: list[dict] = []
+    for key, count in merged_counts.most_common(10):
+        meta = merged_meta.get(key)
+        if not meta:
+            continue
+        release_rel = meta["release_rel"]
+        artist_id = meta.get("artist_id")
+        title = (meta.get("title") or "").strip()
+        if not title:
+            title = Path(release_rel).name
+            m = re.match(r"^(\d{4})(?:\.\d{2}){0,2}\.\s*(.+)$", title)
+            if m:
+                title = m.group(2).strip()
+        release_id, artist_id = _resolve_dashboard_release_ids(
+            db,
+            artist_id=artist_id,
+            title=title,
+            release_rel=release_rel,
+        )
+        artist_name = None
+        if artist_id:
+            band = db.get(Band, artist_id)
+            artist_name = band.bnd_name if band else None
+        cover_url = (
+            cover_url_for_track_path(meta["path"], media_root)
+            if media_root
+            else None
+        )
+        # Prefer cover from the resolved on-disk layout (without /Audio/)
+        if media_root and not cover_url:
+            cover_url = cover_url_for_track_path(
+                _normalize_legacy_audio_rel(meta["path"]), media_root
+            )
+        top_releases.append(
+            {
+                "id": release_id,
+                "title": title,
+                "artist_id": artist_id,
+                "artist_name": artist_name,
+                "play_count": count,
+                "cover_url": cover_url,
+            }
+        )
+    return top_releases
 
 
 def _parse_country_id(field: str | None) -> int | None:
@@ -372,6 +603,209 @@ def list_artist_cards(
             }
         )
     return items, total
+
+
+def _title_letter(title: str | None) -> str:
+    raw = (title or "").strip()[:1].upper()
+    if raw and "A" <= raw <= "Z":
+        return raw
+    return "#"
+
+
+def _release_decade(date_iso: str | None) -> int | None:
+    if not date_iso or len(date_iso) < 4 or not date_iso[:4].isdigit():
+        return None
+    return (int(date_iso[:4]) // 10) * 10
+
+
+def _album_play_counts(db: Session, user_id: int) -> Counter[str]:
+    """Map release_id (rel_…) → play weight for catalog most_played."""
+    from app.playlist_tracks import _album_rel_path
+    from app.profile_scope import rep_user_filter
+
+    media_root = Path(settings.media_root) if settings.media_root else None
+    counts: Counter[str] = Counter()
+    for r in db.scalars(
+        select(Reproduction).where(
+            Reproduction.rep_media_type == 200,
+            rep_user_filter(user_id),
+        )
+    ).all():
+        if is_quiz_play_title(r.rep_title):
+            continue
+        path = (r.rep_path or "").strip().replace("\\", "/")
+        if not path:
+            continue
+        try:
+            n = int(r.rep_reproductions or "0")
+        except ValueError:
+            n = 1
+        if n <= 0:
+            continue
+        release_rel = None
+        if media_root is not None:
+            from app.media_index import _release_dir_from_content_folder
+            from app.media_paths_util import safe_relative
+            from app.playlist_tracks import _audio_file_for_play_path
+
+            audio_file = _audio_file_for_play_path(path, media_root)
+            if not audio_file:
+                alt = _normalize_legacy_audio_rel(path)
+                if alt != path:
+                    audio_file = _audio_file_for_play_path(alt, media_root)
+            if audio_file:
+                release_dir = _release_dir_from_content_folder(audio_file.parent)
+                release_rel = safe_relative(release_dir, media_root)
+        if not release_rel:
+            release_rel = _normalize_legacy_audio_rel(_album_rel_path(path))
+        if not release_rel:
+            continue
+        counts[release_id_from_path(release_rel.replace("\\", "/"))] += n
+    return counts
+
+
+def list_album_cards(
+    db: Session,
+    *,
+    user_id: int,
+    search: str = "",
+    letter: str = "",
+    filter_mode: str = "name",
+    artist_id: int | None = None,
+    continent_id: int | None = None,
+    country_id: int | None = None,
+    start_decade: int | None = None,
+    subgenre_id: int | None = None,
+    label: str = "",
+    producer: str = "",
+    category: str = "",
+    layout: str = "cover",
+    page: int = 1,
+    page_size: int = 48,
+) -> tuple[list[dict], int, list[str], list[str]]:
+    """Paginated album/release cards across the music catalog.
+
+    Returns (items, total, letters, categories).
+    ``categories`` is populated when ``artist_id`` is set (artist audio types).
+    """
+    from app.media_index import get_audio_index
+    from app.music_filters import filter_bands
+    from app.release_banner_photos import enrich_items_with_banners
+
+    rows = list(db.scalars(select(Band)).all())
+
+    if filter_mode == "artists":
+        if artist_id is None:
+            rows = []
+        else:
+            rows = [b for b in rows if b.bnd_id == artist_id]
+    elif filter_mode in ("continent", "country", "genre", "label", "producer"):
+        rows = filter_bands(
+            db,
+            rows,
+            search="",
+            letter="",
+            filter_mode=filter_mode,
+            continent_id=continent_id,
+            country_id=country_id,
+            subgenre_id=subgenre_id,
+            label=label,
+            producer=producer,
+        )
+    # name / start / most_played: all bands; album-level filters applied below
+
+    play_counts = (
+        _album_play_counts(db, user_id) if filter_mode == "most_played" else None
+    )
+
+    albums: list[dict] = []
+    categories_for_artist: list[str] = []
+    letters_set: set[str] = set()
+    search_term = search.strip().lower()
+
+    for b in rows:
+        index = get_audio_index(db, b, force=False)
+        releases = index.get("releases") or []
+        if artist_id is not None and b.bnd_id == artist_id:
+            categories_for_artist = list(index.get("categories") or [])
+        for rel in releases:
+            title = (rel.get("title") or "").strip()
+            if search_term:
+                in_title = search_term in title.lower()
+                in_artist = bool(b.bnd_name and search_term in b.bnd_name.lower())
+                if not in_title and not in_artist:
+                    continue
+            if category and rel.get("category") != category:
+                continue
+            if filter_mode == "start" and start_decade is not None:
+                if _release_decade(rel.get("date_iso")) != start_decade:
+                    continue
+            letters_set.add(_title_letter(title))
+            if filter_mode == "name" and letter:
+                tl = _title_letter(title)
+                if letter == "#":
+                    if tl != "#":
+                        continue
+                elif tl != letter.upper()[:1]:
+                    continue
+            rid = rel.get("navigate_release_id") or rel.get("id")
+            pc = None
+            if play_counts is not None and rid:
+                pc = play_counts.get(rid, 0)
+                alt = rel.get("id")
+                if alt and alt != rid:
+                    pc = max(pc, play_counts.get(alt, 0))
+            albums.append(
+                {
+                    "id": rid,
+                    "navigate_release_id": rid,
+                    "navigate_band_id": rel.get("navigate_band_id") or b.bnd_id,
+                    "title": title,
+                    "artist_id": b.bnd_id,
+                    "artist_name": b.bnd_name,
+                    "cover_url": rel.get("cover_url"),
+                    "banner_url": rel.get("banner_url"),
+                    "logo_url": rel.get("logo_url"),
+                    "logo_collapsed_url": rel.get("logo_collapsed_url"),
+                    "date_iso": rel.get("date_iso"),
+                    "display_date": rel.get("display_date"),
+                    "category": rel.get("category"),
+                    "folder_path": rel.get("folder_path"),
+                    "play_count": pc,
+                }
+            )
+
+    letters = sorted(letters_set, key=lambda x: (x == "#", x))
+
+    if filter_mode == "most_played":
+        albums.sort(
+            key=lambda a: (
+                -(a.get("play_count") or 0),
+                (a.get("artist_name") or "").casefold(),
+                (a.get("title") or "").casefold(),
+            )
+        )
+    else:
+        albums.sort(
+            key=lambda a: (
+                (a.get("title") or "").casefold(),
+                (a.get("artist_name") or "").casefold(),
+                a.get("date_iso") or "",
+            )
+        )
+
+    total = len(albums)
+    start = (page - 1) * page_size
+    page_items = albums[start : start + page_size]
+
+    if layout == "banner" and page_items:
+        by_band: dict[int, list[dict]] = {}
+        for it in page_items:
+            by_band.setdefault(int(it["artist_id"]), []).append(it)
+        for bid, items in by_band.items():
+            enrich_items_with_banners(db, bid, items)
+
+    return page_items, total, letters, categories_for_artist
 
 
 def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[dict]:

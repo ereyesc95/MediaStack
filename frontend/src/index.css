@@ -947,6 +947,36 @@ input {
   overflow: hidden;
 }
 
+/* When On Repeat is playing, shrink other panes so labels stay visible above the player. */
+.music-dashboard--player-active .dash-row--icons .dash-icon-item-cover,
+.music-dashboard--player-active .dash-row--icons .dash-placeholder--landscape {
+  height: clamp(3.25rem, 9vh, 5.5rem);
+}
+
+.music-dashboard--player-active .dash-row--tracks .dash-track-art,
+.music-dashboard--player-active .dash-row--tracks .dash-placeholder--square {
+  width: clamp(3.5rem, 8.5vh, 5.75rem);
+  height: clamp(3.5rem, 8.5vh, 5.75rem);
+}
+
+.music-dashboard--player-active .dash-row--genres .dash-genre-ring,
+.music-dashboard--player-active .dash-row--genres .dash-placeholder--circle {
+  width: clamp(3.1rem, 8vh, 5rem);
+  height: clamp(3.1rem, 8vh, 5rem);
+}
+
+.music-dashboard--player-active .dash-row--flags .dash-country-flag,
+.music-dashboard--player-active .dash-row--flags .dash-placeholder--flag {
+  width: clamp(3.1rem, 8vh, 5rem);
+  height: clamp(2.2rem, 5.5vh, 3.4rem);
+}
+
+.music-dashboard--player-active .dash-item-label,
+.music-dashboard--player-active .dash-track-title,
+.music-dashboard--player-active .dash-icon-item-name {
+  font-size: clamp(0.58rem, 1.4vh, 0.72rem);
+}
+
 .music-dashboard--tablet-portrait {
   --dash-pane-cols: 5;
 }
@@ -10695,10 +10725,10 @@ button.media-release-card--banner {
   min-height: 0;
   overflow: hidden;
   gap: clamp(0.55rem, 1.4vh, 0.85rem);
-  --overview-photo-col: clamp(7rem, 14vw, 14.5rem);
+  --overview-photo-col: clamp(7.5rem, 15vw, 15rem);
   --overview-portrait-width: 0.74;
-  --overview-portrait-max-h: clamp(8.5rem, 20vh, 12.5rem);
-  --overview-landscape-max-h: clamp(5.25rem, 13vh, 8.5rem);
+  --overview-portrait-max-h: clamp(10rem, 26vh, 16rem);
+  --overview-landscape-max-h: clamp(6rem, 16vh, 10rem);
   --overview-member-photo: clamp(2.75rem, 3.6vw, 3.75rem);
   --overview-single-cover: clamp(2.75rem, 3.6vw, 3.75rem);
   --overview-lineup-font: clamp(0.58rem, 0.68vw, 0.68rem);
@@ -10725,8 +10755,9 @@ button.media-release-card--banner {
 }
 
 .release-page__overview--compact-lineup .release-page__overview-top {
-  flex: 0 1 auto;
-  max-height: min(50vh, calc(100% - 9rem));
+  flex: 1 1 0;
+  max-height: none;
+  min-height: 0;
 }
 
 .release-page__overview-side {
@@ -10737,6 +10768,9 @@ button.media-release-card--banner {
   align-items: center;
   align-self: stretch;
   justify-content: flex-start;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   gap: clamp(0.4rem, 0.9vh, 0.65rem);
   width: auto;
   max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
@@ -11001,23 +11035,32 @@ button.media-release-card--banner {
 .release-page__overview-top {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   gap: clamp(0.65rem, 1.5vw, 1.25rem);
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-height: 0;
-  max-height: min(50vh, calc(100% - 9rem));
+  max-height: none;
   width: 100%;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
   z-index: 0;
   --overview-photocard-scale: 1;
+  --overview-portrait-max-h: clamp(11rem, 30vh, 18rem);
+  --overview-landscape-max-h: clamp(6.5rem, 18vh, 11rem);
+}
+
+.release-page__overview--compact-lineup .release-page__overview-top {
+  flex: 1 1 0;
+  max-height: none;
+  min-height: 0;
 }
 
 .release-page__overview-top .release-page__desc-block {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  max-height: 100%;
+  max-height: none;
+  height: auto;
   order: 1;
   overflow: hidden;
   display: flex;
@@ -11026,9 +11069,9 @@ button.media-release-card--banner {
 }
 
 .release-page__overview-top .release-page__desc-scroll {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   height: auto;
-  max-height: 100%;
+  max-height: none;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -11036,18 +11079,20 @@ button.media-release-card--banner {
 
 .release-page__overview-top .release-page__photocards,
 .release-page__overview-side .release-page__photocards {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   order: 2;
   width: auto;
   max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
-  align-self: flex-start;
+  align-self: stretch;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
-  gap: clamp(0.4rem, 0.9vh, 0.65rem);
+  gap: clamp(0.45rem, 1.1vh, 0.85rem);
   padding: 0;
   overflow: visible;
   display: flex;
+  min-height: 0;
+  height: auto;
 }
 
 .release-page__overview-top .release-photocard {
@@ -11310,6 +11355,111 @@ button.media-release-card--banner {
   flex: 0 0 auto;
   min-height: 0;
   justify-content: flex-start;
+}
+
+.release-page__staff {
+  position: relative;
+  min-height: clamp(4.5rem, 14vh, 9rem);
+}
+
+.release-page__staff-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: inherit;
+  width: 100%;
+}
+
+.release-page__staff-add-link {
+  appearance: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.release-page__staff-add-link:hover {
+  opacity: 1;
+  text-decoration: none;
+}
+
+.release-staff-role-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.release-staff-role-trigger {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.release-staff-role-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.2rem);
+  z-index: 40;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  max-height: 12rem;
+  overflow-y: auto;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1a1520;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.release-staff-role-menu button {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.release-staff-role-menu button:hover,
+.release-staff-role-menu button.is-selected {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.media-item-tracklist__cover {
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.28rem;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.media-item-tracklist__cover--empty {
+  background-image: none;
 }
 
 .release-page__overview--no-singles .release-page__lineup {

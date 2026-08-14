@@ -25,7 +25,7 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 6
+MEDIA_TAB_SCAN_VERSION = 7
 
 # Artist media tabs now prefer sibling module franchise folders:
 # video → Movies/{L}/{Artist}/, library → Books/{L}/{Artist}/, series → Series/…
@@ -80,9 +80,10 @@ def _known_categories(kind: str) -> set[str]:
 
 
 def _folder_cover(folder: Path, media_root: Path) -> str | None:
-    """Prefer exact ``Cover - Front`` / ``Cover - Album`` in [Artwork], then globs."""
+    """Prefer exact ``Cover - Front`` / ``Cover - Album``, then any Gallery image."""
     from app.artwork_stems import resolve_cover_front_file
     from app.band_library import _find_artwork_subdir
+    from app.series_paths import cover_search_dirs
 
     def _with_mtime(path: Path) -> str:
         url = _media_url(path, media_root)
@@ -98,17 +99,21 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
             return _with_mtime(exact)
 
     search_dirs: list[Path] = []
-    if art:
-        search_dirs.append(art)
-    else:
-        try:
-            for child in folder.iterdir():
-                if child.is_dir() and child.name.casefold() in _SKIP_ITEM_NAMES:
-                    search_dirs.append(child)
-                    break
-        except OSError:
-            pass
-    search_dirs.append(folder)
+    seen: set[str] = set()
+
+    def _add(d: Path | None) -> None:
+        if not d or not d.is_dir():
+            return
+        key = str(d.resolve()) if d.exists() else str(d)
+        if key in seen:
+            return
+        seen.add(key)
+        search_dirs.append(d)
+
+    for d in cover_search_dirs(folder):
+        _add(d)
+    _add(art)
+    _add(folder)
 
     preferred = (
         "Cover - Front*",
@@ -119,14 +124,11 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
         "front*",
     )
     for directory in search_dirs:
-        if not directory.is_dir():
-            continue
         for pattern in preferred:
             try:
                 matches = sorted(directory.glob(pattern), key=lambda p: p.name.casefold())
             except OSError:
                 continue
-            # Prefer exact stem match over "Cover - Front (alt)" style names
             exact_front = [
                 p
                 for p in matches
@@ -143,6 +145,40 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
             for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
                 if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
                     return _with_mtime(child)
+        except OSError:
+            continue
+    return None
+
+
+def _folder_cover_back(folder: Path, media_root: Path) -> str | None:
+    """Cover - Back from Gallery/Covers/[Artwork] when present."""
+    from app.artwork_stems import COVER_BACK_STEM
+    from app.band_library import _find_artwork_subdir
+    from app.series_paths import cover_search_dirs
+
+    def _with_mtime(path: Path) -> str:
+        url = _media_url(path, media_root)
+        try:
+            return f"{url}&v={int(path.stat().st_mtime)}"
+        except OSError:
+            return url
+
+    want = COVER_BACK_STEM.casefold()
+    dirs: list[Path] = []
+    art = _find_artwork_subdir(folder)
+    if art:
+        dirs.append(art)
+    dirs.extend(cover_search_dirs(folder))
+    for directory in dirs:
+        if not directory.is_dir():
+            continue
+        try:
+            for p in directory.iterdir():
+                if not (p.is_file() and p.suffix.lower() in IMAGE_EXTS):
+                    continue
+                stem = p.stem.casefold().strip()
+                if stem == want or ("cover" in stem and "back" in stem):
+                    return _with_mtime(p)
         except OSError:
             continue
     return None

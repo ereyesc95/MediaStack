@@ -23,6 +23,7 @@ from app.music_dashboard import (
     artists_by_genre,
     build_dashboard,
     get_user_playlist_detail,
+    list_album_cards,
     list_artist_cards,
     list_user_playlists,
     playlist_tracks,
@@ -205,6 +206,7 @@ def music_dashboard(
         return {
             "top_tracks": [],
             "top_artists": [],
+            "top_releases": [],
             "top_genres": [],
             "top_countries": [],
         }
@@ -294,6 +296,58 @@ def artist_cards(
         producer=producer,
     )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/album-cards")
+def album_cards(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    search: str = "",
+    letter: str = "",
+    filter_mode: str = Query("name"),
+    artist_id: int | None = None,
+    continent_id: int | None = None,
+    country_id: int | None = None,
+    start_decade: int | None = None,
+    subgenre_id: int | None = None,
+    label: str = "",
+    producer: str = "",
+    category: str = "",
+    layout: str = Query("cover", pattern="^(cover|banner)$"),
+    orientation: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(48, ge=1, le=200),
+):
+    # Accept orientation as an alias for layout (catalog toggles may send either).
+    card_layout = layout
+    if orientation in ("cover", "banner"):
+        card_layout = orientation
+    items, total, letters, categories = list_album_cards(
+        db,
+        user_id=user.usr_id,
+        search=search,
+        letter=letter,
+        filter_mode=filter_mode,
+        artist_id=artist_id,
+        continent_id=continent_id,
+        country_id=country_id,
+        start_decade=start_decade,
+        subgenre_id=subgenre_id,
+        label=label,
+        producer=producer,
+        category=category,
+        layout=card_layout,
+        page=page,
+        page_size=page_size,
+    )
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "letters": letters,
+        "categories": categories,
+    }
 
 
 @router.get("/musicbrainz/search")

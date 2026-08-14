@@ -43,6 +43,7 @@ export type ArtistCard = {
   code?: string | null;
   name: string | null;
   photo_url: string | null;
+  portrait_url?: string | null;
   logo_url: string | null;
   logo_collapsed_url?: string | null;
   icon_url: string | null;
@@ -65,6 +66,37 @@ export type ArtistFilterMode =
   | "label"
   | "producer"
   | "most_played";
+
+/** Album catalog filter modes (Artists/Albums scope). */
+export type AlbumFilterMode =
+  | "name"
+  | "artists"
+  | "continent"
+  | "country"
+  | "start"
+  | "genre"
+  | "label"
+  | "producer"
+  | "most_played";
+
+export type MusicCatalogScope = "artists" | "albums";
+
+export type AlbumCard = {
+  id: string;
+  navigate_release_id: string;
+  navigate_band_id: number;
+  title: string;
+  artist_id: number;
+  artist_name: string | null;
+  cover_url: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
+  logo_collapsed_url?: string | null;
+  date_iso: string | null;
+  display_date?: string | null;
+  category: string;
+  play_count?: number | null;
+};
 
 export type FilterOptions = {
   subgenre_groups: {
@@ -119,9 +151,19 @@ export type DashboardTrack = {
   cover_url?: string | null;
 };
 
+export type DashboardRelease = {
+  id: string;
+  title: string;
+  artist_id: number | null;
+  artist_name: string | null;
+  play_count: number;
+  cover_url?: string | null;
+};
+
 export type MusicDashboard = {
   top_tracks: DashboardTrack[];
   top_artists: ArtistCard[];
+  top_releases: DashboardRelease[];
   top_genres: {
     id: number | string;
     name: string;
@@ -134,6 +176,7 @@ export type MusicDashboard = {
 export const EMPTY_DASHBOARD: MusicDashboard = {
   top_tracks: [],
   top_artists: [],
+  top_releases: [],
   top_genres: [],
   top_countries: [],
 };
@@ -741,12 +784,13 @@ export type MediaItemFile = {
   display_date?: string | null;
   path: string;
   kind: string;
-  size: number;
+  size?: number | null;
   url?: string | null;
   duration?: string | null;
   duration_sec?: number | null;
   page_count?: number | null;
   pages?: string | null;
+  cover_url?: string | null;
 };
 
 export type MediaItemGroup = {
