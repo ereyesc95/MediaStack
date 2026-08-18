@@ -10,7 +10,7 @@ type Props = {
 
 /** Full-pane branded loading / error state used across catalog pages. */
 export default function PlaylistBoot({
-  label = "Loading…",
+  label: _label = "Loading…",
   error = null,
   onBack,
   backLabel = "← Back",
@@ -33,14 +33,5 @@ export default function PlaylistBoot({
     );
   }
 
-  return (
-    <div
-      className={`playlist-boot ${className}`.trim()}
-      role="status"
-      aria-live="polite"
-    >
-      <MyStackIcon className="playlist-boot__icon" size={52} />
-      <p className="playlist-boot__label">{label}</p>
-    </div>
-  );
+  return null;
 }

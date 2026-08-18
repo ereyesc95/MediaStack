@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Genre, MediaItemMeta
+from app.models import Genre, MediaItemMeta, Subgenre
 from app.paths import DATA_DIR
 
 # genres.genMediaTypeID — video/TV/movies vs books/print
@@ -55,11 +55,24 @@ def list_genres_for_kind(db: Session, kind: str) -> list[dict]:
         .where(Genre.gen_media_type_id == media_type)
         .order_by(Genre.gen_name)
     ).all()
-    return [
+    out: list[dict] = [
         {"id": g.gen_id, "name": g.gen_name}
         for g in rows
         if g.gen_name and g.gen_name.strip()
     ]
+    seen = {(g["name"] or "").casefold() for g in out}
+    subs = db.scalars(
+        select(Subgenre)
+        .where(Subgenre.sgn_media_type_id == media_type)
+        .order_by(Subgenre.sgn_name)
+    ).all()
+    for sub in subs:
+        name = (sub.sgn_name or "").strip()
+        if not name or name.casefold() in seen:
+            continue
+        seen.add(name.casefold())
+        out.append({"id": sub.sgn_id, "name": name})
+    return out
 
 
 def list_publishers_for_kind(db: Session, kind: str) -> list[str]:

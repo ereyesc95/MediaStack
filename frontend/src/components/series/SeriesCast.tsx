@@ -16,6 +16,7 @@ import type {
   SeriesSubseriesCard,
 } from "../../types";
 import { isPhoneLayout, useDeviceLayout } from "../../usePhoneLayout";
+import { displayLanguageLabel } from "../../languageDisplay";
 import { IconEditProfile } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
 
@@ -217,8 +218,8 @@ function StaffRoleSuggest({
 const LANG_LABEL_FALLBACK: Record<string, string> = {
   ja: "Japanese",
   en: "English",
-  "es-es": "Spanish (Spain)",
-  "es-419": "Spanish (Latin America)",
+  "es-es": "Castilian",
+  "es-419": "Spanish",
   "pt-br": "Portuguese (Brazil)",
   "zh-cn": "Chinese (Simplified)",
   "zh-tw": "Chinese (Traditional)",
@@ -241,7 +242,7 @@ function languageLabel(
     LANG_LABEL_FALLBACK[key] ||
     LANG_LABEL_FALLBACK[key.replace("_", "-")] ||
     code;
-  return raw.replace(/\s*\(origin\)\s*$/i, "").trim();
+  return displayLanguageLabel(code, raw);
 }
 
 type Props = {
@@ -276,6 +277,10 @@ type Props = {
   filmId?: string;
   /** Books: character-only form (no actors). */
   characterOnly?: boolean;
+  onOpenCastProject?: (target: {
+    subseriesId?: string;
+    title: string;
+  }) => void;
 };
 
 /** Language code → flag-icons country ISO */
@@ -752,6 +757,7 @@ function CastMemberModal({
   roleOptions = [],
   onClose,
   onDataChanged,
+  onOpenCastProject,
 }: {
   member: SeriesCastMember;
   franchiseId: string;
@@ -767,6 +773,10 @@ function CastMemberModal({
   roleOptions?: StaffRoleOpt[];
   onClose: () => void;
   onDataChanged: () => void;
+  onOpenCastProject?: (target: {
+    subseriesId?: string;
+    title: string;
+  }) => void;
 }) {
   const characterCentered = bucket === "characters";
   const [editing, setEditing] = useState(false);
@@ -999,16 +1009,18 @@ function CastMemberModal({
     castSubFilter,
     franchiseLangs[0]
   );
-  const relatedLabels =
+  const relatedProjects =
     selectedSubs.length > 0
-      ? subseries
-          .filter((s) => selectedSubs.includes(s.id))
-          .map((s) => s.title)
+      ? subseries.filter((s) => selectedSubs.includes(s.id))
       : member.subseries_ids?.length
-        ? subseries
-            .filter((s) => (member.subseries_ids || []).includes(s.id))
-            .map((s) => s.title)
-        : [franchiseName];
+        ? subseries.filter((s) =>
+            (member.subseries_ids || []).includes(s.id)
+          )
+        : [];
+  const relatedItems =
+    relatedProjects.length > 0
+      ? relatedProjects.map((s) => ({ id: s.id, title: s.title }))
+      : [{ id: undefined as string | undefined, title: franchiseName }];
 
   return (
     <ModalPortal onClose={onClose}>
@@ -1089,11 +1101,21 @@ function CastMemberModal({
                     Related projects:
                   </span>
                   <ul className="artist-member-modal__projects">
-                    {relatedLabels.map((t) => (
-                      <li key={t}>
-                        <span className="artist-member-modal__project-name">
-                          {t}
-                        </span>
+                    {relatedItems.map((project) => (
+                      <li key={project.id || project.title}>
+                        <button
+                          type="button"
+                          className="artist-member-modal__project-name"
+                          onClick={() => {
+                            onOpenCastProject?.({
+                              subseriesId: project.id,
+                              title: project.title,
+                            });
+                            onClose();
+                          }}
+                        >
+                          {project.title}
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -1820,6 +1842,31 @@ export function AddCastModal({
   );
 }
 
+export function languageHasCharacterCast(
+  cast: {
+    characters?: SeriesCastMember[];
+    animated?: SeriesCastMember[];
+  },
+  lang: string,
+  originLanguage: string | null | undefined,
+  subFilter: string = "all"
+): boolean {
+  const list = cast.characters || cast.animated || [];
+  if (!list.length || !lang) return false;
+  return list.some((m) =>
+    actorGroupsForDisplay(
+      m,
+      [lang],
+      originLanguage,
+      subFilter,
+      lang
+    ).some(
+      (g) =>
+        g.language.toLowerCase() === lang.toLowerCase() && g.people.length > 0
+    )
+  );
+}
+
 export default function SeriesCast({
   franchiseId,
   franchiseName,
@@ -1840,6 +1887,7 @@ export default function SeriesCast({
   castApi = "series",
   filmId,
   characterOnly = false,
+  onOpenCastProject,
 }: Props) {
   const [modalMember, setModalMember] = useState<SeriesCastMember | null>(null);
   const deviceLayout = useDeviceLayout();
@@ -2156,6 +2204,7 @@ export default function SeriesCast({
           roleOptions={staffRoleOpts}
           onClose={() => setModalMember(null)}
           onDataChanged={onDataChanged}
+          onOpenCastProject={onOpenCastProject}
         />
       ) : null}
 

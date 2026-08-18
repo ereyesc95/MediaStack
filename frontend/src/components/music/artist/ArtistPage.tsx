@@ -35,6 +35,8 @@ import {
   type ArtistOverviewTab,
   type ArtistSection,
 } from "../../../musicRoute";
+import { normalizeSlug, stripDatedFolderTitle } from "../../../routeSlug";
+import { saveSeriesEntryReferrer } from "../../../seriesRoute";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -217,6 +219,12 @@ type Props = {
   onOpenReleaseNavigate?: (targetBandId: number, releaseId: string) => void;
   onOpenPlaylist?: (slug: string) => void;
   onOpenMediaItem?: (kind: "video" | "library", itemId: string) => void;
+  /** Open a Movies leaf from artist VIDEO tab (same entity as MovieStack). */
+  onOpenMoviesLeaf?: (
+    franchiseId: string,
+    filmId: string,
+    opts?: { franchiseName?: string; filmTitle?: string }
+  ) => void;
   /** Open a Series leaf from artist SERIES tab (folder under Series/…). */
   onOpenSeriesFolder?: (folderPath: string) => void;
 };
@@ -254,6 +262,7 @@ export default function ArtistPage({
   onOpenReleaseNavigate,
   onOpenPlaylist,
   onOpenMediaItem,
+  onOpenMoviesLeaf,
   onOpenSeriesFolder,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
@@ -1578,7 +1587,38 @@ export default function ArtistPage({
             kind="video"
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
-            onOpenItem={(id) => onOpenMediaItem?.("video", id)}
+            onOpenItem={(id, item) => {
+              if (onOpenMoviesLeaf) {
+                const parts = (item?.folder_path || "")
+                  .replace(/\\/g, "/")
+                  .split("/")
+                  .filter(Boolean);
+                const moviesIdx = parts.findIndex(
+                  (p) => p.toLowerCase() === "movies"
+                );
+                const artistName = data?.name ?? shell?.name ?? "";
+                let franchiseName = artistName;
+                let filmTitle = item?.title || id;
+                if (moviesIdx >= 0 && parts.length > moviesIdx + 2) {
+                  franchiseName = parts[moviesIdx + 2] || franchiseName;
+                  filmTitle = stripDatedFolderTitle(
+                    parts[parts.length - 1] || filmTitle
+                  );
+                }
+                saveSeriesEntryReferrer({
+                  kind: "music",
+                  bandId,
+                  artistSection: "video",
+                  title: artistName,
+                });
+                onOpenMoviesLeaf(normalizeSlug(franchiseName) || franchiseName, filmTitle, {
+                  franchiseName,
+                  filmTitle,
+                });
+                return;
+              }
+              onOpenMediaItem?.("video", id);
+            }}
           />
         )}
         {data && section === "video" && !data.media?.has_video && !cachedVideo && (

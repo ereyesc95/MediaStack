@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { MusicDashboard } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
-import BillboardText from "../BillboardText";
+import { DashHoverTitle, useDashCardReveal } from "../DashHoverTitle";
 import DashIconCard from "./DashIconCard";
 
 const PHONE_MAX_WIDTH = 900;
@@ -103,6 +103,7 @@ type Props = {
   data: MusicDashboard | null;
   loading?: boolean;
   playingPath?: string | null;
+  playerBarVisible?: boolean;
   onPlayTrack: (path: string, artistId: number | null, title: string | null) => void;
   onArtist: (id: number) => void;
   onRelease: (
@@ -121,22 +122,26 @@ function DashPlaceholder({ variant }: { variant: PlaceholderVariant }) {
     return (
       <div className="dash-icon-item dash-placeholder-item" aria-hidden>
         <span className="dash-icon-item-cover dash-placeholder dash-placeholder--landscape" />
-        <span className="dash-placeholder-slot-line" aria-hidden />
       </div>
     );
   }
-
+  if (variant === "square") {
+    return (
+      <div className="dash-track dash-placeholder-item" aria-hidden>
+        <span className="dash-track-art dash-placeholder dash-placeholder--square" />
+      </div>
+    );
+  }
+  if (variant === "circle") {
+    return (
+      <div className="dash-genre dash-placeholder-item" aria-hidden>
+        <span className="dash-genre-ring dash-placeholder dash-placeholder--circle" />
+      </div>
+    );
+  }
   return (
-    <div className={`dash-placeholder-slot dash-placeholder-slot--${variant}`}>
-      <div className={`dash-placeholder dash-placeholder--${variant}`} aria-hidden />
-      {variant === "square" ? (
-        <>
-          <span className="dash-placeholder-slot-line" aria-hidden />
-          <span className="dash-placeholder-slot-line dash-placeholder-slot-line--sub" aria-hidden />
-        </>
-      ) : (
-        <span className="dash-placeholder-slot-line" aria-hidden />
-      )}
+    <div className="dash-country dash-placeholder-item" aria-hidden>
+      <span className="dash-country-flag dash-placeholder dash-placeholder--flag" />
     </div>
   );
 }
@@ -182,6 +187,7 @@ export default function MusicHome({
   data,
   loading,
   playingPath = null,
+  playerBarVisible = false,
   onPlayTrack,
   onArtist,
   onRelease,
@@ -205,9 +211,10 @@ export default function MusicHome({
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
   const dashClass = `${DASH_LAYOUT_CLASS[layout]}${
-    playingPath ? " music-dashboard--player-active" : ""
+    playerBarVisible ? " music-dashboard--player-active" : ""
   }`;
   const tracksScrollRef = useRef<HTMLDivElement>(null);
+  const { revealedId, onCardActivate } = useDashCardReveal();
 
   useLayoutEffect(() => {
     if (
@@ -236,7 +243,7 @@ export default function MusicHome({
 
   return (
     <div className={`music-dashboard${dashClass}`}>
-      {loading && <p className="muted dash-status">Updating…</p>}
+      {null}
 
       <section className="dash-row dash-row--tracks">
         <DashPaneLabel
@@ -249,13 +256,14 @@ export default function MusicHome({
             <button
               key={t.id}
               type="button"
+              data-dash-card={`track-${t.id}`}
               className={`dash-track${
                 playingPath && t.path === playingPath ? " active" : ""
-              }`}
+              }${revealedId === `track-${t.id}` ? " is-revealed" : ""}`}
               data-track-path={t.path ?? undefined}
-              onClick={() =>
-                t.path && onPlayTrack(t.path, t.artist_id, t.title)
-              }
+              onClick={onCardActivate(`track-${t.id}`, () => {
+                if (t.path) onPlayTrack(t.path, t.artist_id, t.title);
+              })}
             >
               <span className="dash-track-art">
                 <span
@@ -266,20 +274,15 @@ export default function MusicHome({
                       : undefined
                   }
                 />
+                <DashHoverTitle
+                  title={t.title_full ?? t.title ?? ""}
+                  subtitle={(t.artist_name_full ?? t.artist_name ?? "").replace(
+                    /■/g,
+                    ","
+                  )}
+                  revealed={revealedId === `track-${t.id}`}
+                />
               </span>
-              <BillboardText
-                className="dash-track-title"
-                short={t.title ?? ""}
-                full={t.title_full ?? t.title ?? ""}
-              />
-              <BillboardText
-                className="dash-track-sub"
-                short={(t.artist_name ?? "").replace(/■/g, ",")}
-                full={(t.artist_name_full ?? t.artist_name ?? "").replace(
-                  /■/g,
-                  ","
-                )}
-              />
             </button>
           ))}
           <PlaceholderTiles
@@ -301,7 +304,8 @@ export default function MusicHome({
               key={a.id}
               artist={a}
               preferPortrait={layout === "mobile-portrait"}
-              onClick={() => onArtist(a.id)}
+              revealed={revealedId === `artist-${a.id}`}
+              onClick={onCardActivate(`artist-${a.id}`, () => onArtist(a.id))}
             />
           ))}
           <PlaceholderTiles
@@ -322,15 +326,18 @@ export default function MusicHome({
             <button
               key={r.id}
               type="button"
-              className="dash-track"
-              onClick={() => {
+              data-dash-card={`release-${r.id}`}
+              className={`dash-track${
+                revealedId === `release-${r.id}` ? " is-revealed" : ""
+              }`}
+              onClick={onCardActivate(`release-${r.id}`, () => {
                 if (r.artist_id != null) {
                   onRelease(r.artist_id, r.id, {
                     artistName: r.artist_name,
                     title: r.title,
                   });
                 }
-              }}
+              })}
             >
               <span className="dash-track-art">
                 <span
@@ -341,12 +348,11 @@ export default function MusicHome({
                       : undefined
                   }
                 />
+                <DashHoverTitle
+                  title={r.title ?? ""}
+                  revealed={revealedId === `release-${r.id}`}
+                />
               </span>
-              <BillboardText
-                className="dash-track-title"
-                short={r.title ?? ""}
-                full={r.title ?? ""}
-              />
             </button>
           ))}
           <PlaceholderTiles
@@ -367,8 +373,13 @@ export default function MusicHome({
             <button
               key={g.id ?? g.name}
               type="button"
-              className="dash-genre"
-              onClick={() => onGenre(Number(g.id))}
+              data-dash-card={`genre-${g.id ?? g.name}`}
+              className={`dash-genre${
+                revealedId === `genre-${g.id ?? g.name}` ? " is-revealed" : ""
+              }`}
+              onClick={onCardActivate(`genre-${g.id ?? g.name}`, () =>
+                onGenre(Number(g.id))
+              )}
             >
               <span className="dash-genre-ring">
                 <span
@@ -379,8 +390,11 @@ export default function MusicHome({
                       : undefined
                   }
                 />
+                <DashHoverTitle
+                  title={g.name}
+                  revealed={revealedId === `genre-${g.id ?? g.name}`}
+                />
               </span>
-              <span className="dash-item-label">{g.name}</span>
             </button>
           ))}
           <PlaceholderTiles
@@ -401,13 +415,21 @@ export default function MusicHome({
             <button
               key={c.name}
               type="button"
-              className="dash-country"
-              onClick={() => onCountry({ id: c.id, name: c.name })}
+              data-dash-card={`country-${c.name}`}
+              className={`dash-country${
+                revealedId === `country-${c.name}` ? " is-revealed" : ""
+              }`}
+              onClick={onCardActivate(`country-${c.name}`, () =>
+                onCountry({ id: c.id, name: c.name })
+              )}
             >
               <span className="dash-country-flag">
                 {c.iso && <span className={`fi fi-${c.iso}`} />}
+                <DashHoverTitle
+                  title={c.name}
+                  revealed={revealedId === `country-${c.name}`}
+                />
               </span>
-              <span className="dash-item-label">{c.name}</span>
             </button>
           ))}
           <PlaceholderTiles

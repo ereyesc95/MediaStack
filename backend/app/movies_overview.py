@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.franchise_identity import find_artwork_home
+from app.franchise_identity import find_artwork_home, find_music_band_for_franchise
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -674,6 +674,19 @@ def build_film_overview(
     directors = film_meta.get("directors") or []
     if isinstance(directors, str):
         directors = [d.strip() for d in directors.split(";") if d.strip()]
+    staff_directors: list[str] = []
+    for member in staff:
+        roles = {
+            str(r).strip().casefold()
+            for r in (member.get("roles") or [])
+            if r
+        }
+        if "director" in roles or "directors" in roles:
+            name = (member.get("name") or "").strip()
+            if name and name not in staff_directors:
+                staff_directors.append(name)
+    if staff_directors:
+        directors = staff_directors
     rd = film_meta.get("release_date") or detail.get("date_iso")
     stored_periods = film_meta.get("activity_periods")
     if isinstance(stored_periods, list) and stored_periods:
@@ -715,6 +728,18 @@ def build_film_overview(
             seen_cards.add(key)
             display_universe_cards.append(c)
 
+    genre_names = [
+        str(g.get("name") or "").strip()
+        for g in genres
+        if isinstance(g, dict) and str(g.get("name") or "").strip()
+    ]
+    from app.screen_kind import kind_label_from_genre_labels
+
+    kind_label, parent_genre_names = kind_label_from_genre_labels(
+        db, genre_names, "film"
+    )
+    music_band = find_music_band_for_franchise(db, work_dir.name)
+
     return {
         "id": fid,
         "mwk_id": row.mwk_id,
@@ -736,6 +761,8 @@ def build_film_overview(
         "cast_languages": language_options,
         "activity_periods": periods,
         "genres": genres,
+        "parent_genre_names": parent_genre_names,
+        "kind_label": kind_label,
         "publishers": publishers,
         "status": film_meta.get("status"),
         "type": film_meta.get("type") or "Movie",
@@ -793,4 +820,5 @@ def build_film_overview(
         "directors": directors,
         "photocards": detail.get("photocards"),
         "trailer_url": film_meta.get("trailer_url") or detail.get("trailer_url"),
+        "music_band_id": music_band.bnd_id if music_band else None,
     }

@@ -334,6 +334,21 @@ def build_book_overview(
     leaf_links["entity_type"] = "books"
     leaf_links["entity_id"] = 0
 
+    genre_rows = about.get("genres") or []
+    genre_names: list[str] = []
+    for g in genre_rows:
+        if isinstance(g, dict):
+            name = str(g.get("name") or "").strip()
+        else:
+            name = str(g or "").strip()
+        if name:
+            genre_names.append(name)
+    from app.screen_kind import kind_label_from_genre_labels
+
+    kind_label, parent_genre_names = kind_label_from_genre_labels(
+        db, genre_names, "book"
+    )
+
     return {
         "id": detail["id"],
         "name": detail.get("title"),
@@ -363,6 +378,8 @@ def build_book_overview(
             else []
         ),
         "genres": about.get("genres") or [],
+        "parent_genre_names": parent_genre_names,
+        "kind_label": kind_label,
         "publishers": about.get("publishers") or [],
         "content_category": about.get("content_category") or "Book",
         "type": about.get("content_category") or "Book",

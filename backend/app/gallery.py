@@ -13,7 +13,6 @@ Example: Music/H/HIM/[Artwork]/Photos/1997.00. Era, Landscape.jpg
 from __future__ import annotations
 
 import hashlib
-import random
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -206,39 +205,60 @@ def _brands_of_kind(
     return out
 
 
+def _stable_choice(items: list, seed: str):
+    """Pick a stable item so catalog/home cards do not reshuffle on refresh."""
+    if not items:
+        return None
+    if len(items) == 1:
+        return items[0]
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return items[int(digest[:8], 16) % len(items)]
+
+
 def _pick_brand_for_year(
     brands: list[EraBrand],
     year: int,
     kind: str,
     *,
     prefer_collapsed: bool = False,
+    seed: str = "",
 ) -> EraBrand | None:
     """Pick a brand covering ``year``. Collapsed only when that same era has one."""
-    normal_matches = [
-        b
-        for b in _brands_of_kind(brands, kind, collapsed=False)
-        if b.start <= year <= b.end
-    ]
+    key = f"{seed}:{kind}:{year}"
+    normal_matches = sorted(
+        [
+            b
+            for b in _brands_of_kind(brands, kind, collapsed=False)
+            if b.start <= year <= b.end
+        ],
+        key=lambda b: b.path.as_posix().casefold(),
+    )
     if prefer_collapsed and normal_matches:
         # Prefer collapsed twin of an in-range normal logo
         ranges = {(b.start, b.end) for b in normal_matches}
-        collapsed = [
-            b
-            for b in _brands_of_kind(brands, kind, collapsed=True)
-            if (b.start, b.end) in ranges
-        ]
+        collapsed = sorted(
+            [
+                b
+                for b in _brands_of_kind(brands, kind, collapsed=True)
+                if (b.start, b.end) in ranges
+            ],
+            key=lambda b: b.path.as_posix().casefold(),
+        )
         if collapsed:
-            return random.choice(collapsed)
+            return _stable_choice(collapsed, f"{key}:collapsed")
     if normal_matches:
-        return random.choice(normal_matches)
+        return _stable_choice(normal_matches, key)
     if prefer_collapsed:
-        collapsed_only = [
-            b
-            for b in _brands_of_kind(brands, kind, collapsed=True)
-            if b.start <= year <= b.end
-        ]
+        collapsed_only = sorted(
+            [
+                b
+                for b in _brands_of_kind(brands, kind, collapsed=True)
+                if b.start <= year <= b.end
+            ],
+            key=lambda b: b.path.as_posix().casefold(),
+        )
         if collapsed_only:
-            return random.choice(collapsed_only)
+            return _stable_choice(collapsed_only, f"{key}:collapsed-only")
     return None
 
 
@@ -305,13 +325,15 @@ def _photo_pool(photos: list[GalleryPhoto], orientation: str) -> list[GalleryPho
     return pool
 
 
-def _pick_era_photo(pool: list[GalleryPhoto]) -> GalleryPhoto:
-    """Pick a random photo; when multiple eras exist, choose era first then photo."""
+def _pick_era_photo(pool: list[GalleryPhoto], seed: str) -> GalleryPhoto:
+    """Pick a stable photo; when multiple eras exist, choose era first then photo."""
     by_year: dict[int, list[GalleryPhoto]] = defaultdict(list)
     for p in pool:
         by_year[p.year].append(p)
-    year = random.choice(list(by_year.keys()))
-    return random.choice(by_year[year])
+    years = sorted(by_year.keys())
+    year = _stable_choice(years, f"{seed}:year")
+    photos = sorted(by_year[year], key=lambda p: p.path.as_posix().casefold())
+    return _stable_choice(photos, f"{seed}:{year}")
 
 
 def resolve_artist_card(
@@ -355,45 +377,51 @@ def resolve_artist_card(
             logo_collapsed_url=_media_url(collapsed.path, root) if collapsed else None,
         )
 
+    seed = f"{artist_name or ''}:{want}"
+
     # Icons mode: branding only (no photo background)
     if want == "icons":
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
         if not eras and photos:
             eras = sorted({p.year for p in photos})
-        fallback_year = random.choice(eras) if eras else 2000
+        fallback_year = _stable_choice(eras, f"{seed}:era") if eras else 2000
         return _pack(
             photo_url=None,
             year=fallback_year,
             logo=_pick_brand_for_year(
-                brands, fallback_year, "logo", prefer_collapsed=False
+                brands, fallback_year, "logo", prefer_collapsed=False, seed=seed
             ),
             icon=_pick_brand_for_year(
-                brands, fallback_year, "icon", prefer_collapsed=False
+                brands, fallback_year, "icon", prefer_collapsed=False, seed=seed
             ),
         )
 
     pool = _photo_pool(photos, want)
     if not pool:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
-        fallback_year = random.choice(eras) if eras else 2000
+        fallback_year = _stable_choice(eras, f"{seed}:era") if eras else 2000
         return _pack(
             photo_url=None,
             year=fallback_year,
             logo=_pick_brand_for_year(
-                brands, fallback_year, "logo", prefer_collapsed=False
+                brands, fallback_year, "logo", prefer_collapsed=False, seed=seed
             ),
             icon=_pick_brand_for_year(
-                brands, fallback_year, "icon", prefer_collapsed=False
+                brands, fallback_year, "icon", prefer_collapsed=False, seed=seed
             ),
         )
 
-    photo = _pick_era_photo(pool)
+    photo = _pick_era_photo(pool, seed)
     era_year = photo.year
     return _pack(
         photo_url=_media_url(photo.path, root),
         year=era_year,
-        logo=_pick_brand_for_year(brands, era_year, "logo", prefer_collapsed=False),
-        icon=_pick_brand_for_year(brands, era_year, "icon", prefer_collapsed=False),
+        logo=_pick_brand_for_year(
+            brands, era_year, "logo", prefer_collapsed=False, seed=seed
+        ),
+        icon=_pick_brand_for_year(
+            brands, era_year, "icon", prefer_collapsed=False, seed=seed
+        ),
     )
 
 
@@ -486,8 +514,16 @@ def pick_playlist_cover(artist_name: str | None, release_hint: str | None) -> st
     if covers.is_dir():
         images = [p for p in covers.iterdir() if p.suffix.lower() in IMAGE_EXTS]
         if images:
-            return _media_url(random.choice(images), root)
+            picked = _stable_choice(
+                sorted(images, key=lambda p: p.as_posix().casefold()),
+                f"{artist_name}:cover",
+            )
+            return _media_url(picked, root) if picked else None
     photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
     if photos:
-        return _media_url(random.choice(photos).path, root)
+        picked = _stable_choice(
+            sorted(photos, key=lambda p: p.path.as_posix().casefold()),
+            f"{artist_name}:photo",
+        )
+        return _media_url(picked.path, root) if picked else None
     return None

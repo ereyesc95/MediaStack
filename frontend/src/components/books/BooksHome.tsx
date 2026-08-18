@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from "react";
 import type { SeriesDashboard, Universe } from "../../types";
 import { EMPTY_SERIES_DASHBOARD } from "../../types";
+import { DashHoverTitle, useDashCardReveal } from "../DashHoverTitle";
 import MyStackIcon from "../MyStackIcon";
 
 const PHONE_MAX_WIDTH = 900;
@@ -132,21 +133,26 @@ function DashPlaceholder({ variant }: { variant: PlaceholderVariant }) {
     return (
       <div className="dash-icon-item dash-placeholder-item" aria-hidden>
         <span className="dash-icon-item-cover dash-placeholder dash-placeholder--landscape" />
-        <span className="dash-placeholder-slot-line" aria-hidden />
+      </div>
+    );
+  }
+  if (variant === "square") {
+    return (
+      <div className="dash-track dash-placeholder-item" aria-hidden>
+        <span className="dash-track-art dash-placeholder dash-placeholder--square" />
+      </div>
+    );
+  }
+  if (variant === "circle") {
+    return (
+      <div className="dash-genre dash-placeholder-item" aria-hidden>
+        <span className="dash-genre-ring dash-placeholder dash-placeholder--circle" />
       </div>
     );
   }
   return (
-    <div className={`dash-placeholder-slot dash-placeholder-slot--${variant}`}>
-      <div className={`dash-placeholder dash-placeholder--${variant}`} aria-hidden />
-      {variant === "square" ? (
-        <>
-          <span className="dash-placeholder-slot-line" aria-hidden />
-          <span className="dash-placeholder-slot-line dash-placeholder-slot-line--sub" aria-hidden />
-        </>
-      ) : (
-        <span className="dash-placeholder-slot-line" aria-hidden />
-      )}
+    <div className="dash-country dash-placeholder-item" aria-hidden>
+      <span className="dash-country-flag dash-placeholder dash-placeholder--flag" />
     </div>
   );
 }
@@ -217,8 +223,6 @@ export default function BooksHome({
   const dash = data ?? EMPTY_SERIES_DASHBOARD;
   const layout = useDashboardLayout();
   const paneLimit = paneItemLimit(layout);
-  const isMobileShell =
-    layout === "mobile-portrait" || layout === "mobile-landscape";
   const useBannerArt = layout === "mobile-landscape";
 
   const pickCover = (s: {
@@ -259,6 +263,7 @@ export default function BooksHome({
   const countryPlaceholders = placeholderCount(topCountries.length, paneLimit);
 
   const dashClass = DASH_LAYOUT_CLASS[layout];
+  const { revealedId, onCardActivate } = useDashCardReveal();
 
   return (
     <div
@@ -266,7 +271,6 @@ export default function BooksHome({
         loading ? "" : " dash-appear-ready"
       }`}
     >
-      {loading ? <p className="muted dash-status">Updating…</p> : null}
       <>
       <section className="dash-row dash-row--icons">
         <DashPaneLabel
@@ -281,16 +285,22 @@ export default function BooksHome({
               <button
                 key={s.id}
                 type="button"
-                className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
-                onClick={() => onFranchise(s.id)}
+                data-dash-card={`franchise-${s.id}`}
+                className={`dash-icon-item${
+                  revealedId === `franchise-${s.id}` ? " is-revealed" : ""
+                }`}
+                onClick={onCardActivate(`franchise-${s.id}`, () =>
+                  onFranchise(s.id)
+                )}
               >
                 <DashCover
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
                 />
-                <span className="dash-item-label dash-icon-item-name" title={s.name}>
-                  {s.name}
-                </span>
+                <DashHoverTitle
+                  title={s.name}
+                  revealed={revealedId === `franchise-${s.id}`}
+                />
               </button>
             );
           })}
@@ -315,16 +325,22 @@ export default function BooksHome({
               <button
                 key={s.id}
                 type="button"
-                className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
-                onClick={() => onBook(s.id, s.work_id)}
+                data-dash-card={`book-${s.id}`}
+                className={`dash-icon-item${
+                  revealedId === `book-${s.id}` ? " is-revealed" : ""
+                }`}
+                onClick={onCardActivate(`book-${s.id}`, () =>
+                  onBook(s.id, s.work_id)
+                )}
               >
                 <DashCover
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
                 />
-                <span className="dash-item-label dash-icon-item-name" title={label}>
-                  {label}
-                </span>
+                <DashHoverTitle
+                  title={label}
+                  revealed={revealedId === `book-${s.id}`}
+                />
               </button>
             );
           })}
@@ -335,8 +351,8 @@ export default function BooksHome({
         </div>
       </section>
 
-      {universes.length > 0 ? (
-        <section className="dash-row dash-row--icons">
+      {topUniverses.length > 0 ? (
+      <section className="dash-row dash-row--icons">
           <DashPaneLabel
             logo="/api/assets/icons/pane-on-repeat"
             title="UNIVERSES"
@@ -349,19 +365,22 @@ export default function BooksHome({
                 <button
                   key={u.id}
                   type="button"
-                  className={`dash-icon-item${isMobileShell ? " dash-icon-item--title-overlay" : ""}`}
-                  onClick={() => onOpenUniverse?.(u.id)}
+                  data-dash-card={`universe-${u.id}`}
+                  className={`dash-icon-item${
+                    revealedId === `universe-${u.id}` ? " is-revealed" : ""
+                  }`}
+                  onClick={onCardActivate(`universe-${u.id}`, () =>
+                    onOpenUniverse?.(u.id)
+                  )}
                 >
                   <DashCover
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
                 />
-                  <span
-                    className="dash-item-label dash-icon-item-name"
+                  <DashHoverTitle
                     title={u.name}
-                  >
-                    {u.name}
-                  </span>
+                    revealed={revealedId === `universe-${u.id}`}
+                  />
                 </button>
               );
             })}
@@ -384,8 +403,13 @@ export default function BooksHome({
             <button
               key={g.id ?? g.name}
               type="button"
-              className="dash-genre"
-              onClick={() => onGenre?.(g.id)}
+              data-dash-card={`genre-${g.id ?? g.name}`}
+              className={`dash-genre${
+                revealedId === `genre-${g.id ?? g.name}` ? " is-revealed" : ""
+              }`}
+              onClick={onCardActivate(`genre-${g.id ?? g.name}`, () =>
+                onGenre?.(g.id)
+              )}
             >
               <span className="dash-genre-ring">
                 <span
@@ -396,8 +420,11 @@ export default function BooksHome({
                       : undefined
                   }
                 />
+                <DashHoverTitle
+                  title={g.name}
+                  revealed={revealedId === `genre-${g.id ?? g.name}`}
+                />
               </span>
-              <span className="dash-item-label">{g.name}</span>
             </button>
           ))}
           <PlaceholderTiles
@@ -418,13 +445,21 @@ export default function BooksHome({
             <button
               key={c.name}
               type="button"
-              className="dash-country"
-              onClick={() => onCountry?.({ id: c.id, name: c.name })}
+              data-dash-card={`country-${c.name}`}
+              className={`dash-country${
+                revealedId === `country-${c.name}` ? " is-revealed" : ""
+              }`}
+              onClick={onCardActivate(`country-${c.name}`, () =>
+                onCountry?.({ id: c.id, name: c.name })
+              )}
             >
               <span className="dash-country-flag">
                 {c.iso ? <span className={`fi fi-${c.iso}`} /> : null}
+                <DashHoverTitle
+                  title={c.name}
+                  revealed={revealedId === `country-${c.name}`}
+                />
               </span>
-              <span className="dash-item-label">{c.name}</span>
             </button>
           ))}
           <PlaceholderTiles

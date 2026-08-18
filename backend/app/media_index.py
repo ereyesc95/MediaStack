@@ -280,9 +280,10 @@ def _release_dir_from_content_folder(folder: Path) -> Path:
             return current
         if _is_audio_category_dir(parent):
             return current
-        if not _is_edition_dir(current):
-            return current
-        current = parent
+        if _is_group_subdir_name(current.name) or _is_edition_dir(current):
+            current = parent
+            continue
+        return current
     return folder
 
 

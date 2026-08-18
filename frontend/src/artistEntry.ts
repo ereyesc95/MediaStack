@@ -17,6 +17,8 @@ export type ArtistEntryReferrer = {
   catalogLetter?: string;
   franchiseId?: string;
   franchiseName?: string;
+  filmId?: string;
+  bookId?: string;
   backLabel?: string;
 };
 

@@ -34,6 +34,8 @@ import {
   type ArtistBackRestore,
 } from "../../artistEntry";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
+import { saveSeriesEntryReferrer } from "../../seriesRoute";
+import { normalizeSlug, stripDatedFolderTitle } from "../../routeSlug";
 import {
   getCachedMusicDashboard,
   prefetchMusicDashboard,
@@ -124,14 +126,22 @@ type Props = {
   ) => void;
   onBackToMovies?: (
     franchiseId: string,
-    restore?: ArtistBackRestore
+    restore?: ArtistBackRestore,
+    filmId?: string,
+    filmTitle?: string
   ) => void;
   onBackToBooks?: (
     franchiseId: string,
-    restore?: ArtistBackRestore
+    restore?: ArtistBackRestore,
+    bookId?: string
   ) => void;
   /** Open Series module from an artist SERIES folder path. */
   onOpenSeriesFolder?: (folderPath: string) => void;
+  onOpenMoviesLeaf?: (
+    franchiseId: string,
+    filmId: string,
+    opts?: { franchiseName?: string; filmTitle?: string }
+  ) => void;
 };
 
 export default function MusicModule({
@@ -172,6 +182,7 @@ export default function MusicModule({
   onBackToMovies,
   onBackToBooks,
   onOpenSeriesFolder,
+  onOpenMoviesLeaf,
 }: Props) {
   const [showAddArtist, setShowAddArtist] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
@@ -291,7 +302,7 @@ export default function MusicModule({
         section: "audio",
         category: album.category,
         artistName: album.artist_name ?? undefined,
-        source: "artist",
+        source: "catalog",
       });
       primeArtistShell(bandId, {
         id: bandId,
@@ -463,20 +474,67 @@ export default function MusicModule({
     if (cached) {
       setDashboard(cached);
       setDashLoading(false);
-      void prefetchMusicDashboard({ force: true }).then(setDashboard);
       return;
     }
     setDashLoading(true);
-    void prefetchMusicDashboard({ force: true })
+    void prefetchMusicDashboard()
       .then(setDashboard)
       .finally(() => setDashLoading(false));
   }, [tab]);
+
+  useEffect(() => {
+    fetchFilterOptions().then(setFilterOptions).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (tab === "artists") {
       fetchFilterOptions().then(setFilterOptions).catch(() => {});
     }
   }, [tab]);
+
+  useEffect(() => {
+    if (
+      !onOpenMoviesLeaf ||
+      !bandId ||
+      artistSection !== "video" ||
+      !mediaItemId
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void prefetchMediaItemOverview(bandId, "video", mediaItemId)
+      .then((ov) => {
+        if (cancelled || !ov) return;
+        const parts = (ov.folder_path || "")
+          .replace(/\\/g, "/")
+          .split("/")
+          .filter(Boolean);
+        const moviesIdx = parts.findIndex((p) => p.toLowerCase() === "movies");
+        let franchiseName = ov.artist_name || "";
+        let filmTitle = ov.title || mediaItemId;
+        if (moviesIdx >= 0 && parts.length > moviesIdx + 2) {
+          franchiseName = parts[moviesIdx + 2] || franchiseName;
+          filmTitle = stripDatedFolderTitle(
+            parts[parts.length - 1] || filmTitle
+          );
+        }
+        saveSeriesEntryReferrer({
+          kind: "music",
+          bandId,
+          artistSection: "video",
+          title: ov.artist_name,
+        });
+        onOpenMoviesLeaf(
+          normalizeSlug(franchiseName) || franchiseName,
+          filmTitle,
+          { franchiseName, filmTitle }
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [onOpenMoviesLeaf, bandId, artistSection, mediaItemId]);
 
   useEffect(() => {
     const hasCountryNav = countryFilterId != null || !!countryFilterName;
@@ -687,10 +745,10 @@ export default function MusicModule({
   const loadAlbums = useCallback(async () => {
     const generation = ++loadAlbumsGeneration.current;
     setError(null);
-    setAlbumsLoading(true);
+    if (albums.length === 0) setAlbumsLoading(true);
     const params = new URLSearchParams({
       page: String(albumPage),
-      page_size: "48",
+      page_size: "24",
       layout: albumCardLayout,
       filter_mode: filterMode,
     });
@@ -757,10 +815,10 @@ export default function MusicModule({
   useEffect(() => {
     if (tab !== "artists" || bandId) return;
     if (!filterReady || homeFilterPending) {
-      setArtists([]);
-      setArtistTotal(0);
-      setAlbums([]);
-      setAlbumTotal(0);
+      if (catalogScope !== "albums") {
+        setArtists([]);
+        setArtistTotal(0);
+      }
       setError(null);
       return;
     }
@@ -1190,7 +1248,8 @@ export default function MusicModule({
         />
       ) : bandId &&
       mediaItemId &&
-      (artistSection === "video" || artistSection === "library") ? (
+      (artistSection === "library" ||
+        (artistSection === "video" && !onOpenMoviesLeaf)) ? (
         <MediaItemPage
           bandId={bandId}
           kind={artistSection}
@@ -1341,6 +1400,14 @@ export default function MusicModule({
             onBand(undefined);
             onTab("home");
           }}
+          onBackToCatalog={() => {
+            clearArtistEntryReferrer();
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onTab("artists");
+          }}
         />
       ) : bandId ? (
         <ArtistPage
@@ -1372,6 +1439,7 @@ export default function MusicModule({
           onOpenMediaItem={(kind, itemId) =>
             onMediaItemNavigate?.(itemId, kind)
           }
+          onOpenMoviesLeaf={onOpenMoviesLeaf}
           onOpenSeriesFolder={onOpenSeriesFolder}
           onBack={() => {
             clearMediaTheme(userId);
@@ -1387,12 +1455,17 @@ export default function MusicModule({
             }
             if (ref?.source === "movies") {
               clearArtistEntryReferrer();
-              onBackToMovies?.("", restore);
+              onBackToMovies?.(
+                ref.franchiseId || "",
+                restore,
+                ref.filmId,
+                ref.backLabel
+              );
               return;
             }
             if (ref?.source === "books") {
               clearArtistEntryReferrer();
-              onBackToBooks?.("", restore);
+              onBackToBooks?.(ref.franchiseId || "", restore, ref.bookId);
               return;
             }
             clearArtistEntryReferrer();
@@ -1451,6 +1524,7 @@ export default function MusicModule({
             data={dashboard}
             loading={dashLoading}
             playingPath={homePlayingPath}
+            playerBarVisible={Boolean(homePlayingPath) && !homePlayerBarHidden}
             onPlayTrack={handlePlay}
             onArtist={(id) => {
               const card = dashboard.top_artists?.find((a) => a.id === id) ?? null;
@@ -1483,9 +1557,14 @@ export default function MusicModule({
               });
             }}
             onGenre={(id) => onGenreFilter(id)}
-            onCountry={(country) =>
-              onCountryFilter(country.id, country.name)
-            }
+            onCountry={(country) => {
+              setFilterMode("country");
+              setCountryId(country.id ?? "");
+              setContinentId("");
+              setSubgenreId("");
+              setSearch("");
+              onCountryFilter(country.id, country.name);
+            }}
           />
         </div>
       ) : tab === "artists" ? (

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
 import { usePhoneLayout } from "../../usePhoneLayout";
-import PlaylistBoot from "../PlaylistBoot";
 import { ChevronIcon } from "../music/release/releaseTrackPanelMeta";
 
 export type SeriesMediaCard = {
@@ -313,7 +312,7 @@ export default function SeriesMediaGrid({
   }, [tapReveal, revealedId]);
 
   if (loading && !(items && items.length)) {
-    return <PlaylistBoot className="playlist-boot--compact" label="Loading…" />;
+    return null;
   }
   if (!items.length) {
     return <p className="muted artist-section-empty">{emptyMessage}</p>;

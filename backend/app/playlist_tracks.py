@@ -4,7 +4,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from app.media_index import release_id_from_path
+from app.media_index import (
+    DISC_DIR_RE,
+    DISC_LOOSE_RE,
+    SIDE_LOOSE_RE,
+    SIDE_RE,
+    release_id_from_path,
+)
 
 _EDITION_DIR_NAMES = frozenset(
     {
@@ -36,7 +42,14 @@ def _folder_core_name(name: str) -> str:
 
 
 def _is_edition_or_disc_name(name: str) -> bool:
-    core = _folder_core_name(name)
+    text = (name or "").strip()
+    if not text:
+        return False
+    if DISC_DIR_RE.match(text) or DISC_LOOSE_RE.match(text):
+        return True
+    if SIDE_RE.match(text) or SIDE_LOOSE_RE.match(text):
+        return True
+    core = _folder_core_name(text)
     if core in _EDITION_DIR_NAMES:
         return True
     if core.endswith(" edition"):

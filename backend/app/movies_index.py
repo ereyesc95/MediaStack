@@ -273,15 +273,31 @@ def find_work_dir(
 def find_film_dir(
     film_id: str, media_root: Path | None = None
 ) -> tuple[Path, Path, str] | None:
-    """Return (film_dir, work_dir, letter) for a film id."""
+    """Return (film_dir, work_dir, letter) for a film id, folder name, or title slug."""
     want = (film_id or "").strip()
     if not want:
         return None
+    want_cf = want.casefold()
+    want_slug = normalize_franchise_slug(want)
     root = _resolve_media_root(media_root)
     for work_dir, letter in iter_work_dirs(root):
-        for item_dir, _d, _t, _h in _iter_work_leaf_items(work_dir):
+        for item_dir, _d, title, _h in _iter_work_leaf_items(work_dir):
             rel = item_dir.relative_to(root).as_posix()
-            if _film_id(rel) == want or item_dir.name.casefold() == want.casefold():
+            keys = {_film_id(rel), item_dir.name.casefold()}
+            for label in (title, item_dir.name):
+                if not label:
+                    continue
+                keys.add(label.casefold())
+                slug = normalize_franchise_slug(label)
+                if slug:
+                    keys.add(slug)
+                _date, parsed = parse_dated_folder_name(label)
+                if parsed:
+                    keys.add(parsed.casefold())
+                    pslug = normalize_franchise_slug(parsed)
+                    if pslug:
+                        keys.add(pslug)
+            if want == _film_id(rel) or want_cf in keys or (want_slug and want_slug in keys):
                 return item_dir, work_dir, letter
     return None
 

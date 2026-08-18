@@ -1,16 +1,20 @@
 import type { ArtistCard as ArtistCardType } from "../../types";
+import { DashHoverTitle } from "../DashHoverTitle";
+import type { MouseEvent } from "react";
 
 type Props = {
   artist: ArtistCardType;
-  onClick: () => void;
+  onClick: (e: MouseEvent<HTMLElement>) => void;
   /** Prefer portrait artist photo on phone portrait; landscape photo otherwise. */
   preferPortrait?: boolean;
+  revealed?: boolean;
 };
 
 export default function DashIconCard({
   artist,
   onClick,
   preferPortrait = false,
+  revealed = false,
 }: Props) {
   const coverUrl = preferPortrait
     ? artist.portrait_url || artist.photo_url || artist.icon_url
@@ -23,12 +27,15 @@ export default function DashIconCard({
     .replace(/█/g, "'");
 
   return (
-    <button type="button" className="dash-icon-item" onClick={onClick}>
+    <button
+      type="button"
+      data-dash-card={`artist-${artist.id}`}
+      className={`dash-icon-item${revealed ? " is-revealed" : ""}`}
+      onClick={onClick}
+    >
       <span className="dash-icon-item-cover">
         <span className="card-bg-layer" style={{ backgroundImage: bg }} />
-      </span>
-      <span className="dash-item-label dash-icon-item-name" title={name}>
-        {name}
+        <DashHoverTitle title={name} revealed={revealed} />
       </span>
     </button>
   );

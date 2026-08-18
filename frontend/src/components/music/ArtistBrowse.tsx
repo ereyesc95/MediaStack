@@ -272,7 +272,7 @@ export default function ArtistBrowse({
     }
   }, [filterMode]);
 
-  const pageSize = 48;
+  const pageSize = isAlbums ? 24 : 48;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const paginated =
     isAlbums || filterMode === "most_played" || filterMode === "gender";
@@ -288,17 +288,12 @@ export default function ArtistBrowse({
 
   const visibleFilterModes = useMemo(() => {
     return filterModeList.filter((f) => {
+      if (f.id === filterMode) return true;
       if (!filterOptions) {
         if (isAlbums) {
           return f.id === "name" || f.id === "artists" || f.id === "most_played";
         }
-        return (
-          f.id === "name" ||
-          f.id === "group" ||
-          f.id === "members" ||
-          f.id === "most_played" ||
-          f.id === "gender"
-        );
+        return true;
       }
       switch (f.id) {
         case "continent":
@@ -318,14 +313,15 @@ export default function ArtistBrowse({
           return true;
       }
     });
-  }, [filterOptions, filterModeList, isAlbums]);
+  }, [filterOptions, filterModeList, isAlbums, filterMode]);
 
   useEffect(() => {
+    if (!filterOptions) return;
     if (!visibleFilterModes.some((m) => m.id === filterMode)) {
       const fallback = visibleFilterModes[0]?.id;
       if (fallback) onFilterModeChange(fallback);
     }
-  }, [visibleFilterModes, filterMode, onFilterModeChange]);
+  }, [visibleFilterModes, filterMode, onFilterModeChange, filterOptions]);
 
   useEffect(() => {
     if (filterMode !== "name") return;
@@ -789,7 +785,7 @@ export default function ArtistBrowse({
       </div>
 
       <div className="artist-browse-scroll">
-        {loading && (
+        {loading && !isAlbums && (
           <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
         )}
         {isAlbums ? (

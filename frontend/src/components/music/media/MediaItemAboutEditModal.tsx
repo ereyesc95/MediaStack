@@ -30,8 +30,8 @@ type Props = {
 const FALLBACK_LANGS = [
   { code: "ja", label: "Japanese" },
   { code: "en", label: "English" },
-  { code: "es-ES", label: "Spanish (Spain)" },
-  { code: "es-419", label: "Spanish (Latin America)" },
+  { code: "es-ES", label: "Castilian" },
+  { code: "es-419", label: "Spanish" },
 ];
 
 function titleCaseWords(value: string): string {

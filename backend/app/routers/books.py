@@ -129,9 +129,11 @@ def books_filter_options(
     from sqlalchemy import select
 
     from app.adult_content import filter_subgenre_groups
+    from app.books_catalog_meta import enrich_books_catalog
+    from app.books_index import build_books_catalog
     from app.media_item_admin import LIBRARY_CONTENT_CATEGORIES
-    from app.models import Country, Genre, Subgenre
-    from app.music_filters import all_country_groups
+    from app.models import Genre, Subgenre
+    from app.music_filters import _country_groups_from_ids, all_country_groups
     from app.seed_music import ensure_music_lookup_data
 
     ensure_music_lookup_data(db)
@@ -174,6 +176,35 @@ def books_filter_options(
     all_subgenre_groups = filter_subgenre_groups(
         all_subgenre_groups, nsfw_unlocked=nsfw_unlocked
     )
+
+    catalog = enrich_books_catalog(db, build_books_catalog())
+    used_country_ids: set[int] = set()
+    writers_map: dict[str, str] = {}
+    publishers_map: dict[str, str] = {}
+    for card in catalog.get("books") or catalog.get("films") or []:
+        if not isinstance(card, dict):
+            continue
+        cid = card.get("country_id")
+        try:
+            if cid is not None:
+                used_country_ids.add(int(cid))
+        except (TypeError, ValueError):
+            pass
+        for w in card.get("writers") or []:
+            name = str(w).strip()
+            if name:
+                writers_map.setdefault(name.casefold(), name)
+        for p in card.get("publishers") or []:
+            name = str(p).strip()
+            if name:
+                publishers_map.setdefault(name.casefold(), name)
+
+    country_groups = _country_groups_from_ids(db, used_country_ids or None)
+    if not used_country_ids:
+        country_groups = []
+    writers = sorted(writers_map.values(), key=str.casefold)
+    publishers = sorted(publishers_map.values(), key=str.casefold)
+
     return {
         "continents": [],
         "countries": [],
@@ -182,11 +213,11 @@ def books_filter_options(
             for group in all_subgenre_groups
             for item in group["items"]
         ],
-        "publishers": [],
-        "writers": [],
-        "authors": [],
+        "publishers": publishers,
+        "writers": writers,
+        "authors": writers,
         "decades": [],
-        "country_groups": all_country_groups(db),
+        "country_groups": country_groups,
         "all_country_groups": all_country_groups(db),
         "subgenre_groups": all_subgenre_groups,
         "all_subgenre_groups": all_subgenre_groups,

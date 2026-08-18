@@ -1180,6 +1180,17 @@ def build_series_overview(
     # Related tabs can filter client-side without a second fetch.
     display_cards = merged_universe_cards or universe_cards
 
+    genre_names = [
+        str(g.get("name") or "").strip()
+        for g in genres
+        if isinstance(g, dict) and str(g.get("name") or "").strip()
+    ]
+    from app.screen_kind import kind_label_from_genre_labels
+
+    kind_label, parent_genre_names = kind_label_from_genre_labels(
+        db, genre_names, "series"
+    )
+
     return {
         "id": detail["id"],
         "ser_id": row.ser_id,
@@ -1200,6 +1211,8 @@ def build_series_overview(
         "cast_languages": cast_languages,
         "activity_periods": activity_periods,
         "genres": genres,
+        "parent_genre_names": parent_genre_names,
+        "kind_label": kind_label,
         "publishers": publishers,
         "status": row.ser_status,
         "type": row.ser_type,

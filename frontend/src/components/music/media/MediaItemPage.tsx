@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchMediaItemGallery } from "../../../api";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { fetchMediaItemGallery, patchMediaItemOverview } from "../../../api";
 import { pushArtistRoute } from "../../../musicRoute";
 import {
   clearMediaItemOverviewCache,
@@ -27,6 +27,7 @@ import type {
   MediaItemFile,
   MediaItemOverview,
   ReleaseNeighbor,
+  SeriesOverview,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
 import { IconZoom } from "../../MenuIcons";
@@ -44,6 +45,9 @@ import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
 } from "../release/ReleasePhotocard";
+import { fitOverviewPhotocards } from "../../../fitOverviewPhotocards";
+import { screenKindLabel } from "../../../screenKindLabel";
+import SeriesAboutEditModal from "../../series/SeriesAboutEditModal";
 import MediaItemAboutEditModal from "./MediaItemAboutEditModal";
 import MediaItemGallery from "./MediaItemGallery";
 
@@ -72,6 +76,46 @@ function splitCreditNames(raw: string | null | undefined): string[] {
     .split(/[;,]/)
     .map((p) => p.trim())
     .filter(Boolean);
+}
+
+function mediaItemAsFilmOverview(data: MediaItemOverview): SeriesOverview {
+  const directors = splitCreditNames(data.director);
+  const genres = (data.genres || []).map((name) => ({ id: name, name }));
+  return {
+    id: data.id,
+    name: data.title,
+    letter: "",
+    folder_path: data.folder_path,
+    cover_url: data.cover_url,
+    bio: data.description,
+    writers: directors,
+    aliases: [],
+    country: data.country_iso
+      ? { id: 0, name: null, iso: data.country_iso }
+      : null,
+    languages: data.languages || [],
+    activity_periods: data.date_iso
+      ? [{ label: "", start: data.date_iso, end: data.date_iso }]
+      : [],
+    genres,
+    parent_genre_names: data.parent_genre_names,
+    kind_label: data.kind_label,
+    publishers: data.publisher ? [data.publisher] : [],
+    eras: [],
+    cast: { characters: [], staff: [] },
+    media: {
+      has_audio: false,
+      has_series: false,
+      has_library: false,
+      has_games: false,
+      has_gallery: false,
+    },
+    links: { categories: [], groups: {} },
+    subseries: [],
+    seasons: [],
+    related: { movies: [], series: [], books: [], games: [], music: [] },
+    directors,
+  } as SeriesOverview & { directors: string[] };
 }
 
 function CreditNameList({ names }: { names: string[] }) {
@@ -208,6 +252,8 @@ export default function MediaItemPage({
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
   const [overviewDescExpanded, setOverviewDescExpanded] = useState(false);
+  const overviewTopRef = useRef<HTMLDivElement>(null);
+  const overviewPhotocardsRef = useRef<HTMLDivElement>(null);
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -391,9 +437,15 @@ export default function MediaItemPage({
   const sectionLabel = kind === "video" ? "Video" : "Library";
   const listTabLabel = kind === "video" ? "VIDEOS" : "VOLUMES";
   const releaseTypeLabel =
-    data?.content_category ||
-    data?.release_type ||
-    (kind === "video" ? "Video release" : "Book");
+    kind === "video"
+      ? screenKindLabel("film", {
+          kindLabel: data?.kind_label,
+          parentGenreNames: data?.parent_genre_names,
+          genres: data?.genres,
+        })
+      : data?.content_category ||
+        data?.release_type ||
+        "Book";
   const displayDate =
     data?.display_date || formatTrackDate(data?.date_iso) || null;
   const coverFrontUrl = data?.cover_url || null;
@@ -485,6 +537,30 @@ export default function MediaItemPage({
   const showSoloLineup = Boolean(data?.is_solo && lineup.length > 0);
   const showOverviewLineup = showBandLineup || showSoloLineup;
   const hasOverviewBottom = true;
+
+  useLayoutEffect(() => {
+    const top = overviewTopRef.current;
+    const cards = overviewPhotocardsRef.current;
+    if (stacked || mobileLandscape || tab !== "overview") {
+      top?.style.removeProperty("--overview-photocard-scale");
+      return;
+    }
+    const measure = () => fitOverviewPhotocards(top, cards);
+    measure();
+    if (!top) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(top);
+    if (cards) ro.observe(cards);
+    return () => ro.disconnect();
+  }, [
+    stacked,
+    mobileLandscape,
+    tab,
+    overviewPhotocards?.portrait_front,
+    overviewPhotocards?.landscape_front,
+    data?.description,
+    hasOverviewBottom,
+  ]);
 
   const directorNames = splitCreditNames(data?.director);
   const authorNames = splitCreditNames(data?.author);
@@ -945,6 +1021,7 @@ export default function MediaItemPage({
                   .join(" ")}
               >
                 <div
+                  ref={overviewTopRef}
                   className={[
                     "release-page__overview-top",
                     data.description ? "" : "release-page__overview-top--no-desc",
@@ -986,6 +1063,7 @@ export default function MediaItemPage({
                   {showOverviewSide && overviewPhotocards ? (
                     <div className="release-page__overview-side">
                       <div
+                        ref={overviewPhotocardsRef}
                         className={`release-page__photocards${
                           photocardsCoverOnly
                             ? " release-page__photocards--cover-only"
@@ -1228,7 +1306,30 @@ export default function MediaItemPage({
         </div>
       )}
 
-      {aboutEditOpen && data && (
+      {aboutEditOpen && data && kind === "video" ? (
+        <SeriesAboutEditModal
+          variant="film"
+          franchiseId=""
+          filmId={itemId}
+          data={mediaItemAsFilmOverview(data)}
+          title="Edit movie"
+          isAdmin={isAdmin}
+          onClose={() => setAboutEditOpen(false)}
+          onSaveAbout={async (payload) => {
+            const updated = await patchMediaItemOverview(bandId, kind, itemId, {
+              description: payload.bio,
+              director: payload.directors.join("; ") || payload.writers,
+              publisher: payload.publishers,
+              country_iso: payload.country_iso,
+              languages: payload.languages,
+              genres: payload.genres.map((g) => g.name),
+            });
+            setCachedMediaItemOverview(bandId, kind, itemId, updated);
+            setData(updated);
+          }}
+          onSaved={() => setAboutEditOpen(false)}
+        />
+      ) : aboutEditOpen && data ? (
         <MediaItemAboutEditModal
           bandId={bandId}
           kind={kind}
@@ -1240,7 +1341,7 @@ export default function MediaItemPage({
             setData(updated);
           }}
         />
-      )}
+      ) : null}
 
       {lineupMemberId != null && data && (
         <ArtistMemberModal

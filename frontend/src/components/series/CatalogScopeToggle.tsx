@@ -1,5 +1,6 @@
 import { IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import type { SeriesCatalogScope } from "./SeriesBrowse";
+import type { ReactNode } from "react";
 
 type Props = {
   value: SeriesCatalogScope;
@@ -7,6 +8,8 @@ type Props = {
   className?: string;
   /** Secondary scope label when not Groups (default Shows; Movies uses Films). */
   itemsLabel?: string;
+  /** Icon for the leaf items mode (Shows / Films / Books). */
+  itemsIcon?: ReactNode;
   /** When true, cycle includes Universes as a third mode. */
   hasUniverses?: boolean;
 };
@@ -24,6 +27,7 @@ export default function CatalogScopeToggle({
   onChange,
   className = "",
   itemsLabel = "SHOWS",
+  itemsIcon,
   hasUniverses = false,
 }: Props) {
   const order = hasUniverses ? ORDER_WITH_UNI : ORDER_BASE;
@@ -58,7 +62,7 @@ export default function CatalogScopeToggle({
       ) : current === "universes" ? (
         <IconUniverse className="catalog-scope-toggle__icon" />
       ) : (
-        <IconMediaSeries className="catalog-scope-toggle__icon" />
+        itemsIcon ?? <IconMediaSeries className="catalog-scope-toggle__icon" />
       )}
       {label}
     </button>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchBooksCatalog,
-  fetchBooksDashboard,
   fetchBooksFilterOptions,
   fetchUniverses,
   resolveBooksPath,
@@ -17,7 +16,11 @@ import {
   preferredSectionForSource,
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
-import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { getDirectBookFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectBookFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import {
+  getCachedBooksDashboard,
+  prefetchBooksDashboard,
+} from "../../booksDashboardCache";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -46,7 +49,7 @@ import {
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
-import { IconUniverse } from "../MenuIcons";
+import { IconMediaBooks, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
@@ -162,7 +165,9 @@ export default function BooksModule({
   const [tab, setTab] = useState<BooksTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
   const [films, setFilms] = useState<BooksBookCard[]>([]);
-  const [dashLoading, setDashLoading] = useState(true);
+  const [dashLoading, setDashLoading] = useState(
+    () => !getCachedBooksDashboard()
+  );
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<
@@ -173,13 +178,13 @@ export default function BooksModule({
         top_films?: BooksBookCard[];
       })
     | null
-  >(null);
+  >(getCachedBooksDashboard() as never);
 
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
   const [filterOptions, setFilterOptions] =
     useState<SeriesFilterOptions | null>(null);
   const [catalogScope, setCatalogScope] =
-    useState<SeriesCatalogScope>("franchises");
+    useState<SeriesCatalogScope>("shows");
   const [universes, setUniverses] = useState<Universe[]>([]);
   const [search, setSearch] = useState("");
   const [letter, setLetter] = useState("");
@@ -198,17 +203,23 @@ export default function BooksModule({
 
   useEffect(() => {
     let cancelled = false;
-    setDashLoading(true);
+    const cached = getCachedBooksDashboard();
+    if (cached) {
+      setDashboard(cached as never);
+      setDashLoading(false);
+    } else {
+      setDashLoading(true);
+    }
     void (async () => {
       try {
         const [dash, uni] = await Promise.all([
-          fetchBooksDashboard(),
+          prefetchBooksDashboard(),
           fetchUniverses("books").catch(() => ({
             universes: [] as Universe[],
           })),
         ]);
         if (cancelled) return;
-        setDashboard(dash);
+        setDashboard(dash as never);
         setUniverses(uni.universes || []);
       } catch (e) {
         if (!cancelled) {
@@ -236,6 +247,13 @@ export default function BooksModule({
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
   }, []);
+
+  useEffect(() => {
+    if (tab !== "home" || franchiseId) return;
+    void prefetchBooksDashboard().then((dash) =>
+      setDashboard(dash as never)
+    );
+  }, [tab, franchiseId]);
 
   useEffect(() => {
     // Catalog is heavy — only load when browsing catalog or a franchise.
@@ -442,6 +460,7 @@ export default function BooksModule({
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
+    setDirectBookFromHome(false);
     const card = (
       franchises.find((f) => f.id === workId) ||
       dashboard?.top_franchises?.find((f) => f.id === workId)
@@ -513,6 +532,7 @@ export default function BooksModule({
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
+    setDirectBookFromHome(from === "home");
     const film = films.find((f) => f.id === nextFilmId);
     const wid = workId || film?.work_id;
     if (!wid) return;
@@ -615,6 +635,13 @@ export default function BooksModule({
             );
             return;
           }
+          const fromHome = getDirectBookFromHome();
+          if (fromHome) {
+            setDirectBookFromHome(false);
+            if (from === "home") backToBooksHome();
+            else backToBooksCatalog();
+            return;
+          }
           // Standalones have no franchise hub to return to.
           const work = franchises.find((f) => f.id === franchiseId) as
             | (SeriesFranchiseCard & { is_standalone?: boolean })
@@ -634,7 +661,8 @@ export default function BooksModule({
         backLabelOverride={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : Boolean(
+            : getDirectBookFromHome() ||
+                Boolean(
                   (franchises.find((f) => f.id === franchiseId) as
                     | { is_standalone?: boolean }
                     | undefined)?.is_standalone
@@ -974,7 +1002,8 @@ export default function BooksModule({
               <CatalogScopeToggle
                 value={catalogScope}
                 onChange={setCatalogScope}
-                itemsLabel="FILMS"
+                itemsLabel="BOOKS"
+                itemsIcon={<IconMediaBooks className="catalog-scope-toggle__icon" />}
                 hasUniverses={universes.length > 0}
               />
             ) : null}
@@ -1010,9 +1039,13 @@ export default function BooksModule({
                       setCatalogScope(order[(i + 1) % order.length]!);
                     }}
                   >
-                    {catalogScope === "universes" ? (
+                    {catalogScope === "franchises" ? (
+                      <IconSeriesScope className="menu-item-icon" />
+                    ) : catalogScope === "universes" ? (
                       <IconUniverse className="menu-item-icon" />
-                    ) : null}
+                    ) : (
+                      <IconMediaBooks className="menu-item-icon" />
+                    )}
                     {catalogScope === "franchises"
                       ? "Groups"
                       : catalogScope === "universes"

@@ -740,11 +740,20 @@ input {
   flex-direction: column;
 }
 
-.music-home-player {
-  flex-shrink: 0;
-  padding: 0.65rem 1rem 0.85rem;
-  border-top: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.35);
+.music-dashboard--player-active .dash-genre-ring,
+.music-dashboard--player-active .dash-placeholder--circle,
+.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-genre-ring,
+.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-placeholder--circle,
+.music-dashboard--player-active.music-dashboard--tablet-landscape .dash-row--genres .dash-genre-ring,
+.music-dashboard--player-active.music-dashboard--tablet-landscape .dash-row--genres .dash-placeholder--circle,
+.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-genre-ring,
+.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-placeholder--circle {
+  width: auto;
+  height: min(100%, 7.5rem);
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .music-module__player-bar {
@@ -947,35 +956,9 @@ input {
   overflow: hidden;
 }
 
-/* When On Repeat is playing, shrink other panes so labels stay visible above the player. */
-.music-dashboard--player-active .dash-row--icons .dash-icon-item-cover,
-.music-dashboard--player-active .dash-row--icons .dash-placeholder--landscape {
-  height: clamp(3.25rem, 9vh, 5.5rem);
-}
-
-.music-dashboard--player-active .dash-row--tracks .dash-track-art,
-.music-dashboard--player-active .dash-row--tracks .dash-placeholder--square {
-  width: clamp(3.5rem, 8.5vh, 5.75rem);
-  height: clamp(3.5rem, 8.5vh, 5.75rem);
-}
-
-.music-dashboard--player-active .dash-row--genres .dash-genre-ring,
-.music-dashboard--player-active .dash-row--genres .dash-placeholder--circle {
-  width: clamp(3.1rem, 8vh, 5rem);
-  height: clamp(3.1rem, 8vh, 5rem);
-}
-
-.music-dashboard--player-active .dash-row--flags .dash-country-flag,
-.music-dashboard--player-active .dash-row--flags .dash-placeholder--flag {
-  width: clamp(3.1rem, 8vh, 5rem);
-  height: clamp(2.2rem, 5.5vh, 3.4rem);
-}
-
-.music-dashboard--player-active .dash-item-label,
-.music-dashboard--player-active .dash-track-title,
-.music-dashboard--player-active .dash-icon-item-name {
-  font-size: clamp(0.58rem, 1.4vh, 0.72rem);
-}
+/* Player bar visible: rows already flex-shrink. Do not clamp card sizes —
+   hover titles sit on the covers, so shrinking them leaves empty pane space
+   and hiding the bar would not restore the old clamps. */
 
 .music-dashboard--tablet-portrait {
   --dash-pane-cols: 5;
@@ -1102,10 +1085,11 @@ input {
   display: grid;
   grid-template-columns: repeat(var(--dash-pane-cols), minmax(0, 1fr));
   gap: 0.35rem;
-  align-items: center;
+  align-items: stretch;
   justify-items: center;
-  align-content: center;
+  align-content: stretch;
   height: 100%;
+  min-height: 0;
 }
 
 .dash-scroll--flags {
@@ -1120,7 +1104,7 @@ input {
 
 .dash-row--genres .dash-scroll,
 .dash-row--flags .dash-scroll {
-  align-items: center;
+  align-items: stretch;
 }
 
 .dash-track {
@@ -1183,7 +1167,7 @@ input {
   max-width: 88px;
   aspect-ratio: 1;
   border-radius: 0;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -1494,6 +1478,9 @@ input {
 .dash-track:hover .billboard-text--scroll .billboard-text-inner,
 .dash-genre:hover .billboard-text--scroll .billboard-text-inner,
 .dash-country:hover .billboard-text--scroll .billboard-text-inner,
+.dash-icon-item:hover .billboard-text--scroll .billboard-text-inner,
+.dash-hover-title.is-revealed .billboard-text--scroll .billboard-text-inner,
+.is-revealed .billboard-text--scroll .billboard-text-inner,
 .release-tracklist__row:hover .billboard-text--scroll .billboard-text-inner,
 .release-tracklist__row.active .billboard-text--scroll .billboard-text-inner,
 .release-page--stacked .release-tracklist__row .billboard-text--scroll .billboard-text-inner,
@@ -1531,13 +1518,62 @@ input {
 }
 
 .dash-item-label {
-  display: block;
-  font-size: 0.68rem;
+  display: none;
+}
+
+.dash-track-title,
+.dash-track-sub {
+  display: none;
+}
+
+.dash-placeholder-slot-line {
+  display: none;
+}
+
+.dash-hover-title {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  padding: 0.35rem 0.4rem;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: opacity 0.15s ease;
+}
+
+.dash-track:hover .dash-hover-title,
+.dash-icon-item:hover .dash-hover-title,
+.dash-genre:hover .dash-hover-title,
+.dash-country:hover .dash-hover-title,
+.dash-hover-title.is-revealed,
+.is-revealed .dash-hover-title {
+  opacity: 1;
+}
+
+.dash-hover-title__main,
+.dash-hover-title__sub {
   width: 100%;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.dash-hover-title__main {
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.dash-hover-title__sub {
+  font-size: 0.62rem;
+  font-weight: 500;
+  opacity: 0.88;
 }
 
 .dash-icon-item {
@@ -1551,9 +1587,10 @@ input {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
-  gap: 0.18rem;
+  gap: 0;
+  position: relative;
 }
 
 .dash-icon-item-cover {
@@ -1607,21 +1644,31 @@ input {
   color: var(--text);
   cursor: pointer;
   min-width: 0;
+  min-height: 0;
   width: 100%;
+  height: 100%;
   padding: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 .dash-genre-ring {
   position: relative;
   display: block;
-  width: 100%;
-  max-width: 72px;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  width: auto;
+  height: min(100%, 7.5rem);
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 1;
   border-radius: 50%;
-  margin: 0 auto 0.25rem;
+  margin: 0 auto;
   overflow: hidden;
 }
 
@@ -1646,13 +1693,14 @@ input {
 }
 
 .dash-country-flag {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   max-width: 110px;
   aspect-ratio: 3 / 2;
-  margin: 0 auto 0.25rem;
+  margin: 0 auto;
   background: var(--bg-hover);
   overflow: hidden;
 }
@@ -1720,9 +1768,13 @@ input {
   .music-dashboard:not(.music-dashboard--mobile-portrait):not(.music-dashboard--mobile-landscape):not(.music-dashboard--tablet-portrait):not(.music-dashboard--tablet-landscape)
     .dash-row--genres
     .dash-placeholder--circle {
-    width: min(100%, 11vh, 128px);
-    max-width: min(100%, 128px);
-    margin-bottom: 0.15rem;
+    width: auto;
+    height: min(100%, 8.5rem);
+    max-width: 100%;
+    max-height: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin-bottom: 0;
   }
 
   .music-dashboard:not(.music-dashboard--mobile-portrait):not(.music-dashboard--mobile-landscape):not(.music-dashboard--tablet-portrait):not(.music-dashboard--tablet-landscape)
@@ -2511,10 +2563,7 @@ input {
 }
 
 .dash-placeholder-slot-line {
-  display: block;
-  width: 100%;
-  min-height: 0.85rem;
-  flex-shrink: 0;
+  display: none;
 }
 
 .dash-placeholder-slot-line--sub {
@@ -2525,7 +2574,7 @@ input {
   flex-shrink: 0;
   opacity: 1;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   box-sizing: border-box;
 }
 
@@ -2534,7 +2583,7 @@ input {
   max-width: 88px;
   aspect-ratio: 1;
   height: auto;
-  margin: 0 auto 0.25rem;
+  margin: 0 auto;
   background: linear-gradient(135deg, #3a2a4a, #1a1520);
 }
 
@@ -2558,12 +2607,17 @@ input {
 }
 
 .dash-placeholder--circle {
-  width: 100%;
-  max-width: 72px;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  width: auto;
+  height: min(100%, 7.5rem);
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 1;
-  height: auto;
   border-radius: 50%;
-  margin: 0 auto 0.25rem;
+  margin: 0 auto;
 }
 
 .dash-placeholder--flag {
@@ -2571,7 +2625,7 @@ input {
   max-width: 110px;
   aspect-ratio: 3 / 2;
   height: auto;
-  margin: 0 auto 0.25rem;
+  margin: 0 auto;
 }
 
 .dash-status {
@@ -3661,19 +3715,24 @@ input {
 
 .music-dashboard--mobile-landscape .dash-genre-ring,
 .music-dashboard--mobile-landscape .dash-placeholder--circle {
-  width: 100%;
-  max-width: 48px;
+  width: auto;
+  height: min(100%, 4.5rem);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 1;
-  margin: 0 auto 0.1rem;
+  margin: 0 auto;
 }
 
 .music-dashboard--tablet-landscape .dash-row--genres .dash-genre-ring,
 .music-dashboard--tablet-landscape .dash-row--genres .dash-placeholder--circle {
-  width: min(100%, 14vh, 120px);
-  max-width: min(100%, 120px);
+  width: auto;
+  height: min(100%, 7rem);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 1;
-  height: auto;
-  margin: 0 auto 0.12rem;
+  margin: 0 auto;
 }
 
 .music-dashboard--mobile-landscape .dash-country-flag,
@@ -3793,12 +3852,13 @@ input {
 
 .music-dashboard--mobile-landscape .dash-genre-ring,
 .music-dashboard--mobile-landscape .dash-placeholder--circle {
-  width: 100%;
-  max-width: 48px;
+  width: auto;
+  max-width: 100%;
   aspect-ratio: 1;
-  height: auto;
+  height: min(100%, 48px);
+  min-width: 0;
+  min-height: 0;
   margin: 0 auto 0.08rem;
-  flex-shrink: 0;
 }
 
 .music-dashboard--mobile-landscape .dash-icon-item-cover,
@@ -4125,12 +4185,15 @@ input {
     line-height: 1.2;
   }
 
-  .music-dashboard--mobile-portrait .dash-genre-ring {
-    width: 100%;
-    max-width: min(20vw, 64px);
+  .music-dashboard--mobile-portrait .dash-genre-ring,
+  .music-dashboard--mobile-portrait .dash-placeholder--circle {
+    width: auto;
+    height: min(100%, 4.25rem);
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
     aspect-ratio: 1;
-    height: auto;
-    margin: 0 auto 0.15rem;
+    margin: 0 auto;
   }
 
   .music-dashboard--mobile-portrait .dash-country-flag,
@@ -4169,7 +4232,10 @@ input {
 
   .music-dashboard--mobile-portrait .dash-genre-ring,
   .music-dashboard--mobile-portrait .dash-placeholder--circle {
-    max-width: min(20vw, 64px);
+    max-width: min(100%, 64px);
+    max-height: 100%;
+    min-width: 0;
+    min-height: 0;
   }
 
 }
@@ -5157,7 +5223,7 @@ input {
   width: 50%;
   z-index: 2;
   pointer-events: none;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .artist-about__photo-shade--left {
@@ -5193,7 +5259,7 @@ input {
   max-height: min(88vh, calc(100vh - 8.5rem));
   object-fit: contain;
   object-position: left top;
-  border-radius: 4px;
+  border-radius: 0;
   display: block;
   box-shadow: none;
 }
@@ -5657,7 +5723,7 @@ input {
   width: 100%;
   max-width: 120px;
   aspect-ratio: 1;
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--bg-hover);
 }
@@ -8733,7 +8799,7 @@ button.media-release-card--banner {
   object-fit: contain;
   object-position: center top;
   box-shadow: none;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .artist-page--stacked .artist-about__photo--layer {
@@ -10725,10 +10791,10 @@ button.media-release-card--banner {
   min-height: 0;
   overflow: hidden;
   gap: clamp(0.55rem, 1.4vh, 0.85rem);
-  --overview-photo-col: clamp(7.5rem, 15vw, 15rem);
+  --overview-photo-col: clamp(9rem, 18vw, 20rem);
   --overview-portrait-width: 0.74;
-  --overview-portrait-max-h: clamp(10rem, 26vh, 16rem);
-  --overview-landscape-max-h: clamp(6rem, 16vh, 10rem);
+  --overview-portrait-max-h: clamp(12rem, 34vh, 22rem);
+  --overview-landscape-max-h: clamp(7.5rem, 20vh, 14rem);
   --overview-member-photo: clamp(2.75rem, 3.6vw, 3.75rem);
   --overview-single-cover: clamp(2.75rem, 3.6vw, 3.75rem);
   --overview-lineup-font: clamp(0.58rem, 0.68vw, 0.68rem);
@@ -11045,8 +11111,8 @@ button.media-release-card--banner {
   position: relative;
   z-index: 0;
   --overview-photocard-scale: 1;
-  --overview-portrait-max-h: clamp(11rem, 30vh, 18rem);
-  --overview-landscape-max-h: clamp(6.5rem, 18vh, 11rem);
+  --overview-portrait-max-h: clamp(16rem, 48vh, 32rem);
+  --overview-landscape-max-h: clamp(10rem, 30vh, 20rem);
 }
 
 .release-page__overview--compact-lineup .release-page__overview-top {
@@ -11085,9 +11151,9 @@ button.media-release-card--banner {
   max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
   align-self: stretch;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  gap: clamp(0.45rem, 1.1vh, 0.85rem);
+  gap: 0.28rem;
   padding: 0;
   overflow: visible;
   display: flex;

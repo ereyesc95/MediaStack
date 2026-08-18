@@ -808,6 +808,7 @@ export type MediaItemOverview = {
   display_date?: string | null;
   folder_path: string;
   cover_url: string | null;
+  cover_back_url?: string | null;
   banner_url?: string | null;
   gallery_photo_url?: string | null;
   disc_url?: string | null;
@@ -826,6 +827,8 @@ export type MediaItemOverview = {
   country_iso?: string | null;
   languages?: string[];
   genres?: string[];
+  parent_genre_names?: string[];
+  kind_label?: string | null;
   photocards?: {
     portrait_front: string | null;
     portrait_back: string | null;
@@ -1643,6 +1646,8 @@ export type SeriesOverview = {
   cast_languages?: SeriesLanguageOption[];
   activity_periods: { label: string; start?: string | null; end?: string | null }[];
   genres: { id: number | string; name: string }[];
+  parent_genre_names?: string[];
+  kind_label?: string | null;
   publishers: string[];
   status?: string | null;
   type?: string | null;

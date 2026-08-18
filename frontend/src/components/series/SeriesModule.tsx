@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchSeriesCatalog,
-  fetchSeriesDashboard,
   fetchSeriesFilterOptions,
   fetchUniverses,
   resolveBooksPath,
@@ -19,6 +18,10 @@ import {
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
 import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import {
+  getCachedSeriesDashboard,
+  prefetchSeriesDashboard,
+} from "../../seriesDashboardCache";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -157,16 +160,20 @@ export default function SeriesModule({
     return "home";
   });
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
-  const [dashboard, setDashboard] = useState<SeriesDashboard | null>(null);
+  const [dashboard, setDashboard] = useState<SeriesDashboard | null>(
+    () => getCachedSeriesDashboard()
+  );
   const [filterOptions, setFilterOptions] = useState<SeriesFilterOptions | null>(
     null
   );
   const [loading, setLoading] = useState(true);
-  const [dashLoading, setDashLoading] = useState(true);
+  const [dashLoading, setDashLoading] = useState(
+    () => !getCachedSeriesDashboard()
+  );
   const [error, setError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
   const [catalogScope, setCatalogScope] = useState<"franchises" | "shows" | "universes">(
-    "franchises"
+    "shows"
   );
   const [universes, setUniverses] = useState<Universe[]>([]);
   const [addUniverseOpen, setAddUniverseOpen] = useState(false);
@@ -233,16 +240,22 @@ export default function SeriesModule({
   }, []);
 
   const loadDashboard = useCallback(async () => {
-    setDashLoading(true);
+    const cached = getCachedSeriesDashboard();
+    if (cached) {
+      setDashboard(cached);
+      setDashLoading(false);
+    } else {
+      setDashLoading(true);
+    }
     try {
-      const [dash, uni] = await Promise.all([
-        fetchSeriesDashboard(),
-        fetchUniverses("series").catch(() => ({ universes: [] as Universe[] })),
-      ]);
+        const [dash, uni] = await Promise.all([
+          prefetchSeriesDashboard(),
+          fetchUniverses("series").catch(() => ({ universes: [] as Universe[] })),
+        ]);
       setDashboard(dash);
       setUniverses(uni.universes || []);
     } catch {
-      setDashboard(null);
+      if (!cached) setDashboard(null);
     } finally {
       setDashLoading(false);
     }
@@ -255,6 +268,10 @@ export default function SeriesModule({
       setFilterOptions(null);
     }
   }, []);
+
+  useEffect(() => {
+    clearMediaTheme(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (universeId != null) {
@@ -368,10 +385,16 @@ export default function SeriesModule({
     setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
     setTab("catalog");
-    const card =
+    const card = (
       franchises.find((f) => f.id === id) ||
       dashboard?.top_franchises?.find((f) => f.id === id) ||
-      null;
+      null
+    ) as
+      | (SeriesFranchiseCard & {
+          is_standalone?: boolean;
+          primary_subseries_id?: string | null;
+        })
+      | null;
     const standaloneId =
       nextSubseriesId == null &&
       card?.is_standalone &&
@@ -576,9 +599,10 @@ export default function SeriesModule({
       }
     }
     // Synthetics still have one subseries — use is_standalone, not empty subseries list.
-    const card =
+    const card = (
       franchises.find((f) => f.id === franchiseId) ||
-      dashboard?.top_franchises?.find((f) => f.id === franchiseId);
+      dashboard?.top_franchises?.find((f) => f.id === franchiseId)
+    ) as { is_standalone?: boolean } | undefined;
     const isStandaloneLeaf = Boolean(card?.is_standalone);
     if (isStandaloneLeaf) {
       if (from === "home") backToHome();

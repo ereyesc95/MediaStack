@@ -40,6 +40,11 @@ import {
   writeStoredLanguage,
 } from "../../languageLogos";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
+import {
+  readSessionEntry,
+  sessionCacheKey,
+  writeSessionEntry,
+} from "../../sessionCache";
 import { pushBooksRoute } from "../../booksRoute";
 import { pushMoviesRoute } from "../../moviesRoute";
 import {
@@ -182,7 +187,7 @@ type FranchiseNavSection = {
 const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
-  { id: "movies", label: "MOVIES", flag: null },
+  { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
@@ -205,7 +210,7 @@ const SERIES_FROM_BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "series", label: "SERIES", flag: "has_series" },
-  { id: "movies", label: "MOVIES", flag: null },
+  { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
@@ -250,6 +255,21 @@ const MEDIA_SUBBAR_SECTIONS: SeriesSection[] = [
 /** Keep last overview per franchise so remount (subseries → franchise) isn't a blank boot. */
 const overviewCache = new Map<string, SeriesOverview>();
 
+function readOverviewCache(key: string): SeriesOverview | null {
+  const mem = overviewCache.get(key);
+  if (mem) return mem;
+  const stored = readSessionEntry<SeriesOverview>(
+    sessionCacheKey("franchise-overview", key)
+  );
+  if (stored) overviewCache.set(key, stored);
+  return stored;
+}
+
+function writeOverviewCache(key: string, data: SeriesOverview) {
+  overviewCache.set(key, data);
+  writeSessionEntry(sessionCacheKey("franchise-overview", key), data);
+}
+
 export default function SeriesFranchisePage({
   franchiseId,
   module = "series",
@@ -293,7 +313,7 @@ export default function SeriesFranchisePage({
   const mobilePortrait = isMobilePortraitLayout(layout);
   const cacheKey = `${isBooks ? "books" : isMoviesOnly ? "movies" : "series"}:${franchiseId}`;
   const [data, setData] = useState<SeriesOverview | null>(
-    () => overviewCache.get(cacheKey) ?? null
+    () => readOverviewCache(cacheKey)
   );
   const sharedSeries = Boolean(
     (data as (SeriesOverview & { shared_series?: boolean }) | null)?.shared_series
@@ -324,7 +344,7 @@ export default function SeriesFranchisePage({
     if (homeReferrer?.source === "books") return SERIES_FROM_BOOKS_SECTIONS;
     return SERIES_SECTIONS;
   }, [isBooks, isMoviesOnly, homeReferrer]);
-  const [loading, setLoading] = useState(() => !overviewCache.has(cacheKey));
+  const [loading, setLoading] = useState(() => !readOverviewCache(cacheKey));
   const [error, setError] = useState<string | null>(null);
   const artworkHomeRedirected = useRef(false);
 
@@ -403,18 +423,22 @@ export default function SeriesFranchisePage({
   const cachedIconRef = useRef<string | null>(null);
 
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
-  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(() => section === "audio");
   const [opedOpen, setOpedOpen] = useState(false);
   const [seriesPlaying, setSeriesPlaying] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [showCards, setShowCards] = useState<SeriesMediaCard[]>([]);
-  const [showLoading, setShowLoading] = useState(false);
+  const [showLoading, setShowLoading] = useState(
+    () => section === "series"
+  );
   const [movieCards, setMovieCards] = useState<SeriesMediaCard[]>([]);
-  const [movieLoading, setMovieLoading] = useState(false);
+  const [movieLoading, setMovieLoading] = useState(
+    () => section === "movies" || section === "books"
+  );
   const [libCards, setLibCards] = useState<SeriesMediaCard[]>([]);
-  const [libLoading, setLibLoading] = useState(false);
+  const [libLoading, setLibLoading] = useState(() => section === "library");
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>([]);
-  const [gameLoading, setGameLoading] = useState(false);
+  const [gameLoading, setGameLoading] = useState(() => section === "games");
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
@@ -423,7 +447,7 @@ export default function SeriesFranchisePage({
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
     const cacheKey = `${isBooks ? "books" : isMoviesOnly ? "movies" : "series"}:${franchiseId}`;
-    const cached = overviewCache.get(cacheKey);
+    const cached = readOverviewCache(cacheKey);
     if (cached) {
       setData(cached);
       setLoading(false);
@@ -438,7 +462,7 @@ export default function SeriesFranchisePage({
           ? await fetchMoviesFranchiseOverview(franchiseId)
           : await fetchSeriesOverview(franchiseId);
       if (gen !== loadGenRef.current) return;
-      overviewCache.set(cacheKey, overview);
+      writeOverviewCache(cacheKey, overview);
       setData(overview);
       setEraIndex(0);
       if (overview.is_animated || (overview.cast?.characters?.length ?? 0) > 0) {
@@ -1284,14 +1308,16 @@ export default function SeriesFranchisePage({
       : null) ||
     null;
 
-  const logoSrc =
-    langLogo ||
-    era?.logo_url ||
-    data?.logo_url ||
-    shell?.logo_url ||
-    null;
-  const iconSrc =
-    era?.icon_url || data?.icon_url || shell?.icon_url || null;
+  const logoSrc = data
+    ? langLogo ||
+      era?.logo_url ||
+      data.logo_url ||
+      shell?.logo_url ||
+      null
+    : null;
+  const iconSrc = data
+    ? era?.icon_url || data.icon_url || shell?.icon_url || null
+    : null;
   if (logoSrc) cachedLogoRef.current = logoSrc;
   if (iconSrc) cachedIconRef.current = iconSrc;
   const displayLogo = logoSrc || cachedLogoRef.current;
@@ -2207,6 +2233,14 @@ export default function SeriesFranchisePage({
               isAdmin ? () => setAddCastOpen(true) : undefined
             }
             onDataChanged={() => void load()}
+            onOpenCastProject={({ subseriesId: id }) => {
+              if (!id) return;
+              onNavigate({
+                subseriesId: id,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
           />
         ) : null}
 
@@ -2403,7 +2437,7 @@ export default function SeriesFranchisePage({
         {section === "audio" ? (
           <SeriesMediaGrid
             items={filterBySubseries(audioCards)}
-            loading={audioLoading && audioCards.length === 0}
+            loading={loading || (audioLoading && audioCards.length === 0)}
             emptyMessage={
               isMovies
                 ? "No audio for this franchise yet."
@@ -2419,7 +2453,7 @@ export default function SeriesFranchisePage({
         {section === "movies" || section === "books" ? (
           <SeriesMediaGrid
             items={filterBySubseries(movieCards)}
-            loading={movieLoading && movieCards.length === 0}
+            loading={loading || (movieLoading && movieCards.length === 0)}
             emptyMessage={
               section === "books"
                 ? "No book folders under this work yet."
@@ -2435,12 +2469,34 @@ export default function SeriesFranchisePage({
             coverAspect="portrait"
             onOpen={
               (isBooks && section === "books") || isMoviesOnly
-                ? (item) =>
+                ? (item) => {
+                    if (isBooks && section === "books") {
+                      pushBooksRoute({
+                        franchiseId,
+                        franchiseName: title,
+                        bookId: item.id,
+                        bookTitle: item.title,
+                        section: "overview",
+                        overviewTab: "about",
+                        universeId,
+                      });
+                    } else {
+                      pushMoviesRoute({
+                        franchiseId,
+                        franchiseName: title,
+                        filmId: item.id,
+                        filmTitle: item.title,
+                        section: "overview",
+                        overviewTab: "about",
+                        universeId,
+                      });
+                    }
                     onNavigate({
                       section: "overview",
                       subseriesId: item.id,
                       seasonId: undefined,
-                    })
+                    });
+                  }
                 : openMediaCard
             }
           />
@@ -2449,7 +2505,7 @@ export default function SeriesFranchisePage({
         {section === "series" ? (
           <SeriesMediaGrid
             items={showCards}
-            loading={showLoading && showCards.length === 0}
+            loading={loading || (showLoading && showCards.length === 0)}
             emptyMessage={
               isMovies
                 ? "No matching Series franchise for this work name."
@@ -2505,7 +2561,7 @@ export default function SeriesFranchisePage({
         {section === "library" ? (
           <SeriesMediaGrid
             items={filterBySubseries(libCards)}
-            loading={libLoading && libCards.length === 0}
+            loading={loading || (libLoading && libCards.length === 0)}
             emptyMessage="No books linked to this franchise yet."
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
@@ -2516,7 +2572,7 @@ export default function SeriesFranchisePage({
         {section === "games" ? (
           <SeriesMediaGrid
             items={filterGames(gameCards)}
-            loading={gameLoading && gameCards.length === 0}
+            loading={loading || (gameLoading && gameCards.length === 0)}
             emptyMessage="No games linked to this franchise yet."
             cardLayout={releaseCardLayout}
             coverAspect="portrait"

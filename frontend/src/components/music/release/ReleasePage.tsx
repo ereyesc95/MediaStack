@@ -90,6 +90,7 @@ import {
   ReleasePhotocardGroup,
   type ReleasePhotocardSet,
 } from "./ReleasePhotocard";
+import { fitOverviewPhotocards } from "../../../fitOverviewPhotocards";
 import { openArtistByName } from "../artist/openArtistByName";
 import ReleaseTracklist, {
   type ReleaseMobileTrackView,
@@ -159,6 +160,7 @@ type Props = {
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
   onBackToMovies?: (franchiseId: string) => void;
   onBackToHome?: () => void;
+  onBackToCatalog?: () => void;
 };
 
 function isVideoMedia(url: string | null | undefined): boolean {
@@ -350,6 +352,7 @@ export default function ReleasePage({
   onBackToSeries,
   onBackToMovies,
   onBackToHome,
+  onBackToCatalog,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -683,24 +686,12 @@ export default function ReleasePage({
       return;
     }
 
-    const desc = overviewDescRef.current;
+      const desc = overviewDescRef.current;
     const cards = overviewPhotocardsRef.current;
     if (!top) return;
 
     const measure = () => {
-      clearScale();
-      if (!desc || !cards) return;
-
-      const topH = top.clientHeight;
-      const cardsH = cards.offsetHeight;
-      if (cardsH <= 0 || topH <= 0) return;
-
-      // Grow photocards to fill the overview-top column down to the lineup.
-      let scale = topH / cardsH;
-      scale = Math.min(2.35, Math.max(1, scale * 0.98));
-      if (scale > 1.02) {
-        top.style.setProperty("--overview-photocard-scale", scale.toFixed(3));
-      }
+      fitOverviewPhotocards(top, cards);
     };
 
     measure();
@@ -972,6 +963,8 @@ export default function ReleasePage({
 
   const releaseReferrer = getReleaseReferrer();
   const homeReferrer = releaseReferrer?.source === "home" ? releaseReferrer : null;
+  const catalogReferrer =
+    releaseReferrer?.source === "catalog" ? releaseReferrer : null;
   const seriesReferrer =
     releaseReferrer?.source === "series" && releaseReferrer.franchiseId
       ? releaseReferrer
@@ -992,7 +985,9 @@ export default function ReleasePage({
   ).toUpperCase();
   const backLabel = homeReferrer
     ? "HOME"
-    : franchiseReferrer
+    : catalogReferrer
+      ? "CATALOG"
+      : franchiseReferrer
       ? bannerLayout
         ? seriesBackUsesIcon
           ? null
@@ -1005,7 +1000,9 @@ export default function ReleasePage({
         : (data?.artist_name ?? "Artist");
   const backAriaLabel = homeReferrer
     ? "Back to Home"
-    : franchiseReferrer
+    : catalogReferrer
+      ? "Back to Catalog"
+      : franchiseReferrer
       ? `Back to ${franchiseBackLabel}`
       : `Back to ${backLabel ?? "Artist"}`;
 
@@ -1014,6 +1011,10 @@ export default function ReleasePage({
     clearReleaseReferrer();
     if (ref?.source === "home") {
       onBackToHome?.();
+      return;
+    }
+    if (ref?.source === "catalog") {
+      onBackToCatalog?.();
       return;
     }
     if (ref?.source === "series" && ref.franchiseId) {

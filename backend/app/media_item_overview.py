@@ -828,4 +828,15 @@ def build_media_item_overview(
     payload = apply_media_item_meta(payload, db, band_id, kind, item_id)
     if payload.get("publisher"):
         payload["publisher_logo_url"] = label_logo_url(payload["publisher"])
+    if kind == "video":
+        from app.screen_kind import kind_label_from_genre_labels
+
+        labels = [
+            str(g).strip()
+            for g in (payload.get("genres") or [])
+            if str(g).strip()
+        ]
+        kind_label, parent_names = kind_label_from_genre_labels(db, labels, "film")
+        payload["kind_label"] = kind_label
+        payload["parent_genre_names"] = parent_names
     return payload

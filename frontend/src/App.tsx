@@ -65,6 +65,7 @@ import {
   setUniverseReturnTarget,
 } from "./mediaEntry";
 import { clearMediaTheme } from "./mediaTheme";
+import { clearAllDashboardCaches } from "./dashboardCaches";
 import type { CardOrientation, MusicTab, View } from "./types";
 import UniversePage from "./components/UniversePage";
 
@@ -84,11 +85,25 @@ const MEDIA_OPTIONS: MediaOption[] = [
 
 ];
 
-
+function viewFromLocationPath(pathname: string): View {
+  const path = (pathname || "/").split("?")[0].toLowerCase();
+  if (path === "/" || path === "") return { kind: "hub" };
+  if (path.startsWith("/music")) return { kind: "music" };
+  if (path.startsWith("/series")) return { kind: "series" };
+  if (path.startsWith("/movies")) return { kind: "movies" };
+  if (path.startsWith("/books")) return { kind: "books" };
+  if (path.startsWith("/games")) return { kind: "games" };
+  if (path.startsWith("/universe")) return { kind: "universe", universeId: 0 };
+  return { kind: "hub" };
+}
 
 export default function App() {
 
-  const [view, setView] = useState<View>({ kind: "hub" });
+  const [view, setView] = useState<View>(() =>
+    typeof window === "undefined"
+      ? { kind: "hub" }
+      : viewFromLocationPath(window.location.pathname)
+  );
 
   const [cardOrientation, setCardOrientation] =
     useState<CardOrientation>("landscape");
@@ -217,7 +232,14 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (view.kind !== "music") {
+      clearMediaTheme(profile?.user_id);
+    }
+  }, [view.kind, profile?.user_id]);
+
   function handleProfileSelected(user: ProfileUser, token: string) {
+    clearAllDashboardCaches();
     applyProfilePreferences(user.user_id);
     setCardOrientation(getStoredOrientation(user.user_id));
     saveProfile(user, token);
@@ -253,6 +275,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
+    clearAllDashboardCaches();
     clearProfile();
     setProfile(null);
     setSourceModal(null);
@@ -341,6 +364,7 @@ export default function App() {
 
 
   function selectMedia(opt: MediaOption) {
+    clearMediaTheme(profile?.user_id);
 
     if (opt.kind === "music") {
       window.history.pushState({}, "", "/");
@@ -676,6 +700,33 @@ export default function App() {
               });
             }}
 
+            onOpenMoviesLeaf={(franchiseId, filmId, opts) => {
+              const bandId = view.kind === "music" ? view.bandId : undefined;
+              if (bandId != null) {
+                saveSeriesEntryReferrer({
+                  kind: "music",
+                  bandId,
+                  artistSection: "video",
+                  title: opts?.franchiseName,
+                });
+              }
+              pushMoviesRoute({
+                franchiseId,
+                franchiseName: opts?.franchiseName,
+                filmId,
+                filmTitle: opts?.filmTitle,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+
             onReleaseNavigate={(releaseId, releaseTab, patchBandId) =>
               openMusic({
                 releaseId,
@@ -782,7 +833,24 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onBackToMovies={(franchiseId, restore) => {
+            onBackToMovies={(franchiseId, restore, filmId, filmTitle) => {
+              if (franchiseId && filmId) {
+                pushMoviesRoute({
+                  franchiseId,
+                  filmId,
+                  filmTitle,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                setView({
+                  kind: "movies",
+                  franchiseId,
+                  filmId,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
               if (!franchiseId) {
                 if (restore?.tab === "home") {
                   pushMoviesRootRoute();
@@ -822,7 +890,23 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onBackToBooks={(franchiseId, restore) => {
+            onBackToBooks={(franchiseId, restore, bookId) => {
+              if (franchiseId && bookId) {
+                pushBooksRoute({
+                  franchiseId,
+                  bookId,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                setView({
+                  kind: "books",
+                  franchiseId,
+                  bookId,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
               if (!franchiseId) {
                 if (restore?.tab === "home") {
                   pushBooksRootRoute();

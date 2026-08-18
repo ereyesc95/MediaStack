@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMoviesCatalog,
-  fetchMoviesDashboard,
+  fetchMoviesFilm,
+  fetchMoviesFilmOverview,
   fetchMoviesFilterOptions,
+  fetchMoviesFranchiseOverview,
   fetchUniverses,
   resolveBooksPath,
   resolveMoviesPath,
@@ -17,7 +19,11 @@ import {
   preferredSectionForSource,
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
-import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { getDirectFilmFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectFilmFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import {
+  getCachedMoviesDashboard,
+  prefetchMoviesDashboard,
+} from "../../moviesDashboardCache";
 import {
   clearSeriesEntryReferrer,
   getSeriesEntryReferrer,
@@ -166,7 +172,9 @@ export default function MoviesModule({
   const [tab, setTab] = useState<MoviesTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
   const [films, setFilms] = useState<MoviesFilmCard[]>([]);
-  const [dashLoading, setDashLoading] = useState(true);
+  const [dashLoading, setDashLoading] = useState(
+    () => !getCachedMoviesDashboard()
+  );
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<
@@ -177,13 +185,13 @@ export default function MoviesModule({
         top_films?: MoviesFilmCard[];
       })
     | null
-  >(null);
+  >(() => getCachedMoviesDashboard() as never);
 
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
   const [filterOptions, setFilterOptions] =
     useState<SeriesFilterOptions | null>(null);
   const [catalogScope, setCatalogScope] =
-    useState<SeriesCatalogScope>("franchises");
+    useState<SeriesCatalogScope>("shows");
   const [universes, setUniverses] = useState<Universe[]>([]);
   const [search, setSearch] = useState("");
   const [letter, setLetter] = useState("");
@@ -204,17 +212,23 @@ export default function MoviesModule({
 
   useEffect(() => {
     let cancelled = false;
-    setDashLoading(true);
+    const cached = getCachedMoviesDashboard();
+    if (cached) {
+      setDashboard(cached as never);
+      setDashLoading(false);
+    } else {
+      setDashLoading(true);
+    }
     void (async () => {
       try {
         const [dash, uni] = await Promise.all([
-          fetchMoviesDashboard(),
+          prefetchMoviesDashboard(),
           fetchUniverses("movies").catch(() => ({
             universes: [] as Universe[],
           })),
         ]);
         if (cancelled) return;
-        setDashboard(dash);
+        setDashboard(dash as never);
         setUniverses(uni.universes || []);
       } catch (e) {
         if (!cancelled) {
@@ -448,6 +462,8 @@ export default function MoviesModule({
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
+    directFilmFromHomeRef.current = false;
+    setDirectFilmFromHome(false);
     const card = (
       franchises.find((f) => f.id === workId) ||
       dashboard?.top_franchises?.find((f) => f.id === workId)
@@ -513,17 +529,32 @@ export default function MoviesModule({
     nextFilmId: string,
     workId?: string | null,
     from: "home" | "catalog" = "catalog",
-    directFromHome = false
+    directFromHome = false,
+    filmTitle?: string | null
   ) => {
     setMediaEntrySource(from);
     setEntrySource(from);
     directFilmFromHomeRef.current = Boolean(directFromHome);
+    setDirectFilmFromHome(Boolean(directFromHome));
     const film = films.find((f) => f.id === nextFilmId);
+    const dashFilm = dashboard?.top_series?.find((s) => s.id === nextFilmId);
     const wid = workId || film?.work_id;
     if (!wid) return;
+    const title =
+      filmTitle?.trim() ||
+      film?.title?.trim() ||
+      dashFilm?.name?.trim() ||
+      undefined;
+    const workName =
+      film?.work_name ||
+      franchises.find((f) => f.id === wid)?.name ||
+      dashboard?.top_franchises?.find((f) => f.id === wid)?.name ||
+      undefined;
     pushMoviesRoute({
       franchiseId: wid,
+      franchiseName: workName,
       filmId: nextFilmId,
+      filmTitle: title,
       section: "overview",
       overviewTab: "about",
     });
@@ -534,6 +565,9 @@ export default function MoviesModule({
       overviewTab: "about",
       universeId: undefined,
     });
+    void fetchMoviesFilmOverview(nextFilmId).catch(() => null);
+    void fetchMoviesFilm(nextFilmId).catch(() => null);
+    void fetchMoviesFranchiseOverview(wid).catch(() => null);
   };
 
   const backToMoviesHome = () => {
@@ -608,8 +642,18 @@ export default function MoviesModule({
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
+        onOpenArtist={onOpenArtist}
         onBack={() => {
           const ref = getSeriesEntryReferrer();
+          if (ref?.kind === "music" && ref.bandId != null && onOpenArtist) {
+            clearSeriesEntryReferrer();
+            onOpenArtist(
+              ref.bandId,
+              (ref.artistSection as import("../../types").ArtistSection) ||
+                "video"
+            );
+            return;
+          }
           if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
             clearSeriesEntryReferrer();
             onOpenBooksFranchise(
@@ -631,8 +675,11 @@ export default function MoviesModule({
           }
           // Standalones have no franchise hub to return to.
           // Direct Best Movies opens return Home; franchise→film returns to hub.
-          if (directFilmFromHomeRef.current) {
+          const fromHome =
+            directFilmFromHomeRef.current || getDirectFilmFromHome();
+          if (fromHome) {
             directFilmFromHomeRef.current = false;
+            setDirectFilmFromHome(false);
             if (from === "home") backToMoviesHome();
             else backToMoviesCatalog();
             return;
@@ -660,10 +707,13 @@ export default function MoviesModule({
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
             : (() => {
                 const ref = getSeriesEntryReferrer();
+                if (ref?.kind === "music" && (ref.title || ref.bandId)) {
+                  return (ref.title || "ARTIST").toLocaleUpperCase();
+                }
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();
                 }
-                if (directFilmFromHomeRef.current) {
+                if (directFilmFromHomeRef.current || getDirectFilmFromHome()) {
                   return (getMediaEntrySource() || entrySource) === "home"
                     ? "HOME"
                     : "CATALOG";
@@ -714,9 +764,15 @@ export default function MoviesModule({
         onOpenSeriesFranchise={onOpenSeriesFranchise}
         onOpenFilm={(id) => {
           directFilmFromHomeRef.current = false;
+          setDirectFilmFromHome(false);
+          const film = films.find((f) => f.id === id);
           pushMoviesRoute({
             franchiseId,
+            franchiseName:
+              film?.work_name ||
+              franchises.find((f) => f.id === franchiseId)?.name,
             filmId: id,
+            filmTitle: film?.title,
             section: "overview",
             overviewTab: "about",
             universeId,
@@ -750,6 +806,7 @@ export default function MoviesModule({
           pushMoviesRoute({
             franchiseId: leaf.franchiseId,
             filmId: leaf.leafId,
+            filmTitle: leaf.title,
             section: "overview",
             overviewTab: "about",
             universeId,
@@ -1115,9 +1172,9 @@ export default function MoviesModule({
               }
               openWork(workId, undefined, undefined, "home");
             }}
-            onFilm={(id, workId) => {
+            onFilm={(id, workId, title) => {
               if (!films.length) loadCatalog();
-              openFilm(id, workId, "home", true);
+              openFilm(id, workId, "home", true, title);
             }}
             onOpenUniverse={(id) => openUniverseLanding(id, "home")}
             onGenre={(id) => {
@@ -1202,7 +1259,7 @@ export default function MoviesModule({
                 (f) => f.id === id || f.work_id === id || f.title === shell?.name
               );
               if (film?.work_id) {
-                openFilm(film.id, film.work_id, "catalog");
+                openFilm(film.id, film.work_id, "catalog", false, film.title);
                 return;
               }
             }

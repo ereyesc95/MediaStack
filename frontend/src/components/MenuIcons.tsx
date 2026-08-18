@@ -542,7 +542,7 @@ export function IconHeadphones({ className }: IconProps) {
   );
 }
 
-/** Vinyl / disc mark — concentric grooves + center label. */
+/** Vinyl / disc mark — outer rim + center hole. */
 export function IconDisc({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
@@ -552,17 +552,16 @@ export function IconDisc({ className }: IconProps) {
         r="9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.85"
       />
       <circle
         cx="12"
         cy="12"
-        r="5.4"
+        r="2.35"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.35"
+        strokeWidth="1.6"
       />
-      <circle cx="12" cy="12" r="2.05" fill="currentColor" />
     </svg>
   );
 }

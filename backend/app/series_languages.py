@@ -7,8 +7,8 @@ LANG_ORIGIN = "origin"  # resolved to concrete code at display time
 LANGUAGE_CATALOG: list[dict[str, str]] = [
     {"code": "ja", "label": "Japanese"},
     {"code": "en", "label": "English"},
-    {"code": "es-ES", "label": "Spanish (Spain)"},
-    {"code": "es-419", "label": "Spanish (Latin America)"},
+    {"code": "es-ES", "label": "Castilian"},
+    {"code": "es-419", "label": "Spanish"},
 ]
 
 # TMDb / ISO-ish → our catalog code

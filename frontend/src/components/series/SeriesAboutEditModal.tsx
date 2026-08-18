@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchBooksFilterOptions,
+  fetchMoviesFilterOptions,
   fetchMoviesPublishers,
   fetchSeriesFilterOptions,
   patchBooksBookAbout,
@@ -8,6 +9,7 @@ import {
   patchSeriesAbout,
 } from "../../api";
 import type { SeriesOverview } from "../../types";
+import { displayLanguageLabel } from "../../languageDisplay";
 import ModalPortal from "../ModalPortal";
 import SearchableDropdown, {
   type DropdownOption,
@@ -17,6 +19,19 @@ import { AddCastModal } from "./SeriesCast";
 type ActivityRow = { start: string; end: string };
 
 type GenreOpt = { id: string; name: string; group?: string };
+
+export type AboutEditSavePayload = {
+  bio: string;
+  writers: string;
+  directors: string[];
+  publishers: string;
+  country_id: number | null;
+  country_iso: string | null;
+  activity_start: string;
+  activity_end: string;
+  languages: string[];
+  genres: { id: number | string; name: string }[];
+};
 
 type Props = {
   franchiseId: string;
@@ -31,13 +46,15 @@ type Props = {
   onClose: () => void;
   onSaved: () => void;
   onCastChanged?: () => void;
+  /** Persist through a custom API (artist video items share the movie editor). */
+  onSaveAbout?: (payload: AboutEditSavePayload) => Promise<void>;
 };
 
 const FALLBACK_LANGS = [
   { code: "ja", label: "Japanese" },
   { code: "en", label: "English" },
-  { code: "es-ES", label: "Spanish (Spain)" },
-  { code: "es-419", label: "Spanish (Latin America)" },
+  { code: "es-ES", label: "Castilian" },
+  { code: "es-419", label: "Spanish" },
 ];
 
 function periodsToRows(
@@ -87,6 +104,7 @@ export default function SeriesAboutEditModal({
   onClose,
   onSaved,
   onCastChanged,
+  onSaveAbout,
 }: Props) {
   const isFilm = variant === "film";
   const isBook = variant === "book";
@@ -156,7 +174,9 @@ export default function SeriesAboutEditModal({
     DropdownOption[]
   >([]);
   const [publisherOptions, setPublisherOptions] = useState<string[]>([]);
+  const [writerOptions, setWriterOptions] = useState<string[]>([]);
   const [publishersFocused, setPublishersFocused] = useState(false);
+  const [writersFocused, setWritersFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addCastOpen, setAddCastOpen] = useState(false);
@@ -175,7 +195,7 @@ export default function SeriesAboutEditModal({
     const opts = data.language_options?.length
       ? data.language_options.map((o) => ({
           code: o.code,
-          label: stripOrigin(o.label),
+          label: displayLanguageLabel(o.code, stripOrigin(o.label)),
         }))
       : [...FALLBACK_LANGS];
     for (const [code, label] of Object.entries(customLangLabels)) {
@@ -221,7 +241,11 @@ export default function SeriesAboutEditModal({
   );
 
   useEffect(() => {
-    const load = isBook ? fetchBooksFilterOptions : fetchSeriesFilterOptions;
+    const load = isBook
+      ? fetchBooksFilterOptions
+      : isFilm
+        ? fetchMoviesFilterOptions
+        : fetchSeriesFilterOptions;
     load()
       .then((opts) => {
         const countries =
@@ -267,9 +291,20 @@ export default function SeriesAboutEditModal({
         if (Array.isArray(cats) && cats.length) {
           setCategoryOptions(cats.filter(Boolean));
         }
+        const writersList =
+          (opts as { writers?: string[]; authors?: string[] }).writers ||
+          (opts as { authors?: string[] }).authors ||
+          [];
+        if (writersList.length) {
+          setWriterOptions(writersList.filter(Boolean));
+        }
+        if (isBook) {
+          const pubs = (opts as { publishers?: string[] }).publishers || [];
+          if (pubs.length) setPublisherOptions(pubs.filter(Boolean));
+        }
       })
       .catch(() => {});
-  }, [isBook]);
+  }, [isBook, isFilm]);
 
   useEffect(() => {
     fetchMoviesPublishers()
@@ -281,6 +316,16 @@ export default function SeriesAboutEditModal({
     () => countryOptions.find((o) => o.value === countryId) ?? null,
     [countryOptions, countryId]
   );
+
+  useEffect(() => {
+    if (countryId) return;
+    const iso = (data.country?.iso || "").trim().toLowerCase();
+    if (!iso) return;
+    const match = countryOptions.find(
+      (o) => (o.iso || "").toLowerCase() === iso
+    );
+    if (match) setCountryId(match.value);
+  }, [countryOptions, countryId, data.country?.iso]);
 
   const removeLang = (code: string) => {
     setSelectedLangs((prev) => prev.filter((c) => c !== code));
@@ -354,6 +399,27 @@ export default function SeriesAboutEditModal({
     setPublishersFocused(false);
   };
 
+  const writerSegment = writers.slice(writers.lastIndexOf(";") + 1).trim();
+  const writerSuggestions = writerSegment
+    ? writerOptions
+        .filter((writer) =>
+          writer.toLowerCase().includes(writerSegment.toLowerCase())
+        )
+        .filter(
+          (writer) => writer.toLowerCase() !== writerSegment.toLowerCase()
+        )
+        .slice(0, 8)
+    : [];
+
+  const selectWriter = (writer: string) => {
+    const separator = writers.lastIndexOf(";");
+    const prefix = separator >= 0 ? writers.slice(0, separator + 1) : "";
+    setWriters(
+      `${prefix}${prefix && !/\s$/.test(prefix) ? " " : ""}${writer}`
+    );
+    setWritersFocused(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -368,7 +434,23 @@ export default function SeriesAboutEditModal({
         id: Number.isFinite(Number(g.id)) ? Number(g.id) : g.id,
         name: g.name,
       }));
-      if (isBook) {
+      if (onSaveAbout) {
+        await onSaveAbout({
+          bio,
+          writers,
+          directors: writers
+            .split(";")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          publishers,
+          country_id: countryId ? Number(countryId) : null,
+          country_iso: selectedCountry?.iso ?? data.country?.iso ?? null,
+          activity_start: starts,
+          activity_end: ends,
+          languages: selectedLangs,
+          genres: genrePayload,
+        });
+      } else if (isBook) {
         if (!aboutFilmId) throw new Error("Missing book id");
         await patchBooksBookAbout(aboutFilmId, {
           bio,
@@ -383,14 +465,8 @@ export default function SeriesAboutEditModal({
         });
       } else if (isFilm) {
         if (!aboutFilmId) throw new Error("Missing film id");
-        const directorList = writers
-          .split(";")
-          .map((s) => s.trim())
-          .filter(Boolean);
         await patchMoviesFilmAbout(aboutFilmId, {
           bio,
-          writers,
-          directors: directorList,
           publishers,
           country_id: countryId ? Number(countryId) : null,
           activity_start: starts,
@@ -461,15 +537,34 @@ export default function SeriesAboutEditModal({
               onChange={(e) => setBio(e.target.value)}
             />
           </label>
-          <label>
-            {isFilm
-              ? "Directors / writers (semicolon-separated)"
+          {isFilm ? null : (
+          <label className={isBook ? "series-about-edit__publishers" : undefined}>
+            {isBook
+              ? "Authors (semicolon-separated)"
               : "Writers (semicolon-separated)"}
             <input
               value={writers}
               onChange={(e) => setWriters(e.target.value)}
+              onFocus={() => setWritersFocused(true)}
+              onBlur={() => setWritersFocused(false)}
+              autoComplete="off"
             />
+            {isBook && writersFocused && writerSuggestions.length > 0 ? (
+              <span className="series-about-edit__publisher-suggestions">
+                {writerSuggestions.map((writer) => (
+                  <button
+                    key={writer}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectWriter(writer)}
+                  >
+                    {writer}
+                  </button>
+                ))}
+              </span>
+            ) : null}
           </label>
+          )}
           <label>
             Country
             <SearchableDropdown
@@ -571,6 +666,7 @@ export default function SeriesAboutEditModal({
               ))}
             </div>
             <SearchableDropdown
+              key={selectedGenres.map((g) => g.id).join("|")}
               options={genreDropdownOptions.filter(
                 (o) =>
                   !selectedGenres.some(
