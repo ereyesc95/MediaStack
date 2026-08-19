@@ -585,9 +585,10 @@ export default function SystemPlaylistPage({
   }, [isSnapshotPlaylist, snapshotFilterState, tracks]);
 
   const displayTracks = useMemo(() => {
+    if (slug === "live-story") return tracks;
     const sorted = applyTrackSort(filteredTracks, trackSort.key, trackSort.desc, originalTrackNumbers);
     return isSnapshotPlaylist ? dedupeTracksByPlayPath(sorted) : sorted;
-  }, [filteredTracks, isSnapshotPlaylist, originalTrackNumbers, trackSort.desc, trackSort.key]);
+  }, [filteredTracks, isSnapshotPlaylist, originalTrackNumbers, slug, trackSort.desc, trackSort.key, tracks]);
 
   const handleSnapshotFilterStateChange = useCallback((state: SnapshotFilterState) => {
     setSnapshotFilterState(state);
@@ -2257,6 +2258,8 @@ export default function SystemPlaylistPage({
                 bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
                 artistName={artistName}
                 tracks={displayTracks}
+                sections={!isUserPlaylist && slug === "live-story" ? detail?.sections : undefined}
+                showSourceReleaseColumn={!isUserPlaylist && slug === "live-story"}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}
                 sortDesc={trackSort.desc}

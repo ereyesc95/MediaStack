@@ -59,6 +59,7 @@ import {
 } from "../../../usePhoneLayout";
 import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem, TrackYoutubeVideo } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
+import { isReleaseId } from "../../../routeSlug";
 import AppMenu from "../../AppMenu";
 import ConfirmDialog from "../../ConfirmDialog";
 import { IconZoom } from "../../MenuIcons";
@@ -616,6 +617,7 @@ export default function ReleasePage({
 
   const load = useCallback(
     (options?: { silent?: boolean }) => {
+      if (!isReleaseId(releaseId)) return;
       const silent = options?.silent ?? false;
       const seq = ++loadSeq.current;
       if (!silent) setError(null);
@@ -651,15 +653,19 @@ export default function ReleasePage({
     setTrackWriters([]);
     sourceArtCacheRef.current.clear();
 
-    const cached = getCachedReleaseOverview(bandId, releaseId);
+    const cached = isReleaseId(releaseId)
+      ? getCachedReleaseOverview(bandId, releaseId)
+      : null;
     setData(cached);
     setError(null);
     const url =
       cached?.background_layers?.[0] ?? cached?.cover_url ?? undefined;
     prevBgRef.current = url;
     setBgLayers(url ? { current: url } : {});
-    void prefetchReleaseTracklist(bandId, releaseId);
-    load({ silent: Boolean(cached) });
+    if (isReleaseId(releaseId)) {
+      void prefetchReleaseTracklist(bandId, releaseId);
+      load({ silent: Boolean(cached) });
+    }
   }, [bandId, releaseId, load, clearMiniAudio, miniAudio.audioRef]);
 
   useEffect(() => {

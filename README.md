@@ -462,6 +462,9 @@ Recognized for **system playlists** and **alternate versions**:
 | **Most Played** | Local tracks sorted by play count for the current profile |
 | **Top Tracks** | From `bndTop100` / `bndTopTracks` matched to local files |
 | **Setlists** | setlist.fm (requires MusicBrainz ID + API key); year/show picker when opening |
+| **Live Story** | One live `[Live at …]` / `[Live in …]` match per studio track across the discography; grouped by original release; card hidden when no matches exist |
+
+Live Story description on the playlist page: **Live versions of {Artist}'s records.** Section headers collapse/expand (accordion); playback auto-opens the section for the current track.
 
 Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Preferred route: `/music/{Artist}/audio/playlist/{slug}` (legacy `/music/artist/{id}/…` still works).
 

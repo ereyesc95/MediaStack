@@ -105,10 +105,21 @@ async function resolveReleaseTitle(
   try {
     const res = await searchArtistReleases(bandId, title);
     const hit = matchLeafTitle(res.releases, title);
-    return hit?.id;
+    if (hit?.id) return hit.id;
+    const query = title.trim();
+    if (query.length >= 2) {
+      const loose = res.releases?.find(
+        (row) =>
+          slugMatch(row.title || "", query) ||
+          slugMatch(stripDatedFolderTitle(row.id || ""), query) ||
+          slugMatch(stripDatedFolderTitle(row.folder_name || ""), query)
+      );
+      if (loose?.id) return loose.id;
+    }
   } catch {
     return undefined;
   }
+  return undefined;
 }
 
 async function resolveMediaItemTitle(
@@ -468,6 +479,143 @@ export async function resolvePathToView(
       },
       canonicalPath: artistPath(artistRoute),
     };
+  }
+
+  return null;
+}
+
+function syncFranchiseModule(pathname: string): FranchiseHomeModule {
+  if (pathname.startsWith("/movies")) return "movies";
+  if (pathname.startsWith("/books")) return "books";
+  return "series";
+}
+
+/** Parse URL → View without network (used for first paint + boot gate). */
+export function parsePathToViewSync(pathname: string, search = ""): View | null {
+  const userPlaylistId = parseUserPlaylistPath(pathname);
+  if (userPlaylistId != null) {
+    return { kind: "music", tab: "playlists", playlistId: userPlaylistId };
+  }
+  if (parsePlaylistsGridPath(pathname)) {
+    return { kind: "music", tab: "playlists" };
+  }
+
+  const legacyFranchise = parseLegacyFranchiseHubPath(pathname, search);
+  if (legacyFranchise) {
+    return franchiseRouteToView(legacyFranchise, syncFranchiseModule(pathname));
+  }
+
+  const franchiseRoute = parseFranchisePath(pathname, search);
+  if (franchiseRoute) {
+    return franchiseRouteToView(franchiseRoute, syncFranchiseModule(pathname));
+  }
+
+  const universeParsed = parseUniversePath(pathname);
+  if (universeParsed) {
+    return {
+      kind: "universe",
+      universeId: universeParsed.universeId ?? 0,
+      section: universeParsed.section,
+      overviewTab: universeParsed.overviewTab,
+    };
+  }
+
+  const seriesParsed = parseSeriesPath(pathname, search);
+  if (seriesParsed) {
+    if (seriesParsed.franchiseOnly) {
+      const fr: FranchiseRoute = {
+        franchiseId: seriesParsed.franchiseId,
+        section: seriesParsed.section,
+        overviewTab: seriesParsed.overviewTab,
+        universeId: seriesParsed.universeId,
+        franchiseName: seriesParsed.franchiseName,
+      };
+      return franchiseRouteToView(fr, "series");
+    }
+    return {
+      kind: "series",
+      franchiseId: seriesParsed.franchiseId,
+      subseriesId: seriesParsed.subseriesId,
+      seasonId: seriesParsed.seasonId,
+      section: seriesParsed.section,
+      overviewTab: seriesParsed.overviewTab,
+      universeId: seriesParsed.universeId,
+    };
+  }
+
+  if (pathname.match(/^\/series\/?$/) || pathname.match(/^\/series\/catalog\/?$/)) {
+    return { kind: "series" };
+  }
+
+  const moviesParsed = parseMoviesPath(pathname, search);
+  if (moviesParsed) {
+    if (moviesParsed.franchiseOnly) {
+      const fr: FranchiseRoute = {
+        franchiseId: moviesParsed.franchiseId,
+        section: moviesParsed.section as FranchiseRoute["section"],
+        overviewTab: moviesParsed.overviewTab as FranchiseRoute["overviewTab"],
+        universeId: moviesParsed.universeId,
+        franchiseName: moviesParsed.franchiseName,
+      };
+      return franchiseRouteToView(fr, "movies");
+    }
+    return {
+      kind: "movies",
+      franchiseId: moviesParsed.franchiseId,
+      filmId: moviesParsed.filmId,
+      section: moviesParsed.section,
+      overviewTab: moviesParsed.overviewTab,
+      universeId: moviesParsed.universeId,
+    };
+  }
+
+  if (pathname.match(/^\/movies\/?$/) || pathname.match(/^\/movies\/catalog\/?$/)) {
+    return { kind: "movies" };
+  }
+
+  const booksParsed = parseBooksPath(pathname, search);
+  if (booksParsed) {
+    if (booksParsed.franchiseOnly) {
+      const fr: FranchiseRoute = {
+        franchiseId: booksParsed.franchiseId,
+        section: booksParsed.section as FranchiseRoute["section"],
+        overviewTab: booksParsed.overviewTab as FranchiseRoute["overviewTab"],
+        universeId: booksParsed.universeId,
+        franchiseName: booksParsed.franchiseName,
+      };
+      return franchiseRouteToView(fr, "books");
+    }
+    return {
+      kind: "books",
+      franchiseId: booksParsed.franchiseId,
+      bookId: booksParsed.bookId,
+      section: booksParsed.section,
+      overviewTab: booksParsed.overviewTab,
+      universeId: booksParsed.universeId,
+    };
+  }
+
+  if (pathname.match(/^\/books\/?$/) || pathname.match(/^\/books\/catalog\/?$/)) {
+    return { kind: "books" };
+  }
+
+  const artistParsed = parseArtistPath(pathname);
+  if (artistParsed) {
+    return {
+      kind: "music",
+      tab: "artists",
+      bandId: artistParsed.bandId,
+      artistSection: artistParsed.section,
+      artistOverviewTab: artistParsed.overviewTab,
+      releaseId: artistParsed.releaseId,
+      releaseTab: artistParsed.releaseTab,
+      mediaItemId: artistParsed.mediaItemId,
+      playlistSlug: artistParsed.playlistSlug,
+    };
+  }
+
+  if (pathname.match(/^\/music\/?$/)) {
+    return { kind: "music", tab: "home" };
   }
 
   return null;

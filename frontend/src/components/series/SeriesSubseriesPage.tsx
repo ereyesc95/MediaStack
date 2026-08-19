@@ -121,6 +121,7 @@ import {
   type ReleasePhotocardSet,
 } from "../music/release/ReleasePhotocard";
 import { fitOverviewPhotocards } from "../../fitOverviewPhotocards";
+import { lineupForReleaseDate } from "../../lineupFilter";
 import {
   DEFAULT_DISC_URL,
   DEFAULT_LABEL_URL,
@@ -1349,11 +1350,18 @@ export default function SeriesSubseriesPage({
   }, [overview?.music_band_id]);
 
   const lineupMembers = useMemo<LineupMember[]>(() => {
-    const lineup = bandOverview?.lineup;
-    if (!lineup) return [];
-    if (lineup.current?.length) return lineup.current;
-    return lineup.all || [];
-  }, [bandOverview?.lineup]);
+    const releaseDate =
+      detail?.date_iso ||
+      card?.date_iso ||
+      overview?.date_iso ||
+      null;
+    return lineupForReleaseDate(bandOverview?.lineup, releaseDate);
+  }, [
+    bandOverview?.lineup,
+    card?.date_iso,
+    detail?.date_iso,
+    overview?.date_iso,
+  ]);
 
   const hasArtistLineup = Boolean(
     overview?.music_band_id && lineupMembers.length
@@ -1731,7 +1739,7 @@ export default function SeriesSubseriesPage({
   useLayoutEffect(() => {
     const top = overviewTopRef.current;
     const cards = overviewPhotocardsRef.current;
-    if (stacked || mobileLandscape || tab !== "overview") {
+    if (stacked || mobileLandscape || tab !== "overview" || overviewTab !== "about") {
       top?.style.removeProperty("--overview-photocard-scale");
       return;
     }
@@ -1741,15 +1749,32 @@ export default function SeriesSubseriesPage({
     const ro = new ResizeObserver(measure);
     ro.observe(top);
     if (cards) ro.observe(cards);
-    return () => ro.disconnect();
+    const scheduleMeasure = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(measure);
+      });
+    };
+    window.addEventListener("resize", scheduleMeasure);
+    window.addEventListener("orientationchange", scheduleMeasure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", scheduleMeasure);
+      window.removeEventListener("orientationchange", scheduleMeasure);
+      top?.style.removeProperty("--overview-photocard-scale");
+    };
   }, [
     stacked,
     mobileLandscape,
     tab,
     overviewTab,
+    loading,
+    mediaReady,
+    error,
+    overview,
     photocards?.portrait_front,
     photocards?.landscape_front,
     overviewBio,
+    showCastBlock,
   ]);
 
   const relatedMovies = useMemo(

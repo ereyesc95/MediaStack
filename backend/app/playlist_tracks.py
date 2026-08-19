@@ -74,6 +74,7 @@ def _album_rel_path(play_path: str) -> str:
 PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "top-tracks": "Most popular tracks across the artist library.",
     "setlists": "Live setlists matched from setlist.fm.",
+    "live-story": "Live versions of the artist's records.",
     "originals": "Studio originals without remix, live, acoustic, or demo tags.",
     "remixes": "Remix and mix versions from albums and singles.",
     "acoustic": "Acoustic recordings and performances.",

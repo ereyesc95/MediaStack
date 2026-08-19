@@ -12727,6 +12727,40 @@ button.release-tracklist__group-label.series-season-block__header.is-open {
   font-variant-numeric: tabular-nums;
 }
 
+.live-story-tracklist__tracks .release-tracklist__play {
+  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(7rem, 0.85fr) auto;
+}
+
+.live-story-tracklist__source-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.08rem;
+  min-width: 0;
+  text-align: left;
+}
+
+.live-story-tracklist__source-col--empty {
+  visibility: hidden;
+}
+
+.live-story-tracklist__source-title {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.live-story-tracklist__source-date {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
 .release-tracklist__title {
   font-size: 0.88rem;
   overflow: hidden;
@@ -17172,7 +17206,6 @@ button.lyrics-status-badge--icon-only {
   --overview-portrait-width: 0.82;
   --overview-portrait-max-h: clamp(12rem, 32vh, 18rem);
   --overview-landscape-max-h: clamp(7.5rem, 20vh, 12rem);
-  --overview-photocard-scale: 1.2;
 }
 
 .series-subseries-page .release-page__overview-side {
@@ -17199,9 +17232,6 @@ button.lyrics-status-badge--icon-only {
   flex-direction: column;
   gap: clamp(0.4rem, 0.9vh, 0.65rem);
   overflow: visible;
-  --overview-portrait-max-h: clamp(9.5rem, 28vh, 14rem);
-  --overview-landscape-max-h: clamp(9.5rem, 28vh, 14rem);
-  --overview-photocard-scale: 1;
 }
 
 .series-subseries-page.release-page--stacked .release-page__overview-side {
@@ -17229,7 +17259,6 @@ button.lyrics-status-badge--icon-only {
   --overview-portrait-width: 0.82;
   --overview-portrait-max-h: clamp(8.5rem, 32vw, 12.5rem);
   --overview-landscape-max-h: clamp(8.5rem, 32vw, 12.5rem);
-  --overview-photocard-scale: 1;
 }
 
 .series-subseries-page.release-page--stacked .release-page__overview-top .release-photocard--portrait,

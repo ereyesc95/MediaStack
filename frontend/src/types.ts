@@ -522,6 +522,9 @@ export type ArtistPlaylistTrack = {
   play_path: string | null;
   album_folder: string | null;
   album_title?: string | null;
+  source_release_title?: string | null;
+  source_release_date?: string | null;
+  source_display_date?: string | null;
   artist_name?: string | null;
   year?: string | null;
   play_count?: number | null;
@@ -540,6 +543,14 @@ export type ArtistPlaylistNeighbor = {
   name: string;
 };
 
+export type ArtistPlaylistSection = {
+  id: string;
+  title: string;
+  date_iso?: string | null;
+  display_date?: string | null;
+  tracks: ArtistPlaylistTrack[];
+};
+
 export type ArtistPlaylistDetail = {
   slug: string;
   name: string;
@@ -553,6 +564,7 @@ export type ArtistPlaylistDetail = {
   source?: string | null;
   spotify_id?: string | null;
   tracks: ArtistPlaylistTrack[];
+  sections?: ArtistPlaylistSection[];
   years?: string[];
   career_start_year?: number;
   show_count?: number;

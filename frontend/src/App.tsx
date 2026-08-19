@@ -56,7 +56,7 @@ import {
 import {
   pushUniverseRoute,
 } from "./universeRoute";
-import { resolvePathToView } from "./routeResolve";
+import { parsePathToViewSync, resolvePathToView } from "./routeResolve";
 import {
   getMediaEntrySource,
   getUniverseReturnTarget,
@@ -99,11 +99,15 @@ function viewFromLocationPath(pathname: string): View {
 
 export default function App() {
 
-  const [view, setView] = useState<View>(() =>
-    typeof window === "undefined"
-      ? { kind: "hub" }
-      : viewFromLocationPath(window.location.pathname)
-  );
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === "undefined") return { kind: "hub" };
+    return (
+      parsePathToViewSync(window.location.pathname, window.location.search) ??
+      viewFromLocationPath(window.location.pathname)
+    );
+  });
+
+  const [routeHydrated, setRouteHydrated] = useState(false);
 
   const [cardOrientation, setCardOrientation] =
     useState<CardOrientation>("landscape");
@@ -148,9 +152,11 @@ export default function App() {
           window.history.replaceState(null, "", resolved.canonicalPath);
         }
       }
+      if (!cancelled) setRouteHydrated(true);
     }
 
     async function init() {
+      const routePromise = applyLocationRoute();
       const token = getProfileToken();
       if (token) {
         try {
@@ -189,7 +195,7 @@ export default function App() {
         setSourceModal("welcome");
       }
 
-      await applyLocationRoute();
+      await routePromise;
     }
 
     void init();
@@ -202,6 +208,11 @@ export default function App() {
     let cancelled = false;
 
     async function onPopState() {
+      const sync = parsePathToViewSync(
+        window.location.pathname,
+        window.location.search
+      );
+      if (sync) setView(sync);
       const resolved = await resolvePathToView(
         window.location.pathname,
         window.location.search
@@ -468,9 +479,11 @@ export default function App() {
   );
 
   const appReady = profileReady && mediaRootConfigured === true;
+  const showApp = appReady && routeHydrated;
   const booting =
     profile === undefined ||
-    (profileReady && mediaRootConfigured === null);
+    (profileReady && mediaRootConfigured === null) ||
+    (appReady && !routeHydrated);
   const showSourceModal =
     profileReady &&
     (sourceModal === "settings" ||
@@ -561,7 +574,7 @@ export default function App() {
 
 
 
-        {appReady && view.kind === "music" && (
+        {showApp && view.kind === "music" && (
 
           <MusicModule
             key={profile.user_id}
@@ -953,7 +966,7 @@ export default function App() {
 
 
 
-        {appReady && view.kind === "universe" && (
+        {showApp && view.kind === "universe" && (
           <UniversePage
             key={`universe-${profile.user_id}-${view.universeId}`}
             universeId={view.universeId}
@@ -1101,7 +1114,7 @@ export default function App() {
           />
         )}
 
-        {appReady && view.kind === "series" && (
+        {showApp && view.kind === "series" && (
           <SeriesModule
             key={`series-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
@@ -1242,7 +1255,7 @@ export default function App() {
           />
         )}
 
-        {appReady && view.kind === "movies" && (
+        {showApp && view.kind === "movies" && (
           <MoviesModule
             key={`movies-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
@@ -1369,7 +1382,7 @@ export default function App() {
           />
         )}
 
-        {appReady && view.kind === "books" && (
+        {showApp && view.kind === "books" && (
           <BooksModule
             key={`books-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}

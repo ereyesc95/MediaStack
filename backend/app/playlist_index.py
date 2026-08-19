@@ -23,11 +23,12 @@ from app.playlist_tracks import (
     enrich_playlist_tracks,
 )
 
-PLAYLIST_INDEX_VERSION = 14
+PLAYLIST_INDEX_VERSION = 15
 
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",
     "setlists": "Setlists",
+    "live-story": "Live Story",
     **{slug: label for slug, label, _ in PLAYLIST_RULES},
     ORIGINALS_SLUG: "Originals",
     **CROSS_PLAYLIST_LABELS,
@@ -204,6 +205,12 @@ def build_playlist_index(
     if setlists:
         playlists.append(setlists)
 
+    from app.live_story_playlists import build_live_story_card
+
+    live_story = build_live_story_card(band, media_root)
+    if live_story:
+        playlists.append(live_story)
+
     suffix = _suffix_buckets(band, media_root)
     cross = _cross_buckets(db, band, media_root)
     extended = scan_extended_playlists(db, band, media_root, user_id=user_id)
@@ -361,16 +368,28 @@ def _finalize_playlist_detail(
     playlists = index.get("playlists") or []
     prev, nxt = _playlist_neighbors(playlists, slug)
     tracks = enrich_playlist_tracks(detail.get("tracks") or [], media_root, db=db)
-    return {
+    out = {
         **detail,
         "slug": slug,
         "name": detail.get("name") or PLAYLIST_LABELS.get(slug, slug.replace("-", " ").title()),
-        "description": PLAYLIST_DESCRIPTIONS.get(slug, ""),
+        "description": detail.get("description") or PLAYLIST_DESCRIPTIONS.get(slug, ""),
         "cover_url": playlist_cover_url(slug),
         "tracks": tracks,
         "prev": prev,
         "next": nxt,
     }
+    raw_sections = detail.get("sections")
+    if raw_sections:
+        out["sections"] = [
+            {
+                **section,
+                "tracks": enrich_playlist_tracks(
+                    section.get("tracks") or [], media_root, db=db
+                ),
+            }
+            for section in raw_sections
+        ]
+    return out
 
 
 def get_playlist_detail(
@@ -400,6 +419,14 @@ def get_playlist_detail(
 
     if slug == "setlists":
         detail = _build_setlists_detail(db, band, media_root)
+        if not detail:
+            return None
+        return _finalize_playlist_detail(db, band, media_root, slug, detail, user_id=user_id)
+
+    if slug == "live-story":
+        from app.live_story_playlists import build_live_story_detail
+
+        detail = build_live_story_detail(band, media_root)
         if not detail:
             return None
         return _finalize_playlist_detail(db, band, media_root, slug, detail, user_id=user_id)
