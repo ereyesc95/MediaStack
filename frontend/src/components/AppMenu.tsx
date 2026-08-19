@@ -4,7 +4,6 @@ import {
   THEMES,
   applyTheme,
   getCustomColors,
-  hasArtistTheme,
   saveCustomColors,
   type CustomThemeColors,
   type ThemeId,
@@ -89,6 +88,9 @@ type Props = {
   refreshIncludeBio?: boolean;
   onRefreshIncludeBioChange?: (v: boolean) => void;
   refreshIncludeLabel?: string;
+  /** Show "Adaptive" in the theme menu (image-sampled colors). */
+  adaptiveThemeActive?: boolean;
+  /** @deprecated Use adaptiveThemeActive */
   artistThemeActive?: boolean;
   /** Extra controls rendered at the top of the dropdown (e.g. mobile chrome). */
   menuChrome?: ReactNode;
@@ -149,10 +151,13 @@ export default function AppMenu({
   refreshIncludeBio = false,
   onRefreshIncludeBioChange,
   refreshIncludeLabel = "Include bio",
+  adaptiveThemeActive,
   artistThemeActive = false,
   menuChrome,
 }: Props) {
   void _refreshLocalFlat;
+  const showAdaptiveTheme =
+    adaptiveThemeActive ?? artistThemeActive;
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
@@ -162,8 +167,6 @@ export default function AppMenu({
   const [customOpen, setCustomOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
-  const showArtistThemeOption =
-    artistThemeActive && hasArtistTheme(userId);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -220,7 +223,9 @@ export default function AppMenu({
     if (id === "artist") {
       setCustomOpen(false);
       applySavedArtistTheme(userId);
+      document.documentElement.setAttribute("data-theme", "artist");
       setActiveTheme("artist");
+      window.dispatchEvent(new CustomEvent("theme-changed"));
       return;
     }
     setCustomOpen(false);
@@ -844,7 +849,7 @@ export default function AppMenu({
                   </span>
                 </button>
               ))}
-              {showArtistThemeOption && (
+              {showAdaptiveTheme && (
                 <button
                   type="button"
                   className={activeTheme === "artist" ? "active" : ""}
@@ -856,7 +861,7 @@ export default function AppMenu({
                   <span
                     className={activeTheme === "artist" ? "" : "menu-submenu-pad"}
                   >
-                    Artist theme
+                    Adaptive
                   </span>
                 </button>
               )}

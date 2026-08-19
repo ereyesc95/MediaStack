@@ -694,10 +694,9 @@ export default function SystemPlaylistPage({
   }, [coverUrl, playingPath, editPlaylist, userPlaylistId, slug]);
 
   const isPlaying = Boolean(playingPath && miniAudio.playing);
-  const hasActiveTrack = Boolean(playingPath);
-  const showTrackPanel = bannerLayout
-    ? Boolean(playingPath && nowPlayingTitle)
-    : Boolean(nowPlayingTitle) && (isPlaying || Boolean(versionSource));
+  // Restore playlist panel art/meta when paused or stopped (matches ReleasePage).
+  const hasActiveTrack = Boolean(playingPath && miniAudio.playing);
+  const showTrackPanel = Boolean(hasActiveTrack && nowPlayingTitle);
   // Idle / playlist-head mode: always show the playlist cover beside the disc.
   const usePlaylistCoverArt = isUserPlaylist && !showTrackPanel;
 
@@ -1438,7 +1437,7 @@ export default function SystemPlaylistPage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"

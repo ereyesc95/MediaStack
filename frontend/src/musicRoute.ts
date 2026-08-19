@@ -9,6 +9,10 @@ import {
   RELEASE_ID_RE,
   MEDIA_ITEM_ID_RE,
 } from "./routeSlug";
+import {
+  rememberArtistSlug,
+  rememberReleaseSlug,
+} from "./routeEntityCache";
 
 export type ArtistSection =
   | "overview"
@@ -299,14 +303,11 @@ export function parseArtistPath(pathname: string): ArtistRoute | null {
 }
 
 export function artistPath(route: ArtistRoute): string {
-  const artistRaw =
-    route.artistName?.trim() ||
-    route.artistSlug?.trim() ||
-    (route.bandId != null ? String(route.bandId) : "artist");
   const artistSeg =
-    route.bandId != null && /^\d+$/.test(artistRaw)
-      ? artistRaw
-      : normalizeSlug(artistRaw) || artistRaw;
+    route.bandId != null
+      ? String(route.bandId)
+      : normalizeSlug(route.artistSlug?.trim() || route.artistName?.trim() || "") ||
+        "artist";
 
   let path = `/music/${enc(artistSeg)}`;
   const section = route.section;
@@ -318,18 +319,7 @@ export function artistPath(route: ArtistRoute): string {
   } else if (section === "audio" && route.playlistSlug) {
     path += `/audio/playlist/${route.playlistSlug}`;
   } else if (section === "audio" && route.releaseId) {
-    const titleRaw =
-      route.releaseTitle?.trim() &&
-      !isReleaseId(route.releaseTitle) &&
-      route.releaseTitle !== route.releaseId
-        ? route.releaseTitle
-        : !isReleaseId(route.releaseId)
-          ? route.releaseTitle?.trim() || route.releaseId
-          : route.releaseTitle?.trim() || "";
-    const releaseSeg = titleRaw
-      ? normalizeSlug(titleRaw) || titleRaw
-      : route.releaseId;
-    path += `/audio/${enc(releaseSeg)}`;
+    path += `/audio/${enc(route.releaseId)}`;
     if (route.releaseTab && route.releaseTab !== "overview") {
       path += `/${route.releaseTab}`;
     }
@@ -337,31 +327,36 @@ export function artistPath(route: ArtistRoute): string {
     (section === "video" || section === "library") &&
     route.mediaItemId
   ) {
-    const titleRaw =
-      route.mediaItemTitle?.trim() &&
-      !isMediaItemId(route.mediaItemTitle) &&
-      route.mediaItemTitle !== route.mediaItemId
-        ? route.mediaItemTitle
-        : !isMediaItemId(route.mediaItemId)
-          ? route.mediaItemTitle?.trim() || route.mediaItemId
-          : route.mediaItemTitle?.trim() || "";
-    const itemSeg = titleRaw
-      ? normalizeSlug(titleRaw) || titleRaw
-      : route.mediaItemId;
-    path += `/${section}/${enc(itemSeg)}`;
+    path += `/${section}/${enc(route.mediaItemId)}`;
   } else {
     path += `/${section}`;
   }
   return path;
 }
 
+function pushHistoryPath(path: string, replace: boolean) {
+  const current = window.location.pathname + window.location.search;
+  if (path === current) return;
+  if (replace) window.history.replaceState(null, "", path);
+  else window.history.pushState(null, "", path);
+}
+
 export function pushArtistRoute(route: ArtistRoute, replace = false) {
   const path = artistPath(route);
-  if (replace) {
-    window.history.replaceState(null, "", path);
-  } else {
-    window.history.pushState(null, "", path);
+  if (route.bandId != null) {
+    rememberArtistSlug(
+      route.artistSlug || route.artistName || String(route.bandId),
+      route.bandId
+    );
+    if (
+      route.releaseId &&
+      isReleaseId(route.releaseId) &&
+      route.releaseTitle?.trim()
+    ) {
+      rememberReleaseSlug(route.bandId, route.releaseTitle, route.releaseId);
+    }
   }
+  pushHistoryPath(path, replace);
 }
 
 export function userPlaylistPath(playlistId: number): string {

@@ -5,10 +5,13 @@ import {
   fetchMoviesFilmOverview,
   fetchMoviesFilterOptions,
   fetchMoviesFranchiseOverview,
-  fetchUniverses,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  getCachedUniverses,
+  prefetchUniverses,
+} from "../../universesCache";
 import {
   defaultSectionForSource,
   saveArtistEntryReferrer,
@@ -192,7 +195,9 @@ export default function MoviesModule({
     useState<SeriesFilterOptions | null>(null);
   const [catalogScope, setCatalogScope] =
     useState<SeriesCatalogScope>("shows");
-  const [universes, setUniverses] = useState<Universe[]>([]);
+  const [universes, setUniverses] = useState<Universe[]>(
+    () => getCachedUniverses("movies") ?? []
+  );
   const [search, setSearch] = useState("");
   const [letter, setLetter] = useState("");
   const [continentId, setContinentId] = useState<number | "">("");
@@ -207,10 +212,6 @@ export default function MoviesModule({
   const directFilmFromHomeRef = useRef(false);
 
   useEffect(() => {
-    clearMediaTheme(userId);
-  }, [userId]);
-
-  useEffect(() => {
     let cancelled = false;
     const cached = getCachedMoviesDashboard();
     if (cached) {
@@ -223,13 +224,11 @@ export default function MoviesModule({
       try {
         const [dash, uni] = await Promise.all([
           prefetchMoviesDashboard(),
-          fetchUniverses("movies").catch(() => ({
-            universes: [] as Universe[],
-          })),
+          prefetchUniverses("movies"),
         ]);
         if (cancelled) return;
         setDashboard(dash as never);
-        setUniverses(uni.universes || []);
+        setUniverses(uni);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));

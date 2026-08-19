@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchSeriesCatalog,
   fetchSeriesFilterOptions,
-  fetchUniverses,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  getCachedUniverses,
+  prefetchUniverses,
+} from "../../universesCache";
 import {
   clearArtistEntryReferrer,
   defaultSectionForSource,
@@ -175,7 +178,9 @@ export default function SeriesModule({
   const [catalogScope, setCatalogScope] = useState<"franchises" | "shows" | "universes">(
     "shows"
   );
-  const [universes, setUniverses] = useState<Universe[]>([]);
+  const [universes, setUniverses] = useState<Universe[]>(
+    () => getCachedUniverses("series") ?? []
+  );
   const [addUniverseOpen, setAddUniverseOpen] = useState(false);
   const [franchiseShell, setFranchiseShell] =
     useState<SeriesFranchiseShell | null>(null);
@@ -250,10 +255,10 @@ export default function SeriesModule({
     try {
         const [dash, uni] = await Promise.all([
           prefetchSeriesDashboard(),
-          fetchUniverses("series").catch(() => ({ universes: [] as Universe[] })),
+          prefetchUniverses("series"),
         ]);
       setDashboard(dash);
-      setUniverses(uni.universes || []);
+      setUniverses(uni);
     } catch {
       if (!cached) setDashboard(null);
     } finally {
@@ -268,10 +273,6 @@ export default function SeriesModule({
       setFilterOptions(null);
     }
   }, []);
-
-  useEffect(() => {
-    clearMediaTheme(userId);
-  }, [userId]);
 
   useEffect(() => {
     if (universeId != null) {

@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchBooksCatalog,
   fetchBooksFilterOptions,
-  fetchUniverses,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  getCachedUniverses,
+  prefetchUniverses,
+} from "../../universesCache";
 import {
   defaultSectionForSource,
   saveArtistEntryReferrer,
@@ -185,7 +188,9 @@ export default function BooksModule({
     useState<SeriesFilterOptions | null>(null);
   const [catalogScope, setCatalogScope] =
     useState<SeriesCatalogScope>("shows");
-  const [universes, setUniverses] = useState<Universe[]>([]);
+  const [universes, setUniverses] = useState<Universe[]>(
+    () => getCachedUniverses("books") ?? []
+  );
   const [search, setSearch] = useState("");
   const [letter, setLetter] = useState("");
   const [continentId, setContinentId] = useState<number | "">("");
@@ -196,10 +201,6 @@ export default function BooksModule({
   const [publisher, setPublisher] = useState("");
   const [writer, setWriter] = useState("");
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
-
-  useEffect(() => {
-    clearMediaTheme(userId);
-  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,13 +215,11 @@ export default function BooksModule({
       try {
         const [dash, uni] = await Promise.all([
           prefetchBooksDashboard(),
-          fetchUniverses("books").catch(() => ({
-            universes: [] as Universe[],
-          })),
+          prefetchUniverses("books"),
         ]);
         if (cancelled) return;
         setDashboard(dash as never);
-        setUniverses(uni.universes || []);
+        setUniverses(uni);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));

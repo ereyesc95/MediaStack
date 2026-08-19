@@ -57,6 +57,7 @@ import {
   pushUniverseRoute,
 } from "./universeRoute";
 import { parsePathToViewSync, resolvePathToView } from "./routeResolve";
+import { prefetchUniverses } from "./universesCache";
 import {
   getMediaEntrySource,
   getUniverseReturnTarget,
@@ -65,11 +66,33 @@ import {
   setUniverseReturnTarget,
 } from "./mediaEntry";
 import { clearMediaTheme } from "./mediaTheme";
+import { seriesLeafFromFolderPath } from "./openMediaFromPath";
 import { clearAllDashboardCaches } from "./dashboardCaches";
 import type { CardOrientation, MusicTab, View } from "./types";
 import UniversePage from "./components/UniversePage";
 
 
+
+const MEDIA_ROOT_CONFIGURED_KEY = "mystack-media-root-configured";
+
+function readCachedMediaRootConfigured(): boolean | null {
+  try {
+    const value = sessionStorage.getItem(MEDIA_ROOT_CONFIGURED_KEY);
+    if (value === "1") return true;
+    if (value === "0") return false;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function rememberMediaRootConfigured(configured: boolean) {
+  try {
+    sessionStorage.setItem(MEDIA_ROOT_CONFIGURED_KEY, configured ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
 
 const MEDIA_OPTIONS: MediaOption[] = [
 
@@ -107,8 +130,6 @@ export default function App() {
     );
   });
 
-  const [routeHydrated, setRouteHydrated] = useState(false);
-
   const [cardOrientation, setCardOrientation] =
     useState<CardOrientation>("landscape");
 
@@ -117,16 +138,19 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [mediaRootConfigured, setMediaRootConfigured] = useState<boolean | null>(
-    null
+    readCachedMediaRootConfigured
   );
 
   const [sourceModal, setSourceModal] = useState<"welcome" | "settings" | null>(
     null
   );
 
-  const [profile, setProfile] = useState<ProfileUser | null | undefined>(
-    undefined
-  );
+  const [profile, setProfile] = useState<ProfileUser | null | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const token = getProfileToken();
+    if (!token) return null;
+    return getStoredProfile() ?? undefined;
+  });
 
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [highlightProfileId, setHighlightProfileId] = useState<number | null>(
@@ -144,19 +168,11 @@ export default function App() {
       if (cancelled) return;
       if (resolved) {
         setView(resolved.view);
-        if (
-          resolved.canonicalPath &&
-          resolved.canonicalPath !==
-            `${window.location.pathname}${window.location.search}`
-        ) {
-          window.history.replaceState(null, "", resolved.canonicalPath);
-        }
       }
-      if (!cancelled) setRouteHydrated(true);
     }
 
     async function init() {
-      const routePromise = applyLocationRoute();
+      void applyLocationRoute();
       const token = getProfileToken();
       if (token) {
         try {
@@ -187,15 +203,15 @@ export default function App() {
       try {
         const s = await fetchAppSettings();
         setMediaRootConfigured(s.media_root_configured);
+        rememberMediaRootConfigured(s.media_root_configured);
         if (!s.media_root_chosen) {
           setSourceModal("welcome");
         }
       } catch {
         setMediaRootConfigured(false);
+        rememberMediaRootConfigured(false);
         setSourceModal("welcome");
       }
-
-      await routePromise;
     }
 
     void init();
@@ -203,6 +219,13 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (mediaRootConfigured !== true || profile == null) return;
+    void prefetchUniverses("movies");
+    void prefetchUniverses("series");
+    void prefetchUniverses("books");
+  }, [mediaRootConfigured, profile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,13 +244,6 @@ export default function App() {
 
       if (resolved) {
         setView(resolved.view);
-        if (
-          resolved.canonicalPath &&
-          resolved.canonicalPath !==
-            `${window.location.pathname}${window.location.search}`
-        ) {
-          window.history.replaceState(null, "", resolved.canonicalPath);
-        }
         return;
       }
 
@@ -479,11 +495,11 @@ export default function App() {
   );
 
   const appReady = profileReady && mediaRootConfigured === true;
-  const showApp = appReady && routeHydrated;
+  const showApp = appReady;
   const booting =
     profile === undefined ||
-    (profileReady && mediaRootConfigured === null) ||
-    (appReady && !routeHydrated);
+    (profileReady && mediaRootConfigured === null);
+
   const showSourceModal =
     profileReady &&
     (sourceModal === "settings" ||
@@ -675,41 +691,30 @@ export default function App() {
             }
 
             onOpenSeriesFolder={(folderPath) => {
-              const parts = folderPath
-                .replace(/\\/g, "/")
-                .split("/")
-                .filter(Boolean);
-              if (
-                parts.length < 3 ||
-                parts[0].toLowerCase() !== "series"
-              ) {
-                return;
-              }
-              const franchiseName = parts[2];
-              const franchiseId = franchiseName.toLowerCase();
-              const subseriesId =
-                parts.length >= 4 ? parts[parts.length - 1] : undefined;
-              const bandId = view.kind === "music" ? view.bandId : undefined;
-              if (bandId != null) {
-                saveSeriesEntryReferrer({
-                  kind: "music",
-                  bandId,
-                  artistSection: "series",
-                  title: franchiseName,
+              void seriesLeafFromFolderPath(folderPath).then((leaf) => {
+                if (!leaf) return;
+                const bandId = view.kind === "music" ? view.bandId : undefined;
+                if (bandId != null) {
+                  saveSeriesEntryReferrer({
+                    kind: "music",
+                    bandId,
+                    artistSection: "series",
+                    title: leaf.franchiseName,
+                  });
+                }
+                pushSeriesRoute({
+                  franchiseId: leaf.franchiseId,
+                  subseriesId: leaf.subseriesId,
+                  section: "overview",
+                  overviewTab: "about",
                 });
-              }
-              pushSeriesRoute({
-                franchiseId,
-                subseriesId,
-                section: "overview",
-                overviewTab: "about",
-              });
-              setView({
-                kind: "series",
-                franchiseId,
-                subseriesId,
-                section: "overview",
-                overviewTab: "about",
+                setView({
+                  kind: "series",
+                  franchiseId: leaf.franchiseId,
+                  subseriesId: leaf.subseriesId,
+                  section: "overview",
+                  overviewTab: "about",
+                });
               });
             }}
 

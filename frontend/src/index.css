@@ -9,7 +9,8 @@
   --accent: #00d4c8;
   --accent-hover: #33e0d6;
   --accent-fg: #ffffff;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.42);
   --scrollbar-track: transparent;
   --radius: 8px;
   --header-height: 44px;
@@ -25,7 +26,8 @@
   --accent: #008f86;
   --accent-hover: #00a89e;
   --accent-fg: #ffffff;
-  --scrollbar-thumb: rgba(26, 34, 51, 0.28);
+  --scrollbar-thumb: rgba(26, 34, 51, 0.34);
+  --scrollbar-thumb-hover: rgba(26, 34, 51, 0.52);
   --scrollbar-track: transparent;
 }
 
@@ -39,7 +41,8 @@
   --accent: #5b8cff;
   --accent-hover: #7aa3ff;
   --accent-fg: #ffffff;
-  --scrollbar-thumb: rgba(220, 228, 248, 0.18);
+  --scrollbar-thumb: rgba(220, 228, 248, 0.24);
+  --scrollbar-thumb-hover: rgba(220, 228, 248, 0.44);
   --scrollbar-track: transparent;
 }
 
@@ -88,7 +91,7 @@
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent) transparent;
 }
 
 body {
@@ -99,6 +102,25 @@ body {
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:vertical:start,
+*::-webkit-scrollbar-button:vertical:end,
+*::-webkit-scrollbar-button:horizontal:start,
+*::-webkit-scrollbar-button:horizontal:end,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:horizontal:start:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 *::-webkit-scrollbar-track {
@@ -106,35 +128,32 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent);
   border-radius: 999px;
+  transition: background 0.15s ease;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--scrollbar-thumb) 70%, var(--accent) 30%);
+  background: var(--scrollbar-thumb-hover);
 }
 
 .ms-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
-}
-
-.ms-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.ms-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent) transparent;
 }
 
 .ms-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent);
   border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.ms-scrollbar:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .ms-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--scrollbar-thumb) 70%, var(--accent) 30%);
+  background: var(--scrollbar-thumb-hover);
 }
 
 button,
@@ -5479,10 +5498,55 @@ input {
   gap: var(--artist-meta-gap);
 }
 
+.artist-about__meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 0.35rem 0.85rem;
+  align-items: end;
+}
+
+.artist-about__meta-grid--stacked,
+.artist-page--mobile-landscape .artist-about__meta-grid {
+  grid-template-columns: 1fr;
+  gap: var(--artist-meta-gap);
+  align-items: start;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__foot {
+  margin-top: auto;
+  margin-bottom: 0;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--primary {
+  min-width: 7.5rem;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary {
+  padding-top: 0;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__meta-row {
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__meta-row dd {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__topics-dd {
+  overflow: hidden;
+}
+
 .artist-about__bio-block {
   flex: 1 1 0;
   min-height: 0;
-  margin-bottom: 1.35rem;
+  margin-bottom: 0.65rem;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -5500,19 +5564,19 @@ input {
 
 .artist-page--desktop .artist-about__bio-scroll,
 .artist-page--tablet-landscape .artist-about__bio-scroll {
-  min-height: 8rem;
+  min-height: 11rem;
 }
 
 @media (max-height: 720px) {
   .artist-page--desktop .artist-about__bio-scroll,
   .artist-page--tablet-landscape .artist-about__bio-scroll {
-    min-height: 5rem;
+    min-height: 7rem;
   }
 }
 
 .artist-page--desktop .artist-about__bio-block,
 .artist-page--tablet-landscape .artist-about__bio-block {
-  min-height: 5rem;
+  min-height: 8rem;
 }
 
 .artist-about__bio-scroll--collapsed {
@@ -5648,13 +5712,9 @@ input {
   gap: 0.35rem;
 }
 
-.artist-about:not(.artist-about--stacked) .artist-about__foot {
-  margin-bottom: 0;
-}
-
 .artist-about:not(.artist-about--stacked) .artist-about__tracks {
-  margin-top: auto;
-  padding-top: var(--artist-meta-gap);
+  margin-top: 0.75rem;
+  padding-top: 0;
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__tracks-title {
@@ -10748,11 +10808,22 @@ button.media-release-card--banner {
   overflow-y: auto;
   padding: 0 0 0.25rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent) transparent;
 }
 
 .release-page__main::-webkit-scrollbar {
   width: 6px;
+}
+
+.release-page__main::-webkit-scrollbar-button,
+.release-page__main::-webkit-scrollbar-button:single-button,
+.release-page__main::-webkit-scrollbar-button:vertical:start:decrement,
+.release-page__main::-webkit-scrollbar-button:vertical:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .release-page__main::-webkit-scrollbar-track {
@@ -10760,12 +10831,18 @@ button.media-release-card--banner {
 }
 
 .release-page__main::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent);
   border-radius: 999px;
 }
 
 .release-page__main::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--scrollbar-thumb-hover);
+}
+
+.module-route-shell {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
 }
 
 .release-page__tab-pane--hidden {
@@ -12732,11 +12809,7 @@ button.release-tracklist__group-label.series-season-block__header.is-open {
 }
 
 .live-story-tracklist__source-col {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.08rem;
+  display: block;
   min-width: 0;
   text-align: left;
 }
@@ -15503,9 +15576,7 @@ button.lyrics-status-badge--icon-only {
   color: inherit;
   font: inherit;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-color: transparent;
+  text-decoration: none;
 }
 
 .series-subseries-page__lang-pill:hover {
@@ -15514,7 +15585,6 @@ button.lyrics-status-badge--icon-only {
 
 .series-subseries-page__lang-pill.is-active {
   color: var(--text);
-  text-decoration-color: var(--accent);
   font-weight: 600;
 }
 

@@ -1744,7 +1744,7 @@ export default function SeriesFranchisePage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuChrome={

@@ -34,8 +34,8 @@ import {
   type ArtistBackRestore,
 } from "../../artistEntry";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
+import { moviesLeafFromFolderPath } from "../../openMediaFromPath";
 import { saveSeriesEntryReferrer } from "../../seriesRoute";
-import { normalizeSlug, stripDatedFolderTitle } from "../../routeSlug";
 import {
   getCachedMusicDashboard,
   prefetchMusicDashboard,
@@ -56,7 +56,7 @@ import SystemPlaylistPage from "./artist/SystemPlaylistPage";
 import MediaItemPage from "./media/MediaItemPage";
 import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
-import { pushArtistRoute, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory, saveReleaseReferrer } from "../../musicRoute";
+import { pushArtistRoute, parseArtistPath, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory, saveReleaseReferrer } from "../../musicRoute";
 import {
   clearSpotifyOAuthErrorHash,
   consumeSpotifyOAuthAwaiting,
@@ -411,6 +411,20 @@ export default function MusicModule({
   const homeBeatPlaying = homeBeatActive && homeAudio.playing;
   useBeatPulse(homeAudio.audioRef, homeBeatActive, homeAudio.playing);
 
+  const pendingDeepMusicRoute = useMemo(() => {
+    if (bandId != null) return false;
+    if (typeof window === "undefined") return false;
+    const parsed = parseArtistPath(window.location.pathname);
+    if (!parsed) return false;
+    return Boolean(
+      parsed.artistSlug ||
+        parsed.playlistSlug ||
+        parsed.releaseId ||
+        parsed.mediaItemId ||
+        (parsed.section && parsed.section !== "overview")
+    );
+  }, [bandId]);
+
   const showHomePlayer =
     !bandId &&
     homeAudio.src &&
@@ -503,32 +517,20 @@ export default function MusicModule({
     }
     let cancelled = false;
     void prefetchMediaItemOverview(bandId, "video", mediaItemId)
-      .then((ov) => {
-        if (cancelled || !ov) return;
-        const parts = (ov.folder_path || "")
-          .replace(/\\/g, "/")
-          .split("/")
-          .filter(Boolean);
-        const moviesIdx = parts.findIndex((p) => p.toLowerCase() === "movies");
-        let franchiseName = ov.artist_name || "";
-        let filmTitle = ov.title || mediaItemId;
-        if (moviesIdx >= 0 && parts.length > moviesIdx + 2) {
-          franchiseName = parts[moviesIdx + 2] || franchiseName;
-          filmTitle = stripDatedFolderTitle(
-            parts[parts.length - 1] || filmTitle
-          );
-        }
+      .then(async (ov) => {
+        if (cancelled || !ov?.folder_path) return;
+        const leaf = await moviesLeafFromFolderPath(ov.folder_path);
+        if (cancelled || !leaf) return;
         saveSeriesEntryReferrer({
           kind: "music",
           bandId,
           artistSection: "video",
           title: ov.artist_name,
         });
-        onOpenMoviesLeaf(
-          normalizeSlug(franchiseName) || franchiseName,
-          filmTitle,
-          { franchiseName, filmTitle }
-        );
+        onOpenMoviesLeaf(leaf.franchiseId, leaf.filmId, {
+          franchiseName: leaf.franchiseName,
+          filmTitle: leaf.filmTitle,
+        });
       })
       .catch(() => {});
     return () => {
@@ -1518,6 +1520,8 @@ export default function MusicModule({
           onChooseSource={onChooseSource}
           onSetOrientation={onSetOrientation}
         />
+      ) : pendingDeepMusicRoute ? (
+        <div className="module-route-shell" aria-busy="true" />
       ) : tab === "home" ? (
         <div className="music-module__body music-module__body--home">
           <MusicHome

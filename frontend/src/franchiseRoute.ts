@@ -3,7 +3,6 @@ import {
   dec,
   enc,
   isReservedSegment,
-  normalizeSlug,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -64,9 +63,7 @@ function parseTail(parts: string[]): {
 }
 
 export function franchisePath(route: FranchiseRoute): string {
-  const raw = route.franchiseName?.trim() || route.franchiseId;
-  const slug = normalizeSlug(raw) || raw;
-  let path = `${FRANCHISE_PATH_PREFIX}/${enc(slug)}`;
+  let path = `${FRANCHISE_PATH_PREFIX}/${enc(route.franchiseId)}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
     const tab =
@@ -132,6 +129,8 @@ export function parseLegacyFranchiseHubPath(
 
 export function pushFranchiseRoute(route: FranchiseRoute, replace = false) {
   const path = franchisePath(route);
+  const current = window.location.pathname + window.location.search;
+  if (path === current) return;
   if (replace) window.history.replaceState({}, "", path);
   else window.history.pushState({}, "", path);
 }

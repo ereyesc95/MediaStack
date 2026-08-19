@@ -146,22 +146,9 @@ export function booksPath(route: BooksRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg =
-    normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
-    route.franchiseId;
+  const franchiseSeg = route.franchiseId;
   let path = `/books/${enc(franchiseSeg)}`;
-  const titleRaw =
-    route.bookTitle?.trim() &&
-    !isBookId(route.bookTitle) &&
-    route.bookTitle !== route.bookId
-      ? route.bookTitle
-      : !isBookId(route.bookId || "")
-        ? route.bookTitle?.trim() || route.bookId
-        : route.bookTitle?.trim() || "";
-  const bookSeg = titleRaw
-    ? normalizeSlug(titleRaw) || titleRaw
-    : route.bookId;
-  path += `/${enc(bookSeg!)}`;
+  path += `/${enc(route.bookId!)}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
@@ -196,10 +183,15 @@ export function parseBooksCatalogPath(pathname: string): boolean {
   );
 }
 
-export function pushBooksRoute(route: BooksRoute, replace = false): void {
-  const path = booksPath(route);
+function pushHistoryPath(path: string, replace: boolean) {
+  const current = window.location.pathname + window.location.search;
+  if (path === current) return;
   if (replace) window.history.replaceState({}, "", path);
   else window.history.pushState({}, "", path);
+}
+
+export function pushBooksRoute(route: BooksRoute, replace = false): void {
+  pushHistoryPath(booksPath(route), replace);
 }
 
 export function pushBooksRootRoute(replace = false): void {

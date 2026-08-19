@@ -144,22 +144,9 @@ export function moviesPath(route: MoviesRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg =
-    normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
-    route.franchiseId;
+  const franchiseSeg = route.franchiseId;
   let path = `/movies/${enc(franchiseSeg)}`;
-  const titleRaw =
-    route.filmTitle?.trim() &&
-    !isFilmId(route.filmTitle) &&
-    route.filmTitle !== route.filmId
-      ? route.filmTitle
-      : !isFilmId(route.filmId || "")
-        ? route.filmTitle?.trim() || route.filmId
-        : route.filmTitle?.trim() || "";
-  const filmSeg = titleRaw
-    ? normalizeSlug(titleRaw) || titleRaw
-    : route.filmId;
-  path += `/${enc(filmSeg!)}`;
+  path += `/${enc(route.filmId!)}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
@@ -194,10 +181,15 @@ export function parseMoviesCatalogPath(pathname: string): boolean {
   );
 }
 
-export function pushMoviesRoute(route: MoviesRoute, replace = false): void {
-  const path = moviesPath(route);
+function pushHistoryPath(path: string, replace: boolean) {
+  const current = window.location.pathname + window.location.search;
+  if (path === current) return;
   if (replace) window.history.replaceState({}, "", path);
   else window.history.pushState({}, "", path);
+}
+
+export function pushMoviesRoute(route: MoviesRoute, replace = false): void {
+  pushHistoryPath(moviesPath(route), replace);
 }
 
 export function pushMoviesRootRoute(replace = false): void {

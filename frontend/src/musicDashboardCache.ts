@@ -19,12 +19,33 @@ function remember(data: MusicDashboard): MusicDashboard {
   return data;
 }
 
+function dashboardHasItems(data: MusicDashboard): boolean {
+  return Boolean(
+    data.top_tracks?.length ||
+      data.top_artists?.length ||
+      data.top_releases?.length ||
+      data.top_genres?.length ||
+      data.top_countries?.length
+  );
+}
+
+function rememberIfPopulated(data: MusicDashboard): MusicDashboard {
+  if (dashboardHasItems(data)) return remember(data);
+  return data;
+}
+
 export function getCachedMusicDashboard(): MusicDashboard | null {
-  if (memory) return memory;
+  if (memory) {
+    if (dashboardHasItems(memory)) return memory;
+    memory = null;
+  }
   const fromSession = readSessionEntry<MusicDashboard>(CACHE_KEY);
   if (fromSession) {
-    memory = fromSession;
-    return fromSession;
+    if (dashboardHasItems(fromSession)) {
+      memory = fromSession;
+      return fromSession;
+    }
+    removeSessionEntry(CACHE_KEY);
   }
   return null;
 }
@@ -48,8 +69,8 @@ export function prefetchMusicDashboard(
   if (inflight) return inflight;
 
   inflight = fetchMusicDashboard()
-    .then(remember)
-    .catch(() => remember(EMPTY_DASHBOARD))
+    .then(rememberIfPopulated)
+    .catch(() => getCachedMusicDashboard() ?? EMPTY_DASHBOARD)
     .finally(() => {
       inflight = null;
     });

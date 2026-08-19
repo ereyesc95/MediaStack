@@ -284,106 +284,116 @@ export default function ArtistAbout({
             )}
           </div>
           <div className="artist-about__foot">
-          <dl className="artist-about__meta">
-            {data.aliases.length > 0 && (
-              <div className="artist-about__meta-row">
-                <dt>Other names</dt>
-                <dd>{data.aliases.join(" • ")}</dd>
-              </div>
-            )}
-            {(data.city || data.country) && (
-              <div className="artist-about__meta-row">
-                <dt>Origin</dt>
-                <dd className="artist-about__origin">
-                  {data.country?.iso && (
-                    <button
-                      type="button"
-                      className="artist-about__flag"
-                      onClick={() => onCountry(data.country!.id)}
-                      aria-label={data.country.name ?? "Country"}
-                    >
-                      <span className={`fi fi-${data.country.iso}`} />
-                    </button>
-                  )}
-                  {originText && (
-                    <MetaValue
-                      flat={flatMeta}
-                      onClick={() =>
-                        data.country && onCountry(data.country.id)
-                      }
-                    >
-                      {originText}
-                    </MetaValue>
-                  )}
-                </dd>
-              </div>
-            )}
-            {data.activity_periods.length > 0 && (
-              <div className="artist-about__meta-row">
-                <dt>Activity</dt>
-                <dd>{data.activity_periods.map((p) => p.label).join(" • ")}</dd>
-              </div>
-            )}
-            {data.subgenres.length > 0 && (
-              <div className="artist-about__meta-row">
-                <dt>Genres</dt>
-                <dd>
-                  {data.subgenres.map((g, i) =>
-                    flatMeta ? (
-                      <span key={g.id} className="artist-about__meta-item">
-                        {i > 0 && (
-                          <span className="artist-about__meta-sep"> • </span>
-                        )}
-                        <MetaValue
-                          flat
-                          onClick={() => onSubgenre(g.id)}
+            <div
+              className={`artist-about__meta-grid${
+                stacked ? " artist-about__meta-grid--stacked" : ""
+              }`}
+            >
+              <dl className="artist-about__meta artist-about__meta--primary">
+                {data.aliases.length > 0 && (
+                  <div className="artist-about__meta-row">
+                    <dt>Other names</dt>
+                    <dd>{data.aliases.join(" • ")}</dd>
+                  </div>
+                )}
+                {(data.city || data.country) && (
+                  <div className="artist-about__meta-row">
+                    <dt>Origin</dt>
+                    <dd className="artist-about__origin">
+                      {data.country?.iso && (
+                        <button
+                          type="button"
+                          className="artist-about__flag"
+                          onClick={() => onCountry(data.country!.id)}
+                          aria-label={data.country.name ?? "Country"}
                         >
-                          {g.name}
+                          <span className={`fi fi-${data.country.iso}`} />
+                        </button>
+                      )}
+                      {originText && (
+                        <MetaValue
+                          flat={flatMeta}
+                          onClick={() =>
+                            data.country && onCountry(data.country.id)
+                          }
+                        >
+                          {originText}
                         </MetaValue>
-                      </span>
-                    ) : (
-                      <MetaValue
-                        key={g.id}
-                        flat={false}
-                        onClick={() => onSubgenre(g.id)}
-                      >
-                        {g.name}
-                      </MetaValue>
-                    )
-                  )}
-                </dd>
-              </div>
-            )}
-            <div className="artist-about__meta-row">
-              <dt>Topics</dt>
-              <dd className="artist-about__topics-dd">
-                <ArtistWordCloud bandId={data.id} embedded />
-              </dd>
+                      )}
+                    </dd>
+                  </div>
+                )}
+                {data.activity_periods.length > 0 && (
+                  <div className="artist-about__meta-row">
+                    <dt>Activity</dt>
+                    <dd>
+                      {data.activity_periods.map((p) => p.label).join(" • ")}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              <dl className="artist-about__meta artist-about__meta--secondary">
+                {data.subgenres.length > 0 && (
+                  <div className="artist-about__meta-row">
+                    <dt>Genres</dt>
+                    <dd>
+                      {data.subgenres.map((g, i) =>
+                        flatMeta ? (
+                          <span key={g.id} className="artist-about__meta-item">
+                            {i > 0 && (
+                              <span className="artist-about__meta-sep"> • </span>
+                            )}
+                            <MetaValue
+                              flat
+                              onClick={() => onSubgenre(g.id)}
+                            >
+                              {g.name}
+                            </MetaValue>
+                          </span>
+                        ) : (
+                          <MetaValue
+                            key={g.id}
+                            flat={false}
+                            onClick={() => onSubgenre(g.id)}
+                          >
+                            {g.name}
+                          </MetaValue>
+                        )
+                      )}
+                    </dd>
+                  </div>
+                )}
+                <div className="artist-about__meta-row">
+                  <dt>Topics</dt>
+                  <dd className="artist-about__topics-dd">
+                    <ArtistWordCloud bandId={data.id} embedded />
+                  </dd>
+                </div>
+                {visibleLabels.length > 0 && (
+                  <div className="artist-about__meta-row">
+                    <dt>Labels</dt>
+                    <dd>
+                      {visibleLabels.map((l, i) =>
+                        flatMeta ? (
+                          <span key={l} className="artist-about__meta-item">
+                            {i > 0 && (
+                              <span className="artist-about__meta-sep"> • </span>
+                            )}
+                            <MetaValue flat onClick={() => onLabel(l)}>
+                              {l}
+                            </MetaValue>
+                          </span>
+                        ) : (
+                          <MetaValue key={l} flat={false} onClick={() => onLabel(l)}>
+                            {l}
+                          </MetaValue>
+                        )
+                      )}
+                    </dd>
+                  </div>
+                )}
+              </dl>
             </div>
-            {visibleLabels.length > 0 && (
-              <div className="artist-about__meta-row">
-                <dt>Labels</dt>
-                <dd>
-                  {visibleLabels.map((l, i) =>
-                    flatMeta ? (
-                      <span key={l} className="artist-about__meta-item">
-                        {i > 0 && (
-                          <span className="artist-about__meta-sep"> • </span>
-                        )}
-                        <MetaValue flat onClick={() => onLabel(l)}>
-                          {l}
-                        </MetaValue>
-                      </span>
-                    ) : (
-                      <MetaValue key={l} flat={false} onClick={() => onLabel(l)}>
-                        {l}
-                      </MetaValue>
-                    )
-                  )}
-                </dd>
-              </div>
-            )}
-          </dl>
           </div>
           {data.solo_performer && onOpenPerformer && (
             <section className="artist-about__performer">

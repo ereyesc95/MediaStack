@@ -19,12 +19,33 @@ function remember(data: SeriesDashboard): SeriesDashboard {
   return data;
 }
 
+function dashboardHasItems(data: SeriesDashboard): boolean {
+  return Boolean(
+    data.top_franchises?.length ||
+      data.top_series?.length ||
+      data.top_genres?.length ||
+      data.top_countries?.length ||
+      data.top_episodes?.length
+  );
+}
+
+function rememberIfPopulated(data: SeriesDashboard): SeriesDashboard {
+  if (dashboardHasItems(data)) return remember(data);
+  return data;
+}
+
 export function getCachedSeriesDashboard(): SeriesDashboard | null {
-  if (memory) return memory;
+  if (memory) {
+    if (dashboardHasItems(memory)) return memory;
+    memory = null;
+  }
   const fromSession = readSessionEntry<SeriesDashboard>(CACHE_KEY);
   if (fromSession) {
-    memory = fromSession;
-    return fromSession;
+    if (dashboardHasItems(fromSession)) {
+      memory = fromSession;
+      return fromSession;
+    }
+    removeSessionEntry(CACHE_KEY);
   }
   return null;
 }
@@ -45,8 +66,8 @@ export function prefetchSeriesDashboard(options?: {
   }
   if (inflight) return inflight;
   inflight = fetchSeriesDashboard()
-    .then(remember)
-    .catch(() => remember(EMPTY_SERIES_DASHBOARD))
+    .then(rememberIfPopulated)
+    .catch(() => getCachedSeriesDashboard() ?? EMPTY_SERIES_DASHBOARD)
     .finally(() => {
       inflight = null;
     });

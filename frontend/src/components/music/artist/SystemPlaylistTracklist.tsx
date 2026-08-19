@@ -130,17 +130,9 @@ function trackMetaLine(
   return parts.length ? parts.join(" · ") : null;
 }
 
-function sourceReleaseColumn(track: ArtistPlaylistTrack): {
-  title: string;
-  date: string | null;
-} | null {
-  const title = track.source_release_title?.trim();
-  if (!title) return null;
-  const date =
-    track.source_display_date?.trim() ||
-    formatTrackDate(track.source_release_date) ||
-    (track.source_release_date?.slice(0, 4) ?? null);
-  return { title, date };
+function liveFileReleaseTitle(track: ArtistPlaylistTrack): string | null {
+  const title = track.album_title?.trim();
+  return title || null;
 }
 
 function userPlaylistTrackYear(track: ArtistPlaylistTrack): string {
@@ -811,7 +803,9 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
             const meta = showTrackMeta && !useMetaColumns && !showSourceReleaseColumn
               ? trackMetaLine(track, multiArtist)
               : null;
-            const sourceMeta = showSourceReleaseColumn ? sourceReleaseColumn(track) : null;
+            const sourceReleaseTitle = showSourceReleaseColumn
+              ? liveFileReleaseTitle(track)
+              : null;
             const youtubeQuery = track.youtube_query ?? null;
             const rowClass = [
               "release-tracklist__row",
@@ -1015,12 +1009,11 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               <>
                 {lead}
                 {titleBlock}
-                {sourceMeta ? (
+                {sourceReleaseTitle ? (
                   <span className="live-story-tracklist__source-col">
-                    <span className="live-story-tracklist__source-title">{sourceMeta.title}</span>
-                    {sourceMeta.date ? (
-                      <span className="live-story-tracklist__source-date">{sourceMeta.date}</span>
-                    ) : null}
+                    <span className="live-story-tracklist__source-title">
+                      {sourceReleaseTitle}
+                    </span>
                   </span>
                 ) : showSourceReleaseColumn ? (
                   <span className="live-story-tracklist__source-col live-story-tracklist__source-col--empty" aria-hidden />

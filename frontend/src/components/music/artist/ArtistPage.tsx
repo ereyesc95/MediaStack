@@ -35,8 +35,8 @@ import {
   type ArtistOverviewTab,
   type ArtistSection,
 } from "../../../musicRoute";
-import { normalizeSlug, stripDatedFolderTitle } from "../../../routeSlug";
 import { saveSeriesEntryReferrer } from "../../../seriesRoute";
+import { moviesLeafFromFolderPath } from "../../../openMediaFromPath";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -1080,7 +1080,7 @@ export default function ArtistPage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               editDataFlat
@@ -1588,32 +1588,19 @@ export default function ArtistPage({
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
             onOpenItem={(id, item) => {
-              if (onOpenMoviesLeaf) {
-                const parts = (item?.folder_path || "")
-                  .replace(/\\/g, "/")
-                  .split("/")
-                  .filter(Boolean);
-                const moviesIdx = parts.findIndex(
-                  (p) => p.toLowerCase() === "movies"
-                );
-                const artistName = data?.name ?? shell?.name ?? "";
-                let franchiseName = artistName;
-                let filmTitle = item?.title || id;
-                if (moviesIdx >= 0 && parts.length > moviesIdx + 2) {
-                  franchiseName = parts[moviesIdx + 2] || franchiseName;
-                  filmTitle = stripDatedFolderTitle(
-                    parts[parts.length - 1] || filmTitle
-                  );
-                }
-                saveSeriesEntryReferrer({
-                  kind: "music",
-                  bandId,
-                  artistSection: "video",
-                  title: artistName,
-                });
-                onOpenMoviesLeaf(normalizeSlug(franchiseName) || franchiseName, filmTitle, {
-                  franchiseName,
-                  filmTitle,
+              if (onOpenMoviesLeaf && item?.folder_path) {
+                void moviesLeafFromFolderPath(item.folder_path).then((leaf) => {
+                  if (!leaf) return;
+                  saveSeriesEntryReferrer({
+                    kind: "music",
+                    bandId,
+                    artistSection: "video",
+                    title: data?.name ?? shell?.name ?? undefined,
+                  });
+                  onOpenMoviesLeaf(leaf.franchiseId, leaf.filmId, {
+                    franchiseName: leaf.franchiseName,
+                    filmTitle: leaf.filmTitle,
+                  });
                 });
                 return;
               }

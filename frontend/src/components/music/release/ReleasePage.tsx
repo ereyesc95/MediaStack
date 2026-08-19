@@ -20,6 +20,7 @@ import {
   playTrack,
   refreshReleaseMetadata,
   resolveArtistName,
+  searchArtistReleases,
 } from "../../../api";
 import {
   clearReleaseReferrer,
@@ -28,9 +29,8 @@ import {
   type ReleaseTab,
 } from "../../../musicRoute";
 import {
-  applyAlbumTheme,
-  beginAlbumPageSession,
-  beginArtistPageSession,
+  applyMediaTheme,
+  beginAdaptivePageSession,
   clearAlbumTheme,
   colorsFromImageUrl,
 } from "../../../mediaTheme";
@@ -59,7 +59,8 @@ import {
 } from "../../../usePhoneLayout";
 import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem, TrackYoutubeVideo } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
-import { isReleaseId } from "../../../routeSlug";
+import { isReleaseId, slugMatch } from "../../../routeSlug";
+import { rememberReleaseSlug, releaseIdFromSlug } from "../../../routeEntityCache";
 import AppMenu from "../../AppMenu";
 import ConfirmDialog from "../../ConfirmDialog";
 import { IconZoom } from "../../MenuIcons";
@@ -548,7 +549,7 @@ export default function ReleasePage({
   );
 
   useEffect(() => {
-    if (!showTabbedBottom) return;
+    if (!showTabbedBottom || !data) return;
     if (bottomTab === "lineup" && !showOverviewLineup) {
       setBottomTab(
         showReleaseStaff ? "staff" : showSinglesTab ? "singles" : "lineup"
@@ -564,6 +565,7 @@ export default function ReleasePage({
     showOverviewLineup,
     showReleaseStaff,
     showSinglesTab,
+    data,
   ]);
 
   useEffect(() => {
@@ -615,16 +617,53 @@ export default function ReleasePage({
   );
   const loadSeq = useRef(0);
 
+  const [resolvedReleaseId, setResolvedReleaseId] = useState(releaseId);
+
+  useEffect(() => {
+    setResolvedReleaseId(releaseId);
+  }, [releaseId]);
+
+  useEffect(() => {
+    if (isReleaseId(releaseId)) return;
+    const cached = releaseIdFromSlug(bandId, releaseId);
+    if (cached) {
+      setResolvedReleaseId(cached);
+      return;
+    }
+    let cancelled = false;
+    void searchArtistReleases(bandId, releaseId)
+      .then((res) => {
+        if (cancelled) return;
+        const hit =
+          res.releases?.find(
+            (row) =>
+              slugMatch(row.title || "", releaseId) ||
+              slugMatch(row.id || "", releaseId)
+          ) ?? null;
+        if (hit?.id) {
+          rememberReleaseSlug(bandId, releaseId, hit.id);
+          setResolvedReleaseId(hit.id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [bandId, releaseId]);
+
   const load = useCallback(
     (options?: { silent?: boolean }) => {
-      if (!isReleaseId(releaseId)) return;
+      if (!isReleaseId(resolvedReleaseId)) return;
       const silent = options?.silent ?? false;
       const seq = ++loadSeq.current;
       if (!silent) setError(null);
-      fetchReleaseOverview(bandId, releaseId)
+      fetchReleaseOverview(bandId, resolvedReleaseId)
         .then((payload) => {
           if (seq !== loadSeq.current) return;
-          setCachedReleaseOverview(bandId, releaseId, "landscape", payload);
+          setCachedReleaseOverview(bandId, resolvedReleaseId, "landscape", payload);
+          if (payload.title?.trim()) {
+            rememberReleaseSlug(bandId, payload.title, resolvedReleaseId);
+          }
           setData(payload);
         })
         .catch((e) => {
@@ -634,7 +673,7 @@ export default function ReleasePage({
           }
         });
     },
-    [bandId, releaseId]
+    [bandId, resolvedReleaseId]
   );
 
   useLayoutEffect(() => {
@@ -653,8 +692,8 @@ export default function ReleasePage({
     setTrackWriters([]);
     sourceArtCacheRef.current.clear();
 
-    const cached = isReleaseId(releaseId)
-      ? getCachedReleaseOverview(bandId, releaseId)
+    const cached = isReleaseId(resolvedReleaseId)
+      ? getCachedReleaseOverview(bandId, resolvedReleaseId)
       : null;
     setData(cached);
     setError(null);
@@ -662,11 +701,11 @@ export default function ReleasePage({
       cached?.background_layers?.[0] ?? cached?.cover_url ?? undefined;
     prevBgRef.current = url;
     setBgLayers(url ? { current: url } : {});
-    if (isReleaseId(releaseId)) {
-      void prefetchReleaseTracklist(bandId, releaseId);
+    if (isReleaseId(resolvedReleaseId)) {
+      void prefetchReleaseTracklist(bandId, resolvedReleaseId);
       load({ silent: Boolean(cached) });
     }
-  }, [bandId, releaseId, load, clearMiniAudio, miniAudio.audioRef]);
+  }, [bandId, resolvedReleaseId, load, clearMiniAudio, miniAudio.audioRef]);
 
   useEffect(() => {
     if (!data?.needs_metadata_fetch) return;
@@ -700,23 +739,37 @@ export default function ReleasePage({
       fitOverviewPhotocards(top, cards);
     };
 
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(top);
-    if (desc) ro.observe(desc);
-    if (cards) ro.observe(cards);
-
     const scheduleMeasure = () => {
       requestAnimationFrame(() => {
         requestAnimationFrame(measure);
       });
     };
 
+    measure();
+    const imageLoads: HTMLImageElement[] = [];
+    const onImageReady = () => scheduleMeasure();
+    cards?.querySelectorAll("img").forEach((node) => {
+      const img = node as HTMLImageElement;
+      if (img.complete) return;
+      imageLoads.push(img);
+      img.addEventListener("load", onImageReady);
+      img.addEventListener("error", onImageReady);
+    });
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(top);
+    if (desc) ro.observe(desc);
+    if (cards) ro.observe(cards);
+
     window.addEventListener("resize", scheduleMeasure);
     window.addEventListener("orientationchange", scheduleMeasure);
 
     return () => {
       ro.disconnect();
+      imageLoads.forEach((img) => {
+        img.removeEventListener("load", onImageReady);
+        img.removeEventListener("error", onImageReady);
+      });
       window.removeEventListener("resize", scheduleMeasure);
       window.removeEventListener("orientationchange", scheduleMeasure);
       clearScale();
@@ -815,11 +868,7 @@ export default function ReleasePage({
   }, [bandId, releaseId, nowPlayingTitle]);
 
   useEffect(() => {
-    beginArtistPageSession(userId);
-    beginAlbumPageSession();
-  }, [userId]);
-
-  useEffect(() => {
+    beginAdaptivePageSession(userId);
     return () => clearAlbumTheme(userId);
   }, [userId]);
 
@@ -933,7 +982,7 @@ export default function ReleasePage({
         displayCover ??
         undefined);
 
-  const themeSampleUrl = displayCover ?? data?.cover_url ?? undefined;
+  const themeSampleUrl = data?.cover_url ?? undefined;
 
   useEffect(() => {
     setCoverFlipped(false);
@@ -942,10 +991,10 @@ export default function ReleasePage({
 
   useEffect(() => {
     if (!themeSampleUrl) return;
-    colorsFromImageUrl(themeSampleUrl).then((c) => {
-      if (c) applyAlbumTheme(c);
+    void colorsFromImageUrl(themeSampleUrl).then((c) => {
+      if (c) applyMediaTheme(c, userId);
     });
-  }, [themeSampleUrl]);
+  }, [themeSampleUrl, userId]);
 
   useEffect(() => {
     if (!bgUrl) return;
@@ -1523,6 +1572,7 @@ export default function ReleasePage({
 
   useEffect(() => {
     setMoreInfoOpen(false);
+    setBottomTab("lineup");
   }, [releaseId]);
 
   // Open info when the active track changes so track meta is visible; user can still collapse.
@@ -2451,7 +2501,7 @@ export default function ReleasePage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"

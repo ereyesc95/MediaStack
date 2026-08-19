@@ -9,11 +9,10 @@ import {
 } from "../../../mediaItemOverviewCache";
 import { formatTrackDate } from "../../../formatDate";
 import {
-  beginAlbumPageSession,
-  beginArtistPageSession,
+  applyMediaTheme,
+  beginAdaptivePageSession,
   clearAlbumTheme,
   colorsFromImageUrl,
-  applyAlbumTheme,
 } from "../../../mediaTheme";
 import {
   isMobileLandscapeLayout,
@@ -305,6 +304,7 @@ export default function MediaItemPage({
     setMoreInfoOpen(false);
     setExpandedGroupId(null);
     setActiveFilePath(null);
+    setOverviewSub("lineup");
   }, [itemId]);
 
   useEffect(() => {
@@ -339,11 +339,7 @@ export default function MediaItemPage({
   }, [bandId, kind, itemId, data?.artist_name, data?.title]);
 
   useEffect(() => {
-    beginArtistPageSession(userId);
-    beginAlbumPageSession();
-  }, [userId]);
-
-  useEffect(() => {
+    beginAdaptivePageSession(userId);
     return () => clearAlbumTheme(userId);
   }, [userId]);
 
@@ -351,9 +347,9 @@ export default function MediaItemPage({
     const themeSampleUrl = data?.cover_url ?? undefined;
     if (!themeSampleUrl) return;
     void colorsFromImageUrl(themeSampleUrl).then((c) => {
-      if (c) applyAlbumTheme(c);
+      if (c) applyMediaTheme(c, userId);
     });
-  }, [data?.cover_url]);
+  }, [data?.cover_url, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -672,7 +668,7 @@ export default function MediaItemPage({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="media-item"
-              artistThemeActive
+              adaptiveThemeActive
               editDataLabel={kind === "library" ? "Edit book" : "Edit Release"}
               onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
               onRefreshTracklist={() => handleRefresh()}

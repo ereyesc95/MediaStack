@@ -152,22 +152,13 @@ export function seriesPath(route: SeriesRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg =
-    normalizeSlug(route.franchiseName?.trim() || route.franchiseId) ||
-    route.franchiseId;
+  const franchiseSeg = route.franchiseId;
   let path = `/series/${enc(franchiseSeg)}`;
-  const leafRaw = stripDatedFolderTitle(
-    route.subseriesTitle?.trim() || route.subseriesId || ""
-  );
-  const leafSeg = leafRaw ? normalizeSlug(leafRaw) || leafRaw : undefined;
-  if (leafSeg) {
-    path += `/${enc(leafSeg)}`;
+  if (route.subseriesId) {
+    path += `/${enc(route.subseriesId)}`;
   }
   if (route.seasonId) {
-    const seasonRaw = stripDatedFolderTitle(
-      route.seasonTitle?.trim() || route.seasonId
-    );
-    path += `/season/${enc(normalizeSlug(seasonRaw) || seasonRaw)}`;
+    path += `/season/${enc(route.seasonId)}`;
   }
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
@@ -200,13 +191,15 @@ export function parseSeriesRootPath(pathname: string): boolean {
   return /^\/series\/?$/.test(pathname);
 }
 
+function pushHistoryPath(path: string, replace: boolean) {
+  const current = window.location.pathname + window.location.search;
+  if (path === current) return;
+  if (replace) window.history.replaceState(null, "", path);
+  else window.history.pushState(null, "", path);
+}
+
 export function pushSeriesRoute(route: SeriesRoute, replace = false) {
-  const path = seriesPath(route);
-  if (replace) {
-    window.history.replaceState(null, "", path);
-  } else {
-    window.history.pushState(null, "", path);
-  }
+  pushHistoryPath(seriesPath(route), replace);
 }
 
 export function pushSeriesCatalogRoute(replace = false) {

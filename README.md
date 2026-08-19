@@ -11,9 +11,9 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 | Module   | Status |
 |----------|--------|
 | **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, Video/Library/Series tabs |
-| **Series** | Active — franchise/show pages, cast/staff, episodes, related media, NSFW gating, slug URLs |
-| **Movies** | Active — works/films, cast, More Movies, NSFW per-film genres, slug URLs |
-| **Books** | Active — works/volumes, types (Manga/Book/…), More Books, NSFW gating, slug URLs |
+| **Series** | Active — franchise/show pages, cast/staff, episodes, related media, NSFW gating, stable leaf IDs in URLs |
+| **Movies** | Active — works/films, cast, More Movies, NSFW per-film genres, stable leaf IDs in URLs |
+| **Books** | Active — works/volumes, types (Manga/Book/…), More Books, NSFW gating, stable leaf IDs in URLs |
 | **Universes** | Active — shared hubs across series/movies/books with SFW filtering |
 | Games    | API stubs / browse shell — full UI pending |
 
@@ -472,22 +472,22 @@ Default playlist card art lives in `assets/playlists/{slug}.png` (512×512 gradi
 
 ---
 
-## URL routing (slug paths)
+## URL routing
 
-The UI uses `history.pushState` (no React Router). Prefer **display-name slugs**; parsers also accept legacy ID/hash paths and rewrite when possible.
+The UI uses `history.pushState` (no React Router). **Leaf segments use stable IDs** (`film_…`, `book_…`, show/subseries ids, numeric `bandId`, release hashes). Title slugs in the path are still parsed for bookmarks but are no longer written on navigation. Franchise hubs keep the franchise folder key (e.g. `dragon ball`).
 
-| Area | Preferred URL | Legacy (still parsed) |
-|------|---------------|------------------------|
-| Artist | `/music/HIM/overview/about` | `/music/artist/4/overview/about` |
-| Audio release | `/music/HIM/audio/Greatest%20Lovesongs%20Vol.%20666` | `/music/artist/4/audio/rel_…` |
-| Video / library item | `/music/HIM/video/The%20Video%20Collection` | `/music/artist/4/video/vid_…` |
-| Franchise hub | `/franchise/dragon%20ball/overview/about` | `/series\|movies\|books/franchise/{id}/…` (no leaf) |
-| Universe | `/universe/wizarding%20world/overview/about` | `/universe/1/…` |
-| Series show | `/series/dragon%20ball/Dragon%20Ball%20Super/overview/about` | `/series/franchise/…/show/…` |
-| Film | `/movies/dragon%20ball/Curse%20of%20the%20Blood%20Rubies/overview/about` | `/movies/franchise/…/film/film_…` |
-| Book volume | `/books/dragon%20ball/Vol.%2001/overview/about` | `/books/franchise/…/book/book_…` |
+| Area | Example URL | Notes |
+|------|-------------|--------|
+| Artist | `/music/4/overview/about` | Numeric band id (name slugs still parse) |
+| Audio release | `/music/4/audio/rel_…` | Release hash id |
+| Video / library item | `/music/4/video/vid_…` | Media item id |
+| Franchise hub | `/franchise/dragon%20ball/overview/about` | Shared franchise key |
+| Universe | `/universe/wizarding%20world/overview/about` | Name slug or numeric id |
+| Series show | `/series/dragon%20ball/show_…/overview/about` | Stable subseries id |
+| Film | `/movies/dragon%20ball/film_9a31d741e235/overview/about` | Stable `film_` hash |
+| Book volume | `/books/dragon%20ball/book_…/overview/about` | Stable `book_` hash |
 
-Internal navigation still uses stable IDs after resolve (`bandId`, `franchiseId`, `film_…` hashes, etc.). See `frontend/src/routeSlug.ts`, `routeResolve.ts`, and the `*Route.ts` modules.
+Opening a music **Video** card that lives under `Movies/…` resolves the folder path via `/api/movies/resolve` so the film URL uses the correct `film_` id immediately. See `frontend/src/openMediaFromPath.ts`, `routeSlug.ts`, `routeResolve.ts`, and the `*Route.ts` modules.
 
 ---
 
@@ -573,7 +573,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 
 ## Music module features
 
-- **Home dashboard** — recent plays, shortcuts; **cover-based theme** while a track plays (restores on pause/stop; menu theme choice is remembered)
+- **Home dashboard** — recent plays, shortcuts; **Adaptive** theme (image-sampled colors on artist/franchise/film pages) and cover-based sampling while a track plays (restores on pause/stop; menu theme choice is remembered)
 - **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
 - **Catalog & release card layouts** — Catalog/Related cards: **Landscape / Portrait / Banner / Icons** (desktop: hover the layout control to open options; phone: tap). Artist Audio/Video/Library: **Cover** or **Banner** (era photo background; hover/tap shows cover + release logo / era icon+logo + full date). Banner era logos use a matching-era **Collapsed** artist logo when present (skipped on **mobile portrait**); release `[Artwork]/Logo - Collapsed` is shown larger on banner hover. External source artists (e.g. *By Various Artists*) replace the page artist’s era branding on the banner. On phones, **Cover** and **Banner** both use first-tap reveal / second-tap open.
 - **Artist links** — edit-link modal shows a square logo preview aligned to the right of the Auto-detect / Catalog / Upload options (preview height matches that column, including the catalog dropdown when open)
@@ -581,7 +581,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 - **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]` (track-specific stems override album animation/canvas); edition `Logo.png` in the top bar when applicable
 - **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`
 - **Writer links** — “Written by” names open in-app when the artist has a local folder, matching **band aliases** (`bndOtherNames`, e.g. Ville Valo → VV)
-- **Playback themes** — home and artist top tracks sample cover colors while playing; changing theme via the menu while playing defers the visual switch until pause/stop, then resumes cover colors on play
+- **Themes** — **Adaptive** (default on content pages: colors sampled from page art) plus Dark/Light/Midnight/Ember/Ocean/Custom presets. Picking a preset pins it until you choose Adaptive again. Playback temporarily overrides with the playing track’s cover art.
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`

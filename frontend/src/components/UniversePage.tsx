@@ -478,7 +478,7 @@ export default function UniversePage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"

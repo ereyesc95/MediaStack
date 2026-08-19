@@ -69,6 +69,7 @@ import {
 } from "../../artistEntry";
 import { getMediaEntrySource } from "../../mediaEntry";
 import { slugMatch } from "../../routeSlug";
+import { rememberLeafSlug } from "../../routeEntityCache";
 import type {
   ArtistCard as ArtistCardType,
   BandOverview,
@@ -668,7 +669,7 @@ export default function SeriesSubseriesPage({
   const [focusCoverUrl, setFocusCoverUrl] = useState<string | null>(null);
   const [focusBgUrl, setFocusBgUrl] = useState<string | null>(null);
   const [castTab, setCastTab] = useState<"lineup" | "characters" | "staff">(
-    "characters"
+    "lineup"
   );
   const [bandOverview, setBandOverview] = useState<BandOverview | null>(null);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
@@ -759,6 +760,7 @@ export default function SeriesSubseriesPage({
     setVolumeDateLabel(null);
     setActiveVolumeId(null);
     setBookHubFilter("all");
+    setCastTab("lineup");
   }, [subseriesId]);
 
   useEffect(() => {
@@ -826,6 +828,22 @@ export default function SeriesSubseriesPage({
         )[];
         let filmDetail = filmDetailMaybe;
         let filmOv = filmOvMaybe;
+        if (!filmDetail && isBook) {
+          const hit = filmList.find(
+            (s) =>
+              s.id === subseriesId ||
+              slugMatch(s.title || "", subseriesId) ||
+              slugMatch(("name" in s && s.name) || "", subseriesId)
+          );
+          if (hit?.id) {
+            filmDetail = await fetchBooksBook(hit.id);
+            if (!filmOv) {
+              filmOv = await fetchBooksBookOverview(hit.id, orientation).catch(
+                () => null
+              );
+            }
+          }
+        }
         if (!filmDetail && !isBook) {
           const hit = filmList.find(
             (s) =>
@@ -843,7 +861,16 @@ export default function SeriesSubseriesPage({
           }
         }
         if (!filmDetail) {
-          throw new Error("Film not found");
+          throw new Error(isBook ? "Book not found" : "Film not found");
+        }
+        const resolvedLeafId = filmDetail.id;
+        if (resolvedLeafId) {
+          rememberLeafSlug(
+            isBook ? "books" : "movies",
+            franchiseId,
+            filmDetail.title || subseriesId,
+            resolvedLeafId
+          );
         }
         const nextOverview = filmOv || workOv || null;
         setOverview(nextOverview);
@@ -936,7 +963,10 @@ export default function SeriesSubseriesPage({
         }));
       const list = fromOverview.length ? fromOverview : fromShows;
       setSiblings(list);
-      const found = list.find((s) => s.id === subseriesId);
+      const found = list.find(
+        (s) =>
+          s.id === subseriesId || slugMatch(s.title || "", subseriesId)
+      );
       if (!found?.folder_path) {
         setError("Subseries not found.");
         setCard(null);
@@ -944,6 +974,7 @@ export default function SeriesSubseriesPage({
         return;
       }
       setCard(found);
+      rememberLeafSlug("series", franchiseId, found.title || subseriesId, found.id);
       const folder = await fetchSeriesFolder(found.folder_path);
       setDetail(folder);
       subseriesPageCache.set(key, {
@@ -1374,7 +1405,10 @@ export default function SeriesSubseriesPage({
   );
   const showCastBlock = hasArtistLineup || hasCharacters || hasStaff;
 
+  const bandLineupPending = Boolean(overview?.music_band_id && !bandOverview);
+
   useEffect(() => {
+    if (bandLineupPending) return;
     if (castTab === "lineup" && !hasArtistLineup) {
       setCastTab(hasCharacters ? "characters" : "staff");
     } else if (castTab === "characters" && !hasCharacters) {
@@ -1382,7 +1416,7 @@ export default function SeriesSubseriesPage({
     } else if (castTab === "staff" && !hasStaff) {
       setCastTab(hasArtistLineup ? "lineup" : "characters");
     }
-  }, [castTab, hasArtistLineup, hasCharacters, hasStaff]);
+  }, [castTab, hasArtistLineup, hasCharacters, hasStaff, bandLineupPending]);
 
   const title =
     detail?.title || card?.title || (isFilm ? overview?.name || "" : "") || "";
@@ -1744,20 +1778,33 @@ export default function SeriesSubseriesPage({
       return;
     }
     const measure = () => fitOverviewPhotocards(top, cards);
-    measure();
-    if (!top) return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(top);
-    if (cards) ro.observe(cards);
     const scheduleMeasure = () => {
       requestAnimationFrame(() => {
         requestAnimationFrame(measure);
       });
     };
+    measure();
+    if (!top) return;
+    const imageLoads: HTMLImageElement[] = [];
+    const onImageReady = () => scheduleMeasure();
+    cards?.querySelectorAll("img").forEach((node) => {
+      const img = node as HTMLImageElement;
+      if (img.complete) return;
+      imageLoads.push(img);
+      img.addEventListener("load", onImageReady);
+      img.addEventListener("error", onImageReady);
+    });
+    const ro = new ResizeObserver(measure);
+    ro.observe(top);
+    if (cards) ro.observe(cards);
     window.addEventListener("resize", scheduleMeasure);
     window.addEventListener("orientationchange", scheduleMeasure);
     return () => {
       ro.disconnect();
+      imageLoads.forEach((img) => {
+        img.removeEventListener("load", onImageReady);
+        img.removeEventListener("error", onImageReady);
+      });
       window.removeEventListener("resize", scheduleMeasure);
       window.removeEventListener("orientationchange", scheduleMeasure);
       top?.style.removeProperty("--overview-photocard-scale");
@@ -1774,7 +1821,10 @@ export default function SeriesSubseriesPage({
     photocards?.portrait_front,
     photocards?.landscape_front,
     overviewBio,
-    showCastBlock,
+    workName,
+    title,
+    siblings.length,
+    leafUniverses.length,
   ]);
 
   const relatedMovies = useMemo(
@@ -3099,7 +3149,7 @@ export default function SeriesSubseriesPage({
   const backAriaLabel = `Back to ${franchiseBackLabel}`;
   const contentReady =
     Boolean(error) ||
-    (!loading && Boolean(overview) && mediaReady);
+    (!loading && Boolean(overview));
 
   if (opedOpen) {
     return (
@@ -3257,7 +3307,7 @@ export default function SeriesSubseriesPage({
               onChooseSource={onChooseSource}
               isAdmin={isAdmin}
               userId={userId}
-              artistThemeActive
+              adaptiveThemeActive
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               menuVariant="release"
@@ -3928,16 +3978,19 @@ export default function SeriesSubseriesPage({
                   {(() => {
                     const leafTitle = (title || card?.title || "").trim();
                     const parentName = (
-                      overview?.name ||
-                      franchiseName ||
                       workName ||
+                      franchiseName ||
+                      overview?.work?.name ||
                       ""
                     ).trim();
                     const nested =
+                      isFilm &&
+                      !isBook &&
                       Boolean(franchiseId) &&
                       Boolean(parentName) &&
                       Boolean(leafTitle) &&
-                      !slugMatch(parentName, leafTitle);
+                      !slugMatch(parentName, leafTitle) &&
+                      (siblings.length > 1 || Boolean(workName));
                     if (!nested) return null;
                     return (
                       <p className="release-page__type-line">

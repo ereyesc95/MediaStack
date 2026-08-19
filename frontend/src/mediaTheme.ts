@@ -198,13 +198,21 @@ function restoreThemeAfterPlayback(userId?: number) {
   applyTheme(restore, userId);
 }
 
-/** Call when entering the artist page. */
+/** Call when entering a page that samples theme colors from media art. */
 export function beginArtistPageSession(userId?: number) {
   if (!artistPageActive) {
     themeBeforeArtist = readPersistedTheme(userId);
     artistPageActive = true;
-    applyTheme("artist", userId);
+    if (artistPageThemePin) {
+      applyTheme(artistPageThemePin, userId);
+    }
   }
+}
+
+/** Album/release pages use the same adaptive sampling session as artist pages. */
+export function beginAdaptivePageSession(userId?: number) {
+  beginArtistPageSession(userId);
+  beginAlbumPageSession();
 }
 
 export function isPlaybackThemeActive() {
@@ -224,7 +232,18 @@ export function getMenuActiveTheme(userId?: number): ThemeId {
   if (playbackSessionActive) {
     return playbackMenuTheme ?? readPersistedTheme(userId);
   }
-  return readDomTheme();
+  if (!artistPageThemePin && (artistPageActive || albumPageActive)) {
+    return "artist";
+  }
+  const dom = readDomTheme();
+  if (dom === "album") return "artist";
+  return dom;
+}
+
+export function isAdaptiveThemeActive(): boolean {
+  if (artistPageThemePin) return false;
+  const dom = readDomTheme();
+  return dom === "artist" || dom === "album";
 }
 
 export function setPlaybackPlaying(playing: boolean) {
@@ -325,8 +344,8 @@ export function applyMediaTheme(colors: CustomThemeColors, userId?: number) {
   }
   saveArtistThemeColors(colors, userId);
   if (shouldApplySampledTheme()) {
-    const active = readDomTheme();
-    applyMediaCss(colors, active === "album" ? "album" : "artist");
+    const variant: "artist" | "album" = albumPageActive ? "album" : "artist";
+    applyMediaCss(colors, variant);
     window.dispatchEvent(new CustomEvent("theme-changed"));
   }
   window.dispatchEvent(new CustomEvent("artist-theme-updated"));

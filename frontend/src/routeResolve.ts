@@ -30,6 +30,14 @@ import { parseMoviesPath } from "./moviesRoute";
 import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath } from "./musicRoute";
 import { parseSeriesPath } from "./seriesRoute";
 import { parseUniversePath } from "./universeRoute";
+import {
+  bandIdFromArtistSlug,
+  leafIdFromSlug,
+  rememberArtistSlug,
+  rememberLeafSlug,
+  rememberReleaseSlug,
+  releaseIdFromSlug,
+} from "./routeEntityCache";
 
 type FranchiseHomeModule = "series" | "movies" | "books";
 
@@ -89,6 +97,7 @@ export async function resolveArtistRoute(route: ArtistRoute): Promise<ArtistRout
   try {
     const res = await resolveArtistName(slug);
     if (res.band_id != null) {
+      rememberArtistSlug(slug, res.band_id);
       return { ...route, bandId: res.band_id, artistName: res.name || slug };
     }
   } catch {
@@ -105,7 +114,10 @@ async function resolveReleaseTitle(
   try {
     const res = await searchArtistReleases(bandId, title);
     const hit = matchLeafTitle(res.releases, title);
-    if (hit?.id) return hit.id;
+    if (hit?.id) {
+      rememberReleaseSlug(bandId, title, hit.id);
+      return hit.id;
+    }
     const query = title.trim();
     if (query.length >= 2) {
       const loose = res.releases?.find(
@@ -114,7 +126,10 @@ async function resolveReleaseTitle(
           slugMatch(stripDatedFolderTitle(row.id || ""), query) ||
           slugMatch(stripDatedFolderTitle(row.folder_name || ""), query)
       );
-      if (loose?.id) return loose.id;
+      if (loose?.id) {
+        rememberReleaseSlug(bandId, title, loose.id);
+        return loose.id;
+      }
     }
   } catch {
     return undefined;
@@ -189,7 +204,10 @@ export async function resolveSeriesRoute(
           : []),
       ];
       const hit = matchLeafTitle(subs, subseriesId);
-      if (hit) subseriesId = hit.id;
+      if (hit) {
+        subseriesId = hit.id;
+        rememberLeafSlug("series", route.franchiseId, hit.title || subseriesId, hit.id);
+      }
     } catch {
       /* keep raw slug */
     }
@@ -204,7 +222,10 @@ export async function resolveMoviesRoute(route: MoviesRoute): Promise<MoviesRout
       const detail = await fetchMoviesFranchise(route.franchiseId);
       const films = detail.films || [];
       const hit = matchLeafTitle(films, filmId);
-      if (hit) filmId = hit.id;
+      if (hit) {
+        filmId = hit.id;
+        rememberLeafSlug("movies", route.franchiseId, hit.title || filmId, hit.id);
+      }
     } catch {
       /* keep slug */
     }
@@ -222,7 +243,10 @@ export async function resolveBooksRoute(route: BooksRoute): Promise<BooksRoute> 
         detail.films ||
         [];
       const hit = matchLeafTitle(books, bookId);
-      if (hit) bookId = hit.id;
+      if (hit) {
+        bookId = hit.id;
+        rememberLeafSlug("books", route.franchiseId, hit.title || bookId, hit.id);
+      }
     } catch {
       /* keep slug */
     }
@@ -535,7 +559,13 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
     return {
       kind: "series",
       franchiseId: seriesParsed.franchiseId,
-      subseriesId: seriesParsed.subseriesId,
+      subseriesId: seriesParsed.subseriesId
+        ? leafIdFromSlug(
+            "series",
+            seriesParsed.franchiseId,
+            seriesParsed.subseriesId
+          ) ?? seriesParsed.subseriesId
+        : undefined,
       seasonId: seriesParsed.seasonId,
       section: seriesParsed.section,
       overviewTab: seriesParsed.overviewTab,
@@ -562,7 +592,15 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
     return {
       kind: "movies",
       franchiseId: moviesParsed.franchiseId,
-      filmId: moviesParsed.filmId,
+      filmId: moviesParsed.filmId
+        ? isFilmId(moviesParsed.filmId)
+          ? moviesParsed.filmId
+          : leafIdFromSlug(
+              "movies",
+              moviesParsed.franchiseId,
+              moviesParsed.filmId
+            ) ?? moviesParsed.filmId
+        : undefined,
       section: moviesParsed.section,
       overviewTab: moviesParsed.overviewTab,
       universeId: moviesParsed.universeId,
@@ -588,7 +626,15 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
     return {
       kind: "books",
       franchiseId: booksParsed.franchiseId,
-      bookId: booksParsed.bookId,
+      bookId: booksParsed.bookId
+        ? isBookId(booksParsed.bookId)
+          ? booksParsed.bookId
+          : leafIdFromSlug(
+              "books",
+              booksParsed.franchiseId,
+              booksParsed.bookId
+            ) ?? booksParsed.bookId
+        : undefined,
       section: booksParsed.section,
       overviewTab: booksParsed.overviewTab,
       universeId: booksParsed.universeId,
@@ -601,13 +647,21 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
 
   const artistParsed = parseArtistPath(pathname);
   if (artistParsed) {
+    let bandId = artistParsed.bandId;
+    if (bandId == null && artistParsed.artistSlug) {
+      bandId = bandIdFromArtistSlug(artistParsed.artistSlug) ?? undefined;
+    }
+    let releaseId = artistParsed.releaseId;
+    if (releaseId && bandId != null && !isReleaseId(releaseId)) {
+      releaseId = releaseIdFromSlug(bandId, releaseId) ?? releaseId;
+    }
     return {
       kind: "music",
       tab: "artists",
-      bandId: artistParsed.bandId,
+      bandId,
       artistSection: artistParsed.section,
       artistOverviewTab: artistParsed.overviewTab,
-      releaseId: artistParsed.releaseId,
+      releaseId,
       releaseTab: artistParsed.releaseTab,
       mediaItemId: artistParsed.mediaItemId,
       playlistSlug: artistParsed.playlistSlug,

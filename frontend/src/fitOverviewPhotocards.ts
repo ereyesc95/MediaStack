@@ -5,8 +5,13 @@ export function fitOverviewPhotocards(
   cards: HTMLElement | null
 ): void {
   if (!top) return;
-  top.style.removeProperty("--overview-photocard-scale");
+  top.style.setProperty("--overview-photocard-scale", "1");
   if (!cards) return;
+
+  const imgs = cards.querySelectorAll("img");
+  for (const img of imgs) {
+    if (!img.complete || img.naturalHeight <= 0) return;
+  }
 
   const rowH = top.clientHeight;
   const portrait = cards.querySelector(

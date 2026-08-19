@@ -2,6 +2,8 @@ import { clearBooksDashboardCache } from "./booksDashboardCache";
 import { clearMoviesDashboardCache } from "./moviesDashboardCache";
 import { clearMusicDashboardCache } from "./musicDashboardCache";
 import { clearSeriesDashboardCache } from "./seriesDashboardCache";
+import { clearRouteEntityCache } from "./routeEntityCache";
+import { clearUniversesCache } from "./universesCache";
 
 /** Drop home-pane caches so the next load (new session / profile) can pick fresh art. */
 export function clearAllDashboardCaches(): void {
@@ -9,4 +11,6 @@ export function clearAllDashboardCaches(): void {
   clearSeriesDashboardCache();
   clearMoviesDashboardCache();
   clearBooksDashboardCache();
+  clearUniversesCache();
+  clearRouteEntityCache();
 }

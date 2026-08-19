@@ -24,12 +24,33 @@ function remember(data: MoviesDash): MoviesDash {
   return data;
 }
 
+function dashboardHasItems(data: SeriesDashboard): boolean {
+  return Boolean(
+    data.top_franchises?.length ||
+      data.top_series?.length ||
+      data.top_genres?.length ||
+      data.top_countries?.length ||
+      data.top_episodes?.length
+  );
+}
+
+function rememberIfPopulated(data: MoviesDash): MoviesDash {
+  if (dashboardHasItems(data)) return remember(data);
+  return data;
+}
+
 export function getCachedMoviesDashboard(): MoviesDash | null {
-  if (memory) return memory;
+  if (memory) {
+    if (dashboardHasItems(memory)) return memory;
+    memory = null;
+  }
   const fromSession = readSessionEntry<MoviesDash>(CACHE_KEY);
   if (fromSession) {
-    memory = fromSession;
-    return fromSession;
+    if (dashboardHasItems(fromSession)) {
+      memory = fromSession;
+      return fromSession;
+    }
+    removeSessionEntry(CACHE_KEY);
   }
   return null;
 }
@@ -50,8 +71,8 @@ export function prefetchMoviesDashboard(options?: {
   }
   if (inflight) return inflight;
   inflight = fetchMoviesDashboard()
-    .then((data) => remember(data as MoviesDash))
-    .catch(() => remember(EMPTY_SERIES_DASHBOARD as MoviesDash))
+    .then((data) => rememberIfPopulated(data as MoviesDash))
+    .catch(() => getCachedMoviesDashboard() ?? (EMPTY_SERIES_DASHBOARD as MoviesDash))
     .finally(() => {
       inflight = null;
     });
