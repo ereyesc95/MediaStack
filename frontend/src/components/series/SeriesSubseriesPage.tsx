@@ -695,9 +695,7 @@ export default function SeriesSubseriesPage({
   const [mediaLoading, setMediaLoading] = useState(
     () => !subseriesMediaCache.has(pageCacheKey)
   );
-  const [mediaReady, setMediaReady] = useState(() =>
-    subseriesMediaCache.has(pageCacheKey)
-  );
+  const [mediaReady, setMediaReady] = useState(false);
   const [rescanTick, setRescanTick] = useState(0);
   const [extraVideos, setExtraVideos] = useState<SeriesEpisodeItem[]>([]);
   const [openingVideos, setOpeningVideos] = useState<SeriesEpisodeItem[]>([]);
@@ -934,16 +932,13 @@ export default function SeriesSubseriesPage({
         return;
       }
 
-      const [shows, ov] = await Promise.all([
-        fetchSeriesFranchiseShows(franchiseId).catch(() => ({ items: [] })),
-        fetchSeriesOverview(franchiseId).catch(() => null),
-      ]);
-      setOverview(ov);
-      setFilmVersions([]);
-      setFilmHasVideo(false);
-      setTrailerUrl(null);
-      setWorkName(null);
-      const fromOverview = (ov?.subseries || []) as SeriesSubseriesCard[];
+      const showsP = fetchSeriesFranchiseShows(franchiseId).catch(() => ({
+        items: [] as Awaited<
+          ReturnType<typeof fetchSeriesFranchiseShows>
+        >["items"],
+      }));
+      const overviewP = fetchSeriesOverview(franchiseId).catch(() => null);
+      const shows = await showsP;
       const fromShows: SeriesSubseriesCard[] = (shows.items || [])
         .filter((s) => s.folder_path)
         .map((s) => ({
@@ -961,12 +956,34 @@ export default function SeriesSubseriesPage({
             (s as { has_gallery?: boolean }).has_gallery
           ),
         }));
-      const list = fromOverview.length ? fromOverview : fromShows;
-      setSiblings(list);
-      const found = list.find(
+      const foundEarly = fromShows.find(
         (s) =>
           s.id === subseriesId || slugMatch(s.title || "", subseriesId)
       );
+      let ov: Awaited<ReturnType<typeof fetchSeriesOverview>> = null;
+      let folder: SeriesFolderDetail | null = null;
+      if (foundEarly?.folder_path) {
+        [ov, folder] = await Promise.all([
+          overviewP,
+          fetchSeriesFolder(foundEarly.folder_path),
+        ]);
+      } else {
+        ov = await overviewP;
+      }
+      setOverview(ov);
+      setFilmVersions([]);
+      setFilmHasVideo(false);
+      setTrailerUrl(null);
+      setWorkName(null);
+      const fromOverview = (ov?.subseries || []) as SeriesSubseriesCard[];
+      const list = fromOverview.length ? fromOverview : fromShows;
+      setSiblings(list);
+      const found =
+        foundEarly ||
+        list.find(
+          (s) =>
+            s.id === subseriesId || slugMatch(s.title || "", subseriesId)
+        );
       if (!found?.folder_path) {
         setError("Subseries not found.");
         setCard(null);
@@ -975,7 +992,9 @@ export default function SeriesSubseriesPage({
       }
       setCard(found);
       rememberLeafSlug("series", franchiseId, found.title || subseriesId, found.id);
-      const folder = await fetchSeriesFolder(found.folder_path);
+      if (!folder) {
+        folder = await fetchSeriesFolder(found.folder_path);
+      }
       setDetail(folder);
       subseriesPageCache.set(key, {
         overview: ov,
@@ -1851,11 +1870,9 @@ export default function SeriesSubseriesPage({
       setAudioCards(cachedMedia.audioCards);
       setLibraryCards(cachedMedia.libraryCards);
       setGameCards(cachedMedia.gameCards);
-      setMediaLoading(false);
-      setMediaReady(true);
-    } else {
-      setMediaLoading(true);
     }
+    setMediaLoading(true);
+    setMediaReady(false);
     const run = async () => {
       try {
         if (isFilm) {
@@ -3462,7 +3479,7 @@ export default function SeriesSubseriesPage({
           </div>
         ) : null}
 
-        {contentReady ? (
+        {contentReady && !mediaLoading ? (
         <nav className="release-page__tabs" aria-label="Subseries sections">
           {tabs.map((t) => (
             <button
@@ -3981,16 +3998,18 @@ export default function SeriesSubseriesPage({
                       workName ||
                       franchiseName ||
                       overview?.work?.name ||
+                      (!isFilm && !isBook ? overview?.name : "") ||
                       ""
                     ).trim();
                     const nested =
-                      isFilm &&
                       !isBook &&
                       Boolean(franchiseId) &&
                       Boolean(parentName) &&
                       Boolean(leafTitle) &&
                       !slugMatch(parentName, leafTitle) &&
-                      (siblings.length > 1 || Boolean(workName));
+                      (isFilm
+                        ? siblings.length > 1 || Boolean(workName)
+                        : siblings.length > 0);
                     if (!nested) return null;
                     return (
                       <p className="release-page__type-line">

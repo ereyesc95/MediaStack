@@ -5500,16 +5500,15 @@ input {
 
 .artist-about__meta-grid {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-  gap: 0.35rem 0.85rem;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--artist-meta-gap) 2.5rem;
+  align-items: start;
 }
 
 .artist-about__meta-grid--stacked,
 .artist-page--mobile-landscape .artist-about__meta-grid {
   grid-template-columns: 1fr;
   gap: var(--artist-meta-gap);
-  align-items: start;
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__foot {
@@ -5517,12 +5516,9 @@ input {
   margin-bottom: 0;
 }
 
-.artist-about:not(.artist-about--stacked) .artist-about__meta--primary {
-  min-width: 7.5rem;
-}
-
+.artist-about:not(.artist-about--stacked) .artist-about__meta--primary,
 .artist-about:not(.artist-about--stacked) .artist-about__meta--secondary {
-  padding-top: 0;
+  font-size: 0.82rem;
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__meta-row {
@@ -5541,6 +5537,12 @@ input {
 
 .artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__topics-dd {
   overflow: hidden;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-word-cloud__pill,
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary .artist-about__pill {
+  font-size: 0.82rem;
+  padding: 0.18rem 0.55rem;
 }
 
 .artist-about__bio-block {
@@ -5638,7 +5640,7 @@ input {
 
 .artist-about__meta-row dt {
   color: var(--text-muted);
-  font-size: inherit;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -5647,7 +5649,7 @@ input {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  font-size: inherit;
+  font-size: 0.82rem;
   color: var(--text);
 }
 
@@ -5656,8 +5658,8 @@ input {
   border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(255, 255, 255, 0.12));
   color: #f0f8ff;
   border-radius: 999px;
-  padding: 0.22rem 0.62rem;
-  font-size: inherit;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
