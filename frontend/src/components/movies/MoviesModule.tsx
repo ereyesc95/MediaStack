@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMoviesCatalog,
-  fetchMoviesFilm,
-  fetchMoviesFilmOverview,
   fetchMoviesFilterOptions,
-  fetchMoviesFranchiseOverview,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
@@ -27,6 +24,7 @@ import {
   getCachedMoviesDashboard,
   prefetchMoviesDashboard,
 } from "../../moviesDashboardCache";
+import { prefetchFilmLeafPage } from "../../leafPageCache";
 import {
   clearSeriesEntryReferrer,
   getSeriesEntryReferrer,
@@ -564,9 +562,9 @@ export default function MoviesModule({
       overviewTab: "about",
       universeId: undefined,
     });
-    void fetchMoviesFilmOverview(nextFilmId).catch(() => null);
-    void fetchMoviesFilm(nextFilmId).catch(() => null);
-    void fetchMoviesFranchiseOverview(wid).catch(() => null);
+    void prefetchFilmLeafPage(wid, nextFilmId, {
+      orientation: cardOrientation,
+    });
   };
 
   const backToMoviesHome = () => {

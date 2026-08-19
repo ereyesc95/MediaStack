@@ -5505,6 +5505,20 @@ input {
   align-items: start;
 }
 
+.artist-about:not(.artist-about--stacked) .artist-about__meta-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  column-gap: 0.75rem;
+  row-gap: var(--artist-meta-gap);
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--primary {
+  grid-column: 1 / span 2;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__meta--secondary {
+  grid-column: 3 / span 3;
+}
+
 .artist-about__meta-grid--stacked,
 .artist-page--mobile-landscape .artist-about__meta-grid {
   grid-template-columns: 1fr;
@@ -5514,6 +5528,7 @@ input {
 .artist-about:not(.artist-about--stacked) .artist-about__foot {
   margin-top: auto;
   margin-bottom: 0;
+  padding-top: 1.25rem;
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__meta--primary,
@@ -5548,7 +5563,7 @@ input {
 .artist-about__bio-block {
   flex: 1 1 0;
   min-height: 0;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -5715,8 +5730,12 @@ input {
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__tracks {
-  margin-top: 0.75rem;
+  margin-top: 0;
   padding-top: 0;
+}
+
+.artist-about:not(.artist-about--stacked) .artist-about__tracks-stack {
+  gap: var(--artist-meta-gap);
 }
 
 .artist-about:not(.artist-about--stacked) .artist-about__tracks-title {
@@ -5727,7 +5746,7 @@ input {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: var(--artist-meta-gap);
   margin: 0;
 }
 

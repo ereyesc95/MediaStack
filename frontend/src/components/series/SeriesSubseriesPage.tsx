@@ -70,6 +70,12 @@ import {
 import { getMediaEntrySource } from "../../mediaEntry";
 import { slugMatch } from "../../routeSlug";
 import { rememberLeafSlug } from "../../routeEntityCache";
+import {
+  deleteCachedLeafPage,
+  getCachedLeafPage,
+  leafPageCacheKey,
+  setCachedLeafPage,
+} from "../../leafPageCache";
 import type {
   ArtistCard as ArtistCardType,
   BandOverview,
@@ -500,18 +506,6 @@ function LineupMiniCard({
   );
 }
 
-type SubseriesCacheEntry = {
-  overview: SeriesOverview | null;
-  card: SeriesSubseriesCard | null;
-  detail: SeriesFolderDetail | null;
-  siblings: SeriesSubseriesCard[];
-  filmVersions?: MoviesFilmDetail["versions"];
-  filmHasVideo?: boolean;
-  trailerUrl?: string | null;
-  workName?: string | null;
-};
-const subseriesPageCache = new Map<string, SubseriesCacheEntry>();
-
 type SubseriesMediaCacheEntry = {
   movieCards: SeriesMediaCard[];
   seriesCards: SeriesMediaCard[];
@@ -522,7 +516,7 @@ type SubseriesMediaCacheEntry = {
 const subseriesMediaCache = new Map<string, SubseriesMediaCacheEntry>();
 
 function cacheKey(isFilm: boolean, franchiseId: string, id: string) {
-  return `${isFilm ? "film" : "sub"}:${franchiseId}:${id}`;
+  return leafPageCacheKey(isFilm, franchiseId, id);
 }
 
 function extraPlayUrl(ep: SeriesEpisodeItem): string | null {
@@ -634,7 +628,7 @@ export default function SeriesSubseriesPage({
   const isFilm = variant === "film" || isBook;
   const tab = sectionToTab(section);
   const pageCacheKey = cacheKey(isFilm, franchiseId, subseriesId);
-  const initialCached = subseriesPageCache.get(pageCacheKey);
+  const initialCached = getCachedLeafPage(pageCacheKey);
 
   const [card, setCard] = useState<SeriesSubseriesCard | null>(
     () => initialCached?.card ?? null
@@ -655,7 +649,7 @@ export default function SeriesSubseriesPage({
   const [seasonEpisodes, setSeasonEpisodes] = useState<
     Record<string, SeriesEpisodeItem[]>
   >({});
-  const [loading, setLoading] = useState(() => !subseriesPageCache.has(pageCacheKey));
+  const [loading, setLoading] = useState(() => !getCachedLeafPage(pageCacheKey));
   const [error, setError] = useState<string | null>(null);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [relatedTab, setRelatedTab] = useState<SeriesRelatedTab>("creator");
@@ -788,7 +782,7 @@ export default function SeriesSubseriesPage({
 
   const loadCard = useCallback(async () => {
     const key = cacheKey(isFilm, franchiseId, subseriesId);
-    const cached = subseriesPageCache.get(key);
+    const cached = getCachedLeafPage(key);
     if (cached) {
       setOverview(cached.overview);
       setCard(cached.card);
@@ -806,56 +800,64 @@ export default function SeriesSubseriesPage({
     try {
       if (isFilm) {
         const orientation = stackedRef.current ? "landscape" : "portrait";
-        const [filmOvMaybe, filmDetailMaybe, workOv] = await Promise.all([
+        const workOvP = (isBook
+          ? fetchBooksFranchiseOverview(franchiseId, orientation)
+          : fetchMoviesFranchiseOverview(franchiseId, orientation)
+        ).catch(() => null);
+        const [filmOvMaybe, filmDetailMaybe] = await Promise.all([
           (isBook
             ? fetchBooksBookOverview(subseriesId, orientation)
             : fetchMoviesFilmOverview(subseriesId, orientation)
           ).catch(() => null),
-          (isBook
+          isBook
             ? fetchBooksBook(subseriesId)
-            : fetchMoviesFilm(subseriesId).catch(() => null)
-          ),
-          (isBook
-            ? fetchBooksFranchiseOverview(franchiseId, orientation)
-            : fetchMoviesFranchiseOverview(franchiseId, orientation)
-          ).catch(() => null),
+            : fetchMoviesFilm(subseriesId).catch(() => null),
         ]);
-        const filmList = (workOv?.films || workOv?.subseries || []) as (
-          | MoviesFilmCard
-          | SeriesSubseriesCard
-        )[];
+        let filmList: (MoviesFilmCard | SeriesSubseriesCard)[] = [];
         let filmDetail = filmDetailMaybe;
         let filmOv = filmOvMaybe;
-        if (!filmDetail && isBook) {
-          const hit = filmList.find(
-            (s) =>
-              s.id === subseriesId ||
-              slugMatch(s.title || "", subseriesId) ||
-              slugMatch(("name" in s && s.name) || "", subseriesId)
-          );
-          if (hit?.id) {
-            filmDetail = await fetchBooksBook(hit.id);
-            if (!filmOv) {
-              filmOv = await fetchBooksBookOverview(hit.id, orientation).catch(
-                () => null
-              );
+        if (!filmDetail) {
+          const workOv = await workOvP;
+          filmList = (workOv?.films || workOv?.subseries || []) as (
+            | MoviesFilmCard
+            | SeriesSubseriesCard
+          )[];
+          if (isBook) {
+            const hit = filmList.find(
+              (s) =>
+                s.id === subseriesId ||
+                slugMatch(s.title || "", subseriesId) ||
+                slugMatch(
+                  "name" in s && typeof s.name === "string" ? s.name : "",
+                  subseriesId
+                )
+            );
+            if (hit?.id) {
+              filmDetail = await fetchBooksBook(hit.id);
+              if (!filmOv) {
+                filmOv = await fetchBooksBookOverview(hit.id, orientation).catch(
+                  () => null
+                );
+              }
             }
-          }
-        }
-        if (!filmDetail && !isBook) {
-          const hit = filmList.find(
-            (s) =>
-              s.id === subseriesId ||
-              slugMatch(s.title || "", subseriesId) ||
-              slugMatch(("name" in s && s.name) || "", subseriesId)
-          );
-          if (hit?.id && hit.id !== subseriesId) {
-            const [resolvedDetail, resolvedOv] = await Promise.all([
-              fetchMoviesFilm(hit.id),
-              fetchMoviesFilmOverview(hit.id, orientation).catch(() => null),
-            ]);
-            filmDetail = resolvedDetail;
-            filmOv = resolvedOv || filmOv;
+          } else {
+            const hit = filmList.find(
+              (s) =>
+                s.id === subseriesId ||
+                slugMatch(s.title || "", subseriesId) ||
+                slugMatch(
+                  "name" in s && typeof s.name === "string" ? s.name : "",
+                  subseriesId
+                )
+            );
+            if (hit?.id && hit.id !== subseriesId) {
+              const [resolvedDetail, resolvedOv] = await Promise.all([
+                fetchMoviesFilm(hit.id),
+                fetchMoviesFilmOverview(hit.id, orientation).catch(() => null),
+              ]);
+              filmDetail = resolvedDetail;
+              filmOv = resolvedOv || filmOv;
+            }
           }
         }
         if (!filmDetail) {
@@ -870,29 +872,8 @@ export default function SeriesSubseriesPage({
             resolvedLeafId
           );
         }
-        const nextOverview = filmOv || workOv || null;
-        setOverview(nextOverview);
 
-        const list = filmList.map(filmCardToSubseries);
-        setSiblings(list);
-        const found =
-          list.find((s) => s.id === subseriesId) ||
-          filmCardToSubseries({
-            id: filmDetail.id,
-            title: filmDetail.title,
-            date_iso: filmDetail.date_iso,
-            display_date: filmDetail.display_date ?? null,
-            folder_path: filmDetail.folder_path,
-            cover_url: filmDetail.cover_url,
-            logo_url: filmDetail.logo_url ?? null,
-            icon_url: filmDetail.icon_url ?? null,
-            badge_url: filmDetail.badge_url ?? null,
-            season_count: filmDetail.versions?.length || 1,
-            has_gallery: filmDetail.has_gallery,
-          });
-        setCard(found);
         const folder = filmDetailToFolder(filmDetail);
-        setDetail(folder);
         const nextVersions =
           filmDetail.versions ||
           (filmDetail as { volumes?: typeof filmDetail.versions }).volumes ||
@@ -909,17 +890,60 @@ export default function SeriesSubseriesPage({
           filmDetail.trailer_url ??
           (filmOv as { trailer_url?: string | null } | null)?.trailer_url ??
           null;
+        const provisionalCard = filmCardToSubseries({
+          id: filmDetail.id,
+          title: filmDetail.title,
+          date_iso: filmDetail.date_iso,
+          display_date: filmDetail.display_date ?? null,
+          folder_path: filmDetail.folder_path,
+          cover_url: filmDetail.cover_url,
+          logo_url: filmDetail.logo_url ?? null,
+          icon_url: filmDetail.icon_url ?? null,
+          badge_url: filmDetail.badge_url ?? null,
+          version_count: filmDetail.versions?.length || 1,
+          has_gallery: filmDetail.has_gallery,
+        } as MoviesFilmCard);
+
+        setOverview(filmOv || null);
+        setCard(provisionalCard);
+        setDetail(folder);
+        setFilmVersions(nextVersions);
+        setFilmHasVideo(nextHasVideo);
+        setTrailerUrl(nextTrailer);
+        setWorkName(
+          filmDetail.work?.name ||
+            filmOv?.work?.name ||
+            franchiseName ||
+            null
+        );
+        setLoading(false);
+
+        const workOv = await workOvP;
+        if (!filmList.length) {
+          filmList = (workOv?.films || workOv?.subseries || []) as (
+            | MoviesFilmCard
+            | SeriesSubseriesCard
+          )[];
+        }
+        const list = filmList.length
+          ? filmList.map(filmCardToSubseries)
+          : [provisionalCard];
+        const found =
+          list.find((s) => s.id === subseriesId || s.id === filmDetail!.id) ||
+          provisionalCard;
+        const nextOverview = filmOv || workOv || null;
         const nextWorkName =
           filmDetail.work?.name ||
           filmOv?.work?.name ||
           workOv?.name ||
           franchiseName ||
           null;
-        setFilmVersions(nextVersions);
-        setFilmHasVideo(nextHasVideo);
-        setTrailerUrl(nextTrailer);
+
+        setOverview(nextOverview);
+        setSiblings(list);
+        setCard(found);
         setWorkName(nextWorkName);
-        subseriesPageCache.set(key, {
+        setCachedLeafPage(key, {
           overview: nextOverview,
           card: found,
           detail: folder,
@@ -996,7 +1020,7 @@ export default function SeriesSubseriesPage({
         folder = await fetchSeriesFolder(found.folder_path);
       }
       setDetail(folder);
-      subseriesPageCache.set(key, {
+      setCachedLeafPage(key, {
         overview: ov,
         card: found,
         detail: folder,
@@ -1227,7 +1251,7 @@ export default function SeriesSubseriesPage({
 
   useEffect(() => {
     // Reset focused cover when subseries changes; hydrate from cache when present
-    const cached = subseriesPageCache.get(
+    const cached = getCachedLeafPage(
       cacheKey(isFilm, franchiseId, subseriesId)
     );
     setFocusCoverUrl(null);
@@ -2877,9 +2901,9 @@ export default function SeriesSubseriesPage({
         setTrailerEditorOpen(false);
         setTrailerSaveError(null);
         const key = cacheKey(isFilm, franchiseId, subseriesId);
-        const prev = subseriesPageCache.get(key);
+        const prev = getCachedLeafPage(key);
         if (prev) {
-          subseriesPageCache.set(key, {
+          setCachedLeafPage(key, {
             ...prev,
             trailerUrl: res.trailer_url,
           });
@@ -3166,7 +3190,7 @@ export default function SeriesSubseriesPage({
   const backAriaLabel = `Back to ${franchiseBackLabel}`;
   const contentReady =
     Boolean(error) ||
-    (!loading && Boolean(overview));
+    (!loading && (Boolean(overview) || Boolean(card && detail)));
 
   if (opedOpen) {
     return (
@@ -5208,7 +5232,7 @@ export default function SeriesSubseriesPage({
           onClose={() => setAboutEditOpen(false)}
           onSaved={() => {
             setAboutEditOpen(false);
-            subseriesPageCache.delete(
+            deleteCachedLeafPage(
               cacheKey(isFilm, franchiseId, subseriesId)
             );
             void loadCard();
@@ -5257,7 +5281,7 @@ export default function SeriesSubseriesPage({
                 )
               )
               .catch(() => {});
-            subseriesPageCache.delete(
+            deleteCachedLeafPage(
               cacheKey(isFilm, franchiseId, subseriesId)
             );
             void loadCard();

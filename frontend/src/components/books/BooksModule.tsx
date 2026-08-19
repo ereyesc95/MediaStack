@@ -24,6 +24,7 @@ import {
   getCachedBooksDashboard,
   prefetchBooksDashboard,
 } from "../../booksDashboardCache";
+import { prefetchFilmLeafPage } from "../../leafPageCache";
 import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
@@ -549,6 +550,10 @@ export default function BooksModule({
       section: "overview",
       overviewTab: "about",
       universeId: undefined,
+    });
+    void prefetchFilmLeafPage(wid, nextFilmId, {
+      isBook: true,
+      orientation: cardOrientation,
     });
   };
 
