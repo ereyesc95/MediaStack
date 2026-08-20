@@ -119,9 +119,13 @@ def _resolve_track_source_labels(
 
     release_dir = _release_dir_from_content_folder(audio_file.parent)
     edition_dir = _source_edition_dir_for_audio(release_dir, audio_file)
-    album_display, _, _ = _source_album_display(release_dir, edition_dir)
+    album_display, release_title, _edition = _source_album_display(
+        release_dir, edition_dir
+    )
     release_rel = safe_relative(release_dir, media_root)
-    return album_display, release_rel.replace("\\", "/") if release_rel else None
+    # Playlist rows show the release title only (no edition suffix).
+    title = (release_title or album_display or "").strip() or None
+    return title, release_rel.replace("\\", "/") if release_rel else None
 
 
 def _resolve_track_release_date(play_path: str, media_root: Path) -> str | None:

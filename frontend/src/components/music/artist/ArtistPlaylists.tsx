@@ -12,6 +12,25 @@ import type {
 } from "../../../types";
 import PlaylistBoot from "../../PlaylistBoot";
 
+/** Prefer assets/playlists/system/… (rewrite legacy flat /playlists/{slug} URLs). */
+export function systemPlaylistCoverUrl(
+  slug: string | null | undefined,
+  coverUrl?: string | null
+): string {
+  const raw = (coverUrl || "").trim();
+  if (raw.includes("/playlists/system/") || raw.includes("/playlists/users/")) {
+    return raw;
+  }
+  if (raw.includes("/api/assets/playlists/")) {
+    return raw.replace(
+      /\/api\/assets\/playlists\/(?!system\/|users\/)/,
+      "/api/assets/playlists/system/"
+    );
+  }
+  if (slug) return `/api/assets/playlists/system/${slug}`;
+  return raw || "/api/assets/default/playlist";
+}
+
 function PlaylistCard({
   playlist,
   layout,
@@ -27,8 +46,7 @@ function PlaylistCard({
   onReveal: () => void;
   onClick: () => void;
 }) {
-  const cover =
-    playlist.cover_url || `/api/assets/playlists/${playlist.slug}`;
+  const cover = systemPlaylistCoverUrl(playlist.slug, playlist.cover_url);
   const trackLabel =
     playlist.slug === "setlists"
       ? "Live shows"

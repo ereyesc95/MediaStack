@@ -804,9 +804,9 @@ def build_series_overview(
         logo_key = link.get("logo_key")
         logo_url = link.get("logo_url")
         if logo_key and not logo_url:
-            logo_url = f"/assets/links/{logo_key}.svg"
+            logo_url = f"/api/assets/links/{logo_key}.svg"
         if not logo_url:
-            logo_url = "/assets/links/link.svg"
+            logo_url = "/api/assets/links/link.svg"
         by_cat[cat].append(
             {
                 "id": link["id"],

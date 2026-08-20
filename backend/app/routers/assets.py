@@ -79,9 +79,31 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
         if folder == "icons":
             return _first_existing(root / "icons", stem)
         if folder == "playlists":
-            return _first_existing(root / "playlists", stem)
+            # playlists/system/{stem}, playlists/users/{stem}, or legacy playlists/{stem}
+            playlists_root = root / "playlists"
+            if "/" in name:
+                sub, rest = name.split("/", 1)
+                if sub in ("system", "users"):
+                    found = _first_existing(playlists_root / sub, _stem(rest))
+                    if found:
+                        return found
+            stem = _stem(name)
+            for sub in ("system", "users", ""):
+                base = playlists_root / sub if sub else playlists_root
+                found = _first_existing(base, stem)
+                if found:
+                    return found
+            return None
         if folder == "labels":
             return _first_existing(root / "labels", stem)
+        if folder == "links":
+            return _first_existing(root / "links", stem)
+        if folder == "people":
+            # people/{Letter}/{Name} — allow nested path after people/
+            nested = root / "people" / name
+            if nested.is_file():
+                return nested
+            return _first_existing(root / "people", stem)
         if folder in ("universes", "universe"):
             return _first_existing(root / "universes", stem)
         if folder == "default":

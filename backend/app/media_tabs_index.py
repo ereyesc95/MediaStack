@@ -25,7 +25,7 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 7
+MEDIA_TAB_SCAN_VERSION = 8
 
 # Artist media tabs now prefer sibling module franchise folders:
 # video → Movies/{L}/{Artist}/, library → Books/{L}/{Artist}/, series → Series/…
@@ -469,6 +469,52 @@ def build_media_tab_index(
     }
 
 
+def _cache_paths_still_on_disk(cached: dict, media_root: Path) -> bool:
+    """Reject cache when any item folder was moved/deleted (e.g. Movies → Series)."""
+    for cat in cached.get("categories") or []:
+        for item in cat.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            rel = (item.get("folder_path") or "").replace("\\", "/").strip("/")
+            if not rel:
+                continue
+            if not (media_root / rel).exists():
+                return False
+    return True
+
+
+def invalidate_media_tab_caches(*, band_id: int | None = None) -> int:
+    """Drop media-tab disk caches so the next read rescans the filesystem."""
+    cache_dir = DATA_DIR / "media_index"
+    if not cache_dir.is_dir():
+        return 0
+    removed = 0
+    kind_suffixes = (
+        "_video.json",
+        "_series.json",
+        "_library.json",
+        "_books.json",
+        "_movies.json",
+    )
+    try:
+        for path in cache_dir.iterdir():
+            if not path.is_file():
+                continue
+            name = path.name
+            if not any(name.endswith(suf) for suf in kind_suffixes):
+                continue
+            if band_id is not None and not name.startswith(f"{band_id}_"):
+                continue
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return removed
+
+
 def get_media_tab_index(
     db: Session,
     band_id: int,
@@ -490,6 +536,7 @@ def get_media_tab_index(
             if (
                 cached.get("categories") is not None
                 and cached.get("scan_version") == MEDIA_TAB_SCAN_VERSION
+                and _cache_paths_still_on_disk(cached, media_root)
             ):
                 cached["cached"] = True
                 return cached

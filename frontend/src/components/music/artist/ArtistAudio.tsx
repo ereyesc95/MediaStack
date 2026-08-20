@@ -381,15 +381,15 @@ function ReleaseCard({
   const handleOpen = () => {
     const targetBand = release.navigate_band_id;
     const targetRelease = release.navigate_release_id;
-    if (targetBand !== bandId) {
-      saveReleaseReferrer({
-        bandId,
-        section: "audio",
-        category,
-        artistName: referrerArtistName,
-        source: "artist",
-      });
-    }
+    // Always overwrite referrer so a prior Movies/Series visit can't leave
+    // the release chrome back-label stuck on "Franchise".
+    saveReleaseReferrer({
+      bandId,
+      section: "audio",
+      category,
+      artistName: referrerArtistName,
+      source: "artist",
+    });
     void prefetchReleaseOverview(targetBand, targetRelease);
     if (onOpenReleaseNavigate) {
       onOpenReleaseNavigate(targetBand, targetRelease);

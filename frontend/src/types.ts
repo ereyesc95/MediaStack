@@ -777,10 +777,19 @@ export type ReleaseEdition = {
   background_layers?: string[];
 };
 
+export type WordCloudTrack = {
+  title: string;
+  play_path: string;
+  release_id?: string | null;
+  navigate_band_id?: number | null;
+  release_title?: string | null;
+};
+
 export type WordCloudTerm = {
   text: string;
   count: number;
   weight: number;
+  tracks?: WordCloudTrack[];
 };
 
 export type WordCloudPayload = {

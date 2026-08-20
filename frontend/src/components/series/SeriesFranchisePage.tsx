@@ -655,8 +655,9 @@ export default function SeriesFranchisePage({
     }
   }, [load, isMovies]);
 
+  // Always probe audio so the AUDIO tab can appear without a false-positive
+  // media.has_audio (music-band name match) flashing then vanishing.
   useEffect(() => {
-    if (section !== "audio") return;
     let cancelled = false;
     setAudioLoading(true);
     const useSeriesAudio = !isMovies;
@@ -728,7 +729,7 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId, isMovies, sharedSeries, seriesFranchiseId]);
+  }, [franchiseId, isMovies, isBooks, sharedSeries, seriesFranchiseId]);
 
   useEffect(() => {
     if (section !== "movies" && section !== "books") return;
@@ -894,7 +895,9 @@ export default function SeriesFranchisePage({
   }, [section]);
 
   useEffect(() => {
-    if (section !== "series") return;
+    // Always probe SERIES for Movies/Books hubs so the tab can stay hidden
+    // when empty (never flash "No matching Series franchise…").
+    if (section !== "series" && !isMovies) return;
     let cancelled = false;
 
     // Books: use enriched related.series (correct covers + series franchise ids).
@@ -1224,26 +1227,55 @@ export default function SeriesFranchisePage({
     const related = data.related;
     return navSections.filter((s) => {
       if (!s.flag) return true;
-      if (media[s.flag]) return true;
-      // Fallback when media flags lag behind related disk payloads
+      // Live card counts win once loaded (avoids empty-tab flash from stale flags).
       if (s.flag === "has_series") {
-        return (related?.series?.length || 0) > 0;
+        // Movies/Books map films/books into `data.subseries` — that is NOT a
+        // Series franchise. Only show SERIES when related/show cards exist.
+        if (isMovies) {
+          return showCards.length > 0 || (related?.series?.length || 0) > 0;
+        }
+        if (showCards.length > 0) return true;
+        return (
+          (data.subseries?.length || 0) > 0 ||
+          (related?.series?.length || 0) > 0 ||
+          Boolean(media.has_series)
+        );
       }
       if (s.flag === "has_movies") {
-        return (related?.movies?.length || 0) > 0;
+        if (movieCards.length > 0) return true;
+        return (related?.movies?.length || 0) > 0 || Boolean(media.has_movies);
+      }
+      if (s.flag === "has_audio") {
+        // media.has_audio is true when a Music band shares the name — that is
+        // not the same as Series/[Audio] releases. Only show with real cards.
+        return audioCards.length > 0;
       }
       if (s.flag === "has_library" || s.flag === "has_books") {
+        if (libCards.length > 0) return true;
         if ((related?.books?.length || 0) > 0) return true;
-        // Cross-module entry from BookStack: keep BOOKS tab visible
         if (homeReferrer?.source === "books") return true;
-        return false;
+        return Boolean(media.has_library);
       }
       if (s.flag === "has_games") {
-        return (related?.games?.length || 0) > 0;
+        if (gameCards.length > 0) return true;
+        return (related?.games?.length || 0) > 0 || Boolean(media.has_games);
       }
-      return false;
+      if (s.flag === "has_gallery") {
+        return Boolean(media.has_gallery);
+      }
+      return Boolean(media[s.flag]);
     });
-  }, [data, navSections, homeReferrer]);
+  }, [
+    data,
+    navSections,
+    homeReferrer,
+    showCards.length,
+    movieCards.length,
+    audioCards.length,
+    libCards.length,
+    gameCards.length,
+    isMovies,
+  ]);
 
   useEffect(() => {
     if (!data) return;

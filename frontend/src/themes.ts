@@ -53,7 +53,7 @@ function customKey(userId?: number) {
 
 export function getStoredTheme(userId?: number): ThemeId {
   const raw = localStorage.getItem(themeKey(userId));
-  if (raw === "artist") return "dark";
+  if (raw === "artist" || raw === "album") return "artist";
   if (raw && THEMES.some((t) => t.id === raw)) return raw as ThemeId;
   return "dark";
 }
@@ -152,9 +152,11 @@ export function applyTheme(id: ThemeId, userId?: number) {
   const attr =
     id === "custom" ? "custom" : id === "artist" ? "artist" : id;
   document.documentElement.setAttribute("data-theme", attr);
-  if (id !== "artist") {
-    localStorage.setItem(themeKey(userId), id);
-  }
+  // Persist Adaptive ("artist") too so refresh keeps the choice.
+  localStorage.setItem(
+    themeKey(userId),
+    id === "album" ? "artist" : id
+  );
   if (id === "custom") {
     applyThemeColors(getCustomColors(userId));
   } else if (id === "artist") {
@@ -169,9 +171,10 @@ export function applyTheme(id: ThemeId, userId?: number) {
 
 /** Persist theme choice without updating CSS (used during active playback). */
 export function persistThemeChoice(id: ThemeId, userId?: number) {
-  if (id !== "artist") {
-    localStorage.setItem(themeKey(userId), id);
-  }
+  localStorage.setItem(
+    themeKey(userId),
+    id === "album" ? "artist" : id
+  );
   updateFavicon();
 }
 

@@ -739,6 +739,8 @@ export default function SeriesSubseriesPage({
   const [trailerDraft, setTrailerDraft] = useState("");
   const [trailerSaveError, setTrailerSaveError] = useState<string | null>(null);
   const [extrasMenuOpen, setExtrasMenuOpen] = useState(false);
+  const trailerBubbleRef = useRef<HTMLDivElement | null>(null);
+  const extrasBubbleRef = useRef<HTMLDivElement | null>(null);
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addRelatedOpen, setAddRelatedOpen] = useState(false);
@@ -931,7 +933,8 @@ export default function SeriesSubseriesPage({
         const found =
           list.find((s) => s.id === subseriesId || s.id === filmDetail!.id) ||
           provisionalCard;
-        const nextOverview = filmOv || workOv || null;
+        // Never replace a film leaf overview with the franchise overview (blinks UI).
+        const nextOverview = filmOv || null;
         const nextWorkName =
           filmDetail.work?.name ||
           filmOv?.work?.name ||
@@ -939,7 +942,9 @@ export default function SeriesSubseriesPage({
           franchiseName ||
           null;
 
-        setOverview(nextOverview);
+        if (nextOverview) {
+          setOverview(nextOverview);
+        }
         setSiblings(list);
         setCard(found);
         setWorkName(nextWorkName);
@@ -1271,7 +1276,10 @@ export default function SeriesSubseriesPage({
       setMediaReady(false);
     }
     setSeasonEpisodes({});
-    setBgLayers({});
+    // Keep painted background when hydrating from cache (avoids a blank blink).
+    if (!cached) {
+      setBgLayers({});
+    }
     setExtraVideos([]);
     setOpeningVideos([]);
     setEndingVideos([]);
@@ -1734,9 +1742,17 @@ export default function SeriesSubseriesPage({
           (m) => (m.language || "").trim().toLowerCase() === lang
         ) || dubHits[0];
       if (langHit?.name) {
+        const slug =
+          langHit.name
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, "and")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "unknown";
         return {
           name: langHit.name,
-          logo: langHit.photo_url || null,
+          // Dub studios use label logos (assets/labels), not person photos.
+          logo: `/api/assets/labels/${slug}.png`,
         };
       }
     }
@@ -1884,28 +1900,44 @@ export default function SeriesSubseriesPage({
     [overview]
   );
 
-  // Prefetch media tabs so empty ones can be hidden
+  // Prefetch media tabs so empty ones can be hidden — never mark ready with
+  // unknown content (that flashes every section tab, then hides empties).
   useEffect(() => {
-    if (!franchiseId || !galleryPath) {
+    if (!franchiseId) {
       setMediaReady(true);
       return;
     }
+    // Wait until the leaf folder is known (or load finished with no path).
+    if (!galleryPath) {
+      if (!loading && (overview || card || detail)) {
+        setMovieCards([]);
+        setSeriesCards([]);
+        setAudioCards([]);
+        setLibraryCards([]);
+        setGameCards([]);
+        setMediaReady(true);
+      }
+      return;
+    }
     if (!isFilm && !title) {
-      setMediaReady(true);
       return;
     }
     let cancelled = false;
     const mediaKey = cacheKey(isFilm, franchiseId, subseriesId);
     const cachedMedia = subseriesMediaCache.get(mediaKey);
-    if (cachedMedia && rescanTick === 0) {
+    const hadCachedMedia = Boolean(cachedMedia) && rescanTick === 0;
+    if (hadCachedMedia && cachedMedia) {
       setMovieCards(cachedMedia.movieCards);
       setSeriesCards(cachedMedia.seriesCards ?? []);
       setAudioCards(cachedMedia.audioCards);
       setLibraryCards(cachedMedia.libraryCards);
       setGameCards(cachedMedia.gameCards);
+      setMediaReady(true);
     }
     setMediaLoading(true);
-    setMediaReady(false);
+    if (!hadCachedMedia) {
+      setMediaReady(false);
+    }
     const run = async () => {
       try {
         if (isFilm) {
@@ -2493,6 +2525,10 @@ export default function SeriesSubseriesPage({
     rescanTick,
     isFilm,
     isBook,
+    loading,
+    overview,
+    card,
+    detail,
   ]);
 
   useEffect(() => {
@@ -2663,27 +2699,28 @@ export default function SeriesSubseriesPage({
     return hubs.filter((o) => o.id !== "all").length > 1 ? hubs : [];
   }, [isBook, bookHubOptions, tab, movieCards, libraryCards]);
 
+  // Prefer live cards; fall back to overview.related so tabs appear as soon as
+  // overview lands (no empty-tab flash — related implies real paths).
   const relatedSeriesCount = overview?.related?.series?.length ?? 0;
-  const hasSeries =
-    seriesCards.length > 0 ||
-    Boolean(overview?.media?.has_series) ||
-    relatedSeriesCount > 0;
+  const relatedMovieCount = overview?.related?.movies?.length ?? 0;
+  const relatedBookCount = overview?.related?.books?.length ?? 0;
+  const relatedGameCount = overview?.related?.games?.length ?? 0;
+  const hasSeries = seriesCards.length > 0 || relatedSeriesCount > 0;
   const hasMovies = isBook
-    ? movieCards.length > 0
+    ? movieCards.length > 0 || relatedMovieCount > 0
     : isFilm
-      ? siblingMovieCount > 0 || movieCards.length > 0
-      : movieCards.length > 0;
+      ? siblingMovieCount > 0 ||
+        movieCards.length > 0 ||
+        relatedMovieCount > 0
+      : movieCards.length > 0 || relatedMovieCount > 0;
   const hasMoreBooks =
-    siblingMovieCount > 0 || libraryCards.length > 0;
+    siblingMovieCount > 0 ||
+    libraryCards.length > 0 ||
+    relatedBookCount > 0;
   const hasAudio = audioCards.length > 0;
-  const hasLibrary = libraryCards.length > 0;
-  const hasGames = gameCards.length > 0;
-  const hasGallery = Boolean(
-    detail?.has_gallery ||
-      card?.has_gallery ||
-      // Prefer showing Gallery while folder detail is still loading
-      (loading && (card?.folder_path || detail?.folder_path))
-  );
+  const hasLibrary = libraryCards.length > 0 || relatedBookCount > 0;
+  const hasGames = gameCards.length > 0 || relatedGameCount > 0;
+  const hasGallery = Boolean(detail?.has_gallery || card?.has_gallery);
 
   const tabs: { id: SubseriesTab; label: string }[] = useMemo(() => {
     const all: { id: SubseriesTab; label: string }[] = isBook
@@ -2728,7 +2765,6 @@ export default function SeriesSubseriesPage({
           ];
     return all.filter((t) => {
       if (t.id === "overview") return true;
-      if (!mediaReady) return false;
       if (t.id === "episodes")
         return isBook
           ? filmVersions.length > 1
@@ -2736,20 +2772,20 @@ export default function SeriesSubseriesPage({
       if (t.id === "gallery") {
         return hasGallery;
       }
+      // Siblings / related known from overview — show immediately.
       if (t.id === "series" && !isFilm && !isBook) {
         return siblingMovieCount > 0;
       }
-      if (t.id === "series") {
-        return hasSeries;
-      }
       if (t.id === "movies" && isFilm && !isBook) {
-        return siblingMovieCount > 0;
+        return siblingMovieCount > 0 || hasMovies;
       }
+      if (t.id === "series") return hasSeries;
       if (t.id === "movies") return hasMovies;
-      if (t.id === "audio") return hasAudio;
       if (t.id === "library")
         return isBook ? hasMoreBooks || hasLibrary : hasLibrary;
       if (t.id === "games") return hasGames;
+      // Audio needs a folder scan (related rarely lists releases).
+      if (t.id === "audio") return mediaReady && hasAudio;
       return true;
     });
   }, [
@@ -2758,21 +2794,14 @@ export default function SeriesSubseriesPage({
     isFilm,
     hasEpisodes,
     hasGallery,
-    loading,
     mediaReady,
     hasMovies,
     hasSeries,
     hasMoreBooks,
     siblingMovieCount,
-    relatedSeriesCount,
     hasAudio,
     hasLibrary,
     hasGames,
-    overview?.media,
-    overview?.related?.movies?.length,
-    overview,
-    card?.folder_path,
-    detail?.folder_path,
     filmVersions.length,
   ]);
 
@@ -2939,6 +2968,25 @@ export default function SeriesSubseriesPage({
     setExtrasMenuOpen((v) => !v);
     setTrailerEditorOpen(false);
   };
+
+  useEffect(() => {
+    if (!trailerEditorOpen && !extrasMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (trailerEditorOpen && trailerBubbleRef.current?.contains(target)) {
+        return;
+      }
+      if (extrasMenuOpen && extrasBubbleRef.current?.contains(target)) {
+        return;
+      }
+      setTrailerEditorOpen(false);
+      setExtrasMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [trailerEditorOpen, extrasMenuOpen]);
 
   const selectSeasonCover = (s: SeriesSeasonCard) => {
     // Desktop left panel: portrait (landscape only if no portrait).
@@ -3126,14 +3174,16 @@ export default function SeriesSubseriesPage({
     overview?.logo_url ||
     franchiseLogoUrl ||
     null;
+  // Leaf chrome icon must come from this work only — never the music-artist /
+  // franchise icon (e.g. heartagram on a HIM video that has no Icon render).
   const resolvedIconUrl =
-    detail?.icon_url ||
-    card?.icon_url ||
-    overview?.icon_url ||
-    franchiseIconUrl ||
-    null;
+    detail?.icon_url || card?.icon_url || overview?.icon_url || null;
   if (resolvedLogoUrl) cachedLogoRef.current = resolvedLogoUrl;
-  if (resolvedIconUrl) cachedIconRef.current = resolvedIconUrl;
+  if (resolvedIconUrl) {
+    cachedIconRef.current = resolvedIconUrl;
+  } else if (!loading) {
+    cachedIconRef.current = null;
+  }
   const topLogoUrl = resolvedLogoUrl || cachedLogoRef.current;
   const topIconUrl = resolvedIconUrl || cachedIconRef.current;
   useEffect(() => {
@@ -3787,11 +3837,23 @@ export default function SeriesSubseriesPage({
                     type="button"
                     className="release-page__cover-flip"
                     onClick={(e) => {
-                      if (canFlipCover) setCoverFlipped((f) => !f);
+                      if (stacked && galleryPath) {
+                        void openCoverArtworkViewer();
+                      } else if (canFlipCover) {
+                        setCoverFlipped((f) => !f);
+                      }
                       e.currentTarget.blur();
                     }}
-                    aria-label={canFlipCover ? "Flip cover" : undefined}
-                    disabled={!canFlipCover}
+                    aria-label={
+                      stacked && galleryPath
+                        ? "Browse artwork"
+                        : canFlipCover
+                          ? "Flip cover"
+                          : undefined
+                    }
+                    disabled={
+                      stacked ? !galleryPath : !canFlipCover
+                    }
                   >
                     <span className="release-page__cover-scene">
                       <span className="release-page__cover-face release-page__cover-face--front">
@@ -4034,6 +4096,10 @@ export default function SeriesSubseriesPage({
                       (!isFilm && !isBook ? overview?.name : "") ||
                       ""
                     ).trim();
+                    // When this work's franchise is a Music artist, the cover
+                    // logo already opens the artist page — skip the franchise
+                    // breadcrumb (there is no separate Series franchise hub).
+                    if (overview?.music_band_id) return null;
                     const nested =
                       !isBook &&
                       Boolean(franchiseId) &&
@@ -4276,7 +4342,10 @@ export default function SeriesSubseriesPage({
                     isAdmin ? (
                       <div className="series-film-play-actions__secondary">
                         {filmExtraItems.length > 0 ? (
-                          <div className="series-film-play-actions__extras-wrap">
+                          <div
+                            className="series-film-play-actions__extras-wrap"
+                            ref={extrasBubbleRef}
+                          >
                             <button
                               type="button"
                               className="series-film-play-actions__btn"
@@ -4286,7 +4355,7 @@ export default function SeriesSubseriesPage({
                               {stacked ? "Extras" : "Play extras"}
                             </button>
                             {extrasMenuOpen && filmExtraItems.length > 1 ? (
-                              <div className="series-film-bubble">
+                              <div className="series-film-bubble series-film-bubble--extras">
                                 {filmExtraItems.map((ep) => (
                                   <button
                                     key={ep.id}
@@ -4302,7 +4371,10 @@ export default function SeriesSubseriesPage({
                           </div>
                         ) : null}
                         {trailerUrl ? (
-                          <div className="series-film-play-actions__trailer-row">
+                          <div
+                            className="series-film-play-actions__trailer-row"
+                            ref={trailerBubbleRef}
+                          >
                             <button
                               type="button"
                               className="series-film-play-actions__btn"
@@ -4334,13 +4406,19 @@ export default function SeriesSubseriesPage({
                               </button>
                             ) : null}
                             {trailerEditorOpen ? (
-                              <div className="series-film-bubble">
+                              <div className="series-film-bubble series-film-bubble--trailer">
                                 <div className="series-film-bubble__row">
                                   <input
                                     className="series-film-bubble__input"
                                     type="url"
                                     value={trailerDraft}
                                     placeholder="YouTube trailer URL"
+                                    style={{
+                                      width: `${Math.max(
+                                        16,
+                                        Math.min(48, trailerDraft.length + 2)
+                                      )}ch`,
+                                    }}
                                     onChange={(e) =>
                                       setTrailerDraft(e.target.value)
                                     }
@@ -4366,7 +4444,10 @@ export default function SeriesSubseriesPage({
                             ) : null}
                           </div>
                         ) : isAdmin ? (
-                          <div className="series-film-play-actions__trailer-row">
+                          <div
+                            className="series-film-play-actions__trailer-row"
+                            ref={trailerBubbleRef}
+                          >
                             <button
                               type="button"
                               className="series-film-play-actions__btn series-film-play-actions__btn--muted"
@@ -4376,13 +4457,19 @@ export default function SeriesSubseriesPage({
                               Add trailer
                             </button>
                             {trailerEditorOpen ? (
-                              <div className="series-film-bubble">
+                              <div className="series-film-bubble series-film-bubble--trailer">
                                 <div className="series-film-bubble__row">
                                   <input
                                     className="series-film-bubble__input"
                                     type="url"
                                     value={trailerDraft}
                                     placeholder="YouTube trailer URL"
+                                    style={{
+                                      width: `${Math.max(
+                                        16,
+                                        Math.min(48, trailerDraft.length + 2)
+                                      )}ch`,
+                                    }}
                                     onChange={(e) =>
                                       setTrailerDraft(e.target.value)
                                     }
@@ -4652,7 +4739,9 @@ export default function SeriesSubseriesPage({
                         activeLanguage={activeLanguage}
                         subseries={overview.subseries || []}
                         castSubFilter={isFilm ? "all" : subseriesId}
-                        layout="row"
+                        layout={
+                          mobilePortrait || stacked ? "grid" : "row"
+                        }
                         tab={castTab === "lineup" ? "characters" : castTab}
                         isAdmin={isAdmin}
                         onDataChanged={() => void loadCard()}

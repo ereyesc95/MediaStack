@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 
 from app.library_track_match import LibraryTrackIndex, MatchedTrack
 from app.models import Playlist, PlaylistData
-from app.paths import DATA_DIR
+from app.paths import ASSETS_DIR, DATA_DIR
 
 USER_PLAYLIST_TYPE = 200
 PLA_KIND_LOCAL = "local"
 PLA_KIND_SNAPSHOT = "snapshot"
-PLAYLIST_COVERS_DIR = DATA_DIR / "playlist_covers"
+# User uploads live under assets (not data/). Legacy data/playlist_covers still read.
+PLAYLIST_COVERS_DIR = ASSETS_DIR / "playlists" / "users"
+_LEGACY_PLAYLIST_COVERS_DIR = DATA_DIR / "playlist_covers"
 
 
 def _youtube_query(title: str, artist: str | None, album: str | None) -> str:
@@ -51,12 +53,13 @@ def resolve_playlist_cover_url(playlist: Playlist) -> str | None:
 
 
 def cover_file_for_playlist(playlist_id: int) -> Path | None:
-    if not PLAYLIST_COVERS_DIR.is_dir():
-        return None
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        path = PLAYLIST_COVERS_DIR / f"{playlist_id}{ext}"
-        if path.is_file():
-            return path
+    for base in (PLAYLIST_COVERS_DIR, _LEGACY_PLAYLIST_COVERS_DIR):
+        if not base.is_dir():
+            continue
+        for ext in (".jpg", ".jpeg", ".png", ".webp"):
+            path = base / f"{playlist_id}{ext}"
+            if path.is_file():
+                return path
     return None
 
 
@@ -398,6 +401,9 @@ def delete_user_playlist(db: Session, playlist_id: int) -> dict:
         db.delete(row)
     if PLAYLIST_COVERS_DIR.is_dir():
         for old in PLAYLIST_COVERS_DIR.glob(f"{playlist_id}.*"):
+            old.unlink(missing_ok=True)
+    if _LEGACY_PLAYLIST_COVERS_DIR.is_dir():
+        for old in _LEGACY_PLAYLIST_COVERS_DIR.glob(f"{playlist_id}.*"):
             old.unlink(missing_ok=True)
     db.delete(playlist)
     db.commit()

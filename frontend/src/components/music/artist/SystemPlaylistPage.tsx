@@ -54,6 +54,7 @@ import type {
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
 import PlaylistBoot from "../../PlaylistBoot";
+import { systemPlaylistCoverUrl } from "./ArtistPlaylists";
 import MediaBeatFx from "../MediaBeatFx";
 import SystemPlaylistTracklist, {
   type SystemPlaylistTracklistHandle,
@@ -651,11 +652,13 @@ export default function SystemPlaylistPage({
     [coverRevision]
   );
   const coverUrl =
-    bustCoverUrl(detail?.cover_url) ||
-    (!isUserPlaylist && slug ? `/api/assets/playlists/${slug}` : undefined) ||
-    (isUserPlaylist ? DEFAULT_USER_PLAYLIST_COVER : undefined) ||
-    coverUrlFallback(tracks) ||
-    "";
+    systemPlaylistCoverUrl(
+      !isUserPlaylist ? slug : null,
+      bustCoverUrl(detail?.cover_url) ||
+        (isUserPlaylist ? DEFAULT_USER_PLAYLIST_COVER : undefined) ||
+        coverUrlFallback(tracks) ||
+        null
+    ) || "";
   const canEditPlaylistCover =
     isUserPlaylist &&
     detail?.editable !== false &&
@@ -2258,7 +2261,7 @@ export default function SystemPlaylistPage({
                 artistName={artistName}
                 tracks={displayTracks}
                 sections={!isUserPlaylist && slug === "live-story" ? detail?.sections : undefined}
-                showSourceReleaseColumn={!isUserPlaylist && slug === "live-story"}
+                showSourceReleaseColumn={!isUserPlaylist}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}
                 sortDesc={trackSort.desc}

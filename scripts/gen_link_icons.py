@@ -1,7 +1,7 @@
-"""Generate monochrome link SVG icons for frontend/public/assets/links."""
+"""Generate monochrome link SVG icons for assets/links."""
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "frontend" / "public" / "assets" / "links"
+ROOT = Path(__file__).resolve().parents[1] / "assets" / "links"
 
 ICONS: dict[str, str] = {
     "link": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12a5 5 0 0 1 5-5h3v2H8.9a3 3 0 1 0 0 6h3v2h-3a5 5 0 0 1-5-5zm7.1 0a5 5 0 0 1 5-5h3v2h-3a3 3 0 1 0 0 6h3v2h-3a5 5 0 0 1-5-5zm-2 0h4v2h-4v-2z"/></svg>',

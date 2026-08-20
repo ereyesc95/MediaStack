@@ -96,6 +96,23 @@ import {
   trackMainTitle,
 } from "../release/releaseTrackPanelMeta";
 
+/** Match backend `release_id_from_path` for opening a release from the player bubble. */
+async function releaseIdFromAlbumFolder(
+  folder: string | null | undefined
+): Promise<string | null> {
+  if (!folder?.trim()) return null;
+  const normalized = folder.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(normalized)
+  );
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 12);
+  return `rel_${hex}`;
+}
+
 /** Release title under Albums/EPs/… — skip edition/disc/side path segments. */
 function albumFolderDisplayTitle(folder: string | null | undefined): string | null {
   if (!folder?.trim()) return null;
@@ -989,7 +1006,20 @@ export default function ArtistPage({
               const navReleaseId = (
                 nowTrack as { navigate_release_id?: string } | undefined
               )?.navigate_release_id;
-              const canOpenRelease = Boolean(navReleaseId && onOpenReleaseNavigate);
+              const canOpenRelease = Boolean(
+                onOpenReleaseNavigate &&
+                  (navReleaseId || nowTrack?.album_folder)
+              );
+              const openNowRelease = () => {
+                if (!onOpenReleaseNavigate) return;
+                void (async () => {
+                  const rid =
+                    navReleaseId ||
+                    (await releaseIdFromAlbumFolder(nowTrack?.album_folder));
+                  if (!rid) return;
+                  onOpenReleaseNavigate(navBandId, rid);
+                })();
+              };
               const dockInner = (
                 <>
                   <div className="series-audio-player__now">
@@ -1007,9 +1037,13 @@ export default function ArtistPage({
                           <button
                             type="button"
                             className="muted series-audio-player__album-link"
-                            onClick={() =>
-                              onOpenReleaseNavigate?.(navBandId, navReleaseId!)
-                            }
+                            title="Go to release"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openNowRelease();
+                            }}
                           >
                             {albumLabel}
                           </button>
@@ -1426,7 +1460,7 @@ export default function ArtistPage({
             data={data}
             eraIndex={eraIndex}
             stacked={stacked}
-            flatMeta={deviceLayout === "mobile-landscape"}
+            flatMeta={false}
             onEraChange={setEraIndex}
             onCountry={onCountry}
             onSubgenre={onSubgenre}
@@ -1434,6 +1468,9 @@ export default function ArtistPage({
             onPlayTrack={handlePlay}
             playingPath={playingPath}
             onOpenPerformer={setMemberModalId}
+            onOpenRelease={(bid, rid) =>
+              onOpenReleaseNavigate?.(bid, rid)
+            }
           />
         )}
 

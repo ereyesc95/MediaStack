@@ -315,7 +315,58 @@ Every edition (or release root) should have a **`[Artwork]`** subfolder — name
 
 If no disc image exists, the app uses `assets/default/disc.png`.
 
-Static UI assets (icons, playlist tiles, default disc/label, genre/decade maps) live under project **`assets/`** (not inside the media library). Member photos and custom link logos live under **`data/people/`** and **`data/links/`** (complementary resources — not playable media).
+Static UI assets (icons, playlist tiles, default disc/label, genre/decade maps, universe art, people photos, link logos) live under project **`assets/`** (not inside the media library). See **Expected asset filenames** below.
+
+### Expected asset filenames
+
+Place drop-in art under project `assets/` (served via `/api/assets/...`). Examples:
+
+| Folder | Purpose | Filename examples |
+|--------|---------|-------------------|
+| `assets/labels/` | Record label / studio logos | `BMG.png`, `Intertrack.png`, `universal.png` |
+| `assets/links/` | Website / database icons (SVG or PNG) | `spotify.svg`, `reddit.svg`, `Reddit.png`, `link.svg` |
+| `assets/people/{Letter}/` | Person photos (cast, lineup) | `Ville Valo.png`, `Ville Valo (mbid-or-id).png`, `Kosmo Kröger.png` |
+| `assets/universes/` | Universe hub art | `Wizarding World - Portrait.png`, `Wizarding World - Landscape.png`, `Wizarding World - Banner.png`, `Wizarding World - Logo.png` (also `wizarding-world_portrait.png`, `universe_logo.png`) |
+| `assets/genre/` | Genre filter backgrounds | `rock.png`, `metal.png` |
+| `assets/decade/` | Decade filter backgrounds | `1990s.png`, `2000s.png` |
+| `assets/continent/` | Continent filter backgrounds | `europe.png`, `north-america.png` |
+| `assets/playlists/system/` | System playlist tiles | `top-tracks.png`, `live-story.png`, `most-played.png` |
+| `assets/playlists/users/` | User playlist covers | `{playlist_id}.jpg` / `.png` (uploads) |
+| `assets/default/` | Fallbacks | `disc.png`, `label.png`, `placeholder - portrait.png` |
+| `assets/subgenre/` | Optional subgenre tiles | `{slug}.png` (optional; empty folder is fine) |
+
+**People disambiguation:** when two people share a name, use parentheses with MusicBrainz id / TMDb id / internal id:
+
+```
+assets/people/V/Ville Valo.png
+assets/people/V/Ville Valo (a3cb23bd-…).png
+```
+
+Legacy `name-slug--id.png` stems still resolve if present.
+
+**Universes** also accept files under `Media/Universes/` with the same naming patterns.
+
+**Link logos:** `assets/links/` is the single source (PNG uploads and SVG catalog icons). Do not rely on `frontend/public/assets/links` or `frontend/dist/assets/links`.
+
+### Data caches (`data/`)
+
+Runtime caches and small overrides live under `data/` as JSON (or images). They are **not** your media library. Safe to delete cache folders anytime — the app regenerates them on demand:
+
+| Folder | Kind | Notes |
+|--------|------|--------|
+| `overview_cache/` | Cache | Band overview snapshots; regenerate on next visit |
+| `media_index/` | Cache | Audio/media scan indexes; regenerates on rescan |
+| `lyrics_cache/` | Cache | Fetched lyrics (LRCLIB); regenerates when lyrics are opened/fetched |
+| `setlist_cache/` | Cache | setlist.fm payloads (~24h TTL) |
+| `release_mb_cache/` | Cache | MusicBrainz release lookups |
+| `franchise_index/` | Cache | Cross-module franchise index (`index.json`) |
+| `quiz_scores/` | Persistent per-profile | Quiz best scores — keep if you care about scores |
+| `release_overrides/` / `media_item_overrides/` | Manual overrides | Keep unless you want to discard edits |
+| `backups/` | Backups | Keep if you rely on them |
+
+User playlist cover uploads live under **`assets/playlists/users/`** (not `data/`). You can delete empty `data/playlist_covers/` after migrating any leftover images there.
+
+Prefer deleting whole cache folders rather than picking files. Scores/overrides/uploads are the ones to preserve.
 
 ### Release overview photocards
 
@@ -468,7 +519,7 @@ Live Story description on the playlist page: **Live versions of {Artist}'s recor
 
 Opening a system playlist shows a **tracklist-only page** (release-style left panel + track list; no Overview/Gallery tabs). Preferred route: `/music/{Artist}/audio/playlist/{slug}` (legacy `/music/artist/{id}/…` still works).
 
-Default playlist card art lives in `assets/playlists/{slug}.png` (512×512 gradient tiles served at `/api/assets/playlists/{slug}`). Regenerate or add covers there when introducing new system playlist slugs.
+Default playlist card art lives in `assets/playlists/system/{slug}.png` (512×512 gradient tiles served at `/api/assets/playlists/system/{slug}`). User playlist covers upload to `assets/playlists/users/`. Regenerate or add system covers when introducing new playlist slugs.
 
 ---
 
@@ -581,7 +632,8 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 - **Per-track playback art** — cover, disc, canvas, and background from the track’s source `[Artwork]` (track-specific stems override album animation/canvas); edition `Logo.png` in the top bar when applicable
 - **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`
 - **Writer links** — “Written by” names open in-app when the artist has a local folder, matching **band aliases** (`bndOtherNames`, e.g. Ville Valo → VV)
-- **Themes** — **Adaptive** (default on content pages: colors sampled from page art) plus Dark/Light/Midnight/Ember/Ocean/Custom presets. Picking a preset pins it until you choose Adaptive again. Playback temporarily overrides with the playing track’s cover art.
+- **Themes** — **Adaptive** (default on content pages: colors sampled from page art; choice persists across refresh) plus Dark/Light/Midnight/Ember/Ocean/Custom presets. Picking a preset pins it until you choose Adaptive again. Playback temporarily overrides with the playing track’s cover art.
+- **Switch media** — hamburger menu (all pages except Hub home): **Switch media** → Music / Series / Movies / Books / Games jumps to that module’s home.
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`

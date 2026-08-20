@@ -197,11 +197,19 @@ def build_word_cloud(
     *,
     limit: int = WORD_CLOUD_TERM_LIMIT,
 ) -> dict:
+    from collections import defaultdict
+
+    from app.band_library import _track_title_from_filename, display_track_title_from_path
+    from app.media_index import (
+        _release_dir_from_content_folder,
+        release_id_from_path,
+    )
+
     artist_name = (band.bnd_name or "").strip()
     seen_paths: set[str] = set()
     seen_text_hashes: set[str] = set()
-    texts: list[str] = []
-    sources = 0
+    # (play_path|None, lyrics text)
+    sources_list: list[tuple[str | None, str]] = []
 
     media_root = Path(settings.media_root) if settings.media_root else None
 
@@ -212,8 +220,7 @@ def build_word_cloud(
         seen_paths.add(key)
         digest = hashlib.sha256(text.casefold().encode("utf-8")).hexdigest()
         seen_text_hashes.add(digest)
-        texts.append(text)
-        sources += 1
+        sources_list.append((play_path, text))
 
     if media_root:
         artist_dir = _artist_dir(media_root, band.bnd_name)
@@ -223,18 +230,21 @@ def build_word_cloud(
             ):
                 digest = hashlib.sha256(text.casefold().encode("utf-8")).hexdigest()
                 seen_text_hashes.add(digest)
-                texts.append(text)
-                sources += 1
+                sources_list.append((play_path, text))
 
-    cached_texts = _collect_cached_lyrics(
+    for text in _collect_cached_lyrics(
         artist_name, seen_text_hashes=seen_text_hashes
-    )
-    texts.extend(cached_texts)
-    sources += len(cached_texts)
+    ):
+        sources_list.append((None, text))
 
     counter: Counter[str] = Counter()
-    for text in texts:
-        counter.update(_tokenize(text))
+    word_tracks: dict[str, set[str]] = defaultdict(set)
+    for play_path, text in sources_list:
+        words = _tokenize(text)
+        counter.update(words)
+        if play_path:
+            for word in set(words):
+                word_tracks[word].add(play_path)
 
     if not counter:
         return {
@@ -244,18 +254,72 @@ def build_word_cloud(
             "hint": "Open Lyrics on a few tracks to build the word cloud, or run Build from cached lyrics.",
         }
 
-    max_count = max(counter.values())
-    terms = [
-        {
-            "text": word,
-            "count": count,
-            "weight": round(0.35 + 0.65 * (count / max_count), 3),
+    def _track_payload(play_path: str) -> dict | None:
+        if not media_root:
+            return {
+                "title": Path(play_path).stem,
+                "play_path": play_path,
+                "release_id": None,
+                "navigate_band_id": band.bnd_id,
+                "release_title": None,
+            }
+        audio = media_root / Path(play_path.replace("\\", "/"))
+        try:
+            title = (
+                display_track_title_from_path(audio)
+                if audio.is_file()
+                else _track_title_from_filename(audio)
+            )
+        except Exception:
+            title = Path(play_path).name
+        release_id = None
+        release_title = None
+        try:
+            parent = audio.parent if audio.exists() else (media_root / Path(play_path).parent)
+            release_dir = _release_dir_from_content_folder(parent)
+            rel = release_dir.relative_to(media_root).as_posix()
+            release_id = release_id_from_path(rel)
+            from app.media_index import entry_display_name
+            from app.franchise_index import parse_dated_folder_name
+
+            folder_name = entry_display_name(release_dir)
+            _date_iso, title_part = parse_dated_folder_name(folder_name)
+            release_title = title_part or folder_name
+        except Exception:
+            pass
+        return {
+            "title": title,
+            "play_path": play_path,
+            "release_id": release_id,
+            "navigate_band_id": band.bnd_id,
+            "release_title": release_title,
         }
-        for word, count in counter.most_common(limit)
-    ]
+
+    max_count = max(counter.values())
+    terms = []
+    for word, count in counter.most_common(limit):
+        tracks = []
+        seen_titles: set[str] = set()
+        for path in sorted(word_tracks.get(word) or ()):
+            payload = _track_payload(path)
+            if not payload:
+                continue
+            key = (payload.get("title") or "").casefold()
+            if key in seen_titles:
+                continue
+            seen_titles.add(key)
+            tracks.append(payload)
+        terms.append(
+            {
+                "text": word,
+                "count": count,
+                "weight": round(0.35 + 0.65 * (count / max_count), 3),
+                "tracks": tracks,
+            }
+        )
     return {
         "terms": terms,
-        "track_sources": sources,
+        "track_sources": len(sources_list),
         "ready": True,
         "hint": None,
     }

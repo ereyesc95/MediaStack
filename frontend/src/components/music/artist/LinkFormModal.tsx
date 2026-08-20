@@ -73,7 +73,7 @@ export default function LinkFormModal({
 
   const previewSrc =
     logoMode === "catalog" && logoKey
-      ? `/assets/links/${logoKey}.svg`
+      ? `/api/assets/links/${logoKey}.svg`
       : logoPreview;
 
   async function handleSave() {

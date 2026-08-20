@@ -74,7 +74,7 @@ export default function SeriesLinkFormModal({
 
   const previewSrc =
     logoMode === "catalog" && logoKey
-      ? `/assets/links/${logoKey}.svg`
+      ? `/api/assets/links/${logoKey}.svg`
       : logoPreview;
 
   async function handleSave() {
@@ -94,9 +94,9 @@ export default function SeriesLinkFormModal({
         logo_key: logoMode === "catalog" ? logoKey || null : null,
         logo_url:
           logoMode === "catalog" && logoKey
-            ? `/assets/links/${logoKey}.svg`
+            ? `/api/assets/links/${logoKey}.svg`
             : logoMode === "auto"
-              ? "/assets/links/link.svg"
+              ? "/api/assets/links/link.svg"
               : logoPreview,
         clear_logo_upload: logoMode !== "catalog" && isEdit,
       };

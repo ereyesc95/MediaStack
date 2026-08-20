@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import type { SeriesDashboard } from "../../types";
 import { EMPTY_SERIES_DASHBOARD } from "../../types";
 import { DashHoverTitle, useDashCardReveal } from "../DashHoverTitle";
@@ -101,9 +101,11 @@ type PlaceholderVariant = "square" | "landscape" | "circle" | "flag";
 function DashCover({
   url,
   position = "top",
+  children,
 }: {
   url?: string | null;
   position?: "top" | "center";
+  children?: ReactNode;
 }) {
   if (url) {
     return (
@@ -117,6 +119,7 @@ function DashCover({
           }}
         />
         <span className="dash-icon-item-cover__scrim" aria-hidden />
+        {children}
       </span>
     );
   }
@@ -124,6 +127,7 @@ function DashCover({
     <span className="dash-icon-item-cover dash-icon-item-cover--empty">
       <MyStackIcon className="dash-icon-item-cover__mark" size={22} />
       <span className="dash-icon-item-cover__scrim" aria-hidden />
+      {children}
     </span>
   );
 }
@@ -286,11 +290,12 @@ export default function SeriesHome({
                 <DashCover
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
-                />
-                <DashHoverTitle
-                  title={s.name}
-                  revealed={revealedId === `franchise-${s.id}`}
-                />
+                >
+                  <DashHoverTitle
+                    title={s.name}
+                    revealed={revealedId === `franchise-${s.id}`}
+                  />
+                </DashCover>
               </button>
             );
           })}
@@ -326,11 +331,12 @@ export default function SeriesHome({
                 <DashCover
                   url={cover}
                   position={useBannerArt ? "center" : "top"}
-                />
-                <DashHoverTitle
-                  title={s.name}
-                  revealed={revealedId === `show-${s.id}`}
-                />
+                >
+                  <DashHoverTitle
+                    title={s.name}
+                    revealed={revealedId === `show-${s.id}`}
+                  />
+                </DashCover>
               </button>
             );
           })}
@@ -366,11 +372,12 @@ export default function SeriesHome({
                   <DashCover
                     url={cover}
                     position={useBannerArt ? "center" : "top"}
-                  />
-                  <DashHoverTitle
-                    title={u.name}
-                    revealed={revealedId === `universe-${u.id}`}
-                  />
+                  >
+                    <DashHoverTitle
+                      title={u.name}
+                      revealed={revealedId === `universe-${u.id}`}
+                    />
+                  </DashCover>
                 </button>
               );
             })}

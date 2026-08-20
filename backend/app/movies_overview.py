@@ -67,7 +67,7 @@ def _group_links(links_raw: list) -> dict:
         cat = item.get("category") or "databases"
         if cat not in by_cat:
             cat = "databases"
-        logo_url = item.get("logo_url") or "/assets/links/link.svg"
+        logo_url = item.get("logo_url") or "/api/assets/links/link.svg"
         by_cat[cat].append(
             {
                 "id": item["id"],

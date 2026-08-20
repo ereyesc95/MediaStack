@@ -19,6 +19,7 @@ import { isPhoneLayout, useDeviceLayout } from "../../usePhoneLayout";
 import { displayLanguageLabel } from "../../languageDisplay";
 import { IconEditProfile } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
+import BillboardText from "../BillboardText";
 
 type StaffRoleOpt = { name: string; type: string };
 
@@ -668,12 +669,14 @@ function MemberCard({
           />
         </span>
         <span className="artist-lineup-card__name">
-          {member.name}
-          {member.is_deceased ? (
-            <span className="artist-lineup-card__deceased" title="Deceased">
-              †
-            </span>
-          ) : null}
+          <BillboardText short={member.name} className="series-cast-card__billboard">
+            {member.name}
+            {member.is_deceased ? (
+              <span className="artist-lineup-card__deceased" title="Deceased">
+                †
+              </span>
+            ) : null}
+          </BillboardText>
         </span>
       </button>
       {characterCentered && actorGroups.length > 0 ? (
@@ -723,9 +726,10 @@ function MemberCard({
                           onSelect(member);
                         }}
                       >
-                        <span className="series-cast-card__actor-name">
-                          {person.name}
-                        </span>
+                        <BillboardText
+                          short={person.name}
+                          className="series-cast-card__actor-name series-cast-card__billboard"
+                        />
                       </button>
                     </span>
                   );
@@ -1985,6 +1989,8 @@ export default function SeriesCast({
       );
     }
     if (castLayout === "row") return resolved;
+    // Mobile portrait wraps into rows of 3 — keep the full list.
+    if (deviceLayout === "mobile-portrait") return resolved;
     return resolved.slice(0, 8);
   }, [
     cast,
@@ -1995,18 +2001,22 @@ export default function SeriesCast({
     franchiseLangs,
     originLanguage,
     roleTypeMap,
+    deviceLayout,
   ]);
 
-  const rows = useMemo(
-    () =>
-      castLayout === "row"
-        ? { top: members, bottom: [] as SeriesCastMember[] }
-        : splitRows(
-            members,
-            deviceLayout === "mobile-landscape" ? 5 : undefined
-          ),
-    [members, deviceLayout, castLayout]
-  );
+  const rows = useMemo(() => {
+    if (castLayout === "row") {
+      return { top: members, bottom: [] as SeriesCastMember[] };
+    }
+    if (deviceLayout === "mobile-portrait") {
+      // CSS grid (3 cols) flattens rows via display:contents — put all in top.
+      return { top: members, bottom: [] as SeriesCastMember[] };
+    }
+    return splitRows(
+      members,
+      deviceLayout === "mobile-landscape" ? 5 : undefined
+    );
+  }, [members, deviceLayout, castLayout]);
 
   const franchiseLangOptions = useMemo(() => {
     if (franchiseLangs.length) {

@@ -4,10 +4,12 @@ import {
   THEMES,
   applyTheme,
   getCustomColors,
+  persistThemeChoice,
   saveCustomColors,
   type CustomThemeColors,
   type ThemeId,
 } from "../themes";
+import { useMediaSwitch, type MediaSwitchKind } from "../mediaSwitchContext";
 import {
   IconAbout,
   IconAddArtist,
@@ -33,7 +35,24 @@ import {
   IconTrash,
   IconUniverse,
   IconVideo,
+  IconMediaMusic,
+  IconMediaSeries,
+  IconMediaMovies,
+  IconMediaBooks,
+  IconMediaGames,
 } from "./MenuIcons";
+
+const MEDIA_SWITCH_OPTIONS: {
+  kind: MediaSwitchKind;
+  label: string;
+  Icon: typeof IconMediaMusic;
+}[] = [
+  { kind: "music", label: "Music", Icon: IconMediaMusic },
+  { kind: "series", label: "Series", Icon: IconMediaSeries },
+  { kind: "movies", label: "Movies", Icon: IconMediaMovies },
+  { kind: "books", label: "Books", Icon: IconMediaBooks },
+  { kind: "games", label: "Games", Icon: IconMediaGames },
+];
 
 type Props = {
   onImport?: () => void;
@@ -164,6 +183,9 @@ export default function AppMenu({
   const [editDataOpen, setEditDataOpen] = useState(false);
   const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [mediaSwitchOpen, setMediaSwitchOpen] = useState(false);
+  const mediaSwitch = useMediaSwitch();
+  const showSwitchMedia = Boolean(mediaSwitch?.showSwitchMedia);
   const [customOpen, setCustomOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
@@ -195,6 +217,7 @@ export default function AppMenu({
         setEditDataOpen(false);
         setTrackDataOpen(false);
         setThemeOpen(false);
+        setMediaSwitchOpen(false);
         setCustomOpen(false);
       }
     }
@@ -222,6 +245,8 @@ export default function AppMenu({
     }
     if (id === "artist") {
       setCustomOpen(false);
+      // Persist Adaptive so a refresh keeps the choice (not Custom/Dark).
+      persistThemeChoice("artist", userId);
       applySavedArtistTheme(userId);
       document.documentElement.setAttribute("data-theme", "artist");
       setActiveTheme("artist");
@@ -945,6 +970,55 @@ export default function AppMenu({
               Edit profile
             </button>
           )}
+          {showSwitchMedia && mediaSwitch ? (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => {
+                  setMediaSwitchOpen((o) => {
+                    const next = !o;
+                    if (next) {
+                      setSettingsOpen(false);
+                      setArtistDataOpen(false);
+                      setEditDataOpen(false);
+                      setTrackDataOpen(false);
+                      setThemeOpen(false);
+                      setCustomOpen(false);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <IconCards className="menu-item-icon" />
+                Switch media
+                <span className="menu-chevron">
+                  {mediaSwitchOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              {mediaSwitchOpen && (
+                <div className="app-menu-submenu">
+                  {MEDIA_SWITCH_OPTIONS.map(({ kind, label, Icon }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className={
+                        mediaSwitch.currentKind === kind ? "active" : undefined
+                      }
+                      onClick={() => {
+                        mediaSwitch.selectMedia(kind);
+                        setOpen(false);
+                        setMediaSwitchOpen(false);
+                      }}
+                    >
+                      <Icon className="menu-item-icon" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
           {onSwitchProfile && (
             <button
               type="button"

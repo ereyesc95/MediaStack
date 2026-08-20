@@ -132,7 +132,20 @@ function trackMetaLine(
 
 function liveFileReleaseTitle(track: ArtistPlaylistTrack): string | null {
   const title = track.album_title?.trim();
-  return title || null;
+  if (!title) return null;
+  // Drop "Release: Edition" suffixes from older enrich payloads.
+  const colon = title.indexOf(": ");
+  if (colon > 0) {
+    const right = title.slice(colon + 2).trim();
+    if (
+      /edition$/i.test(right) ||
+      /^disc\s+\d+/i.test(right) ||
+      /^side\s+[a-z]\b/i.test(right)
+    ) {
+      return title.slice(0, colon).trim() || title;
+    }
+  }
+  return title;
 }
 
 function userPlaylistTrackYear(track: ArtistPlaylistTrack): string {
@@ -1141,7 +1154,11 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           </div>
         )}
         {sectionTracklistBody ?? (
-          <ol className="release-tracklist__tracks">
+          <ol
+            className={`release-tracklist__tracks${
+              showSourceReleaseColumn ? " live-story-tracklist__tracks" : ""
+            }`}
+          >
             {columnHeader}
             {tracklistRows}
           </ol>

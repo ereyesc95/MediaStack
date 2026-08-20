@@ -50,7 +50,7 @@ function LinkCard({
               onError={() => setLogoFailed(true)}
             />
           ) : (
-            <img src="/assets/links/link.svg" alt="" />
+            <img src="/api/assets/links/link.svg" alt="" />
           )}
         </span>
       </a>

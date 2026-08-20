@@ -20,7 +20,7 @@ FEAT_RE = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?|featuring)[^\)\]]*[\)\]]", re.I
 
 LIBRARY_MOST_PLAYED_NAME = "Most Played"
 LIBRARY_MOST_PLAYED_LIMIT = 100
-LIBRARY_MOST_PLAYED_DEFAULT_COVER = "/api/assets/playlists/most-played"
+LIBRARY_MOST_PLAYED_DEFAULT_COVER = "/api/assets/playlists/system/most-played"
 DEFAULT_USER_PLAYLIST_COVER = "/api/assets/default/playlist"
 
 

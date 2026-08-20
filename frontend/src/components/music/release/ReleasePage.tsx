@@ -1029,6 +1029,8 @@ export default function ReleasePage({
       ? releaseReferrer
       : null;
   const franchiseReferrer = seriesReferrer || moviesReferrer;
+  const artistReferrer =
+    releaseReferrer?.source === "artist" ? releaseReferrer : null;
   const referrerOverview = releaseReferrer
     ? getCachedOverview(releaseReferrer.bandId, "landscape")
     : null;
@@ -1042,6 +1044,11 @@ export default function ReleasePage({
     ? "HOME"
     : catalogReferrer
       ? "CATALOG"
+      : artistReferrer
+        ? (artistReferrer.artistName ??
+            referrerOverview?.name ??
+            data?.artist_name ??
+            "Artist")
       : franchiseReferrer
       ? bannerLayout
         ? seriesBackUsesIcon
@@ -1057,6 +1064,8 @@ export default function ReleasePage({
     ? "Back to Home"
     : catalogReferrer
       ? "Back to Catalog"
+      : artistReferrer
+        ? `Back to ${backLabel ?? "Artist"}`
       : franchiseReferrer
       ? `Back to ${franchiseBackLabel}`
       : `Back to ${backLabel ?? "Artist"}`;

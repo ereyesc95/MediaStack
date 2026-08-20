@@ -839,7 +839,7 @@ def add_series_link(
         "url": normalize_external_url(url),
         "logo_key": logo_key,
         "logo_url": logo_url
-        or (f"/assets/links/{logo_key}.svg" if logo_key else "/assets/links/link.svg"),
+        or (f"/api/assets/links/{logo_key}.svg" if logo_key else "/api/assets/links/link.svg"),
     }
     links.append(item)
     _save_links(db, row, links)
@@ -881,7 +881,7 @@ def patch_series_link(
         if logo_url is not None:
             item["logo_url"] = logo_url
         elif item.get("logo_key"):
-            item["logo_url"] = f"/assets/links/{item['logo_key']}.svg"
+            item["logo_url"] = f"/api/assets/links/{item['logo_key']}.svg"
         _save_links(db, row, links)
         return item
     return None

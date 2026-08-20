@@ -18,6 +18,7 @@ type Props = {
   onPlayTrack: (path: string, title: string) => void;
   playingPath: string | null;
   onOpenPerformer?: (artistId: number) => void;
+  onOpenRelease?: (bandId: number, releaseId: string) => void;
 };
 
 function normalizeBio(bio: string): string {
@@ -91,6 +92,7 @@ export default function ArtistAbout({
   onPlayTrack,
   playingPath,
   onOpenPerformer,
+  onOpenRelease,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
@@ -360,7 +362,11 @@ export default function ArtistAbout({
                 <div className="artist-about__meta-row">
                   <dt>Topics</dt>
                   <dd className="artist-about__topics-dd">
-                    <ArtistWordCloud bandId={data.id} embedded />
+                    <ArtistWordCloud
+                      bandId={data.id}
+                      embedded
+                      onOpenRelease={onOpenRelease}
+                    />
                   </dd>
                 </div>
                 {visibleLabels.length > 0 && (

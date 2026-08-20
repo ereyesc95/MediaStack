@@ -23,7 +23,7 @@ from app.playlist_tracks import (
     enrich_playlist_tracks,
 )
 
-PLAYLIST_INDEX_VERSION = 15
+PLAYLIST_INDEX_VERSION = 16
 
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",

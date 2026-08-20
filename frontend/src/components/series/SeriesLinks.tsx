@@ -69,7 +69,7 @@ export default function SeriesLinks({
               title={item.label}
             >
               <span className="artist-link-card__logo">
-                <img src={item.logo_url || "/assets/links/link.svg"} alt="" />
+                <img src={item.logo_url || "/api/assets/links/link.svg"} alt="" />
               </span>
             </a>
             {isAdmin && item.id ? (

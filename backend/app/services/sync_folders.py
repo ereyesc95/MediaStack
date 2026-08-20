@@ -236,4 +236,10 @@ async def run_folder_sync(
         results.append(sync_books(db, root))
     if module in ("all", "movies", "books", "series", "franchise"):
         results.append(rebuild_franchise_index(root))
+    # Media-tab caches (artist Movies/Series/Books) keep stale folder paths after moves.
+    if module in ("all", "movies", "series", "books", "music", "bands"):
+        from app.media_tabs_index import invalidate_media_tab_caches
+
+        removed = invalidate_media_tab_caches()
+        results.append({"table": "media_tab_caches", "removed": removed})
     return results

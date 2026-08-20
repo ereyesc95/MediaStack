@@ -59,10 +59,58 @@ def _name_slug(name: str) -> str:
 
 
 def photo_file_stem(artist: Artist) -> str:
-    """Local filename stem: `{name-slug}--{mbid-or-id}`."""
+    """Local filename stem: `{Display Name} ({mbid-or-id})`."""
     name = _display_name(artist.art_stage_name or artist.art_name)
-    code = (artist.art_code or str(artist.art_id)).lower()
-    return f"{_name_slug(name)}--{code}"
+    code = (artist.art_code or str(artist.art_id) or "unknown").strip()
+    return f"{name} ({code})"
+
+
+_PAREN_ID_RE = re.compile(r"^(?P<name>.+?)\s*\((?P<code>[^)]+)\)\s*$")
+
+
+def _stem_matches_person(
+    stem: str,
+    *,
+    display_name: str,
+    name_slug: str,
+    name_key: str,
+    id_stems: list[str],
+) -> str | None:
+    """Return match quality: 'id' | 'exact' | 'name' | None."""
+    stem_cf = stem.casefold().strip()
+    name_cf = display_name.casefold().strip()
+    stem_key = re.sub(r"[^a-z0-9]+", "", stem_cf)
+
+    # Preferred: Name (mbid-or-id)
+    m = _PAREN_ID_RE.match(stem.strip())
+    if m:
+        base = m.group("name").strip().casefold()
+        code = m.group("code").strip().casefold()
+        if id_stems and code in {s.casefold() for s in id_stems}:
+            return "id"
+        if base == name_cf or re.sub(r"[^a-z0-9]+", "", base) == name_key:
+            if id_stems and any(s.casefold() == code for s in id_stems):
+                return "id"
+            return "exact"
+
+    # Legacy: name-slug--id
+    if name_slug and (
+        stem_cf == name_slug
+        or stem_cf.startswith(f"{name_slug}--")
+        or any(stem_cf.endswith(f"--{s.casefold()}") for s in id_stems)
+    ):
+        if id_stems and any(s.casefold() in stem_cf for s in id_stems):
+            return "id"
+        if stem_cf == name_slug or stem_cf.startswith(f"{name_slug}--"):
+            return "exact"
+
+    if stem_cf == name_cf or stem_key == name_key:
+        return "exact"
+    if id_stems and any(s.casefold() in stem_cf for s in id_stems):
+        return "id"
+    if name_key and name_key in stem_key:
+        return "name"
+    return None
 
 
 def _data_file_url(path: Path) -> str:
@@ -157,25 +205,25 @@ def _local_people_photo(artist: Artist, media_root: Path | None) -> str | None:
     for base, kind in bases:
         if not base.is_dir():
             continue
-        # Prefer id/mbid match, then exact name slug, then name-contains
         by_id: Path | None = None
         by_exact: Path | None = None
         by_name: Path | None = None
         for p in base.iterdir():
             if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
                 continue
-            stem = p.stem.lower()
-            stem_key = re.sub(r"[^a-z0-9]+", "", stem)
-            if stems and any(s in stem for s in stems):
+            quality = _stem_matches_person(
+                p.stem,
+                display_name=name,
+                name_slug=name_slug,
+                name_key=name_key,
+                id_stems=stems,
+            )
+            if quality == "id":
                 by_id = p
                 break
-            if name_slug and (
-                stem == name_slug
-                or stem.startswith(f"{name_slug}--")
-                or stem_key == name_key
-            ):
+            if quality == "exact":
                 by_exact = by_exact or p
-            elif name_key and name_key in stem_key:
+            elif quality == "name":
                 by_name = by_name or p
         hit = by_id or by_exact or by_name
         if hit:

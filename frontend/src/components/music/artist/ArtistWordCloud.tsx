@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWordCloud, prefetchWordCloud } from "../../../api";
-import type { WordCloudPayload } from "../../../types";
+import type { WordCloudPayload, WordCloudTerm } from "../../../types";
 import {
   WORD_CLOUD_INVALIDATE_EVENT,
 } from "../../../wordCloudInvalidation";
+import { trackMainTitle } from "../release/releaseTrackPanelMeta";
 
 type Props = {
   bandId: number;
   embedded?: boolean;
+  onOpenRelease?: (bandId: number, releaseId: string) => void;
 };
 
 function formatTopicLabel(text: string): string {
@@ -18,12 +20,17 @@ function formatTopicLabel(text: string): string {
     .join(" ");
 }
 
-export default function ArtistWordCloud({ bandId, embedded = false }: Props) {
+export default function ArtistWordCloud({
+  bandId,
+  embedded = false,
+  onOpenRelease,
+}: Props) {
   const [data, setData] = useState<WordCloudPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [topicTerm, setTopicTerm] = useState<WordCloudTerm | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,17 +97,24 @@ export default function ArtistWordCloud({ bandId, embedded = false }: Props) {
   const topTerms = terms.slice(0, 5);
   const hasMore = terms.length > 5;
 
+  const openTopic = (t: WordCloudTerm) => {
+    setTopicTerm(t);
+    setModalOpen(false);
+  };
+
   const pills =
     terms.length > 0 ? (
       <div className="artist-word-cloud__pills">
         {topTerms.map((t) => (
-          <span
+          <button
+            type="button"
             key={t.text}
             className="artist-about__pill artist-word-cloud__pill"
-            title={`${t.count} mentions`}
+            title={`${t.count} mentions — view tracks`}
+            onClick={() => openTopic(t)}
           >
             {formatTopicLabel(t.text)}
-          </span>
+          </button>
         ))}
         {hasMore && (
           <button
@@ -115,6 +129,9 @@ export default function ArtistWordCloud({ bandId, embedded = false }: Props) {
     ) : (
       hint
     );
+
+  const topicTracks = topicTerm?.tracks || [];
+  const topicLabel = topicTerm ? formatTopicLabel(topicTerm.text) : "";
 
   const body = (
     <>
@@ -140,16 +157,84 @@ export default function ArtistWordCloud({ bandId, embedded = false }: Props) {
             </header>
             <div className="artist-word-cloud__canvas" aria-label="Lyrics word cloud">
               {terms.map((t) => (
-                <span
+                <button
+                  type="button"
                   key={t.text}
-                  className="artist-word-cloud__term"
+                  className="artist-word-cloud__term artist-word-cloud__term--btn"
                   style={{ fontSize: `${0.82 + t.weight * 1.15}rem` }}
                   title={`${formatTopicLabel(t.text)} (${t.count})`}
+                  onClick={() => openTopic(t)}
                 >
                   {formatTopicLabel(t.text)}
-                </span>
+                </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+      {topicTerm && (
+        <div className="artist-word-cloud-modal" role="dialog" aria-modal="true">
+          <div
+            className="artist-word-cloud-modal__backdrop"
+            onClick={() => setTopicTerm(null)}
+          />
+          <div className="artist-word-cloud-modal__panel artist-topic-tracks-panel">
+            <header className="artist-word-cloud-modal__head">
+              <h3>Tracks tagged “{topicLabel}”</h3>
+              <button
+                type="button"
+                className="artist-word-cloud-modal__close"
+                onClick={() => setTopicTerm(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </header>
+            {topicTracks.length === 0 ? (
+              <p className="muted artist-word-cloud__hint">
+                No local tracks linked to this topic yet (lyrics may be from
+                cache only).
+              </p>
+            ) : (
+              <ul className="artist-topic-tracks">
+                {topicTracks.map((tr) => {
+                  const canGo =
+                    Boolean(tr.release_id) && Boolean(onOpenRelease);
+                  return (
+                    <li key={tr.play_path}>
+                      <button
+                        type="button"
+                        className="artist-topic-tracks__row"
+                        disabled={!canGo}
+                        onClick={() => {
+                          if (canGo && tr.release_id) {
+                            onOpenRelease?.(
+                              tr.navigate_band_id ?? bandId,
+                              tr.release_id
+                            );
+                            setTopicTerm(null);
+                          }
+                        }}
+                      >
+                        <span className="artist-topic-tracks__title">
+                          {trackMainTitle(tr.title)}
+                        </span>
+                        {tr.release_title ? (
+                          <span className="artist-topic-tracks__album muted">
+                            {tr.release_title}
+                          </span>
+                        ) : null}
+                        {canGo ? (
+                          <span className="artist-topic-tracks__go">
+                            Go to release
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       )}

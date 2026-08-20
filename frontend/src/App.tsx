@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   fetchAppSettings,
@@ -8,6 +8,10 @@ import {
   rescanSeriesLocalData,
   syncFolders,
 } from "./api";
+import {
+  MediaSwitchProvider,
+  type MediaSwitchKind,
+} from "./mediaSwitchContext";
 import {
   clearBooksDashboardCache,
   prefetchBooksDashboard,
@@ -546,8 +550,25 @@ export default function App() {
     (sourceModal === "settings" ||
       (sourceModal === "welcome" && !mediaRootConfigured));
 
-  return (
+  const mediaSwitchValue = useMemo(
+    () => ({
+      currentKind: view.kind,
+      selectMedia: (kind: MediaSwitchKind) => {
+        selectMedia(
+          MEDIA_OPTIONS.find((o) => o.kind === kind) ?? {
+            id: 0,
+            kind,
+            label: kind,
+          }
+        );
+      },
+      showSwitchMedia: view.kind !== "hub",
+    }),
+    [view.kind]
+  );
 
+  return (
+    <MediaSwitchProvider value={mediaSwitchValue}>
     <div className={`app ${view.kind === "hub" ? "app--hub" : "app--module-view"}`}>
 
       {booting && (
@@ -1574,6 +1595,7 @@ export default function App() {
       </main>
 
     </div>
+    </MediaSwitchProvider>
 
   );
 

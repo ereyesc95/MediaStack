@@ -77,12 +77,14 @@ def _logo_asset_url(
             if full.is_file():
                 try:
                     data_rel = full.relative_to(links_dir()).as_posix()
-                    return f"/api/data/file?path={quote('links/' + data_rel, safe='/')}"
+                    return f"/api/assets/links/{full.name}"
                 except ValueError:
                     pass
                 for root in (ASSETS_DIR, DATA_DIR):
                     try:
                         data_rel = full.relative_to(root).as_posix()
+                        if data_rel.split("/", 1)[0].casefold() == "links":
+                            return f"/api/assets/links/{full.name}"
                         return f"/api/data/file?path={quote(data_rel, safe='/')}"
                     except ValueError:
                         continue
@@ -106,11 +108,11 @@ def _logo_asset_url(
                     continue
                 stem_cf = f.stem.casefold()
                 if stem_cf == want or stem_cf.startswith(f"{want}--"):
-                    return f"/api/data/file?path={quote('links/' + f.name, safe='/')}"
+                    return f"/api/assets/links/{f.name}"
 
     if logo_key:
-        return f"/assets/links/{logo_key}.svg"
-    return "/assets/links/link.svg"
+        return f"/api/assets/links/{logo_key}.svg"
+    return "/api/assets/links/link.svg"
 
 
 def _serialize_link(

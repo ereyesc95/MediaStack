@@ -147,7 +147,7 @@ def add_link_item(
         "url": raw,
         "logo_key": logo_key,
         "logo_url": logo_url
-        or (f"/assets/links/{logo_key}.svg" if logo_key else "/assets/links/link.svg"),
+        or (f"/api/assets/links/{logo_key}.svg" if logo_key else "/api/assets/links/link.svg"),
     }
     links.append(item)
     return item
@@ -182,7 +182,7 @@ def patch_link_item(
         if logo_url is not None:
             item["logo_url"] = logo_url
         elif logo_key:
-            item["logo_url"] = f"/assets/links/{logo_key}.svg"
+            item["logo_url"] = f"/api/assets/links/{logo_key}.svg"
         return item
     return None
 
