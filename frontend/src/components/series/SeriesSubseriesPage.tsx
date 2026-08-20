@@ -1741,7 +1741,16 @@ export default function SeriesSubseriesPage({
       }
     }
     if (publisherFallback) {
-      return { name: publisherFallback, logo: null as string | null };
+      const slug = publisherFallback
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, "and")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "unknown";
+      return {
+        name: publisherFallback,
+        logo: `/api/assets/labels/${slug}.png`,
+      };
     }
     return null;
   }, [
@@ -3503,7 +3512,7 @@ export default function SeriesSubseriesPage({
           </div>
         ) : null}
 
-        {contentReady && !mediaLoading ? (
+        {contentReady ? (
         <nav className="release-page__tabs" aria-label="Subseries sections">
           {tabs.map((t) => (
             <button
@@ -4420,6 +4429,12 @@ export default function SeriesSubseriesPage({
                         src={distributor?.logo || DEFAULT_LABEL_URL}
                         alt={publisher}
                         className="release-page__label-logo"
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          if (!el.src.includes("/default/label")) {
+                            el.src = DEFAULT_LABEL_URL;
+                          }
+                        }}
                       />
                     </button>
                     <p className="release-page__label-name">

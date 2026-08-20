@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 type Props = {
   onClose: () => void;
@@ -7,6 +7,7 @@ type Props = {
   layer?: 1 | 2;
 };
 
+/** Close on mouseup only when the gesture both started and ended on the backdrop. */
 export default function ModalPortal({
   onClose,
   children,
@@ -16,8 +17,20 @@ export default function ModalPortal({
     layer === 2
       ? "modal-backdrop modal-backdrop--stacked"
       : "modal-backdrop";
+  const pressedOnBackdrop = useRef(false);
   return createPortal(
-    <div className={className} onMouseDown={onClose}>
+    <div
+      className={className}
+      onMouseDown={(e) => {
+        pressedOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        if (pressedOnBackdrop.current && e.target === e.currentTarget) {
+          onClose();
+        }
+        pressedOnBackdrop.current = false;
+      }}
+    >
       {children}
     </div>,
     document.body

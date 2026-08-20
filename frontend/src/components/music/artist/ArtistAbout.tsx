@@ -17,7 +17,6 @@ type Props = {
   onLabel: (label: string) => void;
   onPlayTrack: (path: string, title: string) => void;
   playingPath: string | null;
-  onPlayerHost?: (el: HTMLDivElement | null) => void;
   onOpenPerformer?: (artistId: number) => void;
 };
 
@@ -91,7 +90,6 @@ export default function ArtistAbout({
   onLabel,
   onPlayTrack,
   playingPath,
-  onPlayerHost,
   onOpenPerformer,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -172,10 +170,6 @@ export default function ArtistAbout({
     [data.labels]
   );
   const hasBio = Boolean(data.bio);
-
-  useEffect(() => {
-    return () => onPlayerHost?.(null);
-  }, [onPlayerHost]);
 
   return (
     <div
@@ -476,10 +470,6 @@ export default function ArtistAbout({
                     </button>
                   ))}
                 </div>
-                <div
-                  ref={onPlayerHost}
-                  className="artist-about__tracks-player"
-                />
               </div>
             </section>
           )}

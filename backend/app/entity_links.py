@@ -52,17 +52,23 @@ def _parse_legacy_websites(raw: str | None) -> list[dict[str, str]]:
     return out
 
 
-def _logo_asset_url(logo_key: str | None, logo_path: str | None, media_root: Path | None) -> str:
-    from app.paths import DATA_DIR, links_dir
+def _logo_asset_url(
+    logo_key: str | None,
+    logo_path: str | None,
+    media_root: Path | None,
+    *,
+    label: str | None = None,
+) -> str:
+    from app.paths import ASSETS_DIR, DATA_DIR, links_dir
     from urllib.parse import quote
 
     if logo_path:
         candidates: list[Path] = []
         rel = Path(logo_path.replace("\\", "/"))
-        # New layout: relative to data/links (with or without Links/ prefix)
         candidates.append(links_dir() / rel.name)
         if rel.parts and rel.parts[0].casefold() != "links":
             candidates.append(links_dir() / rel)
+        candidates.append(ASSETS_DIR / "links" / rel.name)
         candidates.append(DATA_DIR / "links" / rel.name)
         if media_root and media_root.is_dir():
             candidates.append(media_root / logo_path)
@@ -70,11 +76,38 @@ def _logo_asset_url(logo_key: str | None, logo_path: str | None, media_root: Pat
         for full in candidates:
             if full.is_file():
                 try:
-                    data_rel = full.relative_to(DATA_DIR).as_posix()
-                    return f"/api/data/file?path={quote(data_rel, safe='/')}"
+                    data_rel = full.relative_to(links_dir()).as_posix()
+                    return f"/api/data/file?path={quote('links/' + data_rel, safe='/')}"
                 except ValueError:
-                    if media_root:
-                        return _media_url(full, media_root)
+                    pass
+                for root in (ASSETS_DIR, DATA_DIR):
+                    try:
+                        data_rel = full.relative_to(root).as_posix()
+                        return f"/api/data/file?path={quote(data_rel, safe='/')}"
+                    except ValueError:
+                        continue
+                if media_root:
+                    return _media_url(full, media_root)
+
+    # Match drop-in logos by website name (e.g. Reddit.png, reddit.png)
+    label_candidates: list[str] = []
+    if logo_key:
+        label_candidates.append(logo_key)
+    if label:
+        label_candidates.append(label)
+    base = links_dir()
+    if base.is_dir() and label_candidates:
+        for raw in label_candidates:
+            want = re.sub(r"[^\w-]+", "-", raw.lower()).strip("-").casefold()
+            if not want:
+                continue
+            for f in base.iterdir():
+                if not f.is_file() or f.suffix.lower() not in ALLOWED_LOGO_EXT:
+                    continue
+                stem_cf = f.stem.casefold()
+                if stem_cf == want or stem_cf.startswith(f"{want}--"):
+                    return f"/api/data/file?path={quote('links/' + f.name, safe='/')}"
+
     if logo_key:
         return f"/assets/links/{logo_key}.svg"
     return "/assets/links/link.svg"
@@ -94,7 +127,9 @@ def _serialize_link(
         "url": row.lnk_url,
         "category": row.lnk_category,
         "logo_key": logo_key,
-        "logo_url": _logo_asset_url(logo_key, row.lnk_logo_path, media_root),
+        "logo_url": _logo_asset_url(
+            logo_key, row.lnk_logo_path, media_root, label=label
+        ),
         "show_label": False,
         "famous": famous,
         "sort_tier": sort_tier(logo_key, label),

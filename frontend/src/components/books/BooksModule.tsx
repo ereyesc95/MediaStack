@@ -91,6 +91,7 @@ const BOOKS_FILTER_MODES_BOOKS: { id: SeriesFilterMode; label: string }[] = [
 type Props = {
   mediaOptions: MediaOption[];
   busy?: string;
+  syncTick?: number;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -139,6 +140,7 @@ type Props = {
 export default function BooksModule({
   mediaOptions,
   busy,
+  syncTick = 0,
   onImport,
   onSync,
   onChooseSource,
@@ -215,7 +217,7 @@ export default function BooksModule({
     void (async () => {
       try {
         const [dash, uni] = await Promise.all([
-          prefetchBooksDashboard(),
+          prefetchBooksDashboard({ force: syncTick > 0 }),
           prefetchUniverses("books"),
         ]);
         if (cancelled) return;
@@ -232,7 +234,7 @@ export default function BooksModule({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncTick]);
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
@@ -250,15 +252,15 @@ export default function BooksModule({
 
   useEffect(() => {
     if (tab !== "home" || franchiseId) return;
-    void prefetchBooksDashboard().then((dash) =>
+    void prefetchBooksDashboard({ force: syncTick > 0 }).then((dash) =>
       setDashboard(dash as never)
     );
-  }, [tab, franchiseId]);
+  }, [tab, franchiseId, syncTick]);
 
   useEffect(() => {
     // Catalog is heavy — only load when browsing catalog or a franchise.
     if (tab === "catalog" || franchiseId) loadCatalog();
-  }, [tab, franchiseId, loadCatalog]);
+  }, [tab, franchiseId, loadCatalog, syncTick]);
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {

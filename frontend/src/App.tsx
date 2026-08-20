@@ -5,8 +5,25 @@ import {
   fetchSession,
   importSql,
   logoutProfile,
+  rescanSeriesLocalData,
   syncFolders,
 } from "./api";
+import {
+  clearBooksDashboardCache,
+  prefetchBooksDashboard,
+} from "./booksDashboardCache";
+import {
+  clearMoviesDashboardCache,
+  prefetchMoviesDashboard,
+} from "./moviesDashboardCache";
+import {
+  clearMusicDashboardCache,
+  prefetchMusicDashboard,
+} from "./musicDashboardCache";
+import {
+  clearSeriesDashboardCache,
+  prefetchSeriesDashboard,
+} from "./seriesDashboardCache";
 import {
   clearProfile,
   getProfileToken,
@@ -134,6 +151,8 @@ export default function App() {
     useState<CardOrientation>("landscape");
 
   const [busy, setBusy] = useState("");
+
+  const [syncTick, setSyncTick] = useState(0);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -361,6 +380,28 @@ export default function App() {
       await syncFolders("all");
 
       setBusy("Sync done");
+
+      window.setTimeout(() => setBusy(""), 2500);
+
+      void rescanSeriesLocalData(true).catch(() => {});
+
+      clearMusicDashboardCache();
+
+      clearSeriesDashboardCache();
+
+      clearMoviesDashboardCache();
+
+      clearBooksDashboardCache();
+
+      void prefetchMusicDashboard({ force: true });
+
+      void prefetchSeriesDashboard({ force: true });
+
+      void prefetchMoviesDashboard({ force: true });
+
+      void prefetchBooksDashboard({ force: true });
+
+      setSyncTick((t) => t + 1);
 
     } catch (e) {
 
@@ -623,6 +664,8 @@ export default function App() {
             mediaOptions={MEDIA_OPTIONS}
 
             busy={busy}
+
+            syncTick={syncTick}
 
             onImport={handleImport}
 
@@ -1124,6 +1167,7 @@ export default function App() {
             key={`series-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
             busy={busy}
+            syncTick={syncTick}
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
@@ -1265,6 +1309,7 @@ export default function App() {
             key={`movies-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
             busy={busy}
+            syncTick={syncTick}
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
@@ -1392,6 +1437,7 @@ export default function App() {
             key={`books-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
             busy={busy}
+            syncTick={syncTick}
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}

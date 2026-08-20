@@ -95,6 +95,7 @@ const MOVIES_FILTER_MODES_FILMS: { id: SeriesFilterMode; label: string }[] = [
 type Props = {
   mediaOptions: MediaOption[];
   busy?: string;
+  syncTick?: number;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -143,6 +144,7 @@ type Props = {
 export default function MoviesModule({
   mediaOptions,
   busy,
+  syncTick = 0,
   onImport,
   onSync,
   onChooseSource,
@@ -221,7 +223,7 @@ export default function MoviesModule({
     void (async () => {
       try {
         const [dash, uni] = await Promise.all([
-          prefetchMoviesDashboard(),
+          prefetchMoviesDashboard({ force: syncTick > 0 }),
           prefetchUniverses("movies"),
         ]);
         if (cancelled) return;
@@ -238,7 +240,7 @@ export default function MoviesModule({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncTick]);
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
@@ -257,7 +259,7 @@ export default function MoviesModule({
   useEffect(() => {
     // Catalog is heavy — only load when browsing catalog or a franchise.
     if (tab === "catalog" || franchiseId) loadCatalog();
-  }, [tab, franchiseId, loadCatalog]);
+  }, [tab, franchiseId, loadCatalog, syncTick]);
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {

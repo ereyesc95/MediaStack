@@ -72,6 +72,7 @@ type SeriesTab = "home" | "catalog";
 type Props = {
   mediaOptions: MediaOption[];
   busy?: string;
+  syncTick?: number;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -132,6 +133,7 @@ type Props = {
 export default function SeriesModule({
   mediaOptions,
   busy,
+  syncTick = 0,
   onImport,
   onSync,
   onChooseSource,
@@ -244,8 +246,8 @@ export default function SeriesModule({
     }
   }, []);
 
-  const loadDashboard = useCallback(async () => {
-    const cached = getCachedSeriesDashboard();
+  const loadDashboard = useCallback(async (force = false) => {
+    const cached = force ? null : getCachedSeriesDashboard();
     if (cached) {
       setDashboard(cached);
       setDashLoading(false);
@@ -254,7 +256,7 @@ export default function SeriesModule({
     }
     try {
         const [dash, uni] = await Promise.all([
-          prefetchSeriesDashboard(),
+          prefetchSeriesDashboard({ force }),
           prefetchUniverses("series"),
         ]);
       setDashboard(dash);
@@ -311,8 +313,8 @@ export default function SeriesModule({
   }, []);
 
   useEffect(() => {
-    void loadDashboard();
-  }, [loadDashboard]);
+    void loadDashboard(syncTick > 0);
+  }, [loadDashboard, syncTick]);
 
   useEffect(() => {
     // Catalog + filters are heavy — only load when browsing catalog or a franchise.
@@ -320,7 +322,7 @@ export default function SeriesModule({
       void loadCatalog();
       void loadFilters();
     }
-  }, [tab, franchiseId, loadCatalog, loadFilters]);
+  }, [tab, franchiseId, loadCatalog, loadFilters, syncTick]);
 
   const openUniverseLanding = useCallback(
     (id: number, from: "home" | "catalog" = "catalog") => {

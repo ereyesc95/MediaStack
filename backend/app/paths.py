@@ -17,11 +17,15 @@ def install_dir() -> Path:
 
 PROJECT_ROOT = install_dir()
 DATA_DIR = PROJECT_ROOT / "data"
+ASSETS_DIR = PROJECT_ROOT / "assets"
 IMPORT_SQL = DATA_DIR / "databinger.sql"
 
-# Complementary resources (not playable media) — kept out of MYSTACK_MEDIA_ROOT
-PEOPLE_DIR = DATA_DIR / "people"
-LINKS_DIR = DATA_DIR / "links"
+# Complementary resources live under assets/ (not playable media / not MYSTACK_MEDIA_ROOT)
+PEOPLE_DIR = ASSETS_DIR / "people"
+LINKS_DIR = ASSETS_DIR / "links"
+# Legacy locations (read + one-time migrate)
+LEGACY_PEOPLE_DIR = DATA_DIR / "people"
+LEGACY_LINKS_DIR = DATA_DIR / "links"
 
 # Back-compat alias
 LEGACY_SQL = IMPORT_SQL
@@ -31,20 +35,57 @@ def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def ensure_assets_dir() -> None:
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
 def people_dir() -> Path:
-    ensure_data_dir()
+    ensure_assets_dir()
     PEOPLE_DIR.mkdir(parents=True, exist_ok=True)
+    _migrate_tree(LEGACY_PEOPLE_DIR, PEOPLE_DIR)
     return PEOPLE_DIR
 
 
 def links_dir() -> Path:
-    ensure_data_dir()
+    ensure_assets_dir()
     LINKS_DIR.mkdir(parents=True, exist_ok=True)
+    _migrate_tree(LEGACY_LINKS_DIR, LINKS_DIR)
     return LINKS_DIR
 
 
+def _migrate_tree(src: Path, dest: Path) -> None:
+    """Move leftover files from a legacy folder into dest (non-destructive)."""
+    if not src.is_dir() or src.resolve() == dest.resolve():
+        return
+    import shutil
+
+    try:
+        entries = list(src.iterdir())
+    except OSError:
+        return
+    if not entries:
+        try:
+            src.rmdir()
+        except OSError:
+            pass
+        return
+    for child in entries:
+        target = dest / child.name
+        if target.exists():
+            continue
+        try:
+            shutil.move(str(child), str(target))
+        except OSError:
+            pass
+    try:
+        if not any(src.iterdir()):
+            src.rmdir()
+    except OSError:
+        pass
+
+
 def migrate_people_links_from_media(media_root: str | Path | None) -> None:
-    """Move Media/People and Media/Links into data/ if still present under media root."""
+    """Move Media/People and Media/Links into assets/ if still present under media root."""
     if not media_root:
         return
     root = Path(media_root)

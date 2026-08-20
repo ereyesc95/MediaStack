@@ -19,7 +19,7 @@ from app.release_tracklist import _track_number
 from app.band_overview import _build_lineup, _is_solo
 from app.config import settings
 from app.gallery import _artist_dir
-from app.media_index import get_audio_index, parse_bracket_tags
+from app.media_index import get_audio_index
 from app.media_paths_util import safe_relative
 from app.models import Band
 from app.paths import DATA_DIR
@@ -27,6 +27,7 @@ from app.system_playlists import EXCLUDE_ORIGINALS, _track_tags
 
 QUIZ_SCORES_DIR = DATA_DIR / "quiz_scores"
 ORIGINAL_CATEGORIES = ("albums", "extended_plays", "soundtracks")
+OTHER_TRACK_CATEGORIES = ("singles", "compilations", "live_albums")
 
 
 def _now() -> str:
@@ -138,14 +139,67 @@ def _tracks_in_release_folder(media_root: Path, folder_rel: str) -> list[dict]:
     return tracks
 
 
+def _filename_has_bracket_tags(stem: str) -> bool:
+    return bool(re.search(r"\[[^\]]*\]", stem or ""))
+
+
+def _collect_other_tracks(media_root: Path, releases: list[dict]) -> list[dict]:
+    """Standalone singles + compilations + live albums: real audio files, no [tags]."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for rel in releases:
+        if rel.get("category") not in OTHER_TRACK_CATEGORIES:
+            continue
+        if not rel.get("official", True):
+            continue
+        folder = rel.get("folder_path") or ""
+        if not folder:
+            continue
+        # Nested singles under an album parent are not "standalone".
+        if rel.get("category") == "singles":
+            parts = folder.replace("\\", "/").casefold().split("/")
+            if "singles" not in parts:
+                continue
+        folder_path = media_root / Path(folder.replace("\\", "/"))
+        if not folder_path.is_dir():
+            continue
+        files: list[Path] = []
+        for path in folder_path.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in AUDIO_EXTS:
+                continue
+            if path.suffix.lower() == ".lnk":
+                continue
+            if _filename_has_bracket_tags(path.stem):
+                continue
+            if not _track_tags_ok_original(path.stem):
+                continue
+            files.append(path)
+        files.sort(key=lambda p: (_track_number(p.name, 9999), p.name.lower()))
+        for path in files:
+            title = _track_title_from_filename(path)
+            key = title.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "title": title,
+                    "number": len(out) + 1,
+                    "hidden": True,
+                }
+            )
+    return out
+
+
 def build_discography_quiz(db: Session, band_id: int) -> dict | None:
     band = db.get(Band, band_id)
     if not band or not settings.media_root:
         return None
     media_root = Path(settings.media_root)
     audio = get_audio_index(db, band, force=False)
+    all_releases = audio.get("releases") or []
     releases_out: list[dict] = []
-    for rel in audio.get("releases") or []:
+    for rel in all_releases:
         if rel.get("category") not in ORIGINAL_CATEGORIES:
             continue
         if not rel.get("official", True):
@@ -161,12 +215,19 @@ def build_discography_quiz(db: Session, band_id: int) -> dict | None:
                 "id": rel.get("id"),
                 "title": rel.get("title") or "",
                 "cover_url": rel.get("cover_url"),
+                "display_date": rel.get("display_date"),
+                "date_iso": rel.get("date_iso"),
                 "tracks": [{"title": t["title"], "number": t["number"], "hidden": True} for t in tracks],
             }
         )
-    if not releases_out:
-        return {"releases": [], "is_solo": _is_solo(db, band)}
-    return {"releases": releases_out, "is_solo": _is_solo(db, band)}
+    other_tracks = _collect_other_tracks(media_root, all_releases)
+    if not releases_out and not other_tracks:
+        return {"releases": [], "other_tracks": [], "is_solo": _is_solo(db, band)}
+    return {
+        "releases": releases_out,
+        "other_tracks": other_tracks,
+        "is_solo": _is_solo(db, band),
+    }
 
 
 def build_lineup_quiz(db: Session, band_id: int, media_root: Path) -> dict | None:

@@ -16541,6 +16541,24 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
 }
 
+.series-audio-player__album-link {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.series-audio-player__album-link:hover {
+  color: var(--text);
+}
+
 .series-film-play-actions {
   display: flex;
   flex-direction: column;
@@ -16680,6 +16698,15 @@ button.lyrics-status-badge--icon-only {
   background: color-mix(in srgb, var(--bg-elevated, #1a1512) 94%, #000);
   border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Trailer / Extras bubbles open upward — don't clip at panel edges */
+.release-page__panel:has(.series-film-bubble),
+.release-page__panel-meta:has(.series-film-bubble),
+.release-page:not(.release-page--stacked)
+  .release-page__panel-meta:has(.series-film-bubble),
+.series-film-play-actions {
+  overflow: visible;
 }
 
 .series-film-bubble__row {
@@ -17971,11 +17998,21 @@ button.lyrics-status-badge--icon-only {
   align-items: start;
 }
 
+.artist-quiz__disco-grid--with-other {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .artist-quiz__disco-col {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.artist-quiz__disco-col--other {
+  position: sticky;
+  top: 0;
+  align-self: start;
 }
 
 .artist-quiz__release {
@@ -17988,6 +18025,22 @@ button.lyrics-status-badge--icon-only {
   font-weight: 700;
   color: var(--text);
   line-height: 1.35;
+}
+
+.artist-quiz__other-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.25rem;
+  background: color-mix(in srgb, var(--bg, #0e0b09) 92%, transparent);
+}
+
+.artist-quiz__release-date {
+  margin: -0.2rem 0 0.45rem;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  line-height: 1.3;
 }
 
 .artist-quiz__track-list {
@@ -18301,8 +18354,13 @@ button.lyrics-status-badge--icon-only {
 }
 
 @media (max-width: 720px) {
-  .artist-quiz__disco-grid {
+  .artist-quiz__disco-grid,
+  .artist-quiz__disco-grid--with-other {
     grid-template-columns: 1fr;
+  }
+
+  .artist-quiz__disco-col--other {
+    position: static;
   }
 
   .artist-page:not(.artist-page--mobile-portrait) .artist-quiz__song-cards {

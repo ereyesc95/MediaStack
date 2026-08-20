@@ -14,10 +14,10 @@ _PORTRAIT_RE = re.compile(r"portrait", re.I)
 _LANDSCAPE_RE = re.compile(r"landscape", re.I)
 
 
-def artwork_dir(franchise_dir: Path, *, film: bool = False) -> Path:
+def artwork_dir(franchise_dir: Path, *, film: bool = False, create: bool = True) -> Path:
     """Return folder for TMDb-downloaded posters/backdrops.
 
-    - Franchise / work folders → ``[Artwork]`` (create if missing).
+    - Franchise / work folders → ``[Artwork]`` (create only when ``create``).
     - Individual film folders → ``Gallery/Covers`` (never create ``[Artwork]``).
     """
     if film:
@@ -27,7 +27,8 @@ def artwork_dir(franchise_dir: Path, *, film: bool = False) -> Path:
         if existing and existing.name.casefold() == "covers":
             return existing
         covers = franchise_dir / "Gallery" / "Covers"
-        covers.mkdir(parents=True, exist_ok=True)
+        if create:
+            covers.mkdir(parents=True, exist_ok=True)
         return covers
 
     preferred = franchise_dir / "[Artwork]"
@@ -36,7 +37,8 @@ def artwork_dir(franchise_dir: Path, *, film: bool = False) -> Path:
     alt = franchise_dir / "Artwork"
     if alt.is_dir():
         return alt
-    preferred.mkdir(parents=True, exist_ok=True)
+    if create:
+        preferred.mkdir(parents=True, exist_ok=True)
     return preferred
 
 
@@ -107,13 +109,51 @@ def ensure_artwork_cached(
     posters: list[str],
     backdrops: list[str],
     film: bool = False,
+    franchise_name: str | None = None,
 ) -> dict:
     """
     If no local portrait/landscape files exist, download TMDb images.
 
-    Franchise/work → ``[Artwork]``. Individual film → ``Gallery/Covers``.
+    Franchise/work → ``[Artwork]`` only when needed (never when Gallery already
+    has art, or when Music/another module already owns franchise ``[Artwork]``).
+    Individual film → ``Gallery/Covers``.
     """
-    art = artwork_dir(franchise_dir, film=film)
+    empty: dict = {"portraits": [], "landscapes": []}
+
+    if not film:
+        try:
+            from app.franchise_identity import find_artwork_home, find_music_artist_dir
+            from app.series_paths import find_artwork_legacy
+
+            name = (franchise_name or franchise_dir.name or "").strip()
+            if name:
+                home = find_artwork_home(name, media_root)
+                if home:
+                    _module, home_dir = home
+                    if home_dir.resolve() != franchise_dir.resolve():
+                        return empty
+                music_dir = find_music_artist_dir(name, media_root)
+                if music_dir and music_dir.resolve() != franchise_dir.resolve():
+                    art_home = find_artwork_legacy(music_dir)
+                    if art_home and art_home.is_dir():
+                        return empty
+        except Exception:
+            pass
+
+        has_p = bool(list_portrait_files(franchise_dir))
+        has_l = bool(list_landscape_files(franchise_dir))
+        if has_p and has_l:
+            return empty
+        # Prefer existing Gallery dirs; only create [Artwork] when nothing local exists
+        if has_p or has_l:
+            art = artwork_dir(franchise_dir, film=False, create=False)
+            if not art.is_dir():
+                return empty
+        else:
+            art = artwork_dir(franchise_dir, film=False, create=True)
+    else:
+        art = artwork_dir(franchise_dir, film=True, create=True)
+
     saved_portraits: list[str] = []
     saved_landscapes: list[str] = []
 
@@ -434,18 +474,29 @@ def _norm_key(text: str) -> str:
 def _file_url(path: Path, media_root: Path | None) -> str | None:
     from urllib.parse import quote
 
+    from app.paths import ASSETS_DIR, DATA_DIR
+
     if media_root and media_root.is_dir():
         try:
             path.resolve().relative_to(media_root.resolve())
             return _media_url(path, media_root)
         except ValueError:
             pass
+    # assets/people/{Letter}/Name.png → /api/data/file?path=people/{Letter}/Name.png
     try:
         rel = path.relative_to(people_dir()).as_posix()
-        return f"/api/data/file?path={quote(rel)}"
+        return f"/api/data/file?path={quote('people/' + rel)}"
     except ValueError:
-        if media_root:
-            return _media_url(path, media_root)
+        pass
+    for root in (ASSETS_DIR, DATA_DIR):
+        try:
+            rel = path.relative_to(root).as_posix()
+            if rel.split("/", 1)[0].casefold() in ("people", "links"):
+                return f"/api/data/file?path={quote(rel)}"
+        except ValueError:
+            continue
+    if media_root:
+        return _media_url(path, media_root)
     return None
 
 

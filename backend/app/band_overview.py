@@ -488,6 +488,13 @@ def build_band_overview(
             top_titles=band.bnd_top_100,
             limit=5,
         )
+        from app.media_index import release_id_from_path
+
+        for track in top_tracks:
+            folder = track.get("album_folder")
+            if folder:
+                track["navigate_release_id"] = release_id_from_path(folder)
+                track["navigate_band_id"] = band.bnd_id
         media = media_visibility_flags(band.bnd_name, root, db=db, band=band)
 
     lineup = _build_lineup(db, band, root)

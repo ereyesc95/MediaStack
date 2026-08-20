@@ -91,6 +91,7 @@ type Props = {
   cardOrientation: CardOrientation;
   mediaOptions: MediaOption[];
   busy?: string;
+  syncTick?: number;
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -160,6 +161,7 @@ export default function MusicModule({
   cardOrientation,
   mediaOptions,
   busy,
+  syncTick = 0,
   onImport,
   onSync,
   onChooseSource,
@@ -484,6 +486,13 @@ export default function MusicModule({
 
   useEffect(() => {
     if (tab !== "home") return;
+    if (syncTick > 0) {
+      setDashLoading(true);
+      void prefetchMusicDashboard({ force: true })
+        .then(setDashboard)
+        .finally(() => setDashLoading(false));
+      return;
+    }
     const cached = getCachedMusicDashboard();
     if (cached) {
       setDashboard(cached);
@@ -494,7 +503,7 @@ export default function MusicModule({
     void prefetchMusicDashboard()
       .then(setDashboard)
       .finally(() => setDashLoading(false));
-  }, [tab]);
+  }, [tab, syncTick]);
 
   useEffect(() => {
     fetchFilterOptions().then(setFilterOptions).catch(() => {});
@@ -837,6 +846,7 @@ export default function MusicModule({
     loadAlbums,
     filterReady,
     homeFilterPending,
+    syncTick,
   ]);
 
   useEffect(() => {
@@ -1222,6 +1232,7 @@ export default function MusicModule({
           }}
           onOpenCatalogSubgenre={(id, subgenreName) => {
             clearMediaTheme(userId);
+            window.history.pushState(null, "", "/music");
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onPlaylist(undefined);
@@ -1344,6 +1355,7 @@ export default function MusicModule({
           }}
           onOpenCatalogProducer={(producerName) => {
             clearMediaTheme(userId);
+            window.history.pushState(null, "", "/music");
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("artists");
@@ -1359,6 +1371,7 @@ export default function MusicModule({
           }}
           onOpenCatalogLabel={(labelName) => {
             clearMediaTheme(userId);
+            window.history.pushState(null, "", "/music");
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("artists");
@@ -1367,6 +1380,7 @@ export default function MusicModule({
           }}
           onOpenCatalogSubgenre={(id, subgenreName) => {
             clearMediaTheme(userId);
+            window.history.pushState(null, "", "/music");
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("artists");

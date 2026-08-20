@@ -351,6 +351,8 @@ export type BandOverview = {
     cover_url: string | null;
     play_path: string | null;
     album_folder: string | null;
+    navigate_band_id?: number;
+    navigate_release_id?: string;
   }[];
   links: EntityLinksPayload;
   lineup: {

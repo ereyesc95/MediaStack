@@ -13,15 +13,28 @@ ASSETS_DIR = PROJECT_ROOT / "assets"
 LEGACY_SYSTEM_DIR = ASSETS_DIR / "system"
 MEDIA_SLUGS = ("music", "series", "movies", "books", "games")
 PANE_SLUGS = ("pane-on-repeat", "pane-icons", "pane-vibes", "pane-global")
-NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade")
+NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade", "labels", "links", "people", "universes", "universe")
 DATA_FILE_PREFIXES = ("people", "links")
 
 
 def _first_existing(base: Path, stem: str) -> Path | None:
-    for ext in (".png", ".jpg", ".webp", ".svg"):
+    for ext in (".png", ".jpg", ".webp", ".svg", ".jpeg"):
         path = base / f"{stem}{ext}"
         if path.is_file():
             return path
+    # Case-insensitive stem match (e.g. BMG.png ↔ bmg)
+    if base.is_dir():
+        want = stem.casefold()
+        try:
+            for f in base.iterdir():
+                if not f.is_file():
+                    continue
+                if f.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+                    continue
+                if f.stem.casefold() == want:
+                    return f
+        except OSError:
+            pass
     return None
 
 
@@ -128,15 +141,33 @@ def media_file(path: str = Query(..., min_length=1)):
 
 @router.get("/data/file")
 def data_file(path: str = Query(..., min_length=1)):
-    """Serve complementary resources under data/people and data/links."""
+    """Serve complementary resources under assets/people and assets/links.
+
+    Also accepts legacy data/people and data/links paths.
+    """
+    from app.paths import ASSETS_DIR
+
     rel = path.replace("\\", "/").lstrip("/")
     top = rel.split("/", 1)[0].casefold()
     if top not in DATA_FILE_PREFIXES:
         raise HTTPException(403, "Invalid path")
-    root = DATA_DIR.resolve()
-    target = (root / rel).resolve()
-    if not str(target).startswith(str(root)):
-        raise HTTPException(403, "Invalid path")
-    if not target.is_file():
-        raise HTTPException(404, "File not found")
-    return FileResponse(target)
+
+    candidates = [
+        ASSETS_DIR / rel,
+        DATA_DIR / rel,
+    ]
+    for candidate in candidates:
+        try:
+            target = candidate.resolve()
+        except OSError:
+            continue
+        if not target.is_file():
+            continue
+        # Must stay under assets/{top} or data/{top}
+        for root in (ASSETS_DIR / top, DATA_DIR / top):
+            try:
+                target.relative_to(root.resolve())
+                return FileResponse(target)
+            except ValueError:
+                continue
+    raise HTTPException(404, "File not found")

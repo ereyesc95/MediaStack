@@ -270,7 +270,6 @@ export default function ArtistPage({
   const [error, setError] = useState<string | null>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
-  const [playerHost, setPlayerHost] = useState<HTMLDivElement | null>(null);
   const [playerBubbleOpen, setPlayerBubbleOpen] = useState(false);
   const playerFallbackRef = useRef<HTMLDivElement>(null);
   const playerBubbleRef = useRef<HTMLDivElement>(null);
@@ -547,7 +546,10 @@ export default function ArtistPage({
           play_path: t.play_path,
           cover_url: t.cover_url,
           release_date: t.release_date,
-          album_folder: null,
+          album_folder: null as string | null,
+          navigate_band_id: (t as { navigate_band_id?: number }).navigate_band_id,
+          navigate_release_id: (t as { navigate_release_id?: string })
+            .navigate_release_id,
         }));
     }
     return (data?.top_tracks ?? []).filter((t) => t.play_path);
@@ -746,14 +748,9 @@ export default function ArtistPage({
     };
   }, [audioRef, audioSrc, playingPath, playableTracks, userId, repeatOne]);
 
-  const onAboutTab = section === "overview" && overviewTab === "about";
-  const embedPlayerInAbout = onAboutTab && Boolean(audioSrc);
-  const playerPortalTarget = embedPlayerInAbout
-    ? playerHost ?? playerFallbackRef.current
-    : null;
-  const showBubblePlayer = Boolean(audioSrc) && !onAboutTab;
+  const showBubblePlayer = Boolean(audioSrc);
   const showPortraitPlayMusic =
-    portraitMenuChrome && playableTracks.length > 0 && !onAboutTab;
+    portraitMenuChrome && playableTracks.length > 0;
 
   const handlePortraitPlayMusic = useCallback(() => {
     if (playerBubbleOpen) {
@@ -778,8 +775,8 @@ export default function ArtistPage({
   ]);
 
   useEffect(() => {
-    if (onAboutTab || !audioSrc) setPlayerBubbleOpen(false);
-  }, [onAboutTab, audioSrc]);
+    if (!audioSrc) setPlayerBubbleOpen(false);
+  }, [audioSrc]);
 
   useEffect(() => {
     if (!playerBubbleOpen) return;
@@ -986,6 +983,13 @@ export default function ArtistPage({
                 (t) => t.play_path === playingPath
               );
               const albumLabel = albumFolderDisplayTitle(nowTrack?.album_folder);
+              const navBandId =
+                (nowTrack as { navigate_band_id?: number } | undefined)
+                  ?.navigate_band_id ?? bandId;
+              const navReleaseId = (
+                nowTrack as { navigate_release_id?: string } | undefined
+              )?.navigate_release_id;
+              const canOpenRelease = Boolean(navReleaseId && onOpenReleaseNavigate);
               const dockInner = (
                 <>
                   <div className="series-audio-player__now">
@@ -999,7 +1003,19 @@ export default function ArtistPage({
                           : "Now playing"}
                       </strong>
                       {albumLabel ? (
-                        <span className="muted">{albumLabel}</span>
+                        canOpenRelease ? (
+                          <button
+                            type="button"
+                            className="muted series-audio-player__album-link"
+                            onClick={() =>
+                              onOpenReleaseNavigate?.(navBandId, navReleaseId!)
+                            }
+                          >
+                            {albumLabel}
+                          </button>
+                        ) : (
+                          <span className="muted">{albumLabel}</span>
+                        )
                       ) : null}
                     </div>
                   </div>
@@ -1369,22 +1385,6 @@ export default function ArtistPage({
       </div>
 
       <audio ref={audioRef} src={audioSrc ?? undefined} preload="auto" />
-      {audioSrc &&
-        playerPortalTarget &&
-        createPortal(
-          <MiniAudioPlayerControls
-            playing={playing}
-            progress={progress}
-            duration={duration}
-            toggle={toggle}
-            seek={seek}
-            onPrev={() => stepTrack(-1)}
-            onNext={() => stepTrack(1)}
-            repeatOne={repeatOne}
-            onRepeatToggle={() => setRepeatOne((r) => !r)}
-          />,
-          playerPortalTarget
-        )}
 
       <div
         className={`artist-page__body${
@@ -1415,7 +1415,6 @@ export default function ArtistPage({
               onOpenArtist={onOpenArtist}
               onPlayTrack={(path, title) => void handlePlay(path, title)}
               playingPath={playingPath}
-              onPlayerHost={setPlayerHost}
             />
           )}
 
@@ -1434,7 +1433,6 @@ export default function ArtistPage({
             onLabel={onLabel}
             onPlayTrack={handlePlay}
             playingPath={playingPath}
-            onPlayerHost={setPlayerHost}
             onOpenPerformer={setMemberModalId}
           />
         )}

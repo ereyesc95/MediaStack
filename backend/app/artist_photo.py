@@ -66,8 +66,16 @@ def photo_file_stem(artist: Artist) -> str:
 
 
 def _data_file_url(path: Path) -> str:
-    rel = path.relative_to(DATA_DIR).as_posix()
-    return f"/api/data/file?path={quote(rel, safe='/')}"
+    from app.paths import ASSETS_DIR, DATA_DIR
+
+    for root in (ASSETS_DIR, DATA_DIR):
+        try:
+            rel = path.relative_to(root).as_posix()
+            # Always expose as people/… or links/… under /api/data/file
+            return f"/api/data/file?path={quote(rel, safe='/')}"
+        except ValueError:
+            continue
+    return f"/api/data/file?path={quote(path.name, safe='/')}"
 
 
 def _path_from_media_url(url: str, media_root: Path) -> Path | None:
@@ -87,11 +95,16 @@ def _path_from_data_url(url: str) -> Path | None:
         return None
     from urllib.parse import parse_qs, urlparse
 
+    from app.paths import ASSETS_DIR, DATA_DIR
+
     rel = parse_qs(urlparse(url).query).get("path", [None])[0]
     if not rel:
         return None
-    path = DATA_DIR / rel
-    return path if path.is_file() else None
+    for root in (ASSETS_DIR, DATA_DIR):
+        path = root / rel
+        if path.is_file():
+            return path
+    return None
 
 
 def member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
@@ -119,7 +132,9 @@ def member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
 
 
 def _local_people_photo(artist: Artist, media_root: Path | None) -> str | None:
-    if not artist.art_code and not artist.art_id:
+    if not artist.art_code and not artist.art_id and not (
+        artist.art_stage_name or artist.art_name
+    ):
         return None
     name = _display_name(artist.art_stage_name or artist.art_name)
     letter = name[0].upper() if name and name[0].isalpha() else "#"
@@ -135,19 +150,39 @@ def _local_people_photo(artist: Artist, media_root: Path | None) -> str | None:
     stems = []
     if artist.art_code:
         stems.append(artist.art_code.lower())
-    stems.append(str(artist.art_id))
+    if artist.art_id:
+        stems.append(str(artist.art_id))
+    name_slug = _name_slug(name)
+    name_key = re.sub(r"[^a-z0-9]+", "", name.casefold())
     for base, kind in bases:
         if not base.is_dir():
             continue
+        # Prefer id/mbid match, then exact name slug, then name-contains
+        by_id: Path | None = None
+        by_exact: Path | None = None
+        by_name: Path | None = None
         for p in base.iterdir():
             if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
                 continue
             stem = p.stem.lower()
-            if any(s in stem for s in stems):
-                if kind == "data":
-                    return _data_file_url(p)
-                if media_root:
-                    return _media_url(p, media_root)
+            stem_key = re.sub(r"[^a-z0-9]+", "", stem)
+            if stems and any(s in stem for s in stems):
+                by_id = p
+                break
+            if name_slug and (
+                stem == name_slug
+                or stem.startswith(f"{name_slug}--")
+                or stem_key == name_key
+            ):
+                by_exact = by_exact or p
+            elif name_key and name_key in stem_key:
+                by_name = by_name or p
+        hit = by_id or by_exact or by_name
+        if hit:
+            if kind == "data":
+                return _data_file_url(hit)
+            if media_root:
+                return _media_url(hit, media_root)
     return None
 
 

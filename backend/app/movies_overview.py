@@ -244,6 +244,7 @@ def build_work_overview(
             posters=posters or ([meta["poster_url"]] if meta.get("poster_url") else []),
             backdrops=backdrops
             or ([meta["backdrop_url"]] if meta.get("backdrop_url") else []),
+            franchise_name=name,
         )
     local_eras = build_local_eras(work_dir, root)
     from app.language_logos import resolve_language_logos
@@ -619,6 +620,7 @@ def build_film_overview(
             posters=posters,
             backdrops=backdrops,
             film=True,
+            franchise_name=work_dir.name,
         )
     local_eras = build_local_eras(film_dir, root)
     from app.language_logos import resolve_language_logos

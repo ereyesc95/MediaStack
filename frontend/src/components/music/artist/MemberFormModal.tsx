@@ -700,9 +700,6 @@ export default function MemberFormModal({
             </section>
 
             <div className="modal-actions-row">
-              <button type="button" className="btn" onClick={onClose}>
-                Cancel
-              </button>
               <button
                 type="button"
                 className="btn"

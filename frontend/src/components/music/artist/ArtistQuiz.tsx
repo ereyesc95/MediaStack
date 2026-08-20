@@ -50,7 +50,14 @@ type Phase = "loading" | "ready" | "playing" | "finished";
 type DiscographyRelease = {
   id: string;
   title: string;
+  display_date?: string | null;
+  date_iso?: string | null;
   tracks: { title: string; number: number }[];
+};
+
+type OtherTrack = {
+  title: string;
+  number: number;
 };
 
 type LineupMember = {
@@ -121,10 +128,19 @@ function formatQuizTrackNum(n: number): string {
 }
 
 function normalizeDiscographyReleases(
-  releases: { id: string; title: string; tracks: { title: string; number?: number }[] }[]
+  releases: {
+    id: string;
+    title: string;
+    display_date?: string | null;
+    date_iso?: string | null;
+    tracks: { title: string; number?: number }[];
+  }[]
 ): DiscographyRelease[] {
   return releases.map((rel) => ({
-    ...rel,
+    id: rel.id,
+    title: rel.title,
+    display_date: rel.display_date,
+    date_iso: rel.date_iso,
     tracks: rel.tracks.map((t, i) => ({
       title: t.title,
       number: t.number ?? i + 1,
@@ -301,6 +317,7 @@ export default function ArtistQuiz({
   const [scores, setScores] = useState<QuizScores>({});
 
   const [discography, setDiscography] = useState<DiscographyRelease[]>([]);
+  const [otherTracks, setOtherTracks] = useState<OtherTrack[]>([]);
   const [lineup, setLineup] = useState<LineupMember[]>([]);
   const [songQuestions, setSongQuestions] = useState<SongQuestion[]>([]);
 
@@ -309,6 +326,9 @@ export default function ArtistQuiz({
     () => new Set()
   );
   const [revealedTracks, setRevealedTracks] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [revealedOtherTracks, setRevealedOtherTracks] = useState<Set<string>>(
     () => new Set()
   );
   const [revealedMembers, setRevealedMembers] = useState<Set<number>>(
@@ -374,8 +394,13 @@ export default function ArtistQuiz({
   const discographyTotals = useMemo(() => {
     let tracks = 0;
     for (const rel of discography) tracks += rel.tracks.length;
-    return { releases: discography.length, tracks, all: discography.length + tracks };
-  }, [discography]);
+    tracks += otherTracks.length;
+    return {
+      releases: discography.length,
+      tracks,
+      all: discography.length + tracks,
+    };
+  }, [discography, otherTracks]);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current != null) {
@@ -457,6 +482,7 @@ export default function ArtistQuiz({
       setGuessInput("");
       setRevealedReleases(new Set());
       setRevealedTracks(new Set());
+      setRevealedOtherTracks(new Set());
       setRevealedMembers(new Set());
       setSongRound(0);
       setSongCorrect(0);
@@ -472,13 +498,20 @@ export default function ArtistQuiz({
       try {
         if (next === "discography") {
           const data = await fetchQuizDiscography(bandId);
-          if (!data.releases.length) {
+          const releases = normalizeDiscographyReleases(data.releases || []);
+          const others = (data.other_tracks || []).map((t, i) => ({
+            title: t.title,
+            number: t.number ?? i + 1,
+          }));
+          if (!releases.length && !others.length) {
             setError("No official releases with local tracks found.");
             setPhase("ready");
             setDiscography([]);
+            setOtherTracks([]);
             return;
           }
-          setDiscography(normalizeDiscographyReleases(data.releases));
+          setDiscography(releases);
+          setOtherTracks(others);
         } else if (next === "lineup") {
           const data = await fetchQuizLineup(bandId);
           if (data.disabled || !data.members.length) {
@@ -522,7 +555,8 @@ export default function ArtistQuiz({
 
   const finishDiscography = useCallback(async () => {
     stopTimer();
-    const score = revealedTracks.size + revealedReleases.size;
+    const score =
+      revealedTracks.size + revealedReleases.size + revealedOtherTracks.size;
     const total = discographyTotals.all;
     const timeMs = elapsedMs;
     try {
@@ -542,6 +576,7 @@ export default function ArtistQuiz({
     bandId,
     discographyTotals.all,
     elapsedMs,
+    revealedOtherTracks.size,
     revealedReleases.size,
     revealedTracks.size,
     stopTimer,
@@ -595,13 +630,18 @@ export default function ArtistQuiz({
   }, [mode, finishDiscography, finishLineup, finishSongs]);
 
   const checkDiscographyComplete = useCallback(
-    (nextReleases: Set<string>, nextTracks: Set<string>) => {
+    (
+      nextReleases: Set<string>,
+      nextTracks: Set<string>,
+      nextOther: Set<string>
+    ) => {
       if (nextReleases.size < discography.length) return false;
+      if (nextOther.size < otherTracks.length) return false;
       let trackTotal = 0;
       for (const rel of discography) trackTotal += rel.tracks.length;
       return nextTracks.size >= trackTotal;
     },
-    [discography]
+    [discography, otherTracks]
   );
 
   useEffect(() => {
@@ -631,6 +671,7 @@ export default function ArtistQuiz({
       if (mode === "discography") {
         const nextReleases = new Set(revealedReleases);
         const nextTracks = new Set(revealedTracks);
+        const nextOther = new Set(revealedOtherTracks);
         let matched = false;
         let scrollTarget: string | null = null;
         for (const rel of discography) {
@@ -648,11 +689,20 @@ export default function ArtistQuiz({
             }
           }
         }
+        for (const track of otherTracks) {
+          const key = `other:${track.title}`;
+          if (!nextOther.has(key) && matchesGuess(trimmed, track.title)) {
+            nextOther.add(key);
+            matched = true;
+            scrollTarget = `other:${key}`;
+          }
+        }
         if (!matched) return raw;
         if (scrollTarget) setPendingScrollTarget(scrollTarget);
         setRevealedReleases(nextReleases);
         setRevealedTracks(nextTracks);
-        if (checkDiscographyComplete(nextReleases, nextTracks)) {
+        setRevealedOtherTracks(nextOther);
+        if (checkDiscographyComplete(nextReleases, nextTracks, nextOther)) {
           void finishDiscography();
         }
         requestAnimationFrame(() => guessInputRef.current?.focus());
@@ -689,7 +739,9 @@ export default function ArtistQuiz({
       finishLineup,
       lineup,
       mode,
+      otherTracks,
       revealedMembers,
+      revealedOtherTracks,
       revealedReleases,
       revealedTracks,
     ]
@@ -709,6 +761,7 @@ export default function ArtistQuiz({
     setGuessInput("");
     setRevealedReleases(new Set());
     setRevealedTracks(new Set());
+    setRevealedOtherTracks(new Set());
     setRevealedMembers(new Set());
     setSongRound(0);
     setSongCorrect(0);
@@ -889,10 +942,19 @@ export default function ArtistQuiz({
             onFinish={handleFinishEarly}
           />
           <div ref={discoScrollRef} className="artist-quiz__scroll">
-            <div className="artist-quiz__disco-grid">
+            <div
+              className={`artist-quiz__disco-grid${
+                otherTracks.length ? " artist-quiz__disco-grid--with-other" : ""
+              }`}
+            >
               {discographyColumns.map((col, ci) => (
                 <div key={ci} className="artist-quiz__disco-col">
-                  {col.map((rel) => (
+                  {col.map((rel) => {
+                    const dateLabel =
+                      rel.display_date ||
+                      formatTrackDate(rel.date_iso) ||
+                      null;
+                    return (
                     <section
                       key={rel.id}
                       className="artist-quiz__release"
@@ -903,6 +965,9 @@ export default function ArtistQuiz({
                           ? quizDisplayTitle(rel.title)
                           : "—"}
                       </h3>
+                      {revealedReleases.has(rel.id) && dateLabel ? (
+                        <p className="artist-quiz__release-date">{dateLabel}</p>
+                      ) : null}
                       <ul className="artist-quiz__track-list">
                         {rel.tracks.map((t) => {
                           const key = `${rel.id}:${t.title}`;
@@ -930,9 +995,45 @@ export default function ArtistQuiz({
                         })}
                       </ul>
                     </section>
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
+              {otherTracks.length > 0 ? (
+                <div className="artist-quiz__disco-col artist-quiz__disco-col--other">
+                  <section className="artist-quiz__release artist-quiz__release--other">
+                    <h3 className="artist-quiz__release-title artist-quiz__other-header">
+                      Other Tracks
+                    </h3>
+                    <ul className="artist-quiz__track-list">
+                      {otherTracks.map((t) => {
+                        const key = `other:${t.title}`;
+                        const revealed = revealedOtherTracks.has(key);
+                        return (
+                          <li
+                            key={key}
+                            className="artist-quiz__track-cell"
+                            data-quiz-target={`other:${key}`}
+                          >
+                            <span className="artist-quiz__track-num">
+                              {formatQuizTrackNum(t.number)}
+                            </span>
+                            <span
+                              className={
+                                revealed
+                                  ? "artist-quiz__track-revealed"
+                                  : "artist-quiz__track-hidden"
+                              }
+                            >
+                              {revealed ? quizDisplayTitle(t.title) : "—"}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

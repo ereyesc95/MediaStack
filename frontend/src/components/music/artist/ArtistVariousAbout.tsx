@@ -12,7 +12,6 @@ type Props = {
   onOpenArtist: (bandId: number) => void;
   onPlayTrack: (path: string, title: string) => void;
   playingPath: string | null;
-  onPlayerHost?: (el: HTMLDivElement | null) => void;
 };
 
 const MAX_RELEASES = 6;
@@ -40,7 +39,6 @@ export default function ArtistVariousAbout({
   onOpenArtist,
   onPlayTrack,
   playingPath,
-  onPlayerHost,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [bioOverflows, setBioOverflows] = useState(false);
@@ -80,8 +78,6 @@ export default function ArtistVariousAbout({
       content.style.minHeight = "";
     };
   }, [stacked, photoUrl]);
-
-  useEffect(() => () => onPlayerHost?.(null), [onPlayerHost]);
 
   useEffect(() => {
     if (stacked) return;
@@ -293,10 +289,6 @@ export default function ArtistVariousAbout({
                       </button>
                     ))}
                   </div>
-                  <div
-                    ref={onPlayerHost}
-                    className="artist-about__tracks-player"
-                  />
                 </div>
               </section>
             )}

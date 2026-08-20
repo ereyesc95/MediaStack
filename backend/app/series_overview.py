@@ -849,6 +849,7 @@ def build_series_overview(
             or ([row.ser_poster_url] if row.ser_poster_url else []),
             backdrops=backdrops
             or ([row.ser_backdrop_url] if row.ser_backdrop_url else []),
+            franchise_name=name,
         )
     local_eras = build_local_eras(franchise_dir, root)
 

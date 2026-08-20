@@ -467,7 +467,14 @@ export async function fetchBandSeriesIndex(
 
 export async function fetchQuizDiscography(bandId: number) {
   return request<{
-    releases: { id: string; title: string; tracks: { title: string; number: number }[] }[];
+    releases: {
+      id: string;
+      title: string;
+      display_date?: string | null;
+      date_iso?: string | null;
+      tracks: { title: string; number: number }[];
+    }[];
+    other_tracks: { title: string; number: number }[];
     is_solo: boolean;
   }>(`${API}/music/bands/${bandId}/quiz/discography`);
 }

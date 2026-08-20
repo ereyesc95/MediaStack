@@ -1,4 +1,4 @@
-"""Filesystem folder scan — port of PrimaryPage.SyncFolders (bands + series)."""
+"""Filesystem folder scan — port of PrimaryPage.SyncFolders (bands + series + movies/books)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.franchise_index import normalize_franchise_slug
 from app.models import Band, Series
 from app.services import musicbrainz, tmdb
 
@@ -24,6 +25,13 @@ def _depth_under(root: Path, path: Path) -> int:
 def _existing_names(db: Session, model, name_col) -> set[str]:
     rows = db.scalars(select(name_col)).all()
     return {r or "" for r in rows if r}
+
+
+def _safe_rel(path: Path, root: Path) -> str | None:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return None
 
 
 async def sync_bands(
@@ -126,6 +134,78 @@ async def sync_series(
     return {"table": "series", "added": added, "scanned": scanned}
 
 
+def sync_movies(db: Session, root: Path) -> dict:
+    """Ensure MovieWork rows exist for Movies/{Letter}/{Work}/ folders."""
+    from app.movies_index import iter_work_dirs
+    from app.movies_refresh import ensure_movie_work, find_movie_work
+
+    movies_root = root / "Movies"
+    if not movies_root.is_dir():
+        return {"table": "movies", "added": 0, "scanned": 0, "error": "Movies root not found"}
+
+    added = 0
+    scanned = 0
+    for work_dir, _letter in iter_work_dirs(root):
+        scanned += 1
+        slug = normalize_franchise_slug(work_dir.name) or work_dir.name.casefold()
+        if find_movie_work(db, slug):
+            continue
+        folder_path = _safe_rel(work_dir, root)
+        ensure_movie_work(
+            db,
+            work_slug=slug,
+            name=work_dir.name,
+            folder_path=folder_path,
+        )
+        added += 1
+    db.commit()
+    return {"table": "movies", "added": added, "scanned": scanned}
+
+
+def sync_books(db: Session, root: Path) -> dict:
+    """Ensure BookWork rows exist for Books/{Letter}/{Work}/ folders."""
+    from app.books_index import iter_work_dirs
+    from app.books_store import ensure_book_work, find_book_work
+
+    books_root = root / "Books"
+    if not books_root.is_dir():
+        return {"table": "books", "added": 0, "scanned": 0, "error": "Books root not found"}
+
+    added = 0
+    scanned = 0
+    for work_dir, _letter in iter_work_dirs(root):
+        scanned += 1
+        slug = normalize_franchise_slug(work_dir.name) or work_dir.name.casefold()
+        if find_book_work(db, slug):
+            continue
+        folder_path = _safe_rel(work_dir, root)
+        ensure_book_work(
+            db,
+            work_slug=slug,
+            name=work_dir.name,
+            folder_path=folder_path,
+        )
+        added += 1
+    db.commit()
+    return {"table": "books", "added": added, "scanned": scanned}
+
+
+def rebuild_franchise_index(media_root: Path) -> dict:
+    try:
+        from app.franchise_index import build_franchise_index, save_franchise_index
+
+        index = build_franchise_index(media_root)
+        path = save_franchise_index(index)
+        return {
+            "table": "franchise_index",
+            "franchise_count": len(index.franchises),
+            "path": str(path),
+            "scanned_at": index.scanned_at,
+        }
+    except Exception as e:
+        return {"table": "franchise_index", "error": str(e)}
+
+
 async def run_folder_sync(
     db: Session,
     *,
@@ -150,4 +230,10 @@ async def run_folder_sync(
             results.append(
                 await sync_series(db, root, tmdb_api_key=tmdb_api_key)
             )
+    if module in ("movies", "all"):
+        results.append(sync_movies(db, root))
+    if module in ("books", "all"):
+        results.append(sync_books(db, root))
+    if module in ("all", "movies", "books", "series", "franchise"):
+        results.append(rebuild_franchise_index(root))
     return results
