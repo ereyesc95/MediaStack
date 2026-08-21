@@ -132,11 +132,12 @@ PLAYLISTS = {
     "originals": ((26, 40, 34), (80, 150, 110), "ORG"),
     "most-played": ((56, 32, 24), (220, 120, 60), "PLD"),
     "standalones": ((48, 34, 18), (196, 142, 58), "STDL"),
+    "singles": ((36, 28, 52), (150, 90, 200), "SGL"),
     "writing-credits": ((30, 34, 48), (100, 120, 200), "WRT"),
     "appearances": ((34, 28, 44), (120, 90, 180), "APP"),
 }
-playlist_dir = OUT / "playlists"
-playlist_dir.mkdir(exist_ok=True)
+playlist_dir = OUT / "playlists" / "system"
+playlist_dir.mkdir(parents=True, exist_ok=True)
 for slug, (c1, c2, label) in PLAYLISTS.items():
     img = gradient(512, 512, c1, c2)
     d = ImageDraw.Draw(img)

@@ -37,6 +37,7 @@ BONUS_RELEASE_CATEGORIES = MAIN_RELEASE_CATEGORIES + ("singles",)
 BONUS_TRACKS_SLUG = "bonus-tracks"
 B_SIDES_SLUG = "b-sides"
 STANDALONES_SLUG = "standalones"
+SINGLES_SLUG = "singles"
 MOST_PLAYED_SLUG = "most-played"
 COLLABORATIONS_SLUG = "collaborations"
 
@@ -44,6 +45,7 @@ EXTENDED_PLAYLIST_LABELS: dict[str, str] = {
     BONUS_TRACKS_SLUG: "Bonus Tracks",
     B_SIDES_SLUG: "B-Sides",
     STANDALONES_SLUG: "Standalones",
+    SINGLES_SLUG: "Singles",
     MOST_PLAYED_SLUG: "Most Played",
     COLLABORATIONS_SLUG: "Collaborations",
 }
@@ -60,17 +62,30 @@ def _audio_files_in_dir(directory: Path) -> list[Path]:
 
 
 def _iter_single_release_roots(singles_cat: Path):
-    from app.media_index import DATE_PREFIX_RE, _is_edition_dir
+    from app.media_index import DATE_PREFIX_RE
+
+    def _looks_like_edition_name(name: str) -> bool:
+        text = name.strip()
+        m = DATE_PREFIX_RE.match(text)
+        if m:
+            text = text[m.end() :].lstrip(". ").strip()
+        low = text.casefold()
+        if not low:
+            return False
+        if low.endswith("edition") or low in {"bonus", "remastered", "standard", "deluxe"}:
+            return True
+        return False
 
     for child in sorted(singles_cat.iterdir(), key=lambda p: p.name.casefold()):
         if not child.is_dir():
             continue
+        # Nested layout: Singles/{Album}/{date}. {Single}/…
         nested = [
             entry
             for entry in child.iterdir()
             if entry.is_dir()
             and DATE_PREFIX_RE.match(entry.name.strip())
-            and not _is_edition_dir(entry)
+            and not _looks_like_edition_name(entry.name)
         ]
         if nested:
             for single in sorted(nested, key=lambda p: p.name.casefold()):
@@ -286,6 +301,117 @@ def scan_standalones(band: Band, media_root: Path) -> list[dict]:
     return out
 
 
+def _variant_penalty(stem: str) -> int:
+    low = stem.casefold()
+    penalty = 0
+    if "live" in low:
+        penalty += 20
+    if "remix" in low or " mix" in low:
+        penalty += 10
+    if "demo" in low:
+        penalty += 8
+    if "instrumental" in low:
+        penalty += 6
+    if "acoustic" in low:
+        penalty += 4
+    return penalty
+
+
+def _find_main_release_track(
+    band: Band, media_root: Path, title: str
+) -> Path | None:
+    """First title match under Albums → EPs → Compilations → Soundtracks → Live."""
+    from app.band_library import _titles_match
+
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return None
+    audio_root = _audio_root(artist_dir)
+    cat_rank = {cat: i for i, cat in enumerate(MAIN_RELEASE_CATEGORIES)}
+
+    candidates: list[tuple[int, int, str, Path]] = []
+    for cat in MAIN_RELEASE_CATEGORIES:
+        folder_name = AUDIO_CATEGORIES.get(cat)
+        if not folder_name:
+            continue
+        cat_dir = audio_root / folder_name
+        if not cat_dir.is_dir():
+            continue
+        for release_dir in cat_dir.iterdir():
+            if not release_dir.is_dir():
+                continue
+            target = _resolve_standard_edition(release_dir)
+            for audio_file in _audio_files_in_dir(target):
+                if _titles_match(title, audio_file.stem):
+                    candidates.append(
+                        (
+                            cat_rank.get(cat, 99),
+                            _variant_penalty(audio_file.stem),
+                            audio_file.as_posix().lower(),
+                            audio_file,
+                        )
+                    )
+    if not candidates:
+        return None
+    candidates.sort(key=lambda row: (row[0], row[1], row[2]))
+    best = candidates[0]
+    # Live/remix-only counterparts do not count as "belongs to a release".
+    if best[1] >= 20:
+        return None
+    return best[3]
+
+
+def scan_singles(band: Band, media_root: Path) -> list[dict]:
+    """All Singles-folder releases: prefer the album counterpart track when present."""
+    artist_dir = _artist_dir(media_root, band.bnd_name)
+    if not artist_dir:
+        return []
+    singles_dir = _audio_root(artist_dir) / AUDIO_CATEGORIES["singles"]
+    if not singles_dir.is_dir():
+        return []
+
+    out: list[dict] = []
+    seen_keys: set[str] = set()
+
+    for single_dir in _iter_single_release_roots(singles_dir):
+        edition = _resolve_standard_edition(single_dir)
+        files = sorted(
+            _audio_files_in_dir(edition),
+            key=lambda p: (_track_number(p.name, 9999), p.name.casefold()),
+        )
+        if not files:
+            continue
+        lead = files[0]
+        lead_title = _track_title_from_filename(lead)
+        title_key = _normalize_title_for_match(lead_title)
+        if not title_key or title_key in seen_keys:
+            continue
+
+        album_hit = _find_main_release_track(band, media_root, lead_title)
+        source = album_hit if album_hit is not None else lead
+        entry = _track_entry(source, media_root)
+        if not entry:
+            continue
+        # Album-audio singles still show Singles-folder artwork (cover/disc/bg).
+        if album_hit is not None:
+            art_path = safe_relative(lead, media_root)
+            if art_path:
+                entry["art_play_path"] = art_path
+                single_cover = _find_cover_front_artwork(lead.parent, media_root)
+                if single_cover:
+                    entry["cover_url"] = single_cover
+        seen_keys.add(title_key)
+        out.append(entry)
+
+    out.sort(
+        key=lambda t: (
+            t.get("release_date") or "9999",
+            (t.get("title") or "").casefold(),
+        )
+    )
+    return out
+
+
 def scan_most_played(
     db: Session, band: Band, media_root: Path, *, user_id: int
 ) -> list[dict]:
@@ -381,6 +507,7 @@ def scan_extended_playlists(
         BONUS_TRACKS_SLUG: scan_bonus_tracks(band, media_root),
         B_SIDES_SLUG: scan_b_sides(band, media_root),
         STANDALONES_SLUG: scan_standalones(band, media_root),
+        SINGLES_SLUG: scan_singles(band, media_root),
         MOST_PLAYED_SLUG: scan_most_played(db, band, media_root, user_id=user_id),
         COLLABORATIONS_SLUG: scan_collaborations(band, media_root),
     }

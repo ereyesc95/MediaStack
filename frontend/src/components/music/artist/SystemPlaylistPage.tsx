@@ -802,6 +802,31 @@ export default function SystemPlaylistPage({
     [bandId]
   );
 
+  const artArgsForTrack = useCallback((track: ArtistPlaylistTrack | null | undefined) => {
+    if (!track) {
+      return { path: null as string | null, releaseId: null as string | null };
+    }
+    return {
+      path: track.art_play_path || track.play_path || null,
+      releaseId: track.art_navigate_release_id || track.navigate_release_id || null,
+    };
+  }, []);
+
+  const trackFallbackArt = useCallback((source?: ArtistPlaylistTrack | null) => {
+    return normalizePlaybackArt({
+      cover_url: source?.cover_url ?? null,
+      disc_url: source?.disc_url ?? null,
+      cover_animation_url: source?.cover_animation_url ?? null,
+      canvas_url: source?.canvas_url ?? null,
+      background_layers:
+        source?.background_layers?.length
+          ? source.background_layers
+          : source?.cover_url
+            ? [source.cover_url]
+            : [],
+    });
+  }, []);
+
   const playAdjacentTrack = useCallback(
     (direction: "prev" | "next") => {
       if (!playingPath) return;
@@ -816,9 +841,10 @@ export default function SystemPlaylistPage({
       void (async () => {
         setPlayingPath(target.play_path!);
         setNowPlayingTitle(target.title);
+        const artArgs = artArgsForTrack(source);
         const art = await resolvePlaybackArt(
-          target.play_path!,
-          target.navigate_release_id ?? source?.navigate_release_id,
+          artArgs.path || target.play_path!,
+          artArgs.releaseId ?? target.navigate_release_id ?? source?.navigate_release_id,
           target.navigate_band_id ?? source?.navigate_band_id ?? bandId
         );
         if (art) setPlaybackArt(art);
@@ -834,7 +860,7 @@ export default function SystemPlaylistPage({
         }
       })();
     },
-    [bandId, isUserPlaylist, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
+    [artArgsForTrack, bandId, isUserPlaylist, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
   );
 
   const handlePlayTrack = useCallback(
@@ -866,20 +892,19 @@ export default function SystemPlaylistPage({
       setNowPlayingTitle(title);
       setVersionSource(null);
       if (stacked) setMobileTrackView("player");
-      const fallbackArt = normalizePlaybackArt(
-        art ?? {
-          cover_url: source?.cover_url ?? null,
-          disc_url: source?.disc_url ?? null,
-          background_layers: source?.cover_url ? [source.cover_url] : [],
-        }
-      );
+      const fallbackArt = art
+        ? normalizePlaybackArt(art)
+        : trackFallbackArt(source);
       setPlaybackArt(fallbackArt);
-      if (source?.cover_url) {
+      if (source?.cover_url || source?.art_play_path) {
         sourceArtCacheRef.current.set(path, fallbackArt);
       }
+      const artArgs = artArgsForTrack(source);
       const resolved = await resolvePlaybackArt(
-        path,
-        source?.navigate_release_id ?? panelActionTrack?.navigate_release_id,
+        artArgs.path || path,
+        artArgs.releaseId ??
+          source?.navigate_release_id ??
+          panelActionTrack?.navigate_release_id,
         source?.navigate_band_id ?? bandId
       );
       if (resolved) {
@@ -907,6 +932,7 @@ export default function SystemPlaylistPage({
       });
     },
     [
+      artArgsForTrack,
       bandId,
       isUserPlaylist,
       miniAudio,
@@ -916,20 +942,22 @@ export default function SystemPlaylistPage({
       setlistPlaybackKey,
       slug,
       stacked,
+      trackFallbackArt,
     ]
   );
 
   useEffect(() => {
     if (!playingPath) return;
     const source = tracks.find((t) => t.play_path === playingPath);
+    const artArgs = artArgsForTrack(source);
     void resolvePlaybackArt(
-      playingPath,
-      source?.navigate_release_id,
+      artArgs.path || playingPath,
+      artArgs.releaseId ?? source?.navigate_release_id,
       source?.navigate_band_id ?? bandId
     ).then((resolved) => {
       if (resolved) setPlaybackArt(resolved);
     });
-  }, [playingPath, resolvePlaybackArt, tracks]);
+  }, [artArgsForTrack, bandId, playingPath, resolvePlaybackArt, tracks]);
 
   const playingTrack = useMemo(() => {
     if (

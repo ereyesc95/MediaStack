@@ -90,6 +90,7 @@ PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "writing-credits": "Tracks written for other artists and projects.",
     "collaborations": "Collaborations and split credits across the library.",
     "standalones": "Standalone singles and one-off releases.",
+    "singles": "Singles across {artist_name}'s discography.",
     "most-played": "Tracks ranked by your play history.",
 }
 
@@ -221,12 +222,25 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
             if duration_sec is not None:
                 out["duration_sec"] = duration_sec
                 out["duration"] = _format_duration(duration_sec)
-        playback = playback_art_for_play_path(media_root, play_path)
+        art_path = (out.get("art_play_path") or "").strip() or play_path
+        playback = playback_art_for_play_path(media_root, art_path)
         if playback:
             if playback.get("disc_url"):
                 out["disc_url"] = playback["disc_url"]
-            if not out.get("cover_url") and playback.get("cover_url"):
+            if playback.get("cover_url"):
                 out["cover_url"] = playback["cover_url"]
+            layers = playback.get("background_layers")
+            if layers:
+                out["background_layers"] = layers
+            if playback.get("cover_animation_url"):
+                out["cover_animation_url"] = playback["cover_animation_url"]
+            if playback.get("canvas_url"):
+                out["canvas_url"] = playback["canvas_url"]
+        if art_path != play_path:
+            _, art_release_rel = _resolve_track_source_labels(art_path, media_root)
+            if art_release_rel:
+                out["art_navigate_release_id"] = release_id_from_path(art_release_rel)
+            out["art_play_path"] = art_path
     return out
 
 

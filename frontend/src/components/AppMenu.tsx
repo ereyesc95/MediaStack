@@ -279,6 +279,7 @@ export default function AppMenu({
         setEditDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
+        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -292,6 +293,7 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
+        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -305,6 +307,7 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
+        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -316,7 +319,9 @@ export default function AppMenu({
       if (next) {
         setArtistDataOpen(false);
         setEditDataOpen(false);
+        setTrackDataOpen(false);
         setSettingsOpen(false);
+        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -328,7 +333,24 @@ export default function AppMenu({
       if (next) {
         setArtistDataOpen(false);
         setEditDataOpen(false);
+        setTrackDataOpen(false);
         setThemeOpen(false);
+        setMediaSwitchOpen(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleMediaSwitch() {
+    setMediaSwitchOpen((o) => {
+      const next = !o;
+      if (next) {
+        setSettingsOpen(false);
+        setArtistDataOpen(false);
+        setEditDataOpen(false);
+        setTrackDataOpen(false);
+        setThemeOpen(false);
+        setCustomOpen(false);
       }
       return next;
     });
@@ -975,20 +997,7 @@ export default function AppMenu({
               <button
                 type="button"
                 className="menu-item-with-sub"
-                onClick={() => {
-                  setMediaSwitchOpen((o) => {
-                    const next = !o;
-                    if (next) {
-                      setSettingsOpen(false);
-                      setArtistDataOpen(false);
-                      setEditDataOpen(false);
-                      setTrackDataOpen(false);
-                      setThemeOpen(false);
-                      setCustomOpen(false);
-                    }
-                    return next;
-                  });
-                }}
+                onClick={toggleMediaSwitch}
               >
                 <IconCards className="menu-item-icon" />
                 Switch media

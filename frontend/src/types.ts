@@ -522,6 +522,9 @@ export type ArtistPlaylistTrack = {
   release_date: string | null;
   cover_url: string | null;
   play_path: string | null;
+  /** Singles playlist: resolve cover/disc/bg from this path while play_path may be the album cut. */
+  art_play_path?: string | null;
+  art_navigate_release_id?: string | null;
   album_folder: string | null;
   album_title?: string | null;
   source_release_title?: string | null;
@@ -533,6 +536,9 @@ export type ArtistPlaylistTrack = {
   navigate_release_id?: string | null;
   navigate_band_id?: number | null;
   disc_url?: string | null;
+  background_layers?: string[] | null;
+  cover_animation_url?: string | null;
+  canvas_url?: string | null;
   duration?: string | null;
   duration_sec?: number | null;
   unavailable?: boolean;

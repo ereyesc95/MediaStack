@@ -9174,31 +9174,50 @@ button.media-release-card--banner {
   gap: 0.28rem;
   line-height: 1.3;
   overflow: visible;
+  font-size: 0.62rem;
 }
 
-/* Mobile landscape artist About: pills + meta labels smaller than bio. */
+/* Beat the non-stacked secondary pill/nowrap rules that keep 0.82rem + clipping. */
+.artist-page--mobile-landscape
+  .artist-about:not(.artist-about--stacked)
+  .artist-about__meta--secondary
+  .artist-about__meta-row
+  dd {
+  flex-wrap: wrap;
+  overflow: visible;
+  font-size: 0.62rem;
+}
+
+/* Mobile landscape artist About: pills + meta values match Origin pill size. */
 .artist-page--mobile-landscape .artist-about__meta,
 .artist-page--mobile-landscape .artist-about__meta--primary,
 .artist-page--mobile-landscape .artist-about__meta--secondary {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
 }
 
 .artist-page--mobile-landscape .artist-about__meta-row dt {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
 }
 
 .artist-page--mobile-landscape .artist-about__pill,
-.artist-page--mobile-landscape .artist-about__meta--secondary .artist-about__pill,
-.artist-page--mobile-landscape .artist-about__meta--secondary .artist-word-cloud__pill,
+.artist-page--mobile-landscape .artist-about__origin .artist-about__pill,
+.artist-page--mobile-landscape
+  .artist-about:not(.artist-about--stacked)
+  .artist-about__meta--secondary
+  .artist-about__pill,
+.artist-page--mobile-landscape
+  .artist-about:not(.artist-about--stacked)
+  .artist-about__meta--secondary
+  .artist-word-cloud__pill,
 .artist-page--mobile-landscape .artist-word-cloud__pill {
-  font-size: 0.62rem;
-  padding: 0.12rem 0.42rem;
+  font-size: 0.62rem !important;
+  padding: 0.1rem 0.4rem;
 }
 
 .artist-page--mobile-landscape .artist-about__tracks-label,
 .artist-page--mobile-landscape .artist-about__section-label,
 .artist-page--mobile-landscape .artist-about__foot-label {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
 }
 
 .artist-page--mobile-landscape .artist-about__tracks {

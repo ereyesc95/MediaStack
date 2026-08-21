@@ -69,7 +69,7 @@ async function fetchArtistAudioEntry(
 ): Promise<ArtistAudioCacheEntry> {
   const [audio, playlistPayload] = await Promise.all([
     fetchBandAudioIndex(bandId, force),
-    fetchBandPlaylistIndex(bandId),
+    fetchBandPlaylistIndex(bandId, force),
   ]);
   const entry: ArtistAudioCacheEntry = {
     audio,
