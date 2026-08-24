@@ -1144,6 +1144,13 @@ export default function SeriesSubseriesPage({
     [detail]
   );
 
+  const rootEpisodes: SeriesEpisodeItem[] = useMemo(
+    () => detail?.episodes || [],
+    [detail]
+  );
+
+  const isVideoCollection = detail?.content_kind === "video_collection";
+
   // Default expand season 1 (first); collapse others. URL seasonId wins once.
   useEffect(() => {
     if (!seasons.length) {
@@ -2628,6 +2635,7 @@ export default function SeriesSubseriesPage({
     !isFilm &&
     (seasons.length > 0 ||
       episodeMovies.length > 0 ||
+      rootEpisodes.length > 0 ||
       (card?.season_count ?? 0) > 0);
   const siblingMovieCount = siblings.filter((s) => s.id !== subseriesId).length;
 
@@ -2722,6 +2730,12 @@ export default function SeriesSubseriesPage({
   const hasGames = gameCards.length > 0 || relatedGameCount > 0;
   const hasGallery = Boolean(detail?.has_gallery || card?.has_gallery);
 
+  const episodesTabLabel = useMemo(() => {
+    const custom = detail?.episodes_tab_label?.trim();
+    if (custom) return stacked ? custom.slice(0, 3).toUpperCase() : custom.toUpperCase();
+    return stacked ? "EPS" : "EPISODES";
+  }, [detail?.episodes_tab_label, stacked]);
+
   const tabs: { id: SubseriesTab; label: string }[] = useMemo(() => {
     const all: { id: SubseriesTab; label: string }[] = isBook
       ? [
@@ -2752,7 +2766,7 @@ export default function SeriesSubseriesPage({
           ]
         : [
             { id: "overview", label: stacked ? "INFO" : "OVERVIEW" },
-            { id: "episodes", label: stacked ? "EPS" : "EPISODES" },
+            { id: "episodes", label: episodesTabLabel },
             {
               id: "series",
               label: stacked ? "MORE" : "MORE SERIES",
@@ -2792,6 +2806,8 @@ export default function SeriesSubseriesPage({
     stacked,
     isBook,
     isFilm,
+    rootEpisodes.length,
+    episodesTabLabel,
     hasEpisodes,
     hasGallery,
     mediaReady,
@@ -5060,13 +5076,29 @@ export default function SeriesSubseriesPage({
           {!error && (card || detail) && tab === "episodes" && !isBook ? (
             <div className="release-tracklist series-subseries-episodes">
               <div className="release-tracklist__body">
-                {seasons.length === 0 && episodeMovies.length === 0 ? (
+                {seasons.length === 0 && episodeMovies.length === 0 && rootEpisodes.length === 0 ? (
                   <p className="muted artist-section-empty">
                     No seasons or movies found under this subseries.
                   </p>
                 ) : (
                   <div className="release-tracklist__content">
-                    {seasons.map((s) => {
+                    {isVideoCollection && rootEpisodes.length > 0 ? (
+                      <SeriesEpisodeList
+                        episodes={rootEpisodes}
+                        showReleaseDate
+                        activeId={activeEpisodeId}
+                        emptyLabel="No videos found in this collection."
+                        onSelect={(ep) => {
+                          setActiveEpisodeId(ep.id);
+                          const url = ep.cover_url || baseCover;
+                          setFocusCoverUrl(url);
+                          setFocusBgUrl(url);
+                        }}
+                      />
+                    ) : null}
+
+                    {!isVideoCollection
+                      ? seasons.map((s) => {
                       const open =
                         expandedSeasonId === s.id &&
                         !moviesExpanded &&
@@ -5108,9 +5140,10 @@ export default function SeriesSubseriesPage({
                           ) : null}
                         </div>
                       );
-                    })}
+                    })
+                      : null}
 
-                    {episodeMovies.length > 0 ? (
+                    {!isVideoCollection && episodeMovies.length > 0 ? (
                       <div className="release-tracklist__edition-block series-season-block">
                         <button
                           type="button"

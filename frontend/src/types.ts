@@ -516,6 +516,17 @@ export type PlaylistIndexPayload = {
   cached: boolean;
 };
 
+export type TrackYoutubeVideo = {
+  url: string;
+  label: string;
+  primary?: boolean;
+  director?: string | null;
+  release_date?: string | null;
+  /** @deprecated use release_date */
+  release_year?: string | number | null;
+  local_path?: string | null;
+};
+
 export type ArtistPlaylistTrack = {
   entry_id?: number;
   title: string;
@@ -543,6 +554,17 @@ export type ArtistPlaylistTrack = {
   duration_sec?: number | null;
   unavailable?: boolean;
   youtube_query?: string | null;
+  youtube_url?: string | null;
+  youtube_videos?: TrackYoutubeVideo[] | null;
+  /** Music Videos playlist: one row per registered video. */
+  video_url?: string | null;
+  video_label?: string | null;
+  video_director?: string | null;
+  video_release_date?: string | null;
+  video_release_year?: string | null;
+  local_video_path?: string | null;
+  track_number?: number | null;
+  is_music_video?: boolean;
   snapshot?: PlaylistSnapshotMeta | null;
 };
 
@@ -680,12 +702,6 @@ export type ReleaseNeighbor = {
   id: string;
   title: string;
   cover_url: string | null;
-};
-
-export type TrackYoutubeVideo = {
-  url: string;
-  label: string;
-  primary?: boolean;
 };
 
 export type ReleaseTrackItem = {
@@ -1407,6 +1423,9 @@ export type SeriesFolderDetail = {
   badge_url?: string | null;
   has_gallery: boolean;
   kind: "season" | "subseries" | "folder";
+  /** Video compilations use Videos/ instead of Episodes/. */
+  content_kind?: "video_collection" | null;
+  episodes_tab_label?: string | null;
   seasons: SeriesSeasonCard[];
   subseries: SeriesSubseriesCard[];
   episodes: SeriesEpisodeItem[];

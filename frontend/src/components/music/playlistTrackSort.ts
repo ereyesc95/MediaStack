@@ -7,6 +7,7 @@ export type PlaylistTrackSortKey =
   | "artist"
   | "album"
   | "year"
+  | "director"
   | "duration"
   | "genres"
   | "label"
@@ -131,15 +132,26 @@ function sortValue(
   const snap = track.snapshot;
   switch (key) {
     case "number":
+      if (track.is_music_video && track.track_number != null && Number.isFinite(track.track_number)) {
+        return track.track_number;
+      }
       return originalNumber(track, originalNumbers);
     case "title":
+      if (track.is_music_video && track.video_label?.trim()) {
+        return `${track.title || ""} ${track.video_label}`.toLowerCase();
+      }
       return (track.title || "").toLowerCase();
     case "artist":
       return trackArtistForFilter(track).toLowerCase();
     case "album":
       return trackAlbumForFilter(track).toLowerCase();
     case "year":
+      if (track.is_music_video) {
+        return (track.video_release_date ?? track.video_release_year ?? "").trim();
+      }
       return trackYearForFilter(track);
+    case "director":
+      return (track.video_director || "").toLowerCase();
     case "duration": {
       // Sentinel so unmatched rows cluster opposite the on-disk block when
       // toggling asc/desc (asc: missing first; desc: on-disk first).

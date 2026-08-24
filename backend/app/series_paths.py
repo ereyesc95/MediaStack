@@ -13,6 +13,8 @@ EXTRAS_GALLERY_NAMES = ("extras",)
 AUDIO_NAMES = ("[audio]", "audio")
 EXTRAS_NAMES = ("[extras]", "extras")
 EPISODES_NAMES = ("episodes",)
+VIDEOS_NAMES = ("videos",)
+CONTENT_ROOT_NAMES = VIDEOS_NAMES + EPISODES_NAMES
 ARTWORK_NAMES = ("[artwork]", "artwork")
 
 
@@ -77,10 +79,15 @@ def find_extras_dir(folder: Path) -> Path | None:
     return None
 
 
-def find_episodes_root(folder: Path) -> Path:
-    """Season folders live under Episodes/ when present, else the folder itself."""
-    nested = _child_named(folder, EPISODES_NAMES)
+def find_content_root(folder: Path) -> Path:
+    """Video/episode buckets: prefer Videos/, then Episodes/, else the folder itself."""
+    nested = _child_named(folder, CONTENT_ROOT_NAMES)
     return nested if nested else folder
+
+
+def find_episodes_root(folder: Path) -> Path:
+    """Season folders live under Episodes/ or Videos/ when present, else the folder itself."""
+    return find_content_root(folder)
 
 
 def cover_search_dirs(folder: Path) -> list[Path]:

@@ -40,6 +40,7 @@ STANDALONES_SLUG = "standalones"
 SINGLES_SLUG = "singles"
 MOST_PLAYED_SLUG = "most-played"
 COLLABORATIONS_SLUG = "collaborations"
+MUSIC_VIDEOS_SLUG = "music-videos"
 
 EXTENDED_PLAYLIST_LABELS: dict[str, str] = {
     BONUS_TRACKS_SLUG: "Bonus Tracks",
@@ -48,6 +49,7 @@ EXTENDED_PLAYLIST_LABELS: dict[str, str] = {
     SINGLES_SLUG: "Singles",
     MOST_PLAYED_SLUG: "Most Played",
     COLLABORATIONS_SLUG: "Collaborations",
+    MUSIC_VIDEOS_SLUG: "Music Videos",
 }
 
 
@@ -462,6 +464,13 @@ def scan_most_played(
     return out
 
 
+def scan_music_videos(db: Session, band: Band, media_root: Path) -> list[dict]:
+    """One row per registered official video (deduped across edition paths)."""
+    from app.track_youtube import collect_band_official_videos
+
+    return collect_band_official_videos(db, band, media_root)
+
+
 def scan_collaborations(band: Band, media_root: Path) -> list[dict]:
     from app.cross_artist_playlists import scan_appearances
     from app.system_playlists import _track_tags
@@ -510,4 +519,5 @@ def scan_extended_playlists(
         SINGLES_SLUG: scan_singles(band, media_root),
         MOST_PLAYED_SLUG: scan_most_played(db, band, media_root, user_id=user_id),
         COLLABORATIONS_SLUG: scan_collaborations(band, media_root),
+        MUSIC_VIDEOS_SLUG: scan_music_videos(db, band, media_root),
     }

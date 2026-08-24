@@ -147,6 +147,35 @@ def _normalize_youtube(url: str) -> str | None:
     return None
 
 
+def _youtube_video_id(url: str) -> str | None:
+    """Extract a stable YouTube video id for deduplication."""
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    normalized = _normalize_youtube(raw)
+    candidate = normalized or raw
+    try:
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(candidate if candidate.startswith("http") else f"https://youtu.be/{candidate}")
+        host = (parsed.hostname or "").replace("www.", "").casefold()
+        if host == "youtu.be":
+            vid = parsed.path.lstrip("/").split("/")[0]
+            return vid.casefold() if vid else None
+        if "youtube.com" in host:
+            query_id = parse_qs(parsed.query).get("v", [None])[0]
+            if query_id:
+                return str(query_id).casefold()
+            embed = re.search(r"/embed/([^/?]+)", parsed.path)
+            if embed:
+                return embed.group(1).casefold()
+    except Exception:
+        pass
+    if re.match(r"^[A-Za-z0-9_-]{6,}$", raw):
+        return raw.casefold()
+    return None
+
+
 def _youtube_map_for_band(db: Session, band_id: int) -> dict[str, str]:
     needle = str(band_id)
     out: dict[str, str] = {}

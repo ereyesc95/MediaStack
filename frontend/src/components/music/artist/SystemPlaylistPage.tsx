@@ -10,7 +10,6 @@ import {
   fetchTrackSourceArt,
   playTrack,
   resolveArtistName,
-  fetchTrackYoutube,
   uploadUserPlaylistCover,
   updateUserPlaylist,
   deleteUserPlaylist,
@@ -50,7 +49,6 @@ import type {
   ArtistPlaylistTrack,
   BandOverview,
   ReleaseTrackItem,
-  TrackYoutubeVideo,
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
 import PlaylistBoot from "../../PlaylistBoot";
@@ -69,6 +67,8 @@ import {
   type PlaylistTrackSortKey,
   type SnapshotFilterState,
 } from "../playlistTrackSort";
+import { trackMainTitle } from "../release/releaseTrackPanelMeta";
+import { youtubeVideoId } from "../../../utils/youtube";
 import SetlistsPlaylistContent, {
   type SetlistsPlaylistHandle,
 } from "./SetlistsPlaylistContent";
@@ -81,19 +81,16 @@ import {
   parseTrackPanelMeta,
   playlistTrackVersionSource,
   primaryArtistName,
-  trackDisplayTitle,
   writerSearchUrl,
 } from "../release/releaseTrackPanelMeta";
 import {
   TrackActionLyricsIcon,
   TrackActionPlaylistIcon,
   TrackActionVersionsIcon,
-  TrackActionYoutubeIcon,
 } from "../release/releaseTrackActionIcons";
 import MediaBeatFrame from "../MediaBeatFrame";
 import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
-import { openYoutubeFullscreen, youtubeVideoId } from "../../../utils/youtube";
 
 type PanelBrand = {
   bandId: number;
@@ -142,6 +139,30 @@ type Props = {
   onSwitchProfile: () => void;
   onEditProfile: () => void;
 };
+
+function dedupeMusicVideoTracks(tracks: ArtistPlaylistTrack[]): ArtistPlaylistTrack[] {
+  const seen = new Set<string>();
+  const out: ArtistPlaylistTrack[] = [];
+  for (const track of tracks) {
+    const titleKey = trackMainTitle(track.title).trim().toLowerCase();
+    const local = track.local_video_path?.trim();
+    const videoKey = local
+      ? `local:${local.toLowerCase()}`
+      : youtubeVideoId(track.video_url ?? track.youtube_url ?? "") ??
+        (track.video_url ?? track.youtube_url ?? "").trim().toLowerCase();
+    if (!titleKey || !videoKey) {
+      out.push(track);
+      continue;
+    }
+    const date = (track.video_release_date ?? track.video_release_year ?? "").trim();
+    const label = (track.video_label ?? "").trim().toLowerCase();
+    const key = `${titleKey}|${videoKey}|${date}|${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(track);
+  }
+  return out;
+}
 
 function coverUrlFallback(tracks: ArtistPlaylistTrack[]): string | undefined {
   return tracks.find((t) => t.cover_url)?.cover_url ?? undefined;
@@ -341,9 +362,7 @@ export default function SystemPlaylistPage({
     useState<ReleaseMobileTrackView>("tracks");
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [bgLayers, setBgLayers] = useState<{ current?: string; outgoing?: string }>({});
-  const [youtubePickerOpen, setYoutubePickerOpen] = useState(false);
   const [trackWriters, setTrackWriters] = useState<string[]>([]);
-  const [panelYoutubeVideos, setPanelYoutubeVideos] = useState<TrackYoutubeVideo[]>([]);
   const [panelBrand, setPanelBrand] = useState<PanelBrand | null>(null);
   const [setlistTourName, setSetlistTourName] = useState<string | null>(null);
   const [setlistTrackCount, setSetlistTrackCount] = useState<number | null>(null);
@@ -355,7 +374,6 @@ export default function SystemPlaylistPage({
 
   const tracklistRef = useRef<SystemPlaylistTracklistHandle>(null);
   const setlistRef = useRef<SetlistsPlaylistHandle>(null);
-  const youtubePickerRef = useRef<HTMLDivElement>(null);
   const canvasVideoRef = useRef<HTMLVideoElement>(null);
   const sourceArtCacheRef = useRef<Map<string, ReleasePlaybackArt>>(new Map());
   const prevBgRef = useRef<string | undefined>(undefined);
@@ -537,8 +555,6 @@ export default function SystemPlaylistPage({
     setVersionSource(null);
     setPanelDateIso(null);
     setTrackWriters([]);
-    setPanelYoutubeVideos([]);
-    setYoutubePickerOpen(false);
     setPanelBrand(null);
     setMobileTrackView("tracks");
     setMoreInfoOpen(false);
@@ -565,10 +581,9 @@ export default function SystemPlaylistPage({
     artists: [],
     genres: [],
   });
-  const [trackSort, setTrackSort] = useState<{ key: PlaylistTrackSortKey; desc: boolean }>({
-    key: "original",
-    desc: false,
-  });
+  const [trackSort, setTrackSort] = useState<{ key: PlaylistTrackSortKey; desc: boolean }>(() =>
+    slug === "music-videos" ? { key: "year", desc: false } : { key: "original", desc: false }
+  );
   const [subgenreNames, setSubgenreNames] = useState<string[]>([]);
   const [subgenreIdByName, setSubgenreIdByName] = useState<Map<string, number>>(new Map());
 
@@ -587,7 +602,9 @@ export default function SystemPlaylistPage({
 
   const displayTracks = useMemo(() => {
     if (slug === "live-story") return tracks;
-    const sorted = applyTrackSort(filteredTracks, trackSort.key, trackSort.desc, originalTrackNumbers);
+    const base =
+      slug === "music-videos" ? dedupeMusicVideoTracks(filteredTracks) : filteredTracks;
+    const sorted = applyTrackSort(base, trackSort.key, trackSort.desc, originalTrackNumbers);
     return isSnapshotPlaylist ? dedupeTracksByPlayPath(sorted) : sorted;
   }, [filteredTracks, isSnapshotPlaylist, originalTrackNumbers, slug, trackSort.desc, trackSort.key, tracks]);
 
@@ -1066,39 +1083,6 @@ export default function SystemPlaylistPage({
   }, [bandId, creditsBandId, nowPlayingTitle, panelActionTrack?.navigate_release_id]);
 
   useEffect(() => {
-    if (!panelActionTrack?.play_path || !nowPlayingTitle) {
-      setPanelYoutubeVideos([]);
-      return;
-    }
-    let cancelled = false;
-    void fetchTrackYoutube(
-      artistName,
-      trackDisplayTitle(nowPlayingTitle),
-      panelActionTrack.play_path,
-      creditsBandId || bandId
-    ).then((res) => {
-      if (cancelled) return;
-      const fromList = (res.youtube_videos ?? []).filter((video) =>
-        youtubeVideoId(video.url)
-      );
-      if (fromList.length > 0) {
-        setPanelYoutubeVideos(fromList);
-        return;
-      }
-      if (res.youtube_url && youtubeVideoId(res.youtube_url)) {
-        setPanelYoutubeVideos([
-          { url: res.youtube_url, label: "Official video", primary: true },
-        ]);
-        return;
-      }
-      setPanelYoutubeVideos([]);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [artistName, bandId, nowPlayingTitle, panelActionTrack?.play_path]);
-
-  useEffect(() => {
     const el = miniAudio.audioRef.current;
     if (!el) return;
     const onEnded = () => {
@@ -1113,24 +1097,6 @@ export default function SystemPlaylistPage({
     el.addEventListener("ended", onEnded);
     return () => el.removeEventListener("ended", onEnded);
   }, [miniAudio.audioRef, playAdjacentTrack, playingPath, repeatOne]);
-
-  useEffect(() => {
-    setYoutubePickerOpen(false);
-  }, [panelActionTrack?.play_path]);
-
-  useEffect(() => {
-    if (!youtubePickerOpen) return;
-    function dismiss(event: PointerEvent) {
-      const target = event.target as Node;
-      if (youtubePickerRef.current && !youtubePickerRef.current.contains(target)) {
-        setYoutubePickerOpen(false);
-      }
-    }
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, [youtubePickerOpen]);
-
-  const panelVideos = panelYoutubeVideos;
 
   const hidePerformerName =
     !isUserPlaylist && (slug === "appearances" || slug === "features") ? artistName : undefined;
@@ -1921,7 +1887,7 @@ export default function SystemPlaylistPage({
                             </p>
                           </div>
                         ) : null}
-                        {bannerLayout && panelActionTrack ? (
+                        {bannerLayout && panelActionTrack && miniAudio.playing ? (
                           <div className="release-page__track-actions release-page__track-actions--in-info">
                             {showLyricsAction && (
                               <button
@@ -1960,49 +1926,6 @@ export default function SystemPlaylistPage({
                             >
                               <TrackActionPlaylistIcon className="release-page__track-action-icon" />
                             </button>
-                            {panelVideos.length > 0 && (
-                              <div ref={youtubePickerRef} className="release-page__youtube-picker-wrap">
-                                <button
-                                  type="button"
-                                  className="release-page__track-action"
-                                  data-tooltip={
-                                    panelVideos.length > 1 ? "Choose video" : "Official video"
-                                  }
-                                  aria-label={
-                                    panelVideos.length > 1 ? "Choose video" : "Official video"
-                                  }
-                                  aria-expanded={
-                                    panelVideos.length > 1 ? youtubePickerOpen : undefined
-                                  }
-                                  onClick={() => {
-                                    if (panelVideos.length <= 1) {
-                                      openYoutubeFullscreen(panelVideos[0]!.url);
-                                      return;
-                                    }
-                                    setYoutubePickerOpen((open) => !open);
-                                  }}
-                                >
-                                  <TrackActionYoutubeIcon className="release-page__track-action-icon" />
-                                </button>
-                                {panelVideos.length > 1 && youtubePickerOpen && (
-                                  <div className="release-page__youtube-picker" role="menu">
-                                    {panelVideos.map((video) => (
-                                      <button
-                                        key={video.url}
-                                        type="button"
-                                        className="release-page__youtube-picker-item"
-                                        role="menuitem"
-                                        onClick={() => openYoutubeFullscreen(video.url)}
-                                      >
-                                        <span className="release-page__youtube-picker-label">
-                                          {video.label}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                         ) : null}
                       </div>
@@ -2066,7 +1989,7 @@ export default function SystemPlaylistPage({
                     </p>
                   </div>
                 ) : null}
-                {panelActionTrack && (
+                {panelActionTrack && miniAudio.playing && (
                   <div className="release-page__track-actions release-page__track-actions--above-player">
                     {showLyricsAction && (
                       <button
@@ -2105,47 +2028,6 @@ export default function SystemPlaylistPage({
                     >
                       <TrackActionPlaylistIcon className="release-page__track-action-icon" />
                     </button>
-                    {panelVideos.length > 0 && (
-                      <div ref={youtubePickerRef} className="release-page__youtube-picker-wrap">
-                        <button
-                          type="button"
-                          className="release-page__track-action"
-                          data-tooltip={
-                            panelVideos.length > 1 ? "Choose video" : "Official video"
-                          }
-                          aria-label={
-                            panelVideos.length > 1 ? "Choose video" : "Official video"
-                          }
-                          aria-expanded={panelVideos.length > 1 ? youtubePickerOpen : undefined}
-                          onClick={() => {
-                            if (panelVideos.length <= 1) {
-                              openYoutubeFullscreen(panelVideos[0]!.url);
-                              return;
-                            }
-                            setYoutubePickerOpen((open) => !open);
-                          }}
-                        >
-                          <TrackActionYoutubeIcon className="release-page__track-action-icon" />
-                        </button>
-                        {panelVideos.length > 1 && youtubePickerOpen && (
-                          <div className="release-page__youtube-picker" role="menu">
-                            {panelVideos.map((video) => (
-                              <button
-                                key={video.url}
-                                type="button"
-                                className="release-page__youtube-picker-item"
-                                role="menuitem"
-                                onClick={() => openYoutubeFullscreen(video.url)}
-                              >
-                                <span className="release-page__youtube-picker-label">
-                                  {video.label}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -2289,7 +2171,9 @@ export default function SystemPlaylistPage({
                 artistName={artistName}
                 tracks={displayTracks}
                 sections={!isUserPlaylist && slug === "live-story" ? detail?.sections : undefined}
-                showSourceReleaseColumn={!isUserPlaylist}
+                showSourceReleaseColumn={!isUserPlaylist && slug !== "music-videos"}
+                musicVideosMode={!isUserPlaylist && slug === "music-videos"}
+                onOpenRelease={onOpenRelease}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}
                 sortDesc={trackSort.desc}
@@ -2321,6 +2205,7 @@ export default function SystemPlaylistPage({
                   void handlePlayTrack(path, title, art, track)
                 }
                 onPanelActionsChange={handlePanelActionsChange}
+                onPausePlayback={() => miniAudio.audioRef.current?.pause()}
                 isAdmin={isAdmin}
                 hidePerformer={hidePerformerName}
                 hideCoverArtist={hideCoverArtist}

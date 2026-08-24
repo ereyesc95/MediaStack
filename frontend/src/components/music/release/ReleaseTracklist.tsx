@@ -29,6 +29,7 @@ import type {
 } from "../../../types";
 import BillboardText from "../../BillboardText";
 import { IconVideo } from "../../MenuIcons";
+import TrackYoutubeButton, { trackYoutubeVideos } from "../TrackYoutubeButton";
 import { ReleaseTrackTitle } from "./releaseTrackTitle";
 import PlaylistBoot from "../../PlaylistBoot";
 import ReleaseAddToPlaylistModal from "./ReleaseAddToPlaylistModal";
@@ -295,6 +296,7 @@ type Props = {
   reloadKey?: number;
   isAdmin?: boolean;
   onOpenLyricsSet?: () => void;
+  onPausePlayback?: () => void;
 };
 
 function trackArt(
@@ -394,6 +396,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     reloadKey = 0,
     isAdmin = false,
     onOpenLyricsSet,
+    onPausePlayback,
   },
   ref
 ) {
@@ -895,6 +898,27 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                             {group.tracks.map((track) => {
                               const active = playingPath === track.play_path;
                               const art = trackArt(track, ed, group.disc_url);
+                              const videos = trackYoutubeVideos(track);
+                              const playTrack = () => {
+                                if (track.is_video) {
+                                  openVideoTrack(track);
+                                  return;
+                                }
+                                setPlayingVersionPath(null);
+                                setActiveVersionSource(null);
+                                const linkSource = linkSourceFromTrack(track);
+                                if (linkSource) setActiveVersionSource(linkSource);
+                                onPlay(track.play_path, track.title, art, ed.label);
+                                onPanelActionsChange?.({
+                                  track,
+                                  showLyrics: true,
+                                  showVersions: true,
+                                  panelDateIso:
+                                    linkSource?.date_iso ??
+                                    resolvePanelDateIso(track.play_path),
+                                  versionSource: linkSource,
+                                });
+                              };
                               return (
                                 <li
                                   key={track.id}
@@ -902,54 +926,43 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                     active ? "release-tracklist__row active" : "release-tracklist__row"
                                   }
                                 >
-                                  <button
-                                    type="button"
-                                    className="release-tracklist__play"
-                                    onClick={() => {
-                                      if (track.is_video) {
-                                        openVideoTrack(track);
-                                        return;
+                                  <span className="release-tracklist__num">{track.number}</span>
+                                  <span className="release-tracklist__title-cluster">
+                                    <button
+                                      type="button"
+                                      className="release-tracklist__title-play"
+                                      onClick={playTrack}
+                                      aria-label={
+                                        track.is_video
+                                          ? `Open video ${track.title}`
+                                          : `Play ${track.title}`
                                       }
-                                      setPlayingVersionPath(null);
-                                      setActiveVersionSource(null);
-                                      const linkSource = linkSourceFromTrack(track);
-                                      if (linkSource) setActiveVersionSource(linkSource);
-                                      onPlay(track.play_path, track.title, art, ed.label);
-                                      onPanelActionsChange?.({
-                                        track,
-                                        showLyrics: true,
-                                        showVersions: true,
-                                        panelDateIso:
-                                          linkSource?.date_iso ??
-                                          resolvePanelDateIso(track.play_path),
-                                        versionSource: linkSource,
-                                      });
-                                    }}
-                                    aria-label={
-                                      track.is_video
-                                        ? `Open video ${track.title}`
-                                        : `Play ${track.title}`
-                                    }
-                                  >
-                                    <span className="release-tracklist__num">{track.number}</span>
-                                    <span className="release-tracklist__title-wrap">
-                                      <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                                      {track.is_video && (
-                                        <span
-                                          className="release-tracklist__video-badge"
-                                          title="Video"
-                                        >
-                                          <IconVideo />
-                                        </span>
-                                      )}
-                                      {track.is_exclusive && <TrackExclusiveBadge />}
-                                    </span>
-                                    {track.duration && (
-                                      <span className="release-tracklist__duration">
-                                        {track.duration}
+                                    >
+                                      <span className="release-tracklist__title-wrap">
+                                        <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                        {track.is_video && (
+                                          <span
+                                            className="release-tracklist__video-badge"
+                                            title="Video"
+                                          >
+                                            <IconVideo />
+                                          </span>
+                                        )}
+                                        {track.is_exclusive && <TrackExclusiveBadge />}
                                       </span>
-                                    )}
-                                  </button>
+                                    </button>
+                                    <TrackYoutubeButton
+                                      videos={videos}
+                                      onBeforeOpen={onPausePlayback}
+                                    />
+                                  </span>
+                                  {track.duration ? (
+                                    <span className="release-tracklist__duration">
+                                      {track.duration}
+                                    </span>
+                                  ) : (
+                                    <span className="release-tracklist__duration release-tracklist__duration--empty" aria-hidden />
+                                  )}
                                 </li>
                               );
                             })}
@@ -970,6 +983,26 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                   {group.tracks.map((track) => {
                     const active = playingPath === track.play_path;
                     const art = trackArt(track, ed, group.disc_url);
+                    const videos = trackYoutubeVideos(track);
+                    const playTrack = () => {
+                      if (track.is_video) {
+                        openVideoTrack(track);
+                        return;
+                      }
+                      setPlayingVersionPath(null);
+                      setActiveVersionSource(null);
+                      const linkSource = linkSourceFromTrack(track);
+                      if (linkSource) setActiveVersionSource(linkSource);
+                      onPlay(track.play_path, track.title, art, ed.label);
+                      onPanelActionsChange?.({
+                        track,
+                        showLyrics: true,
+                        showVersions: true,
+                        panelDateIso:
+                          linkSource?.date_iso ?? resolvePanelDateIso(track.play_path),
+                        versionSource: linkSource,
+                      });
+                    };
                     return (
                       <li
                         key={track.id}
@@ -977,53 +1010,43 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           active ? "release-tracklist__row active" : "release-tracklist__row"
                         }
                       >
-                        <button
-                          type="button"
-                          className="release-tracklist__play"
-                          onClick={() => {
-                            if (track.is_video) {
-                              openVideoTrack(track);
-                              return;
+                        <span className="release-tracklist__num">{track.number}</span>
+                        <span className="release-tracklist__title-cluster">
+                          <button
+                            type="button"
+                            className="release-tracklist__title-play"
+                            onClick={playTrack}
+                            aria-label={
+                              track.is_video
+                                ? `Open video ${track.title}`
+                                : `Play ${track.title}`
                             }
-                            setPlayingVersionPath(null);
-                            setActiveVersionSource(null);
-                            const linkSource = linkSourceFromTrack(track);
-                            if (linkSource) setActiveVersionSource(linkSource);
-                            onPlay(track.play_path, track.title, art, ed.label);
-                            onPanelActionsChange?.({
-                              track,
-                              showLyrics: true,
-                              showVersions: true,
-                              panelDateIso:
-                                linkSource?.date_iso ?? resolvePanelDateIso(track.play_path),
-                              versionSource: linkSource,
-                            });
-                          }}
-                          aria-label={
-                            track.is_video
-                              ? `Open video ${track.title}`
-                              : `Play ${track.title}`
-                          }
-                        >
-                          <span className="release-tracklist__num">{track.number}</span>
-                          <span className="release-tracklist__title-wrap">
-                            <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                            {track.is_video && (
-                              <span
-                                className="release-tracklist__video-badge"
-                                title="Video"
-                              >
-                                <IconVideo />
-                              </span>
-                            )}
-                            {track.is_exclusive && <TrackExclusiveBadge />}
-                          </span>
-                          {track.duration && (
-                            <span className="release-tracklist__duration">
-                              {track.duration}
+                          >
+                            <span className="release-tracklist__title-wrap">
+                              <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                              {track.is_video && (
+                                <span
+                                  className="release-tracklist__video-badge"
+                                  title="Video"
+                                >
+                                  <IconVideo />
+                                </span>
+                              )}
+                              {track.is_exclusive && <TrackExclusiveBadge />}
                             </span>
-                          )}
-                        </button>
+                          </button>
+                          <TrackYoutubeButton
+                            videos={videos}
+                            onBeforeOpen={onPausePlayback}
+                          />
+                        </span>
+                        {track.duration ? (
+                          <span className="release-tracklist__duration">
+                            {track.duration}
+                          </span>
+                        ) : (
+                          <span className="release-tracklist__duration release-tracklist__duration--empty" aria-hidden />
+                        )}
                       </li>
                     );
                   })}

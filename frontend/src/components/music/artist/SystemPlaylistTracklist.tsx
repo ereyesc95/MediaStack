@@ -21,12 +21,14 @@ import {
   type LibraryTrackSearchHit,
 } from "../../../api";
 import { formatTrackDate } from "../../../formatDate";
+import { formatVideoDateIso } from "../../../utils/videoMedia";
 import type {
   ArtistPlaylistTrack,
   ArtistPlaylistSection,
   ReleaseTrackItem,
   TrackVersionItem,
 } from "../../../types";
+import { trackMainTitle } from "../release/releaseTrackPanelMeta";
 import { ReleaseTrackTitle } from "../release/releaseTrackTitle";
 import ReleaseAddToPlaylistModal from "../release/ReleaseAddToPlaylistModal";
 import ReleaseInlineLyrics from "../release/ReleaseInlineLyrics";
@@ -39,6 +41,7 @@ import {
   diskCreditFromTitle,
 } from "../release/releaseTrackPanelMeta";
 import { TrackActionRetryIcon, TrackActionSearchIcon, TrackActionYoutubeIcon } from "../release/releaseTrackActionIcons";
+import TrackYoutubeButton, { trackYoutubeVideos } from "../TrackYoutubeButton";
 import FindInDiskModal from "../FindInDiskModal";
 import SortChevron from "../SortChevron";
 import type { PlaylistTrackSortKey } from "../playlistTrackSort";
@@ -50,6 +53,20 @@ import {
   trackDurationSec,
 } from "../playlistTrackSort";
 import type { ReleaseMobileTrackView, ReleasePlaybackArt } from "../release/ReleaseTracklist";
+import { openTrackVideo } from "../../../utils/videoMedia";
+
+const GENERIC_VIDEO_LABELS = new Set([
+  "official video",
+  "video",
+  "alternate video",
+  "music video",
+]);
+
+function musicVideoDisplayLabel(label?: string | null): string | null {
+  const text = label?.trim();
+  if (!text || GENERIC_VIDEO_LABELS.has(text.toLowerCase())) return null;
+  return text;
+}
 
 export type SystemPlaylistTracklistHandle = {
   openLyrics: (track: ReleaseTrackItem) => void;
@@ -98,12 +115,15 @@ type Props = {
       display_date?: string | null;
     } | null;
   }) => void;
+  onPausePlayback?: () => void;
   isAdmin?: boolean;
   hidePerformer?: string;
   hideCoverArtist?: string;
   originalTrackNumbers?: Map<number, number>;
   sections?: ArtistPlaylistSection[];
   showSourceReleaseColumn?: boolean;
+  musicVideosMode?: boolean;
+  onOpenRelease?: (bandId: number, releaseId: string) => void;
   sortKey?: PlaylistTrackSortKey;
   sortDesc?: boolean;
   onSortChange?: (key: PlaylistTrackSortKey, desc: boolean) => void;
@@ -159,11 +179,13 @@ function userPlaylistTrackYear(track: ArtistPlaylistTrack): string {
 
 function toTrackItem(track: ArtistPlaylistTrack, index: number): ReleaseTrackItem {
   const id =
-    track.entry_id != null
-      ? `entry-${track.entry_id}`
-      : track.play_path
-        ? `path-${track.play_path}-${index}`
-        : `${track.title}-${index}`;
+    track.is_music_video && track.video_url
+      ? `video-${track.video_url}-${index}`
+      : track.entry_id != null
+        ? `entry-${track.entry_id}`
+        : track.play_path
+          ? `path-${track.play_path}-${index}`
+          : `${track.title}-${index}`;
   return {
     id,
     number: index + 1,
@@ -179,6 +201,8 @@ function toTrackItem(track: ArtistPlaylistTrack, index: number): ReleaseTrackIte
     navigate_band_id: track.navigate_band_id ?? null,
     source_album_title: track.album_title ?? null,
     source_date_iso: track.release_date,
+    youtube_url: track.youtube_url ?? null,
+    youtube_videos: track.youtube_videos ?? undefined,
   };
 }
 
@@ -462,12 +486,15 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       mobileBackdropUrl,
       onPlay,
       onPanelActionsChange,
-      isAdmin = false,
+      onPausePlayback,
+      isAdmin: _isAdmin = false,
       hidePerformer,
       hideCoverArtist,
       originalTrackNumbers,
       sections,
       showSourceReleaseColumn = false,
+      musicVideosMode = false,
+      onOpenRelease,
       sortKey = "original",
       sortDesc = false,
       onSortChange,
@@ -734,6 +761,21 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       showTrackMeta && userPlaylistId && !editMode && !snapshotMetadataMode
     );
 
+    const useMusicVideoColumns = Boolean(
+      musicVideosMode && !editMode && !snapshotMetadataMode
+    );
+
+    const handleMusicVideoRow = (track: ArtistPlaylistTrack) => {
+      const url =
+        (track.local_video_path
+          ? `/api/media/file?path=${encodeURIComponent(track.local_video_path)}`
+          : null) ??
+        track.video_url ??
+        track.youtube_url;
+      if (!url) return;
+      openTrackVideo(url, onPausePlayback);
+    };
+
     const toggleColumnSort = (key: PlaylistTrackSortKey) => {
       if (!onSortChange) return;
       if (sortKey === key) {
@@ -754,7 +796,17 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       </button>
     );
 
-    const columnHeader = useMetaColumns ? (
+    const columnHeader = useMusicVideoColumns ? (
+      <li className="user-playlist-tracklist__header music-videos-tracklist__header">
+        <div className="music-videos-tracklist__header-row">
+          {headerCell("#", "number", "user-playlist-tracklist__header-btn--num")}
+          {headerCell("Title", "title", "user-playlist-tracklist__header-btn--title")}
+          {headerCell("Release", "album")}
+          {headerCell("Director", "director")}
+          {headerCell("Date", "year", "user-playlist-tracklist__header-btn--year")}
+        </div>
+      </li>
+    ) : useMetaColumns ? (
       <li className="user-playlist-tracklist__header">
         <div
           className={`user-playlist-tracklist__header-row${
@@ -797,6 +849,60 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       index: number,
       displayNumber: number
     ) => {
+            if (musicVideosMode) {
+              const songTitle = trackMainTitle(track.title);
+              const videoLabel = musicVideoDisplayLabel(track.video_label);
+              const releaseTitle = track.album_title?.trim() || songTitle;
+              const releaseId = track.navigate_release_id ?? null;
+              const releaseBandId = track.navigate_band_id ?? bandId;
+              return (
+                <li
+                  key={track.video_url ? `${track.video_url}-${index}` : `mv-${index}`}
+                  className="release-tracklist__row music-videos-tracklist__row"
+                >
+                  <span className="music-videos-tracklist__num">{displayNumber}</span>
+                  <button
+                    type="button"
+                    className="music-videos-tracklist__title-btn"
+                    onClick={() => handleMusicVideoRow(track)}
+                    aria-label={
+                      videoLabel
+                        ? `Open video ${songTitle} (${videoLabel})`
+                        : `Open video ${songTitle}`
+                    }
+                  >
+                    <span className="music-videos-tracklist__title-main">
+                      {songTitle}
+                      {videoLabel ? (
+                        <span className="music-videos-tracklist__video-label">
+                          ({videoLabel})
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  <span className="music-videos-tracklist__col music-videos-tracklist__col--release">
+                    {releaseTitle && releaseId && onOpenRelease ? (
+                      <button
+                        type="button"
+                        className="music-videos-tracklist__release-link"
+                        onClick={() => onOpenRelease(releaseBandId, releaseId)}
+                      >
+                        {releaseTitle}
+                      </button>
+                    ) : (
+                      releaseTitle || "—"
+                    )}
+                  </span>
+                  <span className="music-videos-tracklist__col music-videos-tracklist__col--director">
+                    {track.video_director?.trim() || "—"}
+                  </span>
+                  <span className="music-videos-tracklist__col music-videos-tracklist__col--year">
+                    {formatVideoDateIso(track.video_release_date ?? track.video_release_year) || "—"}
+                  </span>
+                </li>
+              );
+            }
+
             const item = trackItems[index]!;
             const active = Boolean(track.play_path && playingPath === track.play_path);
             const unavailable = Boolean(track.unavailable || !track.play_path);
@@ -860,6 +966,14 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 </span>
               </span>
             );
+            const videos = unavailable ? [] : trackYoutubeVideos(track);
+            const youtubeBtn =
+              videos.length > 0 ? (
+                <TrackYoutubeButton
+                  videos={videos}
+                  onBeforeOpen={onPausePlayback}
+                />
+              ) : null;
             const titleBlock =
               useMetaColumns || snapshotMetadataMode ? (
               <span
@@ -883,6 +997,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       E
                     </span>
                   ) : null}
+                  {youtubeBtn}
                 </span>
                 {stacked && useMetaColumns && displayArtist ? (
                   <span className="user-playlist-tracklist__title-artist">
@@ -891,14 +1006,17 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 ) : null}
               </span>
             ) : (
-              <span className="release-tracklist__title-wrap">
-                <ReleaseTrackTitle
-                  title={displayTitle}
-                  billboard={stacked}
-                  hidePerformer={hidePerformer}
-                  hideCoverArtist={hideCoverArtist}
-                />
-                {metaNode}
+              <span className="release-tracklist__title-cluster">
+                <span className="release-tracklist__title-wrap">
+                  <ReleaseTrackTitle
+                    title={displayTitle}
+                    billboard={stacked}
+                    hidePerformer={hidePerformer}
+                    hideCoverArtist={hideCoverArtist}
+                  />
+                  {metaNode}
+                </span>
+                {youtubeBtn}
               </span>
             );
             const artistCol =
@@ -1016,7 +1134,9 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 {artistCol}
                 {albumCol}
                 {yearCol}
-                {trailingCell}
+                {unavailable || editMode || snapshotMetadataMode
+                  ? trailingCell
+                  : null}
               </>
             ) : (
               <>
@@ -1031,7 +1151,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 ) : showSourceReleaseColumn ? (
                   <span className="live-story-tracklist__source-col live-story-tracklist__source-col--empty" aria-hidden />
                 ) : null}
-                {unavailable ? rowActions : durationCell}
+                {unavailable ? rowActions : null}
                 {!unavailable && removeCell}
               </>
             );
@@ -1055,15 +1175,18 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                     {rowContent}
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className={playClass}
-                    onClick={() => handlePlayRow(track, item)}
-                    disabled={!track.play_path}
-                    aria-label={`Play ${track.title}`}
-                  >
-                    {rowContent}
-                  </button>
+                  <div className="release-tracklist__row-inner">
+                    <button
+                      type="button"
+                      className={playClass}
+                      onClick={() => handlePlayRow(track, item)}
+                      disabled={!track.play_path}
+                      aria-label={`Play ${track.title}`}
+                    >
+                      {rowContent}
+                    </button>
+                    {useMetaColumns ? trailingCell : durationCell}
+                  </div>
                 )}
               </li>
             );

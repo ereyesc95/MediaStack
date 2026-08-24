@@ -382,6 +382,59 @@ def _folder_has_episode_videos(folder: Path) -> bool:
     return False
 
 
+def _folder_has_content_videos(folder: Path) -> bool:
+    """True when Videos/, Episodes/, or nested season folders contain video files."""
+    from app.series_paths import find_content_root
+
+    content = find_content_root(folder)
+    if _folder_has_episode_videos(content):
+        return True
+    try:
+        for child in content.iterdir():
+            if child.is_dir() and _folder_has_episode_videos(child):
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def _list_dated_video_episodes(folder: Path, media_root: Path) -> list[dict]:
+    """Episode rows for music-video collections (dated filenames under Videos/)."""
+    from app.artist_video_collection import _video_rows_in_dir
+    from app.series_paths import find_content_root
+
+    content = find_content_root(folder)
+    rows = _video_rows_in_dir(content, media_root)
+    episodes: list[dict] = []
+    for row in rows:
+        rel = (row.get("play_path") or "").strip()
+        if not rel:
+            continue
+        rel_path = media_root / Path(rel.replace("/", "\\"))
+        duration_sec = _duration_from_file(rel_path) if rel_path.is_file() else None
+        episodes.append(
+            {
+                "id": _episode_id(rel),
+                "number": None,
+                "title": row.get("title") or Path(rel).stem,
+                "play_path": rel,
+                "open_url": row.get("open_url")
+                or f"/api/media/file?path={quote(rel, safe='/')}",
+                "date_iso": row.get("date_iso"),
+                "display_date": row.get("display_date"),
+                "duration_sec": duration_sec,
+                "duration": _format_duration(duration_sec) if duration_sec else None,
+            }
+        )
+    episodes.sort(
+        key=lambda e: (
+            e.get("date_iso") or "9999",
+            (e.get("title") or "").casefold(),
+        )
+    )
+    return episodes
+
+
 def _artwork_named_cover(
     artwork: Path | None,
     labels: list[str],
@@ -1030,10 +1083,28 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "has_gallery": _has_gallery(folder),
     }
 
-    if _is_season_folder(folder.name) or _folder_has_episode_videos(folder):
-        episodes = _list_episodes(folder, root)
+    from app.artist_video_collection import is_video_collection_folder
+
+    is_video_collection = is_video_collection_folder(folder.name)
+    has_content_videos = _folder_has_content_videos(folder)
+
+    if (
+        _is_season_folder(folder.name)
+        or _folder_has_episode_videos(folder)
+        or (is_video_collection and has_content_videos)
+    ):
+        if is_video_collection and has_content_videos:
+            episodes = _list_dated_video_episodes(folder, root)
+        else:
+            episodes = _list_episodes(folder, root)
+        extra = (
+            {"content_kind": "video_collection", "episodes_tab_label": "Videos"}
+            if is_video_collection
+            else {}
+        )
         return {
             **base,
+            **extra,
             "kind": "season",
             "seasons": [],
             "subseries": [],
@@ -1070,8 +1141,16 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
                     )
         except OSError:
             pass
+    from app.artist_video_collection import is_video_collection_folder
+
+    extra = (
+        {"content_kind": "video_collection", "episodes_tab_label": "Videos"}
+        if is_video_collection_folder(folder.name)
+        else {}
+    )
     return {
         **base,
+        **extra,
         "kind": "subseries" if seasons or movies or not subseries else "folder",
         "seasons": seasons,
         "subseries": subseries,

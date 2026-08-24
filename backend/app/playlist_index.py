@@ -23,7 +23,7 @@ from app.playlist_tracks import (
     enrich_playlist_tracks,
 )
 
-PLAYLIST_INDEX_VERSION = 18
+PLAYLIST_INDEX_VERSION = 24
 
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",
@@ -367,7 +367,9 @@ def _finalize_playlist_detail(
     index = get_playlist_index(db, band, user_id=user_id)
     playlists = index.get("playlists") or []
     prev, nxt = _playlist_neighbors(playlists, slug)
-    tracks = enrich_playlist_tracks(detail.get("tracks") or [], media_root, db=db)
+    tracks = enrich_playlist_tracks(
+        detail.get("tracks") or [], media_root, db=db, band_id=band.bnd_id
+    )
     description = detail.get("description") or PLAYLIST_DESCRIPTIONS.get(slug, "")
     if "{artist_name}" in description:
         artist_name = (band.bnd_name or "").strip() or "the artist"
@@ -388,7 +390,10 @@ def _finalize_playlist_detail(
             {
                 **section,
                 "tracks": enrich_playlist_tracks(
-                    section.get("tracks") or [], media_root, db=db
+                    section.get("tracks") or [],
+                    media_root,
+                    db=db,
+                    band_id=band.bnd_id,
                 ),
             }
             for section in raw_sections

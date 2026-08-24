@@ -92,6 +92,7 @@ PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "standalones": "Standalone singles and one-off releases.",
     "singles": "Singles across {artist_name}'s discography.",
     "most-played": "Tracks ranked by your play history.",
+    "music-videos": "Official music videos across {artist_name}'s discography.",
 }
 
 
@@ -244,5 +245,12 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
     return out
 
 
-def enrich_playlist_tracks(tracks: list[dict], media_root: Path, db=None) -> list[dict]:
-    return [enrich_playlist_track(t, media_root, db=db) for t in tracks]
+def enrich_playlist_tracks(
+    tracks: list[dict], media_root: Path, db=None, *, band_id: int | None = None
+) -> list[dict]:
+    enriched = [enrich_playlist_track(t, media_root, db=db) for t in tracks]
+    if db is not None:
+        from app.track_youtube import attach_playlist_youtube_urls
+
+        attach_playlist_youtube_urls(db, enriched, band_id=band_id, media_root=media_root)
+    return enriched

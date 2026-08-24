@@ -33,13 +33,76 @@ def youtube_overrides_map(db: Session) -> dict[str, str]:
     return out
 
 
+def youtube_videos_by_title(
+    db: Session,
+    *,
+    band_id: int | None = None,
+) -> dict[str, list[dict[str, str | bool]]]:
+    """Map normalized title keys → video lists from TrackOverride rows.
+
+    Used so playlist tracks can inherit Official Videos saved on a different
+    play_path (edition / single) with the same song title.
+    """
+    from app.release_track_extras import _youtube_title_keys
+
+    out: dict[str, list[dict[str, str | bool]]] = {}
+    for row in db.scalars(select(TrackOverride)).all():
+        if band_id is not None and row.tro_band_id is not None and row.tro_band_id != band_id:
+            continue
+        videos = read_track_videos_from_row(row)
+        if not videos:
+            continue
+        title = (row.tro_title or "").strip()
+        if not title:
+            continue
+        for key in _youtube_title_keys(title):
+            if key and key not in out:
+                out[key] = videos
+    return out
+
+
 def _normalize_video_entry(entry: dict[str, Any]) -> dict[str, str | bool] | None:
     url = _normalize_youtube(str(entry.get("url") or ""))
-    if not url:
+    local_path = str(entry.get("local_path") or "").strip().replace("\\", "/") or None
+    if not url and not local_path:
         return None
     label = str(entry.get("label") or "Video").strip() or "Video"
     primary = bool(entry.get("primary"))
-    return {"url": url, "label": label, "primary": primary}
+    out: dict[str, str | bool] = {"url": url or "", "label": label, "primary": primary}
+    if local_path:
+        out["local_path"] = local_path
+    director = str(entry.get("director") or "").strip()
+    if director:
+        out["director"] = director
+    raw_date = entry.get("release_date")
+    if raw_date is None:
+        raw_date = entry.get("release_year")
+    if raw_date is not None and str(raw_date).strip():
+        date_text = str(raw_date).strip()
+        if len(date_text) == 4 and date_text.isdigit():
+            out["release_date"] = f"{date_text}-01-01"
+        else:
+            out["release_date"] = date_text
+    return out
+
+
+def _video_dedupe_key(entry: dict[str, Any]) -> str | None:
+    from app.release_track_extras import _youtube_video_id
+
+    local_path = str(entry.get("local_path") or "").strip().replace("\\", "/")
+    if local_path:
+        return f"local:{local_path.casefold()}"
+    url = str(entry.get("url") or "").strip()
+    if url:
+        vid = _youtube_video_id(url)
+        if vid:
+            return f"yt:{vid}"
+        return f"url:{url.casefold()}"
+    label = str(entry.get("label") or "").strip()
+    date = str(entry.get("release_date") or entry.get("release_year") or "").strip()
+    if label or date:
+        return f"meta:{label.casefold()}|{date}"
+    return None
 
 
 def _normalize_video_list(videos: list[dict[str, Any]] | None) -> list[dict[str, str | bool]]:
@@ -49,9 +112,12 @@ def _normalize_video_list(videos: list[dict[str, Any]] | None) -> list[dict[str,
         if not isinstance(raw, dict):
             continue
         item = _normalize_video_entry(raw)
-        if not item or item["url"] in seen:
+        if not item:
             continue
-        seen.add(item["url"])
+        key = _video_dedupe_key(item)
+        if not key or key in seen:
+            continue
+        seen.add(key)
         out.append(item)
     if out and not any(bool(v.get("primary")) for v in out):
         first = dict(out[0])
@@ -65,7 +131,9 @@ def _primary_youtube_from_row(row: TrackOverride | None) -> str | None:
         return None
     for item in read_track_videos_from_row(row):
         if item.get("primary"):
-            return str(item["url"])
+            url = str(item.get("url") or "").strip()
+            if url:
+                return url
     url = _normalize_youtube(row.tro_youtube_url or "")
     return url or None
 
