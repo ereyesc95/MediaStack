@@ -423,12 +423,6 @@ export default function MediaItemPage({
     [groups]
   );
   const showDurationColumn = kind === "video";
-  const showPagesColumn = useMemo(
-    () =>
-      kind === "library" &&
-      groups.some((g) => g.files.some((f) => Boolean(f.pages || f.page_count))),
-    [groups, kind]
-  );
 
   const sectionLabel = kind === "video" ? "Video" : "Library";
   const listTabLabel = kind === "video" ? "VIDEOS" : "VOLUMES";
@@ -1184,6 +1178,106 @@ export default function MediaItemPage({
                   const gId = groupKey(group.label, groupIndex);
                   const header = showGroupHeader(group.label);
                   const open = !header || expandedGroupId === gId;
+                  if (kind === "library") {
+                    let volumeIndex = 0;
+                    return (
+                      <div key={gId} className="release-tracklist__group series-book-volumes">
+                        {header ? (
+                          <button
+                            type="button"
+                            className={`release-tracklist__group-label series-season-block__header${
+                              open ? " is-open" : ""
+                            }`}
+                            onClick={() => toggleGroup(gId)}
+                            aria-expanded={open}
+                          >
+                            {group.label}
+                          </button>
+                        ) : null}
+                        {open ? (
+                          <ul className="series-book-volumes__list">
+                            {group.files.map((file) => {
+                              const title =
+                                file.title?.trim() || file.name;
+                              const rowDate =
+                                file.display_date ||
+                                formatTrackDate(file.date_iso) ||
+                                "";
+                              const pagesLabel =
+                                file.pages ||
+                                (file.page_count
+                                  ? `${file.page_count} ${
+                                      file.page_count === 1
+                                        ? "page"
+                                        : "pages"
+                                    }`
+                                  : "");
+                              const volNum =
+                                file.number != null && file.number > 0
+                                  ? file.number
+                                  : ++volumeIndex;
+                              if (file.number != null && file.number > 0) {
+                                volumeIndex = Math.max(
+                                  volumeIndex,
+                                  file.number
+                                );
+                              }
+                              const active = activeFilePath === file.path;
+                              return (
+                                <li key={file.path}>
+                                  <button
+                                    type="button"
+                                    className={`series-book-volumes__row${
+                                      active ? " is-active" : ""
+                                    }`}
+                                    onClick={() => {
+                                      setActiveFilePath(file.path);
+                                      openFile(file);
+                                    }}
+                                    title={title}
+                                  >
+                                    <span className="series-book-volumes__leading">
+                                      {file.cover_url ? (
+                                        <span
+                                          className="series-book-volumes__cover"
+                                          style={{
+                                            backgroundImage: `url("${file.cover_url}")`,
+                                          }}
+                                        />
+                                      ) : (
+                                        <span className="series-book-volumes__cover series-book-volumes__cover--empty" />
+                                      )}
+                                      <span className="series-book-volumes__meta">
+                                        <span className="series-book-volumes__title">
+                                          {`${String(volNum).padStart(2, "0")}. `}
+                                          {title}
+                                        </span>
+                                        {rowDate ? (
+                                          <span className="series-book-volumes__date series-book-volumes__date--under">
+                                            {rowDate}
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                    </span>
+                                    {rowDate ? (
+                                      <span className="series-book-volumes__date series-book-volumes__date--center">
+                                        {rowDate}
+                                      </span>
+                                    ) : (
+                                      <span />
+                                    )}
+                                    <span className="series-book-volumes__pages">
+                                      {pagesLabel}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                    );
+                  }
                   return (
                     <div key={gId} className="release-tracklist__group">
                       {header ? (
@@ -1208,23 +1302,14 @@ export default function MediaItemPage({
                               "";
                             const metaRight = showDurationColumn
                               ? file.duration ?? ""
-                              : showPagesColumn
-                                ? file.pages ??
-                                  (file.page_count
-                                    ? `${file.page_count} ${
-                                        file.page_count === 1
-                                          ? "page"
-                                          : "pages"
-                                      }`
-                                    : "")
-                                : "";
+                              : "";
                             const playClass = [
                               "release-tracklist__play",
                               "media-item-tracklist__play",
                               hasDateColumn
                                 ? "media-item-tracklist__play--date"
                                 : "",
-                              showDurationColumn || showPagesColumn
+                              showDurationColumn
                                 ? "media-item-tracklist__play--duration"
                                 : "",
                             ]
@@ -1251,23 +1336,6 @@ export default function MediaItemPage({
                                   <span className="release-tracklist__num">
                                     {file.number ?? index + 1}
                                   </span>
-                                  {kind === "library" ? (
-                                    <span
-                                      className={`media-item-tracklist__cover${
-                                        file.cover_url
-                                          ? ""
-                                          : " media-item-tracklist__cover--empty"
-                                      }`}
-                                      style={
-                                        file.cover_url
-                                          ? {
-                                              backgroundImage: `url("${file.cover_url}")`,
-                                            }
-                                          : undefined
-                                      }
-                                      aria-hidden
-                                    />
-                                  ) : null}
                                   <span className="release-tracklist__title-wrap">
                                     <span className="release-tracklist__title">
                                       {title}
@@ -1278,7 +1346,7 @@ export default function MediaItemPage({
                                       {rowDate}
                                     </span>
                                   ) : null}
-                                  {showDurationColumn || showPagesColumn ? (
+                                  {showDurationColumn ? (
                                     <span className="release-tracklist__duration">
                                       {metaRight}
                                     </span>

@@ -1,4 +1,5 @@
 import { usePhoneLayout } from "../../usePhoneLayout";
+import BillboardText from "../BillboardText";
 import { DEFAULT_DISC_URL } from "./release/releaseTrackPanelMeta";
 import type { AlbumCard, ReleaseCardLayout } from "../../types";
 
@@ -102,7 +103,9 @@ export default function CatalogAlbumCard({
       draggable={false}
     />
   ) : (
-    <span className="media-release-card__title-hover">{album.title}</span>
+    <span className="media-release-card__title-hover">
+      <BillboardText short={album.title} full={album.title} maxLines={3} />
+    </span>
   );
 
   return (

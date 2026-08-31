@@ -439,7 +439,7 @@ export default function SeriesFranchisePage({
   const [libLoading, setLibLoading] = useState(() => section === "library");
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>([]);
   const [gameLoading, setGameLoading] = useState(() => section === "games");
-  const [gallerySectionKey, setGallerySectionKey] = useState("all");
+  const [gallerySectionKey, setGallerySectionKey] = useState("");
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
@@ -497,14 +497,14 @@ export default function SeriesFranchisePage({
     setLibCards([]);
     setGameCards([]);
     setMediaSubFilter("all");
-    setGallerySectionKey("all");
+    setGallerySectionKey("");
     setGallerySections([]);
     cachedLogoRef.current = null;
     cachedIconRef.current = null;
   }, [franchiseId]);
 
   useEffect(() => {
-    setGallerySectionKey("all");
+    setGallerySectionKey("");
   }, [mediaSubFilter, section]);
 
   useEffect(() => {
@@ -2065,13 +2065,6 @@ export default function SeriesFranchisePage({
             role="tablist"
             aria-label="Gallery folders"
           >
-            <button
-              type="button"
-              className={gallerySectionKey === "all" ? "active" : ""}
-              onClick={() => setGallerySectionKey("all")}
-            >
-              All
-            </button>
             {gallerySections.map((s) => (
               <button
                 key={s.key}

@@ -1600,6 +1600,117 @@ def _append_bside_groups(
         )
 
 
+def _build_live_performance_track(
+    *,
+    video_row: dict,
+    media_root: Path,
+    number: int,
+) -> dict | None:
+    from urllib.parse import quote
+
+    from app.media_item_overview import _video_duration_sec
+    from app.media_paths import path_to_local_file
+
+    play_path = (video_row.get("play_path") or "").strip().replace("\\", "/")
+    if not play_path:
+        return None
+    title = (video_row.get("title") or "").strip()
+    if not title:
+        return None
+    date_iso = (video_row.get("date_iso") or "").strip() or None
+    display_date = (video_row.get("display_date") or "").strip() or format_display_date(
+        date_iso
+    )
+    open_url = video_row.get("open_url")
+    if not open_url:
+        open_url = f"/api/media/file?path={quote(play_path, safe='/')}"
+    video_file = path_to_local_file(play_path)
+    duration_sec = None
+    if video_file and video_file.is_file():
+        duration_sec = _video_duration_sec(video_file)
+    return {
+        "id": _track_id(f"live-perf:{play_path}"),
+        "number": number,
+        "title": title,
+        "play_path": play_path,
+        "duration_sec": duration_sec,
+        "duration": _format_duration(duration_sec) if duration_sec is not None else None,
+        "has_lrc": False,
+        "has_synced_lrc": False,
+        "is_link": False,
+        "is_video": True,
+        "is_live_performance": True,
+        "is_exclusive": False,
+        "open_url": open_url,
+        "source_date_iso": date_iso,
+        "source_display_date": display_date,
+        "cover_url": None,
+        "cover_animation_url": None,
+        "canvas_url": None,
+        "disc_url": None,
+        "background_layers": [],
+    }
+
+
+def _attach_live_performance_videos(
+    editions: list[dict],
+    *,
+    band_name: str,
+    media_root: Path,
+    release_title: str,
+    release_content: Path,
+) -> None:
+    from app.artist_video_collection import match_live_performances_for_release
+
+    release_date = _parse_folder_date(release_content.name) or _parse_folder_date(
+        entry_display_name(release_content)
+    )
+    matches = match_live_performances_for_release(
+        band_name=band_name,
+        media_root=media_root,
+        release_title=release_title,
+        release_date_iso=release_date,
+    )
+    if not matches:
+        # Retry with folder title (may include [Unofficial] which matcher strips)
+        folder_title = _album_title_from_folder(release_content.name)
+        if folder_title and folder_title != release_title:
+            matches = match_live_performances_for_release(
+                band_name=band_name,
+                media_root=media_root,
+                release_title=folder_title,
+                release_date_iso=release_date,
+            )
+    if not matches or not editions:
+        return
+
+    # Append after the last track of the last group in the last edition.
+    edition = editions[-1]
+    groups = edition.get("groups") or []
+    if not groups:
+        return
+    group = groups[-1]
+    tracks = group.get("tracks") or []
+    last_num = 0
+    for track in tracks:
+        try:
+            last_num = max(last_num, int(track.get("number") or 0))
+        except (TypeError, ValueError):
+            continue
+    next_num = last_num + 1
+    for row in matches:
+        video_track = _build_live_performance_track(
+            video_row=row,
+            media_root=media_root,
+            number=next_num,
+        )
+        if not video_track:
+            continue
+        tracks.append(video_track)
+        next_num += 1
+    group["tracks"] = tracks
+
+
 def build_release_tracklist(
     db: Session,
     band_id: int,
@@ -1705,6 +1816,15 @@ def build_release_tracklist(
 
     if not editions_out:
         return None
+
+    if category == "live_albums":
+        _attach_live_performance_videos(
+            editions_out,
+            band_name=band.bnd_name,
+            media_root=media_root,
+            release_title=release_title,
+            release_content=content,
+        )
 
     attach_release_youtube_urls(
         db,

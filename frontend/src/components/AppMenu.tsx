@@ -102,6 +102,9 @@ type Props = {
   onAddLink?: () => void;
   onAddSimilar?: () => void;
   addSimilarLabel?: string;
+  /** Leaf admin: Set episodes / Set links / Set volumes (remote URL media). */
+  onSetRemoteMedia?: () => void;
+  setRemoteMediaLabel?: string;
   onRefreshRelatedSimilar?: () => void;
   onRefreshRelatedParticipations?: () => void;
   refreshIncludeBio?: boolean;
@@ -165,6 +168,8 @@ export default function AppMenu({
   onAddLink,
   onAddSimilar,
   addSimilarLabel = "Add similar artist",
+  onSetRemoteMedia,
+  setRemoteMediaLabel = "Set links",
   onRefreshRelatedSimilar,
   onRefreshRelatedParticipations,
   refreshIncludeBio = false,
@@ -383,7 +388,12 @@ export default function AppMenu({
   const showEditDataGroup =
     editDataFlat &&
     isAdmin &&
-    (onAddToUniverse || onEditAbout || onAddMember || onAddLink || onAddSimilar);
+    (onAddToUniverse ||
+      onEditAbout ||
+      onAddMember ||
+      onAddLink ||
+      onAddSimilar ||
+      onSetRemoteMedia);
 
   const refreshMenuLabel = editDataFlat
     ? "Refresh data"
@@ -471,8 +481,8 @@ export default function AppMenu({
                   setOpen(false);
                 }}
               >
-                <IconFolder className="menu-item-icon" />
-                Local files
+                <IconSync className="menu-item-icon" />
+                Sync folders
               </button>
             )}
             {onRefreshLineup && (
@@ -611,6 +621,18 @@ export default function AppMenu({
             >
               <IconAddArtist className="menu-item-icon" />
               {addSimilarLabel}
+            </button>
+          )}
+          {onSetRemoteMedia && (
+            <button
+              type="button"
+              onClick={() => {
+                onSetRemoteMedia();
+                setOpen(false);
+              }}
+            >
+              <IconVideo className="menu-item-icon" />
+              {setRemoteMediaLabel}
             </button>
           )}
         </div>

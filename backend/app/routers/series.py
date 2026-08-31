@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
-from app.deps import get_current_user, get_nsfw_unlocked
+from app.deps import get_current_user, get_nsfw_unlocked, require_admin
 from app.models import User
 from app.schemas import EpisodeOut, SeasonOut, SeriesListOut, SeriesOut
 
@@ -825,3 +825,34 @@ def series_seasons(series_id: int, db: Session = Depends(get_db)):
 @router.get("/db/seasons/{season_id}/episodes", response_model=list[EpisodeOut])
 def season_episodes(season_id: int, db: Session = Depends(get_db)):
     return crud.list_episodes(db, season_id)
+
+
+@router.get("/remote")
+def series_remote_get(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Load saved remote seasons/episodes for a series leaf folder."""
+    from app.remote_media import get_series_remote_payload
+
+    return get_series_remote_payload(db, path)
+
+
+@router.put("/remote")
+def series_remote_put(
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Replace remote seasons/episodes for a series leaf (admin)."""
+    from app.remote_media import save_series_remote
+
+    path = (body.get("folder_path") or "").strip()
+    seasons = body.get("seasons") if isinstance(body, dict) else None
+    if not path:
+        raise HTTPException(400, "folder_path required")
+    try:
+        return save_series_remote(db, path, seasons or [])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

@@ -1905,6 +1905,27 @@ export async function fetchMoviesFilmAudio(filmId: string) {
   }>(`${API}/movies/films/${encodeURIComponent(filmId)}/media/audio`);
 }
 
+export async function fetchMoviesFilmLibrary(filmId: string) {
+  return request<{
+    items: Array<{
+      id?: string;
+      title?: string;
+      name?: string;
+      cover_url?: string | null;
+      banner_url?: string | null;
+      logo_url?: string | null;
+      path?: string;
+      folder_path?: string;
+      date_iso?: string | null;
+      display_date?: string | null;
+      open_url?: string | null;
+      open_mode?: "tab" | "local" | null;
+      open_label?: string | null;
+    }>;
+    count: number;
+  }>(`${API}/movies/films/${encodeURIComponent(filmId)}/media/library`);
+}
+
 export async function fetchMoviesFilmTrailer(filmId: string) {
   return request<{ trailer_url: string | null }>(
     `${API}/movies/films/${encodeURIComponent(filmId)}/trailer`
@@ -2796,6 +2817,94 @@ export async function fetchSeriesFolderExtras(path: string) {
     endings: import("./types").SeriesEpisodeItem[];
     extras: import("./types").SeriesEpisodeItem[];
   }>(`${API}/series/extras?path=${encodeURIComponent(path)}`);
+}
+
+export type RemoteSeriesSeasonPayload = {
+  title: string;
+  date_iso?: string | null;
+  is_specials?: boolean;
+  sort_order?: number;
+  episodes?: {
+    number?: number | null;
+    title: string;
+    date_iso?: string | null;
+    url: string;
+  }[];
+};
+
+export type RemoteMovieLinkPayload = {
+  role: "movie" | "trailer" | "extra";
+  title: string;
+  url: string;
+  sort_order?: number;
+};
+
+export type RemoteBookVolumePayload = {
+  number?: number | null;
+  title: string;
+  date_iso?: string | null;
+  url: string;
+  sort_order?: number;
+};
+
+export async function fetchSeriesRemote(path: string) {
+  return request<{ folder_path: string; seasons: RemoteSeriesSeasonPayload[] }>(
+    `${API}/series/remote?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function saveSeriesRemote(
+  folder_path: string,
+  seasons: RemoteSeriesSeasonPayload[]
+) {
+  return request<{ folder_path: string; seasons: RemoteSeriesSeasonPayload[] }>(
+    `${API}/series/remote`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path, seasons }),
+    }
+  );
+}
+
+export async function fetchMoviesRemote(path: string) {
+  return request<{ folder_path: string; links: RemoteMovieLinkPayload[] }>(
+    `${API}/movies/remote?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function saveMoviesRemote(
+  folder_path: string,
+  links: RemoteMovieLinkPayload[]
+) {
+  return request<{ folder_path: string; links: RemoteMovieLinkPayload[] }>(
+    `${API}/movies/remote`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path, links }),
+    }
+  );
+}
+
+export async function fetchBooksRemote(path: string) {
+  return request<{ folder_path: string; volumes: RemoteBookVolumePayload[] }>(
+    `${API}/books/remote?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function saveBooksRemote(
+  folder_path: string,
+  volumes: RemoteBookVolumePayload[]
+) {
+  return request<{ folder_path: string; volumes: RemoteBookVolumePayload[] }>(
+    `${API}/books/remote`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path, volumes }),
+    }
+  );
 }
 
 export async function fetchMediaRelated(path: string) {

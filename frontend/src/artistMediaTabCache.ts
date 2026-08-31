@@ -72,6 +72,15 @@ export function clearArtistMediaTabCache(
     removeSessionEntry(sessionKey(bandId, kind));
     return;
   }
+  if (bandId != null) {
+    for (const k of ["video", "library", "series"] as ArtistMediaTabKind[]) {
+      const key = cacheKey(bandId, k);
+      store.delete(key);
+      inflight.delete(key);
+      removeSessionEntry(sessionKey(bandId, k));
+    }
+    return;
+  }
   store.clear();
   inflight.clear();
 }

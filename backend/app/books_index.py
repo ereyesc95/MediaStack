@@ -617,6 +617,24 @@ def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
             )
         )
 
+    # Gallery-only work root (synthetic book leaf, e.g. Books/H/High Fidelity)
+    if not books:
+        try:
+            from app.series_paths import has_gallery_images
+
+            if has_gallery_images(work_dir):
+                books.append(
+                    _book_card_from_dir(
+                        work_dir,
+                        media_root,
+                        title=work_dir.name,
+                        date_iso=None,
+                        hub_title=work_dir.name,
+                    )
+                )
+        except Exception:
+            pass
+
     seen: set[str] = set()
     unique: list[dict] = []
     for b in books:
@@ -711,6 +729,39 @@ def find_book_dir(
     return None
 
 
+def counterpart_book_for_movies_path(
+    movies_rel_path: str, media_root: Path | None = None
+) -> dict | None:
+    """Map Movies/{Letter}/{Work}/{Leaf} → Books/{Letter}/{Work}/{Leaf} when present."""
+    root = _resolve_media_root(media_root)
+    norm = (movies_rel_path or "").replace("\\", "/").strip("/")
+    if not norm:
+        return None
+    parts = norm.split("/")
+    if len(parts) < 3 or parts[0].casefold() != "movies":
+        return None
+    books_rel = "/".join(["Books", *parts[1:]])
+    book_dir = root / books_rel
+    if not book_dir.is_dir():
+        return None
+    return _book_card_from_dir(book_dir, root)
+
+
+def counterpart_book_for_film(
+    film_id: str, media_root: Path | None = None
+) -> dict | None:
+    """Book leaf that mirrors a film's on-disk path (same title folder under Books/)."""
+    from app.movies_index import find_film_dir
+
+    root = _resolve_media_root(media_root)
+    found = find_film_dir(film_id, root)
+    if not found:
+        return None
+    film_dir, _work_dir, _letter = found
+    rel = film_dir.relative_to(root).as_posix()
+    return counterpart_book_for_movies_path(rel, root)
+
+
 def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
     from app.series_paths import find_badge_file, find_logo_file
     from app.series_index import (
@@ -784,10 +835,12 @@ def _title_letter(title: str | None) -> str:
 
 def build_books_catalog(media_root: Path | None = None) -> dict:
     root = Path(media_root or settings.media_root or "")
-    franchises = [
-        _work_card(work_dir, letter, root)
-        for work_dir, letter in iter_work_dirs(root)
-    ]
+    franchises = []
+    for work_dir, letter in iter_work_dirs(root):
+        card = _work_card(work_dir, letter, root)
+        if int(card.get("book_count") or 0) <= 0:
+            continue
+        franchises.append(card)
     franchises.sort(key=lambda f: (f.get("name") or "").casefold())
     books: list[dict] = []
     for card in franchises:
@@ -853,7 +906,20 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
 
     card = _book_card_from_dir(book_dir, root)
     work_card = _work_card(work_dir, letter, root)
-    volumes = card.get("volumes") or []
+    volumes = list(card.get("volumes") or [])
+    try:
+        from app.database import SessionLocal
+        from app.remote_media import list_remote_book_volumes, merge_book_volumes
+
+        db = SessionLocal()
+        try:
+            remote = list_remote_book_volumes(db, card.get("folder_path") or "")
+            volumes = merge_book_volumes(volumes, remote)
+        finally:
+            db.close()
+    except Exception:
+        pass
+    primary = volumes[0] if volumes else None
     return {
         **card,
         "kind": "book",
@@ -863,8 +929,11 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
         or card.get("portrait_url"),
         "photocards": resolve_series_photocards(book_dir, root),
         "has_gallery": _has_gallery(book_dir),
-        "versions": volumes,  # film-page reuse
+        "versions": volumes,
         "volumes": volumes,
+        "open_url": (primary or {}).get("open_url") or card.get("open_url"),
+        "open_mode": (primary or {}).get("open_mode") or card.get("open_mode"),
+        "open_label": (primary or {}).get("open_label") or card.get("open_label"),
         "trailer_url": None,
         "seasons": [],
         "subseries": [],

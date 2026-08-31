@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
 import { usePhoneLayout } from "../../usePhoneLayout";
+import BillboardText from "../BillboardText";
 import { ChevronIcon } from "../music/release/releaseTrackPanelMeta";
 
 export type SeriesMediaCard = {
@@ -249,7 +250,9 @@ function SeriesMediaCardView({
             alt=""
           />
         ) : (
-          <span className="media-release-card__title-hover">{item.title}</span>
+          <span className="media-release-card__title-hover">
+            <BillboardText short={item.title} full={item.title} maxLines={3} />
+          </span>
         )}
       </span>
       {openFileControl || dateLabel ? (

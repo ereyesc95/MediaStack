@@ -49,6 +49,33 @@ function openVideoTrack(track: ReleaseTrackItem) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function LivePerformanceTitle({
+  track,
+  billboard = false,
+}: {
+  track: ReleaseTrackItem;
+  billboard?: boolean;
+}) {
+  const dateLabel =
+    track.source_display_date?.trim() ||
+    formatTrackDate(track.source_date_iso) ||
+    null;
+  return (
+    <>
+      <span className={`release-tracklist__title${billboard ? " billboard-text" : ""}`}>
+        {trackMainTitle(track.title)}
+        <span className="release-tracklist__title-suffix">(Live performance)</span>
+        {dateLabel ? (
+          <span className="release-tracklist__live-perf-date"> · {dateLabel}</span>
+        ) : null}
+      </span>
+      <span className="release-tracklist__video-badge" title="Live performance video">
+        <IconVideo />
+      </span>
+    </>
+  );
+}
+
 export {
   clearReleaseTracklistCache,
   prefetchReleaseTracklist,
@@ -939,14 +966,26 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                       }
                                     >
                                       <span className="release-tracklist__title-wrap">
-                                        <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                                        {track.is_video && (
-                                          <span
-                                            className="release-tracklist__video-badge"
-                                            title="Video"
-                                          >
-                                            <IconVideo />
-                                          </span>
+                                        {track.is_live_performance ? (
+                                          <LivePerformanceTitle
+                                            track={track}
+                                            billboard={stacked}
+                                          />
+                                        ) : (
+                                          <>
+                                            <ReleaseTrackTitle
+                                              title={track.title}
+                                              billboard={stacked}
+                                            />
+                                            {track.is_video && (
+                                              <span
+                                                className="release-tracklist__video-badge"
+                                                title="Video"
+                                              >
+                                                <IconVideo />
+                                              </span>
+                                            )}
+                                          </>
                                         )}
                                         {track.is_exclusive && <TrackExclusiveBadge />}
                                       </span>
@@ -1023,14 +1062,23 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                             }
                           >
                             <span className="release-tracklist__title-wrap">
-                              <ReleaseTrackTitle title={track.title} billboard={stacked} />
-                              {track.is_video && (
-                                <span
-                                  className="release-tracklist__video-badge"
-                                  title="Video"
-                                >
-                                  <IconVideo />
-                                </span>
+                              {track.is_live_performance ? (
+                                <LivePerformanceTitle
+                                  track={track}
+                                  billboard={stacked}
+                                />
+                              ) : (
+                                <>
+                                  <ReleaseTrackTitle title={track.title} billboard={stacked} />
+                                  {track.is_video && (
+                                    <span
+                                      className="release-tracklist__video-badge"
+                                      title="Video"
+                                    >
+                                      <IconVideo />
+                                    </span>
+                                  )}
+                                </>
                               )}
                               {track.is_exclusive && <TrackExclusiveBadge />}
                             </span>

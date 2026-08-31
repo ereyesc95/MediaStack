@@ -338,6 +338,16 @@ def movies_franchise_library(work_id: str, db: Session = Depends(get_db)):
     return {"items": (overview.get("related") or {}).get("books") or []}
 
 
+@router.get("/films/{film_id}/media/library")
+def movies_film_library(film_id: str):
+    """Books leaf that mirrors this film's path under Books/ (same dated folder name)."""
+    from app.books_index import counterpart_book_for_film
+
+    book = counterpart_book_for_film(film_id)
+    items = [book] if book else []
+    return {"items": items, "count": len(items)}
+
+
 @router.get("/franchises/{work_id}/media/games")
 def movies_franchise_games(work_id: str, db: Session = Depends(get_db)):
     overview = build_work_overview(db, work_id)
@@ -793,3 +803,34 @@ def movies_film_delete_link(
     if not ok:
         raise HTTPException(404, "Link not found")
     return {"ok": True}
+
+
+@router.get("/remote")
+def movies_remote_get(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Load saved remote movie/trailer/extra links for a film folder."""
+    from app.remote_media import get_movie_remote_payload
+
+    return get_movie_remote_payload(db, path)
+
+
+@router.put("/remote")
+def movies_remote_put(
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Replace remote movie/trailer/extra links for a film leaf (admin)."""
+    from app.remote_media import save_movie_remote_links
+
+    path = (body.get("folder_path") or "").strip()
+    links = body.get("links") if isinstance(body, dict) else None
+    if not path:
+        raise HTTPException(400, "folder_path required")
+    try:
+        return save_movie_remote_links(db, path, links or [])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

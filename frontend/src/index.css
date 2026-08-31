@@ -1528,6 +1528,49 @@ input {
   }
 }
 
+@keyframes billboard-pan-y {
+  0%,
+  12% {
+    transform: translateY(0);
+  }
+  88%,
+  100% {
+    transform: translateY(var(--scroll-end, 0));
+  }
+}
+
+.billboard-text--multiline .billboard-text-clip {
+  max-height: calc(1.2em * var(--billboard-lines, 3));
+}
+
+.billboard-text--multiline .billboard-text-inner {
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.billboard-text--multiline.billboard-text--vscroll .billboard-text-inner {
+  display: block;
+  -webkit-line-clamp: unset;
+  text-overflow: clip;
+}
+
+.media-release-card:hover .billboard-text--vscroll .billboard-text-inner,
+.media-release-card--revealed .billboard-text--vscroll .billboard-text-inner,
+.dash-track:hover .billboard-text--vscroll .billboard-text-inner,
+.dash-icon-item:hover .billboard-text--vscroll .billboard-text-inner,
+.dash-genre:hover .billboard-text--vscroll .billboard-text-inner,
+.dash-country:hover .billboard-text--vscroll .billboard-text-inner,
+.dash-hover-title.is-revealed .billboard-text--vscroll .billboard-text-inner,
+.is-revealed .billboard-text--vscroll .billboard-text-inner {
+  width: 100%;
+  max-width: 100%;
+  animation: billboard-pan-y var(--scroll-duration, 6s) linear infinite;
+}
+
 .dash-track-title {
   font-size: 0.68rem;
   font-weight: 600;
@@ -8665,6 +8708,90 @@ button.media-release-card--banner {
   color: var(--text-muted);
 }
 
+.artist-gallery__animation-subtabs {
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.artist-gallery__animation-grid {
+  display: grid;
+  gap: 0;
+  width: 100%;
+}
+
+.artist-gallery__animation-grid--covers {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+.artist-gallery__animation-grid--canvas {
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+}
+
+.artist-gallery__animation-card {
+  position: relative;
+  display: block;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: var(--bg-hover);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.artist-gallery__animation-card--cover {
+  aspect-ratio: 1;
+}
+
+.artist-gallery__animation-card--canvas {
+  aspect-ratio: 9 / 16;
+}
+
+.artist-gallery__animation-card video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease, filter 0.2s ease;
+}
+
+.artist-gallery__animation-card:hover video {
+  transform: scale(1.04);
+  filter: brightness(0.92);
+}
+
+.artist-gallery__animation-card .artist-gallery__card-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.68rem;
+  text-align: center;
+  color: #f0f8ff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.artist-gallery__animation-card:hover .artist-gallery__card-label {
+  opacity: 1;
+}
+
+.artist-gallery__card-title {
+  display: block;
+  line-height: 1.2;
+}
+
+.artist-gallery__card-date {
+  display: block;
+  font-size: 0.58rem;
+  opacity: 0.78;
+  line-height: 1.2;
+}
+
 .gallery-viewer {
   position: relative;
   width: min(96vw, 72rem);
@@ -8714,7 +8841,8 @@ button.media-release-card--banner {
 }
 
 .gallery-viewer__image,
-.gallery-viewer__img {
+.gallery-viewer__img,
+.gallery-viewer__video {
   display: block;
   max-width: min(100%, calc(96vw - 6rem));
   max-height: min(100%, calc(92vh - 10rem));
@@ -8803,7 +8931,8 @@ button.media-release-card--banner {
   transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
 }
 
-.gallery-viewer__thumb img {
+.gallery-viewer__thumb img,
+.gallery-viewer__thumb video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -16831,6 +16960,117 @@ button.lyrics-status-badge--icon-only {
   white-space: nowrap;
 }
 
+.series-episode-list__hover-action {
+  display: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.series-episode-list__row--link-action:hover .series-episode-list__duration-idle {
+  display: none;
+}
+
+.series-episode-list__row--link-action:hover .series-episode-list__hover-action {
+  display: inline;
+}
+
+.series-book-volumes__hover-action {
+  display: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.series-book-volumes__row--link-action:hover .series-book-volumes__hover-action {
+  display: inline;
+}
+
+.series-book-volumes__row--link-action:hover .series-book-volumes__pages {
+  min-width: 4rem;
+  text-align: right;
+}
+
+.remote-media-modal__hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.remote-media-modal--wide.artist-word-cloud-modal__panel,
+.remote-media-modal--wide.release-video-set-modal {
+  width: min(960px, 96vw);
+  max-width: 96vw;
+}
+
+.remote-media-modal__season-head {
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.remote-media-modal__season-title {
+  flex: 0 1 11rem;
+  max-width: 14rem;
+  min-width: 7rem;
+}
+
+.remote-media-modal__title {
+  flex: 0 1 11rem;
+  max-width: 14rem;
+  min-width: 7rem;
+}
+
+.remote-media-modal__date {
+  max-width: 8.5rem;
+  flex: 0 0 8.5rem;
+}
+
+.remote-media-modal__add-episode.btn.ghost {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.55rem;
+  white-space: nowrap;
+}
+
+.remote-media-modal__section-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.remote-media-modal__add-row {
+  margin-top: 0.35rem;
+  align-self: flex-start;
+}
+
+.remote-media-modal__action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.remote-media-modal__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.remote-media-modal__num {
+  max-width: 3.25rem;
+  text-align: center;
+}
+
+.remote-media-modal__actions {
+  justify-content: space-between;
+}
+
 .series-media-grid--square .media-release-card--portrait {
   aspect-ratio: 1 / 1;
   width: 100%;
@@ -18087,6 +18327,13 @@ button.lyrics-status-badge--icon-only {
 .release-tracklist__video-badge svg {
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.release-tracklist__live-perf-date {
+  font-size: 0.72em;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 0.15em;
 }
 
 .genre-tags-input {
@@ -19790,6 +20037,9 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.3;
 }
 
 .music-videos-tracklist__video-label {

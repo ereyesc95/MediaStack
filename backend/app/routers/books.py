@@ -707,3 +707,34 @@ def books_book_delete_link(
     if not ok:
         raise HTTPException(404, "Link not found")
     return {"ok": True}
+
+
+@router.get("/remote")
+def books_remote_get(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Load saved remote volumes for a book leaf folder."""
+    from app.remote_media import get_book_remote_payload
+
+    return get_book_remote_payload(db, path)
+
+
+@router.put("/remote")
+def books_remote_put(
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Replace remote volumes for a book leaf (admin)."""
+    from app.remote_media import save_book_remote_volumes
+
+    path = (body.get("folder_path") or "").strip()
+    volumes = body.get("volumes") if isinstance(body, dict) else None
+    if not path:
+        raise HTTPException(400, "folder_path required")
+    try:
+        return save_book_remote_volumes(db, path, volumes or [])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

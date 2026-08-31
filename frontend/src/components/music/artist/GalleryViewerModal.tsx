@@ -6,6 +6,7 @@ export type GalleryViewerItem = {
   url: string;
   caption: string;
   subcaption?: string;
+  mediaType?: "image" | "video";
 };
 
 type Props = {
@@ -182,7 +183,23 @@ export default function GalleryViewerModal({
               ‹
             </button>
           ) : null}
-          <img src={item.url} alt={item.caption} className="gallery-viewer__img" />
+          {item.mediaType === "video" ? (
+            <video
+              key={item.id}
+              src={item.url}
+              className="gallery-viewer__img gallery-viewer__video"
+              controls
+              autoPlay
+              loop
+              playsInline
+            />
+          ) : (
+            <img
+              src={item.url}
+              alt={item.caption}
+              className="gallery-viewer__img"
+            />
+          )}
           {hasMany ? (
             <button
               type="button"
@@ -230,7 +247,16 @@ export default function GalleryViewerModal({
                     }`}
                     onClick={() => onIndexChange(t.realIndex)}
                   >
-                    <img src={t.item.url} alt="" />
+                    {t.item.mediaType === "video" ? (
+                      <video
+                        src={t.item.url}
+                        muted
+                        preload="metadata"
+                        playsInline
+                      />
+                    ) : (
+                      <img src={t.item.url} alt="" />
+                    )}
                   </button>
                 );
               })}

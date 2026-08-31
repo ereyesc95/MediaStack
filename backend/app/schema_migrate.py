@@ -374,3 +374,85 @@ def migrate_schema(eng: Engine) -> None:
                     "(ufs_module, ufs_franchise_slug)"
                 )
             )
+
+        if "remote_media_seasons" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE remote_media_seasons (
+                        "rmsID" INTEGER NOT NULL PRIMARY KEY,
+                        "rmsModule" VARCHAR(16) NOT NULL,
+                        "rmsFolderPath" VARCHAR(512) NOT NULL,
+                        "rmsTitle" TEXT NOT NULL,
+                        "rmsDateIso" VARCHAR(32),
+                        "rmsIsSpecials" INTEGER DEFAULT 0,
+                        "rmsSortOrder" INTEGER DEFAULT 0,
+                        "rmsUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_remote_media_seasons_path" '
+                    'ON remote_media_seasons ("rmsModule", "rmsFolderPath")'
+                )
+            )
+
+        if "remote_media_episodes" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE remote_media_episodes (
+                        "rmeID" INTEGER NOT NULL PRIMARY KEY,
+                        "rmeModule" VARCHAR(16) NOT NULL,
+                        "rmeFolderPath" VARCHAR(512) NOT NULL,
+                        "rmeSeasonID" INTEGER NOT NULL,
+                        "rmeNumber" INTEGER,
+                        "rmeTitle" TEXT NOT NULL,
+                        "rmeDateIso" VARCHAR(32),
+                        "rmeUrl" TEXT NOT NULL,
+                        "rmeSortOrder" INTEGER DEFAULT 0,
+                        "rmeUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_remote_media_episodes_season" '
+                    'ON remote_media_episodes ("rmeSeasonID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_remote_media_episodes_path" '
+                    'ON remote_media_episodes ("rmeModule", "rmeFolderPath")'
+                )
+            )
+
+        if "remote_media_links" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE remote_media_links (
+                        "rmlID" INTEGER NOT NULL PRIMARY KEY,
+                        "rmlModule" VARCHAR(16) NOT NULL,
+                        "rmlFolderPath" VARCHAR(512) NOT NULL,
+                        "rmlRole" VARCHAR(32) NOT NULL DEFAULT 'extra',
+                        "rmlTitle" TEXT NOT NULL,
+                        "rmlUrl" TEXT NOT NULL,
+                        "rmlNumber" INTEGER,
+                        "rmlDateIso" VARCHAR(32),
+                        "rmlSortOrder" INTEGER DEFAULT 0,
+                        "rmlUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_remote_media_links_path" '
+                    'ON remote_media_links ("rmlModule", "rmlFolderPath")'
+                )
+            )

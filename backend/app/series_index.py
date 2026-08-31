@@ -530,7 +530,7 @@ def _list_movies(folder: Path, media_root: Path) -> list[dict]:
         for entry in entries:
             if entry.is_file() and entry.suffix.lower() in VIDEO_EXTS:
                 rel = entry.relative_to(media_root).as_posix()
-                number, title = _parse_episode_name(entry.name)
+                number, title, date_iso = _parse_episode_name(entry.name)
                 duration_sec = _duration_from_file(entry)
                 movies.append(
                     {
@@ -541,6 +541,8 @@ def _list_movies(folder: Path, media_root: Path) -> list[dict]:
                         "open_url": _file_url(entry, media_root)
                         or f"/api/media/file?path={quote(rel, safe='/')}",
                         "kind": "movie",
+                        "date_iso": date_iso,
+                        "display_date": format_display_date(date_iso),
                         "duration_sec": duration_sec,
                         "duration": _format_duration(duration_sec)
                         if duration_sec
@@ -751,12 +753,29 @@ def _episode_id(rel: str) -> str:
     return f"ep_{digest}"
 
 
-def _parse_episode_name(filename: str) -> tuple[int | None, str]:
+_EPISODE_PREFIX_RE = re.compile(r"^(\d+)\.\s*(.+)$")
+_SPECIAL_NUM_RE = re.compile(r"^(specials?)\s+(\d+)\b(.*)$", re.IGNORECASE)
+
+
+def _parse_episode_name(filename: str) -> tuple[int | None, str, str | None]:
+    """Return (number, title, date_iso).
+
+    Dated stems like ``1986.02.26. Special 1`` must not treat the year as the
+    episode number — strip the date first, then parse ``N. Title`` / ``Special N``.
+    """
     stem = Path(filename).stem.strip()
-    m = _EPISODE_PREFIX_RE.match(stem)
+    date_iso, rest = parse_dated_folder_name(stem)
+    rest = (rest or stem).strip() or stem
+    m = _EPISODE_PREFIX_RE.match(rest)
     if m:
-        return int(m.group(1)), m.group(2).strip()
-    return None, stem
+        return int(m.group(1)), m.group(2).strip(), date_iso
+    m2 = _SPECIAL_NUM_RE.match(rest)
+    if m2:
+        num = int(m2.group(2))
+        suffix = (m2.group(3) or "").strip(" .-–—")
+        title = f"Special {num}" + (f" {suffix}" if suffix else "")
+        return num, title, date_iso
+    return None, rest, date_iso
 
 
 def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
@@ -769,7 +788,7 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
         if not child.is_file() or child.suffix.lower() not in VIDEO_EXTS:
             continue
         rel = child.relative_to(media_root).as_posix()
-        number, title = _parse_episode_name(child.name)
+        number, title, date_iso = _parse_episode_name(child.name)
         open_url = _file_url(child, media_root)
         duration_sec = _duration_from_file(child)
         if duration_sec is None and child.suffix.lower() in {".mp4", ".m4v", ".mov"}:
@@ -789,15 +808,26 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
                 or f"/api/media/file?path={quote(rel, safe='/')}",
                 "duration_sec": duration_sec,
                 "duration": _format_duration(duration_sec),
+                "date_iso": date_iso,
+                "display_date": format_display_date(date_iso),
             }
         )
     episodes.sort(
         key=lambda e: (
+            e.get("date_iso") or "9999",
             e["number"] is None,
             e["number"] if e["number"] is not None else 10**9,
             (e["title"] or "").casefold(),
         )
     )
+    # Fill missing numbers with incremental order after sort (dated specials).
+    next_num = 1
+    for ep in episodes:
+        if ep.get("number") is None:
+            ep["number"] = next_num
+            next_num += 1
+        else:
+            next_num = max(next_num, int(ep["number"]) + 1)
     return episodes
 
 
@@ -863,6 +893,11 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
             date_iso = best.get("date_iso")
             display_date = best.get("display_date")
     is_standalone = not subseries and bool(seasons)
+    if not is_standalone and not subseries:
+        # Gallery-only franchise root (e.g. Kemonozume) → standalone show leaf
+        if _has_gallery(franchise_dir):
+            is_standalone = True
+            seasons = seasons or []
     if is_standalone:
         subseries = [_synthetic_standalone_show(franchise_dir, media_root, seasons)]
         date_iso = subseries[0].get("date_iso") or date_iso
@@ -993,10 +1028,16 @@ def find_franchise_dir(
 
 def build_series_catalog(media_root: Path | None = None) -> dict:
     root = Path(media_root or settings.media_root or "")
-    franchises = [
-        _franchise_card(franchise_dir, letter, root)
-        for franchise_dir, letter in iter_franchise_dirs(root)
-    ]
+    franchises = []
+    for franchise_dir, letter in iter_franchise_dirs(root):
+        card = _franchise_card(franchise_dir, letter, root)
+        # Hide hubs with no series leaves (e.g. [Artwork]-only franchise)
+        leaf_count = int(card.get("subseries_count") or 0)
+        if card.get("is_standalone"):
+            leaf_count = max(leaf_count, 1)
+        if leaf_count <= 0 and int(card.get("season_count") or 0) <= 0:
+            continue
+        franchises.append(card)
     franchises.sort(key=lambda f: (f.get("name") or "").casefold())
     return {
         "franchises": franchises,
@@ -1083,23 +1124,23 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "has_gallery": _has_gallery(folder),
     }
 
-    from app.artist_video_collection import is_video_collection_folder
+    from app.artist_video_collection import is_artist_video_series_folder
 
-    is_video_collection = is_video_collection_folder(folder.name)
+    is_video_series = is_artist_video_series_folder(folder.name)
     has_content_videos = _folder_has_content_videos(folder)
 
     if (
         _is_season_folder(folder.name)
         or _folder_has_episode_videos(folder)
-        or (is_video_collection and has_content_videos)
+        or (is_video_series and has_content_videos)
     ):
-        if is_video_collection and has_content_videos:
+        if is_video_series and has_content_videos:
             episodes = _list_dated_video_episodes(folder, root)
         else:
             episodes = _list_episodes(folder, root)
         extra = (
             {"content_kind": "video_collection", "episodes_tab_label": "Videos"}
-            if is_video_collection
+            if is_video_series
             else {}
         )
         return {
@@ -1122,7 +1163,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
             for child in sorted(folder.iterdir(), key=lambda p: p.name.casefold()):
                 if child.is_file() and child.suffix.lower() in VIDEO_EXTS:
                     rel = child.relative_to(root).as_posix()
-                    number, title = _parse_episode_name(child.name)
+                    number, title, date_iso = _parse_episode_name(child.name)
                     duration_sec = _duration_from_file(child)
                     movies.append(
                         {
@@ -1133,6 +1174,8 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
                             "open_url": _file_url(child, root)
                             or f"/api/media/file?path={quote(rel, safe='/')}",
                             "kind": "movie",
+                            "date_iso": date_iso,
+                            "display_date": format_display_date(date_iso),
                             "duration_sec": duration_sec,
                             "duration": _format_duration(duration_sec)
                             if duration_sec
@@ -1141,11 +1184,93 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
                     )
         except OSError:
             pass
-    from app.artist_video_collection import is_video_collection_folder
+
+    # Hybrid: merge DB link seasons/episodes (local wins on collision)
+    folder_rel = folder.relative_to(root).as_posix()
+    try:
+        from app.database import SessionLocal
+        from app.remote_media import merge_series_seasons_and_episodes
+
+        def _eps_for_season(season: dict) -> list[dict]:
+            sp = season.get("folder_path")
+            if not sp:
+                return []
+            try:
+                season_dir = _path_from_rel(sp, root)
+            except (ValueError, OSError):
+                return []
+            if not season_dir.is_dir():
+                return []
+            return _list_episodes(season_dir, root)
+
+        db = SessionLocal()
+        try:
+            seasons = merge_series_seasons_and_episodes(
+                seasons, db, folder_rel, _eps_for_season
+            )
+        finally:
+            db.close()
+    except Exception:
+        # Keep local-only seasons if DB unavailable
+        for s in seasons:
+            if "episodes" not in s:
+                sp = s.get("folder_path")
+                if sp:
+                    try:
+                        s["episodes"] = _list_episodes(_path_from_rel(sp, root), root)
+                    except (ValueError, OSError):
+                        s["episodes"] = []
+                else:
+                    s["episodes"] = []
+                s["episode_count"] = len(s.get("episodes") or [])
+
+    from app.artist_video_collection import is_artist_video_series_folder
+
+    # Virtual/remote seasons have no disk folder — attach parent Gallery
+    # season art (e.g. "Season 1 - Portrait.jpg") so covers + theme match.
+    try:
+        from app.series_artwork import resolve_season_art
+        from app.series_paths import find_covers_dir, render_search_dirs
+
+        parent_art = find_covers_dir(folder) or _find_artwork_subdir(folder)
+        parent_renders = render_search_dirs(folder)
+        for season in seasons:
+            if season.get("cover_url") or season.get("portrait_url"):
+                continue
+            labels = [
+                str(season.get("title") or "").strip(),
+                str(season.get("id") or "").strip(),
+            ]
+            labels = [x for x in labels if x]
+            if not labels:
+                continue
+            portrait, landscape, front, back, banner, logo = resolve_season_art(
+                parent_art,
+                labels,
+                root,
+                render_dirs=parent_renders,
+            )
+            cover = portrait or front
+            if not cover and not landscape and not banner and not logo:
+                continue
+            if cover:
+                season["cover_url"] = cover
+                season["portrait_url"] = portrait or cover
+            if landscape:
+                season["landscape_url"] = landscape
+            banner_url = banner or landscape
+            if banner_url:
+                season["banner_url"] = banner_url
+            if back:
+                season["cover_back_url"] = back
+            if logo:
+                season["logo_url"] = logo
+    except Exception:
+        pass
 
     extra = (
         {"content_kind": "video_collection", "episodes_tab_label": "Videos"}
-        if is_video_collection_folder(folder.name)
+        if is_artist_video_series_folder(folder.name)
         else {}
     )
     return {
@@ -1157,6 +1282,12 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "episodes": [],
         "movies": movies,
         "season_count": len(seasons),
+        "has_remote_episodes": any(
+            (s.get("has_remote") or any(
+                (e.get("source") == "remote") for e in (s.get("episodes") or [])
+            ))
+            for s in seasons
+        ),
     }
 
 

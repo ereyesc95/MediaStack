@@ -258,23 +258,30 @@ def _iter_work_leaf_items(
         )
     except OSError:
         videos = []
-    if not videos:
-        return leaves
-    # Prefer a dated filename; else first video titled as the work folder.
-    primary = None
-    date_iso = None
-    title = work_dir.name
-    for video in videos:
-        d, t = parse_dated_folder_name(video.stem)
-        if d:
-            primary = video
-            date_iso, title = d, t or work_dir.name
-            break
-    if primary is None:
-        primary = videos[0]
+    if videos:
+        primary = None
+        date_iso = None
         title = work_dir.name
-    # Treat the work folder itself as the film leaf (covers/gallery live here).
-    leaves.append((work_dir, date_iso, title, None))
+        for video in videos:
+            d, t = parse_dated_folder_name(video.stem)
+            if d:
+                primary = video
+                date_iso, title = d, t or work_dir.name
+                break
+        if primary is None:
+            primary = videos[0]
+            title = work_dir.name
+        leaves.append((work_dir, date_iso, title, None))
+        return leaves
+
+    # Gallery-only work root (synthetic film leaf, e.g. Movies/H/Her)
+    try:
+        from app.series_paths import has_gallery_images
+
+        if has_gallery_images(work_dir):
+            leaves.append((work_dir, None, work_dir.name, None))
+    except Exception:
+        pass
     return leaves
 
 

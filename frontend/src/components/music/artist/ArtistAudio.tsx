@@ -14,6 +14,7 @@ import {
 } from "../../../musicRoute";
 import { DEFAULT_DISC_URL, writerSearchUrl } from "../release/releaseTrackPanelMeta";
 import PlaylistBoot from "../../PlaylistBoot";
+import BillboardText from "../../BillboardText";
 import { formatTrackDate } from "../../../formatDate";
 import { usePhoneLayout, useDeviceLayout, isMobilePortraitLayout } from "../../../usePhoneLayout";
 import type {
@@ -588,7 +589,9 @@ function ReleaseCard({
       draggable={false}
     />
   ) : (
-    <span className="media-release-card__title-hover">{release.title}</span>
+    <span className="media-release-card__title-hover">
+      <BillboardText short={release.title} full={release.title} maxLines={3} />
+    </span>
   );
 
   return (

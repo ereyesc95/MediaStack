@@ -15,19 +15,22 @@ import type {
   ReleaseCardLayout,
 } from "../../../types";
 import PlaylistBoot from "../../PlaylistBoot";
+import BillboardText from "../../BillboardText";
 
 type Props = {
   bandId: number;
   kind: ArtistMediaTabKind;
   cardLayout?: ReleaseCardLayout;
   artistName?: string;
+  refreshKey?: number;
   onOpenItem?: (itemId: string, item?: MediaTabItem) => void;
 };
 
 export function useArtistMediaTab(
   bandId: number,
   kind: ArtistMediaTabKind,
-  enabled: boolean
+  enabled: boolean,
+  refreshKey = 0
 ) {
   const [data, setData] = useState<MediaTabIndexPayload | null>(
     () => getCachedArtistMediaTab(bandId, kind)
@@ -42,7 +45,7 @@ export function useArtistMediaTab(
 
   const load = useCallback(
     async (force = false) => {
-    const cached = !force ? getCachedArtistMediaTab(bandId, kind) : null;
+    const cached = !force && refreshKey === 0 ? getCachedArtistMediaTab(bandId, kind) : null;
     if (cached) {
       setData(cached);
       setCategoryKey(cached.categories[0]?.key ?? "");
@@ -68,7 +71,7 @@ export function useArtistMediaTab(
       setLoading(false);
     }
   },
-    [bandId, kind]
+    [bandId, kind, refreshKey]
   );
 
   useEffect(() => {
@@ -77,8 +80,8 @@ export function useArtistMediaTab(
       setLoading(false);
       return;
     }
-    void load();
-  }, [enabled, load]);
+    void load(refreshKey > 0);
+  }, [enabled, load, refreshKey]);
 
   const category: MediaTabCategory | null = useMemo(
     () => data?.categories.find((c) => c.key === categoryKey) ?? data?.categories[0] ?? null,
@@ -122,9 +125,10 @@ function MediaItemCard({
     preferCollapsed && item.era_logo_collapsed_url
       ? item.era_logo_collapsed_url
       : item.era_logo_url;
-  const openLabel =
-    kind === "library" ? "Read" : kind === "series" ? "Open series" : "Play video";
-  const openUrl = item.open_url?.trim() || null;
+  const openLabel = kind === "library" ? "Read" : "Play video";
+  // Series cards open the franchise page; single-file open is movies/books only.
+  const openUrl =
+    kind === "series" ? null : item.open_url?.trim() || null;
 
   const handleActivate = () => {
     if (tapReveal && !revealed) {
@@ -269,7 +273,9 @@ function MediaItemCard({
       />
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">
-        <span className="media-release-card__title-hover">{item.title}</span>
+        <span className="media-release-card__title-hover">
+          <BillboardText short={item.title} full={item.title} maxLines={3} />
+        </span>
       </span>
       {openFileControl || hoverDate ? (
         <span className="media-release-card__date">
@@ -288,10 +294,11 @@ export default function ArtistMediaGrid({
   kind,
   cardLayout = "cover",
   artistName,
+  refreshKey = 0,
   onOpenItem,
 }: Props) {
   const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
-    useArtistMediaTab(bandId, kind, true);
+    useArtistMediaTab(bandId, kind, true, refreshKey);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);

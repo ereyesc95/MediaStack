@@ -680,11 +680,25 @@ export type GalleryBrandItem = {
   folder_path: string;
 };
 
+export type GalleryAnimationItem = {
+  id: string;
+  url: string;
+  title: string;
+  date_iso: string | null;
+  display_date: string | null;
+  folder_path: string;
+  kind: "cover" | "canvas";
+};
+
 export type GalleryIndexPayload = {
   photos: GalleryPhotoItem[];
   branding: GalleryBrandItem[];
   logos: GalleryBrandItem[];
   icons: GalleryBrandItem[];
+  animations?: {
+    covers: GalleryAnimationItem[];
+    canvas: GalleryAnimationItem[];
+  };
 };
 
 export type AudioIndexPayload = {
@@ -715,6 +729,8 @@ export type ReleaseTrackItem = {
   has_synced_lrc?: boolean;
   is_link: boolean;
   is_video?: boolean;
+  /** Local Live Performances series video appended to a live album tracklist. */
+  is_live_performance?: boolean;
   open_url?: string | null;
   is_exclusive?: boolean;
   youtube_url?: string | null;
@@ -1091,7 +1107,8 @@ export type SeriesSection =
   | "library"
   | "games"
   | "gallery"
-  | "episodes";
+  | "episodes"
+  | "videos";
 
 export type SeriesOverviewTab = "about" | "cast" | "links" | "related";
 export type SeriesCastTab = "characters" | "staff";
@@ -1290,7 +1307,20 @@ export type MoviesFilmDetail = {
     play_path: string;
     file_url?: string | null;
     file_name?: string;
+    open_url?: string | null;
+    open_mode?: "tab" | "local" | null;
+    number?: number | null;
+    display_date?: string | null;
+    date_iso?: string | null;
+    cover_url?: string | null;
+    page_count?: number | null;
+    pages?: string | null;
+    source?: string;
   }[];
+  open_url?: string | null;
+  open_mode?: "tab" | "local" | null;
+  open_label?: string | null;
+  extras?: SeriesEpisodeItem[];
   seasons?: SeriesSeasonCard[];
   subseries?: SeriesSubseriesCard[];
   episodes?: SeriesEpisodeItem[];
@@ -1333,7 +1363,7 @@ export type SeriesSeasonCard = {
   title: string;
   date_iso: string | null;
   display_date?: string | null;
-  folder_path: string;
+  folder_path: string | null;
   cover_url: string | null;
   cover_back_url?: string | null;
   portrait_url?: string | null;
@@ -1341,14 +1371,19 @@ export type SeriesSeasonCard = {
   banner_url?: string | null;
   logo_url?: string | null;
   episode_count: number;
+  /** Present when detail already merged remote/local episodes. */
+  episodes?: SeriesEpisodeItem[];
+  source?: string;
+  has_remote?: boolean;
 };
 
 export type SeriesEpisodeItem = {
   id: string;
   number: number | null;
   title: string;
-  play_path: string;
+  play_path: string | null;
   open_url: string | null;
+  open_mode?: "tab" | "local" | null;
   duration?: string | null;
   duration_sec?: number | null;
   kind?: "episode" | "movie" | "opening" | "ending" | "extra";
@@ -1357,6 +1392,8 @@ export type SeriesEpisodeItem = {
   cover_url?: string | null;
   folder_path?: string | null;
   video_suffix?: string | null;
+  source?: string;
+  hover_label?: string | null;
 };
 
 export type SeriesFranchiseCard = {

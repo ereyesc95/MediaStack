@@ -57,7 +57,7 @@ export default function SeriesGalleryPanel({
 }: Props) {
   const [sections, setSections] = useState<SeriesGallerySection[]>([]);
   const [items, setItems] = useState<SeriesGalleryItem[]>([]);
-  const [internalKey, setInternalKey] = useState<string>("all");
+  const [internalKey, setInternalKey] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -136,10 +136,10 @@ export default function SeriesGalleryPanel({
         secs.map((s) => ({ key: s.key, label: s.label })),
         secs.length > 1
       );
-      const keys = new Set<string>(["all", ...secs.map((s) => s.key)]);
+      const keys = new Set<string>(secs.map((s) => s.key));
       const current = controlledKey ?? internalKey;
       if (!keys.has(current)) {
-        const preferred = secs.length > 1 ? "all" : secs[0]?.key || "all";
+        const preferred = secs[0]?.key || "";
         if (onSectionKeyChangeRef.current) {
           onSectionKeyChangeRef.current(preferred);
         } else {
@@ -160,7 +160,9 @@ export default function SeriesGalleryPanel({
   }, [load]);
 
   const visible = useMemo(() => {
-    if (sectionKey === "all") return items;
+    if (!sectionKey || sectionKey === "all") {
+      return sections[0]?.items || items;
+    }
     const sec = sections.find((s) => s.key === sectionKey);
     return sec?.items || [];
   }, [items, sections, sectionKey]);
@@ -193,13 +195,6 @@ export default function SeriesGalleryPanel({
           role="tablist"
           aria-label="Gallery folders"
         >
-          <button
-            type="button"
-            className={sectionKey === "all" ? "active" : ""}
-            onClick={() => setSectionKey("all")}
-          >
-            All
-          </button>
           {sections.map((s) => (
             <button
               key={s.key}

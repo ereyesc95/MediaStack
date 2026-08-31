@@ -9,6 +9,8 @@ type Props = {
   showReleaseDate?: boolean;
   /** Highlight the last-clicked / active episode row. */
   activeId?: string | null;
+  /** Default hover action text when episode has no duration (link rows). */
+  hoverActionLabel?: string;
 };
 
 function openEpisode(ep: SeriesEpisodeItem) {
@@ -23,6 +25,7 @@ export default function SeriesEpisodeList({
   onSelect,
   showReleaseDate = false,
   activeId = null,
+  hoverActionLabel = "Watch episode",
 }: Props) {
   if (!episodes.length) {
     return (
@@ -41,23 +44,39 @@ export default function SeriesEpisodeList({
                 ? index + 1
                 : "–";
           const dateLabel =
-            showReleaseDate || ep.kind === "movie"
+            showReleaseDate ||
+            ep.kind === "movie" ||
+            Boolean(ep.display_date || ep.date_iso)
               ? ep.display_date || formatTrackDate(ep.date_iso)
               : null;
           const canOpen = Boolean(ep.open_url?.trim());
           const active = Boolean(activeId && activeId === ep.id);
+          const isLinkRow =
+            ep.source === "remote" ||
+            ep.open_mode === "tab" ||
+            (!ep.duration && canOpen);
+          const actionLabel =
+            ep.hover_label?.trim() || (isLinkRow ? hoverActionLabel : null);
           return (
             <li key={ep.id} className="series-episode-list__item">
               <button
                 type="button"
                 className={`release-tracklist__row series-episode-list__row${
                   active ? " active" : ""
-                }${canOpen ? "" : " series-episode-list__row--unavailable"}`}
+                }${canOpen ? "" : " series-episode-list__row--unavailable"}${
+                  actionLabel ? " series-episode-list__row--link-action" : ""
+                }`}
                 onClick={() => {
                   onSelect?.(ep);
                   if (canOpen) openEpisode(ep);
                 }}
-                title={canOpen ? `Open ${ep.title}` : `${ep.title} (file not linked)`}
+                title={
+                  canOpen
+                    ? actionLabel
+                      ? `${actionLabel}: ${ep.title}`
+                      : `Open ${ep.title}`
+                    : `${ep.title} (file not linked)`
+                }
                 disabled={!canOpen && !onSelect}
               >
                 <span className="release-tracklist__num series-episode-list__num">
@@ -75,7 +94,16 @@ export default function SeriesEpisodeList({
                   {dateLabel ? (
                     <span className="series-episode-list__date">{dateLabel}</span>
                   ) : null}
-                  {ep.duration ? (
+                  {actionLabel ? (
+                    <>
+                      <span className="release-tracklist__duration release-tracklist__duration--empty series-episode-list__duration-idle">
+                        {ep.duration || "–"}
+                      </span>
+                      <span className="series-episode-list__hover-action">
+                        {actionLabel}
+                      </span>
+                    </>
+                  ) : ep.duration ? (
                     <span className="release-tracklist__duration">
                       {ep.duration}
                     </span>

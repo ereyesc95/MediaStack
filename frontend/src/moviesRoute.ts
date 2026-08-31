@@ -16,7 +16,8 @@ export type MoviesSection =
   | "audio"
   | "library"
   | "games"
-  | "gallery";
+  | "gallery"
+  | "videos";
 
 export type MoviesOverviewTab = "about" | "cast" | "links" | "related";
 
@@ -39,6 +40,7 @@ const SECTIONS: MoviesSection[] = [
   "library",
   "games",
   "gallery",
+  "videos",
 ];
 
 const OVERVIEW_TABS: MoviesOverviewTab[] = [

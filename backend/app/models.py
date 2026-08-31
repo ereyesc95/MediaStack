@@ -609,6 +609,55 @@ class ReleaseStaffMember(Base):
     rsm_sort_order: Mapped[int | None] = mapped_column("rsmSortOrder", Integer, default=0)
 
 
+class RemoteMediaSeason(Base):
+    """Virtual seasons for a Series leaf folder (link-based / hybrid)."""
+
+    __tablename__ = "remote_media_seasons"
+
+    rms_id: Mapped[int] = mapped_column("rmsID", Integer, primary_key=True)
+    rms_module: Mapped[str] = mapped_column("rmsModule", String(16), index=True)
+    rms_folder_path: Mapped[str] = mapped_column("rmsFolderPath", String(512), index=True)
+    rms_title: Mapped[str] = mapped_column("rmsTitle", Text)
+    rms_date_iso: Mapped[str | None] = mapped_column("rmsDateIso", String(32))
+    rms_is_specials: Mapped[int | None] = mapped_column("rmsIsSpecials", Integer, default=0)
+    rms_sort_order: Mapped[int | None] = mapped_column("rmsSortOrder", Integer, default=0)
+    rms_updated_at: Mapped[str | None] = mapped_column("rmsUpdatedAt", Text)
+
+
+class RemoteMediaEpisode(Base):
+    """Episode URL rows under a remote season."""
+
+    __tablename__ = "remote_media_episodes"
+
+    rme_id: Mapped[int] = mapped_column("rmeID", Integer, primary_key=True)
+    rme_module: Mapped[str] = mapped_column("rmeModule", String(16), index=True)
+    rme_folder_path: Mapped[str] = mapped_column("rmeFolderPath", String(512), index=True)
+    rme_season_id: Mapped[int] = mapped_column("rmeSeasonID", Integer, index=True)
+    rme_number: Mapped[int | None] = mapped_column("rmeNumber", Integer)
+    rme_title: Mapped[str] = mapped_column("rmeTitle", Text)
+    rme_date_iso: Mapped[str | None] = mapped_column("rmeDateIso", String(32))
+    rme_url: Mapped[str] = mapped_column("rmeUrl", Text)
+    rme_sort_order: Mapped[int | None] = mapped_column("rmeSortOrder", Integer, default=0)
+    rme_updated_at: Mapped[str | None] = mapped_column("rmeUpdatedAt", Text)
+
+
+class RemoteMediaLink(Base):
+    """Movie links (movie/trailer/extra) or book volume URLs for a leaf folder."""
+
+    __tablename__ = "remote_media_links"
+
+    rml_id: Mapped[int] = mapped_column("rmlID", Integer, primary_key=True)
+    rml_module: Mapped[str] = mapped_column("rmlModule", String(16), index=True)
+    rml_folder_path: Mapped[str] = mapped_column("rmlFolderPath", String(512), index=True)
+    rml_role: Mapped[str] = mapped_column("rmlRole", String(32), default="extra")
+    rml_title: Mapped[str] = mapped_column("rmlTitle", Text)
+    rml_url: Mapped[str] = mapped_column("rmlUrl", Text)
+    rml_number: Mapped[int | None] = mapped_column("rmlNumber", Integer)
+    rml_date_iso: Mapped[str | None] = mapped_column("rmlDateIso", String(32))
+    rml_sort_order: Mapped[int | None] = mapped_column("rmlSortOrder", Integer, default=0)
+    rml_updated_at: Mapped[str | None] = mapped_column("rmlUpdatedAt", Text)
+
+
 class ApiAuth(Base):
     __tablename__ = "apiauth"
 

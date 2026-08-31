@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.franchise_index import normalize_franchise_slug
 from app.models import Country
-from app.movies_index import build_film_detail, find_film_dir, _film_id
+from app.movies_index import find_film_dir, _film_id
 from app.movies_refresh import (
     ensure_movie_work,
     find_movie_work,
@@ -26,27 +26,27 @@ from app.series_languages import normalize_lang_code
 
 
 def _resolve_film_row(db: Session, film_id: str):
-    """Return (row, meta, films_meta, film_meta, fid, film_dir) or raise ValueError."""
+    """Return (row, meta, films_meta, film_meta, fid, film_dir) or raise ValueError.
+
+    Does not call build_film_detail — that would recurse when trailer/remote
+    merge runs inside film detail.
+    """
     root = Path(settings.media_root or "")
     found = find_film_dir(film_id, root if root.is_dir() else None)
     if not found:
         raise ValueError(f"Film not found: {film_id}")
     film_dir, work_dir, _letter = found
-    detail = build_film_detail(film_id, root if root.is_dir() else None)
-    work = (detail or {}).get("work") or {}
-    work_slug = (
-        work.get("id")
-        or normalize_franchise_slug(work_dir.name)
-        or work_dir.name.casefold()
-    )
-    fid = (detail or {}).get("id") or _film_id(
+    work_slug = normalize_franchise_slug(work_dir.name) or work_dir.name.casefold()
+    fid = _film_id(
         film_dir.relative_to(root).as_posix() if root.is_dir() else film_dir.name
     )
     row = find_movie_work(db, work_slug) or ensure_movie_work(
         db,
         work_slug=work_slug,
         name=work_dir.name,
-        folder_path=work.get("folder_path"),
+        folder_path=work_dir.relative_to(root).as_posix()
+        if root.is_dir()
+        else None,
     )
     meta = _load_meta(row)
     films_meta = meta.get("films") if isinstance(meta.get("films"), dict) else {}
@@ -206,13 +206,23 @@ def save_film_trailer_db(db: Session, film_id: str, url: str | None) -> str | No
 
 
 def get_film_trailer_db(db: Session, film_id: str) -> str | None:
-    try:
-        _row, _meta, _films_meta, film_meta, _fid, _film_dir = _resolve_film_row(
-            db, film_id
-        )
-    except Exception:
+    """Read trailer URL from work meta without calling build_film_detail (no recursion)."""
+    root = Path(settings.media_root or "")
+    found = find_film_dir(film_id, root if root.is_dir() else None)
+    if not found:
         return None
-    url = film_meta.get("trailer_url")
+    film_dir, work_dir, _letter = found
+    work_slug = normalize_franchise_slug(work_dir.name) or work_dir.name.casefold()
+    fid = _film_id(
+        film_dir.relative_to(root).as_posix() if root.is_dir() else film_dir.name
+    )
+    row = find_movie_work(db, work_slug)
+    if not row:
+        return None
+    meta = _load_meta(row)
+    films_meta = meta.get("films") if isinstance(meta.get("films"), dict) else {}
+    film_meta = films_meta.get(fid) if isinstance(films_meta.get(fid), dict) else {}
+    url = film_meta.get("trailer_url") if isinstance(film_meta, dict) else None
     return url.strip() if isinstance(url, str) and url.strip() else None
 
 

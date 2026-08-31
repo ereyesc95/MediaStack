@@ -66,6 +66,7 @@ export function DashHoverTitle({
           className="dash-hover-title__main"
           short={title}
           full={title}
+          maxLines={3}
         />
       ) : null}
       {subtitle ? (
@@ -73,6 +74,7 @@ export function DashHoverTitle({
           className="dash-hover-title__sub"
           short={subtitle}
           full={subtitle}
+          maxLines={2}
         />
       ) : null}
     </span>

@@ -24,10 +24,12 @@ import { setCachedOverview } from "../../../overviewCache";
 import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
 import {
   getCachedArtistGallery,
+  clearArtistGalleryCache,
   prefetchArtistGallery,
 } from "../../../artistGalleryCache";
 import {
   getCachedArtistMediaTab,
+  clearArtistMediaTabCache,
   prefetchArtistMediaTab,
 } from "../../../artistMediaTabCache";
 import {
@@ -313,6 +315,7 @@ export default function ArtistPage({
   const [addSimilarOpen, setAddSimilarOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [audioRefreshKey, setAudioRefreshKey] = useState(0);
+  const [mediaRefreshKey, setMediaRefreshKey] = useState(0);
   const relatedFetchStarted = useRef(false);
   const lineupImportStarted = useRef(false);
   const loadSeq = useRef(0);
@@ -361,7 +364,7 @@ export default function ArtistPage({
   });
   const galleryEnabled =
     section === "gallery" && Boolean(data?.media?.has_gallery || cachedGallery);
-  const galleryState = useArtistGallery(bandId, galleryEnabled);
+  const galleryState = useArtistGallery(bandId, galleryEnabled, mediaRefreshKey);
 
   const visibleSections = useMemo(() => {
     const m = data?.media;
@@ -823,10 +826,19 @@ export default function ArtistPage({
   };
 
   const handleRescanLibrary = async () => {
-    setBusy("Scanning library…");
+    setBusy("Syncing folders…");
     try {
       await rescanBandLibrary(bandId);
+      clearArtistMediaTabCache(bandId);
+      clearArtistGalleryCache(bandId);
       setAudioRefreshKey((k) => k + 1);
+      setMediaRefreshKey((k) => k + 1);
+      await Promise.all([
+        prefetchArtistMediaTab(bandId, "series", { force: true }),
+        prefetchArtistMediaTab(bandId, "video", { force: true }),
+        prefetchArtistMediaTab(bandId, "library", { force: true }),
+        prefetchArtistGallery(bandId, { force: true }),
+      ]);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1622,6 +1634,7 @@ export default function ArtistPage({
             kind="video"
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
+            refreshKey={mediaRefreshKey}
             onOpenItem={(id, item) => {
               if (onOpenMoviesLeaf && item?.folder_path) {
                 void moviesLeafFromFolderPath(item.folder_path).then((leaf) => {
@@ -1652,6 +1665,7 @@ export default function ArtistPage({
             kind="series"
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
+            refreshKey={mediaRefreshKey}
             onOpenItem={(_id, item) => {
               const path = item?.folder_path?.trim();
               if (path && onOpenSeriesFolder) {
@@ -1673,6 +1687,7 @@ export default function ArtistPage({
             kind="library"
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
+            refreshKey={mediaRefreshKey}
             onOpenItem={(id) => onOpenMediaItem?.("library", id)}
           />
         )}

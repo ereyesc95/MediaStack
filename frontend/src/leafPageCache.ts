@@ -32,6 +32,7 @@ export type LeafPageCacheEntry = {
   filmVersions?: MoviesFilmDetail["versions"];
   filmHasVideo?: boolean;
   trailerUrl?: string | null;
+  filmOpenUrl?: string | null;
   workName?: string | null;
 };
 
@@ -41,9 +42,10 @@ const inflight = new Map<string, Promise<void>>();
 export function leafPageCacheKey(
   isFilm: boolean,
   franchiseId: string,
-  id: string
+  id: string,
+  kind: "film" | "book" | "sub" = isFilm ? "film" : "sub"
 ): string {
-  return `${isFilm ? "film" : "sub"}:${franchiseId}:${id}`;
+  return `${kind}:${franchiseId}:${id}`;
 }
 
 function sessionKey(key: string): string {
@@ -189,7 +191,12 @@ export function prefetchFilmLeafPage(
   const isBook = Boolean(options?.isBook);
   const orientation =
     options?.orientation === "landscape" ? "landscape" : "portrait";
-  const key = leafPageCacheKey(true, franchiseId, leafId);
+  const key = leafPageCacheKey(
+    true,
+    franchiseId,
+    leafId,
+    isBook ? "book" : "film"
+  );
   if (getCachedLeafPage(key)) return Promise.resolve();
 
   const existing = inflight.get(key);

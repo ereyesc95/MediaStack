@@ -2032,19 +2032,21 @@ export default function SystemPlaylistPage({
                 )}
 
                 <div className="release-page__panel-footer">
-                  <div className="release-page__panel-player">
-                    <MiniAudioPlayerControls
-                      playing={miniAudio.playing}
-                      progress={miniAudio.progress}
-                      duration={miniAudio.duration}
-                      toggle={miniAudio.toggle}
-                      seek={miniAudio.seek}
-                      onPrev={() => playAdjacentTrack("prev")}
-                      onNext={() => playAdjacentTrack("next")}
-                      repeatOne={repeatOne}
-                      onRepeatToggle={() => setRepeatOne((r) => !r)}
-                    />
-                  </div>
+                  {slug !== "music-videos" ? (
+                    <div className="release-page__panel-player">
+                      <MiniAudioPlayerControls
+                        playing={miniAudio.playing}
+                        progress={miniAudio.progress}
+                        duration={miniAudio.duration}
+                        toggle={miniAudio.toggle}
+                        seek={miniAudio.seek}
+                        onPrev={() => playAdjacentTrack("prev")}
+                        onNext={() => playAdjacentTrack("next")}
+                        repeatOne={repeatOne}
+                        onRepeatToggle={() => setRepeatOne((r) => !r)}
+                      />
+                    </div>
+                  ) : null}
                   <div className="release-page__panel-bottom-bar">
                     {detail.prev ? (
                       <PlaylistNeighborLink
@@ -2079,19 +2081,21 @@ export default function SystemPlaylistPage({
             {bannerLayout ? (
               <div className="release-page__panel-dock">
                 <div className="release-page__panel-footer">
-                  <div className="release-page__panel-player">
-                    <MiniAudioPlayerControls
-                      playing={miniAudio.playing}
-                      progress={miniAudio.progress}
-                      duration={miniAudio.duration}
-                      toggle={miniAudio.toggle}
-                      seek={miniAudio.seek}
-                      onPrev={() => playAdjacentTrack("prev")}
-                      onNext={() => playAdjacentTrack("next")}
-                      repeatOne={repeatOne}
-                      onRepeatToggle={() => setRepeatOne((r) => !r)}
-                    />
-                  </div>
+                  {slug !== "music-videos" ? (
+                    <div className="release-page__panel-player">
+                      <MiniAudioPlayerControls
+                        playing={miniAudio.playing}
+                        progress={miniAudio.progress}
+                        duration={miniAudio.duration}
+                        toggle={miniAudio.toggle}
+                        seek={miniAudio.seek}
+                        onPrev={() => playAdjacentTrack("prev")}
+                        onNext={() => playAdjacentTrack("next")}
+                        repeatOne={repeatOne}
+                        onRepeatToggle={() => setRepeatOne((r) => !r)}
+                      />
+                    </div>
+                  ) : null}
                   <div className="release-page__panel-bottom-bar">
                     {detail.prev ? (
                       <PlaylistNeighborLink

@@ -444,9 +444,206 @@ def _brand_sort_key(brand: EraBrand) -> tuple:
     return (brand.start, kind_order, brand.end, brand.path.name.casefold())
 
 
+
+ANIMATION_PREFIX = "animation - "
+CANVAS_PREFIX = "canvas - "
+
+
+def _release_meta_from_motion_file(
+    file_path: Path, artist_dir: Path
+) -> tuple[str, str | None, str | None]:
+    """Map an [Artwork] motion file up to its dated release folder."""
+    from app.band_library import (
+        AUDIO_CATEGORIES,
+        DATE_PREFIX_RE,
+        _album_title_from_folder,
+        _parse_folder_date,
+    )
+    from app.media_index import format_display_date
+
+    category_names = {n.casefold() for n in AUDIO_CATEGORIES.values()}
+    current = file_path.parent
+    release_dir: Path | None = None
+    for _ in range(16):
+        parent = current.parent
+        if parent == current:
+            break
+        if parent.name.casefold() in category_names:
+            release_dir = current
+            break
+        current = parent
+    if release_dir is None:
+        current = file_path.parent
+        for _ in range(16):
+            if DATE_PREFIX_RE.match(current.name.strip()):
+                release_dir = current
+                break
+            if current == artist_dir or current.parent == current:
+                break
+            current = current.parent
+    if release_dir is None:
+        return file_path.stem, None, None
+    title = _album_title_from_folder(release_dir.name)
+    date_iso = _parse_folder_date(release_dir.name)
+    return title, date_iso, format_display_date(date_iso)
+
+
+def _collect_motion_from_artwork(
+    art: Path,
+    *,
+    artist_dir: Path,
+    media_root: Path,
+    covers: list[dict],
+    canvas: list[dict],
+) -> None:
+    from app.artwork_stems import VIDEO_EXTS
+
+    try:
+        entries = list(art.iterdir())
+    except OSError:
+        return
+    for p in entries:
+        if not p.is_file() or p.suffix.lower() not in VIDEO_EXTS:
+            continue
+        stem = p.stem.casefold()
+        if stem.startswith(ANIMATION_PREFIX):
+            bucket = covers
+            kind = "cover"
+        elif stem.startswith(CANVAS_PREFIX):
+            bucket = canvas
+            kind = "canvas"
+        else:
+            continue
+        title, date_iso, display_date = _release_meta_from_motion_file(p, artist_dir)
+        rel = p.relative_to(media_root).as_posix()
+        bucket.append(
+            {
+                "id": _gallery_item_id(rel),
+                "url": _media_url(p, media_root),
+                "title": title,
+                "date_iso": date_iso,
+                "display_date": display_date,
+                "folder_path": rel,
+                "kind": kind,
+            }
+        )
+
+
+def _walk_release_motion_artwork(
+    folder: Path,
+    *,
+    artist_dir: Path,
+    media_root: Path,
+    covers: list[dict],
+    canvas: list[dict],
+    depth: int = 0,
+) -> None:
+    from app.band_library import ARTWORK_DIR, _find_artwork_subdir
+
+    if depth > 12 or not folder.is_dir():
+        return
+    art = _find_artwork_subdir(folder)
+    if art:
+        _collect_motion_from_artwork(
+            art,
+            artist_dir=artist_dir,
+            media_root=media_root,
+            covers=covers,
+            canvas=canvas,
+        )
+    try:
+        children = list(folder.iterdir())
+    except OSError:
+        return
+    for child in children:
+        if not child.is_dir():
+            continue
+        if child.name.casefold() == ARTWORK_DIR:
+            continue
+        _walk_release_motion_artwork(
+            child,
+            artist_dir=artist_dir,
+            media_root=media_root,
+            covers=covers,
+            canvas=canvas,
+            depth=depth + 1,
+        )
+
+
+def list_release_motion_artwork(
+    artist_dir: Path, media_root: Path
+) -> tuple[list[dict], list[dict]]:
+    """Animation - *.mp4 and Canvas - *.mp4 under release [Artwork] folders."""
+    from app.band_library import AUDIO_CATEGORIES, _audio_root
+
+    covers: list[dict] = []
+    canvas: list[dict] = []
+    audio = _audio_root(artist_dir)
+    for folder_name in AUDIO_CATEGORIES.values():
+        cat = _resolve_child_dir(audio, folder_name)
+        if cat.is_dir():
+            _walk_release_motion_artwork(
+                cat,
+                artist_dir=artist_dir,
+                media_root=media_root,
+                covers=covers,
+                canvas=canvas,
+            )
+
+    def sort_key(item: dict) -> tuple:
+        return (
+            item.get("date_iso") or "",
+            (item.get("title") or "").casefold(),
+            item.get("folder_path") or "",
+        )
+
+    covers.sort(key=sort_key)
+    canvas.sort(key=sort_key)
+    return covers, canvas
+
+
+def artist_has_release_motion_artwork(artist_dir: Path) -> bool:
+    """Fast existence check for Animation-/Canvas- videos under releases."""
+    from app.artwork_stems import VIDEO_EXTS
+    from app.band_library import ARTWORK_DIR, AUDIO_CATEGORIES, _audio_root
+
+    audio = _audio_root(artist_dir)
+
+    def walk(folder: Path, depth: int = 0) -> bool:
+        if depth > 12 or not folder.is_dir():
+            return False
+        try:
+            children = list(folder.iterdir())
+        except OSError:
+            return False
+        for child in children:
+            if child.is_dir():
+                if child.name.casefold() == ARTWORK_DIR:
+                    try:
+                        for p in child.iterdir():
+                            if not p.is_file() or p.suffix.lower() not in VIDEO_EXTS:
+                                continue
+                            stem = p.stem.casefold()
+                            if stem.startswith(ANIMATION_PREFIX) or stem.startswith(
+                                CANVAS_PREFIX
+                            ):
+                                return True
+                    except OSError:
+                        pass
+                elif walk(child, depth + 1):
+                    return True
+        return False
+
+    for folder_name in AUDIO_CATEGORIES.values():
+        cat = _resolve_child_dir(audio, folder_name)
+        if walk(cat):
+            return True
+    return False
+
+
 def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
     """List gallery photos and era logos/icons for the artist Gallery tab."""
-    empty = {"photos": [], "branding": [], "logos": [], "icons": []}
+    empty = {"photos": [], "branding": [], "logos": [], "icons": [], "animations": {"covers": [], "canvas": []}}
     if not artist_name or not media_root.is_dir():
         return empty
 
@@ -494,11 +691,14 @@ def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
     logos_out = [b for b in branding_out if b["kind"] == "logo"]
     icons_out = [b for b in branding_out if b["kind"] == "icon"]
 
+    covers_out, canvas_out = list_release_motion_artwork(artist_dir, media_root)
+
     return {
         "photos": photos_out,
         "branding": branding_out,
         "logos": logos_out,
         "icons": icons_out,
+        "animations": {"covers": covers_out, "canvas": canvas_out},
     }
 
 

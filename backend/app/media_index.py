@@ -674,7 +674,7 @@ def media_visibility_flags(
     except Exception:
         pass
 
-    from app.gallery import _gallery_dir
+    from app.gallery import _gallery_dir, artist_has_release_motion_artwork
 
     gallery = _gallery_dir(artist_dir)
     if gallery.is_dir():
@@ -687,6 +687,8 @@ def media_visibility_flags(
             or _dir_has_gallery_entries(covers)
             or _dir_has_gallery_entries(gallery)
         )
+    if not flags["has_gallery"] and artist_has_release_motion_artwork(artist_dir):
+        flags["has_gallery"] = True
 
     if flags["has_audio"] and db is not None and band is not None:
         from app.playlist_index import has_playlists_quick

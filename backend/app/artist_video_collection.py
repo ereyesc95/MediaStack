@@ -17,11 +17,26 @@ _VIDEO_COLLECTION_RE = re.compile(
     r"(?:\bthe\s+)?video\s+collection\b|\bmusic\s+videos?\b|\bvideo\s+anthology\b",
     re.I,
 )
+_LIVE_PERFORMANCES_RE = re.compile(
+    r"\blive\s+performances?\b|\blive\s+videos?\b|\blive\s+collection\b",
+    re.I,
+)
+_BRACKET_SUFFIX_RE = re.compile(r"\s*\[[^\]]*\]")
 
 
 def is_video_collection_folder(name: str) -> bool:
     _, title = parse_dated_folder_name(name.strip())
     return bool(_VIDEO_COLLECTION_RE.search(title or name))
+
+
+def is_live_performances_folder(name: str) -> bool:
+    _, title = parse_dated_folder_name(name.strip())
+    return bool(_LIVE_PERFORMANCES_RE.search(title or name))
+
+
+def is_artist_video_series_folder(name: str) -> bool:
+    """Video Collection / Music Videos / Live Performances compilations."""
+    return is_video_collection_folder(name) or is_live_performances_folder(name)
 
 
 def find_artist_series_franchise(media_root: Path, artist_name: str) -> Path | None:
@@ -37,6 +52,68 @@ def iter_video_collection_dirs(franchise_dir: Path) -> list[Path]:
             out.append(child)
     return out
 
+
+def iter_live_performances_dirs(franchise_dir: Path) -> list[Path]:
+    if not franchise_dir.is_dir():
+        return []
+    out: list[Path] = []
+    for child in sorted(franchise_dir.iterdir(), key=lambda p: p.name.casefold()):
+        if child.is_dir() and is_live_performances_folder(child.name):
+            out.append(child)
+    return out
+
+
+def _normalize_live_title(title: str) -> str:
+    cleaned = _BRACKET_SUFFIX_RE.sub("", (title or "").strip())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned.casefold()
+
+
+def scan_live_performances_for_band(band_name: str, media_root: Path) -> list[dict]:
+    """All live-performance videos under the artist's Series Live Performances folders."""
+    franchise = find_artist_series_franchise(media_root, band_name)
+    if not franchise:
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for release_dir in iter_live_performances_dirs(franchise):
+        for row in scan_video_collection_release(release_dir, media_root):
+            play_path = (row.get("play_path") or "").strip()
+            if not play_path or play_path in seen:
+                continue
+            seen.add(play_path)
+            title = (row.get("title") or "").strip()
+            if not title:
+                continue
+            out.append(row)
+    out.sort(key=lambda r: (r.get("date_iso") or "9999", (r.get("title") or "").casefold()))
+    return out
+
+
+def match_live_performances_for_release(
+    *,
+    band_name: str,
+    media_root: Path,
+    release_title: str,
+    release_date_iso: str | None,
+) -> list[dict]:
+    """Videos whose filename title/date match a Live Album release."""
+    release_key = _normalize_live_title(release_title)
+    release_date = (release_date_iso or "").strip()[:10] or None
+    if not release_key:
+        return []
+    matches: list[dict] = []
+    for row in scan_live_performances_for_band(band_name, media_root):
+        video_key = _normalize_live_title(str(row.get("title") or ""))
+        if not video_key:
+            continue
+        video_date = (row.get("date_iso") or "").strip()[:10] or None
+        if video_key != release_key:
+            continue
+        if release_date and video_date and release_date != video_date:
+            continue
+        matches.append(row)
+    return matches
 
 def _video_rows_in_dir(folder: Path, media_root: Path) -> list[dict]:
     rows: list[dict] = []

@@ -66,6 +66,19 @@ def rescan_band_library(db: Session, band: Band) -> dict:
     invalidate_media_cache(band.bnd_id)
     invalidate_playlist_cache(band.bnd_id)
     invalidate_overview_cache(band.bnd_id)
+    try:
+        from app.media_tabs_index import invalidate_media_tab_caches
+
+        invalidate_media_tab_caches(band_id=band.bnd_id)
+    except Exception:
+        pass
+    # Rebuild franchise index so new Series/Movies/Books folders appear on the artist page.
+    try:
+        from app.services.sync_folders import rebuild_franchise_index
+
+        rebuild_franchise_index(root)
+    except Exception:
+        pass
     tracks = match_top_tracks(
         band.bnd_name,
         root,

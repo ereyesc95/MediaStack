@@ -33,6 +33,7 @@ const SECTIONS: SeriesSection[] = [
   "games",
   "gallery",
   "episodes",
+  "videos",
 ];
 const OVERVIEW_TABS: SeriesOverviewTab[] = [
   "about",

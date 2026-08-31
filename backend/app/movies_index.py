@@ -364,10 +364,12 @@ def _title_letter(title: str | None) -> str:
 
 def build_movies_catalog(media_root: Path | None = None) -> dict:
     root = Path(media_root or settings.media_root or "")
-    franchises = [
-        _work_card(work_dir, letter, root)
-        for work_dir, letter in iter_work_dirs(root)
-    ]
+    franchises = []
+    for work_dir, letter in iter_work_dirs(root):
+        card = _work_card(work_dir, letter, root)
+        if int(card.get("film_count") or 0) <= 0:
+            continue
+        franchises.append(card)
     franchises.sort(key=lambda f: (f.get("name") or "").casefold())
     films: list[dict] = []
     for card in franchises:
@@ -430,9 +432,47 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
 
     rel = film_dir.relative_to(root).as_posix()
     date_iso, title = parse_dated_folder_name(film_dir.name)
+    if film_dir == work_dir:
+        date_iso = date_iso
+        title = title or work_dir.name
     logo_url, icon_url = find_logo_file(film_dir, root)
     versions = _list_versions(film_dir, root)
+    primary = versions[0] if versions else None
+    local_open = (primary or {}).get("file_url")
+    local_has = _folder_has_video(film_dir)
     work_card = _work_card(work_dir, letter, root)
+
+    trailer_url = None
+    extras: list[dict] = []
+    open_url = local_open
+    open_mode = "local" if local_has and local_open else None
+    try:
+        from app.database import SessionLocal
+        from app.movies_admin import get_film_trailer_db
+        from app.remote_media import list_remote_movie_links, merge_movie_playables
+
+        db = SessionLocal()
+        try:
+            film_id = _film_id(rel)
+            existing_trailer = get_film_trailer_db(db, film_id)
+            remote = list_remote_movie_links(db, rel)
+            merged = merge_movie_playables(
+                local_open_url=local_open,
+                local_has_video=local_has,
+                versions=versions,
+                existing_trailer_url=existing_trailer,
+                remote_links=remote,
+            )
+            open_url = merged.get("open_url")
+            open_mode = merged.get("open_mode")
+            trailer_url = merged.get("trailer_url")
+            extras = merged.get("extras") or []
+            local_has = bool(merged.get("has_video"))
+        finally:
+            db.close()
+    except Exception:
+        pass
+
     return {
         "id": _film_id(rel),
         "kind": "film",
@@ -453,9 +493,13 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
         "badge_url": find_badge_file(film_dir, root),
         "photocards": resolve_series_photocards(film_dir, root),
         "has_gallery": _has_gallery(film_dir),
-        "has_video": _folder_has_video(film_dir),
+        "has_video": local_has,
         "versions": versions,
-        "trailer_url": None,
+        "open_url": open_url,
+        "open_mode": open_mode,
+        "open_label": "Play video" if open_url else None,
+        "trailer_url": trailer_url,
+        "extras": extras,
         "seasons": [],
         "subseries": [],
         "episodes": [],

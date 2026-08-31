@@ -11,6 +11,7 @@ import type {
   ReleaseCardLayout,
 } from "../../../types";
 import PlaylistBoot from "../../PlaylistBoot";
+import BillboardText from "../../BillboardText";
 
 /** Prefer assets/playlists/system/… (rewrite legacy flat /playlists/{slug} URLs). */
 export function systemPlaylistCoverUrl(
@@ -109,7 +110,9 @@ function PlaylistCard({
       />
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">
-        <span className="media-release-card__title-hover">{playlist.name}</span>
+        <span className="media-release-card__title-hover">
+          <BillboardText short={playlist.name} full={playlist.name} maxLines={3} />
+        </span>
       </span>
       <span className="media-release-card__date">{trackLabel}</span>
     </button>
