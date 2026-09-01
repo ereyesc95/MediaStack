@@ -456,3 +456,12 @@ def migrate_schema(eng: Engine) -> None:
                     'ON remote_media_links ("rmlModule", "rmlFolderPath")'
                 )
             )
+
+        if "subgenres" in tables:
+            # Hentai belongs under Anime (not Adult); still NSFW via adult_content.py.
+            conn.execute(
+                text(
+                    'UPDATE subgenres SET "sgnGenreID" = 300005 '
+                    'WHERE "sgnID" = 3000047 AND "sgnGenreID" = 300003'
+                )
+            )

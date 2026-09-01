@@ -302,6 +302,66 @@ def find_film_dir(
     return None
 
 
+def counterpart_film_for_series_path(
+    series_rel_path: str, media_root: Path | None = None
+) -> dict | None:
+    """Map Series/{Letter}/{Work}/{Leaf} → Movies/{Letter}/{Work}/{Leaf} when present."""
+    root = _resolve_media_root(media_root)
+    norm = (series_rel_path or "").replace("\\", "/").strip("/")
+    if not norm:
+        return None
+    parts = norm.split("/")
+    if len(parts) < 3 or parts[0].casefold() != "series":
+        return None
+    movies_rel = "/".join(["Movies", *parts[1:]])
+    film_dir = root / movies_rel
+    if not film_dir.is_dir():
+        return None
+    work_dir = film_dir.parent
+    letter = work_dir.parent.name if work_dir.parent else ""
+    films = _list_films(work_dir, root) if work_dir.is_dir() else []
+    want = film_dir.relative_to(root).as_posix().casefold()
+    for film in films:
+        if (film.get("folder_path") or "").casefold() == want:
+            return film
+    # Fallback: build a minimal card for the leaf dir itself.
+    from app.series_index import (
+        _series_folder_banner,
+        _series_folder_cover,
+        _series_folder_landscape,
+    )
+    from app.series_paths import find_badge_file, find_logo_file
+
+    date_iso, title = parse_dated_folder_name(film_dir.name)
+    logo_url, icon_url = find_logo_file(film_dir, root)
+    versions = _list_versions(film_dir, root)
+    primary = versions[0] if versions else None
+    rel = film_dir.relative_to(root).as_posix()
+    return {
+        "id": _film_id(rel),
+        "title": title or film_dir.name,
+        "date_iso": date_iso,
+        "display_date": format_display_date(date_iso) if date_iso else None,
+        "folder_path": rel,
+        "folder_name": film_dir.name,
+        "path": rel,
+        "cover_url": _series_folder_cover(film_dir, root)
+        or _folder_cover(film_dir, root),
+        "portrait_url": _series_folder_cover(film_dir, root),
+        "landscape_url": _series_folder_landscape(film_dir, root),
+        "banner_url": _series_folder_banner(film_dir, root),
+        "logo_url": logo_url,
+        "icon_url": icon_url,
+        "badge_url": find_badge_file(film_dir, root),
+        "has_video": _folder_has_video(film_dir),
+        "version_count": len(versions),
+        "open_url": (primary or {}).get("file_url"),
+        "open_mode": "local" if primary else None,
+        "open_label": "Play video" if primary else None,
+        "letter": letter,
+    }
+
+
 def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:
     from app.series_paths import find_badge_file, find_logo_file
     from app.series_index import (
@@ -403,12 +463,13 @@ def build_work_detail(work_id: str, media_root: Path | None = None) -> dict | No
         return None
     work_dir, letter = found
     card = _work_card(work_dir, letter, root)
-    from app.series_index import _has_gallery
+    from app.series_index import _has_exclusive_gallery, _has_gallery
 
     return {
         **card,
         "kind": "franchise",
         "has_gallery": _has_gallery(work_dir),
+        "has_exclusive_gallery": _has_exclusive_gallery(work_dir),
         "has_series": False,
         "has_movies": card["film_count"] > 0,
     }
@@ -421,6 +482,7 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
         return None
     film_dir, work_dir, letter = found
     from app.series_index import (
+        _has_exclusive_gallery,
         _has_gallery,
         _series_cover_back,
         _series_folder_banner,
@@ -493,6 +555,7 @@ def build_film_detail(film_id: str, media_root: Path | None = None) -> dict | No
         "badge_url": find_badge_file(film_dir, root),
         "photocards": resolve_series_photocards(film_dir, root),
         "has_gallery": _has_gallery(film_dir),
+        "has_exclusive_gallery": _has_exclusive_gallery(film_dir),
         "has_video": local_has,
         "versions": versions,
         "open_url": open_url,

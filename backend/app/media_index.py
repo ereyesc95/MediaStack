@@ -619,6 +619,8 @@ def _dir_has_gallery_entries(path: Path) -> bool:
     for child in path.iterdir():
         if child.name.casefold() in ("desktop.ini", "thumbs.db"):
             continue
+        if child.name.casefold() == "exclusive":
+            continue
         if child.is_dir() or child.suffix.casefold() == ".lnk":
             return True
         if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
@@ -639,6 +641,7 @@ def media_visibility_flags(
         "has_series": False,
         "has_library": False,  # Books franchise content (legacy key)
         "has_gallery": False,
+        "has_exclusive_gallery": False,
         "has_playlists": False,
         "audio_categories": [],
     }
@@ -689,6 +692,10 @@ def media_visibility_flags(
         )
     if not flags["has_gallery"] and artist_has_release_motion_artwork(artist_dir):
         flags["has_gallery"] = True
+
+    from app.exclusive_gallery import has_exclusive_content
+
+    flags["has_exclusive_gallery"] = has_exclusive_content(artist_dir, layout="music")
 
     if flags["has_audio"] and db is not None and band is not None:
         from app.playlist_index import has_playlists_quick

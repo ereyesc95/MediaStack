@@ -212,8 +212,16 @@ export default function App() {
             setProfile(null);
           }
         } catch {
-          clearProfile();
-          setProfile(null);
+          // Keep the stored profile on transient session failures (common when
+          // leaf/home APIs are slow on refresh). Only force the picker when
+          // there is no cached profile to fall back on.
+          const stored = getStoredProfile();
+          if (stored) {
+            setProfile(stored);
+          } else {
+            clearProfile();
+            setProfile(null);
+          }
         }
       } else {
         const stored = getStoredProfile();

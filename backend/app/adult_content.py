@@ -9,15 +9,26 @@ ADULT_PARENT_GENRES = frozenset(
     }
 )
 
-# Explicit subgenres under Anime / Manga (and anywhere else) that are adult-only.
+# Explicit subgenres that are adult-only (even when parent is not Adult).
 ADULT_SUBGENRES = frozenset(
     {
         "ecchi",
+        "hentai",
         "harem",
         "lolicon",
         "yuri",
         "yaoi",
         "reverse harem",
+        # Named adult buckets (may sit under Animation / Music / etc.)
+        "adult alternative",
+        "adult animation",
+        "adult cartoon",
+        "adult fantasy",
+        "adult parody",
+        "adult reality",
+        "adult ai",
+        "adult magazines",
+        "furry & anthro adult",
     }
 )
 
@@ -27,7 +38,15 @@ def _norm(name: str | None) -> str:
 
 
 def is_adult_subgenre_name(name: str | None) -> bool:
-    return _norm(name) in ADULT_SUBGENRES
+    n = _norm(name)
+    if not n:
+        return False
+    if n in ADULT_SUBGENRES or n in ADULT_PARENT_GENRES:
+        return True
+    # Any "Adult …" label is adult-only (covers new DB rows under Adult).
+    if n.startswith("adult ") or n.startswith("adult-"):
+        return True
+    return False
 
 
 def is_adult_parent_genre_name(name: str | None) -> bool:

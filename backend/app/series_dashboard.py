@@ -98,17 +98,26 @@ def build_series_dashboard(
     media_root = Path(settings.media_root) if settings.media_root else None
     catalog = build_series_catalog(media_root) if media_root else {"franchises": []}
     from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
-    from app.series_catalog_meta import enrich_catalog_metadata
+    from app.series_catalog_meta import (
+        enrich_catalog_metadata,
+        filter_franchise_subseries_lists,
+    )
 
     catalog = enrich_catalog_metadata(db, catalog)
     catalog = enrich_catalog_with_music_identity(
         db, catalog, orientation="portrait", media_root=media_root
     )
     catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
+    adult_subs = adult_subgenre_names_from_db(db)
     franchises = filter_adult_cards(
         catalog.get("franchises") or [],
         nsfw_unlocked=nsfw_unlocked,
-        extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        extra_adult_subgenres=adult_subs,
+    )
+    franchises = filter_franchise_subseries_lists(
+        franchises,
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
     by_id = {f.get("id"): f for f in franchises if f.get("id")}
     catalog_subs = _iter_catalog_subseries(franchises)

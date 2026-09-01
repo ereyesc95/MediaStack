@@ -98,6 +98,7 @@ type Props = {
   onRefreshPhotos?: () => void;
   onRefreshLinks?: () => void;
   onEditAbout?: () => void;
+  onRemoveArtist?: () => void;
   onAddMember?: () => void;
   onAddLink?: () => void;
   onAddSimilar?: () => void;
@@ -164,6 +165,7 @@ export default function AppMenu({
   onRefreshPhotos,
   onRefreshLinks,
   onEditAbout,
+  onRemoveArtist,
   onAddMember,
   onAddLink,
   onAddSimilar,
@@ -390,6 +392,7 @@ export default function AppMenu({
     isAdmin &&
     (onAddToUniverse ||
       onEditAbout ||
+      onRemoveArtist ||
       onAddMember ||
       onAddLink ||
       onAddSimilar ||
@@ -585,6 +588,18 @@ export default function AppMenu({
             >
               <IconEditProfile className="menu-item-icon" />
               {updateLeafLabel}
+            </button>
+          )}
+          {onRemoveArtist && (
+            <button
+              type="button"
+              onClick={() => {
+                onRemoveArtist();
+                setOpen(false);
+              }}
+            >
+              <IconTrash className="menu-item-icon" />
+              Remove artist
             </button>
           )}
           {onAddMember && (

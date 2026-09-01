@@ -99,6 +99,12 @@ def _has_gallery(folder: Path) -> bool:
     return has_gallery_images(folder)
 
 
+def _has_exclusive_gallery(folder: Path) -> bool:
+    from app.series_paths import has_exclusive_gallery
+
+    return has_exclusive_gallery(folder)
+
+
 def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
     """Cover - Front from Gallery/Covers or [Artwork].
 
@@ -1122,6 +1128,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "badge_url": badge_url,
         "photocards": photocards,
         "has_gallery": _has_gallery(folder),
+        "has_exclusive_gallery": _has_exclusive_gallery(folder),
     }
 
     from app.artist_video_collection import is_artist_video_series_folder
@@ -1291,7 +1298,13 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     }
 
 
-def build_series_gallery(rel_path: str, media_root: Path | None = None) -> dict:
+def build_series_gallery(
+    rel_path: str,
+    media_root: Path | None = None,
+    *,
+    nsfw_unlocked: bool = False,
+) -> dict:
+    from app.exclusive_gallery import build_exclusive_section, find_exclusive_dir
     from app.series_paths import gallery_sections
 
     root = _resolve_media_root(media_root)
@@ -1320,9 +1333,17 @@ def build_series_gallery(rel_path: str, media_root: Path | None = None) -> dict:
         return {"folder_path": rel_path, "items": [], "sections": []}
 
     sections = gallery_sections(folder, root)
+    if nsfw_unlocked:
+        ex_dir = find_exclusive_dir(folder, layout="franchise")
+        if ex_dir:
+            ex_sec = build_exclusive_section(ex_dir, root)
+            if ex_sec:
+                sections.append(ex_sec)
     items: list[dict] = []
     for sec in sections:
         items.extend(sec.get("items") or [])
+        for sub in sec.get("subsections") or []:
+            items.extend(sub.get("items") or [])
     return {
         "folder_path": folder.relative_to(root).as_posix(),
         "items": items,

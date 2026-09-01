@@ -29,6 +29,7 @@ let pendingCatalogBrowse: PendingCatalogBrowse | null = null;
 const ENTRY_SOURCE_KEY = "mystack_media_entry_source";
 const DIRECT_FILM_HOME_KEY = "mystack_direct_film_from_home";
 const DIRECT_BOOK_HOME_KEY = "mystack_direct_book_from_home";
+const DIRECT_SERIES_HOME_KEY = "mystack_direct_series_from_home";
 
 export function setMediaEntrySource(next: MediaEntrySource): void {
   entrySource = next;
@@ -79,6 +80,22 @@ export function setDirectBookFromHome(next: boolean): void {
 export function getDirectBookFromHome(): boolean {
   try {
     return sessionStorage.getItem(DIRECT_BOOK_HOME_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setDirectSeriesFromHome(next: boolean): void {
+  try {
+    sessionStorage.setItem(DIRECT_SERIES_HOME_KEY, next ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getDirectSeriesFromHome(): boolean {
+  try {
+    return sessionStorage.getItem(DIRECT_SERIES_HOME_KEY) === "1";
   } catch {
     return false;
   }

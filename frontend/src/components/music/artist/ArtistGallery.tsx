@@ -8,14 +8,17 @@ import type {
   GalleryBrandItem,
   GalleryIndexPayload,
   GalleryPhotoItem,
+  SeriesGalleryItem,
 } from "../../../types";
+import { withMediaAccess } from "../../../mediaFileUrl";
 import PlaylistBoot from "../../PlaylistBoot";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "./GalleryViewerModal";
 
-export type GalleryTab = "photos" | "logos" | "animations";
+export type GalleryTab = "photos" | "logos" | "animations" | "exclusive";
 export type AnimationSubtab = "covers" | "canvas";
+export type ExclusiveSubtab = string;
 
 export type ArtistGalleryState = {
   index: GalleryIndexPayload | null;
@@ -25,13 +28,18 @@ export type ArtistGalleryState = {
   setTab: (tab: GalleryTab) => void;
   animationSubtab: AnimationSubtab;
   setAnimationSubtab: (tab: AnimationSubtab) => void;
+  exclusiveSubtab: ExclusiveSubtab;
+  setExclusiveSubtab: (tab: ExclusiveSubtab) => void;
   photos: GalleryPhotoItem[];
   brands: GalleryBrandItem[];
   animationCovers: GalleryAnimationItem[];
   animationCanvas: GalleryAnimationItem[];
+  exclusiveItems: SeriesGalleryItem[];
+  exclusiveSubsections: { key: string; label: string; items: SeriesGalleryItem[] }[];
   showPhotos: boolean;
   showLogos: boolean;
   showAnimations: boolean;
+  showExclusive: boolean;
   viewerItems: GalleryViewerItem[];
   viewerIndex: number | null;
   setViewerIndex: (index: number | null) => void;
@@ -85,6 +93,13 @@ function animationBuckets(index: GalleryIndexPayload | null): {
   return { covers, canvas };
 }
 
+function hasExclusive(index: GalleryIndexPayload | null): boolean {
+  if (!index?.exclusive) return false;
+  const sec = index.exclusive;
+  if (sec.items?.length) return true;
+  return Boolean(sec.subsections?.some((s) => s.items.length > 0));
+}
+
 function pickInitialTab(index: GalleryIndexPayload | null): GalleryTab {
   if (!index) return "photos";
   const hasBranding =
@@ -95,6 +110,7 @@ function pickInitialTab(index: GalleryIndexPayload | null): GalleryTab {
   if (index.photos.length > 0) return "photos";
   if (hasBranding) return "logos";
   if (hasAnimations) return "animations";
+  if (hasExclusive(index)) return "exclusive";
   return "photos";
 }
 
@@ -105,6 +121,21 @@ function pickInitialAnimationSubtab(
   if (covers.length > 0) return "covers";
   if (canvas.length > 0) return "canvas";
   return "covers";
+}
+
+function pickInitialExclusiveSubtab(index: GalleryIndexPayload | null): string {
+  const sec = index?.exclusive;
+  if (!sec) return "";
+  if (sec.subsections?.length) return sec.subsections[0].key;
+  return "";
+}
+
+function viewerKind(
+  item: SeriesGalleryItem
+): "image" | "video" | "audio" {
+  if (item.media_kind === "video") return "video";
+  if (item.media_kind === "audio") return "audio";
+  return "image";
 }
 
 export function useArtistGallery(
@@ -124,6 +155,9 @@ export function useArtistGallery(
   );
   const [animationSubtab, setAnimationSubtab] = useState<AnimationSubtab>(() =>
     pickInitialAnimationSubtab(getCachedArtistGallery(bandId))
+  );
+  const [exclusiveSubtab, setExclusiveSubtab] = useState<string>(() =>
+    pickInitialExclusiveSubtab(getCachedArtistGallery(bandId))
   );
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
@@ -148,6 +182,7 @@ export function useArtistGallery(
           setIndex(payload);
           setTab(pickInitialTab(payload));
           setAnimationSubtab(pickInitialAnimationSubtab(payload));
+          setExclusiveSubtab(pickInitialExclusiveSubtab(payload));
         })
         .catch(() => {});
       return () => {
@@ -162,6 +197,7 @@ export function useArtistGallery(
         setIndex(payload);
         setTab(pickInitialTab(payload));
         setAnimationSubtab(pickInitialAnimationSubtab(payload));
+        setExclusiveSubtab(pickInitialExclusiveSubtab(payload));
       })
       .catch((e) => {
         if (!cancelled) {
@@ -193,6 +229,19 @@ export function useArtistGallery(
   const showLogos = brands.length > 0;
   const showAnimations =
     animationCovers.length > 0 || animationCanvas.length > 0;
+  const exclusiveSection = index?.exclusive;
+  const exclusiveSubsections = exclusiveSection?.subsections ?? [];
+  const showExclusive = hasExclusive(index);
+  const exclusiveItems = useMemo(() => {
+    if (!exclusiveSection) return [] as SeriesGalleryItem[];
+    if (exclusiveSubsections.length) {
+      const sub =
+        exclusiveSubsections.find((s) => s.key === exclusiveSubtab) ||
+        exclusiveSubsections[0];
+      return sub?.items ?? [];
+    }
+    return exclusiveSection.items ?? [];
+  }, [exclusiveSection, exclusiveSubsections, exclusiveSubtab]);
 
   const viewerItems: GalleryViewerItem[] = useMemo(() => {
     if (!index) return [];
@@ -217,6 +266,14 @@ export function useArtistGallery(
         mediaType: "image" as const,
       }));
     }
+    if (tab === "exclusive") {
+      return exclusiveItems.map((item) => ({
+        id: item.id,
+        url: withMediaAccess(item.url),
+        caption: item.title,
+        mediaType: viewerKind(item),
+      }));
+    }
     const motion =
       animationSubtab === "covers" ? animationCovers : animationCanvas;
     return motion.map((item) => ({
@@ -234,6 +291,7 @@ export function useArtistGallery(
     animationSubtab,
     animationCovers,
     animationCanvas,
+    exclusiveItems,
   ]);
 
   const openViewer = (id: string) => {
@@ -243,7 +301,7 @@ export function useArtistGallery(
 
   useEffect(() => {
     setViewerIndex(null);
-  }, [tab, animationSubtab]);
+  }, [tab, animationSubtab, exclusiveSubtab]);
 
   useEffect(() => {
     if (tab !== "animations") return;
@@ -266,13 +324,18 @@ export function useArtistGallery(
     setTab,
     animationSubtab,
     setAnimationSubtab,
+    exclusiveSubtab,
+    setExclusiveSubtab,
     photos,
     brands,
     animationCovers,
     animationCanvas,
+    exclusiveItems,
+    exclusiveSubsections,
     showPhotos,
     showLogos,
     showAnimations,
+    showExclusive,
     viewerItems,
     viewerIndex,
     setViewerIndex,
@@ -290,14 +353,18 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
     showPhotos,
     showLogos,
     showAnimations,
+    showExclusive,
     tab,
     setTab,
     animationSubtab,
     setAnimationSubtab,
     animationCovers,
     animationCanvas,
+    exclusiveSubsections,
+    exclusiveSubtab,
+    setExclusiveSubtab,
   } = state;
-  if (!showPhotos && !showLogos && !showAnimations) return null;
+  if (!showPhotos && !showLogos && !showAnimations && !showExclusive) return null;
   return (
     <>
       <nav className="artist-page__subtabs artist-gallery__tabs">
@@ -328,6 +395,15 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
             <span>ANIMATIONS</span>
           </button>
         )}
+        {showExclusive && (
+          <button
+            type="button"
+            className={tab === "exclusive" ? "active" : ""}
+            onClick={() => setTab("exclusive")}
+          >
+            <span>EXCLUSIVE</span>
+          </button>
+        )}
       </nav>
       {tab === "animations" && showAnimations ? (
         <nav className="artist-page__subtabs artist-gallery__animation-subtabs">
@@ -351,6 +427,20 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
           )}
         </nav>
       ) : null}
+      {tab === "exclusive" && showExclusive && exclusiveSubsections.length > 1 ? (
+        <nav className="artist-page__subtabs artist-gallery__animation-subtabs">
+          {exclusiveSubsections.map((sub) => (
+            <button
+              key={sub.key}
+              type="button"
+              className={exclusiveSubtab === sub.key ? "active" : ""}
+              onClick={() => setExclusiveSubtab(sub.key)}
+            >
+              <span>{sub.label.toUpperCase()}</span>
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </>
   );
 }
@@ -370,9 +460,11 @@ export default function ArtistGallery({ state }: Props) {
     animationCovers,
     animationCanvas,
     animationSubtab,
+    exclusiveItems,
     showPhotos,
     showLogos,
     showAnimations,
+    showExclusive,
     viewerItems,
     viewerIndex,
     setViewerIndex,
@@ -389,7 +481,7 @@ export default function ArtistGallery({ state }: Props) {
     return <p className="muted artist-section-empty">{error}</p>;
   }
 
-  if (!index || (!showPhotos && !showLogos && !showAnimations)) {
+  if (!index || (!showPhotos && !showLogos && !showAnimations && !showExclusive)) {
     return (
       <p className="muted artist-section-empty">
         No gallery images found under Gallery/Photos or Gallery/Logos.
@@ -448,6 +540,43 @@ export default function ArtistGallery({ state }: Props) {
                 </span>
               </button>
             ))}
+          </div>
+        )
+      ) : tab === "exclusive" ? (
+        exclusiveItems.length === 0 ? (
+          <p className="muted artist-gallery__empty">No items in this section.</p>
+        ) : (
+          <div className="artist-gallery__photo-grid">
+            {exclusiveItems.map((item) => {
+              const url = withMediaAccess(item.url);
+              const kind = viewerKind(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="artist-gallery__photo-card"
+                  onClick={() => openViewer(item.id)}
+                >
+                  {kind === "video" ? (
+                    <video
+                      src={url}
+                      muted
+                      loop
+                      playsInline
+                      preload="metadata"
+                      draggable={false}
+                    />
+                  ) : kind === "audio" ? (
+                    <span className="artist-gallery__audio-card" aria-hidden>
+                      ♪
+                    </span>
+                  ) : (
+                    <img src={url} alt="" loading="lazy" draggable={false} />
+                  )}
+                  <span className="artist-gallery__card-label">{item.title}</span>
+                </button>
+              );
+            })}
           </div>
         )
       ) : motionItems.length === 0 ? (

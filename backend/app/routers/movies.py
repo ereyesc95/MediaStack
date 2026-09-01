@@ -376,8 +376,11 @@ def movies_franchise_movies(
 
 
 @router.get("/gallery")
-def movies_gallery(path: str = Query(..., min_length=1)):
-    return build_movies_gallery(path)
+def movies_gallery(
+    path: str = Query(..., min_length=1),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    return build_movies_gallery(path, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.get("/films/{film_id}")

@@ -641,15 +641,35 @@ def artist_has_release_motion_artwork(artist_dir: Path) -> bool:
     return False
 
 
-def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
+def build_gallery_index(
+    artist_name: str | None,
+    media_root: Path,
+    *,
+    include_exclusive: bool = False,
+) -> dict:
     """List gallery photos and era logos/icons for the artist Gallery tab."""
-    empty = {"photos": [], "branding": [], "logos": [], "icons": [], "animations": {"covers": [], "canvas": []}}
+    empty = {
+        "photos": [],
+        "branding": [],
+        "logos": [],
+        "icons": [],
+        "animations": {"covers": [], "canvas": []},
+        "has_exclusive_gallery": False,
+    }
     if not artist_name or not media_root.is_dir():
         return empty
 
     artist_dir = _artist_dir(media_root, artist_name)
     if not artist_dir:
         return empty
+
+    from app.exclusive_gallery import (
+        build_exclusive_section,
+        find_exclusive_dir,
+        has_exclusive_content,
+    )
+
+    has_exclusive = has_exclusive_content(artist_dir, layout="music")
 
     photos_out: list[dict] = []
     for photo in sorted(
@@ -693,13 +713,21 @@ def build_gallery_index(artist_name: str | None, media_root: Path) -> dict:
 
     covers_out, canvas_out = list_release_motion_artwork(artist_dir, media_root)
 
-    return {
+    payload: dict = {
         "photos": photos_out,
         "branding": branding_out,
         "logos": logos_out,
         "icons": icons_out,
         "animations": {"covers": covers_out, "canvas": canvas_out},
+        "has_exclusive_gallery": has_exclusive,
     }
+    if include_exclusive and has_exclusive:
+        ex_dir = find_exclusive_dir(artist_dir, layout="music")
+        if ex_dir:
+            ex_sec = build_exclusive_section(ex_dir, media_root)
+            if ex_sec:
+                payload["exclusive"] = ex_sec
+    return payload
 
 
 def pick_playlist_cover(artist_name: str | None, release_hint: str | None) -> str | None:

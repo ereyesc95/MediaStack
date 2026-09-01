@@ -6,7 +6,7 @@ export type GalleryViewerItem = {
   url: string;
   caption: string;
   subcaption?: string;
-  mediaType?: "image" | "video";
+  mediaType?: "image" | "video" | "audio";
 };
 
 type Props = {
@@ -193,6 +193,16 @@ export default function GalleryViewerModal({
               loop
               playsInline
             />
+          ) : item.mediaType === "audio" ? (
+            <div className="gallery-viewer__audio-wrap">
+              <audio
+                key={item.id}
+                src={item.url}
+                className="gallery-viewer__audio"
+                controls
+                autoPlay
+              />
+            </div>
           ) : (
             <img
               src={item.url}
@@ -254,6 +264,10 @@ export default function GalleryViewerModal({
                         preload="metadata"
                         playsInline
                       />
+                    ) : t.item.mediaType === "audio" ? (
+                      <span className="gallery-viewer__thumb-audio" aria-hidden>
+                        ♪
+                      </span>
                     ) : (
                       <img src={t.item.url} alt="" />
                     )}

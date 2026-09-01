@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.config import settings
@@ -149,11 +149,26 @@ def asset_file(slug: str):
 
 
 @router.get("/media/file")
-def media_file(path: str = Query(..., min_length=1)):
+def media_file(
+    path: str = Query(..., min_length=1),
+    access_token: str | None = Query(None),
+    authorization: str | None = Header(None),
+):
     if not settings.media_root:
         raise HTTPException(404, "MYSTACK_MEDIA_ROOT not set")
+    from app.auth_session import session_nsfw_unlocked
+    from app.deps import _bearer_token
+    from app.exclusive_gallery import path_is_exclusive
+
+    rel = path.replace("\\", "/")
+    if path_is_exclusive(rel):
+        token = _bearer_token(authorization) or (
+            access_token.strip() if access_token else None
+        )
+        if not session_nsfw_unlocked(token):
+            raise HTTPException(403, "NSFW unlock required")
     root = Path(settings.media_root).resolve()
-    target = (root / path.replace("\\", "/")).resolve()
+    target = (root / rel).resolve()
     if not str(target).startswith(str(root)):
         raise HTTPException(403, "Invalid path")
     if not target.is_file():

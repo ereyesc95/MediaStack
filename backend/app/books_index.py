@@ -747,6 +747,24 @@ def counterpart_book_for_movies_path(
     return _book_card_from_dir(book_dir, root)
 
 
+def counterpart_book_for_series_path(
+    series_rel_path: str, media_root: Path | None = None
+) -> dict | None:
+    """Map Series/{Letter}/{Work}/{Leaf} → Books/{Letter}/{Work}/{Leaf} when present."""
+    root = _resolve_media_root(media_root)
+    norm = (series_rel_path or "").replace("\\", "/").strip("/")
+    if not norm:
+        return None
+    parts = norm.split("/")
+    if len(parts) < 3 or parts[0].casefold() != "series":
+        return None
+    books_rel = "/".join(["Books", *parts[1:]])
+    book_dir = root / books_rel
+    if not book_dir.is_dir():
+        return None
+    return _book_card_from_dir(book_dir, root)
+
+
 def counterpart_book_for_film(
     film_id: str, media_root: Path | None = None
 ) -> dict | None:
@@ -876,12 +894,13 @@ def build_work_detail(work_id: str, media_root: Path | None = None) -> dict | No
         return None
     work_dir, letter = found
     card = _work_card(work_dir, letter, root)
-    from app.series_index import _has_gallery
+    from app.series_index import _has_exclusive_gallery, _has_gallery
 
     return {
         **card,
         "kind": "franchise",
         "has_gallery": _has_gallery(work_dir),
+        "has_exclusive_gallery": _has_exclusive_gallery(work_dir),
         "has_series": False,
         "has_movies": False,
         "has_books": card["book_count"] > 0,
@@ -895,6 +914,7 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
         return None
     book_dir, work_dir, letter = found
     from app.series_index import (
+        _has_exclusive_gallery,
         _has_gallery,
         _series_cover_back,
         _series_folder_banner,
@@ -929,6 +949,7 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
         or card.get("portrait_url"),
         "photocards": resolve_series_photocards(book_dir, root),
         "has_gallery": _has_gallery(book_dir),
+        "has_exclusive_gallery": _has_exclusive_gallery(book_dir),
         "versions": volumes,
         "volumes": volumes,
         "open_url": (primary or {}).get("open_url") or card.get("open_url"),

@@ -22,6 +22,7 @@ import {
   fetchMoviesFranchiseOverview,
   fetchMoviesFranchiseSeries,
   fetchSeriesFolder,
+  fetchSeriesFolderCounterparts,
   fetchSeriesFolderExtras,
   fetchSeriesFranchiseAudio,
   fetchSeriesFranchiseGames,
@@ -40,6 +41,7 @@ import {
   saveMoviesFilmTrailer,
   fetchBandOverview,
 } from "../../api";
+import { getStoredProfile } from "../../auth";
 import { formatTrackDate } from "../../formatDate";
 import {
   applyMediaTheme,
@@ -721,6 +723,8 @@ export default function SeriesSubseriesPage({
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
+  const [galleryEmpty, setGalleryEmpty] = useState(false);
+  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
   const [coverFlipped, setCoverFlipped] = useState(false);
   const [coverViewerItems, setCoverViewerItems] = useState<
     GalleryViewerItem[]
@@ -1675,6 +1679,47 @@ export default function SeriesSubseriesPage({
 
   const galleryPath = detail?.folder_path || card?.folder_path || "";
 
+  useEffect(() => {
+    if (!galleryPath) {
+      setGalleryEmpty(true);
+      setGallerySections([]);
+      return;
+    }
+    let cancelled = false;
+    setGalleryEmpty(false);
+    const fetchGal = isFilm || isBook ? fetchMoviesGallery : fetchSeriesGallery;
+    void fetchGal(galleryPath)
+      .then((payload) => {
+        if (cancelled) return;
+        const items = payload?.items || [];
+        const sections = payload?.sections || [];
+        const count =
+          items.length ||
+          sections.reduce((n: number, s) => {
+            let total = n + (Array.isArray(s.items) ? s.items.length : 0);
+            for (const sub of s.subsections ?? []) {
+              total += sub.items?.length ?? 0;
+            }
+            return total;
+          }, 0);
+        setGalleryEmpty(count === 0);
+        if (sections.length) {
+          setGallerySections(
+            sections.map((s: { key?: string; label?: string }, i: number) => ({
+              key: s.key || String(i),
+              label: s.label || s.key || "Gallery",
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryEmpty(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [galleryPath, isFilm, isBook]);
+
   const openCoverArtworkViewer = async () => {
     if (!galleryPath) return;
     try {
@@ -2085,9 +2130,62 @@ export default function SeriesSubseriesPage({
       if (siblingFilms.length || relatedSeries.length) {
         setMediaReady(true);
       }
+    } else if (!isFilm && !isBook) {
+      // Instant Movies/Books from leaf-filtered related (same speed as More Series).
+      const instantMovies = filterCardsForSubseries(
+        relatedMovies.map((m) => ({
+          ...m,
+          open_label: m.open_label || "Play video",
+          open_mode: m.open_mode || (m.open_url ? ("tab" as const) : null),
+        })),
+        title,
+        galleryPath
+      );
+      const instantBooks = filterCardsForSubseries(
+        toMediaCards(
+          (overview?.related?.books || []).map((it) => {
+            const row = it as {
+              id?: string;
+              title?: string;
+              name?: string;
+              cover_url?: string | null;
+              path?: string;
+              folder_path?: string;
+              open_url?: string | null;
+              open_mode?: "tab" | "local" | null;
+              open_label?: string | null;
+            };
+            return {
+              ...row,
+              path: row.path || row.folder_path,
+              open_label: row.open_label || "Read",
+              open_mode: row.open_mode || (row.open_url ? "tab" : null),
+            };
+          })
+        ),
+        title,
+        galleryPath
+      );
+      if (instantMovies.length) setMovieCards(instantMovies);
+      if (instantBooks.length) setLibraryCards(instantBooks);
+      if (instantMovies.length || instantBooks.length) setMediaReady(true);
     }
     setMediaLoading(true);
-    if (!hadCachedMedia && !(isFilm && !isBook && (siblings.length > 1 || (overview?.related?.series?.length ?? 0) > 0))) {
+    if (
+      !hadCachedMedia &&
+      !(
+        isFilm &&
+        !isBook &&
+        (siblings.length > 1 ||
+          (overview?.related?.series?.length ?? 0) > 0)
+      ) &&
+      !(
+        !isFilm &&
+        !isBook &&
+        (relatedMovies.length > 0 ||
+          (overview?.related?.books?.length ?? 0) > 0)
+      )
+    ) {
       setMediaReady(false);
     }
     const run = async () => {
@@ -2487,7 +2585,7 @@ export default function SeriesSubseriesPage({
           return;
         }
 
-        const [moviesData, audioData, libraryData, gamesData] =
+        const [moviesData, audioData, libraryData, gamesData, counterparts] =
           await Promise.all([
             fetchSeriesFranchiseMovies(franchiseId).catch(() => ({ items: [] })),
             fetchSeriesFranchiseAudio(franchiseId).catch(() => ({
@@ -2497,6 +2595,19 @@ export default function SeriesSubseriesPage({
               items: [],
             })),
             fetchSeriesFranchiseGames(franchiseId).catch(() => ({ items: [] })),
+            galleryPath
+              ? fetchSeriesFolderCounterparts(galleryPath).catch(() => ({
+                  movies: [],
+                  books: [],
+                  movie_count: 0,
+                  book_count: 0,
+                }))
+              : Promise.resolve({
+                  movies: [],
+                  books: [],
+                  movie_count: 0,
+                  book_count: 0,
+                }),
           ]);
         if (cancelled) return;
 
@@ -2511,6 +2622,7 @@ export default function SeriesSubseriesPage({
           banner_url?: string | null;
           logo_url?: string | null;
           path?: string;
+          folder_path?: string;
           date_iso?: string | null;
           display_date?: string | null;
           open_url?: string | null;
@@ -2519,33 +2631,47 @@ export default function SeriesSubseriesPage({
           duration?: string | null;
           duration_sec?: number | null;
         }[];
-        setMovieCards(
-          filterCardsForSubseries(
-            movieItems.length
-              ? toMediaCards(
-                  movieItems.map((m) => ({
-                    ...m,
-                    portrait_url: m.portrait_url || m.cover_url,
-                    landscape_url: m.landscape_url || null,
-                    banner_url:
-                      m.banner_url ||
-                      m.landscape_url ||
-                      m.portrait_url ||
-                      m.cover_url ||
-                      null,
-                    open_label: m.open_label || "Play video",
-                    open_mode: m.open_mode || (m.open_url ? "tab" : null),
-                  }))
-                )
-              : relatedMovies.map((m) => ({
+        const counterpartMovies = (counterparts.movies || []).map((m) => ({
+          ...m,
+          path: m.path || m.folder_path,
+          portrait_url: m.portrait_url || m.cover_url,
+          open_label: m.open_label || "Play video",
+          open_mode: m.open_mode || (m.open_url ? ("tab" as const) : null),
+        }));
+        const filteredFranchiseMovies = filterCardsForSubseries(
+          movieItems.length
+            ? toMediaCards(
+                movieItems.map((m) => ({
                   ...m,
+                  path: m.path || m.folder_path,
+                  portrait_url: m.portrait_url || m.cover_url,
+                  landscape_url: m.landscape_url || null,
+                  banner_url:
+                    m.banner_url ||
+                    m.landscape_url ||
+                    m.portrait_url ||
+                    m.cover_url ||
+                    null,
                   open_label: m.open_label || "Play video",
                   open_mode: m.open_mode || (m.open_url ? "tab" : null),
-                })),
-            title,
-            galleryPath
-          )
+                }))
+              )
+            : relatedMovies.map((m) => ({
+                ...m,
+                open_label: m.open_label || "Play video",
+                open_mode: m.open_mode || (m.open_url ? "tab" : null),
+              })),
+          title,
+          galleryPath
         );
+        const movieById = new Map<string, SeriesMediaCard>();
+        for (const m of [
+          ...filteredFranchiseMovies,
+          ...toMediaCards(counterpartMovies),
+        ]) {
+          movieById.set(m.id || m.path || m.title, m);
+        }
+        setMovieCards(Array.from(movieById.values()));
 
         const releases = (audioData.releases || []) as {
           id?: string;
@@ -2601,8 +2727,8 @@ export default function SeriesSubseriesPage({
           )
         );
 
-        setLibraryCards(
-          filterCardsForSubseries(
+        setLibraryCards(() => {
+          const filtered = filterCardsForSubseries(
             toMediaCards(
               (libraryData.items || []).map((it) => {
                 const row = it as {
@@ -2622,6 +2748,7 @@ export default function SeriesSubseriesPage({
                 };
                 return {
                   ...row,
+                  path: row.path || row.folder_path,
                   open_label: row.open_label || "Read",
                   open_mode: row.open_mode || (row.open_url ? "tab" : null),
                 };
@@ -2629,8 +2756,34 @@ export default function SeriesSubseriesPage({
             ),
             title,
             galleryPath
-          )
-        );
+          );
+          const counterpartBooks = toMediaCards(
+            (counterparts.books || []).map((it) => {
+              const row = it as {
+                id?: string;
+                title?: string;
+                name?: string;
+                cover_url?: string | null;
+                path?: string;
+                folder_path?: string;
+                open_url?: string | null;
+                open_mode?: "tab" | "local" | null;
+                open_label?: string | null;
+              };
+              return {
+                ...row,
+                path: row.path || row.folder_path,
+                open_label: row.open_label || "Read",
+                open_mode: row.open_mode || (row.open_url ? "tab" : null),
+              };
+            })
+          );
+          const byId = new Map<string, SeriesMediaCard>();
+          for (const b of [...filtered, ...counterpartBooks]) {
+            byId.set(b.id || b.path || b.title, b);
+          }
+          return Array.from(byId.values());
+        });
 
         setGameCards(
           filterCardsForSubseries(
@@ -2800,13 +2953,15 @@ export default function SeriesSubseriesPage({
   const relatedBookCount = overview?.related?.books?.length ?? 0;
   const relatedGameCount = overview?.related?.games?.length ?? 0;
   const hasSeries = seriesCards.length > 0 || relatedSeriesCount > 0;
+  // Series leaves: only show Movies/Books tabs when leaf-matched cards exist
+  // (franchise-level related counts alone caused empty-tab flash).
   const hasMovies = isBook
     ? movieCards.length > 0 || relatedMovieCount > 0
     : isFilm
       ? siblingMovieCount > 0 ||
         movieCards.length > 0 ||
         relatedMovieCount > 0
-      : movieCards.length > 0 || relatedMovieCount > 0;
+      : movieCards.length > 0;
   const hasMoreBooks =
     siblingMovieCount > 0 ||
     libraryCards.length > 0 ||
@@ -2814,9 +2969,21 @@ export default function SeriesSubseriesPage({
   const hasAudio = audioCards.length > 0;
   const hasLibrary = isFilm
     ? libraryCards.length > 0
-    : libraryCards.length > 0 || relatedBookCount > 0;
+    : isBook
+      ? hasMoreBooks
+      : libraryCards.length > 0;
   const hasGames = gameCards.length > 0 || relatedGameCount > 0;
-  const hasGallery = Boolean(detail?.has_gallery || card?.has_gallery);
+  const hasGallery =
+    !galleryEmpty &&
+    (gallerySections.length > 0 ||
+      Boolean(detail?.has_gallery || card?.has_gallery) ||
+      (nsfwUnlocked &&
+        Boolean(
+          (detail as { has_exclusive_gallery?: boolean } | null)
+            ?.has_exclusive_gallery ||
+            (card as { has_exclusive_gallery?: boolean } | null)
+              ?.has_exclusive_gallery
+        )));
 
   const filmPlayUrl =
     filmVersions[0]?.file_url?.trim() ||

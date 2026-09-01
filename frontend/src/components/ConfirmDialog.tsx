@@ -9,6 +9,8 @@ type Props = {
   busy?: boolean;
   onConfirm: () => void;
   onClose: () => void;
+  /** Hide bottom cancel — close via × only (default false). */
+  hideCancel?: boolean;
 };
 
 export default function ConfirmDialog({
@@ -20,6 +22,7 @@ export default function ConfirmDialog({
   busy = false,
   onConfirm,
   onClose,
+  hideCancel = false,
 }: Props) {
   return (
     <ModalPortal onClose={onClose} layer={2}>
@@ -35,9 +38,11 @@ export default function ConfirmDialog({
         </div>
         <p className="confirm-dialog__message">{message}</p>
         <div className="modal-actions-row confirm-dialog__actions">
-          <button type="button" className="btn" onClick={onClose} disabled={busy}>
-            {cancelLabel}
-          </button>
+          {!hideCancel ? (
+            <button type="button" className="btn" onClick={onClose} disabled={busy}>
+              {cancelLabel}
+            </button>
+          ) : null}
           <button
             type="button"
             className={`btn${destructive ? " btn--danger" : ""}`}

@@ -141,7 +141,7 @@ function normalizeDiscographyReleases(
     title: rel.title,
     display_date: rel.display_date,
     date_iso: rel.date_iso,
-    tracks: rel.tracks.map((t, i) => ({
+    tracks: (rel.tracks || []).map((t, i) => ({
       title: t.title,
       number: t.number ?? i + 1,
     })),
@@ -514,7 +514,7 @@ export default function ArtistQuiz({
           setOtherTracks(others);
         } else if (next === "lineup") {
           const data = await fetchQuizLineup(bandId);
-          if (data.disabled || !data.members.length) {
+          if (data.disabled || !(data.members?.length)) {
             setError("Lineup quiz is not available.");
             setPhase("ready");
             setLineup([]);
@@ -523,7 +523,7 @@ export default function ArtistQuiz({
           setLineup(data.members);
         } else {
           const data = await fetchQuizSongs(bandId, SONG_ROUNDS);
-          if (!data.questions.length) {
+          if (!(data.questions?.length)) {
             setError("Not enough local tracks for a songs quiz.");
             setPhase("ready");
             setSongQuestions([]);

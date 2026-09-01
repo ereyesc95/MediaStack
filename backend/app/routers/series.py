@@ -17,7 +17,10 @@ def series_catalog(
 ):
     """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ DB filter metadata)."""
     from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
-    from app.series_catalog_meta import enrich_catalog_metadata
+    from app.series_catalog_meta import (
+        enrich_catalog_metadata,
+        filter_franchise_subseries_lists,
+    )
     from app.series_index import build_series_catalog
 
     from app.franchise_identity import (
@@ -30,10 +33,16 @@ def series_catalog(
         db, catalog, orientation="portrait"
     )
     catalog = enrich_catalog_with_artwork_home(catalog)
+    adult_subs = adult_subgenre_names_from_db(db)
     catalog["franchises"] = filter_adult_cards(
         catalog.get("franchises") or [],
         nsfw_unlocked=nsfw_unlocked,
-        extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        extra_adult_subgenres=adult_subs,
+    )
+    catalog["franchises"] = filter_franchise_subseries_lists(
+        catalog.get("franchises") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
     return catalog
 
@@ -281,14 +290,18 @@ def series_franchise_overview(
     franchise_id: str,
     orientation: str = Query("portrait"),
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     """Artist-parity overview: bio/cast/links + disk subseries + related media."""
+    from app.series_catalog_meta import apply_nsfw_filter_to_series_overview
     from app.series_overview import build_series_overview
 
     data = build_series_overview(db, franchise_id, orientation=orientation)
     if not data:
         raise HTTPException(404, "Series franchise not found")
-    return data
+    return apply_nsfw_filter_to_series_overview(
+        db, data, nsfw_unlocked=nsfw_unlocked
+    )
 
 
 @router.post("/franchises/{franchise_id}/refresh-metadata")
@@ -612,6 +625,32 @@ def series_franchise_movies(
     return {"items": items}
 
 
+@router.get("/folder/media/counterparts")
+def series_folder_media_counterparts(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Movies/Books leaves that mirror a Series folder path (same dated leaf name)."""
+    from app.adult_content import filter_adult_related_cards
+    from app.books_index import counterpart_book_for_series_path
+    from app.movies_index import counterpart_film_for_series_path
+
+    film = counterpart_film_for_series_path(path)
+    book = counterpart_book_for_series_path(path)
+    movies = [film] if film else []
+    books = [book] if book else []
+    movies = filter_adult_related_cards(
+        db, movies, nsfw_unlocked=nsfw_unlocked, module="movies"
+    )
+    return {
+        "movies": movies,
+        "books": books,
+        "movie_count": len(movies),
+        "book_count": len(books),
+    }
+
+
 @router.get("/franchises/{franchise_id}/media/audio")
 def series_franchise_audio(
     franchise_id: str,
@@ -673,13 +712,21 @@ def series_franchise_audio(
 
 
 @router.get("/franchises/{franchise_id}/media/series")
-def series_franchise_shows(franchise_id: str, db: Session = Depends(get_db)):
+def series_franchise_shows(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Subseries (and direct seasons) as release-style cards."""
+    from app.series_catalog_meta import apply_nsfw_filter_to_series_overview
     from app.series_overview import build_series_overview
 
     overview = build_series_overview(db, franchise_id)
     if not overview:
         raise HTTPException(404, "Series franchise not found")
+    overview = apply_nsfw_filter_to_series_overview(
+        db, overview, nsfw_unlocked=nsfw_unlocked
+    )
     cards = list(overview.get("subseries") or [])
     if not cards:
         for s in overview.get("seasons") or []:
@@ -730,11 +777,14 @@ def series_folder(path: str = Query(..., min_length=1)):
 
 
 @router.get("/gallery")
-def series_gallery(path: str = Query(..., min_length=1)):
+def series_gallery(
+    path: str = Query(..., min_length=1),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Gallery images for a Series franchise / subseries folder (sectioned)."""
     from app.series_index import build_series_gallery
 
-    return build_series_gallery(path)
+    return build_series_gallery(path, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.get("/franchises/{franchise_id}/playlist/openings-endings")

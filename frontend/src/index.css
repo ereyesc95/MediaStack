@@ -1546,16 +1546,36 @@ input {
 .billboard-text--multiline .billboard-text-inner {
   white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+  overflow-wrap: normal;
+  word-break: normal;
   line-height: 1.2;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
+  display: block;
 }
 
 .billboard-text--multiline.billboard-text--vscroll .billboard-text-inner {
   display: block;
   -webkit-line-clamp: unset;
   text-overflow: clip;
+}
+
+/* Multiline horizontal pan: keep wrapped lines, do not collapse to one line. */
+.dash-track:hover .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.dash-icon-item:hover .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.dash-genre:hover .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.dash-country:hover .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.dash-hover-title.is-revealed .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.is-revealed .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.media-release-card:hover .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner,
+.media-release-card--revealed .billboard-text--multiline.billboard-text--scroll:not(.billboard-text--vscroll) .billboard-text-inner {
+  width: 100%;
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  overflow: visible;
+  text-overflow: clip;
+  animation: billboard-pan var(--scroll-duration, 6s) linear infinite;
 }
 
 .media-release-card:hover .billboard-text--vscroll .billboard-text-inner,
@@ -1642,6 +1662,15 @@ input {
   font-size: 0.62rem;
   font-weight: 500;
   opacity: 0.88;
+}
+
+.dash-icon-item:hover .dash-hover-title .billboard-text-inner,
+.dash-genre:hover .dash-hover-title .billboard-text-inner,
+.dash-country:hover .dash-hover-title .billboard-text-inner,
+.dash-track:hover .dash-hover-title .billboard-text-inner,
+.dash-hover-title.is-revealed .billboard-text-inner,
+.is-revealed .dash-hover-title .billboard-text-inner {
+  text-overflow: clip;
 }
 
 .dash-icon-item {

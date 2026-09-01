@@ -111,8 +111,15 @@ def _activity_periods(meta: dict) -> list[dict]:
     return []
 
 
-def build_movies_gallery(rel_path: str, media_root: Path | None = None) -> dict:
+def build_movies_gallery(
+    rel_path: str,
+    media_root: Path | None = None,
+    *,
+    nsfw_unlocked: bool = False,
+) -> dict:
     """Gallery for a Movies work/film folder (mirrors Series gallery_sections)."""
+    from app.exclusive_gallery import build_exclusive_section, find_exclusive_dir
+
     root = Path(media_root or settings.media_root or "")
     if not root.is_dir():
         return {"folder_path": rel_path, "items": [], "sections": []}
@@ -125,9 +132,17 @@ def build_movies_gallery(rel_path: str, media_root: Path | None = None) -> dict:
     except ValueError:
         return {"folder_path": rel_path, "items": [], "sections": []}
     sections = gallery_sections(folder, root)
+    if nsfw_unlocked:
+        ex_dir = find_exclusive_dir(folder, layout="franchise")
+        if ex_dir:
+            ex_sec = build_exclusive_section(ex_dir, root)
+            if ex_sec:
+                sections.append(ex_sec)
     items: list[dict] = []
     for sec in sections:
         items.extend(sec.get("items") or [])
+        for sub in sec.get("subsections") or []:
+            items.extend(sub.get("items") or [])
     return {
         "folder_path": folder.relative_to(root).as_posix(),
         "items": items,

@@ -541,6 +541,8 @@ def build_band_overview(
         if a.strip()
     ]
 
+    artist_dir = _artist_dir(root, band.bnd_name) if root and band.bnd_name else None
+
     return {
         "id": band.bnd_id,
         "name": _display_name(band.bnd_name),
@@ -570,6 +572,7 @@ def build_band_overview(
         "various_artists_hub": various_artists_hub,
         "related": related,
         "media": media,
+        "has_local_folder": bool(artist_dir and artist_dir.is_dir()),
         "metadata_refreshed_at": band.bnd_metadata_refreshed_at,
         "library_scanned_at": band.bnd_library_scanned_at,
         "needs_lineup_import": needs_lineup_import,

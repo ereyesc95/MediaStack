@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  deleteBand,
   fetchBandOverview,
   fetchBandRelated,
   importBandLineup,
@@ -20,6 +21,7 @@ import {
   refreshBandRelatedSimilar,
   rescanBandLibrary,
 } from "../../../api";
+import { getStoredProfile } from "../../../auth";
 import { setCachedOverview } from "../../../overviewCache";
 import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
 import {
@@ -64,6 +66,7 @@ import type {
   ReleaseCardLayout,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
+import ConfirmDialog from "../../ConfirmDialog";
 import MediaInlineSearch from "../MediaInlineSearch";
 import CardOrientationPicker from "../../CardOrientationPicker";
 import ReleaseCardLayoutPicker from "../../ReleaseCardLayoutPicker";
@@ -322,6 +325,8 @@ export default function ArtistPage({
   const [relatedFetchInProgress, setRelatedFetchInProgress] = useState(false);
   const [lineupImporting, setLineupImporting] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [removeArtistOpen, setRemoveArtistOpen] = useState(false);
+  const [removeArtistBusy, setRemoveArtistBusy] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [vaContributorSort, setVaContributorSort] = useState<
     "tracks" | "compilations" | "name"
@@ -347,6 +352,16 @@ export default function ArtistPage({
     mobilePortrait || deviceLayout === "tablet-portrait";
   const cachedAudio = getCachedArtistAudio(bandId);
   const cachedGallery = getCachedArtistGallery(bandId);
+  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
+  const galleryTabVisible = useCallback(
+    (m: BandOverview["media"] | undefined) =>
+      Boolean(
+        m?.has_gallery ||
+          (nsfwUnlocked && m?.has_exclusive_gallery) ||
+          cachedGallery
+      ),
+    [nsfwUnlocked, cachedGallery]
+  );
   const cachedVideo = getCachedArtistMediaTab(bandId, "video");
   const cachedSeries = getCachedArtistMediaTab(bandId, "series");
   const cachedLibrary = getCachedArtistMediaTab(bandId, "library");
@@ -363,7 +378,7 @@ export default function ArtistPage({
     hidePlaylists: Boolean(data?.is_various_artists),
   });
   const galleryEnabled =
-    section === "gallery" && Boolean(data?.media?.has_gallery || cachedGallery);
+    section === "gallery" && galleryTabVisible(data?.media);
   const galleryState = useArtistGallery(bandId, galleryEnabled, mediaRefreshKey);
 
   const visibleSections = useMemo(() => {
@@ -372,12 +387,19 @@ export default function ArtistPage({
       ? SECTIONS
       : SECTIONS.filter((s) => {
           if (s.id === "overview") return true;
-          if (s.id === "quiz") return !data?.is_various_artists;
+          if (s.id === "quiz") {
+            return Boolean(m.has_audio) && !data?.is_various_artists;
+          }
           if (s.id === "audio") return m.has_audio;
           if (s.id === "video") return m.has_video;
           if (s.id === "series") return Boolean(m.has_series);
           if (s.id === "library") return m.has_library;
-          if (s.id === "gallery") return m.has_gallery;
+          if (s.id === "gallery") {
+            return (
+              m.has_gallery ||
+              (nsfwUnlocked && Boolean(m.has_exclusive_gallery))
+            );
+          }
           return false;
         });
     // Entry module tab sits directly next to Overview.
@@ -404,7 +426,14 @@ export default function ArtistPage({
     if (preferred) out.push(preferred);
     out.push(...rest);
     return out;
-  }, [data?.media, data?.is_various_artists]);
+  }, [data?.media, data?.is_various_artists, nsfwUnlocked]);
+
+  useEffect(() => {
+    if (section !== "quiz" || !data) return;
+    if (!data.media?.has_audio || data.is_various_artists) {
+      onNavigate("overview", "about");
+    }
+  }, [section, data, onNavigate]);
 
   const visibleOverviewTabs = useMemo(() => {
     if (data?.is_various_artists) {
@@ -1229,6 +1258,15 @@ export default function ArtistPage({
                   ? () => setAboutEditOpen(true)
                   : undefined
               }
+              onRemoveArtist={
+                isAdmin &&
+                overviewTab === "about" &&
+                data &&
+                !data.is_various_artists &&
+                data.has_local_folder !== true
+                  ? () => setRemoveArtistOpen(true)
+                  : undefined
+              }
               onAddMember={
                 isAdmin &&
                 overviewTab === "lineup" &&
@@ -1393,7 +1431,7 @@ export default function ArtistPage({
           />
         )}
 
-        {section === "gallery" && data?.media?.has_gallery && (
+        {section === "gallery" && galleryTabVisible(data?.media) && (
           <ArtistGalleryBars
             state={galleryState}
             mobilePortrait={mobilePortrait}
@@ -1532,6 +1570,33 @@ export default function ArtistPage({
             data={data}
             onClose={() => setAboutEditOpen(false)}
             onSaved={load}
+          />
+        )}
+
+        {removeArtistOpen && data && (
+          <ConfirmDialog
+            title="Remove artist"
+            message={`Remove “${data.name}” from your library? This deletes the artist record and related database entries. It cannot be undone.`}
+            confirmLabel="Remove artist"
+            destructive
+            hideCancel
+            busy={removeArtistBusy}
+            onConfirm={() => {
+              void (async () => {
+                setRemoveArtistBusy(true);
+                setError(null);
+                try {
+                  await deleteBand(bandId);
+                  setRemoveArtistOpen(false);
+                  onBack();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setRemoveArtistBusy(false);
+                }
+              })();
+            }}
+            onClose={() => !removeArtistBusy && setRemoveArtistOpen(false)}
           />
         )}
 
@@ -1694,10 +1759,10 @@ export default function ArtistPage({
         {data && section === "library" && !data.media?.has_library && !cachedLibrary && (
           <p className="muted artist-section-empty">No books found.</p>
         )}
-        {section === "gallery" && (data?.media?.has_gallery || cachedGallery) && (
+        {section === "gallery" && galleryTabVisible(data?.media) && (
           <ArtistGallery state={galleryState} />
         )}
-        {data && section === "gallery" && !data.media?.has_gallery && !cachedGallery && (
+        {data && section === "gallery" && !galleryTabVisible(data.media) && (
           <p className="muted artist-section-empty">No gallery folders found.</p>
         )}
       </div>

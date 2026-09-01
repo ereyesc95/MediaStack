@@ -1273,6 +1273,10 @@ export async function deleteBandRelated(bandId: number, erlId: number) {
   });
 }
 
+export async function deleteBand(bandId: number): Promise<{ ok: boolean; id: number }> {
+  return request(`${API}/music/bands/${bandId}`, { method: "DELETE" });
+}
+
 export async function fetchLinkCatalog(): Promise<{
   items: import("./types").LinkCatalogEntry[];
 }> {
@@ -2713,6 +2717,17 @@ export async function deleteSeriesLink(franchiseId: string, linkId: string) {
 export async function fetchSeriesFranchiseMovies(franchiseId: string) {
   return request<{ items: FranchiseMediaEntry[] }>(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/movies`
+  );
+}
+
+export async function fetchSeriesFolderCounterparts(path: string) {
+  return request<{
+    movies: Array<Record<string, unknown>>;
+    books: Array<Record<string, unknown>>;
+    movie_count: number;
+    book_count: number;
+  }>(
+    `${API}/series/folder/media/counterparts?path=${encodeURIComponent(path)}`
   );
 }
 

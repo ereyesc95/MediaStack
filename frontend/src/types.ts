@@ -370,6 +370,7 @@ export type BandOverview = {
   media: MediaFlags;
   metadata_refreshed_at: string | null;
   library_scanned_at: string | null;
+  has_local_folder?: boolean;
   needs_lineup_import?: boolean;
   cached?: boolean;
   is_various_artists?: boolean;
@@ -497,6 +498,8 @@ export type MediaFlags = {
   has_series?: boolean;
   has_library: boolean;
   has_gallery: boolean;
+  /** Exclusive gallery folder exists (content gated behind mystacknsfw). */
+  has_exclusive_gallery?: boolean;
   has_playlists?: boolean;
   audio_categories: string[];
 };
@@ -699,6 +702,8 @@ export type GalleryIndexPayload = {
     covers: GalleryAnimationItem[];
     canvas: GalleryAnimationItem[];
   };
+  has_exclusive_gallery?: boolean;
+  exclusive?: SeriesGallerySection;
 };
 
 export type AudioIndexPayload = {
@@ -1439,6 +1444,7 @@ export type SeriesFranchiseDetail = SeriesFranchiseCard & {
   kind: "franchise";
   seasons: SeriesSeasonCard[];
   has_gallery: boolean;
+  has_exclusive_gallery?: boolean;
 };
 
 export type SeriesFolderDetail = {
@@ -1459,6 +1465,7 @@ export type SeriesFolderDetail = {
   } | null;
   badge_url?: string | null;
   has_gallery: boolean;
+  has_exclusive_gallery?: boolean;
   kind: "season" | "subseries" | "folder";
   /** Video compilations use Videos/ instead of Episodes/. */
   content_kind?: "video_collection" | null;
@@ -1485,12 +1492,20 @@ export type SeriesGalleryItem = {
   folder_path: string;
   section: string;
   subsection?: string | null;
+  media_kind?: "image" | "video" | "audio";
+};
+
+export type SeriesGallerySubsection = {
+  key: string;
+  label: string;
+  items: SeriesGalleryItem[];
 };
 
 export type SeriesGallerySection = {
   key: string;
   label: string;
   items: SeriesGalleryItem[];
+  subsections?: SeriesGallerySubsection[];
 };
 
 export type SeriesGalleryPayload = {
@@ -1776,6 +1791,7 @@ export type SeriesOverview = {
     has_library: boolean;
     has_games: boolean;
     has_gallery: boolean;
+  has_exclusive_gallery?: boolean;
   };
   links: {
     entity_type?: string;

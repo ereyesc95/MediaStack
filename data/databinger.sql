@@ -5055,7 +5055,7 @@ INSERT INTO `subgenres` (`sgnID`, `sgnName`, `sgnGenreID`, `sgnMediaTypeID`) VAL
 (3000044, 'Fetish', 300003, '300'),
 (3000045, 'Gonzo', 300003, '300'),
 (3000046, 'Hardcore', 300003, '300'),
-(3000047, 'Hentai', 300003, '300'),
+(3000047, 'Hentai', 300005, '300'),
 (3000048, 'Homemade', 300003, '300'),
 (3000049, 'Leaked Footage', 300003, '300'),
 (3000050, 'Softcore', 300003, '300'),

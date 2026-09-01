@@ -44,7 +44,18 @@ export default function AddArtistModal({ onClose, onAdded }: Props) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <h3>Add artist</h3>
+        <div className="modal-panel-header">
+          <h3>Add artist</h3>
+          <button
+            type="button"
+            className="modal-close-x"
+            aria-label="Close"
+            onClick={onClose}
+            disabled={busy}
+          >
+            ×
+          </button>
+        </div>
         <p className="muted">Search MusicBrainz (up to 3 matches)</p>
         <div className="modal-search-row">
           <input
@@ -74,9 +85,6 @@ export default function AddArtistModal({ onClose, onAdded }: Props) {
         {!busy && matches.length === 0 && query && (
           <p className="muted">No matches yet. Try Search.</p>
         )}
-        <button type="button" className="btn modal-close" onClick={onClose}>
-          Cancel
-        </button>
       </div>
     </div>
   );

@@ -4,11 +4,21 @@ const ADULT_PARENT_GENRES = new Set(["adult", "adult print"]);
 
 const ADULT_SUBGENRES = new Set([
   "ecchi",
+  "hentai",
   "harem",
   "lolicon",
   "yuri",
   "yaoi",
   "reverse harem",
+  "adult alternative",
+  "adult animation",
+  "adult cartoon",
+  "adult fantasy",
+  "adult parody",
+  "adult reality",
+  "adult ai",
+  "adult magazines",
+  "furry & anthro adult",
 ]);
 
 function norm(name: string | null | undefined): string {
@@ -17,7 +27,9 @@ function norm(name: string | null | undefined): string {
 
 export function isAdultGenreName(name: string | null | undefined): boolean {
   const n = norm(name);
-  return ADULT_PARENT_GENRES.has(n) || ADULT_SUBGENRES.has(n);
+  if (!n) return false;
+  if (ADULT_PARENT_GENRES.has(n) || ADULT_SUBGENRES.has(n)) return true;
+  return n.startsWith("adult ") || n.startsWith("adult-");
 }
 
 export function cardHasAdultGenres(card: {

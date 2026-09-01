@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchSeriesGallery } from "../../api";
-import type { SeriesGalleryItem, SeriesGallerySection } from "../../types";
+import { withMediaAccess } from "../../mediaFileUrl";
+import type {
+  SeriesGalleryItem,
+  SeriesGallerySection,
+  SeriesGallerySubsection,
+} from "../../types";
 import PlaylistBoot from "../PlaylistBoot";
 import GalleryViewerModal, {
   type GalleryViewerItem,
@@ -30,20 +35,56 @@ function mergeSections(
   for (const secs of batches) {
     for (const sec of secs) {
       const existing = byKey.get(sec.key);
-      const fresh = (sec.items || []).filter((it) => {
+      const freshItems = (sec.items || []).filter((it) => {
         if (seenIds.has(it.id)) return false;
         seenIds.add(it.id);
         return true;
       });
+      const freshSubs = (sec.subsections || []).map((sub) => ({
+        ...sub,
+        items: sub.items.filter((it) => {
+          if (seenIds.has(it.id)) return false;
+          seenIds.add(it.id);
+          return true;
+        }),
+      }));
       if (existing) {
-        existing.items = [...existing.items, ...fresh];
+        existing.items = [...existing.items, ...freshItems];
+        if (freshSubs.length) {
+          const subsByKey = new Map(
+            (existing.subsections || []).map((s) => [s.key, s])
+          );
+          for (const sub of freshSubs) {
+            const prev = subsByKey.get(sub.key);
+            if (prev) prev.items = [...prev.items, ...sub.items];
+            else subsByKey.set(sub.key, sub);
+          }
+          existing.subsections = [...subsByKey.values()];
+        }
       } else {
-        byKey.set(sec.key, { ...sec, items: [...fresh] });
+        byKey.set(sec.key, {
+          ...sec,
+          items: [...freshItems],
+          subsections: freshSubs.length ? freshSubs : sec.subsections,
+        });
       }
-      items.push(...fresh);
+      items.push(...freshItems);
+      for (const sub of freshSubs) items.push(...sub.items);
     }
   }
   return { sections: [...byKey.values()], items };
+}
+
+function mediaKind(item: SeriesGalleryItem): "image" | "video" | "audio" {
+  if (item.media_kind === "video") return "video";
+  if (item.media_kind === "audio") return "audio";
+  return "image";
+}
+
+function activeSubsections(
+  sec: SeriesGallerySection | undefined
+): SeriesGallerySubsection[] {
+  return sec?.subsections?.filter((s) => s.items.length > 0) ?? [];
 }
 
 export default function SeriesGalleryPanel({
@@ -58,6 +99,7 @@ export default function SeriesGalleryPanel({
   const [sections, setSections] = useState<SeriesGallerySection[]>([]);
   const [items, setItems] = useState<SeriesGalleryItem[]>([]);
   const [internalKey, setInternalKey] = useState<string>("");
+  const [subsectionKey, setSubsectionKey] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -159,20 +201,46 @@ export default function SeriesGalleryPanel({
     void load();
   }, [load]);
 
-  const visible = useMemo(() => {
-    if (!sectionKey || sectionKey === "all") {
-      return sections[0]?.items || items;
+  const activeSection = useMemo(
+    () => sections.find((s) => s.key === sectionKey) || sections[0],
+    [sections, sectionKey]
+  );
+
+  const subsections = useMemo(
+    () => activeSubsections(activeSection),
+    [activeSection]
+  );
+
+  useEffect(() => {
+    if (!subsections.length) {
+      setSubsectionKey("");
+      return;
     }
-    const sec = sections.find((s) => s.key === sectionKey);
-    return sec?.items || [];
-  }, [items, sections, sectionKey]);
+    if (!subsections.some((s) => s.key === subsectionKey)) {
+      setSubsectionKey(subsections[0].key);
+    }
+  }, [subsections, subsectionKey]);
+
+  const visible = useMemo(() => {
+    if (!activeSection) return items;
+    if (subsections.length) {
+      const sub =
+        subsections.find((s) => s.key === subsectionKey) || subsections[0];
+      return sub?.items ?? [];
+    }
+    if (sectionKey && sectionKey !== "all") {
+      return activeSection.items || [];
+    }
+    return sections[0]?.items || items;
+  }, [activeSection, items, sectionKey, subsections, subsectionKey, sections]);
 
   const viewerItems: GalleryViewerItem[] = useMemo(
     () =>
       visible.map((it) => ({
         id: it.id,
-        url: it.url,
+        url: withMediaAccess(it.url),
         caption: it.title,
+        mediaType: mediaKind(it),
       })),
     [visible]
   );
@@ -207,19 +275,56 @@ export default function SeriesGalleryPanel({
           ))}
         </nav>
       ) : null}
+      {subsections.length > 1 ? (
+        <nav
+          className="series-section-subbar"
+          role="tablist"
+          aria-label="Exclusive folders"
+        >
+          {subsections.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              className={subsectionKey === s.key ? "active" : ""}
+              onClick={() => setSubsectionKey(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
       <div className="artist-gallery__photo-grid series-gallery__grid">
-        {visible.map((it, i) => (
-          <button
-            key={it.id}
-            type="button"
-            className="artist-gallery__photo-card"
-            onClick={() => setViewerIndex(i)}
-            title={it.title}
-          >
-            <img src={it.url} alt={it.title} loading="lazy" draggable={false} />
-            <span className="artist-gallery__card-label">{it.title}</span>
-          </button>
-        ))}
+        {visible.map((it, i) => {
+          const url = withMediaAccess(it.url);
+          const kind = mediaKind(it);
+          return (
+            <button
+              key={it.id}
+              type="button"
+              className="artist-gallery__photo-card"
+              onClick={() => setViewerIndex(i)}
+              title={it.title}
+            >
+              {kind === "video" ? (
+                <video
+                  src={url}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  draggable={false}
+                />
+              ) : kind === "audio" ? (
+                <span className="artist-gallery__audio-card" aria-hidden>
+                  ♪
+                </span>
+              ) : (
+                <img src={url} alt={it.title} loading="lazy" draggable={false} />
+              )}
+              <span className="artist-gallery__card-label">{it.title}</span>
+            </button>
+          );
+        })}
       </div>
       {viewerIndex != null ? (
         <GalleryViewerModal

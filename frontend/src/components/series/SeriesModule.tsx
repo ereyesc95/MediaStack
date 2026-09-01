@@ -20,7 +20,7 @@ import {
   preferredSectionForSource,
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
-import { getMediaEntrySource, getUniverseReturnTarget, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { getDirectSeriesFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectSeriesFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
 import {
   getCachedSeriesDashboard,
   prefetchSeriesDashboard,
@@ -387,6 +387,10 @@ export default function SeriesModule({
     setMediaEntrySource(from);
     setEntrySource(from);
     if (shellHint) setFranchiseShell(shellHint);
+    if (!nextSubseriesId) {
+      directLeafFromHomeRef.current = false;
+      setDirectSeriesFromHome(false);
+    }
     setTab("catalog");
     const card = (
       franchises.find((f) => f.id === id) ||
@@ -592,11 +596,12 @@ export default function SeriesModule({
       return;
     }
     // Opened a show/leaf directly from Home (Best Series) → return to Home.
-    if (directLeafFromHomeRef.current || from === "home") {
-      // Nested drill from franchise hub after arriving from home: only the
-      // direct-leaf flag should force Home; franchise→show keeps hub back.
-      if (directLeafFromHomeRef.current) {
-        directLeafFromHomeRef.current = false;
+    const fromHome =
+      directLeafFromHomeRef.current || getDirectSeriesFromHome();
+    if (fromHome) {
+      directLeafFromHomeRef.current = false;
+      setDirectSeriesFromHome(false);
+      if (from === "home") {
         backToHome();
         return;
       }
@@ -739,6 +744,7 @@ export default function SeriesModule({
                     return (ref.title || "MOVIES").toLocaleUpperCase();
                   }
                   return directLeafFromHomeRef.current ||
+                    getDirectSeriesFromHome() ||
                     Boolean(
                       franchises.find((f) => f.id === franchiseId)?.is_standalone
                     )
@@ -1087,12 +1093,14 @@ export default function SeriesModule({
               if (tryOpenMusicArtistFromFranchise(id, "home")) return;
               if (tryOpenArtworkHomeFranchise(id, "home")) return;
               directLeafFromHomeRef.current = false;
+              setDirectSeriesFromHome(false);
               const card = resolveFranchiseCard(id);
               openFranchise(id, undefined, franchiseShellHint(card), "home");
             }}
             onOpenShow={(franchiseId, subseriesId) => {
               // Best Series / show leaves open in Series — never hijack to music artist.
               directLeafFromHomeRef.current = true;
+              setDirectSeriesFromHome(true);
               const card = resolveFranchiseCard(franchiseId);
               openFranchise(
                 franchiseId,

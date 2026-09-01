@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.exclusive_gallery import EXCLUSIVE_NAME
 from app.gallery import IMAGE_EXTS, _media_url
 
 # Content buckets under a franchise or subseries folder
@@ -198,6 +199,8 @@ def gallery_sections(folder: Path, media_root: Path) -> list[dict]:
             children = []
         for child in children:
             if child.is_dir() and not child.name.startswith("."):
+                if child.name.casefold() == EXCLUSIVE_NAME:
+                    continue
                 roots.append((child.name, child))
         # Loose files at Gallery root
         loose = [
@@ -267,15 +270,36 @@ def _collect_images(
     return items
 
 
-def has_gallery_images(folder: Path) -> bool:
-    if find_gallery_root(folder):
-        return True
-    legacy = find_artwork_legacy(folder)
-    if not legacy:
-        return False
+def _is_under_exclusive(path: Path, scan_root: Path) -> bool:
     try:
-        return any(
-            p.is_file() and p.suffix.lower() in IMAGE_EXTS for p in legacy.iterdir()
-        )
-    except OSError:
+        parts = [p.casefold() for p in path.relative_to(scan_root).parts]
+    except ValueError:
         return False
+    return EXCLUSIVE_NAME in parts
+
+
+def has_gallery_images(folder: Path) -> bool:
+    """True only when at least one image file exists under Gallery or legacy Artwork."""
+    roots: list[Path] = []
+    gal = find_gallery_root(folder)
+    if gal:
+        roots.append(gal)
+    legacy = find_artwork_legacy(folder)
+    if legacy and legacy not in roots:
+        roots.append(legacy)
+    for root in roots:
+        try:
+            for p in root.rglob("*"):
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+                    if _is_under_exclusive(p, root):
+                        continue
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def has_exclusive_gallery(folder: Path) -> bool:
+    from app.exclusive_gallery import has_exclusive_content
+
+    return has_exclusive_content(folder, layout="franchise")

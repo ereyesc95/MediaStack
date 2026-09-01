@@ -416,6 +416,7 @@ def get_band(band_id: int, db: Session = Depends(get_db)):
 def band_gallery_index(
     band_id: int,
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     from app.gallery import build_gallery_index
 
@@ -424,8 +425,16 @@ def band_gallery_index(
         raise HTTPException(404, "Band not found")
     root = Path(settings.media_root) if settings.media_root else None
     if not root or not root.is_dir():
-        return {"photos": [], "branding": [], "logos": [], "icons": []}
-    return build_gallery_index(row.bnd_name, root)
+        return {
+            "photos": [],
+            "branding": [],
+            "logos": [],
+            "icons": [],
+            "has_exclusive_gallery": False,
+        }
+    return build_gallery_index(
+        row.bnd_name, root, include_exclusive=nsfw_unlocked
+    )
 
 
 @router.get("/bands/{band_id}/media/audio")
@@ -940,8 +949,12 @@ def band_series_index(
     band_id: int,
     db: Session = Depends(get_db),
     force: bool = Query(False),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
     from app.media_tabs_index import get_media_tab_index
+    from app.series_catalog_meta import enrich_catalog_metadata
+    from app.series_index import build_series_catalog
 
     row = crud.get_band(db, band_id)
     if not row:
@@ -949,7 +962,76 @@ def band_series_index(
     data = get_media_tab_index(db, band_id, kind="series", force=force)
     if not data:
         raise HTTPException(404, "Series not found")
-    return _enrich_media_tab_banners(db, band_id, data)
+    data = _enrich_media_tab_banners(db, band_id, data)
+    if nsfw_unlocked:
+        return data
+
+    # Attach leaf genres from Series catalog / images.subseries, then filter.
+    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    by_path: dict[str, dict] = {}
+    by_title: dict[str, dict] = {}
+    by_id: dict[str, dict] = {}
+    for fr in catalog.get("franchises") or []:
+        if not isinstance(fr, dict):
+            continue
+        for sub in fr.get("subseries") or []:
+            if not isinstance(sub, dict):
+                continue
+            sid = str(sub.get("id") or "").casefold()
+            title = str(sub.get("title") or "").casefold()
+            path = str(sub.get("folder_path") or "").replace("\\", "/").casefold()
+            if sid:
+                by_id[sid] = sub
+            if title:
+                by_title[title] = sub
+            if path:
+                by_path[path.rstrip("/")] = sub
+        # Franchise root as leaf (standalone)
+        fname = str(fr.get("name") or fr.get("id") or "").casefold()
+        if fname and fr.get("genre_names"):
+            by_title.setdefault(fname, fr)
+            by_id.setdefault(str(fr.get("id") or "").casefold(), fr)
+
+    extra = adult_subgenre_names_from_db(db)
+    categories = []
+    for cat in data.get("categories") or []:
+        if not isinstance(cat, dict):
+            categories.append(cat)
+            continue
+        items = []
+        for it in cat.get("items") or []:
+            if not isinstance(it, dict):
+                items.append(it)
+                continue
+            row_it = dict(it)
+            path = str(it.get("folder_path") or "").replace("\\", "/").casefold().rstrip("/")
+            title = str(it.get("title") or "").casefold()
+            hit = by_path.get(path) if path else None
+            if hit is None and path:
+                # Match Series/{L}/{Franchise}[/sub] trailing segment
+                parts = [p for p in path.split("/") if p]
+                if len(parts) >= 3:
+                    hit = by_id.get(parts[-1].casefold()) or by_title.get(
+                        parts[-1].casefold()
+                    )
+                    if hit is None and len(parts) >= 3:
+                        hit = by_id.get(parts[2].casefold()) or by_title.get(
+                            parts[2].casefold()
+                        )
+            if hit is None and title:
+                hit = by_title.get(title)
+            if hit:
+                for key in ("genre_names", "genre_ids", "parent_genre_names"):
+                    if hit.get(key) is not None:
+                        row_it[key] = hit.get(key)
+            items.append(row_it)
+        filtered = filter_adult_cards(
+            items, nsfw_unlocked=False, extra_adult_subgenres=extra
+        )
+        if filtered:
+            categories.append({**cat, "items": filtered})
+    data = {**data, "categories": categories}
+    return data
 
 
 @router.get("/bands/{band_id}/word-cloud")
@@ -1996,6 +2078,24 @@ def band_rescan_library(
     if not row:
         raise HTTPException(404, "Band not found")
     return rescan_band_library(db, row)
+
+
+@router.delete("/bands/{band_id}")
+def band_delete(
+    band_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.band_delete import delete_band_without_folder
+
+    root = Path(settings.media_root) if settings.media_root else None
+    try:
+        delete_band_without_folder(db, band_id, root)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "id": band_id}
 
 
 @router.patch("/bands/{band_id}/bio")
