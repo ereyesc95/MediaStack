@@ -318,6 +318,17 @@ def book_detail(book_id: str):
     return detail
 
 
+@router.get("/books/{book_id}/media/audio")
+def books_book_audio(book_id: str, db: Session = Depends(get_db)):
+    """Audio under the book folder's Audio / [Audio] bucket."""
+    detail = build_book_detail(book_id)
+    if not detail:
+        raise HTTPException(404, "Book not found")
+    from app.series_audio import scan_folder_audio
+
+    return scan_folder_audio(db, detail.get("folder_path") or "")
+
+
 @router.get("/books/{book_id}/overview")
 def book_overview(
     book_id: str,

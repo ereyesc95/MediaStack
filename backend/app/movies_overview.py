@@ -111,6 +111,48 @@ def _activity_periods(meta: dict) -> list[dict]:
     return []
 
 
+def activity_periods_from_leaf_dates(
+    dates: list[str | None] | list[tuple[str | None, str | None]],
+) -> list[dict]:
+    """First–latest year span from leaf dates (franchise About).
+
+    Accepts bare ISO strings or ``(date_iso, title)`` pairs. When titles are
+    provided, ``start_title`` / ``end_title`` are set for UI hover hints.
+    """
+    pairs: list[tuple[str, str | None]] = []
+    for item in dates:
+        if item is None:
+            continue
+        if isinstance(item, (list, tuple)) and len(item) >= 1:
+            raw = item[0]
+            title = item[1] if len(item) > 1 else None
+        else:
+            raw = item
+            title = None
+        if not raw or not str(raw).strip() or len(str(raw).strip()) < 4:
+            continue
+        pairs.append((str(raw).strip(), str(title).strip() if title else None))
+    if not pairs:
+        return []
+    pairs.sort(key=lambda p: p[0])
+    start, start_title = pairs[0]
+    end, end_title = pairs[-1]
+    ys, ye = start[:4], end[:4]
+    label = f"{ys}–{ye}" if ys != ye else ys
+    out: dict = {
+        "label": label,
+        "start": start,
+        "end": end if end != start else None,
+    }
+    if start_title:
+        out["start_title"] = start_title
+    if end_title and end != start:
+        out["end_title"] = end_title
+    elif end_title and end == start:
+        out["start_title"] = start_title or end_title
+    return [out]
+
+
 def build_movies_gallery(
     rel_path: str,
     media_root: Path | None = None,
@@ -345,6 +387,13 @@ def build_work_overview(
     display_universe_cards = merged_universe_cards or universe_cards
 
     films = detail.get("films") or []
+    film_activity = activity_periods_from_leaf_dates(
+        [
+            (f.get("date_iso"), f.get("title"))
+            for f in films
+            if isinstance(f, dict)
+        ]
+    )
     # Map films → subseries-shaped for SeriesAbout filmography strip
     films_as_subseries = [
         {
@@ -358,6 +407,7 @@ def build_work_overview(
             "badge_url": f.get("badge_url"),
             "folder_path": f.get("folder_path"),
             "season_count": f.get("version_count") or 0,
+            "official": f.get("official", True),
         }
         for f in films
     ]
@@ -434,6 +484,35 @@ def build_work_overview(
             "series_shows": series_ov.get("subseries") or [],
             "series_franchise_id": series_ov.get("id") or slug,
             "shared_series": True,
+            # Prefer on-disk span across movies + series (+ related books) leaves.
+            "activity_periods": (
+                activity_periods_from_leaf_dates(
+                    [
+                        *[
+                            (f.get("date_iso"), f.get("title"))
+                            for f in films
+                            if isinstance(f, dict)
+                        ],
+                        *[
+                            (s.get("date_iso"), s.get("title"))
+                            for s in (series_ov.get("subseries") or [])
+                            if isinstance(s, dict)
+                        ],
+                        *[
+                            (b.get("date_iso"), b.get("title") or b.get("name"))
+                            for b in (
+                                (related.get("books") if isinstance(related, dict) else None)
+                                or related_disk.get("books")
+                                or []
+                            )
+                            if isinstance(b, dict)
+                        ],
+                    ]
+                )
+                or film_activity
+                or series_ov.get("activity_periods")
+                or []
+            ),
             "artwork_home_module": (
                 find_artwork_home(name, root) or (None, None)
             )[0],
@@ -445,8 +524,18 @@ def build_work_overview(
             "primary_film_id": detail.get("primary_film_id"),
             "film_count": detail.get("film_count") or len(films),
             "kind": "franchise",
-            # Don't force a Movies TMDb refresh when Series already has data
-            "needs_metadata": bool(series_ov.get("needs_metadata")),
+            # Don't force a Movies TMDb refresh when Series already has data,
+            # or when films already have TMDb ids — auto-refresh would wipe
+            # user About edits on the franchise page.
+            "needs_metadata": bool(series_ov.get("needs_metadata"))
+            and not any(
+                isinstance(blob, dict) and blob.get("tmdb_id")
+                for blob in (
+                    meta.get("films").values()
+                    if isinstance(meta.get("films"), dict)
+                    else []
+                )
+            ),
         }
 
     language_options = language_options_for_franchise(
@@ -472,7 +561,7 @@ def build_work_overview(
         "origin_language": origin_lang,
         "language_options": language_options,
         "cast_languages": language_options,
-        "activity_periods": _activity_periods(meta),
+        "activity_periods": film_activity or _activity_periods(meta),
         "genres": genres,
         "publishers": publishers,
         "status": meta.get("status"),

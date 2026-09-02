@@ -16,6 +16,11 @@ import type {
 } from "../../../types";
 import PlaylistBoot from "../../PlaylistBoot";
 import BillboardText from "../../BillboardText";
+import {
+  filterByOfficial,
+  hasUnofficialItems,
+  stripUnofficialDisplaySuffix,
+} from "../../../unofficialFilter";
 
 type Props = {
   bandId: number;
@@ -24,6 +29,10 @@ type Props = {
   artistName?: string;
   refreshKey?: number;
   onOpenItem?: (itemId: string, item?: MediaTabItem) => void;
+  /** Controlled Official/Unofficial filter (chrome bar on ArtistPage). */
+  officialOnly?: boolean;
+  onOfficialOnlyChange?: (officialOnly: boolean) => void;
+  onHasUnofficialChange?: (hasUnofficial: boolean) => void;
 };
 
 export function useArtistMediaTab(
@@ -121,6 +130,7 @@ function MediaItemCard({
   const hoverDate = item.display_date || formatTrackDate(item.date_iso) || null;
   const fullDate = formatTrackDate(item.date_iso) || item.display_date || null;
   const coverUrl = item.cover_url || DEFAULT_DISC_URL;
+  const title = stripUnofficialDisplaySuffix(item.title);
   const eraLogoSrc =
     preferCollapsed && item.era_logo_collapsed_url
       ? item.era_logo_collapsed_url
@@ -188,7 +198,7 @@ function MediaItemCard({
             handleActivate();
           }
         }}
-        title={item.title}
+        title={title}
       >
         <span
           className="media-release-card__banner-bg"
@@ -201,7 +211,7 @@ function MediaItemCard({
             style={{ backgroundImage: `url("${coverUrl}")` }}
           />
           <span className="media-release-card__banner-meta">
-            <span className="media-release-card__banner-title">{item.title}</span>
+            <span className="media-release-card__banner-title">{title}</span>
             {(item.era_icon_url || eraLogoSrc) ? (
               <span className="media-release-card__banner-artist-brand">
                 {item.era_icon_url ? (
@@ -261,7 +271,7 @@ function MediaItemCard({
           handleActivate();
         }
       }}
-      title={item.title}
+      title={title}
     >
       <span
         className="media-release-card__cover"
@@ -274,7 +284,7 @@ function MediaItemCard({
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">
         <span className="media-release-card__title-hover">
-          <BillboardText short={item.title} full={item.title} maxLines={3} />
+          <BillboardText short={title} full={title} maxLines={3} />
         </span>
       </span>
       {openFileControl || hoverDate ? (
@@ -296,16 +306,36 @@ export default function ArtistMediaGrid({
   artistName,
   refreshKey = 0,
   onOpenItem,
+  officialOnly: officialOnlyProp,
+  onOfficialOnlyChange,
+  onHasUnofficialChange,
 }: Props) {
   const { data, loading, error, category, categories, categoryKey, setCategoryKey } =
     useArtistMediaTab(bandId, kind, true, refreshKey);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [officialOnlyLocal, setOfficialOnlyLocal] = useState(true);
+  const officialOnly = officialOnlyProp ?? officialOnlyLocal;
+  const setOfficialOnly = onOfficialOnlyChange ?? setOfficialOnlyLocal;
+
+  const allItems = useMemo(
+    () => categories.flatMap((c) => c.items || []),
+    [categories]
+  );
+  const showEditionBar = hasUnofficialItems(allItems);
+
+  useEffect(() => {
+    onHasUnofficialChange?.(showEditionBar);
+  }, [showEditionBar, onHasUnofficialChange]);
+
+  useEffect(() => {
+    setOfficialOnly(true);
+  }, [bandId, kind, setOfficialOnly]);
 
   useEffect(() => {
     setRevealedId(null);
-  }, [categoryKey, cardLayout, bandId, kind]);
+  }, [categoryKey, cardLayout, bandId, kind, officialOnly]);
 
   useEffect(() => {
     if (!isPhone || revealedId == null) return;
@@ -343,6 +373,11 @@ export default function ArtistMediaGrid({
     [bandId, kind, onOpenItem, openingId]
   );
 
+  const visibleItems = useMemo(() => {
+    const items = category?.items || [];
+    return showEditionBar ? filterByOfficial(items, officialOnly) : items;
+  }, [category, showEditionBar, officialOnly]);
+
   if (loading && !data) {
     return <PlaylistBoot className="playlist-boot--compact" label="Loading…" />;
   }
@@ -373,26 +408,56 @@ export default function ArtistMediaGrid({
           ))}
         </nav>
       )}
-      <div
-        className={`media-release-grid artist-media-grid__cards${
-          cardLayout === "banner" ? " media-release-grid--banner" : ""
-        }`}
-      >
-        {(category?.items ?? []).map((item) => (
-          <MediaItemCard
-            key={item.id}
-            item={item}
-            kind={kind}
-            cardLayout={cardLayout}
-            artistName={artistName}
-            opening={openingId === item.id}
-            tapReveal={isPhone}
-            revealed={isPhone && revealedId === item.id}
-            onReveal={() => setRevealedId(item.id)}
-            onOpen={() => void handleOpen(item)}
-          />
-        ))}
-      </div>
+      {!onHasUnofficialChange && showEditionBar ? (
+        <nav
+          className="artist-page__subtabs artist-audio__official-bar artist-media-grid__official-bar"
+          role="tablist"
+          aria-label="Official or unofficial"
+        >
+          <button
+            type="button"
+            className={officialOnly ? "active" : ""}
+            onClick={() => setOfficialOnly(true)}
+          >
+            <span>OFFICIAL</span>
+          </button>
+          <button
+            type="button"
+            className={!officialOnly ? "active" : ""}
+            onClick={() => setOfficialOnly(false)}
+          >
+            <span>UNOFFICIAL</span>
+          </button>
+        </nav>
+      ) : null}
+      {visibleItems.length === 0 ? (
+        <p className="muted artist-section-empty">
+          {officialOnly
+            ? "No official items in this category."
+            : "No unofficial items in this category."}
+        </p>
+      ) : (
+        <div
+          className={`media-release-grid artist-media-grid__cards${
+            cardLayout === "banner" ? " media-release-grid--banner" : ""
+          }`}
+        >
+          {visibleItems.map((item) => (
+            <MediaItemCard
+              key={item.id}
+              item={item}
+              kind={kind}
+              cardLayout={cardLayout}
+              artistName={artistName}
+              opening={openingId === item.id}
+              tapReveal={isPhone}
+              revealed={isPhone && revealedId === item.id}
+              onReveal={() => setRevealedId(item.id)}
+              onOpen={() => void handleOpen(item)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

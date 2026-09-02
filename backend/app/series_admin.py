@@ -8,6 +8,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models import Country, Series
+from app.manual_metadata import mark_manual
 from app.series_languages import normalize_lang_code
 from app.series_refresh import ensure_series_row, find_series_row
 
@@ -168,14 +169,19 @@ def patch_series_about(
         entry = dict(subs.get(sid) or {}) if isinstance(subs.get(sid), dict) else {}
         if bio is not None:
             entry["bio"] = bio.strip()
+            mark_manual(entry, "overview")
         if writers is not None:
             entry["writers"] = writers.strip().replace(",", ";") or ""
+            mark_manual(entry, "writers")
         if publishers is not None:
             entry["publishers"] = publishers.strip().replace(",", ";") or ""
+            mark_manual(entry, "publishers")
         if genres is not None:
             entry["genres"] = _clean_genres(genres)
+            mark_manual(entry, "genres")
         if languages is not None:
             entry["languages"] = _clean_languages(languages)
+            mark_manual(entry, "languages")
         if country_id is not None:
             if country_id:
                 crow = db.get(Country, country_id)
@@ -188,10 +194,12 @@ def patch_series_about(
                 entry["country_id"] = None
                 entry["country_iso"] = None
                 entry["country_name"] = None
+            mark_manual(entry, "country")
         if activity_start is not None or activity_end is not None:
             entry["activity_periods"] = _periods_from_activity(
                 activity_start, activity_end
             )
+            mark_manual(entry, "activity")
         subs[sid] = entry
         images["subseries"] = subs
         row.ser_images_json = json.dumps(images, ensure_ascii=False)
@@ -201,10 +209,12 @@ def patch_series_about(
 
     if bio is not None:
         row.ser_bio = bio.strip()
-        row.ser_bio_manual = 1
         row.ser_bio_source = "manual"
+        mark_manual(images, "overview")
+        row.ser_bio_manual = 1
     if writers is not None:
         row.ser_writers = writers.strip().replace(",", ";") or None
+        mark_manual(images, "writers")
     # City field removed from UI — clear legacy values so Origin isn't duplicated
     if clear_origin_city:
         row.ser_origin_place = None
@@ -217,6 +227,7 @@ def patch_series_about(
                 row.ser_country_iso = str(country_id)
         else:
             row.ser_country_iso = None
+        mark_manual(images, "country")
     if activity_start is not None:
         # Keep first period start as ser_starting_date for display
         first = (activity_start.split(";")[0] or "").strip()
@@ -229,16 +240,19 @@ def patch_series_about(
         pubs = [p for p in (row.ser_publishers or "").split(";") if p.strip()]
         if pubs:
             row.ser_studio = pubs[0]
+        mark_manual(images, "publishers")
     if genres is not None:
         row.ser_genres_json = json.dumps(_clean_genres(genres), ensure_ascii=False)
+        mark_manual(images, "genres")
     if activity_start is not None or activity_end is not None:
         images["activity_periods"] = _periods_from_activity(
             activity_start, activity_end
         )
+        mark_manual(images, "activity")
     if languages is not None:
         images["languages"] = _clean_languages(languages)
-    if activity_start is not None or activity_end is not None or languages is not None:
-        row.ser_images_json = json.dumps(images, ensure_ascii=False)
+        mark_manual(images, "languages")
+    row.ser_images_json = json.dumps(images, ensure_ascii=False)
     db.commit()
     db.refresh(row)
     return row

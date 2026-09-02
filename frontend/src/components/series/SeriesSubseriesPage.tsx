@@ -42,6 +42,11 @@ import {
   fetchBandOverview,
 } from "../../api";
 import { getStoredProfile } from "../../auth";
+import OfficialUnofficialBar from "../OfficialUnofficialBar";
+import {
+  filterByOfficial,
+  hasUnofficialItems,
+} from "../../unofficialFilter";
 import { formatTrackDate } from "../../formatDate";
 import {
   applyMediaTheme,
@@ -255,6 +260,9 @@ function filmDetailToFolder(film: MoviesFilmDetail): SeriesFolderDetail {
     episodes: film.episodes || [],
     movies: film.movies || [],
     photocards: film.photocards,
+    ...(("hub_title" in film && (film as { hub_title?: string }).hub_title)
+      ? { hub_title: (film as { hub_title?: string }).hub_title }
+      : {}),
   };
 }
 
@@ -274,6 +282,7 @@ function filmCardToSubseries(f: MoviesFilmCard | SeriesSubseriesCard): SeriesSub
         ? f.season_count
         : (f as MoviesFilmCard).version_count ?? 1,
     has_gallery: "has_gallery" in f ? Boolean(f.has_gallery) : undefined,
+    official: "official" in f ? (f as { official?: boolean }).official : undefined,
     ...(("hub_title" in f && (f as { hub_title?: string }).hub_title)
       ? { hub_title: (f as { hub_title?: string }).hub_title }
       : {}),
@@ -445,6 +454,7 @@ function toMediaCards(
     category?: string | null;
     duration?: string | null;
     duration_sec?: number | null;
+    official?: boolean;
   }[]
 ): SeriesMediaCard[] {
   return items.map((it, i) => ({
@@ -473,6 +483,7 @@ function toMediaCards(
     category: it.category,
     duration: it.duration ?? null,
     duration_sec: it.duration_sec ?? null,
+    official: it.official,
   }));
 }
 
@@ -597,6 +608,21 @@ function filterCardsForSubseries(
     if (titleBelongs(t)) return true;
     return false;
   });
+}
+
+function hubFilterScope(
+  title: string,
+  folderPath: string,
+  hubTitle?: string | null
+): { title: string; path: string } {
+  const hub = (hubTitle || "").trim();
+  const path = (folderPath || "").replace(/\\/g, "/");
+  if (hub && hub.toLowerCase() !== title.trim().toLowerCase()) {
+    const parts = path.split("/").filter(Boolean);
+    const parent = parts.slice(0, -1).join("/");
+    return { title: hub, path: parent || path };
+  }
+  return { title, path };
 }
 
 export default function SeriesSubseriesPage({
@@ -725,6 +751,7 @@ export default function SeriesSubseriesPage({
   >([]);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
+  const [officialOnly, setOfficialOnly] = useState(true);
   const [coverFlipped, setCoverFlipped] = useState(false);
   const [coverViewerItems, setCoverViewerItems] = useState<
     GalleryViewerItem[]
@@ -942,6 +969,10 @@ export default function SeriesSubseriesPage({
           badge_url: filmDetail.badge_url ?? null,
           version_count: filmDetail.versions?.length || 1,
           has_gallery: filmDetail.has_gallery,
+          ...(("hub_title" in filmDetail &&
+          (filmDetail as { hub_title?: string }).hub_title)
+            ? { hub_title: (filmDetail as { hub_title?: string }).hub_title }
+            : {}),
         } as MoviesFilmCard);
 
         setOverview(filmOv || null);
@@ -1027,6 +1058,7 @@ export default function SeriesSubseriesPage({
           has_gallery: Boolean(
             (s as { has_gallery?: boolean }).has_gallery
           ),
+          official: (s as { official?: boolean }).official,
         }));
       const foundEarly = fromShows.find(
         (s) =>
@@ -1687,7 +1719,11 @@ export default function SeriesSubseriesPage({
     }
     let cancelled = false;
     setGalleryEmpty(false);
-    const fetchGal = isFilm || isBook ? fetchMoviesGallery : fetchSeriesGallery;
+    const fetchGal = isBook
+      ? fetchSeriesGallery
+      : isFilm
+        ? fetchMoviesGallery
+        : fetchSeriesGallery;
     void fetchGal(galleryPath)
       .then((payload) => {
         if (cancelled) return;
@@ -1723,7 +1759,9 @@ export default function SeriesSubseriesPage({
   const openCoverArtworkViewer = async () => {
     if (!galleryPath) return;
     try {
-      const payload = isFilm
+      const payload = isBook
+        ? await fetchSeriesGallery(galleryPath)
+        : isFilm
         ? await fetchMoviesGallery(galleryPath)
         : await fetchSeriesGallery(galleryPath);
       const items: GalleryViewerItem[] = (payload.items || []).map((item) => ({
@@ -2247,63 +2285,84 @@ export default function SeriesSubseriesPage({
               )
             );
 
-            const relatedMovies =
-              (
-                workOv as {
-                  related?: { movies?: Array<Record<string, unknown>> };
-                } | null
-              )?.related?.movies || [];
+            const hub = hubFilterScope(
+              title,
+              galleryPath,
+              (card as { hub_title?: string } | null)?.hub_title ||
+                (detail as { hub_title?: string } | null)?.hub_title ||
+                (overview as { hub_title?: string } | null)?.hub_title
+            );
+            const relatedMovies = (
+              overview
+                ? ((overview.related?.movies || []) as Array<Record<string, unknown>>)
+                : (
+                    (
+                      workOv as {
+                        related?: { movies?: Array<Record<string, unknown>> };
+                      } | null
+                    )?.related?.movies || []
+                  )
+            );
             setMovieCards(
-              toMediaCards(
-                relatedMovies.map((m, i) => ({
-                  id: String(m.path || m.id || `movie-${i}`),
-                  title: String(m.title || "Untitled"),
-                  cover_url: (m.cover_url as string | null) || null,
-                  portrait_url:
-                    (m.portrait_url as string | null) ||
-                    (m.cover_url as string | null) ||
-                    null,
-                  landscape_url: (m.landscape_url as string | null) || null,
-                  banner_url:
-                    (m.banner_url as string | null) ||
-                    (m.landscape_url as string | null) ||
-                    null,
-                  logo_url: (m.logo_url as string | null) || null,
-                  open_url: (m.open_url as string | null) || null,
-                  open_mode: ((m.open_mode as "tab" | "local" | null) ||
-                    (m.open_url ? "tab" : null)) as "tab" | "local" | null,
-                  open_label: "Play video",
-                  display_date:
-                    (m.display_date as string | null) ||
-                    (m.date_iso as string | null) ||
-                    null,
-                  date_iso: (m.date_iso as string | null) || null,
-                  path: (m.path as string | undefined) || undefined,
-                  meta:
-                    (m.subseries as string | undefined) ||
-                    (m.hub_title as string | undefined) ||
-                    undefined,
-                  subseries_id:
-                    (m.subseries as string | null) ||
-                    (m.hub_title as string | null) ||
-                    null,
-                }))
+              filterCardsForSubseries(
+                toMediaCards(
+                  relatedMovies.map((m, i) => ({
+                    id: String(m.path || m.id || `movie-${i}`),
+                    title: String(m.title || "Untitled"),
+                    cover_url: (m.cover_url as string | null) || null,
+                    portrait_url:
+                      (m.portrait_url as string | null) ||
+                      (m.cover_url as string | null) ||
+                      null,
+                    landscape_url: (m.landscape_url as string | null) || null,
+                    banner_url:
+                      (m.banner_url as string | null) ||
+                      (m.landscape_url as string | null) ||
+                      null,
+                    logo_url: (m.logo_url as string | null) || null,
+                    open_url: (m.open_url as string | null) || null,
+                    open_mode: ((m.open_mode as "tab" | "local" | null) ||
+                      (m.open_url ? "tab" : null)) as "tab" | "local" | null,
+                    open_label: "Play video",
+                    display_date:
+                      (m.display_date as string | null) ||
+                      (m.date_iso as string | null) ||
+                      null,
+                    date_iso: (m.date_iso as string | null) || null,
+                    path: (m.path as string | undefined) || undefined,
+                    meta:
+                      (m.subseries as string | undefined) ||
+                      (m.hub_title as string | undefined) ||
+                      undefined,
+                    subseries_id:
+                      (m.subseries as string | null) ||
+                      (m.hub_title as string | null) ||
+                      null,
+                  }))
+                ),
+                hub.title,
+                hub.path
               )
             );
 
-            const relatedSeries =
-              (
-                workOv as {
-                  related?: { series?: Array<Record<string, unknown>> };
-                } | null
-              )?.related?.series || [];
+            const relatedSeries = overview
+              ? ((overview.related?.series || []) as Array<Record<string, unknown>>)
+              : (
+                  (
+                    workOv as {
+                      related?: { series?: Array<Record<string, unknown>> };
+                    } | null
+                  )?.related?.series || []
+                );
             let mappedSeries = mapRelatedSeriesCards(relatedSeries);
             if (!mappedSeries.length && (seriesData.items || []).length) {
               mappedSeries = mapRelatedSeriesCards(
                 (seriesData.items || []) as Array<Record<string, unknown>>
               );
             }
-            setSeriesCards(mappedSeries);
+            setSeriesCards(
+              filterCardsForSubseries(mappedSeries, hub.title, hub.path)
+            );
 
             const releases = (audioData.releases || []) as {
               id?: string;
@@ -2371,8 +2430,8 @@ export default function SeriesSubseriesPage({
                     };
                   })
                 ),
-                title,
-                galleryPath
+                hub.title,
+                hub.path
               )
             );
             setMediaReady(true);
@@ -2630,6 +2689,7 @@ export default function SeriesSubseriesPage({
           open_label?: string | null;
           duration?: string | null;
           duration_sec?: number | null;
+          official?: boolean;
         }[];
         const counterpartMovies = (counterparts.movies || []).map((m) => ({
           ...m,
@@ -2952,11 +3012,13 @@ export default function SeriesSubseriesPage({
   const relatedMovieCount = overview?.related?.movies?.length ?? 0;
   const relatedBookCount = overview?.related?.books?.length ?? 0;
   const relatedGameCount = overview?.related?.games?.length ?? 0;
-  const hasSeries = seriesCards.length > 0 || relatedSeriesCount > 0;
+  const hasSeries = isBook
+    ? seriesCards.length > 0
+    : seriesCards.length > 0 || relatedSeriesCount > 0;
   // Series leaves: only show Movies/Books tabs when leaf-matched cards exist
   // (franchise-level related counts alone caused empty-tab flash).
   const hasMovies = isBook
-    ? movieCards.length > 0 || relatedMovieCount > 0
+    ? movieCards.length > 0
     : isFilm
       ? siblingMovieCount > 0 ||
         movieCards.length > 0 ||
@@ -2966,13 +3028,21 @@ export default function SeriesSubseriesPage({
     siblingMovieCount > 0 ||
     libraryCards.length > 0 ||
     relatedBookCount > 0;
-  const hasAudio = audioCards.length > 0;
+  const hasAudio =
+    audioCards.length > 0 ||
+    (isBook &&
+      Boolean(
+        overview?.media?.has_audio ||
+          (detail as { has_audio?: boolean } | null)?.has_audio
+      ));
   const hasLibrary = isFilm
     ? libraryCards.length > 0
     : isBook
       ? hasMoreBooks
       : libraryCards.length > 0;
-  const hasGames = gameCards.length > 0 || relatedGameCount > 0;
+  const hasGames = isBook
+    ? gameCards.length > 0
+    : gameCards.length > 0 || relatedGameCount > 0;
   const hasGallery =
     !galleryEmpty &&
     (gallerySections.length > 0 ||
@@ -2984,6 +3054,48 @@ export default function SeriesSubseriesPage({
             (card as { has_exclusive_gallery?: boolean } | null)
               ?.has_exclusive_gallery
         )));
+
+  useEffect(() => {
+    setOfficialOnly(true);
+  }, [tab]);
+
+  const seriesTabCards: SeriesMediaCard[] = useMemo(() => {
+    if (!isFilm && !isBook) {
+      return siblings
+        .filter((s) => s.id !== subseriesId)
+        .slice()
+        .sort((a, b) =>
+          (a.date_iso || "9999").localeCompare(b.date_iso || "9999")
+        )
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          cover_url: s.cover_url,
+          portrait_url: s.cover_url,
+          logo_url: s.logo_url,
+          date_iso: s.date_iso,
+          display_date: s.display_date,
+          path: s.folder_path,
+          official: s.official,
+        }));
+    }
+    return seriesCards;
+  }, [isFilm, isBook, siblings, subseriesId, seriesCards]);
+
+  const showSeriesOfficialBar = hasUnofficialItems(seriesTabCards);
+  const visibleSeriesCards = showSeriesOfficialBar
+    ? filterByOfficial(seriesTabCards, officialOnly)
+    : seriesTabCards;
+
+  const showMovieOfficialBar = hasUnofficialItems(movieCards);
+  const visibleMovieCards = showMovieOfficialBar
+    ? filterByOfficial(movieCards, officialOnly)
+    : movieCards;
+
+  const showLibraryOfficialBar = hasUnofficialItems(libraryCards);
+  const visibleLibraryCards = showLibraryOfficialBar
+    ? filterByOfficial(libraryCards, officialOnly)
+    : libraryCards;
 
   const filmPlayUrl =
     filmVersions[0]?.file_url?.trim() ||
@@ -3112,7 +3224,16 @@ export default function SeriesSubseriesPage({
         return isBook ? hasMoreBooks || hasLibrary : hasLibrary;
       if (t.id === "games") return hasGames;
       // Audio needs a folder scan (related rarely lists releases).
-      if (t.id === "audio") return mediaReady && hasAudio;
+      if (t.id === "audio")
+        return (
+          hasAudio &&
+          (mediaReady ||
+            (isBook &&
+              Boolean(
+                overview?.media?.has_audio ||
+                  (detail as { has_audio?: boolean } | null)?.has_audio
+              )))
+        );
       return true;
     });
   }, [
@@ -3841,9 +3962,11 @@ export default function SeriesSubseriesPage({
                 isAdmin
                   ? () => {
                       setMetadataFetching(true);
-                      void (isFilm
-                        ? refreshMoviesFilmMetadata(subseriesId, true)
-                        : refreshSeriesMetadata(franchiseId, refreshBio)
+                      void (isBook
+                        ? Promise.resolve()
+                        : isFilm
+                          ? refreshMoviesFilmMetadata(subseriesId, true)
+                          : refreshSeriesMetadata(franchiseId, refreshBio)
                       )
                         .then(() => {
                           setRescanTick((t) => t + 1);
@@ -4108,6 +4231,25 @@ export default function SeriesSubseriesPage({
               </button>
             ))}
           </div>
+        ) : null}
+
+        {tab === "series" && showSeriesOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
+        ) : null}
+        {tab === "movies" && showMovieOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
+        ) : null}
+        {tab === "library" && showLibraryOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
         ) : null}
       </div>
 
@@ -5567,71 +5709,50 @@ export default function SeriesSubseriesPage({
           ) : null}
 
           {!error && (card || detail) && tab === "series" ? (
-            <SeriesMediaGrid
-              items={
-                !isFilm && !isBook
-                  ? siblings
-                      .filter((s) => s.id !== subseriesId)
-                      .slice()
-                      .sort((a, b) =>
-                        (a.date_iso || "9999").localeCompare(
-                          b.date_iso || "9999"
-                        )
-                      )
-                      .map((s) => ({
-                        id: s.id,
-                        title: s.title,
-                        cover_url: s.cover_url,
-                        portrait_url: s.cover_url,
-                        logo_url: s.logo_url,
-                        date_iso: s.date_iso,
-                        display_date: s.display_date,
-                        path: s.folder_path,
-                      }))
-                  : seriesCards
-              }
-              loading={
-                mediaLoading &&
-                (!isFilm && !isBook
-                  ? siblings.length <= 1
-                  : seriesCards.length === 0)
-              }
-              emptyMessage={
-                !isFilm && !isBook
-                  ? "No other series in this franchise."
-                  : isFilm
-                    ? "No matching Series franchise for this work name."
-                    : "No series linked yet."
-              }
-              cardLayout={cardLayout}
-              coverAspect="portrait"
-              onOpen={
-                !isFilm && !isBook
-                  ? (item) => openSibling(item.id)
-                  : openMediaCard
-              }
-            />
+              <SeriesMediaGrid
+                items={visibleSeriesCards}
+                loading={
+                  mediaLoading &&
+                  (!isFilm && !isBook
+                    ? siblings.length <= 1
+                    : seriesCards.length === 0)
+                }
+                emptyMessage={
+                  !isFilm && !isBook
+                    ? "No other series in this franchise."
+                    : isFilm
+                      ? "No matching Series franchise for this work name."
+                      : "No series linked yet."
+                }
+                cardLayout={cardLayout}
+                coverAspect="portrait"
+                onOpen={
+                  !isFilm && !isBook
+                    ? (item) => openSibling(item.id)
+                    : openMediaCard
+                }
+              />
           ) : null}
 
           {!error && (card || detail) && tab === "movies" ? (
-            <SeriesMediaGrid
-              items={movieCards}
-              loading={mediaLoading && movieCards.length === 0}
-              emptyMessage={
-                isBook
-                  ? "No movies linked to this franchise yet."
-                  : isFilm
-                    ? "No other movies in this franchise."
-                    : "No movies linked to this series yet."
-              }
-              cardLayout={cardLayout}
-              coverAspect="portrait"
-              onOpen={
-                isFilm && !isBook
-                  ? (item) => openSiblingFilm(item.id)
-                  : openMediaCard
-              }
-            />
+              <SeriesMediaGrid
+                items={visibleMovieCards}
+                loading={mediaLoading && movieCards.length === 0}
+                emptyMessage={
+                  isBook
+                    ? "No movies linked to this franchise yet."
+                    : isFilm
+                      ? "No other movies in this franchise."
+                      : "No movies linked to this series yet."
+                }
+                cardLayout={cardLayout}
+                coverAspect="portrait"
+                onOpen={
+                  isFilm && !isBook
+                    ? (item) => openSiblingFilm(item.id)
+                    : openMediaCard
+                }
+              />
           ) : null}
 
           {!error && (card || detail) && tab === "audio" ? (
@@ -5651,24 +5772,24 @@ export default function SeriesSubseriesPage({
           ) : null}
 
           {!error && (card || detail) && tab === "library" ? (
-            <SeriesMediaGrid
-              items={libraryCards}
-              loading={mediaLoading && libraryCards.length === 0}
-              emptyMessage={
-                isBook
-                  ? "No other books in this franchise."
-                  : isFilm
-                    ? "No books matched this movie."
-                    : "No books linked to this series."
-              }
-              cardLayout={cardLayout}
-              coverAspect="portrait"
-              onOpen={
-                isBook
-                  ? (item) => openSiblingFilm(item.id)
-                  : openMediaCard
-              }
-            />
+              <SeriesMediaGrid
+                items={visibleLibraryCards}
+                loading={mediaLoading && libraryCards.length === 0}
+                emptyMessage={
+                  isBook
+                    ? "No other books in this franchise."
+                    : isFilm
+                      ? "No books matched this movie."
+                      : "No books linked to this series."
+                }
+                cardLayout={cardLayout}
+                coverAspect="portrait"
+                onOpen={
+                  isBook
+                    ? (item) => openSiblingFilm(item.id)
+                    : openMediaCard
+                }
+              />
           ) : null}
 
           {!error && (card || detail) && tab === "games" ? (
@@ -5676,7 +5797,9 @@ export default function SeriesSubseriesPage({
               items={filteredGames}
               loading={mediaLoading && filteredGames.length === 0}
               emptyMessage={
-                isFilm
+                isBook
+                  ? "No games linked to this book yet."
+                  : isFilm
                   ? "No games linked to this movie yet."
                   : "No games linked to this series yet."
               }

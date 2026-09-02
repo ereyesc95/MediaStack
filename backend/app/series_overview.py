@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.franchise_index import (
     build_franchise_index,
+    is_unofficial_folder,
     load_franchise_index,
     normalize_franchise_slug,
     related_for_path,
@@ -645,6 +646,15 @@ def _enrich_related_cards(
                     norm_path.lower().startswith("series/")
                     and len([p for p in norm_path.split("/") if p]) == 3
                 ),
+                "official": (
+                    e.get("official")
+                    if "official" in e
+                    else (
+                        not is_unofficial_folder(folder.name)
+                        if folder.is_dir()
+                        else True
+                    )
+                ),
             }
         )
     return out
@@ -997,6 +1007,7 @@ def build_series_overview(
                 "folder_path": s.get("folder_path"),
                 "season_count": s.get("season_count") or 0,
                 "has_gallery": s.get("has_gallery"),
+                "official": s.get("official", True),
             }
         )
 
@@ -1192,6 +1203,38 @@ def build_series_overview(
         db, genre_names, "series"
     )
 
+    related_movies = _enrich_related_cards(related.get("movies") or [], root)
+    related_series = _enrich_related_cards(related_series, root)
+    related_books = _enrich_related_cards(related.get("books") or [], root)
+    related_games = _enrich_related_cards(related.get("games") or [], root)
+
+    try:
+        from app.movies_overview import activity_periods_from_leaf_dates
+
+        span = activity_periods_from_leaf_dates(
+            [
+                *[
+                    (s.get("date_iso"), s.get("title"))
+                    for s in subseries_cards
+                    if isinstance(s, dict)
+                ],
+                *[
+                    (m.get("date_iso"), m.get("title") or m.get("name"))
+                    for m in related_movies
+                    if isinstance(m, dict)
+                ],
+                *[
+                    (b.get("date_iso"), b.get("title") or b.get("name"))
+                    for b in related_books
+                    if isinstance(b, dict)
+                ],
+            ]
+        )
+        if span:
+            activity_periods = span
+    except Exception:
+        pass
+
     return {
         "id": detail["id"],
         "ser_id": row.ser_id,
@@ -1232,10 +1275,10 @@ def build_series_overview(
         "media": media_flags,
         "music_band_id": music_band.bnd_id if music_band else None,
         "related": {
-            "movies": _enrich_related_cards(related.get("movies") or [], root),
-            "series": _enrich_related_cards(related_series, root),
-            "books": _enrich_related_cards(related.get("books") or [], root),
-            "games": _enrich_related_cards(related.get("games") or [], root),
+            "movies": related_movies,
+            "series": related_series,
+            "books": related_books,
+            "games": related_games,
             "music": related.get("music") or [],
             "creator": _stamp_creator_via(creator_cards, writers),
             "similar": similar_cards,

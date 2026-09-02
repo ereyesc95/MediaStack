@@ -949,6 +949,8 @@ export type MediaTabItem = {
   folder_path: string;
   /** First video or readable file — open in a new tab from the card hover action. */
   open_url?: string | null;
+  /** False when on-disk folder has [Unofficial]. */
+  official?: boolean;
 };
 
 export type MediaTabCategory = {
@@ -1191,6 +1193,8 @@ export type MoviesFilmCard = {
   open_url?: string | null;
   open_mode?: "tab" | "local" | null;
   open_label?: string | null;
+  /** False when on-disk folder has [Unofficial]. */
+  official?: boolean;
 };
 
 export type UniverseMember = {
@@ -1245,6 +1249,8 @@ export type UniverseCard = {
   file_url?: string | null;
   open_mode?: "tab" | "local" | null;
   open_label?: string | null;
+  /** False when on-disk folder has [Unofficial]. */
+  official?: boolean;
 };
 
 export type UniverseLanding = {
@@ -1361,6 +1367,9 @@ export type SeriesSubseriesCard = {
   /** Present on universe hub carousel miniatures. */
   module?: "movies" | "series" | "books";
   franchise_id?: string;
+  /** False when on-disk folder has [Unofficial]. */
+  official?: boolean;
+  hub_title?: string | null;
 };
 
 export type SeriesSeasonCard = {
@@ -1376,6 +1385,8 @@ export type SeriesSeasonCard = {
   banner_url?: string | null;
   logo_url?: string | null;
   episode_count: number;
+  /** False when on-disk folder has [Unofficial]. */
+  official?: boolean;
   /** Present when detail already merged remote/local episodes. */
   episodes?: SeriesEpisodeItem[];
   source?: string;
@@ -1453,6 +1464,7 @@ export type SeriesFolderDetail = {
   date_iso: string | null;
   display_date?: string | null;
   folder_path: string;
+  hub_title?: string | null;
   cover_url: string | null;
   banner_url?: string | null;
   cover_back_url?: string | null;
@@ -1466,6 +1478,7 @@ export type SeriesFolderDetail = {
   badge_url?: string | null;
   has_gallery: boolean;
   has_exclusive_gallery?: boolean;
+  has_audio?: boolean;
   kind: "season" | "subseries" | "folder";
   /** Video compilations use Videos/ instead of Episodes/. */
   content_kind?: "video_collection" | null;
@@ -1744,7 +1757,13 @@ export type SeriesOverview = {
   origin_language?: string | null;
   language_options?: SeriesLanguageOption[];
   cast_languages?: SeriesLanguageOption[];
-  activity_periods: { label: string; start?: string | null; end?: string | null }[];
+  activity_periods: {
+    label: string;
+    start?: string | null;
+    end?: string | null;
+    start_title?: string | null;
+    end_title?: string | null;
+  }[];
   genres: { id: number | string; name: string }[];
   parent_genre_names?: string[];
   kind_label?: string | null;

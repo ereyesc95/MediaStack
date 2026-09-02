@@ -97,6 +97,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
+
+
 def normalize_franchise_slug(name: str) -> str:
     """Normalize a franchise/work folder name for index keys."""
     text = (name or "").strip()
@@ -105,17 +108,52 @@ def normalize_franchise_slug(name: str) -> str:
     return text.casefold()
 
 
+def parse_folder_bracket_tags(name: str) -> tuple[str, dict]:
+    """Strip trailing ``[…]`` tags for display; return (clean_title, tags).
+
+    Known tags: ``Unofficial``, ``Box Set`` (case-insensitive; ``;``-separated).
+    """
+    text = (name or "").strip()
+    m = BRACKET_SUFFIX_RE.search(text)
+    if not m:
+        return text, {}
+    clean = text[: m.start()].strip()
+    tags: dict = {}
+    for part in m.group(1).split(";"):
+        piece = part.strip()
+        if not piece:
+            continue
+        low = piece.casefold()
+        if low == "unofficial":
+            tags["unofficial"] = True
+        elif low == "box set":
+            tags["box_set"] = True
+    return clean, tags
+
+
+def is_unofficial_folder(folder_name: str) -> bool:
+    """True when the folder name ends with ``[Unofficial]`` (or combined tags)."""
+    _, tags = parse_folder_bracket_tags(folder_name or "")
+    return bool(tags.get("unofficial"))
+
+
 def parse_dated_folder_name(folder_name: str) -> tuple[str | None, str]:
-    """Return (date_iso, title) from 'YYYY.MM.DD. Title' or ('YYYY. Title')."""
+    """Return (date_iso, title) from 'YYYY.MM.DD. Title' or ('YYYY. Title').
+
+    Trailing ``[Unofficial]`` / ``[Box Set]`` tags are stripped from the title
+    (they drive Official/Unofficial UI tabs, not display text).
+    """
     name = folder_name.strip()
     match = DATE_PREFIX_RE.match(name)
     if not match:
-        return None, name
+        clean, _ = parse_folder_bracket_tags(name)
+        return None, clean
     year, month, day, title = match.groups()
     month = month or "01"
     day = day or "01"
     date_iso = f"{year}-{month}-{day}"
-    return date_iso, (title or name).strip()
+    clean, _ = parse_folder_bracket_tags((title or name).strip())
+    return date_iso, clean
 
 
 def franchise_index_cache_path() -> Path:

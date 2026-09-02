@@ -9,11 +9,14 @@ import ProfileEditModal from "./ProfileEditModal";
 type Props = {
   onSelected: (user: ProfileUser, token: string) => void;
   highlightUserId?: number | null;
+  /** Shown after “Switch profile” so the user can cancel without picking. */
+  onBack?: () => void;
 };
 
 export default function ProfilePickerModal({
   onSelected,
   highlightUserId = null,
+  onBack,
 }: Props) {
   const [profiles, setProfiles] = useState<ProfileUser[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -76,6 +79,29 @@ export default function ProfilePickerModal({
           className="modal-panel modal-panel--profiles"
           onClick={(e) => e.stopPropagation()}
         >
+          {onBack ? (
+            <button
+              type="button"
+              className="artist-page__catalog-back profile-picker-back"
+              onClick={onBack}
+            >
+              <svg
+                className="artist-page__catalog-chevron"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 18l-6-6 6-6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="artist-page__catalog-label">Back</span>
+            </button>
+          ) : null}
           <h3 className="profile-picker-welcome">
             <ProfileWelcomeLogo />
             <span>Welcome to MyStack</span>

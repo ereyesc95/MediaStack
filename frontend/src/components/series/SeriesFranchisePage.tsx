@@ -78,6 +78,11 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import OfficialUnofficialBar from "../OfficialUnofficialBar";
+import {
+  filterByOfficial,
+  hasUnofficialItems,
+} from "../../unofficialFilter";
 import ArtistCard from "../ArtistCard";
 import PlaylistBoot from "../PlaylistBoot";
 import CardOrientationPicker from "../CardOrientationPicker";
@@ -259,7 +264,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
   const mem = overviewCache.get(key);
   if (mem) return mem;
   const stored = readSessionEntry<SeriesOverview>(
-    sessionCacheKey("franchise-overview", key)
+    sessionCacheKey("franchise-overview-v3", key)
   );
   if (stored) overviewCache.set(key, stored);
   return stored;
@@ -267,7 +272,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
 
 function writeOverviewCache(key: string, data: SeriesOverview) {
   overviewCache.set(key, data);
-  writeSessionEntry(sessionCacheKey("franchise-overview", key), data);
+  writeSessionEntry(sessionCacheKey("franchise-overview-v3", key), data);
 }
 
 export default function SeriesFranchisePage({
@@ -440,6 +445,7 @@ export default function SeriesFranchisePage({
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>([]);
   const [gameLoading, setGameLoading] = useState(() => section === "games");
   const [gallerySectionKey, setGallerySectionKey] = useState("");
+  const [officialOnly, setOfficialOnly] = useState(true);
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
@@ -599,9 +605,9 @@ export default function SeriesFranchisePage({
       void (async () => {
         try {
           setRefreshing(true);
-          if (isMovies) {
+          if (isMoviesOnly) {
             await refreshMoviesWorkMetadata(franchiseId, true);
-          } else {
+          } else if (!isBooks) {
             await refreshSeriesMetadata(franchiseId, true);
           }
           if (cancelled) return;
@@ -618,7 +624,7 @@ export default function SeriesFranchisePage({
       window.clearTimeout(timer);
       setRefreshing(false);
     };
-  }, [data?.needs_metadata, franchiseId, load, isMovies]);
+  }, [data?.needs_metadata, franchiseId, load, isMoviesOnly, isBooks]);
 
   const handleRefreshMetadata = useCallback(async () => {
     setRefreshing(true);
@@ -734,9 +740,12 @@ export default function SeriesFranchisePage({
   useEffect(() => {
     if (section !== "movies" && section !== "books") return;
     let cancelled = false;
-    setMovieLoading(true);
     // Books tab (books module) or Movies tab (movies module): leaf cards from overview.
     if ((isBooks && section === "books") || (isMoviesOnly && section === "movies")) {
+      if (!data) {
+        setMovieLoading(true);
+        return;
+      }
       const films =
         (data as { films?: MoviesFilmCard[]; books?: MoviesFilmCard[] } | null)
           ?.books ||
@@ -779,6 +788,7 @@ export default function SeriesFranchisePage({
             meta: (film as { hub_title?: string | null }).hub_title || undefined,
             subseries_id:
               (film as { hub_title?: string | null }).hub_title || null,
+            official: film.official,
           };
         })
       );
@@ -821,6 +831,8 @@ export default function SeriesFranchisePage({
           path: (m.path as string | undefined) || undefined,
           meta: (m.subseries as string | undefined) || undefined,
           subseries_id: (m.subseries as string | null) || null,
+          official:
+            typeof m.official === "boolean" ? (m.official as boolean) : true,
         }))
       );
       setMovieLoading(false);
@@ -828,6 +840,7 @@ export default function SeriesFranchisePage({
         cancelled = true;
       };
     }
+    setMovieLoading(true);
     void fetchSeriesFranchiseMovies(
       sharedSeries ? seriesFranchiseId : franchiseId
     )
@@ -867,6 +880,7 @@ export default function SeriesFranchisePage({
               (m as { subseries?: string | null }).subseries ||
               (m as { hub_title?: string | null }).hub_title ||
               null,
+            official: (m as { official?: boolean }).official,
           }))
         );
       })
@@ -978,9 +992,40 @@ export default function SeriesFranchisePage({
               ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
               : s.date_iso) ||
             null,
+          official: s.official,
         }))
       );
       setShowLoading(false);
+      return;
+    }
+
+    // Pure series: reuse overview.subseries (already loaded) instead of rebuilding
+    // overview via /media/series.
+    if (!isMovies && !isBooks && data?.subseries?.length) {
+      setShowCards(
+        data.subseries.map((s) => ({
+          id: s.id,
+          title: s.title,
+          cover_url: s.cover_url,
+          logo_url: s.logo_url ?? null,
+          badge_url: s.badge_url ?? null,
+          banner_url: s.cover_url,
+          date_label:
+            s.display_date ||
+            (s.season_count
+              ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
+              : s.date_iso) ||
+            null,
+          official: s.official,
+        }))
+      );
+      setShowLoading(false);
+      return;
+    }
+
+    // Wait for overview before a dedicated shows fetch (avoids double rebuild).
+    if (!isMovies && !isBooks && !data) {
+      setShowLoading(true);
       return;
     }
 
@@ -1039,6 +1084,7 @@ export default function SeriesFranchisePage({
                 ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
                 : s.date_iso) ||
               null,
+            official: (s as { official?: boolean }).official,
           }))
         );
       })
@@ -1091,6 +1137,7 @@ export default function SeriesFranchisePage({
               open_url?: string | null;
               open_mode?: "tab" | "local" | null;
               open_label?: string | null;
+              official?: boolean;
             };
             return {
               id: row.path || `book-${i}`,
@@ -1105,6 +1152,7 @@ export default function SeriesFranchisePage({
               date_label: row.display_date || row.date_iso,
               path: row.path,
               meta: row.subseries || undefined,
+              official: row.official,
             };
           })
         );
@@ -1553,6 +1601,27 @@ export default function SeriesFranchisePage({
     }
     return list;
   };
+
+  useEffect(() => {
+    setOfficialOnly(true);
+  }, [section, mediaSubFilter]);
+
+  const scopedMovieCards = filterBySubseries(movieCards);
+  const showMovieOfficialBar = hasUnofficialItems(scopedMovieCards);
+  const visibleMovieCards = showMovieOfficialBar
+    ? filterByOfficial(scopedMovieCards, officialOnly)
+    : scopedMovieCards;
+
+  const showShowOfficialBar = hasUnofficialItems(showCards);
+  const visibleShowCards = showShowOfficialBar
+    ? filterByOfficial(showCards, officialOnly)
+    : showCards;
+
+  const scopedLibCards = filterBySubseries(libCards);
+  const showLibOfficialBar = hasUnofficialItems(scopedLibCards);
+  const visibleLibCards = showLibOfficialBar
+    ? filterByOfficial(scopedLibCards, officialOnly)
+    : scopedLibCards;
 
   const openMediaCard = (item: SeriesMediaCard) => {
     if (item.path?.startsWith("playlist:")) {
@@ -2189,6 +2258,31 @@ export default function SeriesFranchisePage({
             ))}
           </nav>
         ) : null}
+
+        {section === "series" && showShowOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+            label="Official or unofficial"
+          />
+        ) : null}
+
+        {(section === "movies" || section === "books") &&
+        showMovieOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+            label="Official or unofficial"
+          />
+        ) : null}
+
+        {section === "library" && showLibOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+            label="Official or unofficial"
+          />
+        ) : null}
       </div>
 
       <div
@@ -2202,41 +2296,44 @@ export default function SeriesFranchisePage({
         {error ? <p className="error artist-section-empty">{error}</p> : null}
 
         {data && section === "overview" && overviewTab === "about" ? (
-          <SeriesAbout
-            data={data}
-            eraIndex={eraIndex}
-            stacked={stacked}
-            onEraChange={setEraIndex}
-            onOpenSubseries={(sub: SeriesSubseriesCard) =>
-              onNavigate({
-                section: "overview",
-                subseriesId: sub.id,
-                seasonId: undefined,
-              })
-            }
-            writersLabel="Authors"
-            onGenre={(id) =>
-              onBrowseCatalog?.({
-                mode: "genre",
-                subgenreId: typeof id === "number" ? id : undefined,
-              })
-            }
-            onPublisher={(name) =>
-              onBrowseCatalog?.({ mode: "publisher", publisher: name })
-            }
-            onCountry={(c) =>
-              onBrowseCatalog?.({
-                mode: "country",
-                countryId: c.id,
-              })
-            }
-            onWriter={(name) =>
-              onBrowseCatalog?.({ mode: "writer", writer: name })
-            }
-            activeLanguage={activeLanguage}
-            logosSwitchable={logosSwitchable}
-            onLanguageSelect={selectLanguage}
-          />
+            <SeriesAbout
+              data={data}
+              eraIndex={eraIndex}
+              stacked={stacked}
+              onEraChange={setEraIndex}
+              onOpenSubseries={(sub: SeriesSubseriesCard) =>
+                onNavigate({
+                  section: "overview",
+                  subseriesId: sub.id,
+                  seasonId: undefined,
+                })
+              }
+              writersLabel="Authors"
+              datesLabel={
+                isBooks || isMoviesOnly ? "Release Dates" : "Air Dates"
+              }
+              onGenre={(id) =>
+                onBrowseCatalog?.({
+                  mode: "genre",
+                  subgenreId: typeof id === "number" ? id : undefined,
+                })
+              }
+              onPublisher={(name) =>
+                onBrowseCatalog?.({ mode: "publisher", publisher: name })
+              }
+              onCountry={(c) =>
+                onBrowseCatalog?.({
+                  mode: "country",
+                  countryId: c.id,
+                })
+              }
+              onWriter={(name) =>
+                onBrowseCatalog?.({ mode: "writer", writer: name })
+              }
+              activeLanguage={activeLanguage}
+              logosSwitchable={logosSwitchable}
+              onLanguageSelect={selectLanguage}
+            />
         ) : null}
 
         {data && section === "overview" && overviewTab === "cast" ? (
@@ -2477,15 +2574,23 @@ export default function SeriesFranchisePage({
 
         {section === "movies" || section === "books" ? (
           <SeriesMediaGrid
-            items={filterBySubseries(movieCards)}
+            items={visibleMovieCards}
             loading={loading || (movieLoading && movieCards.length === 0)}
             emptyMessage={
               section === "books"
-                ? "No book folders under this work yet."
+                ? officialOnly && showMovieOfficialBar
+                  ? "No official books in this work yet."
+                  : !officialOnly && showMovieOfficialBar
+                    ? "No unofficial books in this work yet."
+                    : "No book folders under this work yet."
                 : isMoviesOnly
                   ? mediaSubFilter !== "all"
                     ? "No movies linked to this series yet."
-                    : "No film folders under this work yet."
+                    : officialOnly && showMovieOfficialBar
+                      ? "No official film folders under this work yet."
+                      : !officialOnly && showMovieOfficialBar
+                        ? "No unofficial film folders under this work yet."
+                        : "No film folders under this work yet."
                   : mediaSubFilter !== "all"
                     ? "No movies linked to this series yet."
                     : "No movies linked to this franchise yet."
@@ -2529,12 +2634,16 @@ export default function SeriesFranchisePage({
 
         {section === "series" ? (
           <SeriesMediaGrid
-            items={showCards}
+            items={visibleShowCards}
             loading={loading || (showLoading && showCards.length === 0)}
             emptyMessage={
               isMovies
                 ? "No matching Series franchise for this work name."
-                : "No subseries found."
+                : officialOnly && showShowOfficialBar
+                  ? "No official subseries found."
+                  : !officialOnly && showShowOfficialBar
+                    ? "No unofficial subseries found."
+                    : "No subseries found."
             }
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
@@ -2585,13 +2694,13 @@ export default function SeriesFranchisePage({
 
         {section === "library" ? (
           <SeriesMediaGrid
-            items={filterBySubseries(libCards)}
-            loading={loading || (libLoading && libCards.length === 0)}
-            emptyMessage="No books linked to this franchise yet."
-            cardLayout={releaseCardLayout}
-            coverAspect="portrait"
-            onOpen={openMediaCard}
-          />
+              items={visibleLibCards}
+              loading={loading || (libLoading && libCards.length === 0)}
+              emptyMessage="No books linked to this franchise yet."
+              cardLayout={releaseCardLayout}
+              coverAspect="portrait"
+              onOpen={openMediaCard}
+            />
         ) : null}
 
         {section === "games" ? (

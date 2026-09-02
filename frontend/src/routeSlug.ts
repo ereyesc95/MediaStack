@@ -46,7 +46,13 @@ export function normalizeSlug(text: string): string {
 export function stripDatedFolderTitle(name: string): string {
   const raw = (name || "").trim();
   const m = raw.match(/^\d{4}(?:\.\d{2}){0,2}\.\s*(.+)$/);
-  return (m?.[1] || raw).trim();
+  const title = (m?.[1] || raw).trim();
+  return title
+    .replace(
+      /\s*\[(?:Unofficial|Box Set)(?:\s*;\s*(?:Unofficial|Box Set))*\]\s*$/i,
+      ""
+    )
+    .trim();
 }
 
 export function slugMatch(a: string, b: string): boolean {

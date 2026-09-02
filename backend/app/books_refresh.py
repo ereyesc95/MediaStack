@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.books_index import find_book_dir, find_work_dir
 from app.books_store import load_work_about, save_work_about
+from app.manual_metadata import mark_manual
 from app.services.google_books import get_google_book, search_google_books
 
 
@@ -73,9 +74,10 @@ def patch_work_about(
         authors = [p.strip() for p in text.split(";") if p.strip()]
         about["writers"] = authors
         about["authors"] = authors
+        mark_manual(about, "writers")
     if bio is not None:
         about["bio"] = bio.strip()
-        about["bio_manual"] = True
+        mark_manual(about, "overview")
         uni = universe_for_franchise(db, "books", work_id)
         if uni and hasattr(uni, "id"):
             try:

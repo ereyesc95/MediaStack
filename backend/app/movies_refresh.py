@@ -15,6 +15,8 @@ from app.franchise_index import normalize_franchise_slug, parse_dated_folder_nam
 from app.models import MovieWork
 from app.movies_index import find_film_dir, find_work_dir, _film_id, _list_films
 from app.series_artwork import ensure_artwork_cached
+from app.adult_content import is_adult_parent_genre_name, is_adult_subgenre_name
+from app.manual_metadata import is_manual, preserve_manual_about
 from app.series_refresh import _merge_related, _merge_unique
 from app.services.tmdb import (
     build_related_from_movie,
@@ -218,18 +220,21 @@ async def refresh_film_metadata(
         api_key,
         self_id=int(movie_id) if str(movie_id).isdigit() else None,
     )
-    film_blob = _film_blob_from_normalized(
-        data,
-        related,
-        existing_related=(existing_film.get("related") or {})
-        if isinstance(existing_film.get("related"), dict)
-        else {},
+    film_blob = preserve_manual_about(
+        existing_film,
+        _film_blob_from_normalized(
+            data,
+            related,
+            existing_related=(existing_film.get("related") or {})
+            if isinstance(existing_film.get("related"), dict)
+            else {},
+        ),
     )
     films_meta[fid] = film_blob
     meta["films"] = films_meta
 
     # Seed work-level fields from first refreshed film / collection
-    if include_bio and not (meta.get("bio_manual")):
+    if include_bio and not is_manual(meta, "overview"):
         if data.get("overview") and not meta.get("bio"):
             meta["bio"] = data["overview"]
             row.mwk_bio = data["overview"]
@@ -322,7 +327,10 @@ async def refresh_work_metadata(
 
     writers: list[str] = list(meta.get("writers") or [])
     publishers: list[str] = list(meta.get("publishers") or [])
-    genres: list = list(meta.get("genres") or [])
+    # Rebuild work genres from films so leftover Adult tags (e.g. Amateur)
+    # cannot hide a SFW franchise after the films themselves are clean.
+    genres: list = []
+    seen_g: set[str] = set()
     first_date = None
     last_date = None
     cast = meta.get("cast") if isinstance(meta.get("cast"), dict) else {
@@ -346,9 +354,12 @@ async def refresh_work_metadata(
             continue
         writers = _merge_unique(writers, blob.get("writers") or [])
         publishers = _merge_unique(publishers, blob.get("publishers") or [])
-        seen_g = {str(g.get("id") or g.get("name")).casefold() for g in genres if isinstance(g, dict)}
         for g in blob.get("genres") or []:
             if not isinstance(g, dict):
+                continue
+            gname = str(g.get("name") or "")
+            if is_adult_subgenre_name(gname) or is_adult_parent_genre_name(gname):
+                # Keep adult tags on the film; do not hide the whole franchise.
                 continue
             key = str(g.get("id") or g.get("name")).casefold()
             if key not in seen_g:
@@ -374,11 +385,14 @@ async def refresh_work_metadata(
             if b and b not in backdrops:
                 backdrops.append(b)
 
+    if not genres:
+        genres = list(meta.get("genres") or [])
+
     if collection_id:
         try:
             coll = await fetch_collection(int(collection_id), api_key)
             overview = (coll.get("overview") or "").strip()
-            if include_bio and overview and not meta.get("bio_manual"):
+            if include_bio and overview and not is_manual(meta, "overview"):
                 meta["bio"] = overview
                 row.mwk_bio = overview
             collection_name = coll.get("name") or collection_name
@@ -408,34 +422,40 @@ async def refresh_work_metadata(
             origin_lang = blob["original_language"]
             break
 
-    meta.update(
-        {
-            "writers": writers,
-            "publishers": publishers,
-            "genres": genres,
-            "cast": cast,
-            "links": _normalize_links(links),
-            "related": related,
-            "posters": posters[:12],
-            "backdrops": backdrops[:12],
-            "poster_url": posters[0] if posters else None,
-            "backdrop_url": backdrops[0] if backdrops else None,
-            "is_animated": is_animated,
-            "status": meta.get("status") or "Released",
-            "type": "Collection" if len(films) > 1 else "Movie",
-            "activity_periods": (
-                [{"start": first_date, "end": last_date}]
-                if first_date or last_date
-                else []
-            ),
-            "languages": [origin_lang] if origin_lang else [LANGUAGE_CATALOG[0]["code"]],
-            "origin_language": origin_lang,
-            "collection_id": collection_id,
-            "collection_name": collection_name,
-            "films": films_meta,
-        }
-    )
-    if include_bio and not meta.get("bio") and not meta.get("bio_manual"):
+    work_update = {
+        "cast": cast,
+        "links": _normalize_links(links),
+        "related": related,
+        "posters": posters[:12],
+        "backdrops": backdrops[:12],
+        "poster_url": posters[0] if posters else None,
+        "backdrop_url": backdrops[0] if backdrops else None,
+        "is_animated": is_animated,
+        "status": meta.get("status") or "Released",
+        "type": "Collection" if len(films) > 1 else "Movie",
+        "collection_id": collection_id,
+        "collection_name": collection_name,
+        "films": films_meta,
+    }
+    if not is_manual(meta, "writers"):
+        work_update["writers"] = writers
+    if not is_manual(meta, "publishers"):
+        work_update["publishers"] = publishers
+    if not is_manual(meta, "genres"):
+        work_update["genres"] = genres
+    if not is_manual(meta, "activity"):
+        work_update["activity_periods"] = (
+            [{"start": first_date, "end": last_date}]
+            if first_date or last_date
+            else []
+        )
+    if not is_manual(meta, "languages"):
+        work_update["languages"] = (
+            [origin_lang] if origin_lang else [LANGUAGE_CATALOG[0]["code"]]
+        )
+        work_update["origin_language"] = origin_lang
+    meta.update(work_update)
+    if include_bio and not meta.get("bio") and not is_manual(meta, "overview"):
         # Fall back to first film overview
         for blob in films_meta.values():
             if isinstance(blob, dict) and blob.get("overview"):

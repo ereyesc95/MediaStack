@@ -25,7 +25,7 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 8
+MEDIA_TAB_SCAN_VERSION = 9
 
 # Artist media tabs now prefer sibling module franchise folders:
 # video → Movies/{L}/{Artist}/, library → Books/{L}/{Artist}/, series → Series/…
@@ -185,11 +185,15 @@ def _folder_cover_back(folder: Path, media_root: Path) -> str | None:
 
 
 def _title_from_folder(name: str) -> str:
+    from app.franchise_index import parse_folder_bracket_tags
+
     m = DATE_PREFIX_RE.match(name.strip())
     if m:
         rest = name[m.end() :].lstrip(". ").strip()
-        return rest or name
-    return name
+        clean, _ = parse_folder_bracket_tags(rest or name)
+        return clean or name
+    clean, _ = parse_folder_bracket_tags(name)
+    return clean or name
 
 
 def _item_card(
@@ -199,6 +203,8 @@ def _item_card(
     resolved: Path,
     media_root: Path,
 ) -> dict | None:
+    from app.franchise_index import is_unofficial_folder
+
     display_name = entry_display_name(display_entry)
     if display_name.casefold() in _SKIP_ITEM_NAMES or display_name.startswith("."):
         return None
@@ -222,6 +228,7 @@ def _item_card(
         "cover_url": _folder_cover(work, media_root),
         "folder_path": rel,
         "open_url": first_openable_file_url(work, media_root, kind),
+        "official": not is_unofficial_folder(display_name),
     }
 
 

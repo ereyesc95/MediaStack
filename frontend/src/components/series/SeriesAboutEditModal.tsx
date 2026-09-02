@@ -467,6 +467,7 @@ export default function SeriesAboutEditModal({
         if (!aboutFilmId) throw new Error("Missing film id");
         await patchMoviesFilmAbout(aboutFilmId, {
           bio,
+          writers,
           publishers,
           country_id: countryId ? Number(countryId) : null,
           activity_start: starts,

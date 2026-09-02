@@ -10,7 +10,12 @@ from urllib.parse import quote
 from app.artwork_stems import COVER_BACK_STEM, COVER_FRONT_STEM
 from app.band_library import DATE_PREFIX_RE, _find_artwork_subdir
 from app.config import settings
-from app.franchise_index import normalize_franchise_slug, parse_dated_folder_name
+from app.franchise_index import (
+    is_unofficial_folder,
+    normalize_franchise_slug,
+    parse_dated_folder_name,
+    parse_folder_bracket_tags,
+)
 from app.gallery import IMAGE_EXTS, _media_url
 from app.media_index import format_display_date
 from app.media_item_overview import VIDEO_EXTS, _file_url
@@ -478,7 +483,7 @@ def _season_card(
     date_iso, title = parse_dated_folder_name(season_dir.name)
     if season_dir.name.casefold() == "specials":
         title = "Specials"
-    display_title = title or season_dir.name
+    display_title = title or parse_folder_bracket_tags(season_dir.name)[0]
     labels = [display_title, season_dir.name]
     if date_iso and title:
         labels.append(f"{date_iso.replace('-', '.')}. {title}")
@@ -505,6 +510,7 @@ def _season_card(
         "cover_back_url": back,
         "logo_url": logo,
         "episode_count": _count_episodes(season_dir),
+        "official": not is_unofficial_folder(season_dir.name),
     }
 
 
@@ -739,7 +745,7 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
         subseries.append(
             {
                 "id": child.name,
-                "title": title or child.name,
+                "title": title or parse_folder_bracket_tags(child.name)[0],
                 "date_iso": date_iso,
                 "display_date": format_display_date(date_iso),
                 "folder_path": child.relative_to(media_root).as_posix(),
@@ -749,6 +755,7 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
                 "badge_url": find_badge_file(child, media_root),
                 "season_count": season_count,
                 "has_gallery": _has_gallery(child),
+                "official": not is_unofficial_folder(child.name),
             }
         )
     return subseries
@@ -965,6 +972,7 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
                 "season_count": s["season_count"],
                 "has_gallery": s.get("has_gallery"),
                 "is_standalone": s.get("is_standalone"),
+                "official": s.get("official", True),
             }
             for s in subseries
         ],
@@ -1113,7 +1121,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
     badge_url = find_badge_file(folder, root)
     base = {
         "id": folder.name,
-        "title": title or folder.name,
+        "title": title or parse_folder_bracket_tags(folder.name)[0],
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso),
         "folder_path": folder.relative_to(root).as_posix(),
@@ -1129,6 +1137,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "photocards": photocards,
         "has_gallery": _has_gallery(folder),
         "has_exclusive_gallery": _has_exclusive_gallery(folder),
+        "official": not is_unofficial_folder(folder.name),
     }
 
     from app.artist_video_collection import is_artist_video_series_folder

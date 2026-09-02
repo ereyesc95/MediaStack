@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatTrackDate } from "../../formatDate";
 import type { SeriesOverview, SeriesSubseriesCard } from "../../types";
+import {
+  filterByOfficial,
+  hasUnofficialItems,
+  stripUnofficialDisplaySuffix,
+} from "../../unofficialFilter";
 
 type Era = SeriesOverview["eras"][number];
 
@@ -24,6 +29,8 @@ type Props = {
   emptyBioMessage?: string;
   /** Meta row label for writers/directors. */
   writersLabel?: string;
+  /** Meta row label for activity periods (Air Dates / Release Dates). */
+  datesLabel?: string;
   /** Override stacked tap-to-reveal on franchise miniatures. */
   tapRevealSubs?: boolean;
 };
@@ -108,6 +115,7 @@ export default function SeriesAbout({
   photoNav = true,
   emptyBioMessage,
   writersLabel = "Writers",
+  datesLabel = "Air Dates",
   tapRevealSubs: tapRevealSubsProp,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -194,6 +202,19 @@ export default function SeriesAbout({
   const photoStageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const subseriesRowRef = useRef<HTMLDivElement>(null);
+  const [officialOnly, setOfficialOnly] = useState(true);
+  const showEditionTabs = hasUnofficialItems(data.subseries);
+  const visibleSubseries = useMemo(
+    () =>
+      showEditionTabs
+        ? filterByOfficial(data.subseries, officialOnly)
+        : data.subseries,
+    [data.subseries, showEditionTabs, officialOnly]
+  );
+
+  useEffect(() => {
+    setOfficialOnly(true);
+  }, [data.id]);
 
   useEffect(() => {
     if (stacked) return;
@@ -242,7 +263,7 @@ export default function SeriesAbout({
   const hasBio = Boolean(data.bio);
   const writers =
     data.writers.length > 0 ? data.writers : [];
-  const hasSubseriesCarousel = data.subseries.length > 6;
+  const hasSubseriesCarousel = visibleSubseries.length > 6;
 
   const advanceSubseriesCarousel = () => {
     const row = subseriesRowRef.current;
@@ -451,9 +472,43 @@ export default function SeriesAbout({
               )}
               {data.activity_periods.length > 0 && (
                 <div className="artist-about__meta-row">
-                  <dt>Air Dates</dt>
+                  <dt>{datesLabel}</dt>
                   <dd>
-                    {data.activity_periods.map((p) => p.label).join(" • ")}
+                    {data.activity_periods.map((p, i) => {
+                      const parts = (p.label || "").split("–");
+                      const startYear = parts[0] || p.label;
+                      const endYear = parts.length > 1 ? parts.slice(1).join("–") : "";
+                      return (
+                        <span key={`${p.label}-${i}`} className="series-about__dates">
+                          {i > 0 ? " • " : null}
+                          {p.start_title || p.end_title ? (
+                            <>
+                              <span
+                                className="series-about__date-year"
+                                title={p.start_title || undefined}
+                              >
+                                {startYear}
+                              </span>
+                              {endYear ? (
+                                <>
+                                  –
+                                  <span
+                                    className="series-about__date-year"
+                                    title={
+                                      p.end_title || p.start_title || undefined
+                                    }
+                                  >
+                                    {endYear}
+                                  </span>
+                                </>
+                              ) : null}
+                            </>
+                          ) : (
+                            p.label
+                          )}
+                        </span>
+                      );
+                    })}
                   </dd>
                 </div>
               )}
@@ -489,12 +544,45 @@ export default function SeriesAbout({
               )}
             </dl>
           </div>
-          {data.subseries.length > 0 && (
+          {(showEditionTabs || visibleSubseries.length > 0) && (
             <section
               className={`artist-about__tracks series-about__subseries${
                 hasSubseriesCarousel ? " series-about__subseries--carousel" : ""
               }`}
             >
+              {showEditionTabs ? (
+                <nav
+                  className="series-subseries-overview__cast-tabs series-about__edition-tabs"
+                  role="tablist"
+                  aria-label="Official or unofficial"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={officialOnly}
+                    className={officialOnly ? "active" : ""}
+                    onClick={() => setOfficialOnly(true)}
+                  >
+                    Official
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={!officialOnly}
+                    className={!officialOnly ? "active" : ""}
+                    onClick={() => setOfficialOnly(false)}
+                  >
+                    Unofficial
+                  </button>
+                </nav>
+              ) : null}
+              {visibleSubseries.length === 0 ? (
+                <p className="muted artist-section-empty">
+                  {officialOnly
+                    ? "No official titles yet."
+                    : "No unofficial titles yet."}
+                </p>
+              ) : (
               <div
                 ref={subseriesRowRef}
                 className={`artist-about__tracks-row series-about__subseries-row${
@@ -503,10 +591,11 @@ export default function SeriesAbout({
                     : " series-about__subseries-row--spread"
                 }`}
               >
-                {data.subseries.map((s) => {
+                {visibleSubseries.map((s) => {
                   const revealed = tapRevealSubs && revealedSubId === s.id;
                   const dateLabel =
                     s.display_date || formatTrackDate(s.date_iso ?? null);
+                  const subTitle = stripUnofficialDisplaySuffix(s.title);
                   return (
                     <button
                       key={s.id}
@@ -525,7 +614,7 @@ export default function SeriesAbout({
                         }
                         onOpenSubseries(s);
                       }}
-                      title={s.title}
+                      title={subTitle}
                     >
                       <span className="artist-about__track-cover series-about__subseries-cover">
                         <span
@@ -547,7 +636,7 @@ export default function SeriesAbout({
                                 />
                               ) : (
                                 <span className="series-about__subseries-reveal-title">
-                                  {s.title}
+                                  {subTitle}
                                 </span>
                               )}
                             </span>
@@ -562,7 +651,7 @@ export default function SeriesAbout({
                       {!tapRevealSubs ? (
                         <>
                           <span className="artist-about__track-title">
-                            {s.title}
+                            {subTitle}
                           </span>
                           {dateLabel ? (
                             <span className="artist-about__track-date">
@@ -575,6 +664,7 @@ export default function SeriesAbout({
                   );
                 })}
               </div>
+              )}
               {hasSubseriesCarousel ? (
                 <button
                   type="button"

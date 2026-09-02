@@ -15,7 +15,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
-from app.franchise_index import normalize_franchise_slug, parse_dated_folder_name
+from app.franchise_index import (
+    is_unofficial_folder,
+    normalize_franchise_slug,
+    parse_dated_folder_name,
+    parse_folder_bracket_tags,
+)
 from app.media_index import format_display_date
 from app.media_item_overview import _file_url
 from app.media_paths_util import safe_relative
@@ -466,7 +471,7 @@ def _book_card_from_dir(
     if title is None or date_iso is None:
         parsed_date, parsed_title = parse_dated_folder_name(book_dir.name)
         date_iso = date_iso if date_iso is not None else parsed_date
-        title = title or parsed_title or book_dir.name
+        title = title or parsed_title or parse_folder_bracket_tags(book_dir.name)[0]
 
     volumes = _list_volumes(book_dir, media_root)
     primary = volumes[0] if volumes else None
@@ -501,6 +506,7 @@ def _book_card_from_dir(
         "open_label": "Read" if primary else None,
         "volumes": volumes,
         "hub_title": hub_title or title,
+        "official": not is_unofficial_folder(book_dir.name),
     }
 
 
@@ -569,7 +575,7 @@ def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
                     _book_card_from_dir(
                         leaf,
                         media_root,
-                        title=ltitle or leaf.name,
+                        title=ltitle or parse_folder_bracket_tags(leaf.name)[0],
                         date_iso=_ld,
                         hub_title=hub_title,
                     )
@@ -923,6 +929,7 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
     )
     from app.series_paths import find_badge_file, find_logo_file
     from app.series_artwork import resolve_series_photocards
+    from app.series_audio import _find_audio_bucket
 
     card = _book_card_from_dir(book_dir, root)
     work_card = _work_card(work_dir, letter, root)
@@ -950,6 +957,7 @@ def build_book_detail(book_id: str, media_root: Path | None = None) -> dict | No
         "photocards": resolve_series_photocards(book_dir, root),
         "has_gallery": _has_gallery(book_dir),
         "has_exclusive_gallery": _has_exclusive_gallery(book_dir),
+        "has_audio": _find_audio_bucket(book_dir) is not None,
         "versions": volumes,
         "volumes": volumes,
         "open_url": (primary or {}).get("open_url") or card.get("open_url"),

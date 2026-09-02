@@ -2820,6 +2820,13 @@ input {
   width: min(640px, 92vw);
   text-align: center;
   padding-top: 1.35rem;
+  position: relative;
+}
+
+.profile-picker-back {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.9rem;
 }
 
 .profile-picker-welcome {
@@ -15710,12 +15717,15 @@ button.lyrics-status-badge--icon-only {
   -webkit-line-clamp: 3;
   overflow: hidden;
   word-break: break-word;
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
 .series-about__subseries-card .artist-about__track-date {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.58rem;
 }
 
 .artist-page--mobile-portrait .series-about__subseries-card .artist-about__track-title,
@@ -16759,6 +16769,51 @@ button.lyrics-status-badge--icon-only {
 .series-subseries-overview__cast-tabs button.active {
   color: var(--text);
   border-bottom-color: var(--accent, #c9a227);
+}
+
+.series-about__edition-tabs {
+  margin: 0.85rem 0 0.65rem;
+  padding: 0 0.15rem;
+}
+
+.series-about__dates {
+  white-space: nowrap;
+}
+
+.series-about__date-year {
+  cursor: inherit;
+}
+
+.universe-page .series-about__subseries,
+.universe-page .artist-about__tracks.series-about__subseries {
+  margin-top: 1.15rem;
+  padding-top: 0.25rem;
+}
+
+.series-about__subseries-card .artist-about__track-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  word-break: break-word;
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+.series-about__subseries-card .artist-about__track-date {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.58rem;
+}
+
+.artist-media-grid__official-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .series-subseries-page .series-subseries-overview__cast .release-page__section-glass.release-page__lineup {

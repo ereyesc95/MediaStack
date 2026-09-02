@@ -4,7 +4,6 @@ import {
   fetchAppSettings,
   fetchSession,
   importSql,
-  logoutProfile,
   rescanSeriesLocalData,
   syncFolders,
 } from "./api";
@@ -179,6 +178,7 @@ export default function App() {
   const [highlightProfileId, setHighlightProfileId] = useState<number | null>(
     null
   );
+  const [switchingProfile, setSwitchingProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,6 +297,7 @@ export default function App() {
   }, [view.kind, profile?.user_id]);
 
   function handleProfileSelected(user: ProfileUser, token: string) {
+    setSwitchingProfile(false);
     clearAllDashboardCaches();
     applyProfilePreferences(user.user_id);
     setCardOrientation(getStoredOrientation(user.user_id));
@@ -324,21 +325,12 @@ export default function App() {
     setProfile(user);
   }
 
-  async function handleSwitchProfile() {
+  function handleSwitchProfile() {
     if (profile?.user_id) {
       setHighlightProfileId(profile.user_id);
     }
-    try {
-      await logoutProfile();
-    } catch {
-      /* ignore */
-    }
-    clearAllDashboardCaches();
-    clearProfile();
-    setProfile(null);
+    setSwitchingProfile(true);
     setSourceModal(null);
-    setView({ kind: "hub" });
-    window.history.replaceState(null, "", "/");
   }
 
   function handleSourceChosen(path: string) {
@@ -531,7 +523,7 @@ export default function App() {
 
   const isAdmin = profile?.is_admin === true;
   const profileReady = profile != null && profile !== undefined;
-  const showProfilePicker = profile === null;
+  const showProfilePicker = profile === null || switchingProfile;
 
   const hubMenu = (
     <AppMenu
@@ -589,6 +581,14 @@ export default function App() {
         <ProfilePickerModal
           onSelected={handleProfileSelected}
           highlightUserId={highlightProfileId}
+          onBack={
+            switchingProfile
+              ? () => {
+                  setSwitchingProfile(false);
+                  setHighlightProfileId(null);
+                }
+              : undefined
+          }
         />
       )}
 

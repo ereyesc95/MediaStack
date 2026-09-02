@@ -613,12 +613,53 @@ def series_franchise_movies(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     from app.adult_content import filter_adult_related_cards
+    from app.movies_index import build_work_detail
     from app.series_overview import build_series_overview
 
     overview = build_series_overview(db, franchise_id)
     if not overview:
         raise HTTPException(404, "Series franchise not found")
     items = list((overview.get("related") or {}).get("movies") or [])
+    # Merge Movies-module leaves (includes [Unofficial] folders the related
+    # index may still omit until a rebuild).
+    by_path: dict[str, dict] = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        key = (it.get("path") or it.get("folder_path") or it.get("id") or "").replace(
+            "\\", "/"
+        ).casefold()
+        if key:
+            by_path[key] = it
+    try:
+        work = build_work_detail(franchise_id)
+        for film in (work or {}).get("films") or []:
+            if not isinstance(film, dict):
+                continue
+            key = (film.get("folder_path") or film.get("id") or "").replace(
+                "\\", "/"
+            ).casefold()
+            if not key:
+                continue
+            if key not in by_path:
+                by_path[key] = {
+                    "id": film.get("id"),
+                    "title": film.get("title"),
+                    "path": film.get("folder_path"),
+                    "folder_path": film.get("folder_path"),
+                    "cover_url": film.get("cover_url"),
+                    "date_iso": film.get("date_iso"),
+                    "display_date": film.get("display_date"),
+                    "open_url": film.get("open_url") or film.get("file_url"),
+                    "official": film.get("official", True),
+                }
+            else:
+                by_path[key]["official"] = film.get(
+                    "official", by_path[key].get("official", True)
+                )
+    except Exception:
+        pass
+    items = list(by_path.values())
     items = filter_adult_related_cards(
         db, items, nsfw_unlocked=nsfw_unlocked, module="movies"
     )

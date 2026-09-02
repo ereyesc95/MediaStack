@@ -9,8 +9,10 @@ from pathlib import Path
 from app.config import settings
 from app.franchise_index import (
     _iter_work_leaf_items,
+    is_unofficial_folder,
     normalize_franchise_slug,
     parse_dated_folder_name,
+    parse_folder_bracket_tags,
 )
 from app.gallery import IMAGE_EXTS, _media_url
 from app.media_index import format_display_date
@@ -188,7 +190,7 @@ def _list_films(work_dir: Path, media_root: Path) -> list[dict]:
         films.append(
             {
                 "id": _film_id(rel),
-                "title": title or item_dir.name,
+                "title": title or parse_folder_bracket_tags(item_dir.name)[0],
                 "date_iso": date_iso,
                 "display_date": format_display_date(date_iso),
                 "folder_path": rel,
@@ -208,6 +210,7 @@ def _list_films(work_dir: Path, media_root: Path) -> list[dict]:
                 "open_mode": "local" if primary else None,
                 "open_label": "Play video" if primary else None,
                 "hub_title": hub,
+                "official": not is_unofficial_folder(item_dir.name),
             }
         )
     films.sort(
@@ -339,7 +342,7 @@ def counterpart_film_for_series_path(
     rel = film_dir.relative_to(root).as_posix()
     return {
         "id": _film_id(rel),
-        "title": title or film_dir.name,
+        "title": title or parse_folder_bracket_tags(film_dir.name)[0],
         "date_iso": date_iso,
         "display_date": format_display_date(date_iso) if date_iso else None,
         "folder_path": rel,
@@ -359,6 +362,7 @@ def counterpart_film_for_series_path(
         "open_mode": "local" if primary else None,
         "open_label": "Play video" if primary else None,
         "letter": letter,
+        "official": not is_unofficial_folder(film_dir.name),
     }
 
 

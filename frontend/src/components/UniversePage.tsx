@@ -37,6 +37,11 @@ import {
 } from "../usePhoneLayout";
 import { getStoredReleaseCardLayout, saveReleaseCardLayout } from "../themes";
 import AppMenu from "./AppMenu";
+import OfficialUnofficialBar from "./OfficialUnofficialBar";
+import {
+  filterByOfficial,
+  hasUnofficialItems,
+} from "../unofficialFilter";
 import { IconCardBanner, IconCardCover } from "./MenuIcons";
 import MyStackIcon from "./MyStackIcon";
 import PlaylistBoot from "./PlaylistBoot";
@@ -101,6 +106,7 @@ function toMediaCard(c: UniverseCard): SeriesMediaCard {
     universe_module: c.module,
     universe_franchise_id: c.franchise_id,
     universe_leaf_id: c.leaf_id || c.id,
+    official: c.official,
   };
 }
 
@@ -181,6 +187,7 @@ export default function UniversePage({
   const [eraIndex, setEraIndex] = useState(0);
   const [activeLanguage, setActiveLanguage] = useState<string | null>(null);
   const [gallerySectionKey, setGallerySectionKey] = useState("all");
+  const [officialOnly, setOfficialOnly] = useState(true);
   const [cardLayout, setCardLayout] = useState<ReleaseCardLayout>(() =>
     userId ? getStoredReleaseCardLayout(userId) : "cover"
   );
@@ -298,6 +305,23 @@ export default function UniversePage({
       ]).map(toMediaCard),
     [hub?.carousel, hub?.series, hub?.movies, hub?.books]
   );
+
+  useEffect(() => {
+    setOfficialOnly(true);
+  }, [section]);
+
+  const showSeriesOfficialBar = hasUnofficialItems(seriesCards);
+  const visibleSeriesCards = showSeriesOfficialBar
+    ? filterByOfficial(seriesCards, officialOnly)
+    : seriesCards;
+  const showMovieOfficialBar = hasUnofficialItems(movieCards);
+  const visibleMovieCards = showMovieOfficialBar
+    ? filterByOfficial(movieCards, officialOnly)
+    : movieCards;
+  const showBookOfficialBar = hasUnofficialItems(bookCards);
+  const visibleBookCards = showBookOfficialBar
+    ? filterByOfficial(bookCards, officialOnly)
+    : bookCards;
 
   const galleryFolders = useMemo(() => {
     const fromOverview = (
@@ -569,6 +593,25 @@ export default function UniversePage({
             </button>
           ))}
         </nav>
+
+        {section === "series" && showSeriesOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
+        ) : null}
+        {section === "movies" && showMovieOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
+        ) : null}
+        {section === "books" && showBookOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={officialOnly}
+            onChange={setOfficialOnly}
+          />
+        ) : null}
       </div>
 
       <div className="artist-page__body">
@@ -607,35 +650,35 @@ export default function UniversePage({
 
         {hub && section === "series" ? (
           <SeriesMediaGrid
-            items={seriesCards}
-            loading={loading && seriesCards.length === 0}
-            emptyMessage="No series in this universe yet."
-            cardLayout={cardLayout}
-            coverAspect="portrait"
-            onOpen={openCard}
-          />
+              items={visibleSeriesCards}
+              loading={loading && seriesCards.length === 0}
+              emptyMessage="No series in this universe yet."
+              cardLayout={cardLayout}
+              coverAspect="portrait"
+              onOpen={openCard}
+            />
         ) : null}
 
         {hub && section === "movies" ? (
           <SeriesMediaGrid
-            items={movieCards}
-            loading={loading && movieCards.length === 0}
-            emptyMessage="No movies in this universe yet."
-            cardLayout={cardLayout}
-            coverAspect="portrait"
-            onOpen={openCard}
-          />
+              items={visibleMovieCards}
+              loading={loading && movieCards.length === 0}
+              emptyMessage="No movies in this universe yet."
+              cardLayout={cardLayout}
+              coverAspect="portrait"
+              onOpen={openCard}
+            />
         ) : null}
 
         {hub && section === "books" ? (
           <SeriesMediaGrid
-            items={bookCards}
-            loading={loading && bookCards.length === 0}
-            emptyMessage="No books in this universe yet."
-            cardLayout={cardLayout}
-            coverAspect="portrait"
-            onOpen={openCard}
-          />
+              items={visibleBookCards}
+              loading={loading && bookCards.length === 0}
+              emptyMessage="No books in this universe yet."
+              cardLayout={cardLayout}
+              coverAspect="portrait"
+              onOpen={openCard}
+            />
         ) : null}
 
         {hub && section === "audio" ? (

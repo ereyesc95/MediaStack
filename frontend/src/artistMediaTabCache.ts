@@ -12,7 +12,7 @@ import {
 import type { MediaTabIndexPayload } from "./types";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "artist-media-tab-v4";
+const NAMESPACE = "artist-media-tab-v5";
 
 export type ArtistMediaTabKind = "video" | "library" | "series";
 

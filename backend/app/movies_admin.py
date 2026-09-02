@@ -23,6 +23,7 @@ from app.series_admin import (
     _periods_from_activity,
 )
 from app.series_languages import normalize_lang_code
+from app.manual_metadata import mark_manual
 
 
 def _resolve_film_row(db: Session, film_id: str):
@@ -95,11 +96,12 @@ def patch_movie_work_about(
     meta = _load_meta(row)
     if bio is not None:
         meta["bio"] = bio.strip()
-        meta["bio_manual"] = True
         meta["bio_source"] = "manual"
+        mark_manual(meta, "overview")
     if writers is not None:
         meta["writers"] = _split_semicolon(writers)
         meta["authors"] = meta["writers"]
+        mark_manual(meta, "writers")
     _save_meta(row, meta)
     db.commit()
     return {"ok": True, "work_id": slug}
@@ -145,12 +147,15 @@ def patch_film_about(
 
     if bio is not None:
         film_meta["overview"] = bio.strip()
+        mark_manual(film_meta, "overview")
 
     if writers is not None:
         writer_list = _split_semicolon(writers)
         film_meta["writers"] = writer_list
+        mark_manual(film_meta, "writers")
         if directors is None:
             film_meta["directors"] = list(writer_list)
+            mark_manual(film_meta, "directors")
 
     if directors is not None:
         if isinstance(directors, str):
@@ -159,21 +164,26 @@ def patch_film_about(
             film_meta["directors"] = [
                 str(d).strip() for d in directors if d and str(d).strip()
             ]
+        mark_manual(film_meta, "directors")
 
     if publishers is not None:
         film_meta["publishers"] = _split_semicolon(publishers)
+        mark_manual(film_meta, "publishers")
 
     if genres is not None:
         film_meta["genres"] = _clean_genres(genres)
+        mark_manual(film_meta, "genres")
 
     if languages is not None:
         cleaned = _clean_languages(languages)
         film_meta["languages"] = cleaned
         if cleaned:
             film_meta["original_language"] = cleaned[0]
+        mark_manual(film_meta, "languages")
 
     if country_id is not None:
         _apply_country(db, film_meta, country_id)
+        mark_manual(film_meta, "country")
 
     if activity_start is not None or activity_end is not None:
         periods = _periods_from_activity(activity_start, activity_end)
@@ -182,6 +192,7 @@ def patch_film_about(
         if activity_start is not None:
             first = (str(activity_start).split(";")[0] or "").strip()
             film_meta["release_date"] = first or first_start
+        mark_manual(film_meta, "activity")
 
     films_meta[fid] = film_meta
     meta["films"] = films_meta

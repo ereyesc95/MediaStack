@@ -98,6 +98,75 @@ def _has_audio(folder: Path) -> bool:
     return False
 
 
+def _title_belongs_to_hub(card_title: str, hub_title: str) -> bool:
+    t = (card_title or "").strip().casefold()
+    want = (hub_title or "").strip().casefold()
+    if not t or not want:
+        return False
+    if t == want:
+        return True
+    if not (
+        t.startswith(f"{want} ")
+        or t.startswith(f"{want}:")
+        or t.startswith(f"{want} -")
+    ):
+        return False
+    rest = t[len(want) :].lstrip(" :-")
+    import re
+
+    sequel = re.match(r"^(z|gt|super)\b", rest)
+    if sequel and not re.search(rf"\b{sequel.group(1)}$", want):
+        return False
+    return True
+
+
+def _item_belongs_to_hub(item: dict, hub_title: str, hub_path: str) -> bool:
+    title = str(
+        item.get("title") or item.get("name") or item.get("subseries") or ""
+    )
+    path = str(item.get("path") or item.get("folder_path") or "").replace(
+        "\\", "/"
+    )
+    hub_path_n = (hub_path or "").replace("\\", "/").strip("/")
+    folder = hub_path_n.split("/")[-1] if hub_path_n else ""
+    if folder and folder.casefold() in path.casefold():
+        return True
+    meta = str(item.get("subseries") or item.get("hub_title") or "").casefold()
+    want = (hub_title or "").strip().casefold()
+    if want and want in meta:
+        return True
+    return _title_belongs_to_hub(title, hub_title)
+
+
+def _filter_related_for_hub(
+    items: list, hub_title: str, hub_path: str
+) -> list:
+    return [
+        it
+        for it in (items or [])
+        if isinstance(it, dict) and _item_belongs_to_hub(it, hub_title, hub_path)
+    ]
+
+
+def _hub_scope_for_book(
+    book_dir: Path, work_dir: Path, root: Path, detail: dict
+) -> tuple[str, str]:
+    hub_title = (detail.get("hub_title") or detail.get("title") or "").strip()
+    title = (detail.get("title") or "").strip()
+    folder_path = (detail.get("folder_path") or "").replace("\\", "/")
+    if (
+        hub_title
+        and hub_title.casefold() != title.casefold()
+        and book_dir.parent.is_dir()
+        and book_dir.parent != work_dir
+    ):
+        try:
+            return hub_title, book_dir.parent.relative_to(root).as_posix()
+        except ValueError:
+            pass
+    return hub_title or title, folder_path
+
+
 def build_books_gallery(folder_path: str, media_root: Path | None = None) -> dict:
     from app.series_index import build_series_gallery
 
@@ -175,6 +244,7 @@ def build_work_overview(
             "folder_path": b.get("folder_path"),
             "season_count": b.get("volume_count") or 0,
             "hub_title": b.get("hub_title"),
+            "official": b.get("official", True),
         }
         for b in books
     ]
@@ -207,6 +277,28 @@ def build_work_overview(
     links_payload["entity_type"] = "books"
     links_payload["entity_id"] = 0
 
+    from app.movies_overview import activity_periods_from_leaf_dates
+
+    book_activity = activity_periods_from_leaf_dates(
+        [
+            *[
+                (b.get("date_iso"), b.get("title"))
+                for b in books
+                if isinstance(b, dict)
+            ],
+            *[
+                (m.get("date_iso"), m.get("title") or m.get("name"))
+                for m in (related_disk.get("movies") or related_disk.get("movie") or [])
+                if isinstance(m, dict)
+            ],
+            *[
+                (s.get("date_iso"), s.get("title") or s.get("name"))
+                for s in (related_disk.get("series") or [])
+                if isinstance(s, dict)
+            ],
+        ]
+    )
+
     return {
         "id": detail["id"],
         "name": detail.get("name"),
@@ -225,7 +317,7 @@ def build_work_overview(
         "languages": [],
         "language_options": [],
         "origin_language": None,
-        "activity_periods": [],
+        "activity_periods": book_activity,
         "genres": [],
         "publishers": [],
         "eras": local_eras,
@@ -276,6 +368,18 @@ def build_book_overview(
         work.get("folder_path") or folder_path,
         work_name=(work.get("name") or (work_dir.name if work_dir else "")),
     )
+    hub_title, hub_path = _hub_scope_for_book(book_dir, work_dir, root, detail)
+    related_movies = _filter_related_for_hub(
+        related_disk.get("movies") or related_disk.get("movie") or [],
+        hub_title,
+        hub_path,
+    )
+    related_series = _filter_related_for_hub(
+        related_disk.get("series") or [], hub_title, hub_path
+    )
+    related_games = _filter_related_for_hub(
+        related_disk.get("games") or [], hub_title, hub_path
+    )
 
     universes, universe, universe_cards, merged_universe_cards, universe_groups = (
         franchise_universe_bundle(db, "books", work_id)
@@ -309,12 +413,12 @@ def build_book_overview(
 
     volumes = detail.get("volumes") or []
     media = {
-        "has_audio": _has_audio(book_dir) or _has_audio(work_dir),
-        "has_series": bool(related_disk.get("series")),
-        "has_movies": bool(related_disk.get("movies") or related_disk.get("movie")),
+        "has_audio": _has_audio(book_dir),
+        "has_series": bool(related_series),
+        "has_movies": bool(related_movies),
         "has_library": False,
         "has_books": True,
-        "has_games": bool(related_disk.get("games")),
+        "has_games": bool(related_games),
         "has_gallery": bool(local_eras) or bool(detail.get("has_gallery")),
     }
 
@@ -354,6 +458,8 @@ def build_book_overview(
         "name": detail.get("title"),
         "letter": (detail.get("title") or "?")[:1].upper(),
         "folder_path": folder_path,
+        "hub_title": hub_title,
+        "hub_path": hub_path,
         "cover_url": detail.get("cover_url"),
         "portrait_url": detail.get("portrait_url"),
         "landscape_url": detail.get("landscape_url"),
@@ -391,12 +497,10 @@ def build_book_overview(
         "seasons": [],
         "media": media,
         "related": {
-            "movies": _enrich_related_cards(
-                related_disk.get("movies") or related_disk.get("movie") or [], root
-            ),
-            "series": _enrich_related_cards(related_disk.get("series") or [], root),
+            "movies": _enrich_related_cards(related_movies, root),
+            "series": _enrich_related_cards(related_series, root),
             "books": [],
-            "games": _enrich_related_cards(related_disk.get("games") or [], root),
+            "games": _enrich_related_cards(related_games, root),
             "creator": visible_related(about, "creator"),
             "similar": visible_related(about, "similar"),
         },

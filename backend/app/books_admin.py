@@ -14,6 +14,7 @@ from app.books_store import (
 )
 from app.config import settings
 from app.models import Country
+from app.manual_metadata import mark_manual
 from app.series_admin import _clean_genres, _clean_languages, _periods_from_activity
 from app.series_languages import normalize_lang_code
 
@@ -89,24 +90,28 @@ def patch_book_about(
 
     if bio is not None:
         about["bio"] = bio.strip()
-        about["bio_manual"] = True
+        mark_manual(about, "overview")
 
     if writers is not None:
         authors = _split_semicolon(writers)
         about["writers"] = authors
         about["authors"] = authors
+        mark_manual(about, "writers")
 
     if publishers is not None:
         about["publishers"] = _split_semicolon(publishers)
+        mark_manual(about, "publishers")
 
     if genres is not None:
         about["genres"] = _clean_genres(genres)
+        mark_manual(about, "genres")
 
     if languages is not None:
         cleaned = _clean_languages(languages)
         about["languages"] = cleaned
         if cleaned:
             about["origin_language"] = cleaned[0]
+        mark_manual(about, "languages")
 
     if content_category is not None:
         from app.media_item_admin import normalize_content_category
@@ -125,10 +130,12 @@ def patch_book_about(
             }
         else:
             about.pop("country", None)
+        mark_manual(about, "country")
 
     if activity_start is not None or activity_end is not None:
         periods = _periods_from_activity(activity_start, activity_end)
         about["activity_periods"] = periods
+        mark_manual(about, "activity")
 
     _save_book_about(book_dir, about, book_id=book_id, work_dir=work_dir)
     return {"ok": True, "book_id": book_id}

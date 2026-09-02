@@ -94,6 +94,7 @@ import ArtistAboutEditModal from "./ArtistAboutEditModal";
 import ArtistLineup, { type LineupTab } from "./ArtistLineup";
 import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
+import OfficialUnofficialBar from "../../OfficialUnofficialBar";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import {
@@ -319,6 +320,12 @@ export default function ArtistPage({
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [audioRefreshKey, setAudioRefreshKey] = useState(0);
   const [mediaRefreshKey, setMediaRefreshKey] = useState(0);
+  const [mediaOfficialOnly, setMediaOfficialOnly] = useState(true);
+  const [showMediaOfficialBar, setShowMediaOfficialBar] = useState(false);
+  useEffect(() => {
+    setMediaOfficialOnly(true);
+    setShowMediaOfficialBar(false);
+  }, [section, bandId]);
   const relatedFetchStarted = useRef(false);
   const lineupImportStarted = useRef(false);
   const loadSeq = useRef(0);
@@ -1431,6 +1438,16 @@ export default function ArtistPage({
           />
         )}
 
+        {(section === "video" ||
+          section === "series" ||
+          section === "library") &&
+        showMediaOfficialBar ? (
+          <OfficialUnofficialBar
+            officialOnly={mediaOfficialOnly}
+            onChange={setMediaOfficialOnly}
+          />
+        ) : null}
+
         {section === "gallery" && galleryTabVisible(data?.media) && (
           <ArtistGalleryBars
             state={galleryState}
@@ -1700,6 +1717,9 @@ export default function ArtistPage({
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
             refreshKey={mediaRefreshKey}
+            officialOnly={mediaOfficialOnly}
+            onOfficialOnlyChange={setMediaOfficialOnly}
+            onHasUnofficialChange={setShowMediaOfficialBar}
             onOpenItem={(id, item) => {
               if (onOpenMoviesLeaf && item?.folder_path) {
                 void moviesLeafFromFolderPath(item.folder_path).then((leaf) => {
@@ -1731,6 +1751,9 @@ export default function ArtistPage({
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
             refreshKey={mediaRefreshKey}
+            officialOnly={mediaOfficialOnly}
+            onOfficialOnlyChange={setMediaOfficialOnly}
+            onHasUnofficialChange={setShowMediaOfficialBar}
             onOpenItem={(_id, item) => {
               const path = item?.folder_path?.trim();
               if (path && onOpenSeriesFolder) {
@@ -1753,6 +1776,9 @@ export default function ArtistPage({
             cardLayout={releaseCardLayout}
             artistName={data?.name ?? shell?.name ?? undefined}
             refreshKey={mediaRefreshKey}
+            officialOnly={mediaOfficialOnly}
+            onOfficialOnlyChange={setMediaOfficialOnly}
+            onHasUnofficialChange={setShowMediaOfficialBar}
             onOpenItem={(id) => onOpenMediaItem?.("library", id)}
           />
         )}

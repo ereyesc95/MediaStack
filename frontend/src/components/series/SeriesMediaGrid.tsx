@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
+import { stripUnofficialDisplaySuffix } from "../../unofficialFilter";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import BillboardText from "../BillboardText";
 import { ChevronIcon } from "../music/release/releaseTrackPanelMeta";
@@ -32,6 +33,8 @@ export type SeriesMediaCard = {
   subseries_id?: string | null;
   navigate_franchise_id?: string;
   navigate_subseries_id?: string;
+  /** False when folder name has [Unofficial]; omit/true = official. */
+  official?: boolean;
 };
 
 type Props = {
@@ -75,6 +78,7 @@ function SeriesMediaCardView({
   revealed: boolean;
   onReveal: () => void;
 }) {
+  const title = stripUnofficialDisplaySuffix(item.title);
   const cover = item.portrait_url || item.landscape_url || item.cover_url || null;
   const bannerBg =
     item.banner_url || item.landscape_url || item.portrait_url || item.cover_url || null;
@@ -171,16 +175,16 @@ function SeriesMediaCardView({
                 className={[
                   "media-release-card__banner-title",
                   "media-release-card__banner-title--compact",
-                  item.title.length >= 40
+                  title.length >= 40
                     ? "media-release-card__banner-title--xlong"
-                    : item.title.length > 26
+                    : title.length > 26
                       ? "media-release-card__banner-title--long"
                       : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
-                {item.title}
+                {title}
               </span>
             )}
             {openFileControl || dateLabel ? (
@@ -203,14 +207,14 @@ function SeriesMediaCardView({
           type="button"
           className={bannerClass}
           onClick={handleClick}
-          title={item.title}
+          title={title}
         >
           {bannerInner}
         </button>
       );
     }
     return (
-      <article className={bannerClass} title={item.title}>
+      <article className={bannerClass} title={title}>
         {bannerInner}
       </article>
     );
@@ -251,7 +255,7 @@ function SeriesMediaCardView({
           />
         ) : (
           <span className="media-release-card__title-hover">
-            <BillboardText short={item.title} full={item.title} maxLines={3} />
+            <BillboardText short={title} full={title} maxLines={3} />
           </span>
         )}
       </span>
@@ -271,14 +275,14 @@ function SeriesMediaCardView({
         type="button"
         className={className}
         onClick={handleClick}
-        title={item.title}
+        title={title}
       >
         {inner}
       </button>
     );
   }
   return (
-    <article className={className} title={item.title}>
+    <article className={className} title={title}>
       {inner}
     </article>
   );

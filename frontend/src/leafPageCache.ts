@@ -22,7 +22,7 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "leaf-page-v1";
+const NAMESPACE = "leaf-page-v4";
 
 export type LeafPageCacheEntry = {
   overview: SeriesOverview | null;

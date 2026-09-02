@@ -1818,7 +1818,7 @@ export async function fetchBooksBookOverview(
 
 export async function fetchBooksBookAudio(bookId: string) {
   return request<{ releases: Array<Record<string, unknown>> }>(
-    `${API}/books/franchises/${encodeURIComponent(bookId)}/media/audio`
+    `${API}/books/books/${encodeURIComponent(bookId)}/media/audio`
   );
 }
 

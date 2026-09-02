@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.crud import get_tmdb_key
 from app.franchise_index import normalize_franchise_slug
+from app.manual_metadata import is_manual
 from app.models import Series
 from app.series_artwork import ensure_artwork_cached
 from app.series_index import find_franchise_dir
@@ -121,6 +122,12 @@ async def refresh_series_metadata(
         return {"ok": False, "error": "TMDb API key not configured"}
 
     row = ensure_series_row(db, franchise_name)
+    try:
+        existing_images = json.loads(row.ser_images_json or "{}")
+        if not isinstance(existing_images, dict):
+            existing_images = {}
+    except (json.JSONDecodeError, TypeError):
+        existing_images = {}
     tv_id = tmdb_id or row.ser_code
     if not tv_id:
         found_id, found_name = await search_tv_id(franchise_name, api_key)
@@ -199,7 +206,9 @@ async def refresh_series_metadata(
     if aliases:
         row.ser_other_names = ";".join(aliases)
 
-    if include_bio and not (row.ser_bio_manual or 0):
+    if include_bio and not (row.ser_bio_manual or 0) and not is_manual(
+        existing_images, "overview"
+    ):
         overview = data.get("overview")
         if overview:
             row.ser_bio = overview
@@ -207,16 +216,17 @@ async def refresh_series_metadata(
             row.ser_bio_manual = 0
 
     # Prefer country ISO only — avoid "Japan, Japan" when place duplicates country
-    row.ser_origin_place = None
-    if countries:
-        row.ser_country_iso = str(countries[0]).lower()[:2]
+    if not is_manual(existing_images, "country"):
+        row.ser_origin_place = None
+        if countries:
+            row.ser_country_iso = str(countries[0]).lower()[:2]
 
-    if writers:
+    if writers and not is_manual(existing_images, "writers"):
         row.ser_writers = ";".join(writers)
-    if publishers:
+    if publishers and not is_manual(existing_images, "publishers"):
         row.ser_publishers = ";".join(publishers)
         row.ser_studio = publishers[0]
-    if genres:
+    if genres and not is_manual(existing_images, "genres"):
         # Preserve manually assigned local taxonomy genres (e.g. Adult/ASMR)
         # so TMDb refresh does not wipe admin edits.
         try:
@@ -316,14 +326,6 @@ async def refresh_series_metadata(
         self_id=int(tv_id) if str(tv_id).isdigit() else None,
     )
 
-    # Preserve manual + hidden related entries across TMDb refresh
-    existing_images: dict = {}
-    try:
-        existing_images = json.loads(row.ser_images_json or "{}")
-        if not isinstance(existing_images, dict):
-            existing_images = {}
-    except (json.JSONDecodeError, TypeError):
-        existing_images = {}
     related = _merge_related(existing_images.get("related") or {}, related)
 
     from app.series_languages import (
@@ -365,23 +367,24 @@ async def refresh_series_metadata(
     row.ser_backdrop_url = data.get("backdrop_url")
 
     images_blob: dict = {
-        "posters": data.get("posters") or [],
-        "backdrops": data.get("backdrops") or [],
-        "activity_periods": existing_images.get("activity_periods") or [],
+        **existing_images,
+        "posters": data.get("posters") or existing_images.get("posters") or [],
+        "backdrops": data.get("backdrops") or existing_images.get("backdrops") or [],
         "related": related,
-        "languages": languages,
-        "origin_language": origin_lang,
     }
-    if first_air or last_air:
-        images_blob["activity_periods"] = [
-            {"start": first_air, "end": last_air}
-        ]
+    if not is_manual(existing_images, "languages"):
+        images_blob["languages"] = languages
+        images_blob["origin_language"] = origin_lang
+    if not is_manual(existing_images, "activity"):
+        if first_air or last_air:
+            images_blob["activity_periods"] = [
+                {"start": first_air, "end": last_air}
+            ]
+        if first_air:
+            row.ser_starting_date = first_air
+        if last_air:
+            row.ser_ending_date = last_air
     row.ser_images_json = json.dumps(images_blob, ensure_ascii=False)
-
-    if first_air:
-        row.ser_starting_date = first_air
-    if last_air:
-        row.ser_ending_date = last_air
 
     # Cache TMDb images into [Artwork] when local portrait/landscape missing
     artwork_saved = {}
