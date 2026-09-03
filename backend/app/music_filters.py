@@ -380,18 +380,25 @@ def search_roster_artists(db: Session, query: str, *, limit: int = 25) -> list[d
     term = query.strip().lower()
     if len(term) < 1:
         return []
+    # Single-character queries only match visible names (not aliases).
+    name_only = len(term) == 1
     out: list[dict] = []
     for a in db.scalars(select(Artist).order_by(Artist.art_name)).all():
-        hay = " ".join(
-            filter(
-                None,
-                [
-                    (a.art_name or "").lower(),
-                    (a.art_stage_name or "").lower(),
-                    (a.art_aliases or "").lower(),
-                ],
+        name = (a.art_name or "").lower()
+        stage = (a.art_stage_name or "").lower()
+        if name_only:
+            hay = " ".join(filter(None, [name, stage]))
+        else:
+            hay = " ".join(
+                filter(
+                    None,
+                    [
+                        name,
+                        stage,
+                        (a.art_aliases or "").lower(),
+                    ],
+                )
             )
-        )
         if term not in hay:
             continue
         label = (a.art_stage_name or a.art_name or "").strip()
@@ -468,17 +475,25 @@ def search_roster_bands(db: Session, query: str, *, limit: int = 25) -> list[dic
     term = query.strip().lower()
     if len(term) < 1:
         return []
+    # Single-character queries only match the display name. Aliases often contain
+    # common letters (e.g. "Adam" in "Queen + Adam Lambert") and look wrong in
+    # typeahead when the visible name has no match.
+    name_only = len(term) == 1
     out: list[dict] = []
     for b in db.scalars(select(Band).order_by(Band.bnd_name)).all():
-        hay = " ".join(
-            filter(
-                None,
-                [
-                    (b.bnd_name or "").lower(),
-                    (b.bnd_other_names or "").lower(),
-                ],
+        name = (b.bnd_name or "").lower()
+        if name_only:
+            hay = name
+        else:
+            hay = " ".join(
+                filter(
+                    None,
+                    [
+                        name,
+                        (b.bnd_other_names or "").lower(),
+                    ],
+                )
             )
-        )
         if term not in hay:
             continue
         label = (b.bnd_name or "").strip()

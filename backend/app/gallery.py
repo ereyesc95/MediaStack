@@ -105,6 +105,11 @@ def _resolve_child_dir(parent: Path, name: str) -> Path:
 
 
 def _artist_dir(media_root: Path, artist_name: str | None) -> Path | None:
+    """Return the artist's Music folder, or None if it does not exist.
+
+    Never fall back to the letter tier (e.g. ``Music/H``): that folder existing
+    because of another artist must not count as a local library for this name.
+    """
     letter = _letter_folder(artist_name)
     safe = _display_name(artist_name)
     music_dir = _resolve_child_dir(media_root, "Music")
@@ -117,7 +122,7 @@ def _artist_dir(media_root: Path, artist_name: str | None) -> Path | None:
         for child in letter_path.iterdir():
             if child.is_dir() and child.name.casefold() == target:
                 return child
-    return letter_path if letter_path.is_dir() else None
+    return None
 
 
 def _gallery_dir(artist_dir: Path) -> Path:
