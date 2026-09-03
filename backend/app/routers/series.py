@@ -674,13 +674,11 @@ def series_folder_media_counterparts(
 ):
     """Movies/Books leaves that mirror a Series folder path (same dated leaf name)."""
     from app.adult_content import filter_adult_related_cards
-    from app.books_index import counterpart_book_for_series_path
-    from app.movies_index import counterpart_film_for_series_path
+    from app.books_index import counterpart_books_for_series_path
+    from app.movies_index import counterpart_films_for_series_path
 
-    film = counterpart_film_for_series_path(path)
-    book = counterpart_book_for_series_path(path)
-    movies = [film] if film else []
-    books = [book] if book else []
+    movies = counterpart_films_for_series_path(path)
+    books = counterpart_books_for_series_path(path)
     movies = filter_adult_related_cards(
         db, movies, nsfw_unlocked=nsfw_unlocked, module="movies"
     )

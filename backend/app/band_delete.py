@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.artist_quiz import QUIZ_SCORES_DIR
@@ -48,23 +48,19 @@ def delete_band_without_folder(db: Session, band_id: int, media_root: Path | Non
     db.execute(delete(TrackOverride).where(TrackOverride.tro_band_id == band_id))
 
     # Avoid scanning every release on delete (can time out on large DBs).
-    # `rel_fk_bands` is a semicolon-separated string (legacy may also use commas),
-    # so we prefilter with LIKE patterns then do the exact parse/update.
+    # `rel_fk_bands` is a delimited id string (";" normally, "," on legacy rows),
+    # so prefilter with LIKE patterns then do the exact parse/update.
     band_s = str(band_id)
-    semicolon_candidates = (
-        Release.rel_fk_bands == band_s
-        | Release.rel_fk_bands.like(f"{band_s};%")
-        | Release.rel_fk_bands.like(f"%;{band_s};%")
-        | Release.rel_fk_bands.like(f"%;{band_s}")
-    )
-    comma_candidates = (
-        Release.rel_fk_bands == band_s
-        | Release.rel_fk_bands.like(f"{band_s},%")
-        | Release.rel_fk_bands.like(f"%,{band_s},%")
-        | Release.rel_fk_bands.like(f"%,{band_s}")
-    )
+    patterns = [f"%{sep}{band_s}{sep}%" for sep in (";", ",")]
+    patterns += [f"{band_s}{sep}%" for sep in (";", ",")]
+    patterns += [f"%{sep}{band_s}" for sep in (";", ",")]
     candidates = db.scalars(
-        select(Release).where(semicolon_candidates | comma_candidates)
+        select(Release).where(
+            or_(
+                Release.rel_fk_bands == band_s,
+                *(Release.rel_fk_bands.like(p) for p in patterns),
+            )
+        )
     ).all()
 
     for rel in candidates:

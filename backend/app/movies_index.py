@@ -305,28 +305,46 @@ def find_film_dir(
     return None
 
 
-def counterpart_film_for_series_path(
+def _is_hub_dir(item_dir: Path) -> bool:
+    """True when a dated folder holds further dated works (a subseries hub)."""
+    return any(leaf != item_dir for leaf, _d, _t, _h in _iter_work_leaf_items(item_dir))
+
+
+def counterpart_films_for_series_path(
     series_rel_path: str, media_root: Path | None = None
-) -> dict | None:
-    """Map Series/{Letter}/{Work}/{Leaf} → Movies/{Letter}/{Work}/{Leaf} when present."""
+) -> list[dict]:
+    """Map Series/{Letter}/{Work}/{Leaf} → Movies/{Letter}/{Work}/{Leaf} when present.
+
+    A mirrored folder can be a subseries hub rather than a film. Hubs expand to
+    their nested film leaves — never to a card for the hub folder itself.
+    """
     root = _resolve_media_root(media_root)
     norm = (series_rel_path or "").replace("\\", "/").strip("/")
     if not norm:
-        return None
+        return []
     parts = norm.split("/")
     if len(parts) < 3 or parts[0].casefold() != "series":
-        return None
+        return []
     movies_rel = "/".join(["Movies", *parts[1:]])
     film_dir = root / movies_rel
     if not film_dir.is_dir():
-        return None
+        return []
     work_dir = film_dir.parent
     letter = work_dir.parent.name if work_dir.parent else ""
     films = _list_films(work_dir, root) if work_dir.is_dir() else []
     want = film_dir.relative_to(root).as_posix().casefold()
-    for film in films:
-        if (film.get("folder_path") or "").casefold() == want:
-            return film
+    exact = [f for f in films if (f.get("folder_path") or "").casefold() == want]
+    if exact:
+        return exact
+    nested = [
+        f
+        for f in films
+        if (f.get("folder_path") or "").casefold().startswith(f"{want}/")
+    ]
+    if nested:
+        return nested
+    if _is_hub_dir(film_dir):
+        return []
     # Fallback: build a minimal card for the leaf dir itself.
     from app.series_index import (
         _series_folder_banner,
@@ -340,30 +358,40 @@ def counterpart_film_for_series_path(
     versions = _list_versions(film_dir, root)
     primary = versions[0] if versions else None
     rel = film_dir.relative_to(root).as_posix()
-    return {
-        "id": _film_id(rel),
-        "title": title or parse_folder_bracket_tags(film_dir.name)[0],
-        "date_iso": date_iso,
-        "display_date": format_display_date(date_iso) if date_iso else None,
-        "folder_path": rel,
-        "folder_name": film_dir.name,
-        "path": rel,
-        "cover_url": _series_folder_cover(film_dir, root)
-        or _folder_cover(film_dir, root),
-        "portrait_url": _series_folder_cover(film_dir, root),
-        "landscape_url": _series_folder_landscape(film_dir, root),
-        "banner_url": _series_folder_banner(film_dir, root),
-        "logo_url": logo_url,
-        "icon_url": icon_url,
-        "badge_url": find_badge_file(film_dir, root),
-        "has_video": _folder_has_video(film_dir),
-        "version_count": len(versions),
-        "open_url": (primary or {}).get("file_url"),
-        "open_mode": "local" if primary else None,
-        "open_label": "Play video" if primary else None,
-        "letter": letter,
-        "official": not is_unofficial_folder(film_dir.name),
-    }
+    return [
+        {
+            "id": _film_id(rel),
+            "title": title or parse_folder_bracket_tags(film_dir.name)[0],
+            "date_iso": date_iso,
+            "display_date": format_display_date(date_iso) if date_iso else None,
+            "folder_path": rel,
+            "folder_name": film_dir.name,
+            "path": rel,
+            "cover_url": _series_folder_cover(film_dir, root)
+            or _folder_cover(film_dir, root),
+            "portrait_url": _series_folder_cover(film_dir, root),
+            "landscape_url": _series_folder_landscape(film_dir, root),
+            "banner_url": _series_folder_banner(film_dir, root),
+            "logo_url": logo_url,
+            "icon_url": icon_url,
+            "badge_url": find_badge_file(film_dir, root),
+            "has_video": _folder_has_video(film_dir),
+            "version_count": len(versions),
+            "open_url": (primary or {}).get("file_url"),
+            "open_mode": "local" if primary else None,
+            "open_label": "Play video" if primary else None,
+            "letter": letter,
+            "official": not is_unofficial_folder(film_dir.name),
+        }
+    ]
+
+
+def counterpart_film_for_series_path(
+    series_rel_path: str, media_root: Path | None = None
+) -> dict | None:
+    """First film leaf mirroring a Series folder path, when there is exactly one."""
+    films = counterpart_films_for_series_path(series_rel_path, media_root)
+    return films[0] if len(films) == 1 else None
 
 
 def _work_card(work_dir: Path, letter: str, media_root: Path) -> dict:

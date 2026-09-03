@@ -510,6 +510,35 @@ def _book_card_from_dir(
     }
 
 
+_BOOK_LEAF_MARKER_DIRS = (
+    "Gallery",
+    "gallery",
+    "Audio",
+    "audio",
+    "[Artwork]",
+    "Artwork",
+    "artwork",
+)
+
+
+def _nested_book_leaf_dirs(folder: Path) -> list[Path]:
+    """Child folders that are book leaves — non-empty means ``folder`` is a hub."""
+    try:
+        return [
+            n
+            for n in folder.iterdir()
+            if n.is_dir()
+            and not _is_skip_dir(n.name)
+            and (
+                _folder_has_pdf(n)
+                or any((n / bucket).is_dir() for bucket in _BOOK_LEAF_MARKER_DIRS)
+                or bool(parse_dated_folder_name(n.name)[0])
+            )
+        ]
+    except OSError:
+        return []
+
+
 def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
     """Discover book leaves under a franchise/work folder.
 
@@ -541,31 +570,7 @@ def _list_books(work_dir: Path, media_root: Path) -> list[dict]:
         date_iso, title = parse_dated_folder_name(child.name)
         hub_title = title or child.name
         direct_pdfs = _list_pdfs(child)
-        try:
-            nested_leaves = [
-                n
-                for n in child.iterdir()
-                if n.is_dir()
-                and not _is_skip_dir(n.name)
-                and (
-                    _folder_has_pdf(n)
-                    or any(
-                        (n / bucket).is_dir()
-                        for bucket in (
-                            "Gallery",
-                            "gallery",
-                            "Audio",
-                            "audio",
-                            "[Artwork]",
-                            "Artwork",
-                            "artwork",
-                        )
-                    )
-                    or bool(parse_dated_folder_name(n.name)[0])
-                )
-            ]
-        except OSError:
-            nested_leaves = []
+        nested_leaves = _nested_book_leaf_dirs(child)
 
         if nested_leaves:
             # Mid-tier hub: every nested content folder is a leaf book.
@@ -735,40 +740,72 @@ def find_book_dir(
     return None
 
 
-def counterpart_book_for_movies_path(
-    movies_rel_path: str, media_root: Path | None = None
-) -> dict | None:
-    """Map Movies/{Letter}/{Work}/{Leaf} → Books/{Letter}/{Work}/{Leaf} when present."""
+def _counterpart_books_for_module_path(
+    rel_path: str, source_module: str, media_root: Path | None = None
+) -> list[dict]:
+    """Map {Module}/{Letter}/{Work}/{Leaf} → matching Books leaves.
+
+    A mirrored folder can be a mid-tier hub rather than a book. Hubs expand to
+    their nested book leaves — never to a card for the hub folder itself.
+    """
     root = _resolve_media_root(media_root)
-    norm = (movies_rel_path or "").replace("\\", "/").strip("/")
+    norm = (rel_path or "").replace("\\", "/").strip("/")
     if not norm:
-        return None
+        return []
     parts = norm.split("/")
-    if len(parts) < 3 or parts[0].casefold() != "movies":
-        return None
+    if len(parts) < 3 or parts[0].casefold() != source_module:
+        return []
     books_rel = "/".join(["Books", *parts[1:]])
     book_dir = root / books_rel
     if not book_dir.is_dir():
-        return None
-    return _book_card_from_dir(book_dir, root)
+        return []
+
+    work_dir = book_dir.parent
+    want = book_dir.relative_to(root).as_posix().casefold()
+    known = _list_books(work_dir, root) if work_dir.is_dir() else []
+    exact = [b for b in known if (b.get("folder_path") or "").casefold() == want]
+    if exact:
+        return exact
+    nested = [
+        b
+        for b in known
+        if (b.get("folder_path") or "").casefold().startswith(f"{want}/")
+    ]
+    if nested:
+        return nested
+    if _nested_book_leaf_dirs(book_dir):
+        return []
+    return [_book_card_from_dir(book_dir, root)]
+
+
+def counterpart_books_for_movies_path(
+    movies_rel_path: str, media_root: Path | None = None
+) -> list[dict]:
+    """Book leaves mirroring a Movies folder path."""
+    return _counterpart_books_for_module_path(movies_rel_path, "movies", media_root)
+
+
+def counterpart_books_for_series_path(
+    series_rel_path: str, media_root: Path | None = None
+) -> list[dict]:
+    """Book leaves mirroring a Series folder path."""
+    return _counterpart_books_for_module_path(series_rel_path, "series", media_root)
+
+
+def counterpart_book_for_movies_path(
+    movies_rel_path: str, media_root: Path | None = None
+) -> dict | None:
+    """Single book leaf mirroring a Movies folder path, when unambiguous."""
+    books = counterpart_books_for_movies_path(movies_rel_path, media_root)
+    return books[0] if len(books) == 1 else None
 
 
 def counterpart_book_for_series_path(
     series_rel_path: str, media_root: Path | None = None
 ) -> dict | None:
-    """Map Series/{Letter}/{Work}/{Leaf} → Books/{Letter}/{Work}/{Leaf} when present."""
-    root = _resolve_media_root(media_root)
-    norm = (series_rel_path or "").replace("\\", "/").strip("/")
-    if not norm:
-        return None
-    parts = norm.split("/")
-    if len(parts) < 3 or parts[0].casefold() != "series":
-        return None
-    books_rel = "/".join(["Books", *parts[1:]])
-    book_dir = root / books_rel
-    if not book_dir.is_dir():
-        return None
-    return _book_card_from_dir(book_dir, root)
+    """Single book leaf mirroring a Series folder path, when unambiguous."""
+    books = counterpart_books_for_series_path(series_rel_path, media_root)
+    return books[0] if len(books) == 1 else None
 
 
 def counterpart_book_for_film(
