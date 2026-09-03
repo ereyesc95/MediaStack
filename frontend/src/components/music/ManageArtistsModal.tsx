@@ -3,9 +3,11 @@ import {
   deleteBand,
   estimateBandImport,
   importBandFromMb,
+  importUnregisteredBand,
   searchMusicBrainz,
   searchRosterBands,
   type ArtistImportEstimate,
+  type ArtistImportResult,
 } from "../../api";
 import type { MbArtistMatch } from "../../types";
 import SearchableDropdown, {
@@ -22,10 +24,16 @@ type SelectedArtist = {
   name: string;
 };
 
+function approximateTimeLabel(seconds: number) {
+  const minutes = Math.max(1, Math.round(seconds / 60) || 1);
+  return `Approximate time: ${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
 export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [mode, setMode] = useState<"add" | "remove">("add");
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<MbArtistMatch[]>([]);
+  const [notFound, setNotFound] = useState(false);
   const [catalogMatches, setCatalogMatches] = useState<DropdownOption[]>([]);
   const [selectedValue, setSelectedValue] = useState("");
   const [selected, setSelected] = useState<SelectedArtist[]>([]);
@@ -72,16 +80,33 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     return options;
   }, []);
 
+  function finishImport(result: ArtistImportResult) {
+    const warnings = result.warnings?.length
+      ? ` Warnings: ${result.warnings.join(" ")}`
+      : "";
+    setNotice(`${result.message}${warnings}`);
+    setMatches([]);
+    setQuery("");
+    setNotFound(false);
+    setPendingArtist(null);
+    setEstimate(null);
+    setWriteUserGuide(false);
+    onChanged();
+  }
+
   async function handleSearch() {
     setError(null);
     setNotice(null);
     setBusy(true);
     setMatches([]);
+    setNotFound(false);
     setPendingArtist(null);
     setEstimate(null);
     try {
       const data = await searchMusicBrainz(query);
-      setMatches(data.items ?? []);
+      const items = data.items ?? [];
+      setMatches(items);
+      setNotFound(items.length === 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -96,6 +121,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setError(null);
     setNotice(null);
     setCloseWarning(null);
+    setNotFound(false);
     setEstimating(true);
     try {
       setEstimate(await estimateBandImport(match.mbid));
@@ -118,20 +144,27 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setNotice(null);
     setCloseWarning(null);
     try {
-      const result = await importBandFromMb(
-        pendingArtist.mbid,
-        writeUserGuide
+      finishImport(
+        await importBandFromMb(pendingArtist.mbid, writeUserGuide)
       );
-      const warnings = result.warnings?.length
-        ? ` Warnings: ${result.warnings.join(" ")}`
-        : "";
-      setNotice(`${result.message}${warnings}`);
-      setMatches([]);
-      setQuery("");
-      setPendingArtist(null);
-      setEstimate(null);
-      setWriteUserGuide(false);
-      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImporting(false);
+      setBusy(false);
+    }
+  }
+
+  async function addUnregisteredArtist() {
+    const name = query.trim();
+    if (!name) return;
+    setBusy(true);
+    setImporting(true);
+    setError(null);
+    setNotice(null);
+    setCloseWarning(null);
+    try {
+      finishImport(await importUnregisteredBand(name));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -186,6 +219,10 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setBusy(false);
   }
 
+  const canCreate =
+    Boolean(pendingArtist && estimate) &&
+    !(estimate?.local_folder_exists && estimate?.catalog_exists);
+
   return (
     <div className="modal-backdrop" onClick={requestClose}>
       <div
@@ -235,11 +272,13 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         <div className="artist-admin-form">
           {mode === "add" ? (
             <>
-              <p className="muted">Search MusicBrainz (up to 3 matches).</p>
               <div className="modal-search-row">
                 <input
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setNotFound(false);
+                  }}
                   placeholder="Artist or band name"
                   disabled={busy || estimating}
                   onKeyDown={(event) =>
@@ -279,6 +318,28 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   ))}
                 </ul>
               )}
+              {notFound && !importing && !pendingArtist && (
+                <p className="manage-artists-modal__not-found">
+                  Artist not found,{" "}
+                  <a
+                    href="https://musicbrainz.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="manage-artists-modal__inline-link"
+                  >
+                    register in MusicBrainz
+                  </a>{" "}
+                  or{" "}
+                  <button
+                    type="button"
+                    className="manage-artists-modal__inline-link"
+                    onClick={() => void addUnregisteredArtist()}
+                    disabled={busy}
+                  >
+                    continue with no registration
+                  </button>
+                </p>
+              )}
               {pendingArtist && (
                 <div className="manage-artists-modal__import">
                   <div className="manage-artists-modal__import-heading">
@@ -299,20 +360,19 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                     )}
                   </div>
                   {estimating && (
-                    <p className="muted">Calculating import size and time…</p>
+                    <p className="muted">Calculating...</p>
                   )}
                   {estimate && (
                     <>
                       <div className="manage-artists-modal__estimate">
-                        <span>Approximate time</span>
-                        <strong>{estimate.estimated_label}</strong>
                         {!estimate.local_folder_exists && (
-                          <small className="muted">
-                            {estimate.release_group_count} official release
-                            {estimate.release_group_count === 1 ? "" : "s"} will
-                            be scaffolded. Large catalogs can take longer when
-                            MusicBrainz is busy.
-                          </small>
+                          <>
+                            <p>{approximateTimeLabel(estimate.estimated_seconds)}</p>
+                            <p>
+                              {estimate.release_group_count} release
+                              {estimate.release_group_count === 1 ? "" : "s"} found
+                            </p>
+                          </>
                         )}
                         {estimate.local_folder_exists &&
                           !estimate.catalog_exists && (
@@ -323,7 +383,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                           )}
                       </div>
                       {!estimate.local_folder_exists && !importing && (
-                        <label className="manage-artists-modal__guide-option">
+                        <label className="ms-checkbox manage-artists-modal__guide-option">
                           <input
                             type="checkbox"
                             checked={writeUserGuide}
@@ -331,9 +391,9 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                               setWriteUserGuide(event.target.checked)
                             }
                           />
-                          <span>
-                            Create <strong>User guide.txt</strong> with folder
-                            and filename hints
+                          <span className="ms-checkbox__box" aria-hidden="true" />
+                          <span className="ms-checkbox__label">
+                            Include user guide
                           </span>
                         </label>
                       )}
@@ -357,26 +417,31 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                             </small>
                           </div>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn manage-artists-modal__create"
-                          onClick={() => void addArtist()}
-                          disabled={busy || estimating}
-                        >
-                          Create artist
-                        </button>
-                      )}
+                      ) : null}
                     </>
                   )}
+                </div>
+              )}
+              {importing && !pendingArtist && (
+                <div
+                  className="manage-artists-modal__progress"
+                  role="status"
+                >
+                  <span className="manage-artists-modal__spinner" />
+                  <div>
+                    <strong>Creating artist…</strong>
+                    <small className="muted">
+                      Keep this window open. Create and search controls are
+                      unavailable until the import finishes.
+                    </small>
+                  </div>
                 </div>
               )}
             </>
           ) : (
             <>
               <p className="muted">
-                Search the catalog and add one or more artists to the removal
-                list. Artists with a local Music folder remain protected.
+                Select the artists to be removed. This action cannot be undone.
               </p>
               <SearchableDropdown
                 options={[]}
@@ -424,6 +489,32 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
           </p>
         )}
         {error && <p className="error manage-artists-modal__error">{error}</p>}
+
+        {mode === "add" && canCreate && !importing && (
+          <div className="modal-panel-actions modal-panel-actions--end">
+            <button
+              type="button"
+              className="btn manage-artists-modal__create"
+              onClick={() => void addArtist()}
+              disabled={busy || estimating}
+            >
+              <svg
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+                className="manage-artists-modal__plus"
+              >
+                <path
+                  d="M8 2.5v11M2.5 8h11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Create artist
+            </button>
+          </div>
+        )}
 
         {mode === "remove" && (
           <div className="modal-panel-actions modal-panel-actions--end">

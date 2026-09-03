@@ -36,8 +36,10 @@ router = APIRouter(prefix="/api/music", tags=["music"])
 
 
 class ImportBandBody(BaseModel):
-    mbid: str
+    mbid: str = ""
+    name: str = ""
     write_user_guide: bool = False
+    unregistered: bool = False
 
 
 class RefreshMetadataBody(BaseModel):
@@ -378,17 +380,26 @@ async def import_band_from_mb(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    mbid = body.mbid.strip()
-    if not mbid:
-        raise HTTPException(400, "mbid required")
-    from app.artist_import import import_artist
+    from app.artist_import import import_artist, import_unregistered_artist
 
+    mbid = (body.mbid or "").strip()
+    name = (body.name or "").strip()
     try:
+        if body.unregistered or (name and not mbid):
+            return import_unregistered_artist(
+                db,
+                name,
+                write_user_guide=body.write_user_guide,
+            )
+        if not mbid:
+            raise HTTPException(400, "mbid required")
         return await import_artist(
             db,
             mbid,
             write_user_guide=body.write_user_guide,
         )
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:

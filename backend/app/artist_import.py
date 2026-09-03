@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,11 +60,10 @@ def _media_root() -> Path:
     return root
 
 
-def _find_band(db: Session, mbid: str, name: str) -> Band | None:
-    row = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
-    if row:
-        return row
-    wanted = name.casefold()
+def _find_band_by_name(db: Session, name: str) -> Band | None:
+    wanted = _display_name(name).casefold()
+    if not wanted:
+        return None
     return next(
         (
             band
@@ -72,6 +72,39 @@ def _find_band(db: Session, mbid: str, name: str) -> Band | None:
         ),
         None,
     )
+
+
+def _find_band(db: Session, mbid: str, name: str) -> Band | None:
+    if mbid:
+        row = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
+        if row:
+            return row
+    return _find_band_by_name(db, name)
+
+
+def _allocate_local_code(db: Session) -> str:
+    for _ in range(12):
+        code = f"local-{uuid.uuid4()}"
+        if db.scalars(select(Band).where(Band.bnd_code == code)).first() is None:
+            return code
+    raise ValueError("Could not allocate a unique artist id")
+
+
+def _new_band(db: Session) -> Band:
+    next_id = (db.scalar(select(func.max(Band.bnd_id))) or 0) + 1
+    band = Band(bnd_id=next_id)
+    db.add(band)
+    return band
+
+
+def _invalidate_band_caches(band_id: int) -> None:
+    from app.band_overview_cache import invalidate_overview_cache
+    from app.media_index import invalidate_media_cache
+    from app.playlist_index import invalidate_playlist_cache
+
+    invalidate_overview_cache(band_id)
+    invalidate_media_cache(band_id)
+    invalidate_playlist_cache(band_id)
 
 
 def _member_relations(data: dict) -> list[dict]:
@@ -425,9 +458,7 @@ async def import_artist(
 
     created_catalog = band is None
     if band is None:
-        next_id = (db.scalar(select(func.max(Band.bnd_id))) or 0) + 1
-        band = Band(bnd_id=next_id)
-        db.add(band)
+        band = _new_band(db)
     _populate_band_metadata(db, band, data)
     db.commit()
     db.refresh(band)
@@ -466,13 +497,7 @@ async def import_artist(
         )
         local_status = "created"
 
-    from app.band_overview_cache import invalidate_overview_cache
-    from app.media_index import invalidate_media_cache
-    from app.playlist_index import invalidate_playlist_cache
-
-    invalidate_overview_cache(band.bnd_id)
-    invalidate_media_cache(band.bnd_id)
-    invalidate_playlist_cache(band.bnd_id)
+    _invalidate_band_caches(band.bnd_id)
 
     if local_status == "existing":
         catalog_action = "created" if created_catalog else "updated"
@@ -493,5 +518,81 @@ async def import_artist(
         "local_status": local_status,
         "releases_created": releases_created,
         "warnings": warnings,
+        "message": message,
+    }
+
+
+def import_unregistered_artist(
+    db: Session,
+    name: str,
+    *,
+    write_user_guide: bool = False,
+) -> dict:
+    """Create a catalog row and empty artist folders without MusicBrainz."""
+    artist_name = _display_name(name).strip()
+    if not artist_name:
+        raise ValueError("Artist name is required")
+
+    root = _media_root()
+    band = _find_band_by_name(db, artist_name)
+    local_folder = _artist_dir(root, band.bnd_name if band else artist_name)
+    if band and local_folder:
+        return {
+            "id": band.bnd_id,
+            "code": band.bnd_code,
+            "name": band.bnd_name,
+            "existing": True,
+            "local_status": "existing",
+            "releases_created": 0,
+            "message": (
+                f"{artist_name} already exists locally. "
+                "No files or catalog data were changed."
+            ),
+        }
+
+    created_catalog = band is None
+    if band is None:
+        band = _new_band(db)
+        band.bnd_name = artist_name
+        band.bnd_code = _allocate_local_code(db)
+        band.bnd_metadata_refreshed_at = _now()
+    elif not (band.bnd_code or "").strip():
+        band.bnd_code = _allocate_local_code(db)
+        band.bnd_name = artist_name or band.bnd_name
+    db.commit()
+    db.refresh(band)
+
+    releases_created = 0
+    local_status = "existing"
+    if not local_folder:
+        local_folder = _artist_dir(root, artist_name)
+    if not local_folder:
+        local_folder, releases_created = _create_artist_tree(
+            db,
+            root,
+            artist_name,
+            [],
+            write_user_guide=write_user_guide,
+        )
+        local_status = "created"
+
+    _invalidate_band_caches(band.bnd_id)
+
+    if local_status == "existing":
+        catalog_action = "created" if created_catalog else "updated"
+        message = (
+            f"{artist_name}'s local folder already existed. The catalog was "
+            f"{catalog_action}; local files were not changed."
+        )
+    else:
+        message = f"{artist_name} was added without a MusicBrainz registration."
+    return {
+        "id": band.bnd_id,
+        "code": band.bnd_code,
+        "name": band.bnd_name,
+        "existing": not created_catalog,
+        "local_status": local_status,
+        "releases_created": releases_created,
+        "warnings": [],
         "message": message,
     }

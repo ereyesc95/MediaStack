@@ -266,6 +266,25 @@ export async function importBandFromMb(
   );
 }
 
+export async function importUnregisteredBand(
+  name: string,
+  writeUserGuide = false
+) {
+  return request<ArtistImportResult>(
+    `${API}/music/bands/import`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        unregistered: true,
+        write_user_guide: writeUserGuide,
+      }),
+    },
+    15 * 60_000
+  );
+}
+
 export async function fetchBand(id: number): Promise<Band> {
   return request(`${API}/music/bands/${id}`);
 }
