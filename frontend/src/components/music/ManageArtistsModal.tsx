@@ -38,6 +38,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [selectedValue, setSelectedValue] = useState("");
   const [selected, setSelected] = useState<SelectedArtist[]>([]);
   const [busy, setBusy] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [pendingArtist, setPendingArtist] = useState<MbArtistMatch | null>(null);
@@ -95,9 +96,11 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   }
 
   async function handleSearch() {
+    if (busy || estimating || !query.trim()) return;
     setError(null);
     setNotice(null);
     setBusy(true);
+    setSearching(true);
     setMatches([]);
     setNotFound(false);
     setPendingArtist(null);
@@ -110,6 +113,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      setSearching(false);
       setBusy(false);
     }
   }
@@ -164,7 +168,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setNotice(null);
     setCloseWarning(null);
     try {
-      finishImport(await importUnregisteredBand(name));
+      finishImport(await importUnregisteredBand(name, writeUserGuide));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -287,11 +291,35 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                 />
                 <button
                   type="button"
-                  className="btn"
+                  className="manage-artists-modal__search-btn"
+                  aria-label={searching ? "Searching" : "Search"}
                   onClick={() => void handleSearch()}
                   disabled={busy || estimating || !query.trim()}
                 >
-                  Search
+                  {searching ? (
+                    <span
+                      className="manage-artists-modal__spinner manage-artists-modal__spinner--sm"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <circle
+                        cx="7"
+                        cy="7"
+                        r="4.4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      />
+                      <path
+                        d="M10.4 10.4 14 14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  )}
                 </button>
               </div>
               {!importing && !pendingArtist && (
@@ -319,26 +347,45 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                 </ul>
               )}
               {notFound && !importing && !pendingArtist && (
-                <p className="manage-artists-modal__not-found">
-                  Artist not found,{" "}
-                  <a
-                    href="https://musicbrainz.org/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="manage-artists-modal__inline-link"
-                  >
-                    register in MusicBrainz
-                  </a>{" "}
-                  or{" "}
-                  <button
-                    type="button"
-                    className="manage-artists-modal__inline-link"
-                    onClick={() => void addUnregisteredArtist()}
-                    disabled={busy}
-                  >
-                    continue with no registration
-                  </button>
-                </p>
+                <div className="manage-artists-modal__not-found">
+                  <p className="manage-artists-modal__not-found-title">
+                    Artist not found
+                  </p>
+                  <p className="manage-artists-modal__not-found-body">
+                    <a
+                      href="https://musicbrainz.org/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="manage-artists-modal__inline-link"
+                    >
+                      Register in MusicBrainz
+                    </a>{" "}
+                    or{" "}
+                    <button
+                      type="button"
+                      className="manage-artists-modal__inline-link"
+                      onClick={() => void addUnregisteredArtist()}
+                      disabled={busy}
+                    >
+                      continue with no registration
+                    </button>{" "}
+                    to proceed
+                  </p>
+                  <label className="ms-checkbox manage-artists-modal__guide-option">
+                    <input
+                      type="checkbox"
+                      checked={writeUserGuide}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setWriteUserGuide(event.target.checked)
+                      }
+                    />
+                    <span className="ms-checkbox__box" aria-hidden="true" />
+                    <span className="ms-checkbox__label">
+                      Include user guide
+                    </span>
+                  </label>
+                </div>
               )}
               {pendingArtist && (
                 <div className="manage-artists-modal__import">
@@ -347,7 +394,9 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                     {!importing && (
                       <button
                         type="button"
-                        className="btn btn--small"
+                        className="modal-close-x"
+                        aria-label="Choose another artist"
+                        title="Choose another artist"
                         onClick={() => {
                           setPendingArtist(null);
                           setEstimate(null);
@@ -355,7 +404,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                         }}
                         disabled={estimating}
                       >
-                        Choose another
+                        ×
                       </button>
                     )}
                   </div>

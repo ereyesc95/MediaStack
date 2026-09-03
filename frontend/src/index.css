@@ -6885,9 +6885,43 @@ input {
   line-height: 1.4;
 }
 
-.manage-artists-modal__guide-option {
+/* Beat `.artist-admin-form label`, which stacks label children in a column. */
+.artist-admin-form label.manage-artists-modal__guide-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  justify-self: start;
+  align-self: start;
   margin: 0.15rem 0 0;
   color: var(--text-muted);
+}
+
+.manage-artists-modal__search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.manage-artists-modal__search-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.manage-artists-modal__search-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.manage-artists-modal__search-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .manage-artists-modal__guide-option .ms-checkbox__label {
@@ -6910,10 +6944,24 @@ input {
 }
 
 .manage-artists-modal__not-found {
+  display: grid;
+  gap: 0.2rem;
   margin: 0.75rem 0 0;
+  color: var(--text-muted);
+}
+
+.manage-artists-modal__not-found p {
+  margin: 0;
+}
+
+.manage-artists-modal__not-found-title {
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.manage-artists-modal__not-found-body {
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--text-muted);
 }
 
 .manage-artists-modal__inline-link {
@@ -6922,7 +6970,7 @@ input {
   padding: 0;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--accent);
   font: inherit;
   font-weight: 700;
   text-decoration: none;
@@ -6933,7 +6981,7 @@ input {
 .manage-artists-modal__inline-link:focus,
 .manage-artists-modal__inline-link:focus-visible,
 .manage-artists-modal__inline-link:active {
-  color: inherit;
+  color: var(--accent);
   text-decoration: none;
   background: none;
   box-shadow: none;
@@ -6964,6 +7012,22 @@ input {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: manage-artist-spin 0.8s linear infinite;
+}
+
+.manage-artists-modal__spinner--sm {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 0.95rem;
+  border-width: 1.5px;
+}
+
+/* Keep the create action close to the estimate card. */
+.modal-panel.manage-artists-modal > .modal-panel-actions {
+  padding-top: 0.35rem;
+}
+
+.modal-panel.manage-artists-modal > .artist-admin-form {
+  flex: 0 1 auto;
 }
 
 .manage-artists-modal__close-warning {
