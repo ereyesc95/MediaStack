@@ -2208,7 +2208,16 @@ export default function SeriesSubseriesPage({
         title,
         galleryPath
       );
-      if (instantMovies.length) setMovieCards(instantMovies);
+      if (instantMovies.length) {
+        // Some related endpoints may return the same physical film leaf twice
+        // with different IDs; dedupe by path first.
+        const movieKey = (m: SeriesMediaCard) =>
+          m.path || m.id || m.title || "";
+        const deduped = Array.from(
+          new Map(instantMovies.map((m) => [movieKey(m), m])).values()
+        );
+        if (deduped.length) setMovieCards(deduped);
+      }
       if (instantBooks.length) setLibraryCards(instantBooks);
       if (instantMovies.length || instantBooks.length) setMediaReady(true);
     }
@@ -2733,7 +2742,8 @@ export default function SeriesSubseriesPage({
           ...filteredFranchiseMovies,
           ...toMediaCards(counterpartMovies),
         ]) {
-          movieById.set(m.id || m.path || m.title, m);
+          // Dedupe by physical path first (IDs can differ between endpoints).
+          movieById.set(m.path || m.id || m.title, m);
         }
         setMovieCards(Array.from(movieById.values()));
 

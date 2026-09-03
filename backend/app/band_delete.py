@@ -47,7 +47,27 @@ def delete_band_without_folder(db: Session, band_id: int, media_root: Path | Non
     db.execute(delete(ReleaseStaffMember).where(ReleaseStaffMember.rsm_band_id == band_id))
     db.execute(delete(TrackOverride).where(TrackOverride.tro_band_id == band_id))
 
-    for rel in db.scalars(select(Release)).all():
+    # Avoid scanning every release on delete (can time out on large DBs).
+    # `rel_fk_bands` is a semicolon-separated string (legacy may also use commas),
+    # so we prefilter with LIKE patterns then do the exact parse/update.
+    band_s = str(band_id)
+    semicolon_candidates = (
+        Release.rel_fk_bands == band_s
+        | Release.rel_fk_bands.like(f"{band_s};%")
+        | Release.rel_fk_bands.like(f"%;{band_s};%")
+        | Release.rel_fk_bands.like(f"%;{band_s}")
+    )
+    comma_candidates = (
+        Release.rel_fk_bands == band_s
+        | Release.rel_fk_bands.like(f"{band_s},%")
+        | Release.rel_fk_bands.like(f"%,{band_s},%")
+        | Release.rel_fk_bands.like(f"%,{band_s}")
+    )
+    candidates = db.scalars(
+        select(Release).where(semicolon_candidates | comma_candidates)
+    ).all()
+
+    for rel in candidates:
         ids = _parse_ids(rel.rel_fk_bands)
         if band_id not in ids:
             continue
