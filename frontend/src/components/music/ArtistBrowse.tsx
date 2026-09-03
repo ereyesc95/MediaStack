@@ -286,6 +286,17 @@ export default function ArtistBrowse({
 
   const filterModeList = isAlbums ? ALBUM_FILTER_MODES : ARTIST_FILTER_MODES;
 
+  // Albums filter by release date; artists filter by their own activity years.
+  const startDecades = useMemo(() => {
+    if (isAlbums) return filterOptions?.decades ?? [];
+    return filterOptions?.start_decades ?? [];
+  }, [filterOptions, isAlbums]);
+
+  const endDecades = useMemo(
+    () => filterOptions?.end_decades ?? [],
+    [filterOptions],
+  );
+
   const visibleFilterModes = useMemo(() => {
     return filterModeList.filter((f) => {
       if (f.id === filterMode) return true;
@@ -301,8 +312,9 @@ export default function ArtistBrowse({
         case "country":
           return (filterOptions.country_groups?.length ?? 0) > 0;
         case "start":
+          return startDecades.length > 0;
         case "end":
-          return (filterOptions.decades?.length ?? 0) > 0;
+          return endDecades.length > 0;
         case "genre":
           return (filterOptions.subgenre_groups?.length ?? 0) > 0;
         case "label":
@@ -313,7 +325,14 @@ export default function ArtistBrowse({
           return true;
       }
     });
-  }, [filterOptions, filterModeList, isAlbums, filterMode]);
+  }, [
+    filterOptions,
+    filterModeList,
+    isAlbums,
+    filterMode,
+    startDecades,
+    endDecades,
+  ]);
 
   useEffect(() => {
     if (!filterOptions) return;
@@ -466,7 +485,7 @@ export default function ArtistBrowse({
         if (!filterOptions) return null;
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {filterOptions.decades.map((d) => (
+            {startDecades.map((d) => (
               <button
                 key={d}
                 type="button"
@@ -482,7 +501,7 @@ export default function ArtistBrowse({
         if (!filterOptions) return null;
         return (
           <div className="filter-subbar filter-subbar--spread">
-            {filterOptions.decades.map((d) => (
+            {endDecades.map((d) => (
               <button
                 key={d}
                 type="button"

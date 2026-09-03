@@ -121,7 +121,12 @@ export type FilterOptions = {
       continent_id: number | null;
     }[];
   }[];
+  /** Release decades (album "release date" filter). */
   decades: number[];
+  /** Decades in which artists started (artist "start date" filter). */
+  start_decades?: number[];
+  /** Decades in which artists ended (artist "end date" filter). */
+  end_decades?: number[];
   continents: { id: number; name: string | null }[];
   /** Letters that have at least one artist/band on disk. */
   letters?: string[];

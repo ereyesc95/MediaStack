@@ -78,14 +78,30 @@ def _band_type_id(b: Band) -> int | None:
     return ids[0] if ids else None
 
 
-def _first_decade(dates: str | None) -> int | None:
+def _decade_years(dates: str | None) -> list[int]:
     if not dates:
+        return []
+    return [int(m) for m in DECADE_RE.findall(dates)]
+
+
+def _first_decade(dates: str | None) -> int | None:
+    """Decade of the earliest year in a multi-period activity field."""
+    years = _decade_years(dates)
+    if not years:
         return None
-    m = DECADE_RE.search(dates)
-    if not m:
+    return (min(years) // 10) * 10
+
+
+def _last_decade(dates: str | None) -> int | None:
+    """Decade of the latest year in a multi-period activity field.
+
+    Bands with reunions store every period, e.g. ``1992;2017-12-31``. The band
+    ended in the last of those years, not the first.
+    """
+    years = _decade_years(dates)
+    if not years:
         return None
-    year = int(m.group(1))
-    return (year // 10) * 10
+    return (max(years) // 10) * 10
 
 
 def _country_ids(db: Session, *, continent_id: int | None = None, country_id: int | None = None) -> set[int]:
@@ -342,7 +358,7 @@ def filter_bands(
         out = [b for b in out if _first_decade(b.bnd_starting_dates) == start_decade]
 
     if filter_mode == "end" and end_decade is not None:
-        out = [b for b in out if _first_decade(b.bnd_ending_dates) == end_decade]
+        out = [b for b in out if _last_decade(b.bnd_ending_dates) == end_decade]
 
     if filter_mode == "genre" and subgenre_id is not None:
         out = [b for b in out if subgenre_id in _parse_ids(b.bnd_fk_subgenres)]
@@ -572,19 +588,31 @@ def filter_options(db: Session) -> dict:
         producer_list.append({"id": pid, "name": name})
 
     letters: set[str] = set()
+    start_decades: set[int] = set()
+    end_decades: set[int] = set()
     for b in bands:
         raw = (b.bnd_name or "").strip()[:1].upper()
         if raw and "A" <= raw <= "Z":
             letters.add(raw)
         elif raw:
             letters.add("#")
+        started = _first_decade(b.bnd_starting_dates)
+        if started is not None:
+            start_decades.add(started)
+        ended = _last_decade(b.bnd_ending_dates)
+        if ended is not None:
+            end_decades.add(ended)
 
     return {
         "subgenre_groups": subgenre_groups,
         "country_groups": country_groups,
         "all_country_groups": all_country_groups(db),
         "continents": continents,
+        # Release decades drive the album "release date" filter; band activity
+        # decades drive the artist start/end filters.
         "decades": sorted(decades),
+        "start_decades": sorted(start_decades),
+        "end_decades": sorted(end_decades),
         "labels": sorted(labels, key=str.lower),
         "producers": producer_list,
         "letters": sorted(letters, key=lambda x: (x == "#", x)),
