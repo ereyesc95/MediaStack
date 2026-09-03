@@ -68,9 +68,11 @@ def init_db() -> None:
 
         ensure_music_lookup_data(db)
         ensure_profiles(db)
+        from app.artist_import_guide import ensure_artist_user_guide_template
         from app.staff_roles import ensure_staff_roles
         from app.universes import migrate_legacy_universe_members
 
+        ensure_artist_user_guide_template(db)
         ensure_staff_roles(db)
         migrate_legacy_universe_members(db)
     finally:

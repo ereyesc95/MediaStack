@@ -219,14 +219,50 @@ export async function searchMusicBrainz(
   return request(`${API}/music/musicbrainz/search?q=${encodeURIComponent(q)}`);
 }
 
-export async function importBandFromMb(mbid: string) {
-  return request<{ id: number; code: string; name: string; existing: boolean }>(
+export type ArtistImportEstimate = {
+  name: string;
+  release_group_count: number;
+  member_count: number;
+  estimated_seconds: number;
+  estimated_label: string;
+  local_folder_exists: boolean;
+  catalog_exists: boolean;
+};
+
+export type ArtistImportResult = {
+  id: number;
+  code: string;
+  name: string;
+  existing: boolean;
+  local_status: "created" | "existing";
+  releases_created: number;
+  warnings?: string[];
+  message: string;
+};
+
+export async function estimateBandImport(mbid: string) {
+  return request<ArtistImportEstimate>(
+    `${API}/music/bands/import-estimate/${encodeURIComponent(mbid)}`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function importBandFromMb(
+  mbid: string,
+  writeUserGuide = false
+) {
+  return request<ArtistImportResult>(
     `${API}/music/bands/import`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mbid }),
-    }
+      body: JSON.stringify({
+        mbid,
+        write_user_guide: writeUserGuide,
+      }),
+    },
+    15 * 60_000
   );
 }
 

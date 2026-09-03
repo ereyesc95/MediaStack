@@ -32,9 +32,11 @@ Media/
 
 ### Audio
 
-Unchanged from README — categories under `Audio/`:
+Preferred layout: release categories directly under the artist folder:
 
 `Albums`, `Extended Plays`, `Compilations`, `Soundtracks`, `Live Albums`, `Singles`
+
+Legacy `Audio/{Category}/` trees are still scanned as a fallback.
 
 Portals: compilation `.lnk` / `.path` / symlinks (resolved via `resolve_media_entry()` in `media_paths_util.py`).
 

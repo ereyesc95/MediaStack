@@ -10,6 +10,17 @@ def migrate_schema(eng: Engine) -> None:
         return
     with eng.begin() as conn:
         tables = set(inspect(eng).get_table_names())
+        if "app_settings" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE app_settings (
+                        "apsKey" TEXT NOT NULL PRIMARY KEY,
+                        "apsValue" TEXT
+                    )
+                    """
+                )
+            )
         if "countries" in tables:
             cols = {c["name"] for c in inspect(eng).get_columns("countries")}
             if "couContinentID" not in cols:

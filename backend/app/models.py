@@ -7,6 +7,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    aps_key: Mapped[str] = mapped_column("apsKey", Text, primary_key=True)
+    aps_value: Mapped[str | None] = mapped_column("apsValue", Text)
+
+
 class ContentType(Base):
     __tablename__ = "contenttype"
 

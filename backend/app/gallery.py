@@ -84,8 +84,15 @@ def _display_name(name: str | None) -> str:
     return name.replace("■", ",").replace("█", "'").strip()
 
 
+def _safe_folder_component(name: str | None) -> str:
+    """Return a Windows-safe media folder component for a display name."""
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " - ", _display_name(name))
+    safe = re.sub(r"\s+", " ", safe).strip().rstrip(". ")
+    return safe or "Unknown"
+
+
 def _letter_folder(name: str | None) -> str:
-    n = _display_name(name)
+    n = _safe_folder_component(name)
     if not n:
         return "#"
     ch = n[0].upper()
@@ -111,7 +118,7 @@ def _artist_dir(media_root: Path, artist_name: str | None) -> Path | None:
     because of another artist must not count as a local library for this name.
     """
     letter = _letter_folder(artist_name)
-    safe = _display_name(artist_name)
+    safe = _safe_folder_component(artist_name)
     music_dir = _resolve_child_dir(media_root, "Music")
     letter_path = _resolve_child_dir(music_dir, letter)
     artist_path = letter_path / safe

@@ -1,9 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   deleteBand,
+  estimateBandImport,
   importBandFromMb,
   searchMusicBrainz,
   searchRosterBands,
+  type ArtistImportEstimate,
 } from "../../api";
 import type { MbArtistMatch } from "../../types";
 import SearchableDropdown, {
@@ -28,8 +30,37 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [selectedValue, setSelectedValue] = useState("");
   const [selected, setSelected] = useState<SelectedArtist[]>([]);
   const [busy, setBusy] = useState(false);
+  const [estimating, setEstimating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [pendingArtist, setPendingArtist] = useState<MbArtistMatch | null>(null);
+  const [estimate, setEstimate] = useState<ArtistImportEstimate | null>(null);
+  const [writeUserGuide, setWriteUserGuide] = useState(false);
+  const [closeWarning, setCloseWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!importing) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [importing]);
+
+  function requestClose() {
+    if (importing) {
+      setCloseWarning(
+        "Artist data and folders are still being created. Closing now can hide " +
+          "the result and may leave the import incomplete. Keep this window open " +
+          "until MyStack confirms it has finished."
+      );
+      return;
+    }
+    if (busy) return;
+    onClose();
+  }
 
   const searchCatalog = useCallback(async (value: string) => {
     const data = await searchRosterBands(value, 50);
@@ -46,6 +77,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setNotice(null);
     setBusy(true);
     setMatches([]);
+    setPendingArtist(null);
+    setEstimate(null);
     try {
       const data = await searchMusicBrainz(query);
       setMatches(data.items ?? []);
@@ -56,23 +89,53 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     }
   }
 
-  async function addArtist(match: MbArtistMatch) {
-    setBusy(true);
+  async function prepareArtist(match: MbArtistMatch) {
+    setPendingArtist(match);
+    setEstimate(null);
+    setWriteUserGuide(false);
     setError(null);
     setNotice(null);
+    setCloseWarning(null);
+    setEstimating(true);
     try {
-      const result = await importBandFromMb(match.mbid);
-      setNotice(
-        result.existing
-          ? `${result.name} is already in the catalog.`
-          : `${result.name} was added.`
+      setEstimate(await estimateBandImport(match.mbid));
+    } catch (e) {
+      setError(
+        `Could not estimate this import: ${
+          e instanceof Error ? e.message : String(e)
+        }`
       );
+    } finally {
+      setEstimating(false);
+    }
+  }
+
+  async function addArtist() {
+    if (!pendingArtist || !estimate) return;
+    setBusy(true);
+    setImporting(true);
+    setError(null);
+    setNotice(null);
+    setCloseWarning(null);
+    try {
+      const result = await importBandFromMb(
+        pendingArtist.mbid,
+        writeUserGuide
+      );
+      const warnings = result.warnings?.length
+        ? ` Warnings: ${result.warnings.join(" ")}`
+        : "";
+      setNotice(`${result.message}${warnings}`);
       setMatches([]);
       setQuery("");
+      setPendingArtist(null);
+      setEstimate(null);
+      setWriteUserGuide(false);
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      setImporting(false);
       setBusy(false);
     }
   }
@@ -124,7 +187,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={busy ? undefined : onClose}>
+    <div className="modal-backdrop" onClick={requestClose}>
       <div
         className="modal-panel artist-admin-modal manage-artists-modal"
         onClick={(event) => event.stopPropagation()}
@@ -135,8 +198,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
             type="button"
             className="modal-close-x"
             aria-label="Close"
-            onClick={onClose}
-            disabled={busy}
+            onClick={requestClose}
+            disabled={busy && !importing}
           >
             ×
           </button>
@@ -146,6 +209,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
           <button
             type="button"
             className={mode === "add" ? "active" : ""}
+            disabled={busy || estimating}
             onClick={() => {
               setMode("add");
               setError(null);
@@ -157,6 +221,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
           <button
             type="button"
             className={mode === "remove" ? "active" : ""}
+            disabled={busy || estimating}
             onClick={() => {
               setMode("remove");
               setError(null);
@@ -176,6 +241,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Artist or band name"
+                  disabled={busy || estimating}
                   onKeyDown={(event) =>
                     event.key === "Enter" && void handleSearch()
                   }
@@ -184,31 +250,127 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   type="button"
                   className="btn"
                   onClick={() => void handleSearch()}
-                  disabled={busy || !query.trim()}
+                  disabled={busy || estimating || !query.trim()}
                 >
                   Search
                 </button>
               </div>
-              <ul className="mb-matches">
-                {matches.map((match) => (
-                  <li key={match.mbid}>
-                    <button
-                      type="button"
-                      onClick={() => void addArtist(match)}
-                      disabled={busy}
-                    >
-                      <strong>{match.name}</strong>
-                      {match.disambiguation && (
-                        <span className="muted">
-                          {" "}
-                          — {match.disambiguation}
-                        </span>
+              {!importing && !pendingArtist && (
+                <ul className="mb-matches">
+                  {matches.map((match) => (
+                    <li key={match.mbid}>
+                      <button
+                        type="button"
+                        onClick={() => void prepareArtist(match)}
+                        disabled={busy || estimating}
+                      >
+                        <strong>{match.name}</strong>
+                        {match.disambiguation && (
+                          <span className="muted">
+                            {" "}
+                            — {match.disambiguation}
+                          </span>
+                        )}
+                        {match.type && (
+                          <span className="badge">{match.type}</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {pendingArtist && (
+                <div className="manage-artists-modal__import">
+                  <div className="manage-artists-modal__import-heading">
+                    <strong>{pendingArtist.name}</strong>
+                    {!importing && (
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        onClick={() => {
+                          setPendingArtist(null);
+                          setEstimate(null);
+                          setError(null);
+                        }}
+                        disabled={estimating}
+                      >
+                        Choose another
+                      </button>
+                    )}
+                  </div>
+                  {estimating && (
+                    <p className="muted">Calculating import size and time…</p>
+                  )}
+                  {estimate && (
+                    <>
+                      <div className="manage-artists-modal__estimate">
+                        <span>Approximate time</span>
+                        <strong>{estimate.estimated_label}</strong>
+                        {!estimate.local_folder_exists && (
+                          <small className="muted">
+                            {estimate.release_group_count} official release
+                            {estimate.release_group_count === 1 ? "" : "s"} will
+                            be scaffolded. Large catalogs can take longer when
+                            MusicBrainz is busy.
+                          </small>
+                        )}
+                        {estimate.local_folder_exists &&
+                          !estimate.catalog_exists && (
+                            <small className="muted">
+                              The local folder will not be changed. Only missing
+                              catalog data will be imported.
+                            </small>
+                          )}
+                      </div>
+                      {!estimate.local_folder_exists && !importing && (
+                        <label className="manage-artists-modal__guide-option">
+                          <input
+                            type="checkbox"
+                            checked={writeUserGuide}
+                            onChange={(event) =>
+                              setWriteUserGuide(event.target.checked)
+                            }
+                          />
+                          <span>
+                            Create <strong>User guide.txt</strong> with folder
+                            and filename hints
+                          </span>
+                        </label>
                       )}
-                      {match.type && <span className="badge">{match.type}</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      {estimate.local_folder_exists &&
+                      estimate.catalog_exists ? (
+                        <p className="modal-notice">
+                          This artist already exists locally and in the catalog.
+                          Nothing will be changed.
+                        </p>
+                      ) : importing ? (
+                        <div
+                          className="manage-artists-modal__progress"
+                          role="status"
+                        >
+                          <span className="manage-artists-modal__spinner" />
+                          <div>
+                            <strong>Creating artist…</strong>
+                            <small className="muted">
+                              Keep this window open. Create and search controls
+                              are unavailable until the import finishes.
+                            </small>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn manage-artists-modal__create"
+                          onClick={() => void addArtist()}
+                          disabled={busy || estimating}
+                        >
+                          Create artist
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -256,6 +418,11 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         </div>
 
         {notice && <p className="modal-notice">{notice}</p>}
+        {closeWarning && (
+          <p className="manage-artists-modal__close-warning" role="alert">
+            {closeWarning}
+          </p>
+        )}
         {error && <p className="error manage-artists-modal__error">{error}</p>}
 
         {mode === "remove" && (

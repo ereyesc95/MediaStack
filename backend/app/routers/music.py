@@ -29,7 +29,7 @@ from app.music_dashboard import (
     playlist_tracks,
 )
 from app.music_filters import filter_options, search_roster_artists, search_roster_bands
-from app.services.musicbrainz import fetch_artist, search_artists
+from app.services.musicbrainz import search_artists
 from app.schemas import BandListOut, BandOut, PlaylistOut, ReleaseListOut, TrackOut
 
 router = APIRouter(prefix="/api/music", tags=["music"])
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/api/music", tags=["music"])
 
 class ImportBandBody(BaseModel):
     mbid: str
+    write_user_guide: bool = False
 
 
 class RefreshMetadataBody(BaseModel):
@@ -355,6 +356,22 @@ async def mb_search(q: str = Query(..., min_length=1)):
     return {"items": await search_artists(q, limit=3)}
 
 
+@router.get("/bands/import-estimate/{mbid}")
+async def estimate_band_import(
+    mbid: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.artist_import import estimate_import
+
+    try:
+        return await estimate_import(db, mbid.strip())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"MusicBrainz estimate error: {exc}") from exc
+
+
 @router.post("/bands/import")
 async def import_band_from_mb(
     body: ImportBandBody,
@@ -364,33 +381,18 @@ async def import_band_from_mb(
     mbid = body.mbid.strip()
     if not mbid:
         raise HTTPException(400, "mbid required")
-    existing = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
-    if existing:
-        return {"id": existing.bnd_id, "code": existing.bnd_code, "name": existing.bnd_name, "existing": True}
-    try:
-        data = await fetch_artist(mbid)
-    except Exception as exc:
-        raise HTTPException(502, f"MusicBrainz error: {exc}") from exc
-    name = data.get("name") or "Unknown"
-    life = data.get("life-span") or {}
-    start = life.get("begin") or ""
-    end = life.get("end") or ""
-    aliases = ";".join(a.get("name", "") for a in data.get("aliases", []) if a.get("name"))
-    from sqlalchemy import func
+    from app.artist_import import import_artist
 
-    next_id = (db.scalar(select(func.max(Band.bnd_id))) or 0) + 1
-    row = Band(
-        bnd_id=next_id,
-        bnd_name=name,
-        bnd_code=mbid,
-        bnd_other_names=aliases or None,
-        bnd_starting_dates=start or None,
-        bnd_ending_dates=end or None,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return {"id": row.bnd_id, "code": row.bnd_code, "name": row.bnd_name, "existing": False}
+    try:
+        return await import_artist(
+            db,
+            mbid,
+            write_user_guide=body.write_user_guide,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Artist import error: {exc}") from exc
 
 
 @router.get("/bands", response_model=BandListOut)
