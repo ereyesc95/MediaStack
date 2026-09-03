@@ -2208,6 +2208,10 @@ export default function SeriesSubseriesPage({
         title,
         galleryPath
       );
+      const dedupeCardsByPath = (items: SeriesMediaCard[]) =>
+        Array.from(
+          new Map(items.map((item) => [item.path || item.id || item.title, item])).values()
+        );
       if (instantMovies.length) {
         // Some related endpoints may return the same physical film leaf twice
         // with different IDs; dedupe by path first.
@@ -2235,7 +2239,7 @@ export default function SeriesSubseriesPage({
         const deduped = Array.from(movieByKey.values());
         if (deduped.length) setMovieCards(deduped);
       }
-      if (instantBooks.length) setLibraryCards(instantBooks);
+      if (instantBooks.length) setLibraryCards(dedupeCardsByPath(instantBooks));
       if (instantMovies.length || instantBooks.length) setMediaReady(true);
     }
     setMediaLoading(true);
@@ -2883,7 +2887,7 @@ export default function SeriesSubseriesPage({
           );
           const byId = new Map<string, SeriesMediaCard>();
           for (const b of [...filtered, ...counterpartBooks]) {
-            byId.set(b.id || b.path || b.title, b);
+            byId.set(b.path || b.id || b.title, b);
           }
           return Array.from(byId.values());
         });

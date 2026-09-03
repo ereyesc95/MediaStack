@@ -95,6 +95,28 @@ def music_folder_exists_for_name(
     return bool(find_music_artist_dir(franchise_name, media_root))
 
 
+def preferred_artwork_owner(
+    franchise_name: str, media_root: Path | None = None
+) -> tuple[str, Path] | None:
+    """Canonical module folder that should own franchise-level ``[Artwork]``.
+
+    Priority is structural, not accidental creation order:
+    Music artist folder first, then Series, then Movies, then Books.
+    """
+    root = _media_root(media_root)
+    safe = _display_folder_name(franchise_name)
+    if not root or not safe:
+        return None
+    for module, folder in MODULE_ROOTS:
+        if module == "music":
+            d = find_music_artist_dir(safe, root)
+        else:
+            d = franchise_letter_dir(root, folder, safe)
+        if d:
+            return module, d
+    return None
+
+
 def find_artwork_home(
     franchise_name: str, media_root: Path | None = None
 ) -> tuple[str, Path] | None:
@@ -106,13 +128,18 @@ def find_artwork_home(
     safe = _display_folder_name(franchise_name)
     if not root or not safe:
         return None
+    preferred = preferred_artwork_owner(safe, root)
+    ordered: list[tuple[str, Path]] = []
+    if preferred:
+        ordered.append(preferred)
     for module, folder in MODULE_ROOTS:
-        if module == "music":
-            d = find_music_artist_dir(safe, root)
-        else:
-            d = franchise_letter_dir(root, folder, safe)
+        d = find_music_artist_dir(safe, root) if module == "music" else franchise_letter_dir(root, folder, safe)
         if not d:
             continue
+        pair = (module, d)
+        if pair not in ordered:
+            ordered.append(pair)
+    for module, d in ordered:
         art = find_artwork_legacy(d)
         if art and art.is_dir():
             return module, d

@@ -122,20 +122,19 @@ def ensure_artwork_cached(
 
     if not film:
         try:
-            from app.franchise_identity import find_artwork_home, find_music_artist_dir
-            from app.series_paths import find_artwork_legacy
+            from app.franchise_identity import find_artwork_home, preferred_artwork_owner
 
             name = (franchise_name or franchise_dir.name or "").strip()
             if name:
+                owner = preferred_artwork_owner(name, media_root)
+                if owner:
+                    _owner_module, owner_dir = owner
+                    if owner_dir.resolve() != franchise_dir.resolve():
+                        return empty
                 home = find_artwork_home(name, media_root)
                 if home:
                     _module, home_dir = home
                     if home_dir.resolve() != franchise_dir.resolve():
-                        return empty
-                music_dir = find_music_artist_dir(name, media_root)
-                if music_dir and music_dir.resolve() != franchise_dir.resolve():
-                    art_home = find_artwork_legacy(music_dir)
-                    if art_home and art_home.is_dir():
                         return empty
         except Exception:
             pass
