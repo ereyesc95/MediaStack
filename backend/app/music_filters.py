@@ -520,6 +520,32 @@ def search_roster_bands(db: Session, query: str, *, limit: int = 25) -> list[dic
     return out
 
 
+def music_subgenre_taxonomy(db: Session) -> list[dict]:
+    """Every music subgenre grouped by parent genre — for the About editors."""
+    parents = {
+        g.gen_id: (g.gen_name or "").strip()
+        for g in db.scalars(select(Genre)).all()
+        if g.gen_name and _is_music_media(g.gen_media_type_id)
+    }
+    by_parent: dict[str, list[dict]] = {}
+    for s in db.scalars(select(Subgenre).order_by(Subgenre.sgn_name)).all():
+        name = (s.sgn_name or "").strip()
+        if not name:
+            continue
+        parent = parents.get(s.sgn_genre_id or 0)
+        if not parent and not _is_music_media(s.sgn_media_type_id):
+            continue
+        by_parent.setdefault(parent or "Other", []).append(
+            {"id": s.sgn_id, "name": name, "genre_id": s.sgn_genre_id}
+        )
+    for items in by_parent.values():
+        items.sort(key=lambda x: (x.get("name") or "").casefold())
+    return [
+        {"genre": parent, "items": items}
+        for parent, items in sorted(by_parent.items(), key=lambda x: x[0].casefold())
+    ]
+
+
 def filter_options(db: Session) -> dict:
     bands = list(db.scalars(select(Band)).all())
     band_ids = {b.bnd_id for b in bands}
@@ -557,6 +583,7 @@ def filter_options(db: Session) -> dict:
         {"genre": name, "items": items}
         for name, items in sorted(by_parent.items(), key=lambda x: x[0].lower())
     ]
+    all_subgenre_groups = music_subgenre_taxonomy(db)
 
     country_groups = _country_groups_from_ids(db, used_country_ids)
     continents = continents_for_country_ids(db, used_country_ids)
@@ -605,6 +632,7 @@ def filter_options(db: Session) -> dict:
 
     return {
         "subgenre_groups": subgenre_groups,
+        "all_subgenre_groups": all_subgenre_groups,
         "country_groups": country_groups,
         "all_country_groups": all_country_groups(db),
         "continents": continents,

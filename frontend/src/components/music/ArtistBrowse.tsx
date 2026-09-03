@@ -287,13 +287,16 @@ export default function ArtistBrowse({
   const filterModeList = isAlbums ? ALBUM_FILTER_MODES : ARTIST_FILTER_MODES;
 
   // Albums filter by release date; artists filter by their own activity years.
+  // Older API builds only send `decades`, so fall back to it rather than
+  // dropping the tabs entirely.
   const startDecades = useMemo(() => {
-    if (isAlbums) return filterOptions?.decades ?? [];
-    return filterOptions?.start_decades ?? [];
+    if (!filterOptions) return [];
+    if (isAlbums) return filterOptions.decades ?? [];
+    return filterOptions.start_decades ?? filterOptions.decades ?? [];
   }, [filterOptions, isAlbums]);
 
   const endDecades = useMemo(
-    () => filterOptions?.end_decades ?? [],
+    () => filterOptions?.end_decades ?? filterOptions?.decades ?? [],
     [filterOptions],
   );
 
