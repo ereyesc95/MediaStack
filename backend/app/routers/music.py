@@ -2088,6 +2088,8 @@ def band_delete(
 ):
     from app.band_delete import delete_band_without_folder
 
+    from sqlalchemy.exc import OperationalError
+
     root = Path(settings.media_root) if settings.media_root else None
     try:
         delete_band_without_folder(db, band_id, root)
@@ -2095,6 +2097,10 @@ def band_delete(
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except OperationalError as exc:
+        raise HTTPException(
+            503, "Database is busy. Please try removing the artist again."
+        ) from exc
     return {"ok": True, "id": band_id}
 
 

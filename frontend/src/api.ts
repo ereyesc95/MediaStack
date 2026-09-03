@@ -1274,7 +1274,11 @@ export async function deleteBandRelated(bandId: number, erlId: number) {
 }
 
 export async function deleteBand(bandId: number): Promise<{ ok: boolean; id: number }> {
-  return request(`${API}/music/bands/${bandId}`, { method: "DELETE" });
+  return request(
+    `${API}/music/bands/${bandId}`,
+    { method: "DELETE" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function fetchLinkCatalog(): Promise<{

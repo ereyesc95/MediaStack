@@ -49,7 +49,7 @@ import {
   getStoredReleaseCardLayout,
   saveReleaseCardLayout,
 } from "../../themes";
-import AddArtistModal from "./AddArtistModal";
+import ManageArtistsModal from "./ManageArtistsModal";
 import AddPlaylistModal, { markSpotifyCredentialsRepair } from "./AddPlaylistModal";
 import ArtistPage from "./artist/ArtistPage";
 import SystemPlaylistPage from "./artist/SystemPlaylistPage";
@@ -186,7 +186,7 @@ export default function MusicModule({
   onOpenSeriesFolder,
   onOpenMoviesLeaf,
 }: Props) {
-  const [showAddArtist, setShowAddArtist] = useState(false);
+  const [showManageArtists, setShowManageArtists] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
@@ -1136,8 +1136,8 @@ export default function MusicModule({
                 userId={userId}
                 onSwitchProfile={onSwitchProfile}
                 onEditProfile={onEditProfile}
-                showAddArtist={showArtistTools && isAdmin}
-                onAddArtist={() => setShowAddArtist(true)}
+                showManageArtists={showArtistTools && isAdmin}
+                onManageArtists={() => setShowManageArtists(true)}
                 showAddPlaylist={tab === "playlists" && !userPlaylistOpen}
                 onAddPlaylist={() => {
                   setAddPlaylistInitialMode("local");
@@ -1690,11 +1690,10 @@ export default function MusicModule({
         />
       )}
 
-      {showAddArtist && (
-        <AddArtistModal
-          onClose={() => setShowAddArtist(false)}
-          onAdded={() => {
-            setShowAddArtist(false);
+      {showManageArtists && (
+        <ManageArtistsModal
+          onClose={() => setShowManageArtists(false)}
+          onChanged={() => {
             loadArtists();
             fetchFilterOptions().then(setFilterOptions).catch(() => {});
           }}

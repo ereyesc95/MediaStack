@@ -13,6 +13,7 @@ import { useMediaSwitch, type MediaSwitchKind } from "../mediaSwitchContext";
 import {
   IconAbout,
   IconAddArtist,
+  IconManageArtists,
   IconCamera,
   IconCards,
   IconCheck,
@@ -58,8 +59,8 @@ type Props = {
   onImport?: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
-  onAddArtist?: () => void;
-  showAddArtist?: boolean;
+  onManageArtists?: () => void;
+  showManageArtists?: boolean;
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
   showEditPlaylist?: boolean;
@@ -132,8 +133,8 @@ const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
 export default function AppMenu({
   onSync,
   onChooseSource,
-  onAddArtist,
-  showAddArtist,
+  onManageArtists,
+  showManageArtists,
   onAddPlaylist,
   showAddPlaylist,
   showEditPlaylist,
@@ -847,16 +848,16 @@ export default function AppMenu({
             </button>
           )}
           {!editDataFlat ? refreshDataBlock : null}
-          {isAdmin && showAddArtist && onAddArtist && (
+          {isAdmin && showManageArtists && onManageArtists && (
             <button
               type="button"
               onClick={() => {
-                onAddArtist();
+                onManageArtists();
                 setOpen(false);
               }}
             >
-              <IconAddArtist className="menu-item-icon" />
-              Add artist
+              <IconManageArtists className="menu-item-icon" />
+              Manage Artists
             </button>
           )}
           {showAddPlaylist && onAddPlaylist && (

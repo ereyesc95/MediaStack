@@ -6809,6 +6809,53 @@ input {
   width: calc(100vw - 2rem);
 }
 
+.manage-artists-modal {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.manage-artists-modal .search-dropdown {
+  width: 100%;
+}
+
+.manage-artists-modal__selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 3rem;
+  padding-top: 0.8rem;
+}
+
+.manage-artists-modal__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem 0.35rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.manage-artists-modal__chip button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+
+.manage-artists-modal__chip button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.manage-artists-modal__error {
+  white-space: pre-line;
+}
+
 .add-universe-modal.modal-panel.artist-admin-modal {
   max-width: min(40rem, calc(100vw - 2rem));
   width: min(40rem, calc(100vw - 2rem));

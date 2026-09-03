@@ -206,6 +206,17 @@ export function IconAddArtist({ className }: IconProps) {
   );
 }
 
+export function IconManageArtists({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm6.5 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 13c-3.34 0-7 1.67-7 4.5V20h9.35a6.5 6.5 0 0 1-.35-2c0-1.9.82-3.61 2.13-4.8A13.3 13.3 0 0 0 9 13zm9.6 1.55-1.1-.64-.9 1.56h-1.8v1.27l-1.1.63.9 1.56-.9 1.56 1.1.64V22h1.8l.9 1.56 1.1-.64.9-1.56h1.8v-1.27l1.1-.64-.9-1.56.9-1.56-1.1-.63v-1.27h-1.8l-.9-1.56-1.1.64-.9 1.56h-1.8v1.27l-1.1.64.9 1.56-.9 1.56zm-.55 4.9a1.55 1.55 0 1 1 0-3.1 1.55 1.55 0 0 1 0 3.1z"
+      />
+    </svg>
+  );
+}
+
 export function IconTheme({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

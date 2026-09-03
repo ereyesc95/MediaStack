@@ -1,15 +1,34 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
+_is_sqlite = settings.database_url.startswith("sqlite")
 _connect_args: dict = {}
-if settings.database_url.startswith("sqlite"):
-    _connect_args = {"check_same_thread": False}
+_engine_kwargs: dict = {}
+if _is_sqlite:
+    # Wait for a writer instead of failing immediately when the artist page
+    # is still importing lineup / related rows.
+    _connect_args = {"check_same_thread": False, "timeout": 30}
+    _engine_kwargs["poolclass"] = NullPool
 
-engine = create_engine(settings.database_url, connect_args=_connect_args)
+engine = create_engine(
+    settings.database_url, connect_args=_connect_args, **_engine_kwargs
+)
+
+if _is_sqlite:
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_on_connect(dbapi_conn, _connection_record) -> None:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

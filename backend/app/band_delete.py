@@ -1,9 +1,11 @@
 """Remove a band from the database when it has no on-disk Music folder."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from sqlalchemy import delete, or_, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.artist_quiz import QUIZ_SCORES_DIR
@@ -25,7 +27,30 @@ from app.person_lookup import _band_has_local_folder
 from app.playlist_index import invalidate_playlist_cache
 
 
+def _is_sqlite_locked(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "database is locked" in text or "database table is locked" in text
+
+
 def delete_band_without_folder(db: Session, band_id: int, media_root: Path | None) -> None:
+    last_error: OperationalError | None = None
+    for attempt in range(8):
+        try:
+            _delete_band_without_folder_once(db, band_id, media_root)
+            return
+        except OperationalError as exc:
+            if not _is_sqlite_locked(exc):
+                raise
+            db.rollback()
+            last_error = exc
+            time.sleep(min(0.2 * (2**attempt), 2.0))
+    if last_error:
+        raise last_error
+
+
+def _delete_band_without_folder_once(
+    db: Session, band_id: int, media_root: Path | None
+) -> None:
     band = db.get(Band, band_id)
     if not band:
         raise LookupError("Band not found")
