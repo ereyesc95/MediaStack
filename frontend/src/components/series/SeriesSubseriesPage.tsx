@@ -2211,11 +2211,28 @@ export default function SeriesSubseriesPage({
       if (instantMovies.length) {
         // Some related endpoints may return the same physical film leaf twice
         // with different IDs; dedupe by path first.
+        const titleCf = title.trim().toLowerCase();
         const movieKey = (m: SeriesMediaCard) =>
           m.path || m.id || m.title || "";
-        const deduped = Array.from(
-          new Map(instantMovies.map((m) => [movieKey(m), m])).values()
-        );
+        const score = (m: SeriesMediaCard) => {
+          const t = (m.title || "").trim().toLowerCase();
+          const nonGeneric = titleCf && t && t !== titleCf;
+          // Heuristic: prefer non-generic titles (avoid "Dragon Ball GT" hub-titles)
+          // and prefer cards with local playback metadata.
+          return (nonGeneric ? 10 : 0) +
+            (m.open_url ? 3 : 0) +
+            (m.duration || m.duration_sec ? 2 : 0);
+        };
+
+        const movieByKey = new Map<string, SeriesMediaCard>();
+        for (const m of instantMovies) {
+          const key = movieKey(m);
+          const existing = movieByKey.get(key);
+          if (!existing || score(m) > score(existing)) {
+            movieByKey.set(key, m);
+          }
+        }
+        const deduped = Array.from(movieByKey.values());
         if (deduped.length) setMovieCards(deduped);
       }
       if (instantBooks.length) setLibraryCards(instantBooks);
@@ -2738,12 +2755,24 @@ export default function SeriesSubseriesPage({
           galleryPath
         );
         const movieById = new Map<string, SeriesMediaCard>();
+        const titleCf = title.trim().toLowerCase();
+        const score = (m: SeriesMediaCard) => {
+          const t = (m.title || "").trim().toLowerCase();
+          const nonGeneric = titleCf && t && t !== titleCf;
+          return (nonGeneric ? 10 : 0) +
+            (m.open_url ? 3 : 0) +
+            (m.duration || m.duration_sec ? 2 : 0);
+        };
         for (const m of [
           ...filteredFranchiseMovies,
           ...toMediaCards(counterpartMovies),
         ]) {
           // Dedupe by physical path first (IDs can differ between endpoints).
-          movieById.set(m.path || m.id || m.title, m);
+          const key = m.path || m.id || m.title;
+          const existing = movieById.get(key);
+          if (!existing || score(m) > score(existing)) {
+            movieById.set(key, m);
+          }
         }
         setMovieCards(Array.from(movieById.values()));
 
