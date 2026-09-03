@@ -449,6 +449,10 @@ export default function SeriesFranchisePage({
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
+  const [gallerySubsectionKey, setGallerySubsectionKey] = useState("");
+  const [gallerySubsections, setGallerySubsections] = useState<
+    { key: string; label: string }[]
+  >([]);
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
@@ -2147,6 +2151,25 @@ export default function SeriesFranchisePage({
           </div>
         ) : null}
 
+        {section === "gallery" && gallerySubsections.length > 1 ? (
+          <div
+            className="series-section-subbar"
+            role="tablist"
+            aria-label="Exclusive folders"
+          >
+            {gallerySubsections.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={gallerySubsectionKey === s.key ? "active" : ""}
+                onClick={() => setGallerySubsectionKey(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {section === "overview" && overviewTab === "related" ? (
           <nav className="artist-page__subtabs artist-page__related-subtabs">
             {(
@@ -2736,6 +2759,9 @@ export default function SeriesFranchisePage({
             sectionKey={gallerySectionKey}
             onSectionKeyChange={setGallerySectionKey}
             onSectionsChange={(secs) => setGallerySections(secs)}
+            subsectionKey={gallerySubsectionKey}
+            onSubsectionKeyChange={setGallerySubsectionKey}
+            onSubsectionsChange={setGallerySubsections}
           />
         ) : null}
       </div>

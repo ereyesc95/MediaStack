@@ -42,9 +42,26 @@ export const DEFAULT_CUSTOM: CustomThemeColors = {
 
 const CUSTOM_KEY = "custom-theme-colors";
 const ARTIST_KEY = "artist-theme-colors";
+const ADAPTIVE_KEY = "adaptive-media-theme";
 
 function themeKey(userId?: number) {
   return userId ? `theme:${userId}` : "theme";
+}
+
+function adaptiveKey(userId?: number) {
+  return userId ? `${ADAPTIVE_KEY}:${userId}` : ADAPTIVE_KEY;
+}
+
+/** Whether media pages should use Adaptive. `null` = default on (sample art). */
+export function getAdaptiveMediaPref(userId?: number): boolean | null {
+  const raw = localStorage.getItem(adaptiveKey(userId));
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return null;
+}
+
+export function setAdaptiveMediaPref(on: boolean, userId?: number) {
+  localStorage.setItem(adaptiveKey(userId), on ? "1" : "0");
 }
 
 function customKey(userId?: number) {
@@ -53,7 +70,15 @@ function customKey(userId?: number) {
 
 export function getStoredTheme(userId?: number): ThemeId {
   const raw = localStorage.getItem(themeKey(userId));
-  if (raw === "artist" || raw === "album") return "artist";
+  if (raw === "artist" || raw === "album") {
+    // Legacy: Adaptive was written as the user theme and overwrote Custom.
+    setAdaptiveMediaPref(true, userId);
+    const inferred: ThemeId = localStorage.getItem(customKey(userId))
+      ? "custom"
+      : "dark";
+    localStorage.setItem(themeKey(userId), inferred);
+    return inferred;
+  }
   if (raw && THEMES.some((t) => t.id === raw)) return raw as ThemeId;
   return "dark";
 }
@@ -150,16 +175,15 @@ export function readDomTheme(): ThemeId {
 
 export function applyTheme(id: ThemeId, userId?: number) {
   const attr =
-    id === "custom" ? "custom" : id === "artist" ? "artist" : id;
+    id === "custom" ? "custom" : id === "artist" || id === "album" ? id : id;
   document.documentElement.setAttribute("data-theme", attr);
-  // Persist Adaptive ("artist") too so refresh keeps the choice.
-  localStorage.setItem(
-    themeKey(userId),
-    id === "album" ? "artist" : id
-  );
+  // Adaptive is page-local — never store it as the user's home theme.
+  if (id !== "artist" && id !== "album") {
+    localStorage.setItem(themeKey(userId), id);
+  }
   if (id === "custom") {
     applyThemeColors(getCustomColors(userId));
-  } else if (id === "artist") {
+  } else if (id === "artist" || id === "album") {
     applyThemeColors(getArtistThemeColors(userId) ?? DEFAULT_CUSTOM);
   } else {
     clearCustomCss();
@@ -171,10 +195,13 @@ export function applyTheme(id: ThemeId, userId?: number) {
 
 /** Persist theme choice without updating CSS (used during active playback). */
 export function persistThemeChoice(id: ThemeId, userId?: number) {
-  localStorage.setItem(
-    themeKey(userId),
-    id === "album" ? "artist" : id
-  );
+  if (id === "artist" || id === "album") {
+    setAdaptiveMediaPref(true, userId);
+    updateFavicon();
+    return;
+  }
+  setAdaptiveMediaPref(false, userId);
+  localStorage.setItem(themeKey(userId), id);
   updateFavicon();
 }
 

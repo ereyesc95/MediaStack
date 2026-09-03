@@ -1,12 +1,14 @@
 import {
   applyTheme,
   applyThemeColors,
+  getAdaptiveMediaPref,
   getArtistThemeColors,
   getStoredTheme,
   persistThemeChoice,
   readDomTheme,
   readPersistedTheme,
   saveArtistThemeColors,
+  setAdaptiveMediaPref,
   type CustomThemeColors,
   type ThemeId,
 } from "./themes";
@@ -198,15 +200,34 @@ function restoreThemeAfterPlayback(userId?: number) {
   applyTheme(restore, userId);
 }
 
+function storedBaseTheme(userId?: number): ThemeId {
+  const stored = readPersistedTheme(userId);
+  if (stored === "artist" || stored === "album") return "dark";
+  return stored;
+}
+
 /** Call when entering a page that samples theme colors from media art. */
 export function beginArtistPageSession(userId?: number) {
+  const pref = getAdaptiveMediaPref(userId);
   if (!artistPageActive) {
-    themeBeforeArtist = readPersistedTheme(userId);
+    themeBeforeArtist = storedBaseTheme(userId);
     artistPageActive = true;
-    if (artistPageThemePin) {
-      applyTheme(artistPageThemePin, userId);
-    }
   }
+  if (pref === false) {
+    const stored = storedBaseTheme(userId);
+    pinArtistPageTheme(stored);
+    applyTheme(stored, userId);
+  } else {
+    clearArtistPageThemePin();
+  }
+}
+
+/** Apply stored theme unless a media page is currently sampling Adaptive. */
+export function applyStoredThemeOrKeepAdaptive(userId: number) {
+  if ((artistPageActive || albumPageActive) && !artistPageThemePin) {
+    return;
+  }
+  applyTheme(getStoredTheme(userId), userId);
 }
 
 /** Album/release pages use the same adaptive sampling session as artist pages. */

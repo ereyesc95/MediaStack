@@ -246,13 +246,13 @@ export default function AppMenu({
     }
     if (id === "custom") {
       setCustomOpen(true);
+      persistThemeChoice("custom", userId);
       applyTheme("custom", userId);
       setActiveTheme("custom");
       return;
     }
     if (id === "artist") {
       setCustomOpen(false);
-      // Persist Adaptive so a refresh keeps the choice (not Custom/Dark).
       persistThemeChoice("artist", userId);
       applySavedArtistTheme(userId);
       document.documentElement.setAttribute("data-theme", "artist");
@@ -261,6 +261,7 @@ export default function AppMenu({
       return;
     }
     setCustomOpen(false);
+    persistThemeChoice(id, userId);
     applyTheme(id, userId);
     setActiveTheme(id);
   }
@@ -275,6 +276,7 @@ export default function AppMenu({
       return;
     }
     applyTheme("custom", userId);
+    persistThemeChoice("custom", userId);
     setActiveTheme("custom");
   }
 

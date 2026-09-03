@@ -23,6 +23,9 @@ type Props = {
   sectionKey?: string;
   onSectionKeyChange?: (key: string) => void;
   onSectionsChange?: (sections: SectionMeta[], hasMultiple: boolean) => void;
+  subsectionKey?: string;
+  onSubsectionKeyChange?: (key: string) => void;
+  onSubsectionsChange?: (sections: SectionMeta[]) => void;
   hideSubbar?: boolean;
 };
 
@@ -94,20 +97,27 @@ export default function SeriesGalleryPanel({
   sectionKey: controlledKey,
   onSectionKeyChange,
   onSectionsChange,
+  subsectionKey: controlledSubKey,
+  onSubsectionKeyChange,
+  onSubsectionsChange,
   hideSubbar = false,
 }: Props) {
   const [sections, setSections] = useState<SeriesGallerySection[]>([]);
   const [items, setItems] = useState<SeriesGalleryItem[]>([]);
   const [internalKey, setInternalKey] = useState<string>("");
-  const [subsectionKey, setSubsectionKey] = useState<string>("");
+  const [internalSubKey, setInternalSubKey] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const onSectionsChangeRef = useRef(onSectionsChange);
   const onSectionKeyChangeRef = useRef(onSectionKeyChange);
+  const onSubsectionsChangeRef = useRef(onSubsectionsChange);
+  const onSubsectionKeyChangeRef = useRef(onSubsectionKeyChange);
   onSectionsChangeRef.current = onSectionsChange;
   onSectionKeyChangeRef.current = onSectionKeyChange;
+  onSubsectionsChangeRef.current = onSubsectionsChange;
+  onSubsectionKeyChangeRef.current = onSubsectionKeyChange;
 
   const pathsKey = useMemo(() => {
     const paths =
@@ -128,6 +138,11 @@ export default function SeriesGalleryPanel({
   const setSectionKey = (key: string) => {
     if (onSectionKeyChangeRef.current) onSectionKeyChangeRef.current(key);
     else setInternalKey(key);
+  };
+  const subsectionKey = controlledSubKey ?? internalSubKey;
+  const setSubsectionKey = (key: string) => {
+    if (onSubsectionKeyChangeRef.current) onSubsectionKeyChangeRef.current(key);
+    else setInternalSubKey(key);
   };
 
   const load = useCallback(async () => {
@@ -214,8 +229,12 @@ export default function SeriesGalleryPanel({
   useEffect(() => {
     if (!subsections.length) {
       setSubsectionKey("");
+      onSubsectionsChangeRef.current?.([]);
       return;
     }
+    onSubsectionsChangeRef.current?.(
+      subsections.map((s) => ({ key: s.key, label: s.label }))
+    );
     if (!subsections.some((s) => s.key === subsectionKey)) {
       setSubsectionKey(subsections[0].key);
     }
@@ -275,7 +294,8 @@ export default function SeriesGalleryPanel({
           ))}
         </nav>
       ) : null}
-      {subsections.length > 1 ? (
+      {subsections.length > 1 &&
+      !(hideSubbar && onSubsectionsChange) ? (
         <nav
           className="series-section-subbar"
           role="tablist"

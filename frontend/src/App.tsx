@@ -51,11 +51,8 @@ import BooksModule from "./components/books/BooksModule";
 import SeriesModule from "./components/series/SeriesModule";
 
 import { toStackName } from "./mediaStack";
-import {
-  applyProfilePreferences,
-  getStoredOrientation,
-  saveOrientation,
-} from "./themes";
+import { applyProfilePreferences, getStoredOrientation, saveOrientation } from "./themes";
+import { applyStoredThemeOrKeepAdaptive, clearMediaTheme } from "./mediaTheme";
 import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
 import {
   pushMoviesCatalogRoute,
@@ -85,7 +82,6 @@ import {
   setPendingCatalogBrowse,
   setUniverseReturnTarget,
 } from "./mediaEntry";
-import { clearMediaTheme } from "./mediaTheme";
 import { seriesLeafFromFolderPath } from "./openMediaFromPath";
 import { clearAllDashboardCaches } from "./dashboardCaches";
 import type { CardOrientation, MusicTab, View } from "./types";
@@ -201,7 +197,7 @@ export default function App() {
         try {
           const session = await fetchSession();
           if (session.user) {
-            applyProfilePreferences(session.user.user_id);
+            applyStoredThemeOrKeepAdaptive(session.user.user_id);
             setCardOrientation(getStoredOrientation(session.user.user_id));
             setProfile(session.user);
             if (session.token) {
@@ -291,7 +287,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (view.kind !== "music") {
+    if (view.kind === "hub") {
       clearMediaTheme(profile?.user_id);
     }
   }, [view.kind, profile?.user_id]);

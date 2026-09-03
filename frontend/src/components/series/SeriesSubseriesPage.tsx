@@ -749,6 +749,10 @@ export default function SeriesSubseriesPage({
   const [gallerySections, setGallerySections] = useState<
     { key: string; label: string }[]
   >([]);
+  const [gallerySubsectionKey, setGallerySubsectionKey] = useState("");
+  const [gallerySubsections, setGallerySubsections] = useState<
+    { key: string; label: string }[]
+  >([]);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
   const [officialOnly, setOfficialOnly] = useState(true);
@@ -4233,6 +4237,25 @@ export default function SeriesSubseriesPage({
           </div>
         ) : null}
 
+        {tab === "gallery" && gallerySubsections.length > 1 ? (
+          <div
+            className="series-section-subbar"
+            role="tablist"
+            aria-label="Exclusive folders"
+          >
+            {gallerySubsections.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={gallerySubsectionKey === s.key ? "active" : ""}
+                onClick={() => setGallerySubsectionKey(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {tab === "series" && showSeriesOfficialBar ? (
           <OfficialUnofficialBar
             officialOnly={officialOnly}
@@ -5816,6 +5839,9 @@ export default function SeriesSubseriesPage({
               sectionKey={gallerySectionKey}
               onSectionKeyChange={setGallerySectionKey}
               onSectionsChange={(secs) => setGallerySections(secs)}
+              subsectionKey={gallerySubsectionKey}
+              onSubsectionKeyChange={setGallerySubsectionKey}
+              onSubsectionsChange={setGallerySubsections}
             />
           ) : null}
         </main>
