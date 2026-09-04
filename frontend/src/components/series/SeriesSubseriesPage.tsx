@@ -289,6 +289,42 @@ function filmCardToSubseries(f: MoviesFilmCard | SeriesSubseriesCard): SeriesSub
   } as SeriesSubseriesCard;
 }
 
+function siblingFilmMediaCards(
+  siblings: SeriesSubseriesCard[],
+  currentId: string
+): SeriesMediaCard[] {
+  return toMediaCards(
+    siblings
+      .filter((film) => film.id !== currentId)
+      .map((film) => {
+        const media = film as SeriesSubseriesCard & {
+          portrait_url?: string | null;
+          landscape_url?: string | null;
+          banner_url?: string | null;
+          open_url?: string | null;
+          open_mode?: "tab" | "local" | null;
+          open_label?: string | null;
+        };
+        return {
+          ...media,
+          path: media.folder_path,
+          portrait_url: media.portrait_url || media.cover_url,
+          landscape_url: media.landscape_url || null,
+          banner_url:
+            media.banner_url ||
+            media.landscape_url ||
+            media.portrait_url ||
+            media.cover_url ||
+            null,
+          open_label:
+            media.open_label || (media.open_url ? "Play video" : null),
+          open_mode:
+            media.open_mode || (media.open_url ? ("local" as const) : null),
+        };
+      })
+  );
+}
+
 function sectionToTab(section: SeriesSection | undefined): SubseriesTab {
   if (section === "episodes") return "episodes";
   if (section === "videos") return "videos";
@@ -2164,42 +2200,15 @@ export default function SeriesSubseriesPage({
       setLibraryCards(cachedMedia.libraryCards);
       setGameCards(cachedMedia.gameCards);
       setMediaReady(true);
+      if (isFilm && !isBook) {
+        const siblingCards = siblingFilmMediaCards(siblings, subseriesId);
+        if (siblingCards.length) setMovieCards(siblingCards);
+      }
     } else if (isFilm && !isBook) {
       // Instant MORE MOVIES / SERIES from already-loaded leaf data so tabs
       // don't wait on the heavy franchise overview rebuild.
-      const siblingFilms = siblings.filter((s) => s.id !== subseriesId);
-      if (siblingFilms.length) {
-        setMovieCards(
-          toMediaCards(
-            siblingFilms.map((m) => {
-              const film = m as SeriesSubseriesCard & {
-                portrait_url?: string | null;
-                landscape_url?: string | null;
-                open_url?: string | null;
-                open_mode?: "tab" | "local" | null;
-                open_label?: string | null;
-              };
-              return {
-                ...film,
-                path: film.folder_path,
-                portrait_url: film.portrait_url || film.cover_url,
-                landscape_url: film.landscape_url || null,
-                banner_url:
-                  film.banner_url ||
-                  film.landscape_url ||
-                  film.portrait_url ||
-                  film.cover_url ||
-                  null,
-                open_label:
-                  film.open_label || (film.open_url ? "Play video" : null),
-                open_mode:
-                  film.open_mode ||
-                  (film.open_url ? ("local" as const) : null),
-              };
-            })
-          )
-        );
-      }
+      const siblingFilms = siblingFilmMediaCards(siblings, subseriesId);
+      if (siblingFilms.length) setMovieCards(siblingFilms);
       const relatedSeries = overview?.related?.series || [];
       if (relatedSeries.length) {
         setSeriesCards(mapRelatedSeriesCards(relatedSeries));
@@ -3091,7 +3100,6 @@ export default function SeriesSubseriesPage({
   // Prefer live cards; fall back to overview.related so tabs appear as soon as
   // overview lands (no empty-tab flash — related implies real paths).
   const relatedSeriesCount = overview?.related?.series?.length ?? 0;
-  const relatedMovieCount = overview?.related?.movies?.length ?? 0;
   const relatedBookCount = overview?.related?.books?.length ?? 0;
   const relatedGameCount = overview?.related?.games?.length ?? 0;
   const hasSeries = isBook
@@ -3102,9 +3110,7 @@ export default function SeriesSubseriesPage({
   const hasMovies = isBook
     ? movieCards.length > 0
     : isFilm
-      ? siblingMovieCount > 0 ||
-        movieCards.length > 0 ||
-        relatedMovieCount > 0
+      ? siblingMovieCount > 0
       : movieCards.length > 0;
   const hasMoreBooks =
     siblingMovieCount > 0 ||

@@ -1587,6 +1587,7 @@ export default function MusicModule({
         </div>
       ) : tab === "artists" ? (
         <ArtistBrowse
+          key={catalogScope}
           catalogScope={catalogScope}
           artists={artists}
           albums={albums}
