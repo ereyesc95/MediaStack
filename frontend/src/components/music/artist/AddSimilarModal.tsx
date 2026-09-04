@@ -28,27 +28,25 @@ export default function AddSimilarModal({ bandId, onClose, onSaved }: Props) {
     let cancelled = false;
     const t = window.setTimeout(() => {
       setSearching(true);
-      searchMusicBrainz(query.trim())
-        .catch(() => ({ items: [] as MbArtistMatch[] }))
-        .then(async (d) => {
-          if (d.items.length) {
-            if (!cancelled) setResults(d.items);
+      // Prefer artists already in the catalog; MusicBrainz is the fallback.
+      searchRosterBands(query.trim(), 50)
+        .catch(() => ({ items: [] as { id: number; name: string }[] }))
+        .then(async (local) => {
+          const localItems = local.items
+            .filter((item) => item.id !== bandId)
+            .map((item) => ({
+              mbid: "",
+              name: item.name,
+              sort_name: item.name,
+              type: "Local",
+              disambiguation: "MyStack catalog",
+            }));
+          if (localItems.length) {
+            if (!cancelled) setResults(localItems);
             return;
           }
-          const local = await searchRosterBands(query.trim(), 50);
-          if (!cancelled) {
-            setResults(
-              local.items
-                .filter((item) => item.id !== bandId)
-                .map((item) => ({
-                  mbid: "",
-                  name: item.name,
-                  sort_name: item.name,
-                  type: "Local",
-                  disambiguation: "MyStack catalog",
-                }))
-            );
-          }
+          const remote = await searchMusicBrainz(query.trim());
+          if (!cancelled) setResults(remote.items);
         })
         .catch(() => {
           if (!cancelled) setResults([]);

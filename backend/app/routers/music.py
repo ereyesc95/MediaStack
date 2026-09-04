@@ -1570,6 +1570,7 @@ def add_band_project_endpoint(
     _admin: User = Depends(require_admin),
 ):
     from app.artist_admin import add_project_for_members
+    from app.band_overview_cache import invalidate_overview_cache
 
     band = crud.get_band(db, band_id)
     if not band:
@@ -1578,7 +1579,7 @@ def add_band_project_endpoint(
     if not isinstance(member_ids, list):
         raise HTTPException(400, "member_artist_ids must be a list")
     try:
-        return add_project_for_members(
+        result = add_project_for_members(
             db,
             band,
             member_artist_ids=[int(x) for x in member_ids],
@@ -1587,6 +1588,8 @@ def add_band_project_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    invalidate_overview_cache(band_id)
+    return result
 
 
 @router.patch("/bands/{band_id}/participations/{arp_id}")
@@ -1986,15 +1989,20 @@ async def band_refresh_related_similar(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    from app.band_overview_cache import invalidate_overview_cache
     from app.entity_related import refresh_similar_for_artist, refresh_similar_for_band
 
     row = crud.get_band(db, band_id)
     if not row:
         raise HTTPException(404, "Band not found")
     solo = _solo_artist_for_band(db, row)
-    if solo:
-        return await refresh_similar_for_artist(db, solo)
-    return await refresh_similar_for_band(db, row, first_fetch=False)
+    result = (
+        await refresh_similar_for_artist(db, solo)
+        if solo
+        else await refresh_similar_for_band(db, row, first_fetch=False)
+    )
+    invalidate_overview_cache(band_id)
+    return result
 
 
 @router.post("/bands/{band_id}/refresh-related-participations")
@@ -2003,6 +2011,7 @@ async def band_refresh_related_participations(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    from app.band_overview_cache import invalidate_overview_cache
     from app.entity_related import (
         refresh_participations_for_artist,
         refresh_participations_for_band,
@@ -2012,9 +2021,13 @@ async def band_refresh_related_participations(
     if not row:
         raise HTTPException(404, "Band not found")
     solo = _solo_artist_for_band(db, row)
-    if solo:
-        return await refresh_participations_for_artist(db, solo)
-    return await refresh_participations_for_band(db, row)
+    result = (
+        await refresh_participations_for_artist(db, solo)
+        if solo
+        else await refresh_participations_for_band(db, row)
+    )
+    invalidate_overview_cache(band_id)
+    return result
 
 
 @router.post("/bands/{band_id}/related/similar")
@@ -2024,6 +2037,7 @@ async def band_add_similar(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    from app.band_overview_cache import invalidate_overview_cache
     from app.entity_related import add_similar_manual
 
     row = crud.get_band(db, band_id)
@@ -2037,6 +2051,7 @@ async def band_add_similar(
         name=body.name.strip(),
         mbid=body.mbid,
     )
+    invalidate_overview_cache(band_id)
     return {"ok": True, "id": erl.erl_id}
 
 
@@ -2047,6 +2062,7 @@ def band_delete_related(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    from app.band_overview_cache import invalidate_overview_cache
     from app.entity_related import hide_related
 
     row = crud.get_band(db, band_id)
@@ -2062,6 +2078,7 @@ def band_delete_related(
     elif erl.erl_fk_bands != band_id:
         raise HTTPException(404, "Related entry not found")
     hide_related(db, erl)
+    invalidate_overview_cache(band_id)
     return {"ok": True}
 
 

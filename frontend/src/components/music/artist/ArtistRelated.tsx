@@ -80,10 +80,16 @@ export default function ArtistRelated({
   const photoResolveAttempts = useRef(0);
   const photoResolveBandId = useRef(bandId);
 
-  const items = useMemo(
-    () => (tab === "similar" ? related.similar : related.participations),
-    [related, tab]
-  );
+  const items = useMemo(() => {
+    const list =
+      tab === "similar" ? related.similar : related.participations;
+    return [...list].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, {
+        sensitivity: "base",
+        numeric: true,
+      })
+    );
+  }, [related, tab]);
 
   const needsPhotos = useMemo(
     () =>

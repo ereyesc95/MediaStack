@@ -975,6 +975,13 @@ def _serialize_card(
     }
 
 
+def _sort_related_cards(cards: list[dict]) -> list[dict]:
+    return sorted(
+        cards,
+        key=lambda card: ((card.get("name") or "").casefold(), card.get("id") or 0),
+    )
+
+
 def related_payload(
     db: Session,
     *,
@@ -990,14 +997,20 @@ def related_payload(
         art = db.get(Artist, solo_artist_id)
         if not art:
             return _empty_payload("artist", solo_artist_id)
-        similar = [
-            _serialize_card(db, r, orientation=orientation, media_root=root)
-            for r in _list_rows(db, kind=KIND_SIMILAR, artist_id=solo_artist_id)
-        ]
-        participations = [
-            _serialize_card(db, r, orientation=orientation, media_root=root)
-            for r in _list_rows(db, kind=KIND_PARTICIPATION, artist_id=solo_artist_id)
-        ]
+        similar = _sort_related_cards(
+            [
+                _serialize_card(db, r, orientation=orientation, media_root=root)
+                for r in _list_rows(db, kind=KIND_SIMILAR, artist_id=solo_artist_id)
+            ]
+        )
+        participations = _sort_related_cards(
+            [
+                _serialize_card(db, r, orientation=orientation, media_root=root)
+                for r in _list_rows(
+                    db, kind=KIND_PARTICIPATION, artist_id=solo_artist_id
+                )
+            ]
+        )
         return {
             "entity_type": "artist",
             "entity_id": solo_artist_id,
@@ -1014,10 +1027,12 @@ def related_payload(
     if not band:
         return _empty_payload("band", 0)
 
-    similar = [
-        _serialize_card(db, r, orientation=orientation, media_root=root)
-        for r in _list_rows(db, kind=KIND_SIMILAR, band_id=band.bnd_id)
-    ]
+    similar = _sort_related_cards(
+        [
+            _serialize_card(db, r, orientation=orientation, media_root=root)
+            for r in _list_rows(db, kind=KIND_SIMILAR, band_id=band.bnd_id)
+        ]
+    )
     participations = []
     for row in _list_rows(
         db, kind=KIND_PARTICIPATION, band_id=band.bnd_id
@@ -1031,6 +1046,7 @@ def related_payload(
         )
         if card.get("via_members"):
             participations.append(card)
+    participations = _sort_related_cards(participations)
     return {
         "entity_type": "band",
         "entity_id": band.bnd_id,
