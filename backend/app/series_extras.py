@@ -339,13 +339,27 @@ def _theme_audio_item(
 
             artist_dir = _artist_dir(media_root, by_artist)
             if artist_dir:
+                from app.media_item_overview import _brand_for_release_year
+
                 brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
-                logos = [b for b in brands if b.kind == "logo"]
-                icons = [b for b in brands if b.kind == "icon"]
-                if logos:
-                    artist_logo_url = _media_url(logos[0].path, media_root)
-                if icons:
-                    artist_icon_url = _media_url(icons[0].path, media_root)
+                release_year_text = (date_iso_full or year or "")[:4]
+                release_year = (
+                    int(release_year_text) if release_year_text.isdigit() else None
+                )
+                logo = (
+                    _brand_for_release_year(brands, release_year, "logo")
+                    if release_year
+                    else None
+                )
+                icon = (
+                    _brand_for_release_year(brands, release_year, "icon")
+                    if release_year
+                    else None
+                )
+                if logo:
+                    artist_logo_url = _media_url(logo.path, media_root)
+                if icon:
+                    artist_icon_url = _media_url(icon.path, media_root)
         except Exception:
             pass
 

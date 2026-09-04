@@ -507,12 +507,20 @@ function LineupMiniCard({
           <img
             src={member.photo_url!}
             alt=""
+            className="lineup-photo-image"
             onError={() => setPhotoFailed(true)}
           />
         ) : (
           <span className="release-lineup-card__initials">
             {member.name.slice(0, 2).toUpperCase()}
           </span>
+        )}
+        {member.signature_url && (
+          <img
+            src={member.signature_url}
+            alt=""
+            className="lineup-signature-overlay"
+          />
         )}
       </span>
       <span className="release-lineup-card__name">{member.name}</span>
@@ -522,6 +530,30 @@ function LineupMiniCard({
         </span>
       ) : null}
     </button>
+  );
+}
+
+function artistBrandForRelease(
+  overview: BandOverview,
+  dateIso: string | null | undefined,
+  kind: "icon" | "logo"
+): string | null {
+  const brands = (overview.branding || []).filter(
+    (brand) => brand.kind === kind
+  );
+  if (!brands.length) return null;
+  const year = Number.parseInt((dateIso || "").slice(0, 4), 10);
+  if (!Number.isFinite(year)) {
+    return [...brands].sort((a, b) => b.end - a.end)[0]?.url || null;
+  }
+  const exact = brands
+    .filter((brand) => brand.start <= year && year <= brand.end)
+    .sort((a, b) => b.end - a.end || b.start - a.start)[0];
+  if (exact) return exact.url;
+  return (
+    brands
+      .filter((brand) => brand.end < year)
+      .sort((a, b) => b.end - a.end || b.start - a.start)[0]?.url || null
   );
 }
 
@@ -1561,18 +1593,21 @@ export default function SeriesSubseriesPage({
     };
   }, [overview?.music_band_id]);
 
+  const overviewDate = (
+    overview as (SeriesOverview & { date_iso?: string | null }) | null
+  )?.date_iso;
   const lineupMembers = useMemo<LineupMember[]>(() => {
     const releaseDate =
       detail?.date_iso ||
       card?.date_iso ||
-      overview?.date_iso ||
+      overviewDate ||
       null;
     return lineupForReleaseDate(bandOverview?.lineup, releaseDate);
   }, [
     bandOverview?.lineup,
     card?.date_iso,
     detail?.date_iso,
-    overview?.date_iso,
+    overviewDate,
   ]);
 
   const hasArtistLineup = Boolean(
@@ -4462,11 +4497,21 @@ export default function SeriesSubseriesPage({
                 {overview?.music_band_id && bandOverview ? (
                   <div className="release-page__brand-row">
                     {(() => {
-                      const era =
-                        bandOverview.eras?.[bandOverview.eras.length - 1] ||
-                        bandOverview.eras?.[0];
-                      const icon = era?.icon_url;
-                      const logo = era?.logo_url;
+                      const releaseDate =
+                        detail?.date_iso ||
+                        card?.date_iso ||
+                        overviewDate ||
+                        null;
+                      const icon = artistBrandForRelease(
+                        bandOverview,
+                        releaseDate,
+                        "icon"
+                      );
+                      const logo = artistBrandForRelease(
+                        bandOverview,
+                        releaseDate,
+                        "logo"
+                      );
                       const openArtist = () => {
                         const bandId = overview.music_band_id;
                         if (!bandId) return;

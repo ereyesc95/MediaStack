@@ -485,6 +485,26 @@ def _release_year(date_iso: str | None) -> int | None:
         return None
 
 
+def _brand_for_release_year(brands: list, year: int, kind: str):
+    """Prefer a containing era, otherwise the closest era ending before release."""
+    from app.band_overview import _pick_brand_for_year_deterministic
+    from app.gallery import _brands_of_kind
+
+    exact = _pick_brand_for_year_deterministic(brands, year, kind)
+    if exact:
+        return exact
+    previous = [
+        brand
+        for brand in _brands_of_kind(brands, kind, collapsed=False)
+        if brand.end < year
+    ]
+    return (
+        sorted(previous, key=lambda brand: (-brand.end, -brand.start, brand.path.name.lower()))[0]
+        if previous
+        else None
+    )
+
+
 def _era_brand_urls(
     band_name: str | None,
     date_iso: str | None,
@@ -496,9 +516,6 @@ def _era_brand_urls(
         _list_era_brands,
         _media_url,
     )
-    from app.band_overview import _pick_brand_for_year_deterministic
-    from app.release_overview import _nearest_brand
-
     artist_dir = _artist_dir(media_root, band_name)
     if not artist_dir:
         return None, None
@@ -507,12 +524,8 @@ def _era_brand_urls(
     era_icon_url: str | None = None
     era_logo_url: str | None = None
     if year:
-        icon = _pick_brand_for_year_deterministic(brands, year, "icon")
-        logo = _pick_brand_for_year_deterministic(brands, year, "logo")
-        if icon and not logo:
-            logo = _nearest_brand(brands, year, "logo")
-        if logo and not icon:
-            icon = _nearest_brand(brands, year, "icon")
+        icon = _brand_for_release_year(brands, year, "icon")
+        logo = _brand_for_release_year(brands, year, "logo")
         if icon:
             era_icon_url = _media_url(icon.path, media_root)
         if logo:
@@ -571,7 +584,7 @@ def _franchise_artist_card(
     date_iso: str | None,
     media_root: Path,
 ) -> dict:
-    from app.band_overview import _display_name, _pick_brand_for_year_deterministic
+    from app.band_overview import _display_name
     from app.gallery import (
         _artist_dir,
         _gallery_subdir,
@@ -580,8 +593,6 @@ def _franchise_artist_card(
         _media_url,
         resolve_artist_card,
     )
-    from app.release_overview import _nearest_brand
-
     name = _display_name(band.bnd_name)
     year = _release_year(date_iso)
     photo_url: str | None = None
@@ -597,12 +608,8 @@ def _franchise_artist_card(
 
         if year:
             brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
-            icon = _pick_brand_for_year_deterministic(brands, year, "icon")
-            logo = _pick_brand_for_year_deterministic(brands, year, "logo")
-            if icon and not logo:
-                logo = _nearest_brand(brands, year, "logo")
-            if logo and not icon:
-                icon = _nearest_brand(brands, year, "icon")
+            icon = _brand_for_release_year(brands, year, "icon")
+            logo = _brand_for_release_year(brands, year, "logo")
             if icon:
                 icon_url = _media_url(icon.path, media_root)
             if logo:

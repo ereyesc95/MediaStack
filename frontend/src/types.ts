@@ -354,6 +354,12 @@ export type BandOverview = {
     icon_url: string | null;
     logo_url: string | null;
   }[];
+  branding?: {
+    kind: "icon" | "logo";
+    start: number;
+    end: number;
+    url: string;
+  }[];
   top_tracks: {
     title: string;
     release_date: string | null;

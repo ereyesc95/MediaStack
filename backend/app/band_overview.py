@@ -564,6 +564,20 @@ def build_band_overview(
     ]
 
     artist_dir = _artist_dir(root, band.bnd_name) if root and band.bnd_name else None
+    branding: list[dict] = []
+    if artist_dir and root:
+        branding = [
+            {
+                "kind": brand.kind,
+                "start": brand.start,
+                "end": brand.end,
+                "url": _media_url(brand.path, root),
+            }
+            for brand in _list_era_brands(
+                _gallery_subdir(artist_dir, "Branding")
+            )
+            if not brand.collapsed
+        ]
 
     return {
         "id": band.bnd_id,
@@ -584,6 +598,7 @@ def build_band_overview(
         ),
         "label_logos": {name: label_logo_url(name) for name in label_names},
         "eras": eras,
+        "branding": branding,
         "top_tracks": top_tracks,
         "links": links,
         "lineup": lineup,
@@ -669,7 +684,7 @@ def get_band_overview(
     cached = load_cached_overview(
         band_id, card_orientation, fingerprint=fingerprint
     )
-    if cached is not None:
+    if cached is not None and "branding" in cached:
         cached = dict(cached)
         cached["cached"] = True
         return cached
