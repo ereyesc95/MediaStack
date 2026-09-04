@@ -3020,3 +3020,75 @@ export async function fetchMediaRelated(path: string) {
     `${API}/media/related?path=${encodeURIComponent(path)}`
   );
 }
+
+export type CatalogImportModule = "movies" | "series" | "books";
+
+export type CatalogImportSearchItem = {
+  source: "local" | "tmdb" | "google_books";
+  kind: "franchise" | "music_artist" | "movie" | "collection" | "tv" | "book";
+  provider_id: string;
+  title: string;
+  date?: string | null;
+  subtitle?: string | null;
+  cover_url?: string | null;
+};
+
+export type CatalogImportItem = {
+  provider_id: string;
+  title: string;
+  date?: string | null;
+  poster_url?: string | null;
+  backdrop_url?: string | null;
+  seasons?: { number: number; name?: string | null; date?: string | null }[];
+};
+
+export async function searchCatalogImport(
+  module: CatalogImportModule,
+  query: string
+) {
+  return request<{
+    local_franchises: CatalogImportSearchItem[];
+    items: CatalogImportSearchItem[];
+  }>(
+    `${API}/catalog-import/${module}/search?q=${encodeURIComponent(query)}`
+  );
+}
+
+export async function previewCatalogImport(
+  module: CatalogImportModule,
+  item: CatalogImportSearchItem
+) {
+  return request<{
+    franchise_name: string;
+    scope: "single" | "collection" | "series";
+    items: CatalogImportItem[];
+  }>(`${API}/catalog-import/${module}/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(item),
+  });
+}
+
+export async function createCatalogImport(
+  module: CatalogImportModule,
+  payload: {
+    franchise_name: string;
+    franchise_home: boolean;
+    include_guide: boolean;
+    nested_series: boolean;
+    items: CatalogImportItem[];
+  }
+) {
+  return request<{
+    ok: boolean;
+    franchise_name: string;
+    franchise_path: string;
+    created: string[];
+    skipped: string[];
+    metadata_errors: string[];
+  }>(`${API}/catalog-import/${module}/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}

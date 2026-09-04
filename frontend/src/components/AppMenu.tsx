@@ -61,6 +61,8 @@ type Props = {
   onChooseSource?: () => void;
   onManageArtists?: () => void;
   showManageArtists?: boolean;
+  onManageCatalog?: () => void;
+  manageCatalogLabel?: string;
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
   showEditPlaylist?: boolean;
@@ -136,6 +138,8 @@ export default function AppMenu({
   onChooseSource,
   onManageArtists,
   showManageArtists,
+  onManageCatalog,
+  manageCatalogLabel = "Manage Catalog",
   onAddPlaylist,
   showAddPlaylist,
   showEditPlaylist,
@@ -860,6 +864,18 @@ export default function AppMenu({
             >
               <IconManageArtists className="menu-item-icon" />
               Manage Artists
+            </button>
+          )}
+          {isAdmin && onManageCatalog && (
+            <button
+              type="button"
+              onClick={() => {
+                onManageCatalog();
+                setOpen(false);
+              }}
+            >
+              <IconManageArtists className="menu-item-icon" />
+              {manageCatalogLabel}
             </button>
           )}
           {showAddPlaylist && onAddPlaylist && (

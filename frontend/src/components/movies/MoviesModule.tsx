@@ -56,6 +56,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import ManageCatalogModal from "../ManageCatalogModal";
 import CardOrientationPicker from "../CardOrientationPicker";
 import { IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
@@ -180,6 +181,7 @@ export default function MoviesModule({
   );
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
   const [dashboard, setDashboard] = useState<
     | (SeriesDashboard & {
         franchise_count?: number;
@@ -1086,6 +1088,8 @@ export default function MoviesModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              onManageCatalog={() => setManageCatalogOpen(true)}
+              manageCatalogLabel="Add Movie"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button
@@ -1306,6 +1310,19 @@ export default function MoviesModule({
           }}
         />
       )}
+      {manageCatalogOpen ? (
+        <ManageCatalogModal
+          module="movies"
+          onClose={() => setManageCatalogOpen(false)}
+          onChanged={() => {
+            loadCatalog();
+            void prefetchMoviesDashboard({ force: true }).then(
+              (next) => setDashboard(next as never),
+              () => undefined
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

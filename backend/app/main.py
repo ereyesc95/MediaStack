@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
 from app.config import settings
+from app import catalog_import
 from app.database import SessionLocal, init_db
 from app.frontend_static import mount_frontend
 from app.models import Band, Book, Game, Movie, Release, Series, Track
@@ -66,6 +67,7 @@ app.include_router(series.router)
 app.include_router(movies.router)
 app.include_router(universes.router)
 app.include_router(books.router)
+app.include_router(catalog_import.router)
 app.include_router(games.router)
 app.include_router(import_router.router)
 app.include_router(sync.router)

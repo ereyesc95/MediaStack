@@ -1,6 +1,7 @@
 """Cross-module franchise identity: music artist folders + shared [Artwork] home."""
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import select
@@ -14,7 +15,7 @@ from app.gallery import (
     _resolve_child_dir,
     resolve_artist_card,
 )
-from app.models import Band
+from app.models import AppSetting, Band
 from app.series_paths import find_artwork_legacy
 
 MODULE_ROOTS: tuple[tuple[str, str], ...] = (
@@ -23,6 +24,39 @@ MODULE_ROOTS: tuple[tuple[str, str], ...] = (
     ("movies", "Movies"),
     ("books", "Books"),
 )
+FRANCHISE_HOME_KEY_PREFIX = "franchise_home:"
+
+
+@lru_cache(maxsize=512)
+def explicit_franchise_home(franchise_name: str) -> str | None:
+    slug = normalize_franchise_slug(franchise_name)
+    if not slug:
+        return None
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        row = db.get(AppSetting, f"{FRANCHISE_HOME_KEY_PREFIX}{slug}")
+        value = (row.aps_value or "").strip().casefold() if row else ""
+        return value if value in {"music", "series", "movies", "books"} else None
+    finally:
+        db.close()
+
+
+def set_explicit_franchise_home(
+    db: Session, franchise_name: str, module: str
+) -> None:
+    slug = normalize_franchise_slug(franchise_name)
+    value = module.strip().casefold()
+    if not slug or value not in {"music", "series", "movies", "books"}:
+        raise ValueError("Invalid franchise home")
+    key = f"{FRANCHISE_HOME_KEY_PREFIX}{slug}"
+    row = db.get(AppSetting, key)
+    if row:
+        row.aps_value = value
+    else:
+        db.add(AppSetting(aps_key=key, aps_value=value))
+    explicit_franchise_home.cache_clear()
 
 
 def _media_root(media_root: Path | None = None) -> Path | None:
@@ -100,14 +134,18 @@ def preferred_artwork_owner(
 ) -> tuple[str, Path] | None:
     """Canonical module folder that should own franchise-level ``[Artwork]``.
 
-    Priority is structural, not accidental creation order:
+    An explicit AppSetting wins; otherwise priority is structural:
     Music artist folder first, then Series, then Movies, then Books.
     """
     root = _media_root(media_root)
     safe = _display_folder_name(franchise_name)
     if not root or not safe:
         return None
-    for module, folder in MODULE_ROOTS:
+    explicit = explicit_franchise_home(safe)
+    ordered_roots = sorted(
+        MODULE_ROOTS, key=lambda pair: 0 if pair[0] == explicit else 1
+    )
+    for module, folder in ordered_roots:
         if module == "music":
             d = find_music_artist_dir(safe, root)
         else:
@@ -239,6 +277,10 @@ def enrich_catalog_with_artwork_home(
             continue
         name = (card.get("name") or "").strip()
         if not name:
+            continue
+        explicit = explicit_franchise_home(name)
+        if explicit:
+            card["artwork_home_module"] = explicit
             continue
         home = find_artwork_home(name, root)
         if home:

@@ -10,7 +10,6 @@ import {
   prefetchUniverses,
 } from "../../universesCache";
 import {
-  clearArtistEntryReferrer,
   defaultSectionForSource,
   saveArtistEntryReferrer,
 } from "../../artistEntry";
@@ -54,6 +53,7 @@ import {
 } from "../../usePhoneLayout";
 import AddToUniverseModal from "../AddToUniverseModal";
 import AppMenu from "../AppMenu";
+import ManageCatalogModal from "../ManageCatalogModal";
 import CardOrientationPicker from "../CardOrientationPicker";
 import { IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
@@ -176,6 +176,7 @@ export default function SeriesModule({
     () => !getCachedSeriesDashboard()
   );
   const [error, setError] = useState<string | null>(null);
+  const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
   const [catalogScope, setCatalogScope] = useState<"franchises" | "shows" | "universes">(
     "shows"
@@ -1044,6 +1045,8 @@ export default function SeriesModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              onManageCatalog={() => setManageCatalogOpen(true)}
+              manageCatalogLabel="Add Series"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button
@@ -1186,6 +1189,19 @@ export default function SeriesModule({
           }}
         />
       )}
+      {manageCatalogOpen ? (
+        <ManageCatalogModal
+          module="series"
+          onClose={() => setManageCatalogOpen(false)}
+          onChanged={() => {
+            void loadCatalog();
+            void prefetchSeriesDashboard({ force: true }).then(
+              setDashboard,
+              () => undefined
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

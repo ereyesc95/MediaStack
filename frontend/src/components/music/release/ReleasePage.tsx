@@ -2992,7 +2992,12 @@ export default function ReleasePage({
                         );
                         const ov = await fetchReleaseOverview(bandId, releaseId);
                         setData(ov);
-                        setCachedReleaseOverview(bandId, releaseId, ov);
+                        setCachedReleaseOverview(
+                          bandId,
+                          releaseId,
+                          "landscape",
+                          ov
+                        );
                         setAddStaffOpen(false);
                         setEditingStaff(null);
                       } finally {
@@ -3035,7 +3040,12 @@ export default function ReleasePage({
                       }
                       const ov = await fetchReleaseOverview(bandId, releaseId);
                       setData(ov);
-                      setCachedReleaseOverview(bandId, releaseId, ov);
+                      setCachedReleaseOverview(
+                        bandId,
+                        releaseId,
+                        "landscape",
+                        ov
+                      );
                       setStaffName("");
                       setStaffPhoto("");
                       setStaffRolesText("");

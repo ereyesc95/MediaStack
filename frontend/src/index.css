@@ -23427,3 +23427,43 @@ button.lyrics-status-badge--icon-only {
 .release-page--stacked .series-book-volumes__pages {
   justify-self: end;
 }
+
+.manage-catalog-modal {
+  width: min(94vw, 680px);
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+}
+
+.manage-catalog-modal__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.manage-catalog-modal__items {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--bg-elevated) 65%, transparent);
+}
+
+.manage-catalog-modal__item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.55rem;
+}
+
+.manage-catalog-modal__item:hover {
+  background: color-mix(in srgb, var(--bg-hover) 65%, transparent);
+}
+
+.manage-catalog-modal__item input {
+  flex: 0 0 auto;
+}

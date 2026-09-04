@@ -115,6 +115,7 @@ async def refresh_series_metadata(
     include_bio: bool = True,
     tmdb_id: int | str | None = None,
     subseries_titles: list[str] | None = None,
+    cache_artwork: bool = True,
 ) -> dict:
     """Pull TMDb TV details into the Series row for this franchise folder name."""
     api_key = get_tmdb_key(db)
@@ -278,7 +279,7 @@ async def refresh_series_metadata(
         found = find_franchise_dir(
             normalize_franchise_slug(franchise_name) or franchise_name, root
         )
-    if found:
+    if found and cache_artwork:
         franchise_dir, _ = found
         from app.series_artwork import enrich_cast_character_photos_from_jikan
 

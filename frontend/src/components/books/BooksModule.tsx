@@ -52,6 +52,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import ManageCatalogModal from "../ManageCatalogModal";
 import CardOrientationPicker from "../CardOrientationPicker";
 import { IconMediaBooks, IconSeriesScope, IconUniverse } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
@@ -176,6 +177,7 @@ export default function BooksModule({
   );
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
   const [dashboard, setDashboard] = useState<
     | (SeriesDashboard & {
         franchise_count?: number;
@@ -1028,6 +1030,8 @@ export default function BooksModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
+              onManageCatalog={() => setManageCatalogOpen(true)}
+              manageCatalogLabel="Add Book"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button
@@ -1252,6 +1256,19 @@ export default function BooksModule({
           }}
         />
       )}
+      {manageCatalogOpen ? (
+        <ManageCatalogModal
+          module="books"
+          onClose={() => setManageCatalogOpen(false)}
+          onChanged={() => {
+            loadCatalog();
+            void prefetchBooksDashboard({ force: true }).then(
+              (next) => setDashboard(next as never),
+              () => undefined
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

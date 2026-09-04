@@ -175,6 +175,7 @@ async def refresh_film_metadata(
     *,
     include_bio: bool = True,
     tmdb_id: int | str | None = None,
+    cache_artwork: bool = True,
 ) -> dict:
     api_key = get_tmdb_key(db)
     if not api_key:
@@ -242,14 +243,18 @@ async def refresh_film_metadata(
         row.mwk_tmdb_collection_id = int(data["collection_id"])
     row.mwk_tmdb_movie_id = int(data.get("tmdb_id") or movie_id)
 
-    artwork = ensure_artwork_cached(
-        film_dir,
-        root,
-        posters=film_blob["posters"]
-        or ([film_blob["poster_url"]] if film_blob.get("poster_url") else []),
-        backdrops=film_blob["backdrops"]
-        or ([film_blob["backdrop_url"]] if film_blob.get("backdrop_url") else []),
-        film=True,
+    artwork = (
+        ensure_artwork_cached(
+            film_dir,
+            root,
+            posters=film_blob["posters"]
+            or ([film_blob["poster_url"]] if film_blob.get("poster_url") else []),
+            backdrops=film_blob["backdrops"]
+            or ([film_blob["backdrop_url"]] if film_blob.get("backdrop_url") else []),
+            film=True,
+        )
+        if cache_artwork
+        else {}
     )
 
     row.mwk_refreshed_at = _now()
