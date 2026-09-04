@@ -66,10 +66,18 @@ function MemberCard({
           <img
             src={member.photo_url!}
             alt=""
+            className="lineup-photo-image"
             onError={() => setPhotoFailed(true)}
           />
         ) : (
           <span className="artist-lineup-card__ph">{initials(member.name)}</span>
+        )}
+        {member.signature_url && (
+          <img
+            src={member.signature_url}
+            alt=""
+            className="lineup-signature-overlay"
+          />
         )}
       </span>
       <span className="artist-lineup-card__name">
@@ -118,19 +126,11 @@ export default function ArtistLineup({
   );
 
   if (loading) {
-    return (
-      <div className="artist-lineup">
-        <p className="muted">Importing from MusicBrainz…</p>
-      </div>
-    );
+    return null;
   }
 
   if (!lineup.all.length) {
-    return (
-      <div className="artist-lineup">
-        <p className="muted">No lineup data available.</p>
-      </div>
-    );
+    return null;
   }
 
   return (

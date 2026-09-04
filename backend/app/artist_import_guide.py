@@ -16,7 +16,7 @@ ARTIST FOLDERS
 --------------
 [Artwork]/
   Exclusive/  NSFW-gated artist gallery media; optional subfolders are supported.
-  Logos/      Artist-era branding.
+  Branding/   Artist-era logos, icons and member signatures.
   Photos/     Artist-era photos and card backgrounds.
   Covers/     Optional covers for artist/user media.
 
@@ -25,10 +25,14 @@ Albums, Extended Plays, Compilations, Live Albums, Soundtracks, Singles
 
 ARTIST [ARTWORK] FILENAMES
 --------------------------
-Logos:
+Branding:
   Logo [1995-1997].png
   Icon [1995-1997].png
   Logo [1995-1997] Collapsed.png
+  Signature - Member Name.png
+
+Signatures appear over lineup photos on hover and below the photo in the
+member details modal. The member name must match the lineup display name.
 
 Photos begin with a year and include an orientation when applicable:
   1997. Artist photo, Portrait.jpg
@@ -173,6 +177,12 @@ Windows .lnk, .path files and supported symlinks may point to shared releases or
 def ensure_artist_user_guide_template(db: Session) -> AppSetting:
     row = db.get(AppSetting, ARTIST_USER_GUIDE_KEY)
     if row:
+        # Upgrade the original built-in template without overwriting a template
+        # the user has already customized.
+        value = row.aps_value or ""
+        if "Logos/      Artist-era branding." in value and "Signature -" not in value:
+            row.aps_value = DEFAULT_ARTIST_USER_GUIDE
+            db.commit()
         return row
     row = AppSetting(
         aps_key=ARTIST_USER_GUIDE_KEY,

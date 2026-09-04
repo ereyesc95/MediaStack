@@ -628,6 +628,32 @@ def _dir_has_gallery_entries(path: Path) -> bool:
     return False
 
 
+def _dir_has_brand_gallery_entries(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    for child in path.iterdir():
+        if child.is_file() and child.stem.casefold().startswith("signature - "):
+            continue
+        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+            continue
+        if child.is_dir() or child.suffix.casefold() == ".lnk":
+            return True
+        if child.is_file() and child.suffix.lower() in IMAGE_EXTS:
+            return True
+    return False
+
+
+def _dir_has_direct_gallery_files(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    return any(
+        child.is_file()
+        and child.name.casefold() not in ("desktop.ini", "thumbs.db")
+        and (child.suffix.lower() in IMAGE_EXTS or child.suffix.casefold() == ".lnk")
+        for child in path.iterdir()
+    )
+
+
 def media_visibility_flags(
     band_name: str | None,
     media_root: Path,
@@ -677,18 +703,22 @@ def media_visibility_flags(
     except Exception:
         pass
 
-    from app.gallery import _gallery_dir, artist_has_release_motion_artwork
+    from app.gallery import (
+        _gallery_dir,
+        _gallery_subdir,
+        artist_has_release_motion_artwork,
+    )
 
     gallery = _gallery_dir(artist_dir)
     if gallery.is_dir():
         photos = _resolve_child_dir(gallery, "Photos")
-        logos = _resolve_child_dir(gallery, "Logos")
+        branding = _gallery_subdir(artist_dir, "Branding")
         covers = _resolve_child_dir(gallery, "Covers")
         flags["has_gallery"] = (
             _dir_has_gallery_entries(photos)
-            or _dir_has_gallery_entries(logos)
+            or _dir_has_brand_gallery_entries(branding)
             or _dir_has_gallery_entries(covers)
-            or _dir_has_gallery_entries(gallery)
+            or _dir_has_direct_gallery_files(gallery)
         )
     if not flags["has_gallery"] and artist_has_release_motion_artwork(artist_dir):
         flags["has_gallery"] = True

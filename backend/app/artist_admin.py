@@ -346,6 +346,27 @@ def add_project_for_members(
             )
         )
         created += 1
+    from app.entity_related import KIND_PARTICIPATION, _upsert_row
+
+    via_members = [
+        _display_name(
+            (artist.art_stage_name or artist.art_name) if artist else ""
+        )
+        for artist in (db.get(Artist, mid) for mid in ids)
+        if artist
+    ]
+    _upsert_row(
+        db,
+        kind=KIND_PARTICIPATION,
+        band_id=current_band.bnd_id,
+        artist_id=None,
+        name=target.bnd_name or name,
+        mbid=target.bnd_code,
+        local_band_id=target.bnd_id,
+        source="manual",
+        manual=True,
+        via_members=via_members,
+    )
     db.commit()
     return {
         "ok": True,

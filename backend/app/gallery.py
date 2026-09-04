@@ -3,7 +3,7 @@
 Expected layout (under MYSTACK_MEDIA_ROOT):
 
     Music/{Letter}/{ArtistName}/[Artwork]/Photos/   — year-prefixed photos
-    Music/{Letter}/{ArtistName}/[Artwork]/Logos/    — era Icon/Logo PNGs
+    Music/{Letter}/{ArtistName}/[Artwork]/Branding/ — era logos, icons, signatures
     Music/{Letter}/{ArtistName}/[Artwork]/Covers/   — optional playlist covers
 
 Legacy ``Gallery/`` (same subfolders) is still accepted as a fallback.
@@ -150,7 +150,41 @@ def _gallery_dir(artist_dir: Path) -> Path:
 
 
 def _gallery_subdir(artist_dir: Path, sub: str) -> Path:
-    return _resolve_child_dir(_gallery_dir(artist_dir), sub)
+    gallery = _gallery_dir(artist_dir)
+    if sub.casefold() in {"branding", "logos"}:
+        branding = _resolve_child_dir(gallery, "Branding")
+        if branding.is_dir():
+            return branding
+        # Read-only compatibility for libraries created before Branding replaced
+        # Logos. New scaffolds always use Branding.
+        legacy = _resolve_child_dir(gallery, "Logos")
+        return legacy if legacy.is_dir() else branding
+    return _resolve_child_dir(gallery, sub)
+
+
+def member_signature_url(
+    artist_dir: Path | None,
+    member_name: str | None,
+    media_root: Path | None,
+) -> str | None:
+    """Return ``Signature - {member}.<image>`` from the artist Branding folder."""
+    if not artist_dir or not media_root or not member_name:
+        return None
+    branding = _gallery_subdir(artist_dir, "Branding")
+    if not branding.is_dir():
+        return None
+    wanted = f"signature - {_display_name(member_name)}".casefold()
+    try:
+        for path in branding.iterdir():
+            if (
+                path.is_file()
+                and path.suffix.casefold() in IMAGE_EXTS
+                and path.stem.casefold() == wanted
+            ):
+                return _media_url(path, media_root)
+    except OSError:
+        return None
+    return None
 
 
 def _parse_photo(path: Path) -> GalleryPhoto | None:
@@ -362,7 +396,7 @@ def resolve_artist_card(
         return ArtistCardAssets(None, None, None, None, True)
 
     photos_dir = _gallery_subdir(artist_dir, "Photos")
-    logos_dir = _gallery_subdir(artist_dir, "Logos")
+    logos_dir = _gallery_subdir(artist_dir, "Branding")
     photos = _list_photos(photos_dir)
     brands = _list_era_brands(logos_dir)
 
@@ -702,7 +736,7 @@ def build_gallery_index(
 
     branding_out: list[dict] = []
     for brand in sorted(
-        _list_era_brands(_gallery_subdir(artist_dir, "Logos")),
+        _list_era_brands(_gallery_subdir(artist_dir, "Branding")),
         key=_brand_sort_key,
     ):
         rel = brand.path.relative_to(media_root).as_posix()

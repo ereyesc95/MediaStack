@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
@@ -33,11 +34,13 @@ from app.services.musicbrainz import search_artists
 from app.schemas import BandListOut, BandOut, PlaylistOut, ReleaseListOut, TrackOut
 
 router = APIRouter(prefix="/api/music", tags=["music"])
+_artist_import_tasks: dict[str, asyncio.Task] = {}
 
 
 class ImportBandBody(BaseModel):
     mbid: str = ""
     name: str = ""
+    import_id: str = ""
     write_user_guide: bool = False
     unregistered: bool = False
 
@@ -384,6 +387,10 @@ async def import_band_from_mb(
 
     mbid = (body.mbid or "").strip()
     name = (body.name or "").strip()
+    import_id = (body.import_id or "").strip()
+    task = asyncio.current_task()
+    if import_id and task:
+        _artist_import_tasks[import_id] = task
     try:
         if body.unregistered or (name and not mbid):
             return import_unregistered_artist(
@@ -398,12 +405,30 @@ async def import_band_from_mb(
             mbid,
             write_user_guide=body.write_user_guide,
         )
+    except asyncio.CancelledError as exc:
+        db.rollback()
+        raise HTTPException(409, "Artist creation cancelled") from exc
     except HTTPException:
         raise
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(502, f"Artist import error: {exc}") from exc
+    finally:
+        if import_id and _artist_import_tasks.get(import_id) is task:
+            _artist_import_tasks.pop(import_id, None)
+
+
+@router.post("/bands/import/{import_id}/cancel")
+async def cancel_band_import(
+    import_id: str,
+    _admin: User = Depends(require_admin),
+):
+    task = _artist_import_tasks.get(import_id.strip())
+    if not task or task.done():
+        return {"cancelled": False}
+    task.cancel()
+    return {"cancelled": True}
 
 
 @router.get("/bands", response_model=BandListOut)
@@ -1292,6 +1317,15 @@ def quiz_discography(band_id: int, db: Session = Depends(get_db)):
     if not data:
         raise HTTPException(404, "Band not found")
     return data
+
+
+@router.get("/bands/{band_id}/quiz/availability")
+def quiz_mode_availability(band_id: int, db: Session = Depends(get_db)):
+    from app.artist_quiz import quiz_availability
+
+    if not crud.get_band(db, band_id):
+        raise HTTPException(404, "Band not found")
+    return quiz_availability(db, band_id)
 
 
 @router.get("/bands/{band_id}/quiz/lineup")

@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { addBandSimilar, searchMusicBrainz } from "../../../api";
+import {
+  addBandSimilar,
+  searchMusicBrainz,
+  searchRosterBands,
+} from "../../../api";
 import type { MbArtistMatch } from "../../../types";
 import ModalPortal from "../../ModalPortal";
 
@@ -21,15 +25,43 @@ export default function AddSimilarModal({ bandId, onClose, onSaved }: Props) {
       setResults([]);
       return;
     }
+    let cancelled = false;
     const t = window.setTimeout(() => {
       setSearching(true);
       searchMusicBrainz(query.trim())
-        .then((d) => setResults(d.items))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .catch(() => ({ items: [] as MbArtistMatch[] }))
+        .then(async (d) => {
+          if (d.items.length) {
+            if (!cancelled) setResults(d.items);
+            return;
+          }
+          const local = await searchRosterBands(query.trim(), 50);
+          if (!cancelled) {
+            setResults(
+              local.items
+                .filter((item) => item.id !== bandId)
+                .map((item) => ({
+                  mbid: "",
+                  name: item.name,
+                  sort_name: item.name,
+                  type: "Local",
+                  disambiguation: "MyStack catalog",
+                }))
+            );
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
     }, 350);
-    return () => window.clearTimeout(t);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [bandId, query]);
 
   async function pick(item: MbArtistMatch) {
     setSaving(true);
@@ -64,7 +96,6 @@ export default function AddSimilarModal({ bandId, onClose, onSaved }: Props) {
 
         <div className="artist-admin-form">
           <label>
-            Search MusicBrainz
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -78,7 +109,7 @@ export default function AddSimilarModal({ bandId, onClose, onSaved }: Props) {
           {results.length > 0 && (
             <ul className="add-similar-results">
               {results.map((item) => (
-                <li key={item.mbid}>
+                <li key={`${item.mbid || "local"}-${item.name}`}>
                   <button
                     type="button"
                     className="btn btn--block"

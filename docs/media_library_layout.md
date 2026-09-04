@@ -98,7 +98,8 @@ Music/H/HIM/Library/
 
 ### Gallery
 
-`Gallery/Photos/`, `Gallery/Logos/`, `Gallery/Covers/` — see README.
+`[Artwork]/Photos/`, `[Artwork]/Branding/`, `[Artwork]/Covers/` — see README.
+Legacy `Gallery/Logos/` remains readable, but new artist scaffolds use Branding.
 
 ---
 

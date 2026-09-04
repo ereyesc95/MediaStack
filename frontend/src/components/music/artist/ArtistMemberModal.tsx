@@ -146,37 +146,46 @@ export default function ArtistMemberModal({
           {data && !loading && (
             <div className="artist-member-modal__body">
               <div className="artist-member-modal__hero">
-                <button
-                  type="button"
-                  className={`artist-member-modal__photo-btn${
-                    isAdmin ? " artist-member-modal__photo-btn--admin" : ""
-                  }`}
-                  onClick={() => isAdmin && fileRef.current?.click()}
-                  title={isAdmin ? "Choose photo" : undefined}
-                  disabled={uploading}
-                >
-                  {data.photo_url && !photoFailed ? (
+                <div className="artist-member-modal__portrait">
+                  <button
+                    type="button"
+                    className={`artist-member-modal__photo-btn${
+                      isAdmin ? " artist-member-modal__photo-btn--admin" : ""
+                    }`}
+                    onClick={() => isAdmin && fileRef.current?.click()}
+                    title={isAdmin ? "Choose photo" : undefined}
+                    disabled={uploading}
+                  >
+                    {data.photo_url && !photoFailed ? (
+                      <img
+                        src={data.photo_url}
+                        alt=""
+                        className={
+                          data.is_deceased
+                            ? "artist-member-modal__photo--deceased"
+                            : ""
+                        }
+                        onError={() => setPhotoFailed(true)}
+                      />
+                    ) : (
+                      <span className="artist-member-modal__ph">
+                        {initials(data.name)}
+                      </span>
+                    )}
+                    {isAdmin && (
+                      <span className="artist-member-modal__photo-hint">
+                        {uploading ? "…" : "📷"}
+                      </span>
+                    )}
+                  </button>
+                  {data.signature_url && (
                     <img
-                      src={data.photo_url}
-                      alt=""
-                      className={
-                        data.is_deceased
-                          ? "artist-member-modal__photo--deceased"
-                          : ""
-                      }
-                      onError={() => setPhotoFailed(true)}
+                      src={data.signature_url}
+                      alt={`${data.name} signature`}
+                      className="artist-member-modal__signature"
                     />
-                  ) : (
-                    <span className="artist-member-modal__ph">
-                      {initials(data.name)}
-                    </span>
                   )}
-                  {isAdmin && (
-                    <span className="artist-member-modal__photo-hint">
-                      {uploading ? "…" : "📷"}
-                    </span>
-                  )}
-                </button>
+                </div>
                 <input
                   ref={fileRef}
                   type="file"

@@ -165,7 +165,7 @@ Media/
             └── [Artwork]/
                 ├── Exclusive/
                 ├── Photos/           # `{YYYY}.…, Banner|Landscape|Portrait.jpg`
-                ├── Logos/            # `Logo|Icon [YYYY-YYYY].png` (+ optional `Collapsed`)
+                ├── Branding/         # Era logos/icons and `Signature - Member Name.png`
                 └── Covers/
 ```
 
@@ -173,7 +173,7 @@ Legacy `Audio/{Category}/` and `Gallery/` layouts remain supported as fallbacks.
 
 **Gallery Photos (banner cards):** release banner backgrounds prefer a **Banner** photo for the release year, then **Landscape** for that year, then the closest **past** era only (never future). Unique photos are preferred before reuse.
 
-**Gallery Logos:** `Logo [1997-2000].png` / `Icon [1998-2017].png`. Optional `Logo [1995-1996] Collapsed.png` is used only on **banner** hover/tap when that era matches the release (or catalog card era) — never a Collapsed logo from a different range. On the artist **Gallery → Branding** strip, labels show the date range only (e.g. `1995–1996`); the word “Collapsed” is not shown in the UI.
+**Gallery Branding:** `Logo [1997-2000].png` / `Icon [1998-2017].png`. Optional `Logo [1995-1996] Collapsed.png` is used only on **banner** hover/tap when that era matches the release (or catalog card era) — never a Collapsed logo from a different range. `Signature - Member Name.png` appears over that member’s lineup photo on hover and below their photo in the member modal. On the artist **Gallery → Branding** strip, labels show the date range only (e.g. `1995–1996`); the word “Collapsed” is not shown in the UI.
 
 **Example artist path:**
 

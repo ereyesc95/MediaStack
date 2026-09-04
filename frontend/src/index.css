@@ -4361,7 +4361,10 @@ input {
 .artist-page {
   display: flex;
   flex-direction: column;
+  height: 100dvh;
   min-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
   position: relative;
   isolation: isolate;
 }
@@ -6005,6 +6008,12 @@ input {
   padding: 0 0 2rem;
 }
 
+.artist-audio .media-release-grid.media-release-grid--banner {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
 .artist-related__grid {
   width: 100%;
 }
@@ -6219,6 +6228,7 @@ input {
 }
 
 .artist-lineup-card__photo {
+  position: relative;
   width: var(--lineup-photo);
   height: var(--lineup-photo);
   border-radius: 50%;
@@ -6245,6 +6255,36 @@ input {
 
 .artist-lineup-card:hover img {
   transform: scale(1.08);
+}
+
+.artist-lineup-card .lineup-signature-overlay,
+.release-lineup-card .lineup-signature-overlay {
+  position: absolute;
+  inset: 18%;
+  z-index: 2;
+  width: 64%;
+  height: 64%;
+  border-radius: 0;
+  object-fit: contain;
+  background: transparent;
+  opacity: 0;
+  transform: none;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.artist-lineup-card:has(.lineup-signature-overlay):hover
+  .lineup-photo-image,
+.release-lineup-card:has(.lineup-signature-overlay):hover
+  .lineup-photo-image {
+  filter: blur(2px) brightness(0.42);
+  transform: scale(1.08);
+}
+
+.artist-lineup-card:hover .lineup-signature-overlay,
+.release-lineup-card:hover .lineup-signature-overlay {
+  opacity: 1;
+  transform: none;
 }
 
 .artist-lineup-card--deceased img,
@@ -6380,6 +6420,24 @@ input {
   align-items: center;
 }
 
+.artist-member-modal__portrait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.artist-member-modal__hero img.artist-member-modal__signature {
+  width: min(7rem, 80%);
+  height: auto;
+  max-height: 2.5rem;
+  margin-top: 0.7rem;
+  object-fit: contain;
+  border-radius: 0;
+  background: transparent;
+  flex-shrink: 1;
+}
+
 .artist-member-modal__hero img,
 .artist-member-modal__ph {
   width: 9.5rem;
@@ -6440,6 +6498,13 @@ input {
   }
 
   .artist-member-modal__photo-btn {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: center;
+  }
+
+  .artist-member-modal__portrait {
     grid-column: 1;
     grid-row: 1;
     align-self: center;
@@ -6896,6 +6961,11 @@ input {
   color: var(--text-muted);
 }
 
+.manage-artists-modal__estimate
+  + .manage-artists-modal__guide-option {
+  margin-top: -0.62rem;
+}
+
 .manage-artists-modal__search-btn {
   display: inline-flex;
   align-items: center;
@@ -7001,6 +7071,7 @@ input {
 }
 
 .manage-artists-modal__progress small {
+  font-size: 0.72rem;
   line-height: 1.4;
 }
 
@@ -12490,6 +12561,7 @@ button.media-release-card--banner {
 }
 
 .release-lineup-card__photo {
+  position: relative;
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 50%;

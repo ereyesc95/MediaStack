@@ -637,15 +637,6 @@ async def refresh_participations_for_band(
     if not first_fetch:
         _delete_non_manual(db, kind=KIND_PARTICIPATION, band_id=band.bnd_id)
     items = _db_participations_for_band(db, band)
-    member_ids = {
-        arp.arp_fk_artists
-        for arp in db.scalars(
-            select(ArtistParticipation).where(
-                ArtistParticipation.arp_fk_bands == band.bnd_id
-            )
-        ).all()
-        if arp.arp_fk_artists
-    }
     order = 0
     if first_fetch:
         for item in items:
@@ -665,11 +656,9 @@ async def refresh_participations_for_band(
         band.bnd_related_participations_at = _now()
         db.commit()
         items = []
-    items.extend(
-        await _mb_participations_for_members(
-            db, member_ids, exclude_band_id=band.bnd_id
-        )
-    )
+    # Projects are sourced from canonical local participation rows. Remote
+    # MusicBrainz relationships can be broader than the roster data shown in a
+    # member modal, which produced unexplained project cards with no provenance.
     for item in items:
         order += 1
         _upsert_row(
@@ -702,11 +691,6 @@ async def refresh_participations_for_band(
 async def refresh_participations_for_artist(db: Session, artist: Artist) -> dict:
     _delete_non_manual(db, kind=KIND_PARTICIPATION, artist_id=artist.art_id)
     items = _db_participations_for_artist(db, artist)
-    items.extend(
-        await _mb_participations_for_members(
-            db, {artist.art_id}, exclude_band_id=None
-        )
-    )
     order = 0
     for item in items:
         order += 1
@@ -1034,16 +1018,19 @@ def related_payload(
         _serialize_card(db, r, orientation=orientation, media_root=root)
         for r in _list_rows(db, kind=KIND_SIMILAR, band_id=band.bnd_id)
     ]
-    participations = [
-        _serialize_card(
+    participations = []
+    for row in _list_rows(
+        db, kind=KIND_PARTICIPATION, band_id=band.bnd_id
+    ):
+        card = _serialize_card(
             db,
-            r,
+            row,
             orientation=orientation,
             media_root=root,
             owner_band_id=band.bnd_id,
         )
-        for r in _list_rows(db, kind=KIND_PARTICIPATION, band_id=band.bnd_id)
-    ]
+        if card.get("via_members"):
+            participations.append(card)
     return {
         "entity_type": "band",
         "entity_id": band.bnd_id,

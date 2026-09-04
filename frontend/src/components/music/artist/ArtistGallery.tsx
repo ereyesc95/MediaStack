@@ -482,11 +482,7 @@ export default function ArtistGallery({ state }: Props) {
   }
 
   if (!index || (!showPhotos && !showLogos && !showAnimations && !showExclusive)) {
-    return (
-      <p className="muted artist-section-empty">
-        No gallery images found under Gallery/Photos or Gallery/Logos.
-      </p>
-    );
+    return null;
   }
 
   const motionItems =

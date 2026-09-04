@@ -80,14 +80,14 @@ export default function ArtistWordCloud({
 
   const hint = (
     <p className="muted artist-word-cloud__hint">
-      Open Lyrics on a few tracks to build the word cloud, or{" "}
+      Set lyrics on tracks to see topics, or{" "}
       <button
         type="button"
         className="artist-word-cloud__hint-link"
         disabled={building}
         onClick={() => void build()}
       >
-        {building ? "Building…" : "Build from cached lyrics"}
+        {building ? "Checking…" : "check cached lyrics"}
       </button>
       .
     </p>

@@ -103,6 +103,10 @@ export type FilterOptions = {
     genre: string;
     items: { id: number; name: string | null; genre_id: number | null }[];
   }[];
+  all_subgenre_groups?: {
+    genre: string;
+    items: { id: number; name: string | null; genre_id: number | null }[];
+  }[];
   country_groups: {
     continent: string;
     items: {
@@ -436,6 +440,7 @@ export type LineupMember = {
   participation_id?: number;
   name: string;
   photo_url: string | null;
+  signature_url?: string | null;
   start: string | null;
   end: string | null;
   years?: string | null;
@@ -489,6 +494,7 @@ export type ArtistDetails = {
   age_text: string | null;
   is_deceased: boolean;
   photo_url: string | null;
+  signature_url?: string | null;
   urls: Record<string, string>;
   participations: ArtistParticipationRef[];
   band_membership: BandMembership | null;

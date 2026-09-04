@@ -258,6 +258,24 @@ def build_lineup_quiz(db: Session, band_id: int, media_root: Path) -> dict | Non
     return {"members": members, "disabled": False}
 
 
+def quiz_availability(db: Session, band_id: int) -> dict:
+    """Return only quiz visibility flags; unavailable modes stay out of the UI."""
+    media_root = Path(settings.media_root) if settings.media_root else Path()
+    discography = build_discography_quiz(db, band_id) or {}
+    lineup = build_lineup_quiz(db, band_id, media_root) or {}
+    songs = build_songs_quiz(db, band_id, rounds=1) or {}
+    return {
+        "discography": bool(
+            (discography.get("releases") or [])
+            or (discography.get("other_tracks") or [])
+        ),
+        "songs": bool(songs.get("questions")),
+        "lineup": bool(
+            not lineup.get("disabled") and (lineup.get("members") or [])
+        ),
+    }
+
+
 def _enrich_track_candidate(media_root: Path, audio_file: Path, title: str, path: str) -> dict:
     from app.band_library import _find_cover_front_artwork, _release_date_for_track
 

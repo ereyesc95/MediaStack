@@ -150,6 +150,17 @@ def build_artist_details(
     from app.artist_photo import member_photo_url
 
     photo = member_photo_url(artist, media_root)
+    signature = None
+    if band_id and media_root:
+        from app.gallery import _artist_dir, member_signature_url
+
+        context_band = db.get(Band, band_id)
+        if context_band:
+            signature = member_signature_url(
+                _artist_dir(media_root, context_band.bnd_name),
+                stage,
+                media_root,
+            )
 
     band_membership = None
     band_memberships: list[dict] = []
@@ -192,6 +203,7 @@ def build_artist_details(
         "age_text": _age_text(artist.art_birth_date),
         "is_deceased": bool((artist.art_death_date or "").strip()),
         "photo_url": photo,
+        "signature_url": signature,
         "urls": urls,
         "participations": participations,
         "band_membership": band_membership,

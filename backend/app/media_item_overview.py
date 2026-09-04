@@ -502,7 +502,7 @@ def _era_brand_urls(
     artist_dir = _artist_dir(media_root, band_name)
     if not artist_dir:
         return None, None
-    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
     year = _release_year(date_iso)
     era_icon_url: str | None = None
     era_logo_url: str | None = None
@@ -596,7 +596,7 @@ def _franchise_artist_card(
             photo_url = _media_url(closest.path, media_root)
 
         if year:
-            brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+            brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
             icon = _pick_brand_for_year_deterministic(brands, year, "icon")
             logo = _pick_brand_for_year_deterministic(brands, year, "logo")
             if icon and not logo:

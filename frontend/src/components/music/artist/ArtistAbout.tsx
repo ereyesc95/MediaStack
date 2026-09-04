@@ -11,6 +11,7 @@ type Props = {
   eraIndex: number;
   stacked: boolean;
   flatMeta?: boolean;
+  fetching?: boolean;
   onEraChange: (index: number) => void;
   onCountry: (id: number) => void;
   onSubgenre: (id: number) => void;
@@ -85,6 +86,7 @@ export default function ArtistAbout({
   eraIndex,
   stacked,
   flatMeta = false,
+  fetching = false,
   onEraChange,
   onCountry,
   onSubgenre,
@@ -172,6 +174,13 @@ export default function ArtistAbout({
     [data.labels]
   );
   const hasBio = Boolean(data.bio);
+  const hasOtherMetadata = Boolean(
+    data.aliases.length ||
+      originText ||
+      data.activity_periods.length ||
+      data.subgenres.length ||
+      visibleLabels.length
+  );
 
   return (
     <div
@@ -265,9 +274,9 @@ export default function ArtistAbout({
                     {paragraph}
                   </p>
                 ))
-              ) : (
+              ) : !fetching ? (
                 <p className="muted">No biography stored yet.</p>
-              )}
+              ) : null}
             </div>
             {stacked && hasBio && (
               <button
@@ -359,16 +368,18 @@ export default function ArtistAbout({
                     </dd>
                   </div>
                 )}
-                <div className="artist-about__meta-row">
-                  <dt>Topics</dt>
-                  <dd className="artist-about__topics-dd">
-                    <ArtistWordCloud
-                      bandId={data.id}
-                      embedded
-                      onOpenRelease={onOpenRelease}
-                    />
-                  </dd>
-                </div>
+                {hasOtherMetadata && (
+                  <div className="artist-about__meta-row">
+                    <dt>Topics</dt>
+                    <dd className="artist-about__topics-dd">
+                      <ArtistWordCloud
+                        bandId={data.id}
+                        embedded
+                        onOpenRelease={onOpenRelease}
+                      />
+                    </dd>
+                  </div>
+                )}
                 {visibleLabels.length > 0 && (
                   <div className="artist-about__meta-row">
                     <dt>Labels</dt>

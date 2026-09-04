@@ -75,7 +75,7 @@ def _source_branding(
     artist_dir = _artist_dir(root, source_name)
     if not artist_dir:
         return None, None
-    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
     if not brands:
         return None, None
     y = year if year is not None else 2000
@@ -113,7 +113,7 @@ def enrich_items_with_banners(
         return
 
     photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
-    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
     if not photos and not brands:
         return
 

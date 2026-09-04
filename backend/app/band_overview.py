@@ -177,7 +177,7 @@ def list_era_slides(artist_name: str | None, media_root: Path) -> list[dict]:
     if not artist_dir:
         return []
     photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
-    brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+    brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
     if not photos:
         return []
 
@@ -256,6 +256,7 @@ def _lineup_entry(
     arp: ArtistParticipation,
     artist: Artist,
     media_root: Path | None,
+    artist_dir: Path | None,
     founding_year: int | None,
 ) -> dict:
     from app.lineup_instruments import instrument_label
@@ -273,11 +274,14 @@ def _lineup_entry(
                 roles.append(label)
     flags = _participation_flags(arp, founding_year)
     deceased = bool((artist.art_death_date or "").strip())
+    from app.gallery import member_signature_url
+
     return {
         "id": artist.art_id,
         "participation_id": arp.arp_id,
         "name": name,
         "photo_url": _member_photo_url(artist, media_root),
+        "signature_url": member_signature_url(artist_dir, name, media_root),
         "start": start,
         "end": end,
         "years": _format_years(start, end),
@@ -296,13 +300,23 @@ def _build_lineup(db: Session, band: Band, media_root: Path | None) -> dict:
     ).all()
     band_start = (band.bnd_starting_dates or "").split(";")[0].strip()[:4]
     founding_year = int(band_start) if band_start.isdigit() else None
+    artist_dir = _artist_dir(media_root, band.bnd_name) if media_root else None
 
     all_entries: list[dict] = []
     for arp in rows:
         artist = db.get(Artist, arp.arp_fk_artists) if arp.arp_fk_artists else None
         if not artist:
             continue
-        all_entries.append(_lineup_entry(db, arp, artist, media_root, founding_year))
+        all_entries.append(
+            _lineup_entry(
+                db,
+                arp,
+                artist,
+                media_root,
+                artist_dir,
+                founding_year,
+            )
+        )
 
     sorted_entries = sort_lineup_members(all_entries)
     official = [e for e in sorted_entries if e.get("is_official")]
@@ -422,10 +436,14 @@ def _solo_performer(
         end = (band.bnd_ending_dates or "").split(";")[0].strip() or None
     name = _display_name(artist.art_stage_name or artist.art_name)
     deceased = bool((artist.art_death_date or "").strip())
+    from app.gallery import member_signature_url
+
+    artist_dir = _artist_dir(media_root, band.bnd_name) if media_root else None
     return {
         "id": artist.art_id,
         "name": name,
         "photo_url": _member_photo_url(artist, media_root),
+        "signature_url": member_signature_url(artist_dir, name, media_root),
         "start": start,
         "end": end,
         "years": _format_years(start, end),
@@ -501,7 +519,11 @@ def build_band_overview(
     solo = _is_solo(db, band)
     is_various = band_id == VARIOUS_ARTISTS_DEFAULT_ID
     needs_lineup_import = bool(
-        band.bnd_code and not band.bnd_lineup_imported_at and not solo and not is_various
+        band.bnd_code
+        and not band.bnd_code.startswith("local-")
+        and not band.bnd_lineup_imported_at
+        and not solo
+        and not is_various
     )
     show_lineup = not solo and not is_various and (
         bool(lineup.get("all")) or needs_lineup_import
@@ -605,7 +627,8 @@ def _overview_media_mtimes(
 
     audio_mtime = _audio_mtime(artist_dir)
     photos = _gallery_subdir(artist_dir, "Photos")
-    gallery_mtime = _dir_mtime(photos)
+    branding = _gallery_subdir(artist_dir, "Branding")
+    gallery_mtime = max(_dir_mtime(photos), _dir_mtime(branding))
     video_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Video"))
     library_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Library"))
     return gallery_mtime, audio_mtime, video_mtime, library_mtime

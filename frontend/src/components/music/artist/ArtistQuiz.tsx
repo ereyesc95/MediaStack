@@ -504,7 +504,6 @@ export default function ArtistQuiz({
             number: t.number ?? i + 1,
           }));
           if (!releases.length && !others.length) {
-            setError("No official releases with local tracks found.");
             setPhase("ready");
             setDiscography([]);
             setOtherTracks([]);
@@ -515,7 +514,6 @@ export default function ArtistQuiz({
         } else if (next === "lineup") {
           const data = await fetchQuizLineup(bandId);
           if (data.disabled || !(data.members?.length)) {
-            setError("Lineup quiz is not available.");
             setPhase("ready");
             setLineup([]);
             return;
@@ -524,7 +522,6 @@ export default function ArtistQuiz({
         } else {
           const data = await fetchQuizSongs(bandId, SONG_ROUNDS);
           if (!(data.questions?.length)) {
-            setError("Not enough local tracks for a songs quiz.");
             setPhase("ready");
             setSongQuestions([]);
             return;

@@ -23,7 +23,7 @@ from app.services import musicbrainz
 
 ARTIST_FOLDERS = (
     "[Artwork]/Exclusive",
-    "[Artwork]/Logos",
+    "[Artwork]/Branding",
     "[Artwork]/Photos",
     "[Artwork]/Covers",
     "Albums",
@@ -395,9 +395,9 @@ async def estimate_import(db: Session, mbid: str) -> dict:
     seconds = max(
         15,
         int(
-            12
-            + math.ceil(release_group_count / 100) * 2
-            + release_group_count * 0.6
+            15
+            + math.ceil(release_group_count / 100) * 5
+            + release_group_count * 4
             + member_count * 1.3
         ),
     )

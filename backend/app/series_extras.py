@@ -339,7 +339,7 @@ def _theme_audio_item(
 
             artist_dir = _artist_dir(media_root, by_artist)
             if artist_dir:
-                brands = _list_era_brands(_gallery_subdir(artist_dir, "Logos"))
+                brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
                 logos = [b for b in brands if b.kind == "logo"]
                 icons = [b for b in brands if b.kind == "icon"]
                 if logos:

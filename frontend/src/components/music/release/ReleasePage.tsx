@@ -251,12 +251,20 @@ function LineupMiniCard({
           <img
             src={member.photo_url!}
             alt=""
+            className="lineup-photo-image"
             onError={() => setPhotoFailed(true)}
           />
         ) : (
           <span className="release-lineup-card__initials">
             {member.name.slice(0, 2).toUpperCase()}
           </span>
+        )}
+        {member.signature_url && (
+          <img
+            src={member.signature_url}
+            alt=""
+            className="lineup-signature-overlay"
+          />
         )}
       </span>
       <span className="release-lineup-card__name">{member.name}</span>

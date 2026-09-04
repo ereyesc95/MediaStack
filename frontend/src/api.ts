@@ -51,7 +51,14 @@ async function request<T>(
   timeoutMs = FETCH_TIMEOUT_MS
 ): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const externalSignal = init?.signal;
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   let res: Response;
   const headers = new Headers(init?.headers);
   for (const [k, v] of Object.entries(authHeaders())) {
@@ -61,6 +68,7 @@ async function request<T>(
     res = await fetch(url, { ...init, headers, signal: controller.signal });
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
+      if (!timedOut && externalSignal?.aborted) throw e;
       throw new Error("Request timed out. Is MyStack running?");
     }
     if (e instanceof TypeError) {
@@ -69,6 +77,7 @@ async function request<T>(
     throw e;
   } finally {
     window.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
   }
   if (!res.ok) {
     throw new Error(await errorMessageFromResponse(res));
@@ -250,7 +259,9 @@ export async function estimateBandImport(mbid: string) {
 
 export async function importBandFromMb(
   mbid: string,
-  writeUserGuide = false
+  writeUserGuide = false,
+  importId?: string,
+  signal?: AbortSignal
 ) {
   return request<ArtistImportResult>(
     `${API}/music/bands/import`,
@@ -259,8 +270,10 @@ export async function importBandFromMb(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mbid,
+        import_id: importId,
         write_user_guide: writeUserGuide,
       }),
+      signal,
     },
     15 * 60_000
   );
@@ -268,7 +281,9 @@ export async function importBandFromMb(
 
 export async function importUnregisteredBand(
   name: string,
-  writeUserGuide = false
+  writeUserGuide = false,
+  importId?: string,
+  signal?: AbortSignal
 ) {
   return request<ArtistImportResult>(
     `${API}/music/bands/import`,
@@ -277,11 +292,20 @@ export async function importUnregisteredBand(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
+        import_id: importId,
         unregistered: true,
         write_user_guide: writeUserGuide,
       }),
+      signal,
     },
     15 * 60_000
+  );
+}
+
+export async function cancelBandImport(importId: string) {
+  return request<{ cancelled: boolean }>(
+    `${API}/music/bands/import/${encodeURIComponent(importId)}/cancel`,
+    { method: "POST" }
   );
 }
 
@@ -320,11 +344,15 @@ export async function refreshBandMetadata(
   id: number,
   includeBio: boolean
 ): Promise<{ ok: boolean; refreshed_at?: string; error?: string }> {
-  return request(`${API}/music/bands/${id}/refresh-metadata`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ include_bio: includeBio }),
-  });
+  return request(
+    `${API}/music/bands/${id}/refresh-metadata`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ include_bio: includeBio }),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function rescanBandLibrary(
@@ -532,6 +560,12 @@ export async function fetchQuizDiscography(bandId: number) {
     other_tracks: { title: string; number: number }[];
     is_solo: boolean;
   }>(`${API}/music/bands/${bandId}/quiz/discography`);
+}
+
+export async function fetchQuizAvailability(bandId: number) {
+  return request<Record<"discography" | "songs" | "lineup", boolean>>(
+    `${API}/music/bands/${bandId}/quiz/availability`
+  );
 }
 
 export async function fetchQuizLineup(bandId: number) {

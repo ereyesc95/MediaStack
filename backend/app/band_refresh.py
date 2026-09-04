@@ -11,7 +11,7 @@ from app.media_index import invalidate_media_cache
 from app.playlist_index import invalidate_playlist_cache
 from app.config import settings
 from app.models import Band
-from app.services.musicbrainz import fetch_artist
+from app.services.musicbrainz import fetch_artist, search_artist_mbid
 
 
 def _now() -> str:
@@ -25,10 +25,23 @@ async def refresh_band_metadata(
     include_bio: bool = False,
 ) -> dict:
     """Re-fetch MusicBrainz core fields; optional bio overwrite when not manual."""
-    if not band.bnd_code:
-        return {"ok": False, "error": "No MusicBrainz ID"}
+    code = (band.bnd_code or "").strip()
+    if not code or code.startswith("local-"):
+        code = (
+            await search_artist_mbid(
+                band.bnd_name or "",
+                user_agent=settings.musicbrainz_user_agent,
+            )
+            or ""
+        )
+        if not code:
+            return {"ok": False, "error": "No data found"}
+        band.bnd_code = code
 
-    data = await fetch_artist(band.bnd_code)
+    data = await fetch_artist(
+        code,
+        user_agent=settings.musicbrainz_user_agent,
+    )
     life = data.get("life-span") or {}
     band.bnd_starting_dates = life.get("begin") or band.bnd_starting_dates
     end = life.get("end")

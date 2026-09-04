@@ -101,6 +101,7 @@ type Props = {
   onEditAbout?: () => void;
   onRemoveArtist?: () => void;
   onAddMember?: () => void;
+  addMemberLabel?: string;
   onAddLink?: () => void;
   onAddSimilar?: () => void;
   addSimilarLabel?: string;
@@ -168,6 +169,7 @@ export default function AppMenu({
   onEditAbout,
   onRemoveArtist,
   onAddMember,
+  addMemberLabel = "Update cast",
   onAddLink,
   onAddSimilar,
   addSimilarLabel = "Add similar artist",
@@ -614,7 +616,7 @@ export default function AppMenu({
               }}
             >
               <IconAddArtist className="menu-item-icon" />
-              Update cast
+              {addMemberLabel}
             </button>
           )}
           {onAddLink && (

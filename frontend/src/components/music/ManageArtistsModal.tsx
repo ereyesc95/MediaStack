@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  cancelBandImport,
   deleteBand,
   estimateBandImport,
   importBandFromMb,
@@ -47,6 +48,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [closeWarning, setCloseWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const importControllerRef = useRef<AbortController | null>(null);
+  const importIdRef = useRef("");
 
   useEffect(() => {
     if (!importing) return;
@@ -60,11 +63,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
 
   function requestClose() {
     if (importing) {
-      setCloseWarning(
-        "Artist data and folders are still being created. Closing now can hide " +
-          "the result and may leave the import incomplete. Keep this window open " +
-          "until MyStack confirms it has finished."
-      );
+      setCloseWarning("visible");
       return;
     }
     if (busy) return;
@@ -92,7 +91,23 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setPendingArtist(null);
     setEstimate(null);
     setWriteUserGuide(false);
+    setCloseWarning(null);
     onChanged();
+  }
+
+  async function cancelAndClose() {
+    const importId = importIdRef.current;
+    try {
+      if (importId) await cancelBandImport(importId);
+    } catch {
+      // The request may have completed between the warning and confirmation.
+    } finally {
+      importControllerRef.current?.abort();
+      importControllerRef.current = null;
+      importIdRef.current = "";
+      setCloseWarning(null);
+      onClose();
+    }
   }
 
   async function handleSearch() {
@@ -147,13 +162,27 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setError(null);
     setNotice(null);
     setCloseWarning(null);
+    const controller = new AbortController();
+    const importId = crypto.randomUUID();
+    importControllerRef.current = controller;
+    importIdRef.current = importId;
     try {
       finishImport(
-        await importBandFromMb(pendingArtist.mbid, writeUserGuide)
+        await importBandFromMb(
+          pendingArtist.mbid,
+          writeUserGuide,
+          importId,
+          controller.signal
+        )
       );
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      if (importControllerRef.current === controller) {
+        importControllerRef.current = null;
+        importIdRef.current = "";
+      }
       setImporting(false);
       setBusy(false);
     }
@@ -167,11 +196,27 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setError(null);
     setNotice(null);
     setCloseWarning(null);
+    const controller = new AbortController();
+    const importId = crypto.randomUUID();
+    importControllerRef.current = controller;
+    importIdRef.current = importId;
     try {
-      finishImport(await importUnregisteredBand(name, writeUserGuide));
+      finishImport(
+        await importUnregisteredBand(
+          name,
+          writeUserGuide,
+          importId,
+          controller.signal
+        )
+      );
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      if (importControllerRef.current === controller) {
+        importControllerRef.current = null;
+        importIdRef.current = "";
+      }
       setImporting(false);
       setBusy(false);
     }
@@ -459,11 +504,22 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                         >
                           <span className="manage-artists-modal__spinner" />
                           <div>
-                            <strong>Creating artist…</strong>
                             <small className="muted">
-                              Keep this window open. Create and search controls
-                              are unavailable until the import finishes.
+                              Creating artist, please wait...
                             </small>
+                            {closeWarning && (
+                              <small className="muted">
+                                Closing now may interrupt the process and result
+                                in incomplete data.{" "}
+                                <button
+                                  type="button"
+                                  className="manage-artists-modal__inline-link"
+                                  onClick={() => void cancelAndClose()}
+                                >
+                                  Continue
+                                </button>
+                              </small>
+                            )}
                           </div>
                         </div>
                       ) : null}
@@ -478,11 +534,22 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                 >
                   <span className="manage-artists-modal__spinner" />
                   <div>
-                    <strong>Creating artist…</strong>
                     <small className="muted">
-                      Keep this window open. Create and search controls are
-                      unavailable until the import finishes.
+                      Creating artist, please wait...
                     </small>
+                    {closeWarning && (
+                      <small className="muted">
+                        Closing now may interrupt the process and result in
+                        incomplete data.{" "}
+                        <button
+                          type="button"
+                          className="manage-artists-modal__inline-link"
+                          onClick={() => void cancelAndClose()}
+                        >
+                          Continue
+                        </button>
+                      </small>
+                    )}
                   </div>
                 </div>
               )}
@@ -532,11 +599,6 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         </div>
 
         {notice && <p className="modal-notice">{notice}</p>}
-        {closeWarning && (
-          <p className="manage-artists-modal__close-warning" role="alert">
-            {closeWarning}
-          </p>
-        )}
         {error && <p className="error manage-artists-modal__error">{error}</p>}
 
         {mode === "add" && canCreate && !importing && (

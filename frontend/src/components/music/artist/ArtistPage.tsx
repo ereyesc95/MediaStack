@@ -11,6 +11,7 @@ import {
   deleteBand,
   fetchBandOverview,
   fetchBandRelated,
+  fetchQuizAvailability,
   importBandLineup,
   playTrack,
   refreshBandLineup,
@@ -316,6 +317,10 @@ export default function ArtistPage({
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
   const [quizMode, setQuizMode] = useState<QuizMode>("discography");
+  const [quizAvailability, setQuizAvailability] = useState<Record<
+    QuizMode,
+    boolean
+  > | null>(null);
   const [addSimilarOpen, setAddSimilarOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [audioRefreshKey, setAudioRefreshKey] = useState(0);
@@ -331,6 +336,7 @@ export default function ArtistPage({
   const loadSeq = useRef(0);
   const [relatedFetchInProgress, setRelatedFetchInProgress] = useState(false);
   const [lineupImporting, setLineupImporting] = useState(false);
+  const [topStatus, setTopStatus] = useState("");
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [removeArtistOpen, setRemoveArtistOpen] = useState(false);
   const [removeArtistBusy, setRemoveArtistBusy] = useState(false);
@@ -359,15 +365,23 @@ export default function ArtistPage({
     mobilePortrait || deviceLayout === "tablet-portrait";
   const cachedAudio = getCachedArtistAudio(bandId);
   const cachedGallery = getCachedArtistGallery(bandId);
+  const cachedGalleryHasContent = Boolean(
+    cachedGallery &&
+      (cachedGallery.photos.length ||
+        cachedGallery.branding.length ||
+        (cachedGallery.animations?.covers.length ?? 0) ||
+        (cachedGallery.animations?.canvas.length ?? 0) ||
+        cachedGallery.has_exclusive_gallery)
+  );
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
   const galleryTabVisible = useCallback(
     (m: BandOverview["media"] | undefined) =>
       Boolean(
         m?.has_gallery ||
           (nsfwUnlocked && m?.has_exclusive_gallery) ||
-          cachedGallery
+          cachedGalleryHasContent
       ),
-    [nsfwUnlocked, cachedGallery]
+    [nsfwUnlocked, cachedGalleryHasContent]
   );
   const cachedVideo = getCachedArtistMediaTab(bandId, "video");
   const cachedSeries = getCachedArtistMediaTab(bandId, "series");
@@ -391,11 +405,15 @@ export default function ArtistPage({
   const visibleSections = useMemo(() => {
     const m = data?.media;
     const base = !m
-      ? SECTIONS
+      ? SECTIONS.filter((section) => section.id === "overview")
       : SECTIONS.filter((s) => {
           if (s.id === "overview") return true;
           if (s.id === "quiz") {
-            return Boolean(m.has_audio) && !data?.is_various_artists;
+            return Boolean(
+              !data?.is_various_artists &&
+                quizAvailability &&
+                Object.values(quizAvailability).some(Boolean)
+            );
           }
           if (s.id === "audio") return m.has_audio;
           if (s.id === "video") return m.has_video;
@@ -433,16 +451,70 @@ export default function ArtistPage({
     if (preferred) out.push(preferred);
     out.push(...rest);
     return out;
-  }, [data?.media, data?.is_various_artists, nsfwUnlocked]);
+  }, [
+    data?.media,
+    data?.is_various_artists,
+    nsfwUnlocked,
+    quizAvailability,
+  ]);
+
+  useEffect(() => {
+    if (!data || visibleSections.some((item) => item.id === section)) return;
+    onNavigate("overview", "about");
+  }, [data, visibleSections, section, onNavigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setQuizAvailability(null);
+    fetchQuizAvailability(bandId)
+      .then((value) => {
+        if (!cancelled) setQuizAvailability(value);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuizAvailability({
+            discography: false,
+            songs: false,
+            lineup: false,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bandId]);
 
   useEffect(() => {
     if (section !== "quiz" || !data) return;
-    if (!data.media?.has_audio || data.is_various_artists) {
+    if (
+      data.is_various_artists ||
+      (quizAvailability &&
+        !Object.values(quizAvailability).some(Boolean))
+    ) {
       onNavigate("overview", "about");
     }
-  }, [section, data, onNavigate]);
+  }, [section, data, quizAvailability, onNavigate]);
 
-  const visibleOverviewTabs = useMemo(() => {
+  const availableQuizModes = useMemo(
+    () =>
+      QUIZ_MODES.filter(
+        (mode) =>
+          !(mode.soloHidden && data?.is_solo) &&
+          Boolean(quizAvailability?.[mode.id])
+      ),
+    [data?.is_solo, quizAvailability]
+  );
+
+  useEffect(() => {
+    if (section !== "quiz" || !availableQuizModes.length) return;
+    if (!availableQuizModes.some((mode) => mode.id === quizMode)) {
+      setQuizMode(availableQuizModes[0].id);
+    }
+  }, [section, availableQuizModes, quizMode]);
+
+  const visibleOverviewTabs = useMemo<
+    { id: ArtistOverviewTab; label: string }[]
+  >(() => {
     if (data?.is_various_artists) {
       return [
         { id: "about", label: "ABOUT" },
@@ -522,6 +594,12 @@ export default function ArtistPage({
       .catch(() => {})
       .finally(() => setLineupImporting(false));
   }, [bandId, data?.needs_lineup_import, data?.is_solo, load]);
+
+  useEffect(() => {
+    if (!topStatus) return;
+    const timer = window.setTimeout(() => setTopStatus(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [topStatus]);
 
   useEffect(() => {
     const cats = data?.links?.categories ?? [];
@@ -638,7 +716,7 @@ export default function ArtistPage({
     current: string | undefined;
     outgoing: string | undefined;
   }>(() => ({ current: bgUrl, outgoing: undefined }));
-  const prevBgRef = useRef(bgUrl);
+  const prevBgRef = useRef<string | undefined>(bgUrl);
 
   useEffect(() => {
     if (!bgUrl) {
@@ -851,10 +929,14 @@ export default function ArtistPage({
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
     try {
-      await refreshBandMetadata(bandId, refreshBio);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const result = await refreshBandMetadata(bandId, refreshBio);
+      if (result.ok) {
+        load();
+      } else {
+        setTopStatus("No data found");
+      }
+    } catch {
+      setTopStatus("No data found");
     } finally {
       setBusy("");
       setRefreshBio(false);
@@ -1033,6 +1115,10 @@ export default function ArtistPage({
             )}
           </div>
           <div className="artist-page__top-right">
+            {lineupImporting && (
+              <span className="muted">Fetching data, please wait...</span>
+            )}
+            {topStatus && <span className="muted">{topStatus}</span>}
             {busy && <span className="muted">{busy}</span>}
             {section === "overview" &&
               (overviewTab === "related" ||
@@ -1281,6 +1367,7 @@ export default function ArtistPage({
                   ? () => setAddMemberOpen(true)
                   : undefined
               }
+              addMemberLabel="Add member"
               onAddLink={
                 isAdmin && overviewTab === "links"
                   ? () => setAddLinkOpen(true)
@@ -1344,8 +1431,7 @@ export default function ArtistPage({
 
         {section === "quiz" && data && (
           <nav className="artist-page__subtabs artist-page__quiz-subtabs">
-            {QUIZ_MODES.filter((m) => !(m.soloHidden && data.is_solo)).map(
-              (m) => (
+            {availableQuizModes.map((m) => (
                 <button
                   key={m.id}
                   type="button"
@@ -1354,8 +1440,7 @@ export default function ArtistPage({
                 >
                   <span>{m.label}</span>
                 </button>
-              )
-            )}
+              ))}
           </nav>
         )}
 
@@ -1528,6 +1613,7 @@ export default function ArtistPage({
             eraIndex={eraIndex}
             stacked={stacked}
             flatMeta={false}
+            fetching={lineupImporting}
             onEraChange={setEraIndex}
             onCountry={onCountry}
             onSubgenre={onSubgenre}
@@ -1787,9 +1873,6 @@ export default function ArtistPage({
         )}
         {section === "gallery" && galleryTabVisible(data?.media) && (
           <ArtistGallery state={galleryState} />
-        )}
-        {data && section === "gallery" && !galleryTabVisible(data.media) && (
-          <p className="muted artist-section-empty">No gallery folders found.</p>
         )}
       </div>
     </div>

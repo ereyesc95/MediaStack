@@ -741,7 +741,7 @@ def build_release_overview(
     gallery_photo_url: str | None = None
 
     if artist_dir:
-        logos_dir = _gallery_subdir(artist_dir, "Logos")
+        logos_dir = _gallery_subdir(artist_dir, "Branding")
         brands: list[EraBrand] = _list_era_brands(logos_dir)
         if release_year:
             icon = _pick_brand_for_year_deterministic(brands, release_year, "icon")
