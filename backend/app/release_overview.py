@@ -558,6 +558,56 @@ def _prev_next_neighbors(
     )
 
 
+def _neighbors_from_context(
+    db: Session,
+    *,
+    neighbor_band_id: int | None,
+    fallback_releases: list[dict],
+    card: dict,
+) -> tuple[dict | None, dict | None]:
+    """Prefer prev/next from the referring artist when the release is owned elsewhere."""
+    if not neighbor_band_id:
+        return _prev_next_neighbors(fallback_releases, card)
+    context_band = db.get(Band, neighbor_band_id)
+    if not context_band:
+        return _prev_next_neighbors(fallback_releases, card)
+    context_releases = (
+        get_audio_index(db, context_band, force=False).get("releases") or []
+    )
+    if not context_releases:
+        return _prev_next_neighbors(fallback_releases, card)
+
+    candidates = [
+        str(card.get("id") or ""),
+        str(card.get("navigate_release_id") or ""),
+    ]
+    context_card = None
+    for candidate in candidates:
+        if not candidate:
+            continue
+        context_card = find_release_card(context_releases, candidate)
+        if context_card:
+            break
+    if context_card is None:
+        title = (card.get("title") or "").casefold().strip()
+        category = card.get("category")
+        official = card.get("official", True)
+        if title:
+            context_card = next(
+                (
+                    row
+                    for row in context_releases
+                    if row.get("category") == category
+                    and row.get("official", True) == official
+                    and (row.get("title") or "").casefold().strip() == title
+                ),
+                None,
+            )
+    if context_card is None:
+        return _prev_next_neighbors(fallback_releases, card)
+    return _prev_next_neighbors(context_releases, context_card)
+
+
 def _match_db_release(db: Session, band_id: int, title: str) -> Release | None:
     norm = title.casefold().strip()
     for rel in db.scalars(select(Release)).all():
@@ -682,6 +732,7 @@ def build_release_overview(
     release_id: str,
     *,
     card_orientation: str = "landscape",
+    neighbor_band_id: int | None = None,
 ) -> dict | None:
     band = db.get(Band, band_id)
     if not band:
@@ -716,6 +767,7 @@ def build_release_overview(
                 target_band_id,
                 target_release_id,
                 card_orientation=card_orientation,
+                neighbor_band_id=neighbor_band_id or band_id,
             )
         return None
 
@@ -799,7 +851,12 @@ def build_release_overview(
             orientation=card_orientation,
         )
 
-    prev_r, next_r = _prev_next_neighbors(audio_data.get("releases") or [], card)
+    prev_r, next_r = _neighbors_from_context(
+        db,
+        neighbor_band_id=neighbor_band_id,
+        fallback_releases=audio_data.get("releases") or [],
+        card=card,
+    )
     type_label = _release_type_label(card.get("category") or "", content)
     artist_name = _display_name(band.bnd_name)
 

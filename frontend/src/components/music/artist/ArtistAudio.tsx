@@ -391,7 +391,7 @@ function ReleaseCard({
       artistName: referrerArtistName,
       source: "artist",
     });
-    void prefetchReleaseOverview(targetBand, targetRelease);
+    void prefetchReleaseOverview(targetBand, targetRelease, "landscape", bandId);
     if (onOpenReleaseNavigate) {
       onOpenReleaseNavigate(targetBand, targetRelease);
     }

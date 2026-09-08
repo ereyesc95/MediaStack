@@ -533,6 +533,7 @@ async def release_overview(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     orientation: str = Query("landscape"),
+    neighbor_band_id: int | None = Query(None),
 ):
     from app.release_overview import build_release_overview
     from app.release_metadata_refresh import refresh_release_metadata
@@ -543,8 +544,13 @@ async def release_overview(
     from app.gallery import normalize_card_orientation
 
     card_orientation = normalize_card_orientation(orientation)
+    context_band_id = neighbor_band_id if neighbor_band_id and neighbor_band_id != band_id else None
     data = build_release_overview(
-        db, band_id, release_id, card_orientation=card_orientation
+        db,
+        band_id,
+        release_id,
+        card_orientation=card_orientation,
+        neighbor_band_id=context_band_id,
     )
     if not data:
         raise HTTPException(404, "Release not found")

@@ -60,18 +60,28 @@ def _media_root() -> Path:
     return root
 
 
+def _band_name_aliases(band: Band) -> list[str]:
+    names: list[str] = []
+    primary = _display_name(band.bnd_name).strip()
+    if primary:
+        names.append(primary)
+    raw = (band.bnd_other_names or "").replace("■", ",").replace("█", "'")
+    for piece in raw.replace(";", ",").split(","):
+        alias = _display_name(piece).strip()
+        if alias and alias.casefold() not in {n.casefold() for n in names}:
+            names.append(alias)
+    return names
+
+
 def _find_band_by_name(db: Session, name: str) -> Band | None:
     wanted = _display_name(name).casefold()
     if not wanted:
         return None
-    return next(
-        (
-            band
-            for band in db.scalars(select(Band)).all()
-            if _display_name(band.bnd_name).casefold() == wanted
-        ),
-        None,
-    )
+    for band in db.scalars(select(Band)).all():
+        for alias in _band_name_aliases(band):
+            if alias.casefold() == wanted:
+                return band
+    return None
 
 
 def _find_band(db: Session, mbid: str, name: str) -> Band | None:
@@ -80,6 +90,25 @@ def _find_band(db: Session, mbid: str, name: str) -> Band | None:
         if row:
             return row
     return _find_band_by_name(db, name)
+
+
+def _resolve_local_artist_dir(
+    root: Path,
+    band: Band | None,
+    preferred_name: str | None = None,
+) -> Path | None:
+    """Locate an existing artist folder by catalog name, then aliases, then preferred."""
+    candidates: list[str] = []
+    if band is not None:
+        candidates.extend(_band_name_aliases(band))
+    preferred = _display_name(preferred_name or "").strip()
+    if preferred and preferred.casefold() not in {c.casefold() for c in candidates}:
+        candidates.append(preferred)
+    for name in candidates:
+        folder = _artist_dir(root, name)
+        if folder:
+            return folder
+    return None
 
 
 def _allocate_local_code(db: Session) -> str:
@@ -365,7 +394,7 @@ async def estimate_import(
 ) -> dict:
     root = _media_root()
     known = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
-    known_folder = _artist_dir(root, known.bnd_name) if known else None
+    known_folder = _resolve_local_artist_dir(root, known) if known else None
     if known and known_folder and not update_existing:
         return {
             "name": _display_name(known.bnd_name),
@@ -383,7 +412,7 @@ async def estimate_import(
     )
     name = (data.get("name") or "Unknown").strip()
     band = _find_band(db, mbid, name)
-    local_folder = _artist_dir(root, band.bnd_name if band else name)
+    local_folder = _resolve_local_artist_dir(root, band, name)
     member_count = len(_member_relations(data))
 
     if band and local_folder and not update_existing:
@@ -434,7 +463,7 @@ async def import_artist(
 ) -> dict:
     root = _media_root()
     known = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
-    known_folder = _artist_dir(root, known.bnd_name) if known else None
+    known_folder = _resolve_local_artist_dir(root, known) if known else None
     if known and known_folder and not update_existing:
         name = _display_name(known.bnd_name)
         return {
@@ -453,7 +482,7 @@ async def import_artist(
     )
     name = (data.get("name") or "Unknown").strip()
     band = _find_band(db, mbid, name)
-    local_folder = _artist_dir(root, band.bnd_name if band else name)
+    local_folder = _resolve_local_artist_dir(root, band, name)
 
     if band and local_folder and not update_existing:
         return {
@@ -476,6 +505,21 @@ async def import_artist(
     if band is None:
         band = _new_band(db)
     _populate_band_metadata(db, band, data)
+    if local_folder:
+        disk_name = local_folder.name
+        if _display_name(band.bnd_name).casefold() != disk_name.casefold():
+            aliases = [
+                alias
+                for alias in _band_name_aliases(band)
+                if alias.casefold() != disk_name.casefold()
+            ]
+            mb_name = _display_name(name).strip()
+            if mb_name and mb_name.casefold() not in {
+                alias.casefold() for alias in aliases
+            }:
+                aliases.insert(0, mb_name)
+            band.bnd_name = disk_name
+            band.bnd_other_names = ";".join(aliases) or band.bnd_other_names
     db.commit()
     db.refresh(band)
 
@@ -502,13 +546,20 @@ async def import_artist(
     local_status = "existing"
     if not local_folder:
         # Recheck immediately before writing in case another import created it.
-        local_folder = _artist_dir(root, name)
+        local_folder = _resolve_local_artist_dir(root, band, name)
     updating_existing_folder = bool(local_folder and update_existing)
     if not local_folder or update_existing:
+        # Always scaffold under the existing folder when updating (e.g. VV for
+        # MusicBrainz "Ville Valo"), never create a second artist directory.
+        scaffold_name = (
+            _display_name(band.bnd_name)
+            if updating_existing_folder
+            else name
+        )
         local_folder, releases_created = _create_artist_tree(
             db,
             root,
-            name,
+            scaffold_name,
             groups,
             write_user_guide=write_user_guide,
             artist_dir_override=local_folder if updating_existing_folder else None,
@@ -560,7 +611,7 @@ def import_unregistered_artist(
 
     root = _media_root()
     band = _find_band_by_name(db, artist_name)
-    local_folder = _artist_dir(root, band.bnd_name if band else artist_name)
+    local_folder = _resolve_local_artist_dir(root, band, artist_name)
     if band and local_folder:
         return {
             "id": band.bnd_id,
@@ -590,7 +641,7 @@ def import_unregistered_artist(
     releases_created = 0
     local_status = "existing"
     if not local_folder:
-        local_folder = _artist_dir(root, artist_name)
+        local_folder = _resolve_local_artist_dir(root, band, artist_name)
     if not local_folder:
         local_folder, releases_created = _create_artist_tree(
             db,

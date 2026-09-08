@@ -394,10 +394,15 @@ export async function fetchBandAudioIndex(
 export async function fetchReleaseOverview(
   bandId: number,
   releaseId: string,
-  orientation: import("./types").CardOrientation = "landscape"
+  orientation: import("./types").CardOrientation = "landscape",
+  neighborBandId?: number | null
 ): Promise<import("./types").ReleaseOverview> {
+  const params = new URLSearchParams({ orientation });
+  if (neighborBandId && neighborBandId !== bandId) {
+    params.set("neighbor_band_id", String(neighborBandId));
+  }
   return request(
-    `${API}/music/bands/${bandId}/releases/${releaseId}/overview?orientation=${orientation}`,
+    `${API}/music/bands/${bandId}/releases/${releaseId}/overview?${params}`,
     undefined,
     LONG_RUNNING_TIMEOUT_MS
   );

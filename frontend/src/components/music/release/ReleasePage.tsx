@@ -649,10 +649,26 @@ export default function ReleasePage({
       const silent = options?.silent ?? false;
       const seq = ++loadSeq.current;
       if (!silent) setError(null);
-      fetchReleaseOverview(bandId, resolvedReleaseId)
+      const referrer = getReleaseReferrer();
+      const neighborBandId =
+        referrer?.source === "artist" && referrer.bandId !== bandId
+          ? referrer.bandId
+          : null;
+      fetchReleaseOverview(
+        bandId,
+        resolvedReleaseId,
+        "landscape",
+        neighborBandId
+      )
         .then((payload) => {
           if (seq !== loadSeq.current) return;
-          setCachedReleaseOverview(bandId, resolvedReleaseId, "landscape", payload);
+          setCachedReleaseOverview(
+            bandId,
+            resolvedReleaseId,
+            "landscape",
+            payload,
+            neighborBandId
+          );
           if (payload.title?.trim()) {
             rememberReleaseSlug(bandId, payload.title, resolvedReleaseId);
           }

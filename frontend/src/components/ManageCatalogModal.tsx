@@ -672,12 +672,12 @@ export default function ManageCatalogModal({
             </div>
           </div>
         ) : step === "search" ? (
-          <div className="artist-admin-form" key="search">
+          <div className="artist-admin-form manage-catalog-modal__form--search" key="search">
             {searchRow}
             {resultsList}
           </div>
         ) : (
-          <div className="artist-admin-form" key="details">
+          <div className="artist-admin-form manage-catalog-modal__form--details" key="details">
             <label>
               Franchise name
               <input
@@ -696,7 +696,7 @@ export default function ManageCatalogModal({
               </Checkbox>
             ) : null}
 
-            <div className="manage-catalog-modal__items">
+            <div className="manage-catalog-modal__selection">
               <small className="muted">
                 {scope === "collection"
                   ? "TMDb collection"
@@ -704,33 +704,38 @@ export default function ManageCatalogModal({
                     ? "Possible Google Books series"
                     : "Selected titles"}
               </small>
-              {items.map((item) => (
-                <Checkbox
-                  key={item.key}
-                  className="manage-catalog-modal__item"
-                  checked={selectedKeys.has(item.key)}
-                  disabled={saving}
-                  onChange={() => toggleItem(item.key)}
-                >
-                  {item.title}
-                  {item.date ? (
-                    <span className="muted"> {item.date}</span>
-                  ) : null}
-                  {module === "series" && item.seasons?.length ? (
-                    <span className="muted">
-                      {" · "}
-                      {item.seasons.filter((season) => season.number > 0).length}{" "}
-                      seasons
-                      {item.seasons.some((season) => season.number === 0)
-                        ? " + Specials"
-                        : ""}
-                    </span>
-                  ) : null}
-                  {!item.provider_id ? (
-                    <span className="muted"> · No registration</span>
-                  ) : null}
-                </Checkbox>
-              ))}
+              <div className="manage-catalog-modal__items">
+                {items.map((item) => (
+                  <Checkbox
+                    key={item.key}
+                    className="manage-catalog-modal__item"
+                    checked={selectedKeys.has(item.key)}
+                    disabled={saving}
+                    onChange={() => toggleItem(item.key)}
+                  >
+                    {item.title}
+                    {item.date ? (
+                      <span className="muted"> {item.date}</span>
+                    ) : null}
+                    {module === "series" && item.seasons?.length ? (
+                      <span className="muted">
+                        {" · "}
+                        {
+                          item.seasons.filter((season) => season.number > 0)
+                            .length
+                        }{" "}
+                        seasons
+                        {item.seasons.some((season) => season.number === 0)
+                          ? " + Specials"
+                          : ""}
+                      </span>
+                    ) : null}
+                    {!item.provider_id ? (
+                      <span className="muted"> · No registration</span>
+                    ) : null}
+                  </Checkbox>
+                ))}
+              </div>
             </div>
 
             <small className="muted">
