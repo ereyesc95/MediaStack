@@ -299,9 +299,14 @@ def _create_artist_tree(
     groups: list[dict],
     *,
     write_user_guide: bool,
+    artist_dir_override: Path | None = None,
 ) -> tuple[Path, int]:
     music_dir = _resolve_child_dir(root, "Music")
-    artist_dir = music_dir / _letter_folder(artist_name) / _safe_folder_component(artist_name)
+    artist_dir = artist_dir_override or (
+        music_dir
+        / _letter_folder(artist_name)
+        / _safe_folder_component(artist_name)
+    )
     for relative in ARTIST_FOLDERS:
         (artist_dir / Path(relative)).mkdir(parents=True, exist_ok=True)
 
@@ -325,6 +330,7 @@ def _create_artist_tree(
             collision_key = str(release_dir).casefold()
         used_paths[collision_key] = group_id
 
+        release_existed = release_dir.is_dir()
         (release_dir / "[Artwork]").mkdir(parents=True, exist_ok=True)
         medium_count = int(group.get("_medium_count") or 0)
         if medium_count > 1:
@@ -332,13 +338,16 @@ def _create_artist_tree(
             for position in range(1, medium_count + 1):
                 label = str(position).zfill(width)
                 (release_dir / f"{label}. Disc {label}").mkdir(exist_ok=True)
-        releases_created += 1
+        if not release_existed:
+            releases_created += 1
 
     if write_user_guide:
-        (artist_dir / "User guide.txt").write_text(
-            get_artist_user_guide_template(db),
-            encoding="utf-8",
-        )
+        guide_path = artist_dir / "User guide.txt"
+        if not guide_path.exists():
+            guide_path.write_text(
+                get_artist_user_guide_template(db),
+                encoding="utf-8",
+            )
     return artist_dir, releases_created
 
 
@@ -351,11 +360,13 @@ def _format_duration(seconds: int) -> str:
     return f"about {minutes} minutes"
 
 
-async def estimate_import(db: Session, mbid: str) -> dict:
+async def estimate_import(
+    db: Session, mbid: str, *, update_existing: bool = False
+) -> dict:
     root = _media_root()
     known = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
     known_folder = _artist_dir(root, known.bnd_name) if known else None
-    if known and known_folder:
+    if known and known_folder and not update_existing:
         return {
             "name": _display_name(known.bnd_name),
             "release_group_count": 0,
@@ -375,7 +386,7 @@ async def estimate_import(db: Session, mbid: str) -> dict:
     local_folder = _artist_dir(root, band.bnd_name if band else name)
     member_count = len(_member_relations(data))
 
-    if band and local_folder:
+    if band and local_folder and not update_existing:
         return {
             "name": name,
             "release_group_count": 0,
@@ -387,7 +398,9 @@ async def estimate_import(db: Session, mbid: str) -> dict:
         }
 
     release_group_count = 0
-    if not local_folder and name.casefold() != "various artists":
+    if (
+        not local_folder or update_existing
+    ) and name.casefold() != "various artists":
         release_group_count = await musicbrainz.count_official_release_groups(
             mbid,
             user_agent=settings.musicbrainz_user_agent,
@@ -417,11 +430,12 @@ async def import_artist(
     mbid: str,
     *,
     write_user_guide: bool,
+    update_existing: bool = False,
 ) -> dict:
     root = _media_root()
     known = db.scalars(select(Band).where(Band.bnd_code == mbid)).first()
     known_folder = _artist_dir(root, known.bnd_name) if known else None
-    if known and known_folder:
+    if known and known_folder and not update_existing:
         name = _display_name(known.bnd_name)
         return {
             "id": known.bnd_id,
@@ -441,7 +455,7 @@ async def import_artist(
     band = _find_band(db, mbid, name)
     local_folder = _artist_dir(root, band.bnd_name if band else name)
 
-    if band and local_folder:
+    if band and local_folder and not update_existing:
         return {
             "id": band.bnd_id,
             "code": band.bnd_code,
@@ -453,7 +467,9 @@ async def import_artist(
         }
 
     groups: list[dict] = []
-    if not local_folder and name.casefold() != "various artists":
+    if (
+        not local_folder or update_existing
+    ) and name.casefold() != "various artists":
         groups = await _prepare_release_groups(mbid)
 
     created_catalog = band is None
@@ -487,15 +503,17 @@ async def import_artist(
     if not local_folder:
         # Recheck immediately before writing in case another import created it.
         local_folder = _artist_dir(root, name)
-    if not local_folder:
+    updating_existing_folder = bool(local_folder and update_existing)
+    if not local_folder or update_existing:
         local_folder, releases_created = _create_artist_tree(
             db,
             root,
             name,
             groups,
             write_user_guide=write_user_guide,
+            artist_dir_override=local_folder if updating_existing_folder else None,
         )
-        local_status = "created"
+        local_status = "updated" if updating_existing_folder else "created"
 
     _invalidate_band_caches(band.bnd_id)
 
@@ -504,6 +522,13 @@ async def import_artist(
         message = (
             f"{name}'s local folder already existed. The catalog was "
             f"{catalog_action} from MusicBrainz; local files were not changed."
+        )
+    elif local_status == "updated":
+        message = (
+            f"{name}'s local folders were updated additively. "
+            f"{releases_created} missing release folder"
+            f"{'' if releases_created == 1 else 's'} created; "
+            "existing files were not changed."
         )
     else:
         message = (

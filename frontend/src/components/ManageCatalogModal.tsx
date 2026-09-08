@@ -5,6 +5,7 @@ import {
   removeCatalogRegistration,
   searchCatalogImport,
   searchCatalogRegistrations,
+  updateCatalogFolders,
   type CatalogImportItem,
   type CatalogImportModule,
   type CatalogImportSearchItem,
@@ -149,6 +150,8 @@ export default function ManageCatalogModal({
     CatalogImportSearchItem[]
   >([]);
   const [notFound, setNotFound] = useState(false);
+  const [existingFranchise, setExistingFranchise] =
+    useState<CatalogImportSearchItem | null>(null);
   const [searching, setSearching] = useState(false);
   const [firstPick, setFirstPick] = useState<CatalogImportSearchItem | null>(
     null
@@ -164,6 +167,7 @@ export default function ManageCatalogModal({
   const [nestedSeries, setNestedSeries] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [closeWarning, setCloseWarning] = useState(false);
   const [registrationQuery, setRegistrationQuery] = useState("");
   const [registrations, setRegistrations] = useState<CatalogRegistration[]>([]);
@@ -193,14 +197,18 @@ export default function ManageCatalogModal({
     if (value.length < 1 || searching) return;
     setSearching(true);
     setError(null);
+    setNotice(null);
     setNotFound(false);
+    setExistingFranchise(null);
     const controller = new AbortController();
     lookupControllerRef.current = controller;
     try {
       const data = await searchCatalogImport(module, value, controller.signal);
       setLocalFranchises(data.local_franchises);
       setResults(data.items);
-      setNotFound(data.items.length === 0);
+      setNotFound(
+        data.items.length === 0 && data.local_franchises.length === 0
+      );
     } catch (e) {
       if (controller.signal.aborted) return;
       setResults([]);
@@ -235,7 +243,14 @@ export default function ManageCatalogModal({
 
   async function choose(item: CatalogImportSearchItem) {
     if (item.source === "local") {
-      setFranchiseName(item.title);
+      if (item.kind === "franchise") {
+        setExistingFranchise(item);
+        setNotice(null);
+      } else {
+        addPicked([{ provider_id: "", title: item.title, date: null }]);
+        setFranchiseName(item.title);
+        setStep("details");
+      }
       return;
     }
     setSearching(true);
@@ -262,6 +277,29 @@ export default function ManageCatalogModal({
         lookupControllerRef.current = null;
         setSearching(false);
       }
+    }
+  }
+
+  async function updateExistingLocalFolders() {
+    if (!existingFranchise || saving) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await updateCatalogFolders(
+        module,
+        existingFranchise.title
+      );
+      setNotice(
+        `${result.folders_created} missing folder${
+          result.folders_created === 1 ? "" : "s"
+        } created. Existing files were not changed.`
+      );
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -396,6 +434,8 @@ export default function ManageCatalogModal({
           onChange={(e) => {
             setQuery(e.target.value);
             setNotFound(false);
+            setExistingFranchise(null);
+            setNotice(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -466,7 +506,7 @@ export default function ManageCatalogModal({
                 <button
                   type="button"
                   className="btn btn--block"
-                  onClick={() => setFranchiseName(item.title)}
+                  onClick={() => void choose(item)}
                 >
                   <span className="add-similar-results__name">
                     {item.title}
@@ -479,6 +519,21 @@ export default function ManageCatalogModal({
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {existingFranchise ? (
+        <p className="modal-notice manage-catalog-modal__existing">
+          This {labels.singular} already exists, click{" "}
+          <button
+            type="button"
+            className="manage-artists-modal__inline-link"
+            onClick={() => void updateExistingLocalFolders()}
+            disabled={saving}
+          >
+            here
+          </button>{" "}
+          to update local folders
+        </p>
       ) : null}
 
       {results.length ? (
@@ -553,9 +608,10 @@ export default function ManageCatalogModal({
         </div>
 
         {error ? <p className="error">{error}</p> : null}
+        {notice ? <p className="modal-notice">{notice}</p> : null}
 
         {mode === "remove" ? (
-          <div className="artist-admin-form">
+          <div className="artist-admin-form" key="remove">
             <p className="muted">
               Select the {labels.plural.toLowerCase()} to be removed. This
               action cannot be undone.
@@ -616,12 +672,12 @@ export default function ManageCatalogModal({
             </div>
           </div>
         ) : step === "search" ? (
-          <div className="artist-admin-form">
+          <div className="artist-admin-form" key="search">
             {searchRow}
             {resultsList}
           </div>
         ) : (
-          <div className="artist-admin-form">
+          <div className="artist-admin-form" key="details">
             <label>
               Franchise name
               <input
@@ -683,16 +739,18 @@ export default function ManageCatalogModal({
             {searchRow}
             {resultsList}
 
-            <small className="muted">
-              {chosenItems.length} folder{chosenItems.length === 1 ? "" : "s"}{" "}
-              will be scaffolded
-            </small>
-            <small className="muted">
-              Approximate time:{" "}
-              {estimatedSeconds >= 60
-                ? `${Math.ceil(estimatedSeconds / 60)} minute(s)`
-                : `${estimatedSeconds} seconds`}
-            </small>
+            <div className="manage-catalog-modal__estimate">
+              <small className="muted">
+                {chosenItems.length} folder
+                {chosenItems.length === 1 ? "" : "s"} will be created
+              </small>
+              <small className="muted">
+                Approximate time:{" "}
+                {estimatedSeconds >= 60
+                  ? `${Math.ceil(estimatedSeconds / 60)} minute(s)`
+                  : `${estimatedSeconds} seconds`}
+              </small>
+            </div>
             <Checkbox
               className="manage-artists-modal__guide-option"
               checked={franchiseHome}
@@ -718,10 +776,10 @@ export default function ManageCatalogModal({
               </small>
             ) : null}
 
-            <div className="modal-actions-row">
+            <div className="modal-actions-row manage-catalog-modal__actions">
               <button
                 type="button"
-                className="btn"
+                className="btn manage-catalog-modal__back"
                 disabled={saving}
                 onClick={() => {
                   stopLookup();
@@ -731,6 +789,7 @@ export default function ManageCatalogModal({
                   setSelectedKeys(new Set());
                 }}
               >
+                <span aria-hidden="true">‹</span>
                 Back
               </button>
               <button

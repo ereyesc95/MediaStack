@@ -247,7 +247,7 @@ export type ArtistImportResult = {
   code: string;
   name: string;
   existing: boolean;
-  local_status: "created" | "existing";
+  local_status: "created" | "existing" | "updated";
   releases_created: number;
   warnings?: string[];
   message: string;
@@ -255,10 +255,13 @@ export type ArtistImportResult = {
 
 export async function estimateBandImport(
   mbid: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  updateExisting = false
 ) {
   return request<ArtistImportEstimate>(
-    `${API}/music/bands/import-estimate/${encodeURIComponent(mbid)}`,
+    `${API}/music/bands/import-estimate/${encodeURIComponent(mbid)}${
+      updateExisting ? "?update_existing=true" : ""
+    }`,
     { signal },
     LONG_RUNNING_TIMEOUT_MS
   );
@@ -268,7 +271,8 @@ export async function importBandFromMb(
   mbid: string,
   writeUserGuide = false,
   importId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  updateExisting = false
 ) {
   return request<ArtistImportResult>(
     `${API}/music/bands/import`,
@@ -279,6 +283,7 @@ export async function importBandFromMb(
         mbid,
         import_id: importId,
         write_user_guide: writeUserGuide,
+        update_existing: updateExisting,
       }),
       signal,
     },
@@ -3103,6 +3108,21 @@ export async function createCatalogImport(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCatalogFolders(
+  module: CatalogImportModule,
+  franchiseName: string
+) {
+  return request<{
+    ok: boolean;
+    franchise_name: string;
+    folders_created: number;
+  }>(`${API}/catalog-import/${module}/update-folders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ franchise_name: franchiseName }),
   });
 }
 

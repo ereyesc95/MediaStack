@@ -2189,7 +2189,12 @@ export default function ReleasePage({
               <ReleaseNeighborLink
                 neighbor={data.prev}
                 direction="prev"
-                onClick={() => onOpenRelease(bandId, data.prev!.id)}
+                onClick={() =>
+                  onOpenRelease(
+                    data.prev!.navigate_band_id ?? bandId,
+                    data.prev!.navigate_release_id || data.prev!.id
+                  )
+                }
               />
             ) : (
               <span className="release-page__neighbor-spacer" />
@@ -2198,7 +2203,12 @@ export default function ReleasePage({
               <ReleaseNeighborLink
                 neighbor={data.next}
                 direction="next"
-                onClick={() => onOpenRelease(bandId, data.next!.id)}
+                onClick={() =>
+                  onOpenRelease(
+                    data.next!.navigate_band_id ?? bandId,
+                    data.next!.navigate_release_id || data.next!.id
+                  )
+                }
               />
             ) : (
               <span className="release-page__neighbor-spacer" />
@@ -2266,7 +2276,12 @@ export default function ReleasePage({
                 <ReleaseNeighborLink
                   neighbor={data.prev}
                   direction="prev"
-                  onClick={() => onOpenRelease(bandId, data.prev!.id)}
+                  onClick={() =>
+                    onOpenRelease(
+                      data.prev!.navigate_band_id ?? bandId,
+                      data.prev!.navigate_release_id || data.prev!.id
+                    )
+                  }
                 />
               ) : (
                 <span className="release-page__neighbor-spacer" />
@@ -2275,7 +2290,12 @@ export default function ReleasePage({
                 <ReleaseNeighborLink
                   neighbor={data.next}
                   direction="next"
-                  onClick={() => onOpenRelease(bandId, data.next!.id)}
+                  onClick={() =>
+                    onOpenRelease(
+                      data.next!.navigate_band_id ?? bandId,
+                      data.next!.navigate_release_id || data.next!.id
+                    )
+                  }
                 />
               ) : (
                 <span className="release-page__neighbor-spacer" />

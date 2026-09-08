@@ -543,9 +543,18 @@ def _prev_next_neighbors(
         return None, None
     prev_r = pool[(idx - 1) % len(pool)]
     next_r = pool[(idx + 1) % len(pool)]
+
+    def _neighbor(row: dict) -> dict:
+        return {
+            "id": row["id"],
+            "title": row["title"],
+            "cover_url": row.get("cover_url"),
+            "navigate_band_id": row.get("navigate_band_id"),
+            "navigate_release_id": row.get("navigate_release_id"),
+        }
     return (
-        {"id": prev_r["id"], "title": prev_r["title"], "cover_url": prev_r.get("cover_url")},
-        {"id": next_r["id"], "title": next_r["title"], "cover_url": next_r.get("cover_url")},
+        _neighbor(prev_r),
+        _neighbor(next_r),
     )
 
 
@@ -697,6 +706,17 @@ def build_release_overview(
     display_entry = media_root / Path(folder_rel)
     content = resolve_media_entry(display_entry, media_root=media_root)
     if not content or not content.is_dir():
+        target_band_id = int(card.get("navigate_band_id") or band_id)
+        target_release_id = str(
+            card.get("navigate_release_id") or card.get("id") or release_id
+        )
+        if (target_band_id, target_release_id) != (band_id, release_id):
+            return build_release_overview(
+                db,
+                target_band_id,
+                target_release_id,
+                card_orientation=card_orientation,
+            )
         return None
 
     folder_name = entry_display_name(display_entry)

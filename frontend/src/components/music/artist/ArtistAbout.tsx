@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { formatTrackDate } from "../../../formatDate";
 import type { BandOverview } from "../../../types";
 import { trackDisplayTitle, defaultArtistHeroUrl } from "../release/releaseTrackPanelMeta";
@@ -78,6 +85,63 @@ function MetaValue({
     >
       {children}
     </button>
+  );
+}
+
+function FittingGenrePills({
+  items,
+  onSubgenre,
+}: {
+  items: BandOverview["subgenres"];
+  onSubgenre: (id: number) => void;
+}) {
+  const containerRef = useRef<HTMLElement | null>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [visibleCount, setVisibleCount] = useState(items.length);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const measure = () => {
+      const available = container.clientWidth;
+      if (available <= 0) return;
+      const gap =
+        Number.parseFloat(getComputedStyle(container).columnGap || "0") || 0;
+      let used = 0;
+      let count = 0;
+      for (const button of itemRefs.current.slice(0, items.length)) {
+        if (!button) continue;
+        const next = button.offsetWidth + (count ? gap : 0);
+        if (count > 0 && used + next > available) break;
+        used += next;
+        count += 1;
+      }
+      setVisibleCount(Math.max(1, count));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [items]);
+
+  return (
+    <dd className="artist-about__genre-pills" ref={containerRef}>
+      {items.map((genre, index) => (
+        <button
+          key={genre.id}
+          ref={(element) => {
+            itemRefs.current[index] = element;
+          }}
+          type="button"
+          className={`artist-about__pill${
+            index >= visibleCount ? " artist-about__pill--measure-hidden" : ""
+          }`}
+          onClick={() => onSubgenre(genre.id)}
+        >
+          {genre.name}
+        </button>
+      ))}
+    </dd>
   );
 }
 
@@ -341,9 +405,9 @@ export default function ArtistAbout({
                 {data.subgenres.length > 0 && (
                   <div className="artist-about__meta-row">
                     <dt>Genres</dt>
-                    <dd>
-                      {data.subgenres.map((g, i) =>
-                        flatMeta ? (
+                    {flatMeta ? (
+                      <dd>
+                        {data.subgenres.map((g, i) => (
                           <span key={g.id} className="artist-about__meta-item">
                             {i > 0 && (
                               <span className="artist-about__meta-sep"> • </span>
@@ -355,17 +419,14 @@ export default function ArtistAbout({
                               {g.name}
                             </MetaValue>
                           </span>
-                        ) : (
-                          <MetaValue
-                            key={g.id}
-                            flat={false}
-                            onClick={() => onSubgenre(g.id)}
-                          >
-                            {g.name}
-                          </MetaValue>
-                        )
-                      )}
-                    </dd>
+                        ))}
+                      </dd>
+                    ) : (
+                      <FittingGenrePills
+                        items={data.subgenres}
+                        onSubgenre={onSubgenre}
+                      />
+                    )}
                   </div>
                 )}
                 {hasOtherMetadata && (

@@ -181,7 +181,7 @@ def apply_release_overrides(
         payload["producer"] = override["producer"]
     if override.get("label"):
         payload["label"] = override["label"]
-    if override.get("subgenres"):
+    if "subgenres" in override:
         payload["subgenres"] = [
             {"id": i, "name": name} for i, name in enumerate(override["subgenres"])
         ]

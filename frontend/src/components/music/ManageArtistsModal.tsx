@@ -45,6 +45,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [importing, setImporting] = useState(false);
   const [pendingArtist, setPendingArtist] = useState<MbArtistMatch | null>(null);
   const [estimate, setEstimate] = useState<ArtistImportEstimate | null>(null);
+  const [updateExisting, setUpdateExisting] = useState(false);
   const [writeUserGuide, setWriteUserGuide] = useState(false);
   const [closeWarning, setCloseWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +94,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setNotFound(false);
     setPendingArtist(null);
     setEstimate(null);
+    setUpdateExisting(false);
     setWriteUserGuide(false);
     setCloseWarning(null);
     onChanged();
@@ -147,6 +149,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   async function prepareArtist(match: MbArtistMatch) {
     setPendingArtist(match);
     setEstimate(null);
+    setUpdateExisting(false);
     setWriteUserGuide(false);
     setError(null);
     setNotice(null);
@@ -161,6 +164,34 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
       if (controller.signal.aborted) return;
       setError(
         `Could not estimate this import: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    } finally {
+      if (lookupControllerRef.current === controller) {
+        lookupControllerRef.current = null;
+        setEstimating(false);
+      }
+    }
+  }
+
+  async function prepareExistingFolderUpdate() {
+    if (!pendingArtist || estimating || importing) return;
+    setEstimate(null);
+    setUpdateExisting(true);
+    setError(null);
+    setEstimating(true);
+    const controller = new AbortController();
+    lookupControllerRef.current = controller;
+    try {
+      setEstimate(
+        await estimateBandImport(pendingArtist.mbid, controller.signal, true)
+      );
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      setUpdateExisting(false);
+      setError(
+        `Could not estimate this update: ${
           e instanceof Error ? e.message : String(e)
         }`
       );
@@ -189,7 +220,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
           pendingArtist.mbid,
           writeUserGuide,
           importId,
-          controller.signal
+          controller.signal,
+          updateExisting
         )
       );
     } catch (e) {
@@ -305,7 +337,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
 
   const canCreate =
     Boolean(pendingArtist && estimate) &&
-    !(estimate?.local_folder_exists && estimate?.catalog_exists);
+    (!estimate?.local_folder_exists || updateExisting);
 
   const slowLookupHint = slowLookup ? (
     <p className="manage-artists-modal__not-found-body">
@@ -506,6 +538,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                         onClick={() => {
                           setPendingArtist(null);
                           setEstimate(null);
+                          setUpdateExisting(false);
                           setError(null);
                         }}
                         disabled={estimating}
@@ -523,7 +556,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   {estimate && (
                     <>
                       <div className="manage-artists-modal__estimate">
-                        {!estimate.local_folder_exists && (
+                        {(!estimate.local_folder_exists || updateExisting) && (
                           <>
                             <p>{approximateTimeLabel(estimate.estimated_seconds)}</p>
                             <p>
@@ -540,7 +573,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                             </small>
                           )}
                       </div>
-                      {!estimate.local_folder_exists && !importing && (
+                      {(!estimate.local_folder_exists || updateExisting) &&
+                        !importing && (
                         <label className="ms-checkbox manage-artists-modal__guide-option">
                           <input
                             type="checkbox"
@@ -556,10 +590,17 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                         </label>
                       )}
                       {estimate.local_folder_exists &&
-                      estimate.catalog_exists ? (
+                      !updateExisting ? (
                         <p className="modal-notice">
-                          This artist already exists locally and in the catalog.
-                          Nothing will be changed.
+                          This artist already exists, click{" "}
+                          <button
+                            type="button"
+                            className="manage-artists-modal__inline-link"
+                            onClick={() => void prepareExistingFolderUpdate()}
+                          >
+                            here
+                          </button>{" "}
+                          to update local folders
                         </p>
                       ) : importing ? (
                         <div
@@ -686,7 +727,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   strokeLinecap="round"
                 />
               </svg>
-              Create artist
+              {updateExisting ? "Update folders" : "Create artist"}
             </button>
           </div>
         )}

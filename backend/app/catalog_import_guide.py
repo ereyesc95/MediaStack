@@ -48,6 +48,42 @@ Multiple tags may share one bracket pair separated by semicolons.
 Windows .lnk, .path files and supported symlinks may point to shared media.
 """
 
+QUIZ_GUIDE = """FRANCHISE QUIZZES
+-----------------
+The Quiz tab appears only when enough local media exists. It lives on the
+franchise page, or on a true standalone title until that title joins a franchise.
+
+Catalog:
+  Uses official dated Series, Movies and Books leaves in the same franchise.
+  Folders and files tagged [Unofficial] are excluded.
+
+Encyclopedia:
+  Put topic images one level below Gallery/Extras:
+    Gallery/Extras/Characters/
+    Gallery/Extras/Items/
+    Gallery/Extras/Locations/
+  Characters/ is created automatically. Add, rename or remove other topic
+  folders whenever needed; the app scans them when Quiz opens. Topic names are
+  merged case-insensitively across Series, Movies and Books in the franchise.
+  Loose images directly in Gallery/Extras appear under the topic "Extras".
+  A numeric filename prefix controls display order but is not part of the guess:
+    0001. Sakura.png
+    0002. Kero.png
+  Bracket suffixes are not part of the guess and can identify alternate versions:
+    0003. Syaoran [School uniform].png
+    0003. Syaoran [Battle costume].gif
+  Matching names become one answer with previous/next image versions.
+  Supported image formats include animated .gif files.
+
+Soundtrack:
+  Audio categories may contain real .lnk or .path shortcuts to Music releases.
+  Opening/ending videos may be placed in a leaf Extras/ folder:
+    01. Theme title [Season 1 Opening].mp4
+    02. Theme title [Season 1 Ending].mp4
+    01. Theme title [Special Opening].mp4
+  Matching Music audio is preferred; otherwise the video's audio is used.
+"""
+
 DEFAULT_GUIDES = {
     "movies": f"""MyStack Movies media guide
 ==========================
@@ -71,9 +107,11 @@ The franchise root contains [Artwork]/ only when Movies is its franchise home.
 Movie files may use a date prefix, numeric prefix, or title:
   YYYY.MM.DD. Film title.mkv
   01. Film title.mp4
-Extra feature files may be placed in Extras/ when used by a future scanner.
+Theme and extra feature videos may be placed in a separate leaf Extras/ folder.
 
-{COMMON_ART}""",
+{COMMON_ART}
+
+{QUIZ_GUIDE}""",
     "series": f"""MyStack Series media guide
 ==========================
 
@@ -106,7 +144,9 @@ Promo/theme videos under Extras/:
 Audio entries are normally .lnk or .path shortcuts to Music releases.
 Optional [By Artist] identifies the owning Music artist; no tag means Various Artists.
 
-{COMMON_ART}""",
+{COMMON_ART}
+
+{QUIZ_GUIDE}""",
     "books": f"""MyStack Books media guide
 =========================
 
@@ -131,7 +171,9 @@ Book files may use:
   01. Chapter title.pdf
   01. Volume title.cbz
 
-{COMMON_ART}""",
+{COMMON_ART}
+
+{QUIZ_GUIDE}""",
 }
 
 
@@ -168,4 +210,6 @@ def ensure_catalog_user_guide_templates(db: Session) -> None:
                     "Gallery/Branding (legacy Gallery/Renders is also supported):",
                 )
             )
+            if "FRANCHISE QUIZZES" not in row.aps_value:
+                row.aps_value = f"{row.aps_value.rstrip()}\n\n{QUIZ_GUIDE}"
     db.commit()

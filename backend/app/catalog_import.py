@@ -94,22 +94,38 @@ def _relative(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _gallery_tree(folder: Path) -> None:
-    for rel in (
+def _mkdir_tree(folder: Path, relatives: tuple[str, ...]) -> int:
+    created = 0
+    for rel in relatives:
+        target = folder / rel
+        if not target.is_dir():
+            created += 1
+        target.mkdir(parents=True, exist_ok=True)
+    return created
+
+
+def _gallery_tree(folder: Path) -> int:
+    return _mkdir_tree(
+        folder,
+        (
         "Gallery/Covers",
         "Gallery/Branding",
-        "Gallery/Extras",
+        "Gallery/Extras/Characters",
         "Gallery/Exclusive",
-    ):
-        (folder / rel).mkdir(parents=True, exist_ok=True)
+        ),
+    )
 
 
-def _series_tree(folder: Path) -> None:
-    _gallery_tree(folder)
-    for rel in ("Episodes", "Specials", "Extras"):
-        (folder / rel).mkdir(parents=True, exist_ok=True)
-    for category in AUDIO_CATEGORIES:
-        (folder / "Audio" / category).mkdir(parents=True, exist_ok=True)
+def _series_tree(folder: Path) -> int:
+    return _gallery_tree(folder) + _mkdir_tree(
+        folder,
+        (
+            "Episodes",
+            "Specials",
+            "Extras",
+            *(f"Audio/{category}" for category in AUDIO_CATEGORIES),
+        ),
+    )
 
 
 def _local_franchises(module: str, query: str) -> list[dict]:
@@ -573,6 +589,62 @@ def _rebuild_franchise_index(root: Path) -> None:
         invalidate_universe_caches()
     except (ImportError, AttributeError):
         pass
+
+
+@router.post("/{module}/update-folders")
+def update_catalog_folders(
+    module: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    if module not in MODULE_DIRS:
+        raise HTTPException(404, "Unsupported catalog module")
+    root = _root()
+    franchise_name = _safe_name(
+        str(body.get("franchise_name") or ""), fallback=""
+    )
+    if not franchise_name:
+        raise HTTPException(400, "Franchise name is required")
+    franchise_dir = (
+        root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
+    )
+    if not franchise_dir.is_dir():
+        raise HTTPException(404, "Local franchise folder not found")
+
+    created = 0
+    artwork = franchise_dir / "[Artwork]"
+    if artwork.is_dir():
+        created += _mkdir_tree(
+            artwork, ("Branding", "Covers", "Photos", "Exclusive")
+        )
+
+    leaf_dirs = [
+        child
+        for child in franchise_dir.iterdir()
+        if child.is_dir()
+        and child.name.casefold() != "[artwork]"
+        and (
+            (child / "Gallery").is_dir()
+            or re.match(r"^\d{4}(?:\.\d{2})?(?:\.\d{2})?\.\s", child.name)
+        )
+    ]
+    if module == "series":
+        targets = leaf_dirs or [franchise_dir]
+        for target in targets:
+            created += _series_tree(target)
+    else:
+        targets = leaf_dirs or (
+            [franchise_dir] if (franchise_dir / "Gallery").is_dir() else []
+        )
+        for target in targets:
+            created += _gallery_tree(target)
+
+    _rebuild_franchise_index(root)
+    return {
+        "ok": True,
+        "franchise_name": franchise_name,
+        "folders_created": created,
+    }
 
 
 @router.post("/{module}/create")

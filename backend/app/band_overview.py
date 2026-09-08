@@ -21,7 +21,15 @@ from app.gallery import (
     _list_photos,
     _media_url,
 )
-from app.models import Artist, ArtistParticipation, ArtistType, Band, Country, Subgenre
+from app.models import (
+    Artist,
+    ArtistParticipation,
+    ArtistType,
+    Band,
+    Country,
+    Genre,
+    Subgenre,
+)
 from app.music_dashboard import _parse_country_id, _resolve_subgenre_name
 from app.label_assets import label_logo_url
 from app.music_filters import _parse_ids, is_catalog_label
@@ -348,10 +356,69 @@ def _resolve_country(db: Session, band: Band) -> dict | None:
 
 
 def _resolve_subgenres(db: Session, band: Band) -> list[dict]:
+    parent_names = {
+        (name or "").strip().casefold()
+        for name in db.scalars(select(Genre.gen_name)).all()
+        if (name or "").strip()
+    }
+    rows = {
+        (row.sgn_name or "").strip().casefold(): row
+        for row in db.scalars(select(Subgenre)).all()
+        if (row.sgn_name or "").strip()
+    }
+    counts: dict[int, int] = {}
+    saw_release_genres = False
+    root = Path(settings.media_root) if settings.media_root else None
+    if root and root.is_dir():
+        from app.media_index import scan_audio_releases
+        from app.release_admin import load_release_override
+        from app.release_overview import _match_db_release
+
+        for card in scan_audio_releases(db, band, root):
+            if card.get("navigate_band_id") not in (None, band.bnd_id):
+                continue
+            release_id = str(card.get("navigate_release_id") or card.get("id") or "")
+            override = load_release_override(band.bnd_id, release_id)
+            if "subgenres" in override:
+                saw_release_genres = True
+                for name in override.get("subgenres") or []:
+                    row = rows.get(str(name).strip().casefold())
+                    if row and row.sgn_id and row.sgn_name:
+                        counts[row.sgn_id] = counts.get(row.sgn_id, 0) + 1
+                continue
+            release = _match_db_release(db, band.bnd_id, str(card.get("title") or ""))
+            if not release:
+                continue
+            ids = _parse_ids(release.rel_fk_subgenres)
+            if ids:
+                saw_release_genres = True
+            for sid in ids:
+                row = db.get(Subgenre, sid)
+                if row and row.sgn_name:
+                    counts[sid] = counts.get(sid, 0) + 1
+
+    if saw_release_genres:
+        resolved = [
+            {"id": sid, "name": _resolve_subgenre_name(db, sid), "count": count}
+            for sid, count in counts.items()
+        ]
+        return [
+            {"id": item["id"], "name": item["name"]}
+            for item in sorted(
+                (
+                    item
+                    for item in resolved
+                    if item["name"]
+                    and str(item["name"]).strip().casefold() not in parent_names
+                ),
+                key=lambda item: (-int(item["count"]), str(item["name"]).casefold()),
+            )
+        ]
+
     out: list[dict] = []
     for sid in _parse_ids(band.bnd_fk_subgenres):
         name = _resolve_subgenre_name(db, sid)
-        if name:
+        if name and name.strip().casefold() not in parent_names:
             out.append({"id": sid, "name": name})
     return out
 

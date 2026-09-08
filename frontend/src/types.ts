@@ -738,6 +738,8 @@ export type ReleaseNeighbor = {
   id: string;
   title: string;
   cover_url: string | null;
+  navigate_band_id?: number | null;
+  navigate_release_id?: string | null;
 };
 
 export type ReleaseTrackItem = {

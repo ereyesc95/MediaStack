@@ -49,6 +49,7 @@ class ImportBandBody(BaseModel):
     import_id: str = ""
     write_user_guide: bool = False
     unregistered: bool = False
+    update_existing: bool = False
 
 
 class RefreshMetadataBody(BaseModel):
@@ -380,13 +381,16 @@ async def mb_search(q: str = Query(..., min_length=1)):
 @router.get("/bands/import-estimate/{mbid}")
 async def estimate_band_import(
     mbid: str,
+    update_existing: bool = Query(False),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
     from app.artist_import import estimate_import
 
     try:
-        return await estimate_import(db, mbid.strip())
+        return await estimate_import(
+            db, mbid.strip(), update_existing=update_existing
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
@@ -420,6 +424,7 @@ async def import_band_from_mb(
             db,
             mbid,
             write_user_guide=body.write_user_guide,
+            update_existing=body.update_existing,
         )
     except asyncio.CancelledError as exc:
         db.rollback()
@@ -812,6 +817,9 @@ def patch_release_overview(
     )
     if not data:
         raise HTTPException(404, "Release not found")
+    from app.band_overview_cache import invalidate_overview_cache
+
+    invalidate_overview_cache(band_id)
     return data
 
 
