@@ -188,6 +188,11 @@ async def search_artists(
                 "disambiguation": a.get("disambiguation"),
             }
         )
+    out.sort(
+        key=lambda item: (
+            str(item.get("sort_name") or item.get("name") or "").casefold()
+        )
+    )
     return out
 
 

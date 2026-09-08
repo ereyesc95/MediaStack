@@ -129,7 +129,13 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     lookupControllerRef.current = controller;
     try {
       const data = await searchMusicBrainz(query, controller.signal);
-      const items = data.items ?? [];
+      const items = [...(data.items ?? [])].sort((a, b) =>
+        (a.sort_name || a.name || "").localeCompare(
+          b.sort_name || b.name || "",
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
       setMatches(items);
       setNotFound(items.length === 0);
     } catch {
@@ -609,7 +615,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                         >
                           <span className="manage-artists-modal__spinner" />
                           <div>
-                            <small className="muted">
+                            <small className="muted manage-modal__wait">
                               Creating artist, please wait...
                             </small>
                             {closeWarning && (
@@ -639,7 +645,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                 >
                   <span className="manage-artists-modal__spinner" />
                   <div>
-                    <small className="muted">
+                    <small className="muted manage-modal__wait">
                       Creating artist, please wait...
                     </small>
                     {closeWarning && (

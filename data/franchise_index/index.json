@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-09-08T16:00:46.017958+00:00",
+  "scanned_at": "2026-09-08T23:07:16.788795+00:00",
   "franchises": {
     "dracula untold": {
       "display_name": "Dracula Untold",
@@ -645,6 +645,53 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "Deadman Wonderland"
+        }
+      ]
+    },
+    "digimon": {
+      "display_name": "Digimon",
+      "slug": "digimon",
+      "letter": "D",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/D/Digimon",
+          "title": "Digimon",
+          "date_iso": "1999-03-07",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Digimon"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Digimon/1999.03.07. Digimon - Digital Monsters",
+          "title": "Digimon - Digital Monsters",
+          "date_iso": "1999-03-07",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Digimon - Digital Monsters",
+          "franchise_display": "Digimon"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Digimon/2001.04.01. Digimon Tamers",
+          "title": "Digimon Tamers",
+          "date_iso": "2001-04-01",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Digimon Tamers",
+          "franchise_display": "Digimon"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Digimon/2002.04.07. Digimon Frontier",
+          "title": "Digimon Frontier",
+          "date_iso": "2002-04-07",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Digimon Frontier",
+          "franchise_display": "Digimon"
         }
       ]
     },

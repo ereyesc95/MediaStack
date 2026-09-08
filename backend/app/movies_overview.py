@@ -402,6 +402,11 @@ def build_work_overview(
             "date_iso": f.get("date_iso"),
             "display_date": f.get("display_date"),
             "cover_url": f.get("cover_url"),
+            "portrait_url": f.get("portrait_url") or f.get("cover_url"),
+            "landscape_url": f.get("landscape_url"),
+            "banner_url": f.get("banner_url")
+            or f.get("landscape_url")
+            or f.get("cover_url"),
             "logo_url": f.get("logo_url"),
             "icon_url": f.get("icon_url"),
             "badge_url": f.get("badge_url"),

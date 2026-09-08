@@ -204,8 +204,26 @@ export default function ManageCatalogModal({
     lookupControllerRef.current = controller;
     try {
       const data = await searchCatalogImport(module, value, controller.signal);
-      setLocalFranchises(data.local_franchises);
-      setResults(data.items);
+      setLocalFranchises(
+        [...data.local_franchises].sort((a, b) =>
+          a.title.localeCompare(b.title, undefined, { sensitivity: "base" })
+        )
+      );
+      setResults(
+        [...data.items].sort((a, b) => {
+          const yearA = (a.date || "").slice(0, 4);
+          const yearB = (b.date || "").slice(0, 4);
+          const hasA = /^\d{4}$/.test(yearA);
+          const hasB = /^\d{4}$/.test(yearB);
+          if (hasA && hasB && yearA !== yearB) {
+            return yearA.localeCompare(yearB);
+          }
+          if (hasA !== hasB) return hasA ? -1 : 1;
+          return a.title.localeCompare(b.title, undefined, {
+            sensitivity: "base",
+          });
+        })
+      );
       setNotFound(
         data.items.length === 0 && data.local_franchises.length === 0
       );
@@ -223,20 +241,25 @@ export default function ManageCatalogModal({
   }
 
   function addPicked(incoming: CatalogImportItem[]) {
-    const added: PickedItem[] = [];
+    // Stable keys + pure updaters (no shared mutable `added`) so React Strict Mode
+    // double-invoke cannot insert the same title twice.
+    const identities = incoming
+      .map(itemIdentity)
+      .filter((identity): identity is string => Boolean(identity));
     setItems((current) => {
-      const seen = new Set(current.map(itemIdentity));
+      const byId = new Map(
+        current.map((item) => [itemIdentity(item) || item.key, item])
+      );
       for (const entry of incoming) {
         const identity = itemIdentity(entry);
-        if (!identity || seen.has(identity)) continue;
-        seen.add(identity);
-        added.push({ ...entry, key: `${identity}-${current.length + added.length}` });
+        if (!identity || byId.has(identity)) continue;
+        byId.set(identity, { ...entry, key: identity });
       }
-      return [...current, ...added];
+      return Array.from(byId.values());
     });
     setSelectedKeys((current) => {
       const next = new Set(current);
-      for (const entry of added) next.add(entry.key);
+      for (const identity of identities) next.add(identity);
       return next;
     });
   }
@@ -772,7 +795,9 @@ export default function ManageCatalogModal({
             </Checkbox>
 
             {saving ? (
-              <small className="muted">Creating folders, please wait...</small>
+              <small className="muted manage-modal__wait">
+                Creating folders, please wait...
+              </small>
             ) : null}
             {closeWarning ? (
               <small className="muted">
@@ -794,7 +819,20 @@ export default function ManageCatalogModal({
                   setSelectedKeys(new Set());
                 }}
               >
-                <span aria-hidden="true">‹</span>
+                <svg
+                  className="manage-catalog-modal__back-chevron"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M15 6l-6 6 6 6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
                 Back
               </button>
               <button

@@ -253,6 +253,29 @@ def remove_catalog_registration(
     return {"ok": True}
 
 
+def _catalog_search_sort_key(item: dict) -> tuple:
+    """Oldest year first; titles with no year sort after by name."""
+    title = str(item.get("title") or "").casefold()
+    date = str(item.get("date") or "").strip()
+    year = date[:4] if len(date) >= 4 and date[:4].isdigit() else None
+    if year is not None:
+        return (0, year, title)
+    return (1, title, "")
+
+
+def _sort_catalog_search_items(items: list[dict], *, limit: int = 10) -> list[dict]:
+    seen: set[tuple[str, str]] = set()
+    unique: list[dict] = []
+    for item in items:
+        key = (str(item.get("kind") or ""), str(item.get("provider_id") or ""))
+        if not key[1] or key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    unique.sort(key=_catalog_search_sort_key)
+    return unique[:limit]
+
+
 async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
     endpoints = ("movie", "collection") if kind == "movies" else ("tv",)
     out: list[dict] = []
@@ -263,7 +286,7 @@ async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
                 params={"api_key": api_key, "query": query},
             )
             response.raise_for_status()
-            for item in (response.json().get("results") or [])[:10]:
+            for item in (response.json().get("results") or [])[:20]:
                 title = (
                     item.get("title")
                     or item.get("name")
@@ -294,7 +317,7 @@ async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
                         ),
                     }
                 )
-    return out
+    return _sort_catalog_search_items(out)
 
 
 def _tmdb_id_query(value: str) -> tuple[str | None, str | None]:
@@ -435,11 +458,13 @@ async def search_catalog_import(
             book_results = await asyncio.to_thread(
                 search_google_books, q, max_results=20
             )
-            remote = [
-                _google_books_search_item(item)
-                for item in book_results
-                if item.get("id")
-            ]
+            remote = _sort_catalog_search_items(
+                [
+                    _google_books_search_item(item)
+                    for item in book_results
+                    if item.get("id")
+                ]
+            )
     else:
         api_key = get_tmdb_key(db)
         if not api_key:

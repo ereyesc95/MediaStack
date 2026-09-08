@@ -742,6 +742,9 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
             if season_count == 0:
                 season_count = _count_seasons_deep(child)
         logo, icon = find_logo_file(child, media_root)
+        cover = _series_folder_cover(child, media_root)
+        landscape = _series_folder_landscape(child, media_root)
+        banner = _series_folder_banner(child, media_root)
         subseries.append(
             {
                 "id": child.name,
@@ -749,7 +752,10 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
                 "date_iso": date_iso,
                 "display_date": format_display_date(date_iso),
                 "folder_path": child.relative_to(media_root).as_posix(),
-                "cover_url": _series_folder_cover(child, media_root),
+                "cover_url": cover,
+                "portrait_url": cover,
+                "landscape_url": landscape,
+                "banner_url": banner or landscape,
                 "logo_url": logo,
                 "icon_url": icon,
                 "badge_url": find_badge_file(child, media_root),

@@ -272,7 +272,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
   const mem = overviewCache.get(key);
   if (mem) return mem;
   const stored = readSessionEntry<SeriesOverview>(
-    sessionCacheKey("franchise-overview-v3", key)
+    sessionCacheKey("franchise-overview-v4", key)
   );
   if (stored) overviewCache.set(key, stored);
   return stored;
@@ -280,7 +280,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
 
 function writeOverviewCache(key: string, data: SeriesOverview) {
   overviewCache.set(key, data);
-  writeSessionEntry(sessionCacheKey("franchise-overview-v3", key), data);
+  writeSessionEntry(sessionCacheKey("franchise-overview-v4", key), data);
 }
 
 export default function SeriesFranchisePage({
@@ -1020,9 +1020,12 @@ export default function SeriesFranchisePage({
           id: s.id,
           title: s.title,
           cover_url: s.cover_url,
+          portrait_url: s.portrait_url || s.cover_url,
+          landscape_url: s.landscape_url ?? null,
           logo_url: s.logo_url ?? null,
           badge_url: s.badge_url ?? null,
-          banner_url: s.cover_url,
+          banner_url:
+            s.banner_url || s.landscape_url || s.cover_url || null,
           date_label:
             s.display_date ||
             (s.season_count
@@ -1044,9 +1047,12 @@ export default function SeriesFranchisePage({
           id: s.id,
           title: s.title,
           cover_url: s.cover_url,
+          portrait_url: s.portrait_url || s.cover_url,
+          landscape_url: s.landscape_url ?? null,
           logo_url: s.logo_url ?? null,
           badge_url: s.badge_url ?? null,
-          banner_url: s.cover_url,
+          banner_url:
+            s.banner_url || s.landscape_url || s.cover_url || null,
           date_label:
             s.display_date ||
             (s.season_count
@@ -1109,10 +1115,16 @@ export default function SeriesFranchisePage({
             id: s.id,
             title: s.title,
             cover_url: s.cover_url,
+            portrait_url:
+              (s as { portrait_url?: string | null }).portrait_url ||
+              s.cover_url,
+            landscape_url:
+              (s as { landscape_url?: string | null }).landscape_url || null,
             logo_url: (s as { logo_url?: string | null }).logo_url || null,
             badge_url: (s as { badge_url?: string | null }).badge_url || null,
             banner_url:
               (s as { banner_url?: string | null }).banner_url ||
+              (s as { landscape_url?: string | null }).landscape_url ||
               s.cover_url ||
               null,
             date_label:

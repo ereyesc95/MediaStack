@@ -1001,6 +1001,14 @@ def build_series_overview(
                 "date_iso": s.get("date_iso"),
                 "display_date": s.get("display_date"),
                 "cover_url": s.get("cover_url") or detail.get("cover_url"),
+                "portrait_url": s.get("portrait_url")
+                or s.get("cover_url")
+                or detail.get("cover_url"),
+                "landscape_url": s.get("landscape_url"),
+                "banner_url": s.get("banner_url")
+                or s.get("landscape_url")
+                or s.get("cover_url")
+                or detail.get("cover_url"),
                 "logo_url": logo_url,
                 "icon_url": icon_url,
                 "badge_url": badge_url,
