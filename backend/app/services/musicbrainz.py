@@ -37,6 +37,12 @@ async def _get_json_with_retries(
             await asyncio.sleep(MB_REQUEST_DELAY)
             return data
         except (httpx.HTTPError, ValueError) as exc:
+            if (
+                isinstance(exc, httpx.HTTPStatusError)
+                and 400 <= exc.response.status_code < 500
+                and exc.response.status_code != 429
+            ):
+                raise
             last_error = exc
             if attempt + 1 < attempts:
                 await asyncio.sleep(2.0 * (attempt + 1))
@@ -183,6 +189,21 @@ async def search_artists(
             }
         )
     return out
+
+
+async def lookup_artist(
+    mbid: str, *, user_agent: str = DEFAULT_UA
+) -> dict:
+    """Return one artist in the same compact shape used by name search."""
+    artist = await fetch_artist(mbid, user_agent=user_agent)
+    return {
+        "mbid": artist.get("id"),
+        "name": artist.get("name"),
+        "sort_name": artist.get("sort-name"),
+        "type": artist.get("type"),
+        "country": artist.get("country"),
+        "disambiguation": artist.get("disambiguation"),
+    }
 
 
 async def fetch_artist(

@@ -14,6 +14,7 @@ from app.routers import (
     assets,
     auth,
     books,
+    franchise_quiz,
     games,
     import_router,
     media,
@@ -67,6 +68,7 @@ app.include_router(series.router)
 app.include_router(movies.router)
 app.include_router(universes.router)
 app.include_router(books.router)
+app.include_router(franchise_quiz.router)
 app.include_router(catalog_import.router)
 app.include_router(games.router)
 app.include_router(import_router.router)

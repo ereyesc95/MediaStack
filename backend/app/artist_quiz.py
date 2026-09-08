@@ -250,6 +250,7 @@ def build_lineup_quiz(db: Session, band_id: int, media_root: Path) -> dict | Non
                 "id": m.get("id"),
                 "name": name,
                 "photo_url": m.get("photo_url"),
+                "signature_url": m.get("signature_url"),
                 "years": m.get("years"),
                 "roles": m.get("roles") or [],
                 "is_deceased": bool(m.get("is_deceased")),

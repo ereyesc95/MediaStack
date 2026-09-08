@@ -1,0 +1,750 @@
+{
+  "index_version": 2,
+  "scanned_at": "2026-09-08T16:00:46.017958+00:00",
+  "franchises": {
+    "dracula untold": {
+      "display_name": "Dracula Untold",
+      "slug": "dracula untold",
+      "letter": "D",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dracula Untold",
+          "title": "Dracula Untold",
+          "date_iso": "2014-10-10",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dracula Untold"
+        }
+      ]
+    },
+    "dragon ball": {
+      "display_name": "Dragon Ball",
+      "slug": "dragon ball",
+      "letter": "D",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dragon Ball/1986.02.26. Dragon Ball/1986.12.20. Curse of the Blood Rubies",
+          "title": "Curse of the Blood Rubies",
+          "date_iso": "1986-12-20",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dragon Ball/1986.02.26. Dragon Ball/1989.07.15. Dead Zone",
+          "title": "Dead Zone",
+          "date_iso": "1989-07-15",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dragon Ball/1986.02.26. Dragon Ball/1993.03.06. Broly - The Legendary Super Saiyan",
+          "title": "Broly - The Legendary Super Saiyan",
+          "date_iso": "1993-03-06",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dragon Ball/1986.02.26. Dragon Ball/1997.03.26. A Hero's Legacy",
+          "title": "A Hero's Legacy",
+          "date_iso": "1997-03-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dragon Ball/1996.02.07. Dragon Ball GT/1999.03.26. A Hero's Legacy 3",
+          "title": "A Hero's Legacy 3",
+          "date_iso": "1999-03-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball GT",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball",
+          "title": "Dragon Ball",
+          "date_iso": "1986-02-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball/1986.02.26. Dragon Ball",
+          "title": "Dragon Ball",
+          "date_iso": "1986-02-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball/1989.04.26. Dragon Ball Z",
+          "title": "Dragon Ball Z",
+          "date_iso": "1989-04-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball Z",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball/1996.02.07. Dragon Ball GT",
+          "title": "Dragon Ball GT",
+          "date_iso": "1996-02-07",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball GT",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball/2000.04.26. Dragon Ball AF [Unofficial]",
+          "title": "Dragon Ball AF",
+          "date_iso": "2000-04-26",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball AF",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dragon Ball/2015.07.05. Dragon Ball Super",
+          "title": "Dragon Ball Super",
+          "date_iso": "2015-07-05",
+          "letter": "D",
+          "platform": null,
+          "subseries": "Dragon Ball Super",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "book",
+          "path": "Books/D/Dragon Ball/1986.02.26. Dragon Ball/1985.12.03. Vol. 01",
+          "title": "Vol. 01",
+          "date_iso": "1985-12-03",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "book",
+          "path": "Books/D/Dragon Ball/1986.02.26. Dragon Ball/1986.03.10. Vol. 02",
+          "title": "Vol. 02",
+          "date_iso": "1986-03-10",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "book",
+          "path": "Books/D/Dragon Ball/1996.02.07. Dragon Ball GT/1997.02.07. Dragon Ball GT Anecdotes",
+          "title": "Dragon Ball GT Anecdotes",
+          "date_iso": "1997-02-07",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "book",
+          "path": "Books/D/Dragon Ball/1986.02.26. Dragon Ball/2003.01.01. GT Perfect Files",
+          "title": "GT Perfect Files",
+          "date_iso": "2003-01-01",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Switch/D/Dragon Ball/2020.01.17. Dragon Ball Z Kakarot",
+          "title": "Dragon Ball Z Kakarot",
+          "date_iso": "2020-01-17",
+          "letter": "D",
+          "platform": "Nintendo Switch",
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "game",
+          "path": "Games/PlayStation/D/Dragon Ball/1986.02.26. Dragon Ball/1997.08.25. Final Bout",
+          "title": "Final Bout",
+          "date_iso": "1997-08-25",
+          "letter": "D",
+          "platform": "PlayStation",
+          "subseries": "Dragon Ball",
+          "franchise_display": "Dragon Ball"
+        },
+        {
+          "kind": "game",
+          "path": "Games/PlayStation 2/D/Dragon Ball/2002.11.10. Dragon Ball Z Budokai",
+          "title": "Dragon Ball Z Budokai",
+          "date_iso": "2002-11-10",
+          "letter": "D",
+          "platform": "PlayStation 2",
+          "subseries": null,
+          "franchise_display": "Dragon Ball"
+        }
+      ]
+    },
+    "fantastic beasts": {
+      "display_name": "Fantastic Beasts",
+      "slug": "fantastic beasts",
+      "letter": "F",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/F/Fantastic Beasts/2016.11.18. Fantastic Beasts and Where to Find Them",
+          "title": "Fantastic Beasts and Where to Find Them",
+          "date_iso": "2016-11-18",
+          "letter": "F",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Fantastic Beasts"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/F/Fantastic Beasts/2018.11.16. Fantastic Beasts - The Crimes of Grindelwald",
+          "title": "Fantastic Beasts - The Crimes of Grindelwald",
+          "date_iso": "2018-11-16",
+          "letter": "F",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Fantastic Beasts"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/F/Fantastic Beasts/2022.04.15. Fantastic Beasts - The Secrets of Dumbledore",
+          "title": "Fantastic Beasts - The Secrets of Dumbledore",
+          "date_iso": "2022-04-15",
+          "letter": "F",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Fantastic Beasts"
+        }
+      ]
+    },
+    "finding nemo": {
+      "display_name": "Finding Nemo",
+      "slug": "finding nemo",
+      "letter": "F",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/F/Finding Nemo/2003.05.30. Finding Nemo",
+          "title": "Finding Nemo",
+          "date_iso": "2003-05-30",
+          "letter": "F",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Finding Nemo"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/F/Finding Nemo/2016.06.17. Finding Dory",
+          "title": "Finding Dory",
+          "date_iso": "2016-06-17",
+          "letter": "F",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Finding Nemo"
+        }
+      ]
+    },
+    "harry potter": {
+      "display_name": "Harry Potter",
+      "slug": "harry potter",
+      "letter": "H",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2001.11.16. Harry Potter and the Philosopher's Stone",
+          "title": "Harry Potter and the Philosopher's Stone",
+          "date_iso": "2001-11-16",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2002.11.15. Harry Potter and the Chamber of Secrets",
+          "title": "Harry Potter and the Chamber of Secrets",
+          "date_iso": "2002-11-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2004.06.04. Harry Potter and the Prisoner of Azkaban",
+          "title": "Harry Potter and the Prisoner of Azkaban",
+          "date_iso": "2004-06-04",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2005.11.18. Harry Potter and the Goblet of Fire",
+          "title": "Harry Potter and the Goblet of Fire",
+          "date_iso": "2005-11-18",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2007.07.11. Harry Potter and the Order of the Phoenix",
+          "title": "Harry Potter and the Order of the Phoenix",
+          "date_iso": "2007-07-11",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2009.07.15. Harry Potter and the Half-Blood Prince",
+          "title": "Harry Potter and the Half-Blood Prince",
+          "date_iso": "2009-07-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2010.11.19. Harry Potter and the Deathly Hallows - Part 1",
+          "title": "Harry Potter and the Deathly Hallows - Part 1",
+          "date_iso": "2010-11-19",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2011.07.15. Harry Potter and the Deathly Hallows - Part 2",
+          "title": "Harry Potter and the Deathly Hallows - Part 2",
+          "date_iso": "2011-07-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/Harry Potter/2016.07.15. Harry Potter and the Cursed Child [Unofficial]",
+          "title": "Harry Potter and the Cursed Child",
+          "date_iso": "2016-07-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/Harry Potter",
+          "title": "Harry Potter",
+          "date_iso": "2026-12-25",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/Harry Potter/2026.12.25. Harry Potter",
+          "title": "Harry Potter",
+          "date_iso": "2026-12-25",
+          "letter": "H",
+          "platform": null,
+          "subseries": "Harry Potter",
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2001.11.16. Harry Potter and the Philosopher's Stone",
+          "title": "Harry Potter and the Philosopher's Stone",
+          "date_iso": "2001-11-16",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2002.11.15. Harry Potter and the Chamber of Secrets",
+          "title": "Harry Potter and the Chamber of Secrets",
+          "date_iso": "2002-11-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2004.06.04. Harry Potter and the Prisoner of Azkaban",
+          "title": "Harry Potter and the Prisoner of Azkaban",
+          "date_iso": "2004-06-04",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2005.11.18. Harry Potter and the Goblet of Fire",
+          "title": "Harry Potter and the Goblet of Fire",
+          "date_iso": "2005-11-18",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2007.07.11. Harry Potter and the Order of the Phoenix",
+          "title": "Harry Potter and the Order of the Phoenix",
+          "date_iso": "2007-07-11",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2009.07.15. Harry Potter and the Half-Blood Prince",
+          "title": "Harry Potter and the Half-Blood Prince",
+          "date_iso": "2009-07-15",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2010.11.19. Harry Potter and the Deathly Hallows - Part 1",
+          "title": "Harry Potter and the Deathly Hallows - Part 1",
+          "date_iso": "2010-11-19",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/Harry Potter/2013.11.19. Harry Potter and the Cursed Child",
+          "title": "Harry Potter and the Cursed Child",
+          "date_iso": "2013-11-19",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Harry Potter"
+        }
+      ]
+    },
+    "her": {
+      "display_name": "Her",
+      "slug": "her",
+      "letter": "H",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/H/Her",
+          "title": "Her",
+          "date_iso": null,
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Her"
+        }
+      ]
+    },
+    "him": {
+      "display_name": "HIM",
+      "slug": "him",
+      "letter": "H",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/H/HIM/2005.04.13. Love Metal Archives Vol. 1",
+          "title": "Love Metal Archives Vol. 1",
+          "date_iso": "2005-04-13",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/HIM/2005.11.05. Poison Arrow",
+          "title": "Poison Arrow",
+          "date_iso": "2005-11-05",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/HIM/2006.11.05. Venomous Arrow",
+          "title": "Venomous Arrow",
+          "date_iso": "2006-11-05",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/H/HIM/2017.04.12. Live Performances",
+          "title": "Live Performances",
+          "date_iso": "2017-04-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM",
+          "title": "HIM",
+          "date_iso": "2003-06-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM/2003.06.12. The Video Collection",
+          "title": "The Video Collection",
+          "date_iso": "2003-06-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": "The Video Collection",
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM/2017.06.12. The HIM Docuseries",
+          "title": "The HIM Docuseries",
+          "date_iso": "2017-06-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": "The HIM Docuseries",
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM/2018.06.12. The HIM Anthology",
+          "title": "The HIM Anthology",
+          "date_iso": "2018-06-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": "The HIM Anthology",
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM/2023.06.12. Live Performances",
+          "title": "Live Performances",
+          "date_iso": "2023-06-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": "Live Performances",
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/HIM/2025.12.25. The HIM Series",
+          "title": "The HIM Series",
+          "date_iso": "2025-12-25",
+          "letter": "H",
+          "platform": null,
+          "subseries": "The HIM Series",
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/HIM/2000.12.12. Files from the Vault",
+          "title": "Files from the Vault",
+          "date_iso": "2000-12-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/HIM/2001.12.12. Chapters of Love Metal",
+          "title": "Chapters of Love Metal",
+          "date_iso": "2001-12-12",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/HIM/2008.01.10. Interview with HIM by Razor [Unofficial]",
+          "title": "Interview with HIM by Razor",
+          "date_iso": "2008-01-10",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        },
+        {
+          "kind": "book",
+          "path": "Books/H/HIM/2010.01.10. Interview with HIM by Loudwire",
+          "title": "Interview with HIM by Loudwire",
+          "date_iso": "2010-01-10",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "HIM"
+        }
+      ]
+    },
+    "deadman wonderland": {
+      "display_name": "Deadman Wonderland",
+      "slug": "deadman wonderland",
+      "letter": "D",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/D/Deadman Wonderland",
+          "title": "Deadman Wonderland",
+          "date_iso": "2011-04-17",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Deadman Wonderland"
+        }
+      ]
+    },
+    "hazbin hotel": {
+      "display_name": "Hazbin Hotel",
+      "slug": "hazbin hotel",
+      "letter": "H",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/H/Hazbin Hotel",
+          "title": "Hazbin Hotel",
+          "date_iso": "2019-10-28",
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Hazbin Hotel"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/Hazbin Hotel/2019.10.28. Hazbin Hotel",
+          "title": "Hazbin Hotel",
+          "date_iso": "2019-10-28",
+          "letter": "H",
+          "platform": null,
+          "subseries": "Hazbin Hotel",
+          "franchise_display": "Hazbin Hotel"
+        },
+        {
+          "kind": "series",
+          "path": "Series/H/Hazbin Hotel/2019.11.25. Helluva Boss",
+          "title": "Helluva Boss",
+          "date_iso": "2019-11-25",
+          "letter": "H",
+          "platform": null,
+          "subseries": "Helluva Boss",
+          "franchise_display": "Hazbin Hotel"
+        }
+      ]
+    },
+    "kemonozume": {
+      "display_name": "Kemonozume",
+      "slug": "kemonozume",
+      "letter": "K",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/K/Kemonozume",
+          "title": "Kemonozume",
+          "date_iso": null,
+          "letter": "K",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Kemonozume"
+        }
+      ]
+    },
+    "high fidelity": {
+      "display_name": "High Fidelity",
+      "slug": "high fidelity",
+      "letter": "H",
+      "entries": [
+        {
+          "kind": "book",
+          "path": "Books/H/High Fidelity",
+          "title": "High Fidelity",
+          "date_iso": null,
+          "letter": "H",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "High Fidelity"
+        }
+      ]
+    },
+    "the shining": {
+      "display_name": "The Shining",
+      "slug": "the shining",
+      "letter": "T",
+      "entries": [
+        {
+          "kind": "book",
+          "path": "Books/T/The Shining/1977.01.28. The Shining",
+          "title": "The Shining",
+          "date_iso": "1977-01-28",
+          "letter": "T",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "The Shining"
+        },
+        {
+          "kind": "book",
+          "path": "Books/T/The Shining/2013.05.23. Doctor Sleep",
+          "title": "Doctor Sleep",
+          "date_iso": "2013-05-23",
+          "letter": "T",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "The Shining"
+        }
+      ]
+    }
+  }
+}

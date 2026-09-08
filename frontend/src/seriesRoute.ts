@@ -32,6 +32,7 @@ const SECTIONS: SeriesSection[] = [
   "library",
   "games",
   "gallery",
+  "quiz",
   "episodes",
   "videos",
 ];

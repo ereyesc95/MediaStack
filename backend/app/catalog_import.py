@@ -6,10 +6,11 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.catalog_import_guide import get_catalog_user_guide
@@ -24,7 +25,7 @@ from app.franchise_index import (
     save_franchise_index,
 )
 from app.gallery import _letter_folder
-from app.models import User
+from app.models import BookLeaf, BookWork, MovieWork, Series, User
 from app.services.google_books import get_google_book, search_google_books
 from app.services.tmdb import (
     TMDB_BASE,
@@ -55,6 +56,11 @@ ARTWORK_HOSTS = {
     "books.google.com",
     "books.googleusercontent.com",
     "lh3.googleusercontent.com",
+}
+REGISTRATION_MODELS = {
+    "movies": (MovieWork, "mwk_id", "mwk_name", "mwk_slug"),
+    "series": (Series, "ser_id", "ser_name", None),
+    "books": (BookWork, "bwk_id", "bwk_name", "bwk_slug"),
 }
 
 
@@ -91,7 +97,7 @@ def _relative(path: Path, root: Path) -> str:
 def _gallery_tree(folder: Path) -> None:
     for rel in (
         "Gallery/Covers",
-        "Gallery/Renders",
+        "Gallery/Branding",
         "Gallery/Extras",
         "Gallery/Exclusive",
     ):
@@ -146,6 +152,91 @@ def _local_franchises(module: str, query: str) -> list[dict]:
     return sorted(unique.values(), key=lambda item: item["title"].casefold())
 
 
+@router.get("/{module}/registrations")
+def search_catalog_registrations(
+    module: str,
+    q: str = Query("", max_length=200),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    if module not in REGISTRATION_MODELS:
+        raise HTTPException(404, "Unsupported catalog module")
+    model, id_attr, name_attr, _slug_attr = REGISTRATION_MODELS[module]
+    wanted = q.strip().casefold()
+    rows = db.scalars(select(model)).all()
+    by_slug: dict[str, dict] = {}
+    for row in rows:
+        name = str(getattr(row, name_attr, "") or "").strip()
+        if not name or (wanted and wanted not in name.casefold()):
+            continue
+        slug = normalize_franchise_slug(name)
+        by_slug[slug] = {
+            "id": str(getattr(row, id_attr)),
+            "name": name,
+            "has_local_folder": False,
+        }
+    for item in _local_franchises(module, q or ""):
+        if item.get("kind") != "franchise":
+            continue
+        name = str(item.get("title") or "")
+        slug = normalize_franchise_slug(name)
+        current = by_slug.get(slug)
+        if current:
+            current["has_local_folder"] = True
+        else:
+            by_slug[slug] = {
+                "id": f"local:{slug}",
+                "name": name,
+                "has_local_folder": True,
+            }
+    return {
+        "items": sorted(by_slug.values(), key=lambda item: item["name"].casefold())
+    }
+
+
+@router.delete("/{module}/registrations/{registration_id}")
+def remove_catalog_registration(
+    module: str,
+    registration_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    if module not in REGISTRATION_MODELS:
+        raise HTTPException(404, "Unsupported catalog module")
+    if registration_id.startswith("local:"):
+        raise HTTPException(
+            409, "This item has a local folder and cannot be removed."
+        )
+    try:
+        numeric_id = int(registration_id)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid registration") from exc
+    model, _id_attr, name_attr, slug_attr = REGISTRATION_MODELS[module]
+    row = db.get(model, numeric_id)
+    if not row:
+        raise HTTPException(404, "Registration not found")
+    name = str(getattr(row, name_attr, "") or "").strip()
+    local = (
+        _root()
+        / MODULE_DIRS[module]
+        / _letter_folder(name)
+        / _safe_name(name)
+    )
+    if local.is_dir():
+        raise HTTPException(
+            409, "This item has a local folder and cannot be removed."
+        )
+    if module == "books" and slug_attr:
+        slug = str(getattr(row, slug_attr, "") or "")
+        for leaf in db.scalars(
+            select(BookLeaf).where(BookLeaf.blk_work_slug == slug)
+        ).all():
+            db.delete(leaf)
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
 async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
     endpoints = ("movie", "collection") if kind == "movies" else ("tv",)
     out: list[dict] = []
@@ -190,10 +281,125 @@ async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
     return out
 
 
+def _tmdb_id_query(value: str) -> tuple[str | None, str | None]:
+    """Return an optional TMDb object kind and ID from a bare ID or URL."""
+    clean = value.strip()
+    url_match = re.search(
+        r"(?:themoviedb\.org)/(movie|tv|collection)/(\d+)", clean, re.I
+    )
+    if url_match:
+        return url_match.group(1).casefold(), url_match.group(2)
+    if clean.isdigit():
+        return None, clean
+    return None, None
+
+
+def _tmdb_search_item(raw: dict, kind: str) -> dict:
+    title = (
+        raw.get("title")
+        or raw.get("name")
+        or raw.get("original_title")
+        or raw.get("original_name")
+        or "Untitled"
+    )
+    date = raw.get("release_date") or raw.get("first_air_date")
+    return {
+        "source": "tmdb",
+        "kind": kind,
+        "provider_id": str(raw.get("id") or ""),
+        "title": title,
+        "date": date,
+        "subtitle": " · ".join(
+            part
+            for part in (
+                kind.title(),
+                (date or "")[:4],
+                raw.get("original_language"),
+            )
+            if part
+        ),
+        "cover_url": image_url(raw.get("poster_path"), "w342"),
+    }
+
+
+async def _tmdb_direct_lookup(
+    module: str, value: str, api_key: str
+) -> dict | None:
+    requested_kind, provider_id = _tmdb_id_query(value)
+    if not provider_id:
+        return None
+    if module == "series":
+        if requested_kind and requested_kind != "tv":
+            return None
+        try:
+            return _tmdb_search_item(
+                await fetch_tv(provider_id, api_key), "tv"
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return None
+            raise
+
+    kinds = [requested_kind] if requested_kind in {"movie", "collection"} else [
+        "movie",
+        "collection",
+    ]
+    for kind in kinds:
+        try:
+            raw = (
+                await fetch_collection(provider_id, api_key)
+                if kind == "collection"
+                else await fetch_movie(provider_id, api_key)
+            )
+            return _tmdb_search_item(raw, kind)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 404:
+                raise
+    return None
+
+
+def _google_books_id_query(value: str) -> str | None:
+    clean = value.strip()
+    if "books.google." in clean.casefold():
+        parsed = urlparse(clean)
+        query_id = (parse_qs(parsed.query).get("id") or [None])[0]
+        if query_id:
+            return query_id
+        tail = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+        if tail and tail.casefold() not in {"books", "edition"}:
+            return tail
+    if (
+        len(clean) >= 8
+        and " " not in clean
+        and re.fullmatch(r"[A-Za-z0-9_-]+", clean)
+    ):
+        return clean
+    return None
+
+
+def _google_books_search_item(item: dict) -> dict:
+    return {
+        "source": "google_books",
+        "kind": "book",
+        "provider_id": str(item.get("id") or ""),
+        "title": item.get("title") or "Untitled",
+        "date": item.get("published_date"),
+        "subtitle": " · ".join(
+            part
+            for part in (
+                ", ".join(item.get("authors") or []),
+                (item.get("published_date") or "")[:4],
+            )
+            if part
+        ),
+        "cover_url": item.get("thumbnail"),
+    }
+
+
 @router.get("/{module}/search")
 async def search_catalog_import(
     module: str,
-    q: str = Query(..., min_length=2),
+    q: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
@@ -201,34 +407,29 @@ async def search_catalog_import(
         raise HTTPException(404, "Unsupported catalog module")
     local = _local_franchises(module, q)
     if module == "books":
-        book_results = await asyncio.to_thread(
-            search_google_books, q, max_results=20
+        direct_id = _google_books_id_query(q)
+        direct = (
+            await asyncio.to_thread(get_google_book, direct_id)
+            if direct_id
+            else None
         )
-        remote = [
-            {
-                "source": "google_books",
-                "kind": "book",
-                "provider_id": str(item.get("id") or ""),
-                "title": item.get("title") or "Untitled",
-                "date": item.get("published_date"),
-                "subtitle": " · ".join(
-                    part
-                    for part in (
-                        ", ".join(item.get("authors") or []),
-                        (item.get("published_date") or "")[:4],
-                    )
-                    if part
-                ),
-                "cover_url": item.get("thumbnail"),
-            }
-            for item in book_results
-            if item.get("id")
-        ]
+        if direct and direct.get("id"):
+            remote = [_google_books_search_item(direct)]
+        else:
+            book_results = await asyncio.to_thread(
+                search_google_books, q, max_results=20
+            )
+            remote = [
+                _google_books_search_item(item)
+                for item in book_results
+                if item.get("id")
+            ]
     else:
         api_key = get_tmdb_key(db)
         if not api_key:
             raise HTTPException(400, "TMDb API key is not configured")
-        remote = await _tmdb_search(module, q, api_key)
+        direct = await _tmdb_direct_lookup(module, q, api_key)
+        remote = [direct] if direct else await _tmdb_search(module, q, api_key)
     return {"local_franchises": local, "items": remote}
 
 

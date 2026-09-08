@@ -1088,8 +1088,12 @@ export default function MoviesModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
-              onManageCatalog={() => setManageCatalogOpen(true)}
-              manageCatalogLabel="Add Movie"
+              onManageCatalog={
+                tab === "catalog"
+                  ? () => setManageCatalogOpen(true)
+                  : undefined
+              }
+              manageCatalogLabel="Manage Movies"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

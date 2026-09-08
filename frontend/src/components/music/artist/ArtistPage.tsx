@@ -1746,6 +1746,7 @@ export default function ArtistPage({
             isSolo={data.is_solo}
             mode={quizMode}
             onModeChange={setQuizMode}
+            onOpenRelease={onOpenReleaseNavigate}
             onStopPageAudio={stopPageAudio}
             onSongsBeatChange={handleQuizSongsBeatChange}
           />

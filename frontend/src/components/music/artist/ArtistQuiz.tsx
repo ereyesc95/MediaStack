@@ -31,6 +31,7 @@ type Props = {
   isSolo: boolean;
   mode: QuizMode;
   onModeChange: (mode: QuizMode) => void;
+  onOpenRelease?: (bandId: number, releaseId: string) => void;
   /** Stops artist-page playback so quiz audio (songs mode) does not overlap. */
   onStopPageAudio?: () => void;
   onSongsBeatChange?: (active: boolean, playing: boolean) => void;
@@ -50,6 +51,7 @@ type Phase = "loading" | "ready" | "playing" | "finished";
 type DiscographyRelease = {
   id: string;
   title: string;
+  cover_url?: string | null;
   display_date?: string | null;
   date_iso?: string | null;
   tracks: { title: string; number: number }[];
@@ -64,6 +66,7 @@ type LineupMember = {
   id: number;
   name: string;
   photo_url?: string | null;
+  signature_url?: string | null;
   years?: string | null;
   roles?: string[];
   is_deceased?: boolean;
@@ -131,6 +134,7 @@ function normalizeDiscographyReleases(
   releases: {
     id: string;
     title: string;
+    cover_url?: string | null;
     display_date?: string | null;
     date_iso?: string | null;
     tracks: { title: string; number?: number }[];
@@ -139,6 +143,7 @@ function normalizeDiscographyReleases(
   return releases.map((rel) => ({
     id: rel.id,
     title: rel.title,
+    cover_url: rel.cover_url,
     display_date: rel.display_date,
     date_iso: rel.date_iso,
     tracks: (rel.tracks || []).map((t, i) => ({
@@ -309,6 +314,7 @@ export default function ArtistQuiz({
   isSolo,
   mode,
   onModeChange,
+  onOpenRelease,
   onStopPageAudio,
   onSongsBeatChange,
 }: Props) {
@@ -334,6 +340,10 @@ export default function ArtistQuiz({
   const [revealedMembers, setRevealedMembers] = useState<Set<number>>(
     () => new Set()
   );
+  const [previewReleaseId, setPreviewReleaseId] = useState<string | null>(null);
+  const [activeSignatureMemberId, setActiveSignatureMemberId] = useState<
+    number | null
+  >(null);
 
   const [songRound, setSongRound] = useState(0);
   const [songCorrect, setSongCorrect] = useState(0);
@@ -484,6 +494,8 @@ export default function ArtistQuiz({
       setRevealedTracks(new Set());
       setRevealedOtherTracks(new Set());
       setRevealedMembers(new Set());
+      setPreviewReleaseId(null);
+      setActiveSignatureMemberId(null);
       setSongRound(0);
       setSongCorrect(0);
       setSongPicked(null);
@@ -760,6 +772,8 @@ export default function ArtistQuiz({
     setRevealedTracks(new Set());
     setRevealedOtherTracks(new Set());
     setRevealedMembers(new Set());
+    setPreviewReleaseId(null);
+    setActiveSignatureMemberId(null);
     setSongRound(0);
     setSongCorrect(0);
     setSongPicked(null);
@@ -930,7 +944,7 @@ export default function ArtistQuiz({
         <div className="artist-quiz__panel artist-quiz__panel--scrollable">
           <QuizControlBar
             guessInputRef={guessInputRef}
-            placeholder="Type a release or track title…"
+            placeholder="Type a release or track title"
             guessInput={guessInput}
             onGuessChange={handleGuessChange}
             timerProgress={timerProgress}
@@ -958,9 +972,45 @@ export default function ArtistQuiz({
                       data-quiz-target={`release:${rel.id}`}
                     >
                       <h3 className="artist-quiz__release-title">
-                        {revealedReleases.has(rel.id)
-                          ? quizDisplayTitle(rel.title)
-                          : "—"}
+                        {revealedReleases.has(rel.id) ? (
+                          <span className="artist-quiz__release-preview">
+                            <button
+                              type="button"
+                              className={`artist-quiz__release-title-trigger${
+                                rel.cover_url
+                                  ? " artist-quiz__release-title-trigger--clickable"
+                                  : ""
+                              }`}
+                              aria-expanded={
+                                rel.cover_url
+                                  ? previewReleaseId === rel.id
+                                  : undefined
+                              }
+                              onClick={() => {
+                                if (!rel.cover_url) return;
+                                setPreviewReleaseId((current) =>
+                                  current === rel.id ? null : rel.id
+                                );
+                              }}
+                            >
+                              {quizDisplayTitle(rel.title)}
+                            </button>
+                            {rel.cover_url && previewReleaseId === rel.id ? (
+                              <button
+                                type="button"
+                                className="artist-quiz__release-cover-popover"
+                                onClick={() => onOpenRelease?.(bandId, rel.id)}
+                              >
+                                <img src={rel.cover_url} alt="" />
+                                <span className="artist-quiz__release-cover-label">
+                                  Go to release
+                                </span>
+                              </button>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </h3>
                       {revealedReleases.has(rel.id) && dateLabel ? (
                         <p className="artist-quiz__release-date">{dateLabel}</p>
@@ -1040,7 +1090,7 @@ export default function ArtistQuiz({
         <div className="artist-quiz__panel artist-quiz__panel--scrollable artist-quiz__panel--lineup">
           <QuizControlBar
             guessInputRef={guessInputRef}
-            placeholder="Type a member name…"
+            placeholder="Type a member name"
             guessInput={guessInput}
             onGuessChange={handleGuessChange}
             timerProgress={timerProgress}
@@ -1068,10 +1118,36 @@ export default function ArtistQuiz({
                           m.is_deceased ? " artist-quiz__member--deceased" : ""
                         }`}
                       >
-                      <span className="artist-quiz__member-photo">
+                      <button
+                        type="button"
+                        className={`artist-quiz__member-photo${
+                          revealed
+                            ? " artist-quiz__member-photo--revealed"
+                            : ""
+                        }${
+                          activeSignatureMemberId === m.id
+                            ? " artist-quiz__member-photo--active"
+                            : ""
+                        }`}
+                        aria-label={
+                          revealed
+                            ? `${m.name}${m.signature_url ? " signature" : " photo"}`
+                            : "Hidden member"
+                        }
+                        disabled={!revealed}
+                        onClick={() =>
+                          setActiveSignatureMemberId((current) =>
+                            current === m.id ? null : m.id
+                          )
+                        }
+                      >
                         {revealed ? (
                           m.photo_url ? (
-                            <img src={m.photo_url} alt="" />
+                            <img
+                              src={m.photo_url}
+                              alt=""
+                              className="artist-quiz__member-photo-image"
+                            />
                           ) : (
                             <span className="artist-quiz__member-ph">
                               {initials(m.name)}
@@ -1080,7 +1156,14 @@ export default function ArtistQuiz({
                         ) : (
                           <span className="artist-quiz__member-ph artist-quiz__member-ph--empty" />
                         )}
-                      </span>
+                        {revealed && m.signature_url ? (
+                          <img
+                            src={m.signature_url}
+                            alt=""
+                            className="artist-quiz__member-signature"
+                          />
+                        ) : null}
+                      </button>
                       <div className="artist-quiz__member-meta">
                         {revealed ? (
                           <>

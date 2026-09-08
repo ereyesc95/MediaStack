@@ -30,6 +30,7 @@ import {
   fetchSeriesFranchiseMovies,
   fetchSeriesFranchiseShows,
   fetchSeriesGallery,
+  fetchFranchiseQuizAvailability,
   fetchSeriesOverview,
   fetchMoviesGallery,
   fetchUniverse,
@@ -40,6 +41,7 @@ import {
   rescanSeriesLocalData,
   saveMoviesFilmTrailer,
   fetchBandOverview,
+  type FranchiseQuizAvailability,
 } from "../../api";
 import { getStoredProfile } from "../../auth";
 import OfficialUnofficialBar from "../OfficialUnofficialBar";
@@ -103,6 +105,7 @@ import type {
   Universe,
   UniverseCard,
 } from "../../types";
+import FranchiseQuiz from "./FranchiseQuiz";
 import {
   isMobileLandscapeLayout,
   isMobilePortraitLayout,
@@ -172,7 +175,8 @@ export type SubseriesTab =
   | "audio"
   | "library"
   | "games"
-  | "gallery";
+  | "gallery"
+  | "quiz";
 
 export type SeriesCatalogBrowseTarget = {
   mode: SeriesFilterMode;
@@ -334,7 +338,8 @@ function sectionToTab(section: SeriesSection | undefined): SubseriesTab {
     section === "movies" ||
     section === "audio" ||
     section === "library" ||
-    section === "games"
+    section === "games" ||
+    section === "quiz"
   ) {
     return section;
   }
@@ -345,6 +350,7 @@ function tabToSection(tab: SubseriesTab): SeriesSection {
   if (tab === "episodes") return "episodes";
   if (tab === "videos") return "videos";
   if (tab === "gallery") return "gallery";
+  if (tab === "quiz") return "quiz";
   if (
     tab === "series" ||
     tab === "movies" ||
@@ -822,9 +828,42 @@ export default function SeriesSubseriesPage({
     { key: string; label: string }[]
   >([]);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
+  const [quizAvailability, setQuizAvailability] =
+    useState<FranchiseQuizAvailability | null>(null);
+  const [quizAvailabilityReady, setQuizAvailabilityReady] = useState(false);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
   const [officialOnly, setOfficialOnly] = useState(true);
   const [coverFlipped, setCoverFlipped] = useState(false);
+
+  useEffect(() => {
+    const folderPath = detail?.folder_path;
+    if (!folderPath) {
+      setQuizAvailability(null);
+      setQuizAvailabilityReady(false);
+      return;
+    }
+    let cancelled = false;
+    setQuizAvailabilityReady(false);
+    Promise.all([
+      fetchFranchiseQuizAvailability(franchiseId),
+      fetchFranchiseQuizAvailability(franchiseId, folderPath),
+    ])
+      .then(([hub, leaf]) => {
+        if (cancelled) return;
+        const belongsOnHub = hub.catalog;
+        setQuizAvailability(belongsOnHub ? null : leaf);
+        setQuizAvailabilityReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuizAvailability(null);
+          setQuizAvailabilityReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.folder_path, franchiseId]);
   const [coverViewerItems, setCoverViewerItems] = useState<
     GalleryViewerItem[]
   >([]);
@@ -3261,6 +3300,7 @@ export default function SeriesSubseriesPage({
           { id: "audio", label: "AUDIO" },
           { id: "games", label: "GAMES" },
           { id: "gallery", label: stacked ? "ART" : "GALLERY" },
+          { id: "quiz", label: "QUIZ" },
         ]
       : isFilm
         ? [
@@ -3275,6 +3315,7 @@ export default function SeriesSubseriesPage({
             { id: "library", label: "BOOKS" },
             { id: "games", label: "GAMES" },
             { id: "gallery", label: stacked ? "ART" : "GALLERY" },
+            { id: "quiz", label: "QUIZ" },
           ]
         : [
             { id: "overview", label: stacked ? "INFO" : "OVERVIEW" },
@@ -3288,6 +3329,7 @@ export default function SeriesSubseriesPage({
             { id: "library", label: "BOOKS" },
             { id: "games", label: "GAMES" },
             { id: "gallery", label: stacked ? "ART" : "GALLERY" },
+            { id: "quiz", label: "QUIZ" },
           ];
     return all.filter((t) => {
       if (t.id === "overview") return true;
@@ -3298,6 +3340,11 @@ export default function SeriesSubseriesPage({
           : !isFilm && hasEpisodes;
       if (t.id === "gallery") {
         return hasGallery;
+      }
+      if (t.id === "quiz") {
+        return Boolean(
+          quizAvailability?.encyclopedia || quizAvailability?.soundtrack
+        );
       }
       // Siblings / related known from overview — show immediately.
       if (t.id === "series" && !isFilm && !isBook) {
@@ -3342,6 +3389,7 @@ export default function SeriesSubseriesPage({
     hasGames,
     filmVersions.length,
     showFilmVideosTab,
+    quizAvailability,
   ]);
 
   /** Leaf pages get Related when there is anything to show (universes / talent / similar). */
@@ -3406,6 +3454,7 @@ export default function SeriesSubseriesPage({
 
   useEffect(() => {
     if (loading) return;
+    if (tab === "quiz" && !quizAvailabilityReady) return;
     if (!tabs.some((t) => t.id === tab)) {
       onNavigate({
         subseriesId,
@@ -3413,7 +3462,16 @@ export default function SeriesSubseriesPage({
         section: "overview",
       });
     }
-  }, [tabs, tab, onNavigate, subseriesId, expandedSeasonId, seasonId, loading]);
+  }, [
+    tabs,
+    tab,
+    onNavigate,
+    subseriesId,
+    expandedSeasonId,
+    seasonId,
+    loading,
+    quizAvailabilityReady,
+  ]);
 
   const setTab = (next: SubseriesTab) => {
     onNavigate({
@@ -5923,6 +5981,18 @@ export default function SeriesSubseriesPage({
               cardLayout={cardLayout}
               coverAspect="portrait"
               onOpen={openMediaCard}
+            />
+          ) : null}
+
+          {!error &&
+          detail?.folder_path &&
+          tab === "quiz" &&
+          quizAvailability ? (
+            <FranchiseQuiz
+              franchiseId={franchiseId}
+              scopePath={detail.folder_path}
+              initialAvailability={quizAvailability}
+              onAvailabilityChange={setQuizAvailability}
             />
           ) : null}
 

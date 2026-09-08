@@ -9,7 +9,7 @@ from app.gallery import IMAGE_EXTS, _media_url
 # Content buckets under a franchise or subseries folder
 GALLERY_NAMES = ("gallery",)
 COVERS_NAMES = ("covers",)
-RENDERS_NAMES = ("renders",)
+RENDERS_NAMES = ("branding", "renders")
 EXTRAS_GALLERY_NAMES = ("extras",)
 AUDIO_NAMES = ("[audio]", "audio")
 EXTRAS_NAMES = ("[extras]", "extras")
@@ -47,10 +47,12 @@ def find_covers_dir(folder: Path) -> Path | None:
 
 
 def find_renders_dir(folder: Path) -> Path | None:
-    """Logos / badges / PNG renders: Gallery/Renders, else [Artwork]."""
+    """Logos / badges: Gallery/Branding, legacy Renders, else [Artwork]."""
     gal = find_gallery_root(folder)
     if gal:
-        renders = _child_named(gal, RENDERS_NAMES)
+        renders = _child_named(gal, ("branding",)) or _child_named(
+            gal, ("renders",)
+        )
         if renders:
             return renders
     return _child_named(folder, ARTWORK_NAMES)
@@ -185,7 +187,7 @@ def find_logo_file(folder: Path, media_root: Path) -> tuple[str | None, str | No
 
 
 def gallery_sections(folder: Path, media_root: Path) -> list[dict]:
-    """Walk Gallery/{Covers,Renders,Extras…} into sectioned image lists.
+    """Walk Gallery/{Covers,Branding,Extras…} into sectioned image lists.
 
     Falls back to flat [Artwork] as section ``covers`` when no Gallery/.
     """

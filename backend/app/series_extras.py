@@ -521,7 +521,13 @@ def openings_endings_playlist_card(franchise_id: str) -> dict | None:
 
 
 def collect_audio_tracks_from_folders(
-    db: Session, folders: list[Path], media_root: Path
+    db: Session,
+    folders: list[Path],
+    media_root: Path,
+    *,
+    official_only: bool = False,
+    exclude_tagged_tracks: bool = False,
+    shortcuts_only: bool = False,
 ) -> list[dict]:
     """Resolve Audio/ .lnk releases under folders into playable track entries."""
     from app.band_library import AUDIO_EXTS
@@ -537,6 +543,16 @@ def collect_audio_tracks_from_folders(
             if not cat_dir.is_dir():
                 continue
             for entry in _iter_category_release_entries(cat_dir):
+                if shortcuts_only and not (
+                    entry.is_symlink()
+                    or (entry.is_file() and entry.suffix.casefold() in {".lnk", ".path"})
+                ):
+                    continue
+                if official_only:
+                    from app.franchise_index import is_unofficial_folder
+
+                    if is_unofficial_folder(entry.name):
+                        continue
                 name = entry_display_name(entry)
                 resolved = resolve_media_entry(entry, media_root=media_root)
                 card = _build_release_card(
@@ -566,6 +582,8 @@ def collect_audio_tracks_from_folders(
                 except OSError:
                     continue
                 for audio in audio_files:
+                    if exclude_tagged_tracks and re.search(r"\[[^\]]+\]", audio.stem):
+                        continue
                     rel = safe_relative(audio, media_root)
                     if not rel or rel in seen:
                         continue
@@ -598,6 +616,7 @@ def collect_audio_tracks_from_folders(
                         {
                             "id": f"trk_{hashlib.sha256(rel.encode()).hexdigest()[:12]}",
                             "title": title,
+                            "play_path": rel,
                             "play_url": play_url,
                             "cover_url": cover,
                             "artist": artist,

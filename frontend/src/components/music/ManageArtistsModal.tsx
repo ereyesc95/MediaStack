@@ -11,6 +11,7 @@ import {
   type ArtistImportResult,
 } from "../../api";
 import type { MbArtistMatch } from "../../types";
+import useSlowLookupHint from "../../useSlowLookupHint";
 import SearchableDropdown, {
   type DropdownOption,
 } from "../SearchableDropdown";
@@ -50,6 +51,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const importControllerRef = useRef<AbortController | null>(null);
   const importIdRef = useRef("");
+  const lookupControllerRef = useRef<AbortController | null>(null);
+  const slowLookup = useSlowLookupHint(searching || estimating);
 
   useEffect(() => {
     if (!importing) return;
@@ -120,16 +123,24 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setNotFound(false);
     setPendingArtist(null);
     setEstimate(null);
+    const controller = new AbortController();
+    lookupControllerRef.current = controller;
     try {
-      const data = await searchMusicBrainz(query);
+      const data = await searchMusicBrainz(query, controller.signal);
       const items = data.items ?? [];
       setMatches(items);
       setNotFound(items.length === 0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch {
+      // MusicBrainz can be unreachable or too slow; offer the no-registration path.
+      if (controller.signal.aborted) return;
+      setMatches([]);
+      setNotFound(true);
     } finally {
-      setSearching(false);
-      setBusy(false);
+      if (lookupControllerRef.current === controller) {
+        lookupControllerRef.current = null;
+        setSearching(false);
+        setBusy(false);
+      }
     }
   }
 
@@ -142,16 +153,22 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setCloseWarning(null);
     setNotFound(false);
     setEstimating(true);
+    const controller = new AbortController();
+    lookupControllerRef.current = controller;
     try {
-      setEstimate(await estimateBandImport(match.mbid));
+      setEstimate(await estimateBandImport(match.mbid, controller.signal));
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(
         `Could not estimate this import: ${
           e instanceof Error ? e.message : String(e)
         }`
       );
     } finally {
-      setEstimating(false);
+      if (lookupControllerRef.current === controller) {
+        lookupControllerRef.current = null;
+        setEstimating(false);
+      }
     }
   }
 
@@ -188,8 +205,26 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     }
   }
 
-  async function addUnregisteredArtist() {
-    const name = query.trim();
+  function stopLookup() {
+    const controller = lookupControllerRef.current;
+    lookupControllerRef.current = null;
+    controller?.abort();
+    setSearching(false);
+    setEstimating(false);
+    setBusy(false);
+  }
+
+  async function continueWithoutRegistration() {
+    const name = (pendingArtist?.name || query).trim();
+    stopLookup();
+    setNotFound(false);
+    setPendingArtist(null);
+    setEstimate(null);
+    await addUnregisteredArtist(name);
+  }
+
+  async function addUnregisteredArtist(artistName?: string) {
+    const name = (artistName ?? query).trim();
     if (!name) return;
     setBusy(true);
     setImporting(true);
@@ -272,6 +307,19 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     Boolean(pendingArtist && estimate) &&
     !(estimate?.local_folder_exists && estimate?.catalog_exists);
 
+  const slowLookupHint = slowLookup ? (
+    <p className="manage-artists-modal__not-found-body">
+      You can also{" "}
+      <button
+        type="button"
+        className="manage-artists-modal__inline-link"
+        onClick={() => void continueWithoutRegistration()}
+      >
+        continue with no registration
+      </button>
+    </p>
+  ) : null;
+
   return (
     <div className="modal-backdrop" onClick={requestClose}>
       <div
@@ -321,6 +369,18 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         <div className="artist-admin-form">
           {mode === "add" ? (
             <>
+              <p className="manage-artists-modal__search-instruction">
+                Search artist by name or by{" "}
+                <a
+                  href="https://musicbrainz.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="manage-artists-modal__inline-link"
+                  title="Get ID from MusicBrainz"
+                >
+                  ID
+                </a>
+              </p>
               <div className="modal-search-row">
                 <input
                   value={query}
@@ -328,7 +388,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                     setQuery(event.target.value);
                     setNotFound(false);
                   }}
-                  placeholder="Artist or band name"
+                  placeholder="Artist name or ID"
                   disabled={busy || estimating}
                   onKeyDown={(event) =>
                     event.key === "Enter" && void handleSearch()
@@ -367,6 +427,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   )}
                 </button>
               </div>
+              {searching ? slowLookupHint : null}
               {!importing && !pendingArtist && (
                 <ul className="mb-matches">
                   {matches.map((match) => (
@@ -454,7 +515,10 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                     )}
                   </div>
                   {estimating && (
-                    <p className="muted">Calculating...</p>
+                    <>
+                      <p className="muted">Calculating...</p>
+                      {slowLookupHint}
+                    </>
                   )}
                   {estimate && (
                     <>

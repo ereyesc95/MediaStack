@@ -223,9 +223,13 @@ export async function searchRosterBands(
 }
 
 export async function searchMusicBrainz(
-  q: string
+  q: string,
+  signal?: AbortSignal
 ): Promise<{ items: MbArtistMatch[] }> {
-  return request(`${API}/music/musicbrainz/search?q=${encodeURIComponent(q)}`);
+  return request(
+    `${API}/music/musicbrainz/search?q=${encodeURIComponent(q)}`,
+    { signal }
+  );
 }
 
 export type ArtistImportEstimate = {
@@ -249,10 +253,13 @@ export type ArtistImportResult = {
   message: string;
 };
 
-export async function estimateBandImport(mbid: string) {
+export async function estimateBandImport(
+  mbid: string,
+  signal?: AbortSignal
+) {
   return request<ArtistImportEstimate>(
     `${API}/music/bands/import-estimate/${encodeURIComponent(mbid)}`,
-    undefined,
+    { signal },
     LONG_RUNNING_TIMEOUT_MS
   );
 }
@@ -553,6 +560,7 @@ export async function fetchQuizDiscography(bandId: number) {
     releases: {
       id: string;
       title: string;
+      cover_url?: string | null;
       display_date?: string | null;
       date_iso?: string | null;
       tracks: { title: string; number: number }[];
@@ -574,6 +582,7 @@ export async function fetchQuizLineup(bandId: number) {
       id: number;
       name: string;
       photo_url?: string | null;
+      signature_url?: string | null;
       years?: string | null;
       roles?: string[];
       is_deceased?: boolean;
@@ -3044,19 +3053,22 @@ export type CatalogImportItem = {
 
 export async function searchCatalogImport(
   module: CatalogImportModule,
-  query: string
+  query: string,
+  signal?: AbortSignal
 ) {
   return request<{
     local_franchises: CatalogImportSearchItem[];
     items: CatalogImportSearchItem[];
   }>(
-    `${API}/catalog-import/${module}/search?q=${encodeURIComponent(query)}`
+    `${API}/catalog-import/${module}/search?q=${encodeURIComponent(query)}`,
+    { signal }
   );
 }
 
 export async function previewCatalogImport(
   module: CatalogImportModule,
-  item: CatalogImportSearchItem
+  item: CatalogImportSearchItem,
+  signal?: AbortSignal
 ) {
   return request<{
     franchise_name: string;
@@ -3066,6 +3078,7 @@ export async function previewCatalogImport(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(item),
+    signal,
   });
 }
 
@@ -3091,4 +3104,162 @@ export async function createCatalogImport(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export type CatalogRegistration = {
+  id: string;
+  name: string;
+  has_local_folder: boolean;
+};
+
+export async function searchCatalogRegistrations(
+  module: CatalogImportModule,
+  query: string
+) {
+  return request<{ items: CatalogRegistration[] }>(
+    `${API}/catalog-import/${module}/registrations?q=${encodeURIComponent(
+      query
+    )}`
+  );
+}
+
+export async function removeCatalogRegistration(
+  module: CatalogImportModule,
+  registrationId: string
+) {
+  return request<{ ok: boolean }>(
+    `${API}/catalog-import/${module}/registrations/${encodeURIComponent(
+      registrationId
+    )}`,
+    { method: "DELETE" }
+  );
+}
+
+export type FranchiseQuizMode = "catalog" | "encyclopedia" | "soundtrack";
+export type FranchiseQuizTopic = {
+  key: string;
+  label: string;
+  count: number;
+};
+export type FranchiseQuizAvailability = {
+  catalog: boolean;
+  encyclopedia: boolean;
+  soundtrack: boolean;
+  encyclopedia_topics: FranchiseQuizTopic[];
+  soundtrack_topics: FranchiseQuizTopic[];
+};
+export type FranchiseQuizCatalogItem = {
+  id: string;
+  module: "series" | "movie" | "book" | "game";
+  navigate_id: string;
+  title: string;
+  date_iso?: string | null;
+  cover_url?: string | null;
+  path: string;
+};
+export type FranchiseQuizEncyclopediaItem = {
+  id: string;
+  title: string;
+  number?: number | null;
+  variants: {
+    id: string;
+    url: string;
+    title: string;
+    source_title: string;
+    module: string;
+  }[];
+};
+export type FranchiseQuizSoundChoice = {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  cover_url?: string | null;
+  cover_aspect?: "square" | "portrait";
+};
+export type FranchiseQuizSoundQuestion = {
+  id: string;
+  play_path: string;
+  correct_id: string;
+  choices: FranchiseQuizSoundChoice[];
+};
+
+function franchiseQuizPath(
+  slug: string,
+  endpoint: string,
+  params?: Record<string, string | number | null | undefined>
+) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value != null && String(value)) search.set(key, String(value));
+  }
+  const suffix = search.size ? `?${search}` : "";
+  return `${API}/franchise-quiz/${encodeURIComponent(slug)}/${endpoint}${suffix}`;
+}
+
+export function fetchFranchiseQuizAvailability(
+  slug: string,
+  path?: string | null
+) {
+  return request<FranchiseQuizAvailability>(
+    franchiseQuizPath(slug, "availability", { path })
+  );
+}
+
+export function fetchFranchiseQuizCatalog(slug: string) {
+  return request<{
+    columns: {
+      key: string;
+      label: string;
+      items: FranchiseQuizCatalogItem[];
+    }[];
+    total: number;
+  }>(franchiseQuizPath(slug, "catalog"));
+}
+
+export function fetchFranchiseQuizEncyclopedia(
+  slug: string,
+  topic: string,
+  path?: string | null
+) {
+  return request<{ topic: string; items: FranchiseQuizEncyclopediaItem[] }>(
+    franchiseQuizPath(slug, "encyclopedia", { topic, path })
+  );
+}
+
+export function fetchFranchiseQuizSoundtrack(
+  slug: string,
+  topic: string,
+  path?: string | null,
+  rounds = 10
+) {
+  return request<{
+    topic: string;
+    questions: FranchiseQuizSoundQuestion[];
+    available_count: number;
+  }>(franchiseQuizPath(slug, "soundtrack", { topic, path, rounds }));
+}
+
+export function fetchFranchiseQuizScores(slug: string) {
+  return request<Record<string, import("./types").QuizScoreEntry>>(
+    franchiseQuizPath(slug, "scores")
+  );
+}
+
+export function saveFranchiseQuizScore(
+  slug: string,
+  body: {
+    quiz_type: string;
+    score: number;
+    total: number;
+    time_ms: number;
+  }
+) {
+  return request<import("./types").QuizScoreEntry>(
+    franchiseQuizPath(slug, "scores"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }

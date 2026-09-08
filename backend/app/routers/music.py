@@ -1,6 +1,8 @@
 import asyncio
 from pathlib import Path
+import re
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -30,11 +32,15 @@ from app.music_dashboard import (
     playlist_tracks,
 )
 from app.music_filters import filter_options, search_roster_artists, search_roster_bands
-from app.services.musicbrainz import search_artists
+from app.services.musicbrainz import lookup_artist, search_artists
 from app.schemas import BandListOut, BandOut, PlaylistOut, ReleaseListOut, TrackOut
 
 router = APIRouter(prefix="/api/music", tags=["music"])
 _artist_import_tasks: dict[str, asyncio.Task] = {}
+_MUSICBRAINZ_ARTIST_ID_RE = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-"
+    r"[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b"
+)
 
 
 class ImportBandBody(BaseModel):
@@ -358,7 +364,17 @@ def album_cards(
 
 @router.get("/musicbrainz/search")
 async def mb_search(q: str = Query(..., min_length=1)):
-    return {"items": await search_artists(q, limit=3)}
+    value = q.strip()
+    id_match = _MUSICBRAINZ_ARTIST_ID_RE.search(value)
+    if id_match:
+        try:
+            item = await lookup_artist(id_match.group(0))
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return {"items": []}
+            raise
+        return {"items": [item] if item.get("mbid") else []}
+    return {"items": await search_artists(value, limit=10)}
 
 
 @router.get("/bands/import-estimate/{mbid}")

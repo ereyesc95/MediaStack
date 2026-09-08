@@ -39,6 +39,7 @@ _META_DIRS = frozenset(
         "[extras]",
         "[audio]",
         "covers",
+        "branding",
         "renders",
         "volumes",
     }

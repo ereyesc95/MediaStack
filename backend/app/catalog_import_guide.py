@@ -22,7 +22,7 @@ Gallery/Covers (or franchise [Artwork] when this module is the franchise home):
   Photocard - Landscape Front.jpg
   Photocard - Landscape Back.jpg
 
-Gallery/Renders:
+Gallery/Branding (legacy Gallery/Renders is also supported):
   Logo.png
   Icon.png
   Badge.png
@@ -62,7 +62,7 @@ Do not create Series, Books, Games or Audio portal folders here.
 
 Each film may contain:
   Gallery/Covers/
-  Gallery/Renders/
+  Gallery/Branding/
   Gallery/Extras/
   Gallery/Exclusive/
 
@@ -86,7 +86,7 @@ A single flat show may keep Episodes/, Specials/ and Extras/ at franchise root.
 
 Show/subseries folders may contain:
   Gallery/Covers/
-  Gallery/Renders/
+  Gallery/Branding/
   Gallery/Extras/
   Gallery/Exclusive/
   Episodes/YYYY.MM.DD. Season N/
@@ -120,7 +120,7 @@ Do not create Movies, Series, Games or Audio portal folders here.
 
 Each book may contain:
   Gallery/Covers/
-  Gallery/Renders/
+  Gallery/Branding/
   Gallery/Extras/
   Gallery/Exclusive/
 
@@ -153,5 +153,19 @@ def get_catalog_user_guide(db: Session, module: str) -> str:
 
 def ensure_catalog_user_guide_templates(db: Session) -> None:
     for module in DEFAULT_GUIDES:
-        get_catalog_user_guide(db, module)
+        row = db.get(AppSetting, guide_key(module))
+        if not row:
+            get_catalog_user_guide(db, module)
+            continue
+        if row.aps_value:
+            row.aps_value = (
+                row.aps_value.replace(
+                    "Gallery/Renders/", "Gallery/Branding/"
+                )
+                .replace("Gallery/Renders:", "Gallery/Branding:")
+                .replace(
+                    "Gallery/Branding (legacy Gallery/Branding is also supported):",
+                    "Gallery/Branding (legacy Gallery/Renders is also supported):",
+                )
+            )
     db.commit()

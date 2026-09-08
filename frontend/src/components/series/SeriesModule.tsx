@@ -1045,8 +1045,12 @@ export default function SeriesModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
-              onManageCatalog={() => setManageCatalogOpen(true)}
-              manageCatalogLabel="Add Series"
+              onManageCatalog={
+                tab === "catalog"
+                  ? () => setManageCatalogOpen(true)
+                  : undefined
+              }
+              manageCatalogLabel="Manage Series"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

@@ -25,9 +25,12 @@ import {
   fetchSeriesFranchiseLibrary,
   fetchSeriesFranchiseMovies,
   fetchSeriesFranchiseShows,
+  fetchFranchiseQuizAvailability,
   fetchSeriesOverview,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
+  type FranchiseQuizAvailability,
+  type FranchiseQuizCatalogItem,
 } from "../../api";
 import {
   applyMediaTheme,
@@ -95,6 +98,7 @@ import SeriesAbout from "./SeriesAbout";
 import SeriesAudioPlayer from "./SeriesAudioPlayer";
 import SeriesCast from "./SeriesCast";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
+import FranchiseQuiz from "./FranchiseQuiz";
 import SeriesLinks from "./SeriesLinks";
 import SeriesMediaGrid, { type SeriesMediaCard } from "./SeriesMediaGrid";
 import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
@@ -197,6 +201,7 @@ const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+  { id: "quiz", label: "QUIZ", flag: null },
 ];
 
 /** Movies-centered path: MOVIES before SERIES. */
@@ -208,6 +213,7 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+  { id: "quiz", label: "QUIZ", flag: null },
 ];
 
 /** Books entry into a Series artwork-home: BOOKS next to Overview. */
@@ -219,6 +225,7 @@ const SERIES_FROM_BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+  { id: "quiz", label: "QUIZ", flag: null },
 ];
 
 /** Books-centered path: BOOKS for works, then related SERIES / MOVIES. */
@@ -230,6 +237,7 @@ const BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "audio", label: "AUDIO", flag: "has_audio" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+  { id: "quiz", label: "QUIZ", flag: null },
 ];
 
 const EMPTY_SERIES_SHOWS: SeriesSubseriesCard[] = [];
@@ -453,6 +461,31 @@ export default function SeriesFranchisePage({
   const [gallerySubsections, setGallerySubsections] = useState<
     { key: string; label: string }[]
   >([]);
+  const [quizAvailability, setQuizAvailability] =
+    useState<FranchiseQuizAvailability | null>(null);
+  const [quizAvailabilityReady, setQuizAvailabilityReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setQuizAvailability(null);
+    setQuizAvailabilityReady(false);
+    fetchFranchiseQuizAvailability(franchiseId)
+      .then((value) => {
+        if (!cancelled) {
+          setQuizAvailability(value);
+          setQuizAvailabilityReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuizAvailability(null);
+          setQuizAvailabilityReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [franchiseId]);
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
@@ -1278,6 +1311,13 @@ export default function SeriesFranchisePage({
     const media = data.media || ({} as SeriesOverview["media"]);
     const related = data.related;
     return navSections.filter((s) => {
+      if (s.id === "quiz") {
+        return Boolean(
+          quizAvailability?.catalog ||
+            quizAvailability?.encyclopedia ||
+            quizAvailability?.soundtrack
+        );
+      }
       if (!s.flag) return true;
       // Live card counts win once loaded (avoids empty-tab flash from stale flags).
       if (s.flag === "has_series") {
@@ -1327,15 +1367,23 @@ export default function SeriesFranchisePage({
     libCards.length,
     gameCards.length,
     isMovies,
+    quizAvailability,
   ]);
 
   useEffect(() => {
     if (!data) return;
+    if (section === "quiz" && !quizAvailabilityReady) return;
     const allowed = new Set(visibleSections.map((s) => s.id));
     if (!allowed.has(section)) {
       onNavigate({ section: "overview", overviewTab: "about" });
     }
-  }, [data, section, visibleSections, onNavigate]);
+  }, [
+    data,
+    section,
+    visibleSections,
+    onNavigate,
+    quizAvailabilityReady,
+  ]);
 
   const era = currentAboutEra ?? data?.eras?.[0];
   const listedLangs = useMemo(() => {
@@ -1665,6 +1713,29 @@ export default function SeriesFranchisePage({
       void fetch(url, { method: "POST" }).catch(() => {});
     } else {
       window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const openQuizCatalogItem = (item: FranchiseQuizCatalogItem) => {
+    if (item.module === "series") {
+      if (!isMovies && !isBooks) {
+        onNavigate({
+          franchiseId,
+          subseriesId: item.navigate_id,
+          section: "overview",
+          overviewTab: "about",
+        });
+      } else {
+        onOpenSeriesFranchise?.(franchiseId, item.navigate_id, universeId);
+      }
+      return;
+    }
+    if (item.module === "movie") {
+      onOpenMoviesPath?.(item.path);
+      return;
+    }
+    if (item.module === "book") {
+      onOpenBooksPath?.(item.path);
     }
   };
 
@@ -2734,6 +2805,15 @@ export default function SeriesFranchisePage({
             cardLayout={releaseCardLayout}
             coverAspect="portrait"
             onOpen={openMediaCard}
+          />
+        ) : null}
+
+        {section === "quiz" && quizAvailability ? (
+          <FranchiseQuiz
+            franchiseId={franchiseId}
+            initialAvailability={quizAvailability}
+            onAvailabilityChange={setQuizAvailability}
+            onOpenCatalogItem={openQuizCatalogItem}
           />
         ) : null}
 

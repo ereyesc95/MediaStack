@@ -1030,8 +1030,12 @@ export default function BooksModule({
               userId={userId}
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
-              onManageCatalog={() => setManageCatalogOpen(true)}
-              manageCatalogLabel="Add Book"
+              onManageCatalog={
+                tab === "catalog"
+                  ? () => setManageCatalogOpen(true)
+                  : undefined
+              }
+              manageCatalogLabel="Manage Books"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

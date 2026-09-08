@@ -18,6 +18,7 @@ export type BooksSection =
   | "library"
   | "games"
   | "gallery"
+  | "quiz"
   | "episodes";
 
 export type BooksOverviewTab = "about" | "cast" | "links" | "related";
@@ -42,6 +43,7 @@ const SECTIONS: BooksSection[] = [
   "library",
   "games",
   "gallery",
+  "quiz",
   "episodes",
 ];
 

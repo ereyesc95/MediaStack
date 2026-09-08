@@ -22,7 +22,7 @@ Media/
 | **`{Letter}`** | First letter of the **grouping title** (artist, work, franchise, or game title). Use `#` for non-alpha. |
 | **Item folders** | `{YYYY.MM.DD}. {Title}` or `{YYYY}. {Title}`; bracket tags optional. |
 | **Filenames** | Flexible — numeric prefix (`01.`), date prefix, vinyl side (`A1.`), or title as filename (same rules as Audio). |
-| **`[Artwork]`** | Franchise-level Series logos/badges; Music/Movies/Books/Games item art. Subseries prefer `Gallery/Covers` + `Gallery/Renders`. Not at the letter tier. |
+| **`[Artwork]`** | Franchise-level Series logos/badges; Music/Movies/Books/Games item art. Subseries prefer `Gallery/Covers` + `Gallery/Branding` (`Gallery/Renders` remains a fallback). Not at the letter tier. |
 | **Categories** | Subfolders under `Video/` and `Library/` (**Music only**). Omit unused categories. |
 | **`Extras/` / `[Extras]`** | **Series only** — openings/endings/promo videos under a show. Do **not** nest other modules’ catalogs as extras. |
 
@@ -149,7 +149,7 @@ Series/D/Dragon Ball/
 ├── 1986.02.26. Dragon Ball/
 │   ├── Gallery/
 │   │   ├── Covers/                          ← Cover - Front/Back, characters, banners, wallpapers…
-│   │   ├── Renders/                         ← Logo.png, Badge.png, other PNGs
+│   │   ├── Branding/                        ← Logo.png, Badge.png, other PNGs
 │   │   └── Extras/                          ← optional nested image folders
 │   ├── Audio/                               ← (or legacy [Audio]/) .lnk → Music releases
 │   │   └── Albums/….lnk

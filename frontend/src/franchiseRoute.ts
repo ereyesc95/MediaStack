@@ -27,6 +27,7 @@ const SECTIONS: FranchiseSection[] = [
   "library",
   "games",
   "gallery",
+  "quiz",
   "episodes",
 ];
 

@@ -3349,6 +3349,9 @@ input {
   list-style: none;
   padding: 0;
   margin: 0 0 0.75rem;
+  max-height: min(21rem, 42vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .mb-matches button {
@@ -7032,6 +7035,12 @@ input {
 .manage-artists-modal__not-found-body {
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.manage-artists-modal__search-instruction {
+  margin: 0.3rem 0 -0.45rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .manage-artists-modal__inline-link {
@@ -16794,6 +16803,8 @@ button.lyrics-status-badge--icon-only {
   margin: 0.15rem 0 0;
   line-height: 1.25;
 }
+
+.series-subseries-page__season-logo-glass {
   position: absolute;
   left: 0;
   top: 50%;
@@ -19146,6 +19157,82 @@ button.lyrics-status-badge--icon-only {
   line-height: 1.35;
 }
 
+.artist-quiz__release-preview {
+  position: relative;
+  display: inline-block;
+}
+
+.artist-quiz__release-title-trigger {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: default;
+}
+
+.artist-quiz__release-title-trigger--clickable {
+  cursor: pointer;
+}
+
+.artist-quiz__release-cover-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 6;
+  width: clamp(5.5rem, 10vw, 7.5rem);
+  padding: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--bg) 94%, black);
+  box-shadow: 0 0.75rem 1.8rem rgba(0, 0, 0, 0.42);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.artist-quiz__release-cover-popover img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.35rem;
+  object-fit: cover;
+  transition:
+    transform 0.2s ease,
+    filter 0.2s ease;
+}
+
+.artist-quiz__release-cover-popover:hover img,
+.artist-quiz__release-cover-popover:focus-visible img {
+  transform: scale(1.08);
+  filter: blur(1.5px) brightness(0.5);
+}
+
+.artist-quiz__release-cover-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.artist-quiz__release-cover-popover:hover .artist-quiz__release-cover-label,
+.artist-quiz__release-cover-popover:focus-visible
+  .artist-quiz__release-cover-label {
+  opacity: 1;
+}
+
 .artist-quiz__other-header {
   position: sticky;
   top: 0;
@@ -19300,20 +19387,62 @@ button.lyrics-status-badge--icon-only {
 }
 
 .artist-quiz__member-photo {
+  position: relative;
   display: block;
   width: var(--quiz-lineup-photo);
   height: var(--quiz-lineup-photo);
+  margin: 0;
+  padding: 0;
   border-radius: 50%;
   overflow: hidden;
   background: color-mix(in srgb, var(--bg) 50%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  color: inherit;
+  cursor: default;
 }
 
-.artist-quiz__member-photo img {
+.artist-quiz__member-photo--revealed {
+  cursor: pointer;
+}
+
+.artist-quiz__member-photo-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition:
+    transform 0.22s ease,
+    filter 0.22s ease;
+}
+
+.artist-quiz__member-photo--revealed:hover .artist-quiz__member-photo-image,
+.artist-quiz__member-photo--active .artist-quiz__member-photo-image {
+  transform: scale(1.08);
+}
+
+.artist-quiz__member-signature {
+  position: absolute;
+  inset: 18%;
+  z-index: 2;
+  display: block;
+  width: 64%;
+  height: 64%;
+  object-fit: contain;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.artist-quiz__member-photo--revealed:has(.artist-quiz__member-signature):hover
+  .artist-quiz__member-photo-image,
+.artist-quiz__member-photo--active:has(.artist-quiz__member-signature)
+  .artist-quiz__member-photo-image {
+  filter: blur(2px) brightness(0.42);
+}
+
+.artist-quiz__member-photo--revealed:hover .artist-quiz__member-signature,
+.artist-quiz__member-photo--active .artist-quiz__member-signature {
+  opacity: 1;
 }
 
 .artist-quiz__member-ph {
@@ -19343,6 +19472,147 @@ button.lyrics-status-badge--icon-only {
 .artist-quiz__member-years {
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+.franchise-quiz__modes {
+  flex-shrink: 0;
+}
+
+.franchise-quiz__topic {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: min(22rem, calc(100% - 2rem));
+  margin: 0.5rem auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.franchise-quiz__topic select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.franchise-quiz__catalog {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.franchise-quiz__answer {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-height: 1.55rem;
+  color: var(--text);
+}
+
+.franchise-quiz__answer > .artist-quiz__release-cover-popover {
+  top: calc(100% + 0.25rem);
+  left: 0;
+}
+
+.franchise-quiz__encyclopedia {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.2rem 1rem;
+}
+
+.franchise-quiz__encyclopedia-popover {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 7;
+  width: clamp(8rem, 14vw, 11rem);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--bg) 95%, black);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.45);
+}
+
+.franchise-quiz__encyclopedia-popover > img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.franchise-quiz__variant-nav {
+  position: absolute;
+  top: 42%;
+  z-index: 2;
+  width: 1.55rem;
+  height: 1.9rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: rgba(0, 0, 0, 0.58);
+  color: white;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.franchise-quiz__variant-nav--prev {
+  left: 0.3rem;
+}
+
+.franchise-quiz__variant-nav--next {
+  right: 0.3rem;
+}
+
+.franchise-quiz__variant-title {
+  display: block;
+  padding: 0.42rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.franchise-quiz__variant-title small {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 400;
+}
+
+.franchise-quiz__soundtrack {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.franchise-quiz__sound-cover--portrait {
+  aspect-ratio: 2 / 3;
+}
+
+.franchise-quiz__sound-cover--portrait img {
+  object-fit: contain;
+}
+
+.franchise-quiz__sound-subtitle {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+@media (max-width: 700px) {
+  .franchise-quiz__encyclopedia {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .franchise-quiz__catalog {
+    grid-template-columns: 1fr;
+  }
 }
 
 .artist-quiz__member--deceased .artist-quiz__member-name {
@@ -23431,14 +23701,22 @@ button.lyrics-status-badge--icon-only {
 .manage-catalog-modal {
   width: min(94vw, 680px);
   max-height: min(88vh, 760px);
-  overflow-y: auto;
 }
 
-.manage-catalog-modal__search {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
+.modal-panel.manage-catalog-modal > .artist-admin-form {
+  padding-top: 0.35rem;
+}
+
+.manage-catalog-modal .modal-search-row {
   align-items: center;
+  margin: 0 0 0.35rem;
+}
+
+.manage-catalog-modal .modal-search-row input {
+  min-height: 2.15rem;
+  padding: 0.5rem 0.7rem;
+  line-height: 1.35;
+  box-sizing: border-box;
 }
 
 .manage-catalog-modal__items {
@@ -23452,18 +23730,24 @@ button.lyrics-status-badge--icon-only {
   background: color-mix(in srgb, var(--bg-elevated) 65%, transparent);
 }
 
-.manage-catalog-modal__item {
-  display: flex;
-  gap: 0.55rem;
+/* Beat `.artist-admin-form label`, which stacks label children in a column. */
+.artist-admin-form label.manage-catalog-modal__item {
+  flex-direction: row;
   align-items: center;
-  padding: 0.45rem 0.5rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.45rem;
   border-radius: 0.55rem;
 }
 
-.manage-catalog-modal__item:hover {
+.manage-catalog-modal__item:hover:not(.ms-checkbox--disabled) {
   background: color-mix(in srgb, var(--bg-hover) 65%, transparent);
 }
 
-.manage-catalog-modal__item input {
-  flex: 0 0 auto;
+.manage-catalog-modal__item .ms-checkbox__label {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.manage-catalog-modal__item .muted {
+  font-size: 0.72rem;
 }

@@ -1,6 +1,7 @@
 """Language-aware logo discovery for Series/Movies franchise and item pages.
 
-Filename conventions (case-insensitive), searched under Gallery/Renders,
+Filename conventions (case-insensitive), searched under Gallery/Branding
+(with Gallery/Renders as a legacy fallback),
 [Artwork], Artwork, and Gallery/Logos:
 
   logo.png                 → default (exact stem ``logo``)

@@ -1131,6 +1131,7 @@ export type SeriesSection =
   | "library"
   | "games"
   | "gallery"
+  | "quiz"
   | "episodes"
   | "videos";
 
