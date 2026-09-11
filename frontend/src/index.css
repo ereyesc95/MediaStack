@@ -14,6 +14,10 @@
   --scrollbar-track: transparent;
   --radius: 8px;
   --header-height: 44px;
+  /* Source banner art is 2000×500; layouts scale to this 4:1 ratio. */
+  --banner-source-w: 2000;
+  --banner-source-h: 500;
+  --banner-aspect-ratio: var(--banner-source-w) / var(--banner-source-h);
 }
 
 [data-theme="light"] {
@@ -374,6 +378,70 @@ input {
   flex-direction: column;
   z-index: 200;
   overflow: hidden;
+}
+
+/* Accordion panels: short height slide (editions, seasons, groups, more-info). */
+.ms-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  /* Flex parents use min-height:auto; without these the closed panel keeps
+     content painted over siblings even when the row track is 0fr. */
+  min-height: 0;
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 100%;
+  transition: grid-template-rows 220ms ease;
+}
+
+.ms-disclosure.is-open {
+  grid-template-rows: 1fr;
+}
+
+.ms-disclosure__inner {
+  overflow: hidden;
+  min-height: 0;
+  /* Kill paint escape from backdrop-filter / transformed kids while closed. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+}
+
+.ms-disclosure.is-open > .ms-disclosure__inner {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 140ms ease 40ms;
+}
+
+/* Floating menus: short fade + slide. */
+.ms-menu-pop {
+  opacity: 0;
+  transform: translateY(-0.35rem);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 0s linear 180ms;
+}
+
+.ms-menu-pop.is-open {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-disclosure,
+  .ms-disclosure__inner,
+  .ms-disclosure.is-open > .ms-disclosure__inner,
+  .ms-menu-pop {
+    transition: none;
+  }
 }
 
 .app-menu-dropdown button {
@@ -846,7 +914,7 @@ input {
 .artist-playlist-grid.artist-playlist-grid--banner .media-release-card--banner,
 .artist-playlist-grid.artist-playlist-grid--banner button.media-release-card--banner {
   height: auto;
-  aspect-ratio: 2160 / 600;
+  aspect-ratio: var(--banner-aspect-ratio);
 }
 
 @media (min-width: 700px) {
@@ -1483,6 +1551,27 @@ input {
   overflow: hidden;
 }
 
+/* Page header titles: always scroll when truncated (not hover-gated). */
+.top-bar-title {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.top-bar-title .billboard-text-inner {
+  text-align: center;
+}
+
+.artist-page__top-center .top-bar-title--scroll .billboard-text-inner,
+.release-page__top-center .top-bar-title--scroll .billboard-text-inner {
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  animation: billboard-pan var(--scroll-duration, 6s) linear infinite;
+}
+
 .billboard-text-clip {
   display: block;
   width: 100%;
@@ -1948,7 +2037,7 @@ input {
 
 .artist-card--banner {
   width: 100%;
-  aspect-ratio: 2160 / 600;
+  aspect-ratio: var(--banner-aspect-ratio);
   min-height: 100px;
 }
 
@@ -4806,6 +4895,24 @@ input {
   justify-content: center;
   gap: 0.4rem;
   min-height: 2.1rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.artist-page__top-center .top-bar-title {
+  width: 100%;
+}
+
+/* Mobile portrait: center title column must shrink so TopBarTitle can fit/scroll. */
+.artist-page--stacked .artist-page__top,
+.artist-page--mobile-portrait .artist-page__top {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.artist-page--stacked .artist-page__top-center,
+.artist-page--mobile-portrait .artist-page__top-center {
+  max-width: 100%;
 }
 
 .artist-page__top-right {
@@ -5708,10 +5815,10 @@ input {
 }
 
 .artist-about__bio-scroll--collapsed {
-  max-height: 22.5rem;
+  max-height: 7.5rem;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 62%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
 }
 
 .artist-about__bio-scroll--expanded {
@@ -5723,14 +5830,14 @@ input {
 
 .artist-about__bio-toggle {
   margin-top: 0.35rem;
+  margin-bottom: 0.85rem;
   background: none;
   border: none;
   color: color-mix(in srgb, var(--text) 82%, var(--accent, #c9a227));
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
 }
 
 .artist-about__bio {
@@ -6054,6 +6161,13 @@ input {
 }
 
 .artist-audio .media-release-grid.media-release-grid--banner {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+/* Catalog browse: page scroll owns overflow — do not clip banners to ~3 rows. */
+.artist-browse .media-release-grid.media-release-grid--banner {
   max-height: none;
   overflow-y: visible;
   overscroll-behavior: auto;
@@ -8129,7 +8243,7 @@ input {
   container-name: release-banner-grid;
   grid-template-columns: 1fr;
   /* One full-width banner row */
-  --banner-row-h: calc(100cqw * 600 / 2160);
+  --banner-row-h: calc(100cqw * var(--banner-source-h) / var(--banner-source-w));
   grid-auto-rows: var(--banner-row-h);
   align-content: start;
   align-items: stretch;
@@ -8148,7 +8262,7 @@ input {
   .media-release-grid.media-release-grid--banner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     /* Each card is half the grid width */
-    --banner-row-h: calc(50cqw * 600 / 2160);
+    --banner-row-h: calc(50cqw * var(--banner-source-h) / var(--banner-source-w));
     grid-auto-rows: var(--banner-row-h);
     max-height: calc(3 * var(--banner-row-h));
   }
@@ -8160,7 +8274,7 @@ input {
 
 .artist-page--mobile-landscape .media-release-grid.media-release-grid--banner {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  --banner-row-h: calc(50cqw * 600 / 2160);
+  --banner-row-h: calc(50cqw * var(--banner-source-h) / var(--banner-source-w));
   grid-auto-rows: var(--banner-row-h);
   max-height: calc(3 * var(--banner-row-h));
 }
@@ -8356,10 +8470,10 @@ button.media-release-card--banner {
   pointer-events: auto;
 }
 
-/* Mobile / touch: shorter cards so banner photos show more horizontally */
+/* Mobile / touch: keep the same source 4:1 ratio (scaled to card width). */
 @media (max-width: 480px) {
   .media-release-card--banner {
-    aspect-ratio: 3.45 / 1;
+    aspect-ratio: var(--banner-aspect-ratio);
     min-height: 0;
   }
 
@@ -9410,16 +9524,18 @@ button.media-release-card--banner {
 .artist-page--stacked .artist-about__photo-stage {
   width: 100%;
   max-width: 100%;
+  aspect-ratio: var(--banner-aspect-ratio);
+  overflow: hidden;
 }
 
 .artist-page--stacked .artist-about__photo {
   width: 100%;
   max-width: 100%;
-  height: auto;
-  max-height: min(52vh, 72vw);
+  height: 100%;
+  max-height: none;
   aspect-ratio: auto;
-  object-fit: contain;
-  object-position: center top;
+  object-fit: cover;
+  object-position: center center;
   box-shadow: none;
   border-radius: 0;
 }
@@ -9427,15 +9543,17 @@ button.media-release-card--banner {
 .artist-page--stacked .artist-about__photo--layer {
   width: 100%;
   max-width: 100%;
+  height: 100%;
   left: 0;
   transform: none;
+  object-fit: cover;
 }
 
 .artist-page--stacked .artist-about__photo--empty {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--banner-aspect-ratio);
   min-height: 0;
-  max-height: min(52vh, 72vw);
+  max-height: none;
 }
 
 .artist-page--stacked .artist-about__content {
@@ -9462,11 +9580,11 @@ button.media-release-card--banner {
 .artist-about--stacked .artist-about__bio-scroll--collapsed {
   flex: none;
   min-height: 0;
-  height: 22.5rem;
-  max-height: 22.5rem;
+  height: 7.5rem;
+  max-height: 7.5rem;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, #000 62%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
 }
 
 .artist-page--stacked .artist-about__bio-scroll--fit,
@@ -9912,6 +10030,12 @@ button.media-release-card--banner {
   justify-content: center;
   gap: 0.35rem;
   min-height: 1.55rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.release-page__top-center .top-bar-title {
+  width: 100%;
 }
 
 .release-page__brand-icon {
@@ -23014,7 +23138,7 @@ button.lyrics-status-badge--icon-only {
   display: block;
   width: 100%;
   max-width: none;
-  aspect-ratio: 2160 / 600;
+  aspect-ratio: var(--banner-aspect-ratio);
   margin-inline: 0;
   border-radius: 0;
   overflow: hidden;
@@ -23028,7 +23152,7 @@ button.lyrics-status-badge--icon-only {
   .release-page__cover {
   width: 100%;
   height: 100%;
-  aspect-ratio: 2160 / 600;
+  aspect-ratio: var(--banner-aspect-ratio);
   object-fit: cover;
   object-position: center;
   margin-inline: 0;
@@ -23069,8 +23193,31 @@ button.lyrics-status-badge--icon-only {
   box-sizing: border-box;
 }
 
-.series-subseries-page__panel-meta--hidden {
-  display: none;
+/* Stacked more-info: MsDisclosure owns the slide; keep meta content-sized. */
+.series-subseries-page.release-page--stacked .release-page__panel-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto !important;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.series-subseries-page.release-page--stacked .release-page__panel-meta > * {
+  overflow: hidden !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+}
+
+.series-subseries-page.release-page--stacked
+  .release-page__panel-meta
+  .release-page__panel-body {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0;
 }
 
 .series-subseries-page__neighbors {
@@ -23391,13 +23538,15 @@ button.lyrics-status-badge--icon-only {
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  aspect-ratio: 2160 / 600;
+  aspect-ratio: var(--banner-aspect-ratio);
   overflow: hidden;
   box-sizing: border-box;
   container-type: inline-size;
   /* Equal pad top/bottom/left; cover height = banner height − 2×pad (via cqw). */
   --release-banner-pad: clamp(0.4rem, 1.4cqw, 0.75rem);
-  --release-cover-size: calc(100cqw * 600 / 2160 - 2 * var(--release-banner-pad));
+  --release-cover-size: calc(
+    100cqw * var(--banner-source-h) / var(--banner-source-w) - 2 * var(--release-banner-pad)
+  );
   --release-banner-inset: var(--release-banner-pad);
   --release-disc-size: calc(var(--release-cover-size) * 0.82);
   padding: 0;
@@ -23541,8 +23690,51 @@ button.lyrics-status-badge--icon-only {
   box-sizing: border-box;
 }
 
-.release-page--banner-layout .release-page__panel-meta--hidden {
-  display: none;
+/*
+ * Banner more-info is wrapped in MsDisclosure. Beat track-player flex:1 rules so
+ * the meta sizes to content while open and fully collapses when closed.
+ * backdrop-filter must turn off when closed or layers paint over the overview.
+ */
+.release-page--banner-layout .release-page__panel-meta,
+.release-page--banner-layout.release-page--stacked.release-page--track-player
+  .release-page__panel-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto !important;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.release-page--banner-layout .release-page__panel-meta > *,
+.release-page--banner-layout.release-page--stacked.release-page--track-player
+  .release-page__panel-meta > * {
+  overflow: hidden !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: none;
+}
+
+.release-page--banner-layout .release-page__panel-meta .release-page__panel-fit-inner,
+.release-page--banner-layout .release-page__panel-meta .release-page__panel-body,
+.release-page--banner-layout.release-page--stacked.release-page--track-player
+  .release-page__panel-meta .release-page__panel-fit-inner,
+.release-page--banner-layout.release-page--stacked.release-page--track-player
+  .release-page__panel-meta .release-page__panel-body {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0;
+}
+
+.release-page--banner-layout .ms-disclosure:not(.is-open) .release-page__panel-meta--glass,
+.series-subseries-page .ms-disclosure:not(.is-open) .series-subseries-page__panel-meta--glass {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: transparent;
+  padding-block: 0;
 }
 
 .release-page--banner-layout .release-page__panel-content {

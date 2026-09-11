@@ -27,6 +27,8 @@ import {
 } from "../../usePhoneLayout";
 import { useBeatPulse } from "../../useBeatPulse";
 import AppMenu from "../AppMenu";
+import MsDisclosure from "../MsDisclosure";
+import TopBarTitle from "../TopBarTitle";
 import PlaylistBoot from "../PlaylistBoot";
 import MediaBeatFx from "../music/MediaBeatFx";
 import MediaBeatFrame from "../music/MediaBeatFrame";
@@ -355,7 +357,6 @@ export default function SeriesOpeningsEndingsPage({
   const panelCanvas = active?.canvas_url || null;
   const showPanelCanvas = Boolean(panelCanvas);
   const pageCanvasActive = bannerLayout && showPanelCanvas;
-  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
   const showTrackPanel = Boolean(activeId && active);
   const releaseDate =
     active?.display_date ||
@@ -535,9 +536,10 @@ export default function SeriesOpeningsEndingsPage({
             </button>
           </div>
           <div className="release-page__top-center">
-            <span className="release-page__title-center">
-              OPENINGS &amp; ENDINGS
-            </span>
+            <TopBarTitle
+              text="OPENINGS & ENDINGS"
+              className="release-page__title-center"
+            />
           </div>
           <div className="release-page__top-right">
             <AppMenu
@@ -682,10 +684,11 @@ export default function SeriesOpeningsEndingsPage({
               </button>
             ) : null}
 
+            <MsDisclosure open={!bannerLayout || moreInfoOpen}>
             <div
               className={`release-page__panel-meta${
                 bannerLayout ? " release-page__panel-meta--glass" : ""
-              }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+              }`}
             >
               <div className="release-page__panel-body">
                 {active ? (
@@ -852,6 +855,7 @@ export default function SeriesOpeningsEndingsPage({
                 </div>
               ) : null}
             </div>
+            </MsDisclosure>
 
             {bannerLayout ? (
               <div className="release-page__panel-dock">

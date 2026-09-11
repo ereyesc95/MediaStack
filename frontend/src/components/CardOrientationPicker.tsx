@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import type { CardOrientation } from "../types";
+import { useMenuPresence } from "../useMenuPresence";
 import { usePhoneLayout } from "../usePhoneLayout";
 import {
   IconCardBadge,
@@ -38,6 +39,7 @@ export default function CardOrientationPicker({
   includeBadge = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
   const rootRef = useRef<HTMLDivElement>(null);
   const leaveTimer = useRef<number | null>(null);
   const isPhone = usePhoneLayout();
@@ -105,8 +107,15 @@ export default function CardOrientationPicker({
       >
         <CurrentIcon />
       </button>
-      {open && (
-        <div className="card-orientation-picker__menu" role="menu">
+      {menuPresent ? (
+        <div
+          className={`card-orientation-picker__menu ms-menu-pop${
+            menuVisible ? " is-open" : ""
+          }`}
+          role="menu"
+          aria-hidden={!menuVisible}
+          inert={menuVisible ? undefined : true}
+        >
           <div className="card-orientation-picker__menu-panel">
             {options.map(({ id, label, Icon }) => (
               <button
@@ -126,7 +135,7 @@ export default function CardOrientationPicker({
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

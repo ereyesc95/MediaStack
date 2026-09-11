@@ -223,9 +223,10 @@ def _series_folder_landscape(folder: Path, media_root: Path) -> str | None:
 
 
 def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
-    """Cover - Banner, then landscape-named art, from Gallery/Covers or [Artwork]."""
+    """Any *banner*-named art, then Cover - Banner stem, then landscape fallback."""
     from app.series_paths import cover_search_dirs
     from app.artwork_stems import resolve_cover_banner_file
+    from app.series_artwork import list_banner_files
 
     def _url(p: Path) -> str | None:
         url = _media_url(p, media_root)
@@ -235,6 +236,10 @@ def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
             return f"{url}&v={int(p.stat().st_mtime)}"
         except OSError:
             return url
+
+    banners = list_banner_files(folder)
+    if banners:
+        return _url(banners[0])
 
     for d in cover_search_dirs(folder):
         exact = resolve_cover_banner_file(d)

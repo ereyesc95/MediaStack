@@ -52,6 +52,8 @@ import type {
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
 import PlaylistBoot from "../../PlaylistBoot";
+import MsDisclosure from "../../MsDisclosure";
+import TopBarTitle from "../../TopBarTitle";
 import { systemPlaylistCoverUrl } from "./ArtistPlaylists";
 import MediaBeatFx from "../MediaBeatFx";
 import SystemPlaylistTracklist, {
@@ -1257,7 +1259,6 @@ export default function SystemPlaylistPage({
     }
   }, [playingPath, bannerLayout]);
 
-  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
   const pageCanvasActive = bannerLayout && showPanelCanvas;
   const overviewLandscape =
     overview?.eras?.find((e) => e.landscape_url)?.landscape_url ?? null;
@@ -1413,9 +1414,10 @@ export default function SystemPlaylistPage({
             </button>
           </div>
           <div className="release-page__top-center">
-            <span className="release-page__title-center">
-              {detail.name.toLocaleUpperCase()}
-            </span>
+            <TopBarTitle
+              text={detail.name.toLocaleUpperCase()}
+              className="release-page__title-center"
+            />
           </div>
           <div className="release-page__top-right">
             {!isUserPlaylist && bandId != null && (
@@ -1649,10 +1651,11 @@ export default function SystemPlaylistPage({
               </button>
             ) : null}
 
+            <MsDisclosure open={!bannerLayout || moreInfoOpen}>
             <div
               className={`release-page__panel-meta${
                 bannerLayout ? " release-page__panel-meta--glass" : ""
-              }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+              }`}
             >
               <div className="release-page__panel-fit">
                 <div className="release-page__panel-fit-inner">
@@ -2077,6 +2080,7 @@ export default function SystemPlaylistPage({
               </div>
               ) : null}
             </div>
+            </MsDisclosure>
 
             {bannerLayout ? (
               <div className="release-page__panel-dock">

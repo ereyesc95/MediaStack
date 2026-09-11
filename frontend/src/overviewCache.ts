@@ -8,8 +8,15 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 24;
-const NAMESPACE = "band-overview-v8";
-const LEGACY_NAMESPACES = ["band-overview-v5", "band-overview-v6", "band-overview-v7"];
+const NAMESPACE = "band-overview-v11";
+const LEGACY_NAMESPACES = [
+  "band-overview-v5",
+  "band-overview-v6",
+  "band-overview-v7",
+  "band-overview-v8",
+  "band-overview-v9",
+  "band-overview-v10",
+];
 
 type CacheKey = `${number}:${CardOrientation}`;
 

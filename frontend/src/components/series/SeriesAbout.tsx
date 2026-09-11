@@ -49,8 +49,47 @@ function bioParagraphs(bio: string): string[] {
   return parts.length ? parts : [text];
 }
 
+function urlLooksBanner(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    return /banner/i.test(decodeURIComponent(url));
+  } catch {
+    return /banner/i.test(url);
+  }
+}
+
+function eraIsBannerSlide(era: Era): boolean {
+  return (
+    era.orientation === "banner" ||
+    Boolean(era.banner_url) ||
+    urlLooksBanner(era.banner_url) ||
+    urlLooksBanner(era.slide_url)
+  );
+}
+
+function eraStackedHero(era: Era): string | undefined {
+  if (era.banner_url) return era.banner_url;
+  if (era.orientation === "banner" && era.slide_url) return era.slide_url;
+  for (const u of [era.slide_url, era.landscape_url, era.portrait_url]) {
+    if (urlLooksBanner(u)) return u ?? undefined;
+  }
+  return era.landscape_url ?? undefined;
+}
+
 function carouselEras(eras: Era[], stacked: boolean): Era[] {
   if (stacked) {
+    const withBanner = eras.filter(eraIsBannerSlide);
+    if (withBanner.length) {
+      const seen = new Set<string>();
+      const unique: Era[] = [];
+      for (const e of withBanner) {
+        const key = eraStackedHero(e);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        unique.push(e);
+      }
+      if (unique.length) return unique;
+    }
     const landscapes = eras.filter(
       (e) => e.landscape_url || (e.orientation === "landscape" && e.slide_url)
     );
@@ -64,7 +103,7 @@ function carouselEras(eras: Era[], stacked: boolean): Era[] {
 }
 
 function eraHeroUrl(era: Era, stacked: boolean): string | undefined {
-  if (stacked) return era.landscape_url ?? undefined;
+  if (stacked) return eraStackedHero(era);
   return era.portrait_url ?? undefined;
 }
 
@@ -137,9 +176,9 @@ export default function SeriesAbout({
     }
     const el = bioScrollRef.current;
     if (!el) return;
-    // Measure natural height vs ~15-line collapse cap (22.5rem).
+    // Measure natural height vs ~5-line collapse cap (7.5rem).
     const measure = () => {
-      const cap = 22.5 * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+      const cap = 7.5 * parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
       const natural = el.scrollHeight;
       setBioNeedsToggle(natural > cap + 2);
     };

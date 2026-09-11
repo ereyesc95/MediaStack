@@ -63,6 +63,8 @@ import { isReleaseId, slugMatch } from "../../../routeSlug";
 import { rememberReleaseSlug, releaseIdFromSlug } from "../../../routeEntityCache";
 import AppMenu from "../../AppMenu";
 import ConfirmDialog from "../../ConfirmDialog";
+import MsDisclosure from "../../MsDisclosure";
+import TopBarTitle from "../../TopBarTitle";
 import { IconZoom } from "../../MenuIcons";
 import MediaInlineSearch from "../MediaInlineSearch";
 import ArtistMemberModal from "../artist/ArtistMemberModal";
@@ -1584,7 +1586,6 @@ export default function ReleasePage({
   const showMobilePlayerMeta = false;
   const showPanelReleaseMeta = !showTrackPanel;
   /** Banner: info body is toggleable; player + neighbors stay mounted separately. */
-  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
   const pageCanvasActive = bannerLayout && showPanelCanvas;
 
   const pageClass = [
@@ -1786,10 +1787,11 @@ export default function ReleasePage({
         </button>
       ) : null}
 
+      <MsDisclosure open={!bannerLayout || moreInfoOpen}>
       <div
         className={`release-page__panel-meta${
           bannerLayout ? " release-page__panel-meta--glass" : ""
-        }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+        }`}
         ref={panelMetaRef}
       >
         <div className="release-page__panel-fit" ref={panelFitRef}>
@@ -2273,6 +2275,7 @@ export default function ReleasePage({
             </>
           ) : null}
       </div>
+      </MsDisclosure>
 
       {bannerLayout ? (
         <div className="release-page__panel-dock" ref={panelBottomRef}>
@@ -2398,7 +2401,10 @@ export default function ReleasePage({
           <div className="release-page__top-center">
             {topLogo}
             {!topLogo && data && (
-              <span className="release-page__title-center">{data.title}</span>
+              <TopBarTitle
+                text={data.title}
+                className="release-page__title-center"
+              />
             )}
           </div>
           <div className="release-page__top-right">

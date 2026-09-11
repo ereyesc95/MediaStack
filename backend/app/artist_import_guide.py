@@ -93,7 +93,7 @@ Static cover and background images:
   Cover - Album             Alternate main-cover name.
   Cover - Back
   Cover - Inner
-  Cover - Banner
+  Cover - Banner            Preferred 2000×500 (4:1); UI scales to this ratio.
   Cover - Landscape
 
 Motion:

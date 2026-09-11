@@ -165,7 +165,8 @@ export default function ArtistBrowse({
   onClearFilter,
   loading,
 }: Props) {
-  const isAlbums = catalogScope === "albums";
+  const isAlbums =
+    catalogScope === "albums" || catalogScope === "singles";
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
   const [groupOpen, setGroupOpen] = useState(false);
@@ -193,15 +194,18 @@ export default function ArtistBrowse({
   const handleAlbumCardClick = useCallback(
     (album: AlbumCardType) => {
       if (!onAlbum) return;
+      const cardKey =
+        album.folder_path ||
+        `${album.artist_id}-${album.id}-${album.navigate_release_id}`;
       if (!isPhone) {
         onAlbum(album);
         return;
       }
-      if (revealedId === album.id) {
+      if (revealedId === cardKey) {
         setRevealedId(null);
         onAlbum(album);
       } else {
-        setRevealedId(album.id);
+        setRevealedId(cardKey);
       }
     },
     [isPhone, revealedId, onAlbum]
@@ -284,7 +288,13 @@ export default function ArtistBrowse({
     return [...LETTERS, HASH];
   }, [filterOptions, isAlbums, albumLetters]);
 
-  const filterModeList = isAlbums ? ALBUM_FILTER_MODES : ARTIST_FILTER_MODES;
+  const filterModeList = useMemo(() => {
+    if (!isAlbums) return ARTIST_FILTER_MODES;
+    const titleLabel = catalogScope === "singles" ? "SINGLES" : "ALBUMS";
+    return ALBUM_FILTER_MODES.map((m) =>
+      m.id === "name" ? { ...m, label: titleLabel } : m
+    );
+  }, [isAlbums, catalogScope]);
 
   // Albums filter by release date; artists filter by their own activity years.
   // Older API builds only send `decades`, so fall back to it rather than
@@ -812,6 +822,9 @@ export default function ArtistBrowse({
         )}
         {isAlbums ? (
           <>
+            {loading && albums.length === 0 && (
+              <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+            )}
             {albums.length > 0 && (
               <div
                 className={`media-release-grid${
@@ -820,17 +833,22 @@ export default function ArtistBrowse({
                     : ""
                 }`}
               >
-                {albums.map((a) => (
+                {albums.map((a) => {
+                  const cardKey =
+                    a.folder_path ||
+                    `${a.artist_id}-${a.id}-${a.navigate_release_id}`;
+                  return (
                   <CatalogAlbumCard
-                    key={`${a.navigate_band_id}-${a.id}`}
+                    key={cardKey}
                     album={a}
                     cardLayout={albumCardLayout}
                     tapReveal={isPhone}
-                    revealed={isPhone && revealedId === a.id}
-                    onReveal={() => setRevealedId(a.id)}
+                    revealed={isPhone && revealedId === cardKey}
+                    onReveal={() => setRevealedId(cardKey)}
                     onOpen={handleAlbumCardClick}
                   />
-                ))}
+                  );
+                })}
               </div>
             )}
             {!albums.length && !loading && (

@@ -37,6 +37,7 @@ import {
 } from "../usePhoneLayout";
 import { getStoredReleaseCardLayout, saveReleaseCardLayout } from "../themes";
 import AppMenu from "./AppMenu";
+import TopBarTitle from "./TopBarTitle";
 import OfficialUnofficialBar from "./OfficialUnofficialBar";
 import {
   filterByOfficial,
@@ -482,7 +483,7 @@ export default function UniversePage({
                 onError={() => setLogoFailed(true)}
               />
             ) : (
-              <span className="artist-page__brand-name">{title}</span>
+              <TopBarTitle text={title} className="artist-page__brand-name" />
             )}
           </div>
           <div className="artist-page__top-right">

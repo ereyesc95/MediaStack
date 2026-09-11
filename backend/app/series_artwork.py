@@ -12,6 +12,7 @@ from app.paths import people_dir
 
 _PORTRAIT_RE = re.compile(r"portrait", re.I)
 _LANDSCAPE_RE = re.compile(r"landscape", re.I)
+_BANNER_RE = re.compile(r"banner", re.I)
 
 
 def artwork_dir(franchise_dir: Path, *, film: bool = False, create: bool = True) -> Path:
@@ -45,10 +46,15 @@ def artwork_dir(franchise_dir: Path, *, film: bool = False, create: bool = True)
 def _list_named(
     franchise_dir: Path, *, want: str
 ) -> list[Path]:
-    """Files under Gallery/Covers or [Artwork] whose stem contains portrait|landscape."""
+    """Files under Gallery/Covers or [Artwork] whose stem contains portrait|landscape|banner."""
     from app.series_paths import cover_search_dirs
 
-    needle = _PORTRAIT_RE if want == "portrait" else _LANDSCAPE_RE
+    if want == "portrait":
+        needle = _PORTRAIT_RE
+    elif want == "banner":
+        needle = _BANNER_RE
+    else:
+        needle = _LANDSCAPE_RE
     out: list[Path] = []
     dirs = list(cover_search_dirs(franchise_dir))
     covers = franchise_dir / "Gallery" / "Covers"
@@ -69,6 +75,9 @@ def _list_named(
         for f in files:
             if not f.is_file() or f.suffix.lower() not in IMAGE_EXTS:
                 continue
+            # Landscape list must not steal banner-named files.
+            if want == "landscape" and _BANNER_RE.search(f.stem):
+                continue
             if needle.search(f.stem):
                 out.append(f)
     return out
@@ -80,6 +89,10 @@ def list_portrait_files(franchise_dir: Path) -> list[Path]:
 
 def list_landscape_files(franchise_dir: Path) -> list[Path]:
     return _list_named(franchise_dir, want="landscape")
+
+
+def list_banner_files(franchise_dir: Path) -> list[Path]:
+    return _list_named(franchise_dir, want="banner")
 
 
 def _download(url: str, dest: Path) -> bool:
@@ -181,25 +194,34 @@ def ensure_artwork_cached(
 
 
 def build_local_eras(franchise_dir: Path, media_root: Path) -> list[dict]:
-    """Only portrait-named files for left carousel; landscape-named for bg pairing."""
+    """Portrait for desktop carousel; landscape/banner for stacked overview heroes."""
     eras: list[dict] = []
     portraits = list_portrait_files(franchise_dir)
     landscapes = list_landscape_files(franchise_dir)
+    banners = list_banner_files(franchise_dir)
     # Pair by index when possible
-    n = max(len(portraits), len(landscapes), 1 if portraits or landscapes else 0)
+    n = max(
+        len(portraits),
+        len(landscapes),
+        len(banners),
+        1 if portraits or landscapes or banners else 0,
+    )
     for i in range(n):
         p = portraits[i] if i < len(portraits) else None
         l = landscapes[i] if i < len(landscapes) else None
+        b = banners[i] if i < len(banners) else None
         p_url = _media_url(p, media_root) if p else None
         l_url = _media_url(l, media_root) if l else None
-        if not p_url and not l_url:
+        b_url = _media_url(b, media_root) if b else None
+        if not p_url and not l_url and not b_url:
             continue
         eras.append(
             {
-                "orientation": "portrait" if p_url else "landscape",
+                "orientation": "portrait" if p_url else ("banner" if b_url else "landscape"),
                 "portrait_url": p_url,
                 "landscape_url": l_url,
-                "slide_url": p_url or l_url,
+                "banner_url": b_url,
+                "slide_url": p_url or b_url or l_url,
                 "icon_url": None,
                 "logo_url": None,
                 "year": None,
@@ -207,21 +229,49 @@ def build_local_eras(franchise_dir: Path, media_root: Path) -> list[dict]:
         )
     # Also emit pure landscape-only eras for background rotation when no portrait pair
     if not eras and landscapes:
-        for l in landscapes:
+        for i, l in enumerate(landscapes):
             url = _media_url(l, media_root)
             if not url:
                 continue
+            b = banners[i] if i < len(banners) else (banners[0] if banners else None)
             eras.append(
                 {
                     "orientation": "landscape",
                     "portrait_url": None,
                     "landscape_url": url,
+                    "banner_url": _media_url(b, media_root) if b else None,
                     "slide_url": url,
                     "icon_url": None,
                     "logo_url": None,
                     "year": None,
                 }
             )
+    if not eras and banners:
+        for b in banners:
+            url = _media_url(b, media_root)
+            if not url:
+                continue
+            eras.append(
+                {
+                    "orientation": "banner",
+                    "portrait_url": None,
+                    "landscape_url": None,
+                    "banner_url": url,
+                    "slide_url": url,
+                    "icon_url": None,
+                    "logo_url": None,
+                    "year": None,
+                }
+            )
+    # Franchise often has one Cover - Banner; reuse it on every era so stacked
+    # heroes never fall back to landscape while a banner file exists.
+    if banners and eras:
+        default_banner = _media_url(banners[0], media_root)
+        for i, era in enumerate(eras):
+            if era.get("banner_url"):
+                continue
+            b = banners[i] if i < len(banners) else banners[0]
+            era["banner_url"] = _media_url(b, media_root) if b else default_banner
     return eras
 
 

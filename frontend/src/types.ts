@@ -79,7 +79,7 @@ export type AlbumFilterMode =
   | "producer"
   | "most_played";
 
-export type MusicCatalogScope = "artists" | "albums";
+export type MusicCatalogScope = "artists" | "albums" | "singles";
 
 export type AlbumCard = {
   id: string;
@@ -95,6 +95,7 @@ export type AlbumCard = {
   date_iso: string | null;
   display_date?: string | null;
   category: string;
+  folder_path?: string | null;
   play_count?: number | null;
 };
 
@@ -351,6 +352,7 @@ export type BandOverview = {
     slide_url?: string | null;
     portrait_url: string | null;
     landscape_url: string | null;
+    banner_url?: string | null;
     icon_url: string | null;
     logo_url: string | null;
   }[];
@@ -1753,6 +1755,7 @@ export type SeriesOverviewEra = {
   orientation: string;
   portrait_url?: string | null;
   landscape_url?: string | null;
+  banner_url?: string | null;
   slide_url?: string | null;
   icon_url?: string | null;
   logo_url?: string | null;

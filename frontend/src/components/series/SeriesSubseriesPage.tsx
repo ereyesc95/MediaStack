@@ -113,6 +113,8 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import MsDisclosure from "../MsDisclosure";
+import TopBarTitle from "../TopBarTitle";
 import AddToUniverseModal from "../AddToUniverseModal";
 import ArtistCard from "../ArtistCard";
 import CardOrientationPicker from "../CardOrientationPicker";
@@ -3944,7 +3946,7 @@ export default function SeriesSubseriesPage({
               <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
             ) : null}
             {showTitleFallback ? (
-              <span className="release-page__brand-name">{title}</span>
+              <TopBarTitle text={title} className="release-page__brand-name" />
             ) : !topIcon && !topLogo ? (
               <span
                 className="release-page__brand-logo release-page__brand-logo--pending"
@@ -4548,13 +4550,12 @@ export default function SeriesSubseriesPage({
               </button>
             ) : null}
 
+            <MsDisclosure
+              open={!stacked || (tab === "overview" && moreInfoOpen)}
+            >
             <div
               className={`release-page__panel-meta${
                 stacked ? " series-subseries-page__panel-meta--glass" : ""
-              }${
-                stacked && (tab !== "overview" || !moreInfoOpen)
-                  ? " series-subseries-page__panel-meta--hidden"
-                  : ""
               }`}
             >
               <div className="release-page__panel-body">
@@ -5210,6 +5211,7 @@ export default function SeriesSubseriesPage({
                 ) : null}
               </div>
             </div>
+            </MsDisclosure>
 
             {stacked ? (
               <div className="release-page__panel-footer series-subseries-page__neighbors">
@@ -5785,7 +5787,7 @@ export default function SeriesSubseriesPage({
                               {seasonDate ? ` · ${seasonDate}` : ""}
                             </span>
                           </button>
-                          {open ? (
+                          <MsDisclosure open={open}>
                             <SeriesEpisodeList
                               episodes={eps}
                               activeId={activeEpisodeId}
@@ -5795,7 +5797,7 @@ export default function SeriesSubseriesPage({
                                 selectSeasonCover(s);
                               }}
                             />
-                          ) : null}
+                          </MsDisclosure>
                         </div>
                       );
                     })
@@ -5827,7 +5829,7 @@ export default function SeriesSubseriesPage({
                             · {episodeMovies.length}
                           </span>
                         </button>
-                        {moviesExpanded && !extrasExpanded ? (
+                        <MsDisclosure open={moviesExpanded && !extrasExpanded}>
                           <SeriesEpisodeList
                             episodes={episodeMovies}
                             showReleaseDate
@@ -5840,7 +5842,7 @@ export default function SeriesSubseriesPage({
                               setFocusBgUrl(url);
                             }}
                           />
-                        ) : null}
+                        </MsDisclosure>
                       </div>
                     ) : null}
                     {(() => {
@@ -5866,14 +5868,14 @@ export default function SeriesSubseriesPage({
                               · {allExtras.length}
                             </span>
                           </button>
-                          {extrasExpanded ? (
+                          <MsDisclosure open={extrasExpanded}>
                             <SeriesEpisodeList
                               episodes={allExtras}
                               activeId={activeEpisodeId}
                               emptyLabel="No extras found."
                               onSelect={(ep) => setActiveEpisodeId(ep.id)}
                             />
-                          ) : null}
+                          </MsDisclosure>
                         </div>
                       );
                     })()}

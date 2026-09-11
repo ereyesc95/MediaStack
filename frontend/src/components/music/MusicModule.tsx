@@ -72,7 +72,7 @@ import {
   useMiniAudio,
 } from "./artist/MiniAudioPlayer";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconDisc } from "../MenuIcons";
+import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 type Props = {
@@ -345,7 +345,7 @@ export default function MusicModule({
   }, [userId]);
 
   useEffect(() => {
-    if (catalogScope === "albums") {
+    if (catalogScope === "albums" || catalogScope === "singles") {
       if (
         filterMode === "group" ||
         filterMode === "members" ||
@@ -385,6 +385,11 @@ export default function MusicModule({
       setAlbumCategory("");
       setArtistPage(1);
       setAlbumPage(1);
+      if (next === "albums" || next === "singles") {
+        setAlbums([]);
+        setAlbumTotal(0);
+        setAlbumLetters([]);
+      }
     },
     []
   );
@@ -756,7 +761,10 @@ export default function MusicModule({
   const loadAlbums = useCallback(async () => {
     const generation = ++loadAlbumsGeneration.current;
     setError(null);
-    if (albums.length === 0) setAlbumsLoading(true);
+    // Drop stale cards immediately so letter / scope changes cannot open the
+    // previous page's release while the new list is in flight.
+    setAlbums([]);
+    setAlbumsLoading(true);
     const params = new URLSearchParams({
       page: String(albumPage),
       page_size: "24",
@@ -772,7 +780,13 @@ export default function MusicModule({
     if (subgenreId !== "") params.set("subgenre_id", String(subgenreId));
     if (label.trim()) params.set("label", label.trim());
     if (producer.trim()) params.set("producer", producer.trim());
-    if (albumCategory) params.set("category", albumCategory);
+    if (catalogScope === "singles") {
+      params.set("category", "singles");
+    } else if (albumCategory) {
+      params.set("category", albumCategory);
+    } else {
+      params.set("exclude_category", "singles");
+    }
 
     try {
       const data = await fetchAlbumCards(params);
@@ -821,19 +835,20 @@ export default function MusicModule({
     label,
     producer,
     albumCategory,
+    catalogScope,
   ]);
 
   useEffect(() => {
     if (tab !== "artists" || bandId) return;
     if (!filterReady || homeFilterPending) {
-      if (catalogScope !== "albums") {
+      if (catalogScope === "artists") {
         setArtists([]);
         setArtistTotal(0);
       }
       setError(null);
       return;
     }
-    if (catalogScope === "albums") {
+    if (catalogScope === "albums" || catalogScope === "singles") {
       loadAlbums();
     } else {
       loadArtists();
@@ -1099,7 +1114,7 @@ export default function MusicModule({
                 />
               ) : null}
               {showArtistTools &&
-                (catalogScope === "albums" ? (
+                (catalogScope === "albums" || catalogScope === "singles" ? (
                   <ReleaseCardLayoutPicker
                     value={albumCardLayout}
                     onChange={setAlbumCardLayoutPersisted}
@@ -1149,16 +1164,26 @@ export default function MusicModule({
                       type="button"
                       onClick={() =>
                         handleCatalogScopeChange(
-                          catalogScope === "artists" ? "albums" : "artists"
+                          catalogScope === "artists"
+                            ? "albums"
+                            : catalogScope === "albums"
+                              ? "singles"
+                              : "artists"
                         )
                       }
                     >
                       {catalogScope === "artists" ? (
                         <IconAddArtist className="menu-item-icon" />
+                      ) : catalogScope === "singles" ? (
+                        <IconHeadphones className="menu-item-icon" />
                       ) : (
                         <IconDisc className="menu-item-icon" />
                       )}
-                      {catalogScope === "artists" ? "Artists" : "Albums"}
+                      {catalogScope === "artists"
+                        ? "Artists"
+                        : catalogScope === "singles"
+                          ? "Singles"
+                          : "Albums"}
                     </button>
                   ) : undefined
                 }
@@ -1596,8 +1621,16 @@ export default function MusicModule({
           albumCategories={albumCategories}
           albumCategory={albumCategory}
           albumArtistId={albumArtistId}
-          total={catalogScope === "albums" ? albumTotal : artistTotal}
-          page={catalogScope === "albums" ? albumPage : artistPage}
+          total={
+            catalogScope === "albums" || catalogScope === "singles"
+              ? albumTotal
+              : artistTotal
+          }
+          page={
+            catalogScope === "albums" || catalogScope === "singles"
+              ? albumPage
+              : artistPage
+          }
           orientation={cardOrientation}
           search={search}
           letter={letter}
@@ -1637,7 +1670,9 @@ export default function MusicModule({
           onLabelChange={setLabel}
           onProducerChange={setProducer}
           onPageChange={
-            catalogScope === "albums" ? setAlbumPage : setArtistPage
+            catalogScope === "albums" || catalogScope === "singles"
+              ? setAlbumPage
+              : setArtistPage
           }
           onArtist={openArtist}
           onAlbum={openAlbum}
@@ -1654,7 +1689,9 @@ export default function MusicModule({
             setSubgenreId("");
           }}
           loading={
-            catalogScope === "albums" ? albumsLoading : artistsLoading
+            catalogScope === "albums" || catalogScope === "singles"
+              ? albumsLoading
+              : artistsLoading
           }
         />
       ) : (

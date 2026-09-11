@@ -28,6 +28,7 @@ import type {
   TrackVersionItem,
 } from "../../../types";
 import BillboardText from "../../BillboardText";
+import MsDisclosure from "../../MsDisclosure";
 import { IconVideo } from "../../MenuIcons";
 import TrackYoutubeButton, { trackYoutubeVideos } from "../TrackYoutubeButton";
 import { ReleaseTrackTitle } from "./releaseTrackTitle";
@@ -883,8 +884,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               </button>
             )}
 
-            {open ? (
-              <>
+            <MsDisclosure open={open}>
             {ed.unresolved && ed.groups.length === 0 && (
               <p className="release-tracklist__edition-empty muted">
                 Original release not found in library.
@@ -1102,8 +1102,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               </div>
               );
             })}
-              </>
-            ) : null}
+            </MsDisclosure>
           </section>
           );
       })}

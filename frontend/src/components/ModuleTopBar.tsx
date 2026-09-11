@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mediaTypeIcon, toStackName } from "../mediaStack";
+import { useMenuPresence } from "../useMenuPresence";
 
 export type MediaOption = {
   id: number;
@@ -30,6 +31,8 @@ export default function ModuleTopBar({
   menu,
 }: Props) {
   const [mediaOpen, setMediaOpen] = useState(false);
+  const { present: menuPresent, visible: menuVisible } =
+    useMenuPresence(mediaOpen);
   const mediaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,8 +69,14 @@ export default function ModuleTopBar({
             ▾
           </span>
         </button>
-        {mediaOpen && (
-          <ul className="module-top-bar__media-menu">
+        {menuPresent ? (
+          <ul
+            className={`module-top-bar__media-menu ms-menu-pop${
+              menuVisible ? " is-open" : ""
+            }`}
+            aria-hidden={!menuVisible}
+            inert={menuVisible ? undefined : true}
+          >
             {mediaOptions.map((opt) => (
               <li key={opt.kind}>
                 <button
@@ -86,7 +95,7 @@ export default function ModuleTopBar({
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </div>
 
       <nav className="module-top-bar__tabs" aria-label="Module sections">

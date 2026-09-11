@@ -706,6 +706,11 @@ _ALBUM_FLAT_TTL = 120.0
 _ALBUM_FLAT_CACHE: tuple[float, list[dict], dict[int, list[str]]] | None = None
 
 
+def clear_album_flat_cache() -> None:
+    global _ALBUM_FLAT_CACHE
+    _ALBUM_FLAT_CACHE = None
+
+
 def _flatten_album_catalog(db: Session) -> tuple[list[dict], dict[int, list[str]]]:
     """Cached album rows across all bands (no search/filter applied)."""
     global _ALBUM_FLAT_CACHE
@@ -722,12 +727,16 @@ def _flatten_album_catalog(db: Session) -> tuple[list[dict], dict[int, list[str]
         cats_by_artist[band.bnd_id] = list(index.get("categories") or [])
         for rel in index.get("releases") or []:
             title = (rel.get("title") or "").strip()
-            rid = rel.get("navigate_release_id") or rel.get("id")
+            card_id = str(rel.get("id") or "")
+            rid = str(rel.get("navigate_release_id") or card_id or "")
+            nav_band = int(rel.get("navigate_band_id") or band.bnd_id)
             albums.append(
                 {
-                    "id": rid,
+                    # Keep path-local id distinct from navigate_release_id so
+                    # .lnk portals and canonical rows do not share React keys.
+                    "id": card_id or rid,
                     "navigate_release_id": rid,
-                    "navigate_band_id": rel.get("navigate_band_id") or band.bnd_id,
+                    "navigate_band_id": nav_band,
                     "title": title,
                     "artist_id": band.bnd_id,
                     "artist_name": band.bnd_name,
@@ -746,6 +755,19 @@ def _flatten_album_catalog(db: Session) -> tuple[list[dict], dict[int, list[str]
     return albums, cats_by_artist
 
 
+def _prefer_canonical_album(a: dict, b: dict) -> dict:
+    """Prefer the real folder over a .lnk portal when both resolve to one release."""
+    a_lnk = str(a.get("folder_path") or "").casefold().endswith(".lnk")
+    b_lnk = str(b.get("folder_path") or "").casefold().endswith(".lnk")
+    if a_lnk != b_lnk:
+        return b if a_lnk else a
+    a_canon = int(a.get("artist_id") or 0) == int(a.get("navigate_band_id") or -1)
+    b_canon = int(b.get("artist_id") or 0) == int(b.get("navigate_band_id") or -1)
+    if a_canon != b_canon:
+        return a if a_canon else b
+    return a
+
+
 def list_album_cards(
     db: Session,
     *,
@@ -761,6 +783,7 @@ def list_album_cards(
     label: str = "",
     producer: str = "",
     category: str = "",
+    exclude_category: str = "",
     layout: str = "cover",
     page: int = 1,
     page_size: int = 48,
@@ -796,13 +819,18 @@ def list_album_cards(
         _album_play_counts(db, user_id) if filter_mode == "most_played" else None
     )
 
+    want_category = (category or "").strip().casefold()
+    skip_category = (exclude_category or "").strip().casefold()
+
     albums: list[dict] = []
     letters_set: set[str] = set()
     search_term = search.strip().lower()
     categories_for_artist = (
         list(cats_by_artist.get(artist_id) or []) if artist_id is not None else []
     )
+    dedupe_global = artist_id is None and filter_mode != "artists"
 
+    matched: list[dict] = []
     for rel in all_albums:
         if allowed_ids is not None and rel.get("artist_id") not in allowed_ids:
             continue
@@ -815,18 +843,13 @@ def list_album_cards(
             )
             if not in_title and not in_artist:
                 continue
-        if category and rel.get("category") != category:
+        rel_cat = str(rel.get("category") or "").strip().casefold()
+        if want_category and rel_cat != want_category:
+            continue
+        if skip_category and rel_cat == skip_category:
             continue
         if filter_mode == "start" and start_decade is not None:
             if _release_decade(rel.get("date_iso")) != start_decade:
-                continue
-        letters_set.add(_title_letter(title))
-        if filter_mode == "name" and letter:
-            tl = _title_letter(title)
-            if letter == "#":
-                if tl != "#":
-                    continue
-            elif tl != letter.upper()[:1]:
                 continue
         rid = rel.get("navigate_release_id") or rel.get("id")
         pc = None
@@ -837,6 +860,30 @@ def list_album_cards(
                 pc = max(pc, play_counts.get(alt, 0))
         item = dict(rel)
         item["play_count"] = pc
+        matched.append(item)
+
+    # Global browse: hide .lnk duplicates of the same navigate target so one
+    # card maps to one release (avoids key collisions / wrong opens).
+    if dedupe_global:
+        by_nav: dict[str, dict] = {}
+        for item in matched:
+            nav = str(item.get("navigate_release_id") or item.get("id") or "")
+            if not nav:
+                continue
+            prev = by_nav.get(nav)
+            by_nav[nav] = item if prev is None else _prefer_canonical_album(prev, item)
+        matched = list(by_nav.values())
+
+    for item in matched:
+        title = (item.get("title") or "").strip()
+        letters_set.add(_title_letter(title))
+        if filter_mode == "name" and letter:
+            tl = _title_letter(title)
+            if letter == "#":
+                if tl != "#":
+                    continue
+            elif tl != letter.upper()[:1]:
+                continue
         albums.append(item)
 
     letters = sorted(letters_set, key=lambda x: (x == "#", x))

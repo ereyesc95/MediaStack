@@ -161,8 +161,7 @@ def _photo_for_orientation(photos: list[GalleryPhoto], year: int, want: str) -> 
     pool = [p for p in photos if p.year == year and p.orientation == want]
     if pool:
         return sorted(pool, key=lambda p: p.path.name.lower())[0]
-    pool = [p for p in photos if p.year == year]
-    return sorted(pool, key=lambda p: p.path.name.lower())[0] if pool else None
+    return None
 
 
 def _pick_brand_for_year_deterministic(
@@ -189,32 +188,34 @@ def list_era_slides(artist_name: str | None, media_root: Path) -> list[dict]:
     if not photos:
         return []
 
+    # One slide per era-year (dedupe portrait/landscape/banner triples).
+    by_year: dict[int, list[GalleryPhoto]] = {}
+    for photo in photos:
+        by_year.setdefault(photo.year, []).append(photo)
+
     slides: list[dict] = []
-    sorted_photos = sorted(photos, key=lambda p: (-p.year, p.path.name.lower()))
-    for photo in sorted_photos:
-        year = photo.year
-        portrait = (
-            photo
-            if photo.orientation == "portrait"
-            else _photo_for_orientation(photos, year, "portrait")
-        )
-        landscape = (
-            photo
-            if photo.orientation == "landscape"
-            else _photo_for_orientation(photos, year, "landscape")
-        )
+    for year in sorted(by_year.keys(), reverse=True):
+        year_photos = by_year[year]
+        portrait = _photo_for_orientation(year_photos, year, "portrait")
+        landscape = _photo_for_orientation(year_photos, year, "landscape")
+        banner = _photo_for_orientation(year_photos, year, "banner")
+        # Prefer a named orientation as the slide identity; fall back to any file.
+        primary = portrait or landscape or banner or sorted(
+            year_photos, key=lambda p: p.path.name.lower()
+        )[0]
         icon = _pick_brand_for_year_deterministic(brands, year, "icon")
         logo = _pick_brand_for_year_deterministic(brands, year, "logo")
         slides.append(
             {
-                "id": photo.path.as_posix(),
+                "id": primary.path.as_posix(),
                 "year": year,
-                "orientation": photo.orientation,
-                "slide_url": _media_url(photo.path, media_root),
+                "orientation": primary.orientation,
+                "slide_url": _media_url(primary.path, media_root),
                 "portrait_url": _media_url(portrait.path, media_root) if portrait else None,
                 "landscape_url": _media_url(landscape.path, media_root)
                 if landscape
-                else (_media_url(photo.path, media_root) if photo else None),
+                else None,
+                "banner_url": _media_url(banner.path, media_root) if banner else None,
                 "icon_url": _media_url(icon.path, media_root) if icon else None,
                 "logo_url": _media_url(logo.path, media_root) if logo else None,
             }
@@ -753,6 +754,55 @@ def get_band_overview(
     )
     if cached is not None and "branding" in cached:
         cached = dict(cached)
+        eras = cached.get("eras")
+        if isinstance(eras, list) and eras:
+            # Upgrade legacy era payloads that predate banner_url.
+            by_year_banner: dict[int, str] = {}
+            upgraded: list[dict] = []
+            for e in eras:
+                if not isinstance(e, dict):
+                    continue
+                e = dict(e)
+                slide = e.get("slide_url") or ""
+                if e.get("orientation") == "banner" and slide and not e.get("banner_url"):
+                    e["banner_url"] = slide
+                if (
+                    not e.get("banner_url")
+                    and isinstance(slide, str)
+                    and "banner" in slide.lower()
+                ):
+                    e["banner_url"] = slide
+                year = e.get("year")
+                if e.get("banner_url") and isinstance(year, int):
+                    by_year_banner.setdefault(year, e["banner_url"])
+                upgraded.append(e)
+            for e in upgraded:
+                year = e.get("year")
+                if (
+                    not e.get("banner_url")
+                    and isinstance(year, int)
+                    and year in by_year_banner
+                ):
+                    e["banner_url"] = by_year_banner[year]
+            cached["eras"] = upgraded
+            # Prefer one slide per year (dedupe portrait/landscape/banner triples).
+            if len(upgraded) > 3 and any(
+                e.get("orientation") == "banner" for e in upgraded
+            ):
+                by_year: dict[int, dict] = {}
+                for e in upgraded:
+                    year = e.get("year")
+                    if not isinstance(year, int):
+                        continue
+                    prev = by_year.get(year)
+                    if prev is None or (
+                        e.get("banner_url") and not prev.get("banner_url")
+                    ):
+                        by_year[year] = e
+                if by_year:
+                    cached["eras"] = [
+                        by_year[y] for y in sorted(by_year.keys(), reverse=True)
+                    ]
         cached["cached"] = True
         return cached
 

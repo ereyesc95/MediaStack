@@ -28,6 +28,7 @@ import type {
   ReleaseTrackItem,
   TrackVersionItem,
 } from "../../../types";
+import MsDisclosure from "../../MsDisclosure";
 import { trackMainTitle } from "../release/releaseTrackPanelMeta";
 import { ReleaseTrackTitle } from "../release/releaseTrackTitle";
 import ReleaseAddToPlaylistModal from "../release/ReleaseAddToPlaylistModal";
@@ -1221,7 +1222,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 </span>
               ) : null}
             </button>
-            {open ? (
+            <MsDisclosure open={open}>
             <ol className="release-tracklist__tracks live-story-tracklist__tracks">
               {section.tracks.map((track, sectionIndex) => {
                 const index =
@@ -1231,7 +1232,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 return renderPlaylistTrackRow(track, index, sectionIndex + 1);
               })}
             </ol>
-            ) : null}
+            </MsDisclosure>
           </section>
           );
         })

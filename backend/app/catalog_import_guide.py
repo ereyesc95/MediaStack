@@ -11,7 +11,7 @@ COMMON_ART = """ARTWORK FILENAMES
 Gallery/Covers (or franchise [Artwork] when this module is the franchise home):
   Cover - Front.jpg
   Cover - Back.jpg
-  Cover - Banner.jpg
+  Cover - Banner.jpg        Preferred 2000×500 (4:1); UI scales to this ratio.
   Cover - Landscape.jpg
   Characters - Portrait.jpg
   Characters - Landscape.jpg

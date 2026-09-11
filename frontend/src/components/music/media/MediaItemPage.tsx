@@ -29,6 +29,8 @@ import type {
   SeriesOverview,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
+import MsDisclosure from "../../MsDisclosure";
+import TopBarTitle from "../../TopBarTitle";
 import { IconZoom } from "../../MenuIcons";
 import PlaylistBoot from "../../PlaylistBoot";
 import MediaBeatFrame from "../MediaBeatFrame";
@@ -606,7 +608,6 @@ export default function MediaItemPage({
       null
     : null;
 
-  const bannerMetaHidden = bannerLayout && !moreInfoOpen;
   const hasNeighbors = Boolean(data?.prev || data?.next);
 
   return (
@@ -654,9 +655,10 @@ export default function MediaItemPage({
               </MediaBeatFrame>
             ) : (
               data && (
-                <span className="release-page__title-center release-page__title-center--lg">
-                  {data.title}
-                </span>
+                <TopBarTitle
+                  text={data.title}
+                  className="release-page__title-center release-page__title-center--lg"
+                />
               )
             )}
           </div>
@@ -817,10 +819,11 @@ export default function MediaItemPage({
                 </button>
               ) : null}
 
+              <MsDisclosure open={!bannerLayout || moreInfoOpen}>
               <div
                 className={`release-page__panel-meta${
                   bannerLayout ? " release-page__panel-meta--glass" : ""
-                }${bannerMetaHidden ? " release-page__panel-meta--hidden" : ""}`}
+                }`}
               >
                 <div className="release-page__panel-fit">
                   <div className="release-page__panel-fit-inner">
@@ -978,6 +981,7 @@ export default function MediaItemPage({
                   </div>
                 ) : null}
               </div>
+              </MsDisclosure>
 
               {bannerLayout && hasNeighbors ? (
                 <div className="release-page__panel-dock">
@@ -1202,7 +1206,7 @@ export default function MediaItemPage({
                             {group.label}
                           </button>
                         ) : null}
-                        {open ? (
+                        <MsDisclosure open={open}>
                           <ul className="series-book-volumes__list">
                             {group.files.map((file) => {
                               const title =
@@ -1282,7 +1286,7 @@ export default function MediaItemPage({
                               );
                             })}
                           </ul>
-                        ) : null}
+                        </MsDisclosure>
                       </div>
                     );
                   }
@@ -1300,7 +1304,7 @@ export default function MediaItemPage({
                           {group.label}
                         </button>
                       ) : null}
-                      {open ? (
+                      <MsDisclosure open={open}>
                         <ol className="release-tracklist__tracks">
                           {group.files.map((file, index) => {
                             const title = file.title?.trim() || file.name;
@@ -1364,7 +1368,7 @@ export default function MediaItemPage({
                             );
                           })}
                         </ol>
-                      ) : null}
+                      </MsDisclosure>
                     </div>
                   );
                 })}

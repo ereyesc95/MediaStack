@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useMenuPresence } from "../useMenuPresence";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme } from "../mediaTheme";
 import {
   THEMES,
@@ -192,6 +193,7 @@ export default function AppMenu({
   const showAdaptiveTheme =
     adaptiveThemeActive ?? artistThemeActive;
   const [open, setOpen] = useState(false);
+  const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
   const [editDataOpen, setEditDataOpen] = useState(false);
@@ -676,8 +678,12 @@ export default function AppMenu({
         <span />
         <span />
       </button>
-      {open && (
-        <div className="app-menu-dropdown">
+      {menuPresent ? (
+        <div
+          className={`app-menu-dropdown ms-menu-pop${menuVisible ? " is-open" : ""}`}
+          aria-hidden={!menuVisible}
+          inert={menuVisible ? undefined : true}
+        >
           {editDataFlat ? (
             <>
               {refreshDataBlock}
@@ -1100,7 +1106,7 @@ export default function AppMenu({
             </button>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

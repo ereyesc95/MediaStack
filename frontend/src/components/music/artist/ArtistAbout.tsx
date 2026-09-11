@@ -43,17 +43,59 @@ function bioParagraphs(bio: string): string[] {
   return parts.length ? parts : [text];
 }
 
+function urlLooksBanner(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    return /banner/i.test(decodeURIComponent(url));
+  } catch {
+    return /banner/i.test(url);
+  }
+}
+
+function eraIsBannerSlide(era: Era): boolean {
+  return (
+    era.orientation === "banner" ||
+    Boolean(era.banner_url) ||
+    urlLooksBanner(era.banner_url) ||
+    urlLooksBanner(era.slide_url)
+  );
+}
+
+function eraStackedHero(era: Era): string | undefined {
+  if (era.banner_url) return era.banner_url;
+  if (era.orientation === "banner" && era.slide_url) return era.slide_url;
+  for (const u of [era.slide_url, era.landscape_url, era.portrait_url]) {
+    if (urlLooksBanner(u)) return u ?? undefined;
+  }
+  return era.landscape_url ?? era.slide_url ?? undefined;
+}
+
 function carouselEras(eras: Era[], stacked: boolean): Era[] {
-  const want = stacked ? "landscape" : "portrait";
-  const filtered = eras.filter((e) => e.orientation === want);
+  if (stacked) {
+    // Prefer banner-named slides (API may omit banner_url on older caches).
+    const withBanner = eras.filter(eraIsBannerSlide);
+    if (withBanner.length) {
+      const seen = new Set<string>();
+      const unique: Era[] = [];
+      for (const e of withBanner) {
+        const key = eraStackedHero(e);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        unique.push(e);
+      }
+      if (unique.length) return unique;
+    }
+    const filtered = eras.filter((e) => e.orientation === "landscape");
+    if (filtered.length) return filtered;
+    return eras.filter((e) => e.landscape_url);
+  }
+  const filtered = eras.filter((e) => e.orientation === "portrait");
   if (filtered.length) return filtered;
-  return stacked
-    ? eras.filter((e) => e.landscape_url)
-    : eras.filter((e) => e.portrait_url);
+  return eras.filter((e) => e.portrait_url);
 }
 
 function eraHeroUrl(era: Era, stacked: boolean): string | undefined {
-  if (stacked) return era.landscape_url ?? era.slide_url ?? undefined;
+  if (stacked) return eraStackedHero(era);
   return era.portrait_url ?? era.slide_url ?? undefined;
 }
 
@@ -161,6 +203,7 @@ export default function ArtistAbout({
   onOpenRelease,
 }: Props) {
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioNeedsToggle, setBioNeedsToggle] = useState(false);
   const [photoHoverSide, setPhotoHoverSide] = useState<"left" | "right" | null>(
     null
   );
@@ -168,6 +211,45 @@ export default function ArtistAbout({
     () => carouselEras(data.eras, stacked),
     [data.eras, stacked]
   );
+  const bioScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setBioExpanded(false);
+  }, [data.id, data.name]);
+  useEffect(() => {
+    if (!stacked || !data.bio) {
+      setBioNeedsToggle(false);
+      return;
+    }
+    const el = bioScrollRef.current;
+    if (!el) return;
+    const measure = () => {
+      const cap =
+        7.5 *
+        parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+      setBioNeedsToggle(el.scrollHeight > cap + 2);
+    };
+    const prevHeight = el.style.height;
+    const prevMax = el.style.maxHeight;
+    const prevOverflow = el.style.overflow;
+    el.style.height = "auto";
+    el.style.maxHeight = "none";
+    el.style.overflow = "visible";
+    measure();
+    el.style.height = prevHeight;
+    el.style.maxHeight = prevMax;
+    el.style.overflow = prevOverflow;
+    const ro = new ResizeObserver(() => {
+      el.style.height = "auto";
+      el.style.maxHeight = "none";
+      el.style.overflow = "visible";
+      measure();
+      el.style.height = prevHeight;
+      el.style.maxHeight = prevMax;
+      el.style.overflow = prevOverflow;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stacked, data.bio]);
   const era: Era | null = slides.length
     ? slides[Math.min(eraIndex, slides.length - 1)]
     : null;
@@ -324,11 +406,14 @@ export default function ArtistAbout({
         <div ref={contentRef} className="artist-about__content">
           <div className="artist-about__bio-block">
             <div
+              ref={bioScrollRef}
               className={`artist-about__bio-scroll${
                 stacked
                   ? bioExpanded
                     ? " artist-about__bio-scroll--expanded"
-                    : " artist-about__bio-scroll--collapsed"
+                    : bioNeedsToggle
+                      ? " artist-about__bio-scroll--collapsed"
+                      : " artist-about__bio-scroll--fit"
                   : ""
               }`}
             >
@@ -342,7 +427,7 @@ export default function ArtistAbout({
                 <p className="muted">No biography stored yet.</p>
               ) : null}
             </div>
-            {stacked && hasBio && (
+            {stacked && hasBio && bioNeedsToggle && (
               <button
                 type="button"
                 className="artist-about__bio-toggle"

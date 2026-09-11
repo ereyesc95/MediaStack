@@ -1696,7 +1696,9 @@ def build_universe_hub(
         eras.append(
             {
                 "orientation": "landscape",
-                "landscape_url": banner,
+                # Prefer true Banner files; landscape remains the fallback hero.
+                "banner_url": data.get("banner_url") or None,
+                "landscape_url": data.get("landscape_url") or banner,
                 "slide_url": banner,
             }
         )

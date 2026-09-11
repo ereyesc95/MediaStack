@@ -11,6 +11,7 @@ import type {
 import type { MoviesOverviewTab } from "../../moviesRoute";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import TopBarTitle from "../TopBarTitle";
 import PlaylistBoot from "../PlaylistBoot";
 import SeriesAbout from "../series/SeriesAbout";
 import SeriesCast from "../series/SeriesCast";
@@ -147,7 +148,7 @@ export default function MoviesFilmPage({
               className="artist-page__brand-logo"
             />
           ) : (
-            <span className="artist-page__brand-name">{data.name}</span>
+            <TopBarTitle text={data.name} className="artist-page__brand-name" />
           )}
         </div>
         <div className="artist-page__top-right">

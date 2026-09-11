@@ -81,6 +81,7 @@ import {
   useDeviceLayout,
 } from "../../usePhoneLayout";
 import AppMenu from "../AppMenu";
+import TopBarTitle from "../TopBarTitle";
 import OfficialUnofficialBar from "../OfficialUnofficialBar";
 import {
   filterByOfficial,
@@ -272,7 +273,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
   const mem = overviewCache.get(key);
   if (mem) return mem;
   const stored = readSessionEntry<SeriesOverview>(
-    sessionCacheKey("franchise-overview-v4", key)
+    sessionCacheKey("franchise-overview-v7", key)
   );
   if (stored) overviewCache.set(key, stored);
   return stored;
@@ -280,7 +281,7 @@ function readOverviewCache(key: string): SeriesOverview | null {
 
 function writeOverviewCache(key: string, data: SeriesOverview) {
   overviewCache.set(key, data);
-  writeSessionEntry(sessionCacheKey("franchise-overview-v4", key), data);
+  writeSessionEntry(sessionCacheKey("franchise-overview-v7", key), data);
 }
 
 export default function SeriesFranchisePage({
@@ -1281,6 +1282,30 @@ export default function SeriesFranchisePage({
   const aboutSlides = useMemo(() => {
     const eras = data?.eras || [];
     if (stacked) {
+      const withBanner = eras.filter(
+        (e) =>
+          e.orientation === "banner" ||
+          Boolean(e.banner_url) ||
+          (e.slide_url && /banner/i.test(e.slide_url)) ||
+          (e.landscape_url && /banner/i.test(e.landscape_url))
+      );
+      if (withBanner.length) {
+        const seen = new Set<string>();
+        const unique: typeof withBanner = [];
+        for (const e of withBanner) {
+          const key =
+            e.banner_url ||
+            (e.orientation === "banner" ? e.slide_url : null) ||
+            (e.slide_url && /banner/i.test(e.slide_url) ? e.slide_url : null) ||
+            (e.landscape_url && /banner/i.test(e.landscape_url)
+              ? e.landscape_url
+              : null);
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          unique.push(e);
+        }
+        if (unique.length) return unique;
+      }
       return eras.filter((e) => e.landscape_url);
     }
     return eras.filter((e) => e.portrait_url);
@@ -1290,7 +1315,13 @@ export default function SeriesFranchisePage({
     null;
   const coverUrl = currentAboutEra?.portrait_url ?? aboutSlides[0]?.portrait_url ?? null;
   const bgUrl =
+    (currentAboutEra?.orientation === "banner"
+      ? currentAboutEra?.slide_url
+      : null) ??
+    currentAboutEra?.banner_url ??
     currentAboutEra?.landscape_url ??
+    aboutSlides.find((e) => e.banner_url)?.banner_url ??
+    aboutSlides.find((e) => e.orientation === "banner")?.slide_url ??
     aboutSlides.find((e) => e.landscape_url)?.landscape_url ??
     undefined;
 
@@ -1854,7 +1885,7 @@ export default function SeriesFranchisePage({
                   aria-hidden
                 />
               ) : (
-                <span className="artist-page__brand-name">{title}</span>
+                <TopBarTitle text={title} className="artist-page__brand-name" />
               )
             ) : null}
           </div>

@@ -1,4 +1,4 @@
-import { IconAddArtist, IconDisc } from "../MenuIcons";
+import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
 import type { MusicCatalogScope } from "../../types";
 
 type Props = {
@@ -7,9 +7,15 @@ type Props = {
   className?: string;
 };
 
-const ORDER: MusicCatalogScope[] = ["artists", "albums"];
+const ORDER: MusicCatalogScope[] = ["artists", "albums", "singles"];
 
-/** Cycles ARTISTS ↔ ALBUMS (same pattern as Series CatalogScopeToggle). */
+const LABELS: Record<MusicCatalogScope, string> = {
+  artists: "ARTISTS",
+  albums: "ALBUMS",
+  singles: "SINGLES",
+};
+
+/** Cycles ARTISTS → ALBUMS → SINGLES. */
 export default function MusicCatalogScopeToggle({
   value,
   onChange,
@@ -18,8 +24,8 @@ export default function MusicCatalogScopeToggle({
   const idx = Math.max(0, ORDER.indexOf(value));
   const current = ORDER[idx] ?? "artists";
   const next = ORDER[(idx + 1) % ORDER.length] ?? "artists";
-  const label = current === "artists" ? "ARTISTS" : "ALBUMS";
-  const title = next === "artists" ? "Switch to Artists" : "Switch to Albums";
+  const label = LABELS[current];
+  const title = `Switch to ${LABELS[next].charAt(0)}${LABELS[next].slice(1).toLowerCase()}`;
 
   return (
     <button
@@ -31,6 +37,8 @@ export default function MusicCatalogScopeToggle({
     >
       {current === "artists" ? (
         <IconAddArtist className="catalog-scope-toggle__icon" />
+      ) : current === "singles" ? (
+        <IconHeadphones className="catalog-scope-toggle__icon" />
       ) : (
         <IconDisc className="catalog-scope-toggle__icon" />
       )}

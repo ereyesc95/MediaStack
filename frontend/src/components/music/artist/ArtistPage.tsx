@@ -67,6 +67,7 @@ import type {
   ReleaseCardLayout,
 } from "../../../types";
 import AppMenu from "../../AppMenu";
+import TopBarTitle from "../../TopBarTitle";
 import ConfirmDialog from "../../ConfirmDialog";
 import MediaInlineSearch from "../MediaInlineSearch";
 import CardOrientationPicker from "../../CardOrientationPicker";
@@ -658,12 +659,38 @@ export default function ArtistPage({
 
   const carouselEras = useMemo(() => {
     if (!data?.eras.length) return [];
-    const want = stacked ? "landscape" : "portrait";
-    const filtered = data.eras.filter((e) => e.orientation === want);
+    if (stacked) {
+      const withBanner = data.eras.filter(
+        (e) =>
+          e.orientation === "banner" ||
+          Boolean(e.banner_url) ||
+          (e.slide_url && /banner/i.test(e.slide_url)) ||
+          (e.landscape_url && /banner/i.test(e.landscape_url))
+      );
+      if (withBanner.length) {
+        const seen = new Set<string>();
+        const unique: typeof withBanner = [];
+        for (const e of withBanner) {
+          const key =
+            e.banner_url ||
+            (e.orientation === "banner" ? e.slide_url : null) ||
+            (e.slide_url && /banner/i.test(e.slide_url) ? e.slide_url : null) ||
+            (e.landscape_url && /banner/i.test(e.landscape_url)
+              ? e.landscape_url
+              : null);
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          unique.push(e);
+        }
+        if (unique.length) return unique;
+      }
+      const filtered = data.eras.filter((e) => e.orientation === "landscape");
+      if (filtered.length) return filtered;
+      return data.eras.filter((e) => e.landscape_url);
+    }
+    const filtered = data.eras.filter((e) => e.orientation === "portrait");
     if (filtered.length) return filtered;
-    return stacked
-      ? data.eras.filter((e) => e.landscape_url)
-      : data.eras.filter((e) => e.portrait_url);
+    return data.eras.filter((e) => e.portrait_url);
   }, [data, stacked]);
 
   const era = useMemo(() => {
@@ -740,7 +767,7 @@ export default function ArtistPage({
 
   const themeSampleUrl = useMemo(() => {
     const sampleUrl = stacked
-      ? (era?.landscape_url ?? era?.slide_url)
+      ? (era?.banner_url ?? era?.landscape_url ?? era?.slide_url)
       : (era?.portrait_url ?? era?.slide_url);
     return sampleUrl ?? shell?.photo_url ?? undefined;
   }, [era, stacked, shell?.photo_url]);
@@ -1109,9 +1136,10 @@ export default function ArtistPage({
               <MediaBeatFrame variant="logo">{topLogo}</MediaBeatFrame>
             )}
             {!topBrand && !topLogo && (data?.name ?? shell?.name) && (
-              <span className="artist-page__brand-name">
-                {data?.name ?? shell?.name}
-              </span>
+              <TopBarTitle
+                text={data?.name ?? shell?.name ?? ""}
+                className="artist-page__brand-name"
+              />
             )}
           </div>
           <div className="artist-page__top-right">
