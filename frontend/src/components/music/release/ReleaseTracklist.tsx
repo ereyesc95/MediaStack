@@ -556,6 +556,34 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     );
   }, [data, activeVersionIds]);
 
+  /** All edition/version tracks — used to resolve the playing row even when another version tab is open. */
+  const allTracksContexts = useMemo(() => {
+    if (!data) return [] as Array<{
+      track: ReleaseTrackItem;
+      edition: ReleaseEdition;
+      group: ReleaseTrackGroup;
+      editionIndex: number;
+      groupDisc?: string | null;
+      groupDateIso?: string | null;
+    }>;
+    return data.editions.flatMap((ed, editionIndex) => {
+      const versionGroups =
+        ed.versions && ed.versions.length >= 2
+          ? ed.versions.flatMap((v) => v.groups)
+          : ed.groups;
+      return versionGroups.flatMap((group) =>
+        group.tracks.map((track) => ({
+          track,
+          edition: ed,
+          group,
+          editionIndex,
+          groupDisc: group.disc_url,
+          groupDateIso: group.date_iso ?? null,
+        }))
+      );
+    });
+  }, [data]);
+
   const trackContexts = useMemo(() => {
     if (!data) return [] as Array<{
       track: ReleaseTrackItem;
@@ -582,13 +610,15 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   const resolvePanelDateIso = useCallback(
     (path: string | null) => {
       if (!path) return null;
-      const ctx = trackContexts.find((c) => c.track.play_path === path);
+      const ctx =
+        allTracksContexts.find((c) => c.track.play_path === path) ??
+        trackContexts.find((c) => c.track.play_path === path);
       if (!ctx) return null;
       if (ctx.edition.date_iso) return ctx.edition.date_iso;
       if (ctx.groupDateIso) return ctx.groupDateIso;
       return null;
     },
-    [trackContexts]
+    [allTracksContexts, trackContexts]
   );
 
 
@@ -615,25 +645,16 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       for (const ed of data.editions) {
         const versions = ed.versions;
         if (!versions || versions.length < 2) continue;
-        let pick: string | undefined;
-        if (playingPath) {
-          const match = versions.find((v) =>
-            v.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
-          );
-          if (match) pick = match.id;
-        }
-        if (!pick) {
-          const previous =
-            prev[ed.id] && versions.some((v) => v.id === prev[ed.id])
-              ? prev[ed.id]
-              : null;
-          pick =
-            previous ??
-            versions.find((v) =>
-              v.groups.some((g) => g.tracks.length > 0)
-            )?.id ??
-            versions[0]?.id;
-        }
+        const previous =
+          prev[ed.id] && versions.some((v) => v.id === prev[ed.id])
+            ? prev[ed.id]
+            : null;
+        const pick =
+          previous ??
+          versions.find((v) =>
+            v.groups.some((g) => g.tracks.length > 0)
+          )?.id ??
+          versions[0]?.id;
         if (pick) {
           next[ed.id] = pick;
           if (prev[ed.id] !== pick) changed = true;
@@ -650,7 +671,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       }
       return next;
     });
-  }, [data?.editions, playingPath]);
+  }, [data?.editions]);
 
   useEffect(() => {
     if (!data?.editions.length) {
@@ -684,7 +705,9 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const resolveTrackContext = useCallback(
     (path: string) => {
-      const match = trackContexts.find((ctx) => ctx.track.play_path === path);
+      const match =
+        allTracksContexts.find((ctx) => ctx.track.play_path === path) ??
+        trackContexts.find((ctx) => ctx.track.play_path === path);
       if (!match) return null;
       return {
         track: match.track,
@@ -694,7 +717,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         editionIndex: match.editionIndex,
       };
     },
-    [trackContexts]
+    [allTracksContexts, trackContexts]
   );
 
   useEffect(() => {
@@ -1074,6 +1097,13 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                 }
                                 setPlayingVersionPath(null);
                                 setActiveVersionSource(null);
+                                if (track.version_id) {
+                                  setActiveVersionIds((prev) =>
+                                    prev[ed.id] === track.version_id
+                                      ? prev
+                                      : { ...prev, [ed.id]: track.version_id! }
+                                  );
+                                }
                                 const linkSource = linkSourceFromTrack(track);
                                 if (linkSource) setActiveVersionSource(linkSource);
                                 onPlay(track.play_path, track.title, art, ed.label);
@@ -1171,6 +1201,13 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                       }
                       setPlayingVersionPath(null);
                       setActiveVersionSource(null);
+                      if (track.version_id) {
+                        setActiveVersionIds((prev) =>
+                          prev[ed.id] === track.version_id
+                            ? prev
+                            : { ...prev, [ed.id]: track.version_id! }
+                        );
+                      }
                       const linkSource = linkSourceFromTrack(track);
                       if (linkSource) setActiveVersionSource(linkSource);
                       onPlay(track.play_path, track.title, art, ed.label);

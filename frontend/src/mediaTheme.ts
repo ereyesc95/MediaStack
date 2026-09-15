@@ -218,7 +218,9 @@ export function beginArtistPageSession(userId?: number) {
     pinArtistPageTheme(stored);
     applyTheme(stored, userId);
   } else {
+    // Default / enabled: Adaptive is selected when entering media pages.
     clearArtistPageThemePin();
+    window.dispatchEvent(new CustomEvent("theme-changed"));
   }
 }
 
@@ -251,7 +253,16 @@ export function isPlaybackPlaying() {
 /** Theme id shown in the menu (persisted choice during playback, not cover sampling). */
 export function getMenuActiveTheme(userId?: number): ThemeId {
   if (playbackSessionActive) {
-    return playbackMenuTheme ?? readPersistedTheme(userId);
+    if (playbackMenuTheme) return playbackMenuTheme;
+    // Keep Adaptive selected in the menu while cover sampling is active.
+    if (
+      !playbackThemeSuppressed &&
+      !artistPageThemePin &&
+      (artistPageActive || albumPageActive)
+    ) {
+      return "artist";
+    }
+    return readPersistedTheme(userId);
   }
   if (!artistPageThemePin && (artistPageActive || albumPageActive)) {
     return "artist";

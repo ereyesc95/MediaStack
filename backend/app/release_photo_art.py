@@ -48,43 +48,54 @@ PHOTO_STEMS: dict[str, str] = {
     "square": "photo - square",
 }
 
-# Prefer scenic Photo - * then packaging Cover - * (mobile banner ladder).
+# Scenic Photo - * only for catalog cards / About / home icons (no Cover packaging).
 ORIENTATION_FALLBACK_CHAIN: dict[str, tuple[str, ...]] = {
     "banner": (
         "photo - banner",
         "photo - landscape",
         "photo - portrait",
         "photo - square",
-        "cover - banner",
-        "cover - landscape",
-        "cover - portrait",
-        "cover - front",
     ),
     "landscape": (
         "photo - landscape",
         "photo - banner",
         "photo - portrait",
         "photo - square",
-        "cover - landscape",
-        "cover - banner",
-        "cover - portrait",
-        "cover - front",
     ),
     "portrait": (
         "photo - portrait",
         "photo - square",
         "photo - landscape",
         "photo - banner",
-        "cover - portrait",
-        "cover - landscape",
-        "cover - front",
     ),
     "square": (
         "photo - square",
         "photo - portrait",
         "photo - landscape",
+        "photo - banner",
+    ),
+}
+
+# Packaging Cover - * still used by release/now-playing UI.
+COVER_FALLBACK_CHAIN: dict[str, tuple[str, ...]] = {
+    "banner": (
+        "cover - banner",
+        "cover - landscape",
+        "cover - portrait",
         "cover - front",
     ),
+    "landscape": (
+        "cover - landscape",
+        "cover - banner",
+        "cover - portrait",
+        "cover - front",
+    ),
+    "portrait": (
+        "cover - portrait",
+        "cover - landscape",
+        "cover - front",
+    ),
+    "square": ("cover - front",),
 }
 
 COVER_MOTION_STEMS = frozenset({"cover - animation", "cover - canvas"})
@@ -512,11 +523,16 @@ def collect_gallery_dump(
     *,
     include_release_misc: bool = True,
 ) -> list[dict]:
-    """Artist [Artwork]/Gallery dump + non-Cover misc video/gif from release art."""
+    """Artist [Artwork]/Miscellaneous dump (+ legacy Gallery) + release misc media."""
     from app.gallery import _gallery_subdir
 
     items: list[dict] = []
-    gallery_dir = _gallery_subdir(artist_dir, "Gallery")
+    gallery_dir = _gallery_subdir(artist_dir, "Miscellaneous")
+    if not gallery_dir.is_dir():
+        gallery_dir = _gallery_subdir(artist_dir, "Misc")
+    if not gallery_dir.is_dir():
+        # Legacy folder name before Miscellaneous rename
+        gallery_dir = _gallery_subdir(artist_dir, "Gallery")
     if gallery_dir.is_dir():
         try:
             for path in sorted(gallery_dir.rglob("*"), key=lambda p: p.as_posix().casefold()):

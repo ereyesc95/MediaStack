@@ -16,12 +16,10 @@ export default function DashIconCard({
   preferPortrait = false,
   revealed = false,
 }: Props) {
+  // Home ICONS / Round: Photo only — never branding icons or Cover art.
   const coverUrl = preferPortrait
-    ? artist.portrait_url || artist.photo_url || artist.icon_url
-    : artist.photo_url || artist.portrait_url || artist.icon_url;
-  const bg = coverUrl
-    ? `url("${coverUrl}")`
-    : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+    ? artist.portrait_url || artist.photo_url
+    : artist.photo_url || artist.portrait_url;
   const name = (artist.name ?? "Untitled")
     .replace(/■/g, ",")
     .replace(/█/g, "'");
@@ -33,8 +31,15 @@ export default function DashIconCard({
       className={`dash-icon-item${revealed ? " is-revealed" : ""}`}
       onClick={onClick}
     >
-      <span className="dash-icon-item-cover">
-        <span className="card-bg-layer" style={{ backgroundImage: bg }} />
+      <span
+        className={`dash-icon-item-cover${coverUrl ? "" : " dash-icon-item-cover--empty"}`}
+      >
+        {coverUrl ? (
+          <span
+            className="card-bg-layer"
+            style={{ backgroundImage: `url("${coverUrl}")` }}
+          />
+        ) : null}
         <DashHoverTitle title={name} revealed={revealed} />
       </span>
     </button>

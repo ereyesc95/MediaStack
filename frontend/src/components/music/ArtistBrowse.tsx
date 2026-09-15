@@ -177,7 +177,7 @@ export default function ArtistBrowse({
 
   const handleArtistCardClick = useCallback(
     (artistId: number) => {
-      if (!isPhone) {
+      if (!isPhone || orientation === "icons" || orientation === "round") {
         onArtist(artistId);
         return;
       }
@@ -188,7 +188,7 @@ export default function ArtistBrowse({
         setRevealedId(artistId);
       }
     },
-    [isPhone, revealedId, onArtist]
+    [isPhone, revealedId, onArtist, orientation]
   );
 
   const handleAlbumCardClick = useCallback(

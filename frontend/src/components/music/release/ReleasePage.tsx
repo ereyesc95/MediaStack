@@ -1234,7 +1234,27 @@ export default function ReleasePage({
       const payload = await prefetchReleaseGallery(bandId, releaseId);
       const artwork = payload?.artwork || [];
       if (!artwork.length) return;
-      const items: GalleryViewerItem[] = artwork.map((item) => ({
+      // While playing, show artwork from the playing track's edition/version only.
+      const playPath = (playingPath || "")
+        .replace(/\\/g, "/")
+        .toLowerCase();
+      const scoped = playPath
+        ? artwork.filter((item) => {
+            const artPath = (item.folder_path || "")
+              .replace(/\\/g, "/")
+              .toLowerCase();
+            // folder_path is the image file; parent of [Artwork] is the edition/version.
+            const artParent = artPath
+              .replace(/\/[^/]+$/, "")
+              .replace(/\/\[artwork\]$/i, "");
+            return (
+              playPath === artParent ||
+              playPath.startsWith(`${artParent}/`)
+            );
+          })
+        : artwork;
+      const useItems = scoped.length > 0 ? scoped : artwork;
+      const items: GalleryViewerItem[] = useItems.map((item) => ({
         id: item.id,
         url: item.url,
         caption: item.title,
@@ -1680,6 +1700,26 @@ export default function ReleasePage({
                   bannerFlipped ? " release-page__banner-flip--flipped" : ""
                 }`}
                 onClick={() => setBannerFlipped((f) => !f)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  void openCoverArtworkViewer();
+                }}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "touch" || e.pointerType === "pen") {
+                    const timer = window.setTimeout(() => {
+                      void openCoverArtworkViewer();
+                    }, 550);
+                    const clear = () => {
+                      window.clearTimeout(timer);
+                      e.currentTarget.releasePointerCapture?.(e.pointerId);
+                      e.currentTarget.removeEventListener("pointerup", clear);
+                      e.currentTarget.removeEventListener("pointercancel", clear);
+                    };
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    e.currentTarget.addEventListener("pointerup", clear);
+                    e.currentTarget.addEventListener("pointercancel", clear);
+                  }
+                }}
                 aria-label={bannerFlipped ? "Show photo banner" : "Show cover banner"}
               >
                 <span className="release-page__banner-flip-scene">
@@ -1703,6 +1743,26 @@ export default function ReleasePage({
                     : undefined,
                 }}
                 onClick={() => void openCoverArtworkViewer()}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  void openCoverArtworkViewer();
+                }}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "touch" || e.pointerType === "pen") {
+                    const timer = window.setTimeout(() => {
+                      void openCoverArtworkViewer();
+                    }, 550);
+                    const clear = () => {
+                      window.clearTimeout(timer);
+                      e.currentTarget.releasePointerCapture?.(e.pointerId);
+                      e.currentTarget.removeEventListener("pointerup", clear);
+                      e.currentTarget.removeEventListener("pointercancel", clear);
+                    };
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    e.currentTarget.addEventListener("pointerup", clear);
+                    e.currentTarget.addEventListener("pointercancel", clear);
+                  }
+                }}
                 aria-label="Browse release artwork"
               />
             )
@@ -1727,7 +1787,7 @@ export default function ReleasePage({
               </span>
             </button>
           ) : null}
-          {effectivePanelCover && (
+          {effectivePanelCover && !(bannerLayout && bannerFlipped) && (
             <div
               className={`release-page__cover-wrap${
                 bannerLayout ? " release-page__cover-wrap--banner-cover" : ""
@@ -1797,7 +1857,8 @@ export default function ReleasePage({
               ) : null}
             </div>
           )}
-          {(!hasActiveTrack ? data.playback_kind !== "tape" : !isTapePlayback) && (
+          {(!hasActiveTrack ? data.playback_kind !== "tape" : !isTapePlayback) &&
+            !(bannerLayout && bannerFlipped) && (
             <img
               key={panelDiscSrc}
               src={panelDiscSrc}
@@ -1915,7 +1976,9 @@ export default function ReleasePage({
                 )}
                 {panelActionTrack?.version_label ? (
                   <p className="release-page__track-panel-format">
-                    {panelActionTrack.version_label}
+                    {/version$/i.test(panelActionTrack.version_label.trim())
+                      ? panelActionTrack.version_label
+                      : `${panelActionTrack.version_label} version`}
                   </p>
                 ) : null}
                 {trackPanelMeta.versionLabel && (

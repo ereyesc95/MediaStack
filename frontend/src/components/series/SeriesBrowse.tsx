@@ -799,7 +799,7 @@ export default function SeriesBrowse({
           icon_url: card.icon_url,
         });
       };
-      if (!isPhone) {
+      if (!isPhone || orientation === "icons") {
         open();
         return;
       }
@@ -810,7 +810,7 @@ export default function SeriesBrowse({
         setRevealedId(card.key);
       }
     },
-    [isPhone, revealedId, onOpen, onOpenUniverse]
+    [isPhone, revealedId, onOpen, onOpenUniverse, orientation]
   );
 
   const subBar = useMemo(() => {

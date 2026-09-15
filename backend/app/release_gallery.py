@@ -102,7 +102,13 @@ def _walk_release_artwork_dirs(content: Path) -> list[Path]:
             if child.suffix.casefold() == ".lnk":
                 continue
             if child.is_dir() and child.name.casefold() != ARTWORK_DIR:
-                if DISC_DIR_RE.match(child.name) or _is_edition_content_dir(child):
+                from app.release_versions import is_version_folder_name
+
+                if (
+                    DISC_DIR_RE.match(child.name)
+                    or _is_edition_content_dir(child)
+                    or is_version_folder_name(child.name)
+                ):
                     walk_folder(child)
 
     art = _find_artwork_subdir(content)

@@ -2,12 +2,15 @@
 
 Expected layout (under MYSTACK_MEDIA_ROOT):
 
-    Music/{Letter}/{ArtistName}/[Artwork]/Gallery/  — misc dump (photos, gifs, videos)
     Music/{Letter}/{ArtistName}/[Artwork]/Branding/ — era logos, icons, signatures
     Music/{Letter}/{ArtistName}/[Artwork]/Covers/   — optional playlist covers
+    Music/{Letter}/{ArtistName}/[Artwork]/Miscellaneous/  — misc dump (photos, gifs, videos)
+    Music/{Letter}/{ArtistName}/[Artwork]/Exclusive/ — NSFW-gated (admin unlock)
+    Music/{Letter}/{ArtistName}/Albums|…/{Release}/[Artwork]/ — Cover - *, Photo - *
 
 Release/edition ``[Artwork]/Photo - {Banner|Landscape|Portrait|Square}`` supply
 card heroes, About carousel, and Promo tab. ``[Artwork]/Photos`` is ignored (hard cut).
+Legacy ``[Artwork]/Gallery`` is still read as the Miscellaneous dump.
 """
 from __future__ import annotations
 
@@ -158,6 +161,12 @@ def _gallery_subdir(artist_dir: Path, sub: str) -> Path:
         # Logos. New scaffolds always use Branding.
         legacy = _resolve_child_dir(gallery, "Logos")
         return legacy if legacy.is_dir() else branding
+    if sub.casefold() in {"miscellaneous", "misc", "gallery", "photos"}:
+        for name in ("Miscellaneous", "Misc", "Gallery", "Photos"):
+            found = _resolve_child_dir(gallery, name)
+            if found.is_dir():
+                return found
+        return _resolve_child_dir(gallery, "Miscellaneous")
     return _resolve_child_dir(gallery, sub)
 
 

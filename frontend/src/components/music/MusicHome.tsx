@@ -310,7 +310,7 @@ export default function MusicHome({
           ))}
           <PlaceholderTiles
             count={topArtists.length ? artistPlaceholders : paneLimit}
-            variant="landscape"
+            variant="circle"
           />
         </div>
       </section>

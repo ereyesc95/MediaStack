@@ -430,15 +430,6 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
             <span>{mobilePortrait ? "BRANDS" : "BRANDING"}</span>
           </button>
         )}
-        {showGalleryDump && (
-          <button
-            type="button"
-            className={tab === "gallery" ? "active" : ""}
-            onClick={() => setTab("gallery")}
-          >
-            <span>GALLERY</span>
-          </button>
-        )}
         {showAnimations && (
           <button
             type="button"
@@ -446,6 +437,15 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
             onClick={() => setTab("animations")}
           >
             <span>ANIMATIONS</span>
+          </button>
+        )}
+        {showGalleryDump && (
+          <button
+            type="button"
+            className={tab === "gallery" ? "active" : ""}
+            onClick={() => setTab("gallery")}
+          >
+            <span>{mobilePortrait ? "MISC" : "MISCELLANEOUS"}</span>
           </button>
         )}
         {showExclusive && (

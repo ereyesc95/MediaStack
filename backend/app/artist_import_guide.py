@@ -17,7 +17,8 @@ ARTIST FOLDERS
 [Artwork]/
   Exclusive/  NSFW-gated artist gallery media; optional subfolders are supported.
   Branding/   Artist-era logos, icons and member signatures.
-  Gallery/    Misc artist photos, gifs and videos (Gallery tab dump).
+  Miscellaneous/  Misc artist photos, gifs and videos (Miscellaneous tab; Misc on mobile).
+  Gallery/    Legacy alias for Miscellaneous/ (still read).
   Covers/     Optional covers for artist/user media.
 
 Release categories at the artist root:
@@ -35,7 +36,7 @@ Signatures appear over lineup photos on hover and below the photo in the
 member details modal. The member name must match the lineup display name.
 
 Supported gallery dump images: .png, .jpg, .jpeg, .webp, .gif, .bmp
-Gallery dump also supports video formats such as .mp4, .webm, .mov and .m4v.
+Miscellaneous dump also supports video formats such as .mp4, .webm, .mov and .m4v.
 Exclusive also supports those video formats.
 
 RELEASE AND EDITION FOLDERS

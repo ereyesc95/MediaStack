@@ -282,7 +282,7 @@ def artist_cards(
     label: str = "",
     producer: str = "",
     orientation: str = Query(
-        "landscape", pattern="^(landscape|portrait|banner|icons)$"
+        "landscape", pattern="^(landscape|portrait|banner|icons|round)$"
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(48, ge=1, le=200),

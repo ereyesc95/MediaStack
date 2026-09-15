@@ -24,7 +24,7 @@ from app.services import musicbrainz
 ARTIST_FOLDERS = (
     "[Artwork]/Exclusive",
     "[Artwork]/Branding",
-    "[Artwork]/Gallery",
+    "[Artwork]/Miscellaneous",
     "[Artwork]/Covers",
     "Albums",
     "Extended Plays",
