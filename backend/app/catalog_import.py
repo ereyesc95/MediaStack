@@ -640,7 +640,7 @@ def update_catalog_folders(
     artwork = franchise_dir / "[Artwork]"
     if artwork.is_dir():
         created += _mkdir_tree(
-            artwork, ("Branding", "Covers", "Photos", "Exclusive")
+            artwork, ("Branding", "Covers", "Gallery", "Exclusive")
         )
 
     leaf_dirs = [
@@ -703,7 +703,7 @@ async def create_catalog_import(
     if make_home:
         set_explicit_franchise_home(db, franchise_name, module)
         if not franchise_existed:
-            for child in ("Branding", "Covers", "Photos", "Exclusive"):
+            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
                 (franchise_dir / "[Artwork]" / child).mkdir(
                     parents=True, exist_ok=True
                 )

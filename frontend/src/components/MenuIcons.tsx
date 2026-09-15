@@ -101,6 +101,21 @@ export function IconCardBanner({ className }: IconProps) {
   );
 }
 
+export function IconCardRound({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <circle
+        cx="12"
+        cy="12"
+        r="7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
 export function IconCardIcons({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>

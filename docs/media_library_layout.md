@@ -40,6 +40,21 @@ Legacy `Audio/{Category}/` trees are still scanned as a fallback.
 
 Portals: compilation `.lnk` / `.path` / symlinks (resolved via `resolve_media_entry()` in `media_paths_util.py`).
 
+### Format versions (CD / LP / Digital / …)
+
+When a release or edition exists on multiple formats, use sibling format folders (≥2). Do **not** put `[Artwork]` on the parent of the set — each version has its own `[Artwork]`.
+
+```
+Albums/1997.11.03. Greatest Lovesongs Vol. 666/
+└── 2025.10.12. Remastered Edition/
+    ├── 2025.10.12. CD/
+    ├── 2025.10.12. CD - MiniDisc/
+    ├── 2025.10.12. Digital/
+    └── 2025.10.12. LP - Black/
+```
+
+Recognized cores (after date / `01.` strip): `CD`, `SACD`, `MiniDisc`/`MD`, `Flexi`, `Digital`, `USB`, `LP`/`Vinyl`, `Cassette`/`Tape`, `DVD`, `Blu-ray`, `VHS` (plus `Format - Variant`). Tabs: CD family → Digital → LP → Cassette → DVD → Blu-ray → VHS. Catalog covers prefer the **CD** version. A single format folder alone is not a version set.
+
 ### Video — Pattern A (category → item)
 
 Categories sorted **A–Z** (only folders that exist are shown):
@@ -98,8 +113,10 @@ Music/H/HIM/Library/
 
 ### Gallery
 
-`[Artwork]/Photos/`, `[Artwork]/Branding/`, `[Artwork]/Covers/` — see README.
+`[Artwork]/Gallery/`, `[Artwork]/Branding/`, `[Artwork]/Covers/` — see README.
+Release/edition `[Artwork]/Photo - {Banner|Landscape|Portrait|Square}` supply heroes and Promo.
 Legacy `Gallery/Logos/` remains readable, but new artist scaffolds use Branding.
+`[Artwork]/Photos` is ignored (hard cut — rename to Gallery on disk).
 
 ---
 

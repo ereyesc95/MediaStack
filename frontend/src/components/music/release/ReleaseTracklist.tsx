@@ -25,6 +25,7 @@ import type {
   ReleaseTrackGroup,
   ReleaseTrackItem,
   ReleaseTracklist,
+  ReleaseVersion,
   TrackVersionItem,
 } from "../../../types";
 import BillboardText from "../../BillboardText";
@@ -170,6 +171,34 @@ function editionDisplayParts(edition: ReleaseEdition): {
     edition.date_iso,
     edition.display_date
   );
+}
+
+function editionHasFormatVersions(edition: ReleaseEdition): boolean {
+  return (edition.versions?.length ?? 0) >= 2;
+}
+
+function namedEditionTitle(title: string): boolean {
+  return /\b(edition|remaster|deluxe|standard|limited|expanded|anniversary)\b/i.test(
+    title
+  );
+}
+
+function activeVersionForEdition(
+  edition: ReleaseEdition,
+  activeVersionIds: Record<string, string>
+): ReleaseVersion | null {
+  const versions = edition.versions;
+  if (!versions || versions.length < 2) return null;
+  const id = activeVersionIds[edition.id];
+  return versions.find((v) => v.id === id) ?? versions[0] ?? null;
+}
+
+function editionVisibleGroups(
+  edition: ReleaseEdition,
+  activeVersionIds: Record<string, string>
+): ReleaseTrackGroup[] {
+  const ver = activeVersionForEdition(edition, activeVersionIds);
+  return ver ? ver.groups : edition.groups;
 }
 
 function sourceAlbumDisplayTitle(title: string): string {
@@ -461,6 +490,9 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     navigate_release_id: string;
   } | null>(null);
   const [expandedEditionId, setExpandedEditionId] = useState<string | null>(null);
+  const [activeVersionIds, setActiveVersionIds] = useState<Record<string, string>>(
+    {}
+  );
   const lyricsRequestRef = useRef(0);
 
   const setView = useCallback(
@@ -519,8 +551,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
 
   const allTracksFlat = useMemo(() => {
     if (!data) return [] as ReleaseTrackItem[];
-    return data.editions.flatMap((ed) => ed.groups.flatMap((g) => g.tracks));
-  }, [data]);
+    return data.editions.flatMap((ed) =>
+      editionVisibleGroups(ed, activeVersionIds).flatMap((g) => g.tracks)
+    );
+  }, [data, activeVersionIds]);
 
   const trackContexts = useMemo(() => {
     if (!data) return [] as Array<{
@@ -532,7 +566,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       groupDateIso?: string | null;
     }>;
     return data.editions.flatMap((ed, editionIndex) =>
-      ed.groups.flatMap((group) =>
+      editionVisibleGroups(ed, activeVersionIds).flatMap((group) =>
         group.tracks.map((track) => ({
           track,
           edition: ed,
@@ -543,7 +577,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         }))
       )
     );
-  }, [data]);
+  }, [data, activeVersionIds]);
 
   const resolvePanelDateIso = useCallback(
     (path: string | null) => {
@@ -561,8 +595,62 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   const shouldShowEditionHeader = (edition: ReleaseEdition) => {
     if (edition.kind === "bside") return true;
     if (edition.unresolved || edition.is_link) return true;
-    return data ? data.editions.length > 1 : false;
+    if (!data) return false;
+    if (data.editions.length > 1) return true;
+    // Single named edition with format versions still needs its header (tabs sit under it).
+    if (editionHasFormatVersions(edition)) {
+      return namedEditionTitle(editionDisplayParts(edition).title);
+    }
+    return false;
   };
+
+  useEffect(() => {
+    if (!data?.editions.length) {
+      setActiveVersionIds({});
+      return;
+    }
+    setActiveVersionIds((prev) => {
+      const next: Record<string, string> = {};
+      let changed = false;
+      for (const ed of data.editions) {
+        const versions = ed.versions;
+        if (!versions || versions.length < 2) continue;
+        let pick: string | undefined;
+        if (playingPath) {
+          const match = versions.find((v) =>
+            v.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
+          );
+          if (match) pick = match.id;
+        }
+        if (!pick) {
+          const previous =
+            prev[ed.id] && versions.some((v) => v.id === prev[ed.id])
+              ? prev[ed.id]
+              : null;
+          pick =
+            previous ??
+            versions.find((v) =>
+              v.groups.some((g) => g.tracks.length > 0)
+            )?.id ??
+            versions[0]?.id;
+        }
+        if (pick) {
+          next[ed.id] = pick;
+          if (prev[ed.id] !== pick) changed = true;
+        }
+      }
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (
+        !changed &&
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((k) => prev[k] === next[k])
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [data?.editions, playingPath]);
 
   useEffect(() => {
     if (!data?.editions.length) {
@@ -572,7 +660,12 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     // Follow the playing track across editions (next/prev / track end).
     if (playingPath) {
       const match = data.editions.find((ed) =>
-        ed.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
+        editionVisibleGroups(ed, activeVersionIds).some((g) =>
+          g.tracks.some((t) => t.play_path === playingPath)
+        ) ||
+        (ed.versions ?? []).some((v) =>
+          v.groups.some((g) => g.tracks.some((t) => t.play_path === playingPath))
+        )
       );
       if (match) {
         setExpandedEditionId(match.id);
@@ -583,7 +676,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       if (prev && data.editions.some((e) => e.id === prev)) return prev;
       return data.editions[0]?.id ?? null;
     });
-  }, [data?.editions, playingPath, bandId, releaseId]);
+  }, [data?.editions, playingPath, bandId, releaseId, activeVersionIds]);
 
   const toggleEdition = (id: string) => {
     setExpandedEditionId((prev) => (prev === id ? null : id));
@@ -859,6 +952,24 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           const showHeader = shouldShowEditionHeader(ed);
           const parts = editionDisplayParts(ed);
           const open = !showHeader || expandedEditionId === ed.id;
+          const formatVersions = editionHasFormatVersions(ed) ? ed.versions! : null;
+          const activeVersion = formatVersions
+            ? activeVersionForEdition(ed, activeVersionIds)
+            : null;
+          const visibleGroups = editionVisibleGroups(ed, activeVersionIds);
+          const editionArt: ReleaseEdition = activeVersion
+            ? {
+                ...ed,
+                cover_url: activeVersion.cover_url ?? ed.cover_url,
+                cover_back_url: activeVersion.cover_back_url ?? ed.cover_back_url,
+                cover_animation_url:
+                  activeVersion.cover_animation_url ?? ed.cover_animation_url,
+                canvas_url: activeVersion.canvas_url ?? ed.canvas_url,
+                disc_url: activeVersion.disc_url ?? ed.disc_url,
+                background_layers:
+                  activeVersion.background_layers ?? ed.background_layers,
+              }
+            : ed;
           return (
           <section
             key={ed.id}
@@ -884,15 +995,45 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               </button>
             )}
 
+            {formatVersions && open ? (
+              <div
+                className="release-tracklist__version-tabs"
+                role="tablist"
+                aria-label="Format versions"
+              >
+                {formatVersions.map((ver) => {
+                  const selected = activeVersion?.id === ver.id;
+                  return (
+                    <button
+                      key={ver.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      className={selected ? "active" : undefined}
+                      onClick={() =>
+                        setActiveVersionIds((prev) =>
+                          prev[ed.id] === ver.id
+                            ? prev
+                            : { ...prev, [ed.id]: ver.id }
+                        )
+                      }
+                    >
+                      {ver.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
             <MsDisclosure open={open}>
-            {ed.unresolved && ed.groups.length === 0 && (
+            {ed.unresolved && visibleGroups.length === 0 && (
               <p className="release-tracklist__edition-empty muted">
                 Original release not found in library.
               </p>
             )}
 
             {ed.kind === "bside"
-              ? groupBsideGroups(ed.groups).map(({ singleTitle, groups, showSingleHeader }) => (
+              ? groupBsideGroups(visibleGroups).map(({ singleTitle, groups, showSingleHeader }) => (
                   <div key={singleTitle} className="release-tracklist__bside-single">
                     {showSingleHeader && (
                       <h3 className="release-tracklist__single-title">{singleTitle}</h3>
@@ -924,7 +1065,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           <ol className="release-tracklist__tracks">
                             {group.tracks.map((track) => {
                               const active = playingPath === track.play_path;
-                              const art = trackArt(track, ed, group.disc_url);
+                              const art = trackArt(track, editionArt, group.disc_url);
                               const videos = trackYoutubeVideos(track);
                               const playTrack = () => {
                                 if (track.is_video) {
@@ -1011,8 +1152,8 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                     })}
                   </div>
                 ))
-              : ed.groups.map((group) => {
-              const showGroupLabels = ed.groups.length > 1;
+              : visibleGroups.map((group) => {
+              const showGroupLabels = visibleGroups.length > 1;
               return (
               <div key={group.id} className="release-tracklist__group">
                 {showGroupLabels && group.label && (
@@ -1021,7 +1162,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                 <ol className="release-tracklist__tracks">
                   {group.tracks.map((track) => {
                     const active = playingPath === track.play_path;
-                    const art = trackArt(track, ed, group.disc_url);
+                    const art = trackArt(track, editionArt, group.disc_url);
                     const videos = trackYoutubeVideos(track);
                     const playTrack = () => {
                       if (track.is_video) {

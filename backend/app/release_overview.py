@@ -151,6 +151,11 @@ def _resolve_standard_edition(content: Path) -> Path:
 
 
 def _standard_artwork_dir(edition: Path) -> Path | None:
+    from app.release_versions import resolve_artwork_dir_preferring_cd_version
+
+    preferred = resolve_artwork_dir_preferring_cd_version(edition)
+    if preferred:
+        return preferred
     art = _find_artwork_subdir(edition)
     if art:
         return art
@@ -184,17 +189,31 @@ def _artwork_media_file(
     if allow_video:
         exts |= VIDEO_EXTS
     for p in artwork.iterdir():
-        if p.is_file() and p.suffix.lower() in exts and p.stem.casefold() == want:
+        if not p.is_file() or p.suffix.lower() not in exts:
+            continue
+        name = p.name.casefold()
+        if "_small" in name or "_small." in name:
+            continue
+        if p.stem.casefold() == want:
             return p
     return None
 
 
 def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | None]:
+    from app.artwork_stems import (
+        resolve_cover_banner_file,
+        resolve_cover_landscape_file,
+        resolve_cover_portrait_file,
+    )
+
     if not artwork:
         return {
             "cover_front_url": None,
             "cover_back_url": None,
             "cover_inner_url": None,
+            "cover_banner_url": None,
+            "cover_landscape_url": None,
+            "cover_portrait_url": None,
             "cover_animation_url": None,
             "canvas_url": None,
             "icon_url": None,
@@ -212,12 +231,16 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
                     p.is_file()
                     and p.suffix.lower() in IMAGE_EXTS
                     and "back" in p.stem.casefold()
+                    and "_small" not in p.name.casefold()
                 ):
                     cover_back = p
                     break
         except OSError:
             pass
     cover_inner = _artwork_file(artwork, COVER_INNER_STEM)
+    cover_banner = resolve_cover_banner_file(artwork)
+    cover_landscape = resolve_cover_landscape_file(artwork)
+    cover_portrait = resolve_cover_portrait_file(artwork)
     cover_animation = resolve_animation_album_file(artwork)
     canvas = resolve_canvas_album_file(artwork)
     logo = _artwork_file(artwork, LOGO_STEM)
@@ -228,6 +251,13 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
         "cover_front_url": _media_url(cover_front, media_root) if cover_front else None,
         "cover_back_url": _media_url(cover_back, media_root) if cover_back else None,
         "cover_inner_url": _media_url(cover_inner, media_root) if cover_inner else None,
+        "cover_banner_url": _media_url(cover_banner, media_root) if cover_banner else None,
+        "cover_landscape_url": _media_url(cover_landscape, media_root)
+        if cover_landscape
+        else None,
+        "cover_portrait_url": _media_url(cover_portrait, media_root)
+        if cover_portrait
+        else None,
         "cover_animation_url": _media_url(cover_animation, media_root)
         if cover_animation
         else None,
@@ -826,11 +856,14 @@ def build_release_overview(
                 era_icon_url = _media_url(icon.path, media_root)
             if logo:
                 era_logo_url = _media_url(logo.path, media_root)
-        photos_dir = _gallery_subdir(artist_dir, "Photos")
-        photos = _list_photos(photos_dir)
-        closest = _closest_gallery_photo(photos, release_year)
-        if closest:
-            gallery_photo_url = _media_url(closest.path, media_root)
+        photos_hit = None
+        from app.release_photo_art import resolve_standard_photo
+
+        photos_hit = resolve_standard_photo(content, "landscape") or resolve_standard_photo(
+            content, "portrait"
+        )
+        if photos_hit:
+            gallery_photo_url = _media_url(photos_hit.path, media_root)
 
     lineup_full = _build_lineup(db, band, media_root)
     solo = _is_solo(db, band)
@@ -903,6 +936,9 @@ def build_release_overview(
         "reviews": [],
         "cover_url": urls.get("cover_front_url") or card.get("cover_url"),
         "cover_back_url": urls.get("cover_back_url"),
+        "cover_banner_url": urls.get("cover_banner_url"),
+        "cover_landscape_url": urls.get("cover_landscape_url"),
+        "cover_portrait_url": urls.get("cover_portrait_url"),
         "cover_animation_url": urls.get("cover_animation_url"),
         "canvas_url": urls.get("canvas_url"),
         "icon_url": urls.get("icon_url"),
@@ -943,6 +979,7 @@ def build_release_overview(
     banner_item = {
         "title": payload.get("title") or release_title,
         "date_iso": payload.get("date_iso") or card.get("date_iso"),
+        "folder_path": folder_rel,
     }
     enrich_items_with_banners(db, band_id, [banner_item])
     payload["banner_url"] = banner_item.get("banner_url")

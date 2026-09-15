@@ -2,13 +2,12 @@
 
 Expected layout (under MYSTACK_MEDIA_ROOT):
 
-    Music/{Letter}/{ArtistName}/[Artwork]/Photos/   — year-prefixed photos
+    Music/{Letter}/{ArtistName}/[Artwork]/Gallery/  — misc dump (photos, gifs, videos)
     Music/{Letter}/{ArtistName}/[Artwork]/Branding/ — era logos, icons, signatures
     Music/{Letter}/{ArtistName}/[Artwork]/Covers/   — optional playlist covers
 
-Legacy ``Gallery/`` (same subfolders) is still accepted as a fallback.
-
-Example: Music/H/HIM/[Artwork]/Photos/1997.00. Era, Landscape.jpg
+Release/edition ``[Artwork]/Photo - {Banner|Landscape|Portrait|Square}`` supply
+card heroes, About carousel, and Promo tab. ``[Artwork]/Photos`` is ignored (hard cut).
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ ERA_RE = re.compile(
     re.IGNORECASE,
 )
 ORIENTATION_RE = re.compile(r"(landscape|portrait|banner)", re.IGNORECASE)
-CARD_ORIENTATIONS = frozenset({"landscape", "portrait", "banner", "icons"})
+CARD_ORIENTATIONS = frozenset({"landscape", "portrait", "banner", "icons", "round"})
 
 
 def normalize_card_orientation(orientation: str | None) -> str:
@@ -387,6 +386,13 @@ def resolve_artist_card(
     *,
     orientation: str = "landscape",
 ) -> ArtistCardAssets:
+    """Catalog artist card art from latest Standard release Photo - * + Branding."""
+    from app.release_photo_art import (
+        latest_release_with_photos,
+        resolve_photo_for_release,
+        resolve_standard_photo,
+    )
+
     root = Path(settings.media_root) if settings.media_root else None
     if not root or not root.is_dir():
         return ArtistCardAssets(None, None, None, None, True)
@@ -395,14 +401,12 @@ def resolve_artist_card(
     if not artist_dir:
         return ArtistCardAssets(None, None, None, None, True)
 
-    photos_dir = _gallery_subdir(artist_dir, "Photos")
     logos_dir = _gallery_subdir(artist_dir, "Branding")
-    photos = _list_photos(photos_dir)
     brands = _list_era_brands(logos_dir)
 
     want = normalize_card_orientation(orientation)
-    # Collapsed twin is returned separately; UI chooses it for banner (non–mobile-portrait).
     want_collapsed_twin = want == "banner"
+    seed = f"{artist_name or ''}:{want}"
 
     def _pack(
         *,
@@ -423,13 +427,9 @@ def resolve_artist_card(
             logo_collapsed_url=_media_url(collapsed.path, root) if collapsed else None,
         )
 
-    seed = f"{artist_name or ''}:{want}"
-
     # Icons mode: branding only (no photo background)
     if want == "icons":
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
-        if not eras and photos:
-            eras = sorted({p.year for p in photos})
         fallback_year = _stable_choice(eras, f"{seed}:era") if eras else 2000
         return _pack(
             photo_url=None,
@@ -442,31 +442,31 @@ def resolve_artist_card(
             ),
         )
 
-    pool = _photo_pool(photos, want)
-    if not pool:
+    photo_ori = "square" if want == "round" else want
+    release_dir = latest_release_with_photos(artist_dir)
+    hit = None
+    if release_dir is not None:
+        hit = resolve_standard_photo(release_dir, photo_ori)
+        if hit is None:
+            hit = resolve_photo_for_release(
+                release_dir, artist_dir, photo_ori, include_neighbors=True
+            )
+
+    year = None
+    if hit and hit.date_iso and len(hit.date_iso) >= 4 and hit.date_iso[:4].isdigit():
+        year = int(hit.date_iso[:4])
+    if year is None:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
-        fallback_year = _stable_choice(eras, f"{seed}:era") if eras else 2000
-        return _pack(
-            photo_url=None,
-            year=fallback_year,
-            logo=_pick_brand_for_year(
-                brands, fallback_year, "logo", prefer_collapsed=False, seed=seed
-            ),
-            icon=_pick_brand_for_year(
-                brands, fallback_year, "icon", prefer_collapsed=False, seed=seed
-            ),
-        )
+        year = _stable_choice(eras, f"{seed}:era") if eras else 2000
 
-    photo = _pick_era_photo(pool, seed)
-    era_year = photo.year
     return _pack(
-        photo_url=_media_url(photo.path, root),
-        year=era_year,
+        photo_url=_media_url(hit.path, root) if hit else None,
+        year=year,
         logo=_pick_brand_for_year(
-            brands, era_year, "logo", prefer_collapsed=False, seed=seed
+            brands, year, "logo", prefer_collapsed=False, seed=seed
         ),
         icon=_pick_brand_for_year(
-            brands, era_year, "icon", prefer_collapsed=False, seed=seed
+            brands, year, "icon", prefer_collapsed=False, seed=seed
         ),
     )
 
@@ -491,8 +491,11 @@ def _brand_sort_key(brand: EraBrand) -> tuple:
 
 
 
-ANIMATION_PREFIX = "animation - "
-CANVAS_PREFIX = "canvas - "
+ANIMATION_PREFIX = "cover - animation"
+CANVAS_PREFIX = "cover - canvas"
+# Track-specific motion still uses Animation - {title} / Canvas - {title}
+TRACK_ANIMATION_PREFIX = "animation - "
+TRACK_CANVAS_PREFIX = "canvas - "
 
 
 def _release_meta_from_motion_file(
@@ -670,8 +673,11 @@ def artist_has_release_motion_artwork(artist_dir: Path) -> bool:
                             if not p.is_file() or p.suffix.lower() not in VIDEO_EXTS:
                                 continue
                             stem = p.stem.casefold()
-                            if stem.startswith(ANIMATION_PREFIX) or stem.startswith(
-                                CANVAS_PREFIX
+                            if (
+                                stem == ANIMATION_PREFIX
+                                or stem == CANVAS_PREFIX
+                                or stem.startswith(TRACK_ANIMATION_PREFIX)
+                                or stem.startswith(TRACK_CANVAS_PREFIX)
                             ):
                                 return True
                     except OSError:
@@ -693,9 +699,13 @@ def build_gallery_index(
     *,
     include_exclusive: bool = False,
 ) -> dict:
-    """List gallery photos and era logos/icons for the artist Gallery tab."""
+    """Gallery tabs: promo (release Photo - *), branding, gallery dump, animations."""
+    from app.release_photo_art import collect_gallery_dump, collect_promo_photos
+
     empty = {
-        "photos": [],
+        "promo": [],
+        "photos": [],  # legacy alias → gallery dump for older clients
+        "gallery": [],
         "branding": [],
         "logos": [],
         "icons": [],
@@ -717,22 +727,8 @@ def build_gallery_index(
 
     has_exclusive = has_exclusive_content(artist_dir, layout="music")
 
-    photos_out: list[dict] = []
-    for photo in sorted(
-        _list_photos(_gallery_subdir(artist_dir, "Photos")),
-        key=lambda p: (p.year, p.path.name.casefold()),
-    ):
-        rel = photo.path.relative_to(media_root).as_posix()
-        photos_out.append(
-            {
-                "id": _gallery_item_id(rel),
-                "url": _media_url(photo.path, media_root),
-                "year": photo.year,
-                "orientation": photo.orientation,
-                "title": _photo_title(photo.path),
-                "folder_path": rel,
-            }
-        )
+    promo_out = collect_promo_photos(artist_dir, media_root)
+    gallery_out = collect_gallery_dump(artist_dir, media_root)
 
     branding_out: list[dict] = []
     for brand in sorted(
@@ -760,7 +756,10 @@ def build_gallery_index(
     covers_out, canvas_out = list_release_motion_artwork(artist_dir, media_root)
 
     payload: dict = {
-        "photos": photos_out,
+        "promo": promo_out,
+        "gallery": gallery_out,
+        # Keep `photos` as the Gallery dump so older UI still has a bucket.
+        "photos": gallery_out,
         "branding": branding_out,
         "logos": logos_out,
         "icons": icons_out,
@@ -777,7 +776,12 @@ def build_gallery_index(
 
 
 def pick_playlist_cover(artist_name: str | None, release_hint: str | None) -> str | None:
-    """Best-effort cover from gallery or release folder name."""
+    """Best-effort cover from Covers folder or latest release Photo / Cover - Front."""
+    from app.release_photo_art import (
+        latest_release_with_photos,
+        resolve_standard_photo,
+    )
+
     root = Path(settings.media_root) if settings.media_root else None
     if not root:
         return None
@@ -786,18 +790,22 @@ def pick_playlist_cover(artist_name: str | None, release_hint: str | None) -> st
         return None
     covers = _gallery_subdir(artist_dir, "Covers")
     if covers.is_dir():
-        images = [p for p in covers.iterdir() if p.suffix.lower() in IMAGE_EXTS]
+        images = [
+            p
+            for p in covers.iterdir()
+            if p.suffix.lower() in IMAGE_EXTS and "_small" not in p.name.casefold()
+        ]
         if images:
             picked = _stable_choice(
                 sorted(images, key=lambda p: p.as_posix().casefold()),
                 f"{artist_name}:cover",
             )
             return _media_url(picked, root) if picked else None
-    photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
-    if photos:
-        picked = _stable_choice(
-            sorted(photos, key=lambda p: p.path.as_posix().casefold()),
-            f"{artist_name}:photo",
+    release_dir = latest_release_with_photos(artist_dir)
+    if release_dir:
+        hit = resolve_standard_photo(release_dir, "square") or resolve_standard_photo(
+            release_dir, "landscape"
         )
-        return _media_url(picked.path, root) if picked else None
+        if hit:
+            return _media_url(hit.path, root)
     return None

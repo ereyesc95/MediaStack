@@ -180,47 +180,13 @@ def _pick_brand_for_year_deterministic(
 
 
 def list_era_slides(artist_name: str | None, media_root: Path) -> list[dict]:
+    """About carousel: one slide per release (Standard Photo - *), newest first."""
     artist_dir = _artist_dir(media_root, artist_name)
     if not artist_dir:
         return []
-    photos = _list_photos(_gallery_subdir(artist_dir, "Photos"))
-    brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
-    if not photos:
-        return []
+    from app.release_photo_art import list_release_photo_slides
 
-    # One slide per era-year (dedupe portrait/landscape/banner triples).
-    by_year: dict[int, list[GalleryPhoto]] = {}
-    for photo in photos:
-        by_year.setdefault(photo.year, []).append(photo)
-
-    slides: list[dict] = []
-    for year in sorted(by_year.keys(), reverse=True):
-        year_photos = by_year[year]
-        portrait = _photo_for_orientation(year_photos, year, "portrait")
-        landscape = _photo_for_orientation(year_photos, year, "landscape")
-        banner = _photo_for_orientation(year_photos, year, "banner")
-        # Prefer a named orientation as the slide identity; fall back to any file.
-        primary = portrait or landscape or banner or sorted(
-            year_photos, key=lambda p: p.path.name.lower()
-        )[0]
-        icon = _pick_brand_for_year_deterministic(brands, year, "icon")
-        logo = _pick_brand_for_year_deterministic(brands, year, "logo")
-        slides.append(
-            {
-                "id": primary.path.as_posix(),
-                "year": year,
-                "orientation": primary.orientation,
-                "slide_url": _media_url(primary.path, media_root),
-                "portrait_url": _media_url(portrait.path, media_root) if portrait else None,
-                "landscape_url": _media_url(landscape.path, media_root)
-                if landscape
-                else None,
-                "banner_url": _media_url(banner.path, media_root) if banner else None,
-                "icon_url": _media_url(icon.path, media_root) if icon else None,
-                "logo_url": _media_url(logo.path, media_root) if logo else None,
-            }
-        )
-    return slides
+    return list_release_photo_slides(artist_dir, media_root)
 
 
 def _member_photo_url(artist: Artist, media_root: Path | None) -> str | None:
@@ -709,9 +675,9 @@ def _overview_media_mtimes(
     from app.media_index import _audio_mtime
 
     audio_mtime = _audio_mtime(artist_dir)
-    photos = _gallery_subdir(artist_dir, "Photos")
+    photos = _gallery_subdir(artist_dir, "Gallery")
     branding = _gallery_subdir(artist_dir, "Branding")
-    gallery_mtime = max(_dir_mtime(photos), _dir_mtime(branding))
+    gallery_mtime = max(_dir_mtime(photos), _dir_mtime(branding), audio_mtime)
     video_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Video"))
     library_mtime = _dir_mtime(_resolve_child_dir(artist_dir, "Library"))
     return gallery_mtime, audio_mtime, video_mtime, library_mtime

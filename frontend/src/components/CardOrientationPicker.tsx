@@ -8,6 +8,7 @@ import {
   IconCardIcons,
   IconCardLandscape,
   IconCardPortrait,
+  IconCardRound,
 } from "./MenuIcons";
 
 const OPTIONS: {
@@ -18,6 +19,7 @@ const OPTIONS: {
   { id: "banner", label: "Banner", Icon: IconCardBanner },
   { id: "landscape", label: "Landscape", Icon: IconCardLandscape },
   { id: "portrait", label: "Portrait", Icon: IconCardPortrait },
+  { id: "round", label: "Round", Icon: IconCardRound },
   { id: "icons", label: "Logos", Icon: IconCardIcons },
   { id: "badge", label: "Badge", Icon: IconCardBadge },
 ];

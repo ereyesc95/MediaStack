@@ -15,12 +15,15 @@ Gallery/Covers (or franchise [Artwork] when this module is the franchise home):
   Cover - Landscape.jpg
   Characters - Portrait.jpg
   Characters - Landscape.jpg
-  Wallpaper - Portrait.jpg
-  Wallpaper - Landscape.jpg
+  Cover - Portrait.jpg
   Photocard - Portrait Front.jpg
   Photocard - Portrait Back.jpg
   Photocard - Landscape Front.jpg
   Photocard - Landscape Back.jpg
+  Photo - Banner.jpg
+  Photo - Landscape.jpg
+  Photo - Portrait.jpg
+  Photo - Square.jpg
 
 Gallery/Branding (legacy Gallery/Renders is also supported):
   Logo.png
@@ -29,7 +32,7 @@ Gallery/Branding (legacy Gallery/Renders is also supported):
   Logo - Collapsed.png
 
 Gallery/Exclusive is NSFW-gated and supports optional subfolders.
-Franchise [Artwork] may also contain Branding/, Covers/, Photos/ and Exclusive/.
+Franchise [Artwork] may also contain Branding/, Covers/, Gallery/ and Exclusive/.
 Supported images: .png, .jpg, .jpeg, .webp, .gif, .bmp
 Exclusive also supports .mp4, .webm, .mov, .m4v and supported audio.
 
@@ -199,17 +202,25 @@ def ensure_catalog_user_guide_templates(db: Session) -> None:
         if not row:
             get_catalog_user_guide(db, module)
             continue
-        if row.aps_value:
-            row.aps_value = (
-                row.aps_value.replace(
-                    "Gallery/Renders/", "Gallery/Branding/"
-                )
-                .replace("Gallery/Renders:", "Gallery/Branding:")
-                .replace(
-                    "Gallery/Branding (legacy Gallery/Branding is also supported):",
-                    "Gallery/Branding (legacy Gallery/Renders is also supported):",
-                )
+        default = DEFAULT_GUIDES[module]
+        value = row.aps_value or ""
+        # Refresh scaffolds that still teach Photos/Wallpaper or miss Photo stems.
+        if (
+            "Photo - Banner" not in value
+            or "Photos/" in value
+            or "Wallpaper - " in value
+            or "Gallery/Renders/" in value
+        ):
+            row.aps_value = default
+            continue
+        row.aps_value = (
+            value.replace("Gallery/Renders/", "Gallery/Branding/")
+            .replace("Gallery/Renders:", "Gallery/Branding:")
+            .replace(
+                "Gallery/Branding (legacy Gallery/Branding is also supported):",
+                "Gallery/Branding (legacy Gallery/Renders is also supported):",
             )
-            if "FRANCHISE QUIZZES" not in row.aps_value:
-                row.aps_value = f"{row.aps_value.rstrip()}\n\n{QUIZ_GUIDE}"
+        )
+        if "FRANCHISE QUIZZES" not in row.aps_value:
+            row.aps_value = f"{row.aps_value.rstrip()}\n\n{QUIZ_GUIDE}"
     db.commit()

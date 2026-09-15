@@ -1365,6 +1365,12 @@ def _append_lnk_editions(
 
 
 def _list_edition_dirs(content: Path) -> list[Path]:
+    from app.release_versions import list_version_dirs
+
+    # Release root is itself a version set (CD + LP under the album folder).
+    if list_version_dirs(content):
+        return [content]
+
     editions: list[Path] = []
     for child in sorted(content.iterdir(), key=lambda p: p.name.casefold()):
         if child.suffix.casefold() == ".lnk":
@@ -1376,6 +1382,83 @@ def _list_edition_dirs(content: Path) -> list[Path]:
     if not editions and (_has_direct_audio(content) or _has_group_subdirs(content)):
         return [content]
     return editions
+
+
+def _build_edition_versions(
+    edition_dir: Path,
+    media_root: Path,
+    *,
+    db_durations: dict[str, float],
+    art_ctx: PlaybackArtContext | None,
+    db: Session | None,
+    band_id: int | None,
+) -> list[dict] | None:
+    """Build version payloads when edition_dir hosts a format version set."""
+    from app.release_versions import list_version_dirs, version_meta_for_folder
+
+    version_dirs = list_version_dirs(edition_dir)
+    if not version_dirs:
+        return None
+
+    versions_out: list[dict] = []
+    for vdir in version_dirs:
+        meta = version_meta_for_folder(vdir) or {}
+        rel = safe_relative(vdir, media_root) or vdir.name
+        label = meta.get("tab_label") or strip_version_name_prefixes(vdir.name)
+        edition_artwork = _find_artwork_subdir(vdir)
+        urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
+        scanned = _scan_resolved_folder(
+            vdir,
+            media_root,
+            db_durations=db_durations,
+            label=label,
+            kind="version",
+            edition_artwork=edition_artwork,
+            art_ctx=art_ctx,
+            db=db,
+            band_id=band_id,
+        )
+        groups = _dedupe_tracks(scanned.get("groups") or [])
+        # Stamp version label on tracks for now-playing / left panel
+        for group in groups:
+            for track in group.get("tracks") or []:
+                track["version_label"] = label
+                track["version_id"] = _edition_id(rel)
+                track["version_format"] = meta.get("format_key")
+        bg_layers = [
+            u
+            for u in (
+                urls.get("cover_inner_url"),
+                urls.get("cover_back_url"),
+                urls.get("cover_front_url"),
+            )
+            if u
+        ]
+        versions_out.append(
+            {
+                "id": _edition_id(rel),
+                "label": label,
+                "format": meta.get("format_key") or "other",
+                "variant": meta.get("variant"),
+                "date_iso": _parse_folder_date(vdir.name),
+                "display_date": format_display_date(_parse_folder_date(vdir.name)),
+                "folder_path": rel,
+                "cover_url": urls.get("cover_front_url"),
+                "cover_back_url": urls.get("cover_back_url"),
+                "cover_animation_url": urls.get("cover_animation_url"),
+                "canvas_url": urls.get("canvas_url"),
+                "disc_url": urls.get("disc_url"),
+                "background_layers": bg_layers,
+                "groups": groups,
+            }
+        )
+    return versions_out
+
+
+def strip_version_name_prefixes(name: str) -> str:
+    from app.release_versions import strip_version_name_prefixes as _strip
+
+    return _strip(name)
 
 
 def _dedupe_tracks(groups: list[dict]) -> list[dict]:
@@ -1749,7 +1832,42 @@ def build_release_tracklist(
         for edition_dir in edition_dirs:
             rel = safe_relative(edition_dir, media_root) or edition_dir.name
             label = _edition_label(edition_dir)
+            versions = _build_edition_versions(
+                edition_dir,
+                media_root,
+                db_durations=db_durations,
+                art_ctx=art_ctx,
+                db=db,
+                band_id=band_id,
+            )
+            if versions:
+                default = versions[0]
+                editions_out.append(
+                    {
+                        "id": _edition_id(rel),
+                        "label": label,
+                        "kind": "edition",
+                        "date_iso": _parse_folder_date(edition_dir.name),
+                        "display_date": format_display_date(
+                            _parse_folder_date(edition_dir.name)
+                        ),
+                        "cover_url": default.get("cover_url"),
+                        "cover_back_url": default.get("cover_back_url"),
+                        "cover_animation_url": default.get("cover_animation_url"),
+                        "canvas_url": default.get("canvas_url"),
+                        "disc_url": default.get("disc_url"),
+                        "background_layers": default.get("background_layers") or [],
+                        "groups": default.get("groups") or [],
+                        "versions": versions,
+                    }
+                )
+                continue
+
             edition_artwork = _find_artwork_subdir(edition_dir)
+            if not edition_artwork:
+                from app.release_versions import resolve_artwork_dir_preferring_cd_version
+
+                edition_artwork = resolve_artwork_dir_preferring_cd_version(edition_dir)
             urls = _artwork_urls(edition_artwork, media_root) if edition_artwork else {}
             scanned = _scan_resolved_folder(
                 edition_dir,

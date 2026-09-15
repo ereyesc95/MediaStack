@@ -16,7 +16,7 @@ import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "./GalleryViewerModal";
 
-export type GalleryTab = "photos" | "logos" | "animations" | "exclusive";
+export type GalleryTab = "promo" | "gallery" | "logos" | "animations" | "exclusive";
 export type AnimationSubtab = "covers" | "canvas";
 export type ExclusiveSubtab = string;
 
@@ -31,11 +31,15 @@ export type ArtistGalleryState = {
   exclusiveSubtab: ExclusiveSubtab;
   setExclusiveSubtab: (tab: ExclusiveSubtab) => void;
   photos: GalleryPhotoItem[];
+  promo: GalleryPhotoItem[];
+  galleryDump: GalleryPhotoItem[];
   brands: GalleryBrandItem[];
   animationCovers: GalleryAnimationItem[];
   animationCanvas: GalleryAnimationItem[];
   exclusiveItems: SeriesGalleryItem[];
   exclusiveSubsections: { key: string; label: string; items: SeriesGalleryItem[] }[];
+  showPromo: boolean;
+  showGalleryDump: boolean;
   showPhotos: boolean;
   showLogos: boolean;
   showAnimations: boolean;
@@ -101,17 +105,22 @@ function hasExclusive(index: GalleryIndexPayload | null): boolean {
 }
 
 function pickInitialTab(index: GalleryIndexPayload | null): GalleryTab {
-  if (!index) return "photos";
+  if (!index) return "promo";
   const hasBranding =
     (index.branding?.length ?? 0) > 0 ||
     index.logos.length + index.icons.length > 0;
   const { covers, canvas } = animationBuckets(index);
   const hasAnimations = covers.length + canvas.length > 0;
-  if (index.photos.length > 0) return "photos";
+  const promo = index.promo?.length ? index.promo : [];
+  const galleryDump = index.gallery?.length
+    ? index.gallery
+    : index.photos;
+  if (promo.length > 0) return "promo";
   if (hasBranding) return "logos";
+  if (galleryDump.length > 0) return "gallery";
   if (hasAnimations) return "animations";
   if (hasExclusive(index)) return "exclusive";
-  return "photos";
+  return "promo";
 }
 
 function pickInitialAnimationSubtab(
@@ -212,10 +221,16 @@ export function useArtistGallery(
     };
   }, [bandId, enabled, refreshKey]);
 
-  const photos = useMemo(
-    () => (index ? sortPhotos(index.photos) : []),
+  const promo = useMemo(
+    () => (index?.promo?.length ? sortPhotos(index.promo) : []),
     [index]
   );
+  const galleryDump = useMemo(() => {
+    if (!index) return [];
+    if (index.gallery?.length) return sortPhotos(index.gallery);
+    return sortPhotos(index.photos);
+  }, [index]);
+  const photos = galleryDump;
   const brands = useMemo(
     () => (index ? brandingItems(index) : []),
     [index]
@@ -225,7 +240,9 @@ export function useArtistGallery(
     [index]
   );
 
-  const showPhotos = photos.length > 0;
+  const showPromo = promo.length > 0;
+  const showGalleryDump = galleryDump.length > 0;
+  const showPhotos = showPromo || showGalleryDump;
   const showLogos = brands.length > 0;
   const showAnimations =
     animationCovers.length > 0 || animationCanvas.length > 0;
@@ -245,8 +262,8 @@ export function useArtistGallery(
 
   const viewerItems: GalleryViewerItem[] = useMemo(() => {
     if (!index) return [];
-    if (tab === "photos") {
-      return photos.map((p) => ({
+    if (tab === "promo") {
+      return promo.map((p) => ({
         id: p.id,
         url: p.url,
         caption: photoCaption(p),
@@ -254,6 +271,20 @@ export function useArtistGallery(
           p.orientation !== "unknown"
             ? `${p.year} · ${p.orientation}`
             : String(p.year),
+        mediaType: "image" as const,
+      }));
+    }
+    if (tab === "gallery") {
+      return galleryDump.map((p) => ({
+        id: p.id,
+        url: p.url,
+        caption: photoCaption(p),
+        subcaption:
+          p.orientation !== "unknown"
+            ? `${p.year} · ${p.orientation}`
+            : p.year
+              ? String(p.year)
+              : undefined,
         mediaType: "image" as const,
       }));
     }
@@ -286,7 +317,8 @@ export function useArtistGallery(
   }, [
     index,
     tab,
-    photos,
+    promo,
+    galleryDump,
     brands,
     animationSubtab,
     animationCovers,
@@ -327,11 +359,15 @@ export function useArtistGallery(
     exclusiveSubtab,
     setExclusiveSubtab,
     photos,
+    promo,
+    galleryDump,
     brands,
     animationCovers,
     animationCanvas,
     exclusiveItems,
     exclusiveSubsections,
+    showPromo,
+    showGalleryDump,
     showPhotos,
     showLogos,
     showAnimations,
@@ -350,7 +386,8 @@ type BarsProps = {
 
 export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
   const {
-    showPhotos,
+    showPromo,
+    showGalleryDump,
     showLogos,
     showAnimations,
     showExclusive,
@@ -364,17 +401,24 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
     exclusiveSubtab,
     setExclusiveSubtab,
   } = state;
-  if (!showPhotos && !showLogos && !showAnimations && !showExclusive) return null;
+  if (
+    !showPromo &&
+    !showGalleryDump &&
+    !showLogos &&
+    !showAnimations &&
+    !showExclusive
+  )
+    return null;
   return (
     <>
       <nav className="artist-page__subtabs artist-gallery__tabs">
-        {showPhotos && (
+        {showPromo && (
           <button
             type="button"
-            className={tab === "photos" ? "active" : ""}
-            onClick={() => setTab("photos")}
+            className={tab === "promo" ? "active" : ""}
+            onClick={() => setTab("promo")}
           >
-            <span>PHOTOS</span>
+            <span>PROMO</span>
           </button>
         )}
         {showLogos && (
@@ -384,6 +428,15 @@ export function ArtistGalleryBars({ state, mobilePortrait }: BarsProps) {
             onClick={() => setTab("logos")}
           >
             <span>{mobilePortrait ? "BRANDS" : "BRANDING"}</span>
+          </button>
+        )}
+        {showGalleryDump && (
+          <button
+            type="button"
+            className={tab === "gallery" ? "active" : ""}
+            onClick={() => setTab("gallery")}
+          >
+            <span>GALLERY</span>
           </button>
         )}
         {showAnimations && (
@@ -455,7 +508,8 @@ export default function ArtistGallery({ state }: Props) {
     loading,
     error,
     tab,
-    photos,
+    promo,
+    galleryDump,
     brands,
     animationCovers,
     animationCanvas,
@@ -490,12 +544,32 @@ export default function ArtistGallery({ state }: Props) {
 
   return (
     <div className="artist-gallery">
-      {tab === "photos" ? (
-        photos.length === 0 ? (
+      {tab === "promo" ? (
+        promo.length === 0 ? (
           <p className="muted artist-gallery__empty">No items in this section.</p>
         ) : (
           <div className="artist-gallery__photo-grid">
-            {photos.map((photo) => (
+            {promo.map((photo) => (
+              <button
+                key={photo.id}
+                type="button"
+                className="artist-gallery__photo-card"
+                onClick={() => openViewer(photo.id)}
+              >
+                <img src={photo.url} alt="" loading="lazy" draggable={false} />
+                <span className="artist-gallery__card-label">
+                  {photoCaption(photo)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )
+      ) : tab === "gallery" ? (
+        galleryDump.length === 0 ? (
+          <p className="muted artist-gallery__empty">No items in this section.</p>
+        ) : (
+          <div className="artist-gallery__photo-grid">
+            {galleryDump.map((photo) => (
               <button
                 key={photo.id}
                 type="button"

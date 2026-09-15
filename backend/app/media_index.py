@@ -130,7 +130,12 @@ def release_id_from_path(rel_path: str) -> str:
 def _artwork_file(artwork: Path, stem: str) -> Path | None:
     want = stem.casefold()
     for p in artwork.iterdir():
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTS and p.stem.casefold() == want:
+        if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
+            continue
+        name = p.name.casefold()
+        if "_small" in name or "_small." in name:
+            continue
+        if p.stem.casefold() == want:
             return p
     return None
 
@@ -144,10 +149,34 @@ def _find_release_artwork(
     root: Path,
 ) -> tuple[Path | None, Path | None, Path | None]:
     """Return (cover_path, logo_path, logo_collapsed_path) under a release folder tree."""
+    from app.release_versions import (
+        list_version_dirs,
+        preferred_version_dir,
+        resolve_artwork_dir_preferring_cd_version,
+    )
+
+    # Prefer CD (or first) version artwork when the release/edition is a version set.
+    preferred = resolve_artwork_dir_preferring_cd_version(root)
+    if preferred:
+        cover = _artwork_file(preferred, COVER_FRONT_STEM)
+        logo = _artwork_file(preferred, LOGO_STEM)
+        collapsed = _artwork_file(preferred, LOGO_COLLAPSED_STEM)
+        if cover or logo or collapsed:
+            return cover, logo, collapsed
+
     artwork_dirs: list[Path] = []
 
     def walk(directory: Path) -> None:
         if not directory.is_dir():
+            return
+        # Don't descend into non-preferred version siblings when a version set exists
+        versions = list_version_dirs(directory)
+        if versions:
+            pick = preferred_version_dir(directory) or versions[0]
+            art = _find_artwork_subdir(pick)
+            if art:
+                artwork_dirs.append(art)
+            walk(pick)
             return
         art = _find_artwork_subdir(directory)
         if art:
@@ -272,7 +301,9 @@ def _is_audio_category_dir(folder: Path) -> bool:
 
 
 def _release_dir_from_content_folder(folder: Path) -> Path:
-    """Walk up from edition/disc/content folder to the release root (not the category folder)."""
+    """Walk up from edition/disc/version/content folder to the release root."""
+    from app.release_versions import is_version_folder_name
+
     current = folder
     for _ in range(15):
         parent = current.parent
@@ -280,7 +311,11 @@ def _release_dir_from_content_folder(folder: Path) -> Path:
             return current
         if _is_audio_category_dir(parent):
             return current
-        if _is_group_subdir_name(current.name) or _is_edition_dir(current):
+        if (
+            _is_group_subdir_name(current.name)
+            or _is_edition_dir(current)
+            or is_version_folder_name(current.name)
+        ):
             current = parent
             continue
         return current
@@ -711,15 +746,20 @@ def media_visibility_flags(
 
     gallery = _gallery_dir(artist_dir)
     if gallery.is_dir():
-        photos = _resolve_child_dir(gallery, "Photos")
+        gallery_dump = _resolve_child_dir(gallery, "Gallery")
         branding = _gallery_subdir(artist_dir, "Branding")
         covers = _resolve_child_dir(gallery, "Covers")
         flags["has_gallery"] = (
-            _dir_has_gallery_entries(photos)
+            _dir_has_gallery_entries(gallery_dump)
             or _dir_has_brand_gallery_entries(branding)
             or _dir_has_gallery_entries(covers)
             or _dir_has_direct_gallery_files(gallery)
         )
+    if not flags["has_gallery"]:
+        from app.release_photo_art import latest_release_with_photos
+
+        if latest_release_with_photos(artist_dir) is not None:
+            flags["has_gallery"] = True
     if not flags["has_gallery"] and artist_has_release_motion_artwork(artist_dir):
         flags["has_gallery"] = True
 

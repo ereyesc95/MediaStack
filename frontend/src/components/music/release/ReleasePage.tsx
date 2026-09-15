@@ -398,6 +398,7 @@ export default function ReleasePage({
   const [playbackArt, setPlaybackArt] = useState<ReleasePlaybackArt | null>(null);
   const [coverFailed, setCoverFailed] = useState(false);
   const [coverFlipped, setCoverFlipped] = useState(false);
+  const [bannerFlipped, setBannerFlipped] = useState(false);
   const [trackPhotocards, setTrackPhotocards] = useState<
     ReleaseOverview["photocards"] | null
   >(null);
@@ -694,6 +695,7 @@ export default function ReleasePage({
     setPlaybackArt(null);
     setCoverFailed(false);
     setCoverFlipped(false);
+    setBannerFlipped(false);
     setTrackPhotocards(null);
     setVersionSource(null);
     setPanelDateIso(null);
@@ -996,6 +998,7 @@ export default function ReleasePage({
 
   useEffect(() => {
     setCoverFlipped(false);
+    setBannerFlipped(false);
     setCoverFailed(false);
   }, [effectivePanelCover, displayCoverBack]);
 
@@ -1587,6 +1590,14 @@ export default function ReleasePage({
   const showPanelReleaseMeta = !showTrackPanel;
   /** Banner: info body is toggleable; player + neighbors stay mounted separately. */
   const pageCanvasActive = bannerLayout && showPanelCanvas;
+  const scenicBannerUrl =
+    data?.banner_url ||
+    data?.gallery_photo_url ||
+    data?.photocards?.landscape_front ||
+    albumCover ||
+    null;
+  const coverBannerUrl = data?.cover_banner_url || null;
+  const canFlipBanner = Boolean(scenicBannerUrl && coverBannerUrl);
 
   const pageClass = [
     "release-page",
@@ -1662,21 +1673,59 @@ export default function ReleasePage({
               : ""
         }`}>
           {bannerLayout ? (
+            canFlipBanner ? (
+              <button
+                type="button"
+                className={`release-page__banner-flip${
+                  bannerFlipped ? " release-page__banner-flip--flipped" : ""
+                }`}
+                onClick={() => setBannerFlipped((f) => !f)}
+                aria-label={bannerFlipped ? "Show photo banner" : "Show cover banner"}
+              >
+                <span className="release-page__banner-flip-scene">
+                  <span
+                    className="release-page__banner-flip-face release-page__banner-flip-face--front"
+                    style={{ backgroundImage: `url("${scenicBannerUrl}")` }}
+                  />
+                  <span
+                    className="release-page__banner-flip-face release-page__banner-flip-face--back"
+                    style={{ backgroundImage: `url("${coverBannerUrl}")` }}
+                  />
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="release-page__banner-bg"
+                style={{
+                  backgroundImage: scenicBannerUrl
+                    ? `url("${scenicBannerUrl}")`
+                    : undefined,
+                }}
+                onClick={() => void openCoverArtworkViewer()}
+                aria-label="Browse release artwork"
+              />
+            )
+          ) : canFlipBanner ? (
             <button
               type="button"
-              className="release-page__banner-bg"
-              style={{
-                backgroundImage: `url("${
-                  data.banner_url ||
-                  data.gallery_photo_url ||
-                  data.photocards?.landscape_front ||
-                  albumCover ||
-                  ""
-                }")`,
-              }}
-              onClick={() => void openCoverArtworkViewer()}
-              aria-label="Browse release artwork"
-            />
+              className={`release-page__banner-flip release-page__banner-flip--desktop${
+                bannerFlipped ? " release-page__banner-flip--flipped" : ""
+              }`}
+              onClick={() => setBannerFlipped((f) => !f)}
+              aria-label={bannerFlipped ? "Show photo banner" : "Show cover banner"}
+            >
+              <span className="release-page__banner-flip-scene">
+                <span
+                  className="release-page__banner-flip-face release-page__banner-flip-face--front"
+                  style={{ backgroundImage: `url("${scenicBannerUrl}")` }}
+                />
+                <span
+                  className="release-page__banner-flip-face release-page__banner-flip-face--back"
+                  style={{ backgroundImage: `url("${coverBannerUrl}")` }}
+                />
+              </span>
+            </button>
           ) : null}
           {effectivePanelCover && (
             <div
@@ -1864,6 +1913,11 @@ export default function ReleasePage({
                     Released on {trackPanelReleaseDate}
                   </p>
                 )}
+                {panelActionTrack?.version_label ? (
+                  <p className="release-page__track-panel-format">
+                    {panelActionTrack.version_label}
+                  </p>
+                ) : null}
                 {trackPanelMeta.versionLabel && (
                   <p className="release-page__track-panel-version">
                     {trackPanelMeta.versionLabel}

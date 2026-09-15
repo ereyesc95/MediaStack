@@ -17,7 +17,7 @@ ARTIST FOLDERS
 [Artwork]/
   Exclusive/  NSFW-gated artist gallery media; optional subfolders are supported.
   Branding/   Artist-era logos, icons and member signatures.
-  Photos/     Artist-era photos and card backgrounds.
+  Gallery/    Misc artist photos, gifs and videos (Gallery tab dump).
   Covers/     Optional covers for artist/user media.
 
 Release categories at the artist root:
@@ -34,13 +34,9 @@ Branding:
 Signatures appear over lineup photos on hover and below the photo in the
 member details modal. The member name must match the lineup display name.
 
-Photos begin with a year and include an orientation when applicable:
-  1997. Artist photo, Portrait.jpg
-  1997. Artist photo, Landscape.jpg
-  1997. Artist photo, Banner.jpg
-
-Supported gallery images: .png, .jpg, .jpeg, .webp, .gif, .bmp
-Exclusive also supports gallery video formats such as .mp4, .webm, .mov and .m4v.
+Supported gallery dump images: .png, .jpg, .jpeg, .webp, .gif, .bmp
+Gallery dump also supports video formats such as .mp4, .webm, .mov and .m4v.
+Exclusive also supports those video formats.
 
 RELEASE AND EDITION FOLDERS
 ---------------------------
@@ -65,6 +61,38 @@ For multiple editions, create sibling edition folders inside the release:
 An edition is recognized when it contains audio, disc/side/tape folders, or [Artwork].
 ``Standard Edition`` is preferred by default when present.
 
+FORMAT VERSIONS
+---------------
+When a release or edition exists on multiple formats, put each format in its own
+folder. Do not put [Artwork] on the parent of these siblings — each version keeps
+its own [Artwork].
+
+Under an edition:
+  YYYY.MM.DD. Remastered Edition/
+    YYYY.MM.DD. CD/
+    YYYY.MM.DD. CD - MiniDisc/
+    YYYY.MM.DD. CD - Flexi/
+    YYYY.MM.DD. Digital/
+    YYYY.MM.DD. LP - Black/
+    YYYY.MM.DD. Cassette/
+
+Or directly under the release when there is only one content set:
+  YYYY.MM.DD. Album title/
+    YYYY.MM.DD. CD/
+    YYYY.MM.DD. LP/
+
+Recognized format cores (after date / 01. prefixes):
+  CD, SACD, MiniDisc / MD, Flexi / Flexidisc
+  Digital, USB
+  LP / Vinyl
+  Cassette / Tape
+  DVD, Blu-ray / BluRay, VHS
+Variants use a hyphen after the format, e.g. CD - MiniDisc, LP - Bloodline Red.
+
+Tabs appear when two or more format siblings exist (CD first by default).
+Catalog covers prefer the CD version's Cover - Front.
+A lone format folder is not a version set (no tabs).
+
 DISC, VINYL AND TAPE FOLDERS
 ----------------------------
 Preferred sortable names:
@@ -75,6 +103,7 @@ Preferred sortable names:
   01. Tape 01/
 Also supported: Disc 1, Disc 2, Side A, Side B, Tape A and Cassette A.
 Flat vinyl tracks may use A1., A2., B1., B2. filename prefixes.
+These disc/side/tape folders live inside a version (or edition), not as format tabs.
 
 SINGLES
 -------
@@ -88,17 +117,24 @@ RELEASE [ARTWORK] FILENAMES
 ---------------------------
 Create [Artwork] in the final release or edition folder.
 
+Hero / card photos (Promo tab + About carousel + catalog cards):
+  Photo - Banner
+  Photo - Landscape
+  Photo - Portrait
+  Photo - Square
+
 Static cover and background images:
   Cover - Front
   Cover - Album             Alternate main-cover name.
   Cover - Back
   Cover - Inner
-  Cover - Banner            Preferred 2000×500 (4:1); UI scales to this ratio.
+  Cover - Banner            Preferred 2000×500 (4:1); flips on now-playing banner tap.
   Cover - Landscape
+  Cover - Portrait
 
-Motion:
-  Animation - Album         .mp4, .webm, .mov or .m4v
-  Canvas - Album            .mp4, .webm, .mov or .m4v
+Motion (release / now-playing UI — not the Promo tab):
+  Cover - Animation         .mp4, .webm, .mov or .m4v
+  Cover - Canvas            .mp4, .webm, .mov or .m4v
 
 Track-specific media:
   Cover - Track title
@@ -120,15 +156,24 @@ Other supported extras:
   Photocard - Portrait Back
   Photocard - Landscape Front
   Photocard - Landscape Back
-  Photo - Portrait
-  Photo - Landscape
-  Wallpaper - Portrait
-  Wallpaper - Landscape
   Spotify
   QR
 
+Exact stem match only — files like ``Cover - Front.jpg_small.jpg`` are ignored.
+
 Static artwork formats: .png, .jpg, .jpeg, .webp, .gif, .bmp
 Motion artwork formats: .mp4, .webm, .mov, .m4v
+
+PHOTO FALLBACKS
+---------------
+Playing a track: current format version → current edition → Standard Edition →
+other editions → previous release (or next if this is the first release).
+
+Singles under a parent album also fall back to the parent edition that contains
+the track (Standard first), then the parent Standard Edition.
+
+Catalog cards and idle About carousel use Standard Edition photos, preferring
+the CD format version's Cover - Front when format versions exist.
 
 AUDIO FILENAMES
 ---------------
@@ -177,10 +222,21 @@ Windows .lnk, .path files and supported symlinks may point to shared releases or
 def ensure_artist_user_guide_template(db: Session) -> AppSetting:
     row = db.get(AppSetting, ARTIST_USER_GUIDE_KEY)
     if row:
-        # Upgrade the original built-in template without overwriting a template
-        # the user has already customized.
         value = row.aps_value or ""
-        if "Logos/      Artist-era branding." in value and "Signature -" not in value:
+        # Force-upgrade built-in templates that still describe Photos / Wallpaper
+        # or that predate format-version docs.
+        if (
+            (
+                "Photos/" in value
+                or "Wallpaper - " in value
+                or "Animation - Album" in value
+                or "[Artwork]/Photos" in value
+            )
+            and "Photo - Banner" not in value
+        ) or "FORMAT VERSIONS" not in value:
+            row.aps_value = DEFAULT_ARTIST_USER_GUIDE
+            db.commit()
+        elif "Logos/      Artist-era branding." in value and "Signature -" not in value:
             row.aps_value = DEFAULT_ARTIST_USER_GUIDE
             db.commit()
         return row

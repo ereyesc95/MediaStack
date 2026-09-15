@@ -8,7 +8,7 @@ import {
 import type { GalleryIndexPayload } from "./types";
 
 const MAX_ENTRIES = 24;
-const NAMESPACE = "artist-gallery";
+const NAMESPACE = "artist-gallery-v2";
 
 type CacheKey = `${number}`;
 

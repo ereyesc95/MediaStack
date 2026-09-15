@@ -240,6 +240,7 @@ export type CardOrientation =
   | "landscape"
   | "portrait"
   | "banner"
+  | "round"
   | "icons"
   | "badge";
 
@@ -713,6 +714,8 @@ export type GalleryAnimationItem = {
 };
 
 export type GalleryIndexPayload = {
+  promo?: GalleryPhotoItem[];
+  gallery?: GalleryPhotoItem[];
   photos: GalleryPhotoItem[];
   branding: GalleryBrandItem[];
   logos: GalleryBrandItem[];
@@ -772,6 +775,10 @@ export type ReleaseTrackItem = {
   canvas_url?: string | null;
   disc_url?: string | null;
   background_layers?: string[];
+  /** Format version tab label when the track belongs to a CD/LP/… version folder. */
+  version_label?: string | null;
+  version_id?: string | null;
+  version_format?: string | null;
 };
 
 export type ReleaseTakenFrom = {
@@ -824,6 +831,23 @@ export type ReleaseTrackGroup = {
   tracks: ReleaseTrackItem[];
 };
 
+export type ReleaseVersion = {
+  id: string;
+  label: string;
+  format: string;
+  variant?: string | null;
+  date_iso?: string | null;
+  display_date?: string | null;
+  folder_path?: string | null;
+  cover_url?: string | null;
+  cover_back_url?: string | null;
+  cover_animation_url?: string | null;
+  canvas_url?: string | null;
+  disc_url?: string | null;
+  background_layers?: string[];
+  groups: ReleaseTrackGroup[];
+};
+
 export type ReleaseEdition = {
   id: string;
   label: string;
@@ -831,6 +855,8 @@ export type ReleaseEdition = {
   date_iso: string | null;
   display_date?: string | null;
   groups: ReleaseTrackGroup[];
+  /** Format versions (CD / LP / …) when present — length ≥ 2. */
+  versions?: ReleaseVersion[];
   is_link?: boolean;
   unresolved?: boolean;
   cover_url?: string | null;
@@ -1067,6 +1093,9 @@ export type ReleaseOverview = {
   metadata_refreshed_at?: string | null;
   cover_url: string | null;
   cover_back_url?: string | null;
+  cover_banner_url?: string | null;
+  cover_landscape_url?: string | null;
+  cover_portrait_url?: string | null;
   cover_animation_url?: string | null;
   canvas_url?: string | null;
   icon_url?: string | null;
