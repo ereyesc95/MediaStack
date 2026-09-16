@@ -202,6 +202,8 @@ export default function CollectionModal({
     if (m.artist) setArtist(m.artist);
     if (m.title) setTitle(m.title);
   }
+
+  function applyPreview(data: CollectionPreview) {
     setPreview(data);
     setTitle(data.title || "");
     setArtist(data.artist || "");
