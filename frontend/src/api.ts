@@ -3288,3 +3288,155 @@ export function saveFranchiseQuizScore(
     }
   );
 }
+
+/* --- Physical music collection --- */
+
+export type CollectionListParams = {
+  q?: string;
+  subfilter?: string;
+  media?: string;
+  animation?: string;
+  canvas?: string;
+  letter?: string;
+  sort?: string;
+  order?: string;
+  view?: "table" | "cards";
+  page?: number;
+  page_size?: number;
+};
+
+export async function fetchCollection(
+  params: CollectionListParams = {}
+): Promise<{
+  items: import("./types").CollectionLeaf[];
+  total: number;
+  page: number;
+  page_size: number;
+  view: string;
+}> {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== "") q.set(k, String(v));
+  }
+  const qs = q.toString();
+  return request(`${API}/music/collection${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchCollectionItem(id: number) {
+  return request<import("./types").CollectionLeaf>(
+    `${API}/music/collection/${id}`
+  );
+}
+
+export async function fetchCollectionPreviewFromFolder(
+  bandId: number,
+  folderPath: string
+) {
+  const q = new URLSearchParams({
+    band_id: String(bandId),
+    folder_path: folderPath,
+  });
+  return request<import("./types").CollectionPreview>(
+    `${API}/music/collection/preview/from-folder?${q}`
+  );
+}
+
+export async function fetchCollectionStatus(params: {
+  folder_path?: string;
+  artist?: string;
+  title?: string;
+  edition?: string;
+  media_type?: string;
+  original_date?: string;
+  release_type?: string;
+}) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v) q.set(k, v);
+  }
+  return request<{ in_collection: boolean; collection_id: number | null }>(
+    `${API}/music/collection/status?${q}`
+  );
+}
+
+export async function upsertCollectionItem(body: Record<string, unknown>) {
+  return request<{ ok: boolean; item: import("./types").CollectionLeaf }>(
+    `${API}/music/collection`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function updateCollectionItem(
+  id: number,
+  body: Record<string, unknown>
+) {
+  return request<{ ok: boolean; item: import("./types").CollectionLeaf }>(
+    `${API}/music/collection/${id}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function deleteCollectionItem(id: number) {
+  return request<{ ok: boolean }>(`${API}/music/collection/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function previewCollectionImport(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(`${API}/music/collection/import/preview`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{
+    ok: boolean;
+    counts: Record<string, number>;
+    rows: Record<string, unknown>[];
+    total: number;
+  }>;
+}
+
+export async function commitCollectionImport(rows: Record<string, unknown>[]) {
+  return request<{ ok: boolean; added: number; updated: number; total: number }>(
+    `${API}/music/collection/import/commit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    }
+  );
+}
+
+export async function exportCollectionXlsx(): Promise<Blob> {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(`${API}/music/collection/export.xlsx`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+}
+
+export async function fetchCollectionMatches(artist: string, title = "") {
+  const q = new URLSearchParams({ artist, title });
+  return request<{
+    items: {
+      band_id: number;
+      artist?: string | null;
+      title?: string | null;
+      folder_path?: string | null;
+      release_id?: string | null;
+    }[];
+  }>(`${API}/music/collection/matches?${q}`);
+}

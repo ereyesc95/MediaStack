@@ -1177,6 +1177,7 @@ def _build_flat_compilation_edition(
         "kind": "edition",
         "date_iso": _parse_folder_date(content.name),
         "display_date": format_display_date(_parse_folder_date(content.name)),
+        "folder_path": rel,
         "cover_url": urls.get("cover_front_url"),
         "cover_back_url": urls.get("cover_back_url"),
         "cover_animation_url": urls.get("cover_animation_url"),
@@ -1851,6 +1852,7 @@ def build_release_tracklist(
                         "display_date": format_display_date(
                             _parse_folder_date(edition_dir.name)
                         ),
+                        "folder_path": rel,
                         "cover_url": default.get("cover_url"),
                         "cover_back_url": default.get("cover_back_url"),
                         "cover_animation_url": default.get("cover_animation_url"),
@@ -1900,6 +1902,7 @@ def build_release_tracklist(
                         "display_date": format_display_date(
                             _parse_folder_date(edition_dir.name)
                         ),
+                        "folder_path": rel,
                         "cover_url": urls.get("cover_front_url"),
                         "cover_back_url": urls.get("cover_back_url"),
                         "cover_animation_url": urls.get("cover_animation_url"),

@@ -1,9 +1,11 @@
 import asyncio
 from pathlib import Path
+import io
 import re
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -2726,3 +2728,253 @@ def reorder_playlist_tracks_route(
     if not result.get("ok"):
         raise HTTPException(400, result.get("error") or "Reorder failed")
     return result
+
+
+# --- Physical music collection (per profile) ---
+
+
+class CollectionUpsertBody(BaseModel):
+    artist: str
+    title: str
+    edition: str | None = "Standard Edition"
+    release_type: str | None = None
+    original_date: str | None = None
+    edition_date: str | None = None
+    media_type: str | None = None
+    version: str | None = None
+    genres: list[str] | None = None
+    country: str | None = None
+    country_iso: str | None = None
+    animation: list[str] | None = None
+    canvas: list[str] | None = None
+    autographs: list[str] | None = None
+    pending_extra: list[str] | None = None
+    pending_cleared: list[str] | None = None
+    folder_path: str | None = None
+    release_folder_path: str | None = None
+    band_id: int | None = None
+    release_id: str | None = None
+    notes: str | None = None
+    match_key: str | None = None
+
+
+class CollectionImportCommitBody(BaseModel):
+    rows: list[dict]
+
+
+@router.get("/collection")
+def collection_list(
+    q: str | None = None,
+    subfilter: str | None = None,
+    media: str | None = None,
+    animation: str | None = None,
+    canvas: str | None = None,
+    letter: str | None = None,
+    sort: str = "artist",
+    order: str = "asc",
+    view: str = "table",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(30, ge=1, le=10000),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import group_for_cards, group_for_table, list_items
+
+    items = list_items(
+        db,
+        user.usr_id,
+        q=q,
+        subfilter=subfilter,
+        media=media,
+        animation=animation,
+        canvas=canvas,
+        letter=letter,
+        sort=sort,
+        order=order,
+    )
+    if view == "cards":
+        grouped = group_for_cards(items)
+    else:
+        grouped = group_for_table(items)
+
+    total = len(grouped)
+    if page_size >= 10000:
+        page_items = grouped
+        page = 1
+    else:
+        start = (page - 1) * page_size
+        page_items = grouped[start : start + page_size]
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "view": view,
+    }
+
+
+@router.get("/collection/preview/from-folder")
+def collection_preview_folder(
+    band_id: int = Query(...),
+    folder_path: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import build_preview_from_folder, lookup_status
+
+    try:
+        data = build_preview_from_folder(db, band_id=band_id, folder_path=folder_path)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    status = lookup_status(
+        db,
+        user.usr_id,
+        folder_path=data.get("folder_path"),
+        match={
+            "artist": data.get("artist"),
+            "title": data.get("title"),
+            "edition": data.get("edition"),
+            "media_type": data.get("media_type"),
+            "original_date": data.get("original_release_date"),
+            "release_type": data.get("release_type"),
+        },
+    )
+    data.update(status)
+    return data
+
+
+@router.get("/collection/status")
+def collection_status(
+    folder_path: str | None = None,
+    artist: str | None = None,
+    title: str | None = None,
+    edition: str | None = None,
+    media_type: str | None = None,
+    original_date: str | None = None,
+    release_type: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import lookup_status
+
+    return lookup_status(
+        db,
+        user.usr_id,
+        folder_path=folder_path,
+        match={
+            "artist": artist,
+            "title": title,
+            "edition": edition,
+            "media_type": media_type,
+            "original_date": original_date,
+            "release_type": release_type,
+        },
+    )
+
+
+@router.get("/collection/matches")
+def collection_matches(
+    artist: str = Query(...),
+    title: str = Query(""),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.music_collection import fuzzy_matches
+
+    return {"items": fuzzy_matches(db, artist=artist, title=title)}
+
+
+@router.get("/collection/export.xlsx")
+def collection_export(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.collection_excel import export_collection_xlsx
+
+    data = export_collection_xlsx(db, user.usr_id)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Collection.xlsx"'},
+    )
+
+
+@router.post("/collection/import/preview")
+async def collection_import_preview(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.collection_excel import preview_import
+
+    raw = await file.read()
+    result = preview_import(db, user.usr_id, io.BytesIO(raw))
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Import failed")
+    return result
+
+
+@router.post("/collection/import/commit")
+def collection_import_commit(
+    body: CollectionImportCommitBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.collection_excel import commit_import
+
+    return commit_import(db, user.usr_id, body.rows)
+
+
+@router.post("/collection")
+def collection_create(
+    body: CollectionUpsertBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import serialize_item, upsert_item
+
+    row = upsert_item(db, user.usr_id, body.model_dump())
+    return {"ok": True, "item": serialize_item(db, row)}
+
+
+@router.get("/collection/{item_id}")
+def collection_get(
+    item_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import get_item, serialize_item
+
+    row = get_item(db, user.usr_id, item_id)
+    if not row:
+        raise HTTPException(404, "Collection item not found")
+    return serialize_item(db, row)
+
+
+@router.put("/collection/{item_id}")
+def collection_update(
+    item_id: int,
+    body: CollectionUpsertBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import get_item, serialize_item, upsert_item
+
+    existing = get_item(db, user.usr_id, item_id)
+    if not existing:
+        raise HTTPException(404, "Collection item not found")
+    row = upsert_item(db, user.usr_id, body.model_dump())
+    return {"ok": True, "item": serialize_item(db, row)}
+
+
+@router.delete("/collection/{item_id}")
+def collection_delete(
+    item_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import delete_item
+
+    if not delete_item(db, user.usr_id, item_id):
+        raise HTTPException(404, "Collection item not found")
+    return {"ok": True}

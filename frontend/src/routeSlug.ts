@@ -7,6 +7,7 @@ export const RESERVED_SEGMENTS = new Set([
   "library",
   "series",
   "catalog",
+  "collection",
   "playlists",
   "artist",
   "show",

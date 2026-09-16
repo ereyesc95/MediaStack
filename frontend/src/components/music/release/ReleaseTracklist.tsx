@@ -9,9 +9,11 @@ import {
   type CSSProperties,
 } from "react";
 import {
+  fetchCollectionStatus,
   fetchTrackLyrics,
   fetchTrackVersions,
 } from "../../../api";
+import CollectionModal from "../CollectionModal";
 import { prefetchReleaseTrackCredits } from "../../../releaseTrackCreditsCache";
 import {
   clearReleaseTracklistCache as clearTracklistCache,
@@ -431,6 +433,64 @@ function versionToTrackItem(version: TrackVersionItem): ReleaseTrackItem {
   };
 }
 
+function CollectionTracklistButton({
+  folderPath,
+  label = "short",
+  onOpen,
+}: {
+  folderPath: string;
+  label?: "short" | "long";
+  onOpen: (info: { folderPath: string; collectionId: number | null }) => void;
+}) {
+  const [inCollection, setInCollection] = useState(false);
+  const [collectionId, setCollectionId] = useState<number | null>(null);
+  const [hover, setHover] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchCollectionStatus({ folder_path: folderPath })
+      .then((s) => {
+        if (cancelled) return;
+        setInCollection(Boolean(s.in_collection));
+        setCollectionId(s.collection_id ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInCollection(false);
+        setCollectionId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath]);
+
+  const text = !inCollection
+    ? label === "long"
+      ? "Add to my collection"
+      : "Collection"
+    : hover
+      ? "Edit in my collection"
+      : "Added in my collection";
+
+  return (
+    <button
+      type="button"
+      className={`release-tracklist__collection-btn${
+        inCollection ? " is-added" : ""
+      }`}
+      title={text}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen({ folderPath, collectionId });
+      }}
+    >
+      {text}
+    </button>
+  );
+}
+
 const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function ReleaseTracklist(
   {
     bandId,
@@ -483,6 +543,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [plusTrack, setPlusTrack] = useState<ReleaseTrackItem | null>(null);
   const [lyricsEditOpen, setLyricsEditOpen] = useState(false);
+  const [collectionModal, setCollectionModal] = useState<{
+    folderPath: string;
+    collectionId: number | null;
+  } | null>(null);
   const [versionsReturnPath, setVersionsReturnPath] = useState<string | null>(null);
   const [playingVersionPath, setPlayingVersionPath] = useState<string | null>(null);
   const [activeVersionSource, setActiveVersionSource] = useState<{
@@ -999,52 +1063,78 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
             className="release-tracklist__edition-block"
           >
             {showHeader && (
-              <button
-                type="button"
-                className={`release-tracklist__edition-title series-season-block__header${
-                  open ? " is-open" : ""
-                }${
-                  ed.unresolved ? " release-tracklist__edition-title--unresolved" : ""
-                }`}
-                onClick={() => toggleEdition(ed.id)}
-                aria-expanded={open}
-              >
-                <span className="release-tracklist__edition-name">{parts.title}</span>
-                {parts.dateLabel ? (
-                  <span className="release-tracklist__title-suffix release-tracklist__edition-date">
-                    {parts.dateLabel}
-                  </span>
+              <div className="release-tracklist__edition-head">
+                <button
+                  type="button"
+                  className={`release-tracklist__edition-title series-season-block__header${
+                    open ? " is-open" : ""
+                  }${
+                    ed.unresolved ? " release-tracklist__edition-title--unresolved" : ""
+                  }`}
+                  onClick={() => toggleEdition(ed.id)}
+                  aria-expanded={open}
+                >
+                  <span className="release-tracklist__edition-name">{parts.title}</span>
+                  {parts.dateLabel ? (
+                    <span className="release-tracklist__title-suffix release-tracklist__edition-date">
+                      {parts.dateLabel}
+                    </span>
+                  ) : null}
+                </button>
+                {!formatVersions && ed.folder_path ? (
+                  <CollectionTracklistButton
+                    folderPath={ed.folder_path}
+                    onOpen={(info) => setCollectionModal(info)}
+                  />
                 ) : null}
-              </button>
+              </div>
             )}
 
+            {!showHeader && !formatVersions && ed.folder_path ? (
+              <div className="release-tracklist__collection-alone">
+                <CollectionTracklistButton
+                  folderPath={ed.folder_path}
+                  label="long"
+                  onOpen={(info) => setCollectionModal(info)}
+                />
+              </div>
+            ) : null}
+
             {formatVersions && open ? (
-              <div
-                className="release-tracklist__version-tabs"
-                role="tablist"
-                aria-label="Format versions"
-              >
-                {formatVersions.map((ver) => {
-                  const selected = activeVersion?.id === ver.id;
-                  return (
-                    <button
-                      key={ver.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      className={selected ? "active" : undefined}
-                      onClick={() =>
-                        setActiveVersionIds((prev) =>
-                          prev[ed.id] === ver.id
-                            ? prev
-                            : { ...prev, [ed.id]: ver.id }
-                        )
-                      }
-                    >
-                      {ver.label}
-                    </button>
-                  );
-                })}
+              <div className="release-tracklist__version-bar">
+                <div
+                  className="release-tracklist__version-tabs"
+                  role="tablist"
+                  aria-label="Format versions"
+                >
+                  {formatVersions.map((ver) => {
+                    const selected = activeVersion?.id === ver.id;
+                    return (
+                      <button
+                        key={ver.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        className={selected ? "active" : undefined}
+                        onClick={() =>
+                          setActiveVersionIds((prev) =>
+                            prev[ed.id] === ver.id
+                              ? prev
+                              : { ...prev, [ed.id]: ver.id }
+                          )
+                        }
+                      >
+                        {ver.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeVersion?.folder_path ? (
+                  <CollectionTracklistButton
+                    folderPath={activeVersion.folder_path}
+                    onOpen={(info) => setCollectionModal(info)}
+                  />
+                ) : null}
               </div>
             ) : null}
 
@@ -1490,6 +1580,16 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           }}
         />
       )}
+      {collectionModal ? (
+        <CollectionModal
+          open
+          mode={collectionModal.collectionId ? "edit" : "add"}
+          bandId={bandId}
+          folderPath={collectionModal.folderPath}
+          collectionId={collectionModal.collectionId}
+          onClose={() => setCollectionModal(null)}
+        />
+      ) : null}
     </div>
   );
 });

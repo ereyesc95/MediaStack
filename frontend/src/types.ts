@@ -247,7 +247,87 @@ export type CardOrientation =
 /** Cover vs banner layout for Audio / Video / Library release cards on artist pages. */
 export type ReleaseCardLayout = "cover" | "banner";
 
-export type MusicTab = "home" | "artists" | "playlists";
+export type MusicTab = "home" | "artists" | "collection" | "playlists";
+
+export type CollectionLeaf = {
+  id?: number;
+  row_kind?: "leaf" | "child" | "group";
+  group_key?: string;
+  artist: string;
+  title: string;
+  edition?: string;
+  release_type?: string | null;
+  original_date?: string | null;
+  original_date_display?: string | null;
+  edition_date?: string | null;
+  year?: string | null;
+  media_type?: string | null;
+  version?: string | null;
+  genres?: string[];
+  country?: string | null;
+  country_iso?: string | null;
+  animation?: string[];
+  canvas?: string[];
+  autographs?: string[];
+  pending?: string[];
+  has_pending?: boolean;
+  folder_path?: string | null;
+  release_folder_path?: string | null;
+  band_id?: number | null;
+  release_id?: string | null;
+  local?: boolean;
+  orphan?: boolean;
+  notes?: string | null;
+  cover_url?: string | null;
+  logo_url?: string | null;
+  cover_banner_url?: string | null;
+  spotify_card_url?: string | null;
+  animation_url?: string | null;
+  canvas_url?: string | null;
+  disc_url?: string | null;
+  disc_b_url?: string | null;
+  spotify_icon_active?: boolean;
+  version_count?: number;
+  versions?: CollectionLeaf[];
+  photocards?: { label: string; url?: string | null }[] | null;
+  photocard_pairs?: {
+    id: string;
+    label: string;
+    front_url?: string | null;
+    back_url?: string | null;
+  }[] | null;
+  autograph_images?: { label: string; url?: string | null }[] | null;
+  artwork?: Record<string, { label: string; missing?: boolean; url?: string | null }[]> | null;
+  missing_mandatory?: string[];
+};
+
+export type CollectionPreview = {
+  title: string;
+  original_release_date?: string | null;
+  original_release_date_display?: string | null;
+  edition: string;
+  release_date?: string | null;
+  release_date_display?: string | null;
+  artist?: string | null;
+  band_id?: number | null;
+  country?: string | null;
+  country_iso?: string | null;
+  release_type?: string | null;
+  genres?: string[];
+  media_type?: string | null;
+  version?: string | null;
+  animation?: string[];
+  canvas?: string[];
+  autographs?: string[];
+  artwork?: Record<string, { label: string; missing?: boolean; url?: string | null }[]>;
+  missing_mandatory?: string[];
+  urls?: Record<string, string | null>;
+  folder_path?: string | null;
+  release_folder_path?: string | null;
+  release_id?: string | null;
+  in_collection?: boolean;
+  collection_id?: number | null;
+};
 
 export type ArtistSection =
   | "overview"
@@ -854,6 +934,7 @@ export type ReleaseEdition = {
   kind?: "edition" | "single" | "bside" | "link";
   date_iso: string | null;
   display_date?: string | null;
+  folder_path?: string | null;
   groups: ReleaseTrackGroup[];
   /** Format versions (CD / LP / …) when present — length ≥ 2. */
   versions?: ReleaseVersion[];

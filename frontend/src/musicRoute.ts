@@ -286,6 +286,7 @@ function parseSlugArtistPath(pathname: string): ArtistRoute | null {
   const head = dec(m[1]);
   if (
     head === "playlists" ||
+    head === "collection" ||
     head === "artist" ||
     isReservedSegment(head)
   ) {

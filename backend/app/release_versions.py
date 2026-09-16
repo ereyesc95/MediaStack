@@ -31,10 +31,13 @@ FORMAT_ORDER: dict[str, int] = {
     "cd": 0,
     "digital": 1,
     "lp": 2,
-    "cassette": 3,
-    "dvd": 4,
-    "bluray": 5,
-    "vhs": 6,
+    "7inch": 3,
+    "10inch": 4,
+    "boxset": 5,
+    "cassette": 6,
+    "dvd": 7,
+    "bluray": 8,
+    "vhs": 9,
 }
 
 # Within CD family, plain CD before SACD / MiniDisc / Flexi
@@ -49,6 +52,9 @@ _FORMAT_LABELS: dict[str, str] = {
     "cd": "CD",
     "digital": "Digital",
     "lp": "LP",
+    "7inch": '7"',
+    "10inch": '10"',
+    "boxset": "Boxset",
     "cassette": "Cassette",
     "dvd": "DVD",
     "bluray": "Blu-ray",
@@ -67,6 +73,19 @@ _EXACT_CORES: dict[str, tuple[str, str | None]] = {
     "usb": ("digital", None),
     "lp": ("lp", None),
     "vinyl": ("lp", None),
+    '7"': ("7inch", None),
+    "7''": ("7inch", None),
+    "7″": ("7inch", None),
+    "7 inch": ("7inch", None),
+    "7-inch": ("7inch", None),
+    '10"': ("10inch", None),
+    "10''": ("10inch", None),
+    "10″": ("10inch", None),
+    "10 inch": ("10inch", None),
+    "10-inch": ("10inch", None),
+    "boxset": ("boxset", None),
+    "box set": ("boxset", None),
+    "box": ("boxset", None),
     "cassette": ("cassette", None),
     "tape": ("cassette", None),
     "dvd": ("dvd", None),
@@ -87,6 +106,19 @@ _PREFIX_FORMATS: tuple[tuple[str, str, str | None], ...] = (
     ("usb - ", "digital", None),
     ("lp - ", "lp", None),
     ("vinyl - ", "lp", None),
+    ('7" - ', "7inch", None),
+    ("7'' - ", "7inch", None),
+    ("7″ - ", "7inch", None),
+    ("7 inch - ", "7inch", None),
+    ("7-inch - ", "7inch", None),
+    ('10" - ', "10inch", None),
+    ("10'' - ", "10inch", None),
+    ("10″ - ", "10inch", None),
+    ("10 inch - ", "10inch", None),
+    ("10-inch - ", "10inch", None),
+    ("boxset - ", "boxset", None),
+    ("box set - ", "boxset", None),
+    ("box - ", "boxset", None),
     ("cassette - ", "cassette", None),
     ("tape - ", "cassette", None),
     ("dvd - ", "dvd", None),
@@ -183,6 +215,12 @@ def _tab_label(
             return f"{variant} CD"
         if format_key == "lp":
             return f"{variant} LP"
+        if format_key == "7inch":
+            return f'{variant} 7"'
+        if format_key == "10inch":
+            return f'{variant} 10"'
+        if format_key == "boxset":
+            return f"{variant} Boxset"
         if format_key == "digital":
             return f"{variant} Digital" if variant.casefold() != "usb" else "USB"
         if format_key == "cassette":

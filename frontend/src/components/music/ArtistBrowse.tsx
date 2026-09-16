@@ -169,6 +169,7 @@ export default function ArtistBrowse({
     catalogScope === "albums" || catalogScope === "singles";
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
+  const [displayMode, setDisplayMode] = useState<"cards" | "list">("cards");
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupPopoverStyle, setGroupPopoverStyle] = useState<CSSProperties>({});
   const [pageInput, setPageInput] = useState(String(page));
@@ -745,6 +746,16 @@ export default function ArtistBrowse({
               )}
             </div>
           ))}
+          <button
+            type="button"
+            className={`catalog-display-toggle${displayMode === "list" ? " active" : ""}`}
+            onClick={() =>
+              setDisplayMode((m) => (m === "cards" ? "list" : "cards"))
+            }
+            title={displayMode === "cards" ? "Switch to list view" : "Switch to cards"}
+          >
+            {displayMode === "cards" ? "List" : "Cards"}
+          </button>
         </nav>
         {subBar}
         {showAlbumCategoryBar ? (
@@ -831,7 +842,7 @@ export default function ArtistBrowse({
                   albumCardLayout === "banner"
                     ? " media-release-grid--banner"
                     : ""
-                }`}
+                }${displayMode === "list" ? " media-release-grid--list" : ""}`}
               >
                 {albums.map((a) => {
                   const cardKey =
@@ -864,7 +875,11 @@ export default function ArtistBrowse({
         ) : (
           <>
             {artists.length > 0 && (
-              <div className={`artist-grid artist-grid--${orientation}`}>
+              <div
+                className={`artist-grid artist-grid--${orientation}${
+                  displayMode === "list" ? " artist-grid--list" : ""
+                }`}
+              >
                 {artists.map((a) => (
                   <ArtistCard
                     key={a.id}

@@ -86,6 +86,8 @@ Recognized format cores (after date / 01. prefixes):
   CD, SACD, MiniDisc / MD, Flexi / Flexidisc
   Digital, USB
   LP / Vinyl
+  7" / 7'' / 7-inch, 10" / 10'' / 10-inch
+  Boxset / Box
   Cassette / Tape
   DVD, Blu-ray / BluRay, VHS
 Variants use a hyphen after the format, e.g. CD - MiniDisc, LP - Bloodline Red.

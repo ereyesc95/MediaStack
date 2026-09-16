@@ -24196,3 +24196,141 @@ button.lyrics-status-badge--icon-only {
   flex-shrink: 0;
   color: inherit;
 }
+
+/* --- Music Collection --- */
+.collection-browse { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.5rem 0 1.5rem; min-height: 0; flex: 1; }
+.collection-browse__toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; }
+.collection-browse__tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.collection-browse__tabs button { appearance: none; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); background: transparent; color: var(--text); padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.78rem; cursor: pointer; }
+.collection-browse__tabs button.active { border-color: var(--accent); color: var(--accent); }
+.collection-browse__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.collection-browse__search { min-width: 12rem; padding: 0.35rem 0.6rem; border-radius: 0.4rem; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); background: color-mix(in srgb, var(--bg) 80%, transparent); color: var(--text); }
+.collection-browse__subrow input { padding: 0.3rem 0.5rem; border-radius: 0.35rem; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); background: transparent; color: var(--text); }
+.collection-browse__empty { text-align: center; padding: 3rem 1rem; }
+.collection-browse__empty-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+.collection-browse__pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
+.collection-browse__pager-nav { display: flex; gap: 0.5rem; align-items: center; }
+.collection-import-preview { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.75rem; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 0.5rem; }
+.collection-table-wrap { overflow: auto; max-height: calc(100vh - 14rem); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); border-radius: 0.5rem; }
+.collection-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.collection-table th, .collection-table td { padding: 0.45rem 0.55rem; text-align: left; border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent); vertical-align: middle; white-space: nowrap; }
+.collection-table th button { appearance: none; background: none; border: 0; color: color-mix(in srgb, var(--text) 70%, transparent); font: inherit; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; cursor: pointer; }
+.collection-table tr:hover .collection-edit-btn { opacity: 1; }
+.collection-table__child td:first-child { padding-left: 1.25rem; }
+.collection-table__group td button { appearance: none; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; }
+.collection-table__pending { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; color: var(--accent); }
+.collection-edit-btn { opacity: 0; appearance: none; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 0.95rem; }
+.collection-badge { margin-left: 0.35rem; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); padding: 0.05rem 0.3rem; border-radius: 999px; }
+.collection-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.collection-pill { border: 1px solid color-mix(in srgb, var(--text) 22%, transparent); padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.72rem; }
+.collection-edition { display: inline-flex; align-items: center; gap: 0.35rem; }
+.linkish { appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; }
+.linkish:hover { color: var(--accent); }
+.is-muted { opacity: 0.55; }
+.collection-hover { position: relative; display: inline-flex; align-items: center; gap: 0.25rem; }
+.collection-hover__bubble { display: none; position: absolute; z-index: 40; left: 0; top: calc(100% + 0.35rem); min-width: 8rem; max-width: 16rem; padding: 0.4rem; background: color-mix(in srgb, var(--bg) 92%, black); border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); border-radius: 0.4rem; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+.collection-hover:hover .collection-hover__bubble { display: block; }
+.collection-hover__img { max-width: 10rem; max-height: 10rem; display: block; object-fit: contain; }
+.collection-hover__disc { border-radius: 50%; }
+.collection-hover__photos { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.collection-hover__photos img, .collection-hover__bubble video { max-width: 7rem; max-height: 7rem; object-fit: contain; }
+.collection-spotify { position: relative; appearance: none; border: 0; background: transparent; color: color-mix(in srgb, var(--text) 40%, transparent); cursor: default; padding: 0; }
+.collection-spotify.is-active { color: var(--accent); cursor: pointer; }
+.collection-spotify__flip { display: none; position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); width: 10rem; height: 3rem; perspective: 600px; }
+.collection-spotify.is-active:hover .collection-spotify__flip { display: block; }
+.collection-spotify__front, .collection-spotify__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0.25rem; backface-visibility: hidden; transition: transform 0.35s ease; }
+.collection-spotify__back { transform: rotateX(180deg); }
+.collection-spotify__flip.is-flipped .collection-spotify__front { transform: rotateX(180deg); }
+.collection-spotify__flip.is-flipped .collection-spotify__back { transform: rotateX(0deg); }
+.collection-cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); }
+.collection-cards--landscape { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+.collection-cards--banner { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+.collection-card { position: relative; display: flex; flex-direction: column; gap: 0.45rem; }
+.collection-card__alert { position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--accent); color: #111; font-weight: 700; font-size: 0.75rem; display: grid; place-items: center; }
+.collection-card__cover { appearance: none; border: 0; padding: 0; background: color-mix(in srgb, var(--text) 8%, transparent); aspect-ratio: 1; overflow: hidden; border-radius: 0.35rem; cursor: pointer; }
+.collection-cards--landscape .collection-card__cover { aspect-ratio: 16 / 9; }
+.collection-cards--banner .collection-card__cover { aspect-ratio: 4 / 1; }
+.collection-card__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.collection-card__placeholder { display: grid; place-items: center; height: 100%; color: color-mix(in srgb, var(--text) 45%, transparent); font-size: 0.8rem; }
+.collection-card__title, .collection-card__artist { appearance: none; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; display: flex; gap: 0.3rem; align-items: center; }
+.collection-card__title { font-weight: 600; }
+.collection-card__artist { font-size: 0.85rem; opacity: 0.85; }
+.collection-card__versions summary { cursor: pointer; color: var(--accent); font-size: 0.8rem; }
+.collection-modal { width: min(52rem, 96vw); max-height: 90vh; overflow: auto; }
+.collection-modal__body { display: flex; flex-direction: column; gap: 1rem; }
+.collection-modal__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem 0.85rem; }
+.collection-modal__grid label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: color-mix(in srgb, var(--text) 75%, transparent); }
+.collection-modal__grid input, .collection-modal__grid select, .collection-modal__grid textarea { padding: 0.4rem 0.5rem; border-radius: 0.35rem; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--text); font: inherit; }
+.collection-modal__span2 { grid-column: 1 / -1; }
+.collection-modal__country { display: flex; align-items: center; gap: 0.4rem; }
+.collection-modal__country input { flex: 1; }
+.collection-modal__hint { font-size: 0.75rem; }
+.collection-modal__none { color: var(--accent); }
+.collection-modal__artwork h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.collection-modal__artwork-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.collection-modal__artwork-cols h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
+.collection-modal__artwork-cols ul { margin: 0; padding-left: 1rem; font-size: 0.8rem; }
+.collection-modal__missing { color: var(--accent); font-size: 0.75em; }
+.collection-modal__footer { display: flex; justify-content: space-between; gap: 0.75rem; }
+.collection-modal__footer-right { display: flex; gap: 0.5rem; }
+.release-tracklist__edition-head, .release-tracklist__version-bar { display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
+.release-tracklist__edition-head .release-tracklist__edition-title { flex: 1; }
+.release-tracklist__version-bar .release-tracklist__version-tabs { flex: 1; }
+.release-tracklist__collection-btn { appearance: none; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: transparent; color: var(--accent); font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.release-tracklist__collection-btn:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.release-tracklist__collection-alone { display: flex; justify-content: flex-end; margin: 0.25rem 0 0.5rem; }
+@media (max-width: 720px) {
+  .collection-modal__grid, .collection-modal__artwork-cols { grid-template-columns: 1fr; }
+  .collection-table th:nth-child(n+5), .collection-table td:nth-child(n+5) { display: none; }
+  .collection-table th:nth-child(4), .collection-table td:nth-child(4) { display: table-cell; }
+  .collection-browse__toolbar { flex-direction: column; align-items: stretch; }
+}
+
+/* Collection hover enhancements */
+.collection-ext-search { position: relative; display: inline-flex; align-items: center; gap: 0.25rem; }
+.collection-ext-search__menu { position: absolute; z-index: 50; left: 0; top: calc(100% + 0.3rem); display: flex; flex-direction: column; gap: 0.2rem; min-width: 9rem; padding: 0.4rem; background: color-mix(in srgb, var(--bg) 94%, black); border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); border-radius: 0.4rem; }
+.collection-ext-search__menu a, .collection-ext-search__menu button { font-size: 0.78rem; color: var(--text); text-decoration: none; text-align: left; }
+.collection-photocard-preview { display: flex; flex-direction: column; gap: 0.35rem; min-width: 9rem; }
+.collection-photocard-preview__tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.collection-photocard-preview__tabs button { appearance: none; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: transparent; color: var(--text); font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 999px; cursor: pointer; }
+.collection-photocard-preview__tabs button.active { border-color: var(--accent); color: var(--accent); }
+.collection-photocard-preview__card { position: relative; width: 7.5rem; height: 10rem; border: 0; padding: 0; background: transparent; cursor: pointer; perspective: 800px; }
+.collection-photocard-preview__face { position: absolute; inset: 0; backface-visibility: hidden; transition: transform 0.35s ease; display: grid; place-items: center; }
+.collection-photocard-preview__face img { width: 100%; height: 100%; object-fit: contain; }
+.collection-photocard-preview__face--back { transform: rotateY(180deg); }
+.collection-photocard-preview__card.is-flipped .collection-photocard-preview__face--front { transform: rotateY(180deg); }
+.collection-photocard-preview__card.is-flipped .collection-photocard-preview__face--back { transform: rotateY(0deg); }
+.collection-photocard-preview__hint { font-size: 0.68rem; }
+.collection-disc-preview { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.collection-disc-preview__disc { position: relative; width: 7rem; height: 7rem; border: 0; padding: 0; background: transparent; cursor: pointer; perspective: 800px; }
+.collection-disc-preview__face { position: absolute; inset: 0; backface-visibility: hidden; transition: transform 0.35s ease; display: grid; place-items: center; }
+.collection-disc-preview__face img { width: 100%; height: 100%; object-fit: contain; }
+.collection-disc-preview__disc.is-round .collection-disc-preview__face img { border-radius: 50%; }
+.collection-disc-preview__face--b { transform: rotateY(180deg); }
+.collection-disc-preview__disc.is-flipped .collection-disc-preview__face--a { transform: rotateY(180deg); }
+.collection-disc-preview__disc.is-flipped .collection-disc-preview__face--b { transform: rotateY(0deg); }
+.collection-modal__matches { border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); border-radius: 0.45rem; padding: 0.6rem 0.75rem; }
+.collection-modal__matches h3 { margin: 0 0 0.4rem; font-size: 0.85rem; }
+.collection-modal__matches ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.collection-modal__matches li { display: flex; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+.release-tracklist__collection-btn.is-added { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Catalog list view (Music / Series / Movies / Books) */
+.catalog-display-toggle { margin-left: auto; appearance: none; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); background: transparent; color: var(--text); font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 999px; cursor: pointer; }
+.catalog-display-toggle.active { border-color: var(--accent); color: var(--accent); }
+.artist-grid.artist-grid--list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem 0.75rem; }
+.artist-grid.artist-grid--list .artist-card,
+.artist-grid.artist-grid--list > button { display: grid; grid-template-columns: 2.75rem 1fr; align-items: center; gap: 0.55rem; aspect-ratio: auto !important; min-height: 3rem; padding: 0.25rem 0.35rem; text-align: left; }
+.artist-grid.artist-grid--list .artist-card img,
+.artist-grid.artist-grid--list > button img { width: 2.75rem; height: 2.75rem; object-fit: cover; border-radius: 0.25rem; }
+.media-release-grid.media-release-grid--list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem 0.75rem; }
+.media-release-grid.media-release-grid--list .media-release-card { display: grid; grid-template-columns: 2.75rem 1fr; align-items: center; gap: 0.55rem; aspect-ratio: auto !important; min-height: 3rem; }
+.media-release-grid.media-release-grid--list .media-release-card img { width: 2.75rem; height: 2.75rem; object-fit: cover; }
+@media (max-width: 900px) {
+  .artist-grid.artist-grid--list,
+  .media-release-grid.media-release-grid--list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .artist-grid.artist-grid--list,
+  .media-release-grid.media-release-grid--list { grid-template-columns: 1fr; }
+}

@@ -162,6 +162,7 @@ export default function SeriesBrowse({
 }: Props) {
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [displayMode, setDisplayMode] = useState<"cards" | "list">("cards");
 
   useEffect(() => {
     setRevealedId(null);
@@ -998,6 +999,16 @@ export default function SeriesBrowse({
               {f.label}
             </button>
           ))}
+          <button
+            type="button"
+            className={`catalog-display-toggle${displayMode === "list" ? " active" : ""}`}
+            onClick={() =>
+              setDisplayMode((m) => (m === "cards" ? "list" : "cards"))
+            }
+            title={displayMode === "cards" ? "Switch to list view" : "Switch to cards"}
+          >
+            {displayMode === "cards" ? "List" : "Cards"}
+          </button>
         </nav>
         {subBar}
       </div>
@@ -1015,7 +1026,7 @@ export default function SeriesBrowse({
           <div
             className={`artist-grid artist-grid--${
               orientation === "badge" ? "icons" : orientation
-            }`}
+            }${displayMode === "list" ? " artist-grid--list" : ""}`}
           >
             {filtered.map((card) => {
               const cover =

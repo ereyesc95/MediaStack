@@ -63,6 +63,7 @@ import {
   readSpotifyOAuthError,
 } from "../../spotifyOAuth";
 import ArtistBrowse from "./ArtistBrowse";
+import CollectionBrowse from "./CollectionBrowse";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -332,6 +333,47 @@ export default function MusicModule({
     [onBand, onReleaseNavigate, primeArtistShell]
   );
 
+  const openCollectionRelease = useCallback(
+    (bandId: number, releaseId: string, artistName?: string, title?: string) => {
+      setEntrySource("catalog");
+      saveArtistEntryReferrer({
+        source: "music",
+        section: "audio",
+        backLabel: "COLLECTION",
+      });
+      saveReleaseReferrer({
+        bandId,
+        section: "audio",
+        category: "albums",
+        artistName,
+        source: "catalog",
+      });
+      primeArtistShell(bandId, {
+        id: bandId,
+        name: artistName ?? null,
+        photo_url: null,
+        logo_url: null,
+        logo_collapsed_url: null,
+        icon_url: null,
+        era_year: null,
+        show_name_on_hover: true,
+      });
+      void prefetchReleaseOverview(bandId, releaseId);
+      onBand(bandId, "audio");
+      onReleaseNavigate?.(releaseId, "overview", bandId);
+      pushArtistRoute({
+        bandId,
+        artistName: artistName || undefined,
+        section: "audio",
+        overviewTab: "about",
+        releaseId,
+        releaseTitle: title || undefined,
+        releaseTab: "overview",
+      });
+    },
+    [onBand, onReleaseNavigate, primeArtistShell]
+  );
+
   const setAlbumCardLayoutPersisted = useCallback(
     (next: ReleaseCardLayout) => {
       setAlbumCardLayout(next);
@@ -436,7 +478,7 @@ export default function MusicModule({
     !bandId &&
     homeAudio.src &&
     !homePlayerBarHidden &&
-    (tab === "home" || tab === "artists" || tab === "playlists");
+    (tab === "home" || tab === "artists" || tab === "collection" || tab === "playlists");
   const showHomePlayerRestore =
     !bandId && homeAudio.src && homePlayerBarHidden;
 
@@ -1096,6 +1138,12 @@ export default function MusicModule({
               onClick: () => onTab("artists"),
             },
             {
+              id: "collection",
+              label: "COLLECTION",
+              active: tab === "collection",
+              onClick: () => onTab("collection"),
+            },
+            {
               id: "playlists",
               label: "PLAYLISTS",
               active: tab === "playlists",
@@ -1223,7 +1271,7 @@ export default function MusicModule({
           </div>
         </div>
       )}
-      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "playlists") && (
+      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "playlists") && (
         <audio
           ref={homeAudio.audioRef}
           src={homeAudio.src ?? undefined}
@@ -1692,6 +1740,14 @@ export default function MusicModule({
             catalogScope === "albums" || catalogScope === "singles"
               ? albumsLoading
               : artistsLoading
+          }
+        />
+      ) : tab === "collection" ? (
+        <CollectionBrowse
+          cardOrientation={cardOrientation}
+          onOpenArtist={(id) => openArtist(id)}
+          onOpenRelease={(bandId, releaseId) =>
+            openCollectionRelease(bandId, releaseId)
           }
         />
       ) : (

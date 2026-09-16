@@ -675,3 +675,40 @@ class ApiAuth(Base):
     api_url: Mapped[str | None] = mapped_column("apiURL", Text)
     api_doc: Mapped[str | None] = mapped_column("apiDoc", Text)
     api_token: Mapped[str | None] = mapped_column("apiToken", Text)
+
+
+class CollectionItem(Base):
+    """Per-profile physical music collection leaf (edition × media)."""
+
+    __tablename__ = "collection_items"
+
+    col_id: Mapped[int] = mapped_column("colID", Integer, primary_key=True)
+    col_user_id: Mapped[int] = mapped_column("colUserID", Integer, index=True)
+    col_match_key: Mapped[str] = mapped_column("colMatchKey", String(512), index=True)
+    col_artist: Mapped[str] = mapped_column("colArtist", Text)
+    col_title: Mapped[str] = mapped_column("colTitle", Text)
+    col_edition: Mapped[str | None] = mapped_column("colEdition", Text)
+    col_release_type: Mapped[str | None] = mapped_column("colReleaseType", Text)
+    col_original_date: Mapped[str | None] = mapped_column("colOriginalDate", String(32))
+    col_edition_date: Mapped[str | None] = mapped_column("colEditionDate", String(32))
+    col_media_type: Mapped[str | None] = mapped_column("colMediaType", Text)
+    col_version: Mapped[str | None] = mapped_column("colVersion", Text)
+    col_genres_json: Mapped[str | None] = mapped_column("colGenresJson", Text)
+    col_country: Mapped[str | None] = mapped_column("colCountry", Text)
+    col_country_iso: Mapped[str | None] = mapped_column("colCountryIso", String(8))
+    col_animation_json: Mapped[str | None] = mapped_column("colAnimationJson", Text)
+    col_canvas_json: Mapped[str | None] = mapped_column("colCanvasJson", Text)
+    col_autographs_json: Mapped[str | None] = mapped_column("colAutographsJson", Text)
+    col_pending_extra_json: Mapped[str | None] = mapped_column("colPendingExtraJson", Text)
+    col_pending_cleared_json: Mapped[str | None] = mapped_column(
+        "colPendingClearedJson", Text
+    )
+    col_folder_path: Mapped[str | None] = mapped_column("colFolderPath", Text)
+    col_release_folder_path: Mapped[str | None] = mapped_column(
+        "colReleaseFolderPath", Text
+    )
+    col_band_id: Mapped[int | None] = mapped_column("colBandID", Integer)
+    col_release_id: Mapped[str | None] = mapped_column("colReleaseID", String(64))
+    col_notes: Mapped[str | None] = mapped_column("colNotes", Text)
+    col_created_at: Mapped[str | None] = mapped_column("colCreatedAt", Text)
+    col_updated_at: Mapped[str | None] = mapped_column("colUpdatedAt", Text)
