@@ -273,14 +273,18 @@ function MediaItemCard({
       }}
       title={title}
     >
-      <span
-        className="media-release-card__cover"
-        style={
-          item.cover_url
-            ? { backgroundImage: `url("${item.cover_url}")` }
-            : undefined
-        }
-      />
+      <span className="media-release-card__cover">
+        {item.cover_url ? (
+          <img
+            src={item.cover_url}
+            alt=""
+            className="media-release-card__cover-img"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
+      </span>
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">
         <span className="media-release-card__title-hover">

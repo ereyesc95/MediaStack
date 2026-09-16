@@ -616,14 +616,18 @@ function ReleaseCard({
         }
       }}
     >
-      <span
-        className="media-release-card__cover"
-        style={
-          release.cover_url
-            ? { backgroundImage: `url("${release.cover_url}")` }
-            : undefined
-        }
-      />
+      <span className="media-release-card__cover">
+        {release.cover_url ? (
+          <img
+            src={release.cover_url}
+            alt=""
+            className="media-release-card__cover-img"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
+      </span>
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">{hoverLabel}</span>
       {release.display_date || showSourceArtist ? (

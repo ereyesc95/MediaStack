@@ -398,7 +398,7 @@ export default function CollectionBrowse({
                 }}
               >
                 {card.cover_url ? (
-                  <img src={card.cover_url} alt="" />
+                  <img src={card.cover_url} alt="" loading="lazy" decoding="async" />
                 ) : (
                   <span className="collection-card__placeholder">No cover</span>
                 )}

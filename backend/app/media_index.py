@@ -140,6 +140,32 @@ def _artwork_file(artwork: Path, stem: str) -> Path | None:
     return None
 
 
+def _prefer_small_derivative(path: Path | None) -> Path | None:
+    """Prefer Cover - Front.jpg_small.jpg (or *_small.*) when present for cards."""
+    if path is None or not path.is_file():
+        return path
+    parent = path.parent
+    candidates = (
+        parent / f"{path.name}_small{path.suffix}",
+        parent / f"{path.stem}_small{path.suffix}",
+    )
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    want_name_prefix = f"{path.name.casefold()}_small"
+    want_stem = f"{path.stem.casefold()}_small"
+    try:
+        for child in parent.iterdir():
+            if not child.is_file() or child.suffix.lower() not in IMAGE_EXTS:
+                continue
+            name = child.name.casefold()
+            if name.startswith(want_name_prefix) or child.stem.casefold() == want_stem:
+                return child
+    except OSError:
+        pass
+    return path
+
+
 def _disc_sort_key(folder: Path) -> tuple[int, str]:
     m = re.match(r"^(\d+)", folder.name)
     return (int(m.group(1)) if m else 999, folder.name.casefold())
@@ -502,6 +528,7 @@ def _build_release_card(
         return None
 
     cover_path, logo_path, logo_collapsed_path = _find_release_artwork(artwork_root)
+    cover_path = _prefer_small_derivative(cover_path)
     navigate_rel_path = safe_relative(artwork_root, media_root) or rel_path
     release_id = release_id_from_path(rel_path)
     navigate_release_id = release_id_from_path(navigate_rel_path)

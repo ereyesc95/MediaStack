@@ -128,14 +128,18 @@ export default function CatalogAlbumCard({
         }
       }}
     >
-      <span
-        className="media-release-card__cover"
-        style={
-          album.cover_url
-            ? { backgroundImage: `url("${album.cover_url}")` }
-            : undefined
-        }
-      />
+      <span className="media-release-card__cover">
+        {album.cover_url ? (
+          <img
+            src={album.cover_url}
+            alt=""
+            className="media-release-card__cover-img"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
+      </span>
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">{hoverLabel}</span>
       {album.display_date || album.artist_name ? (

@@ -85,13 +85,18 @@ function carouselEras(eras: Era[], stacked: boolean): Era[] {
       }
       if (unique.length) return unique;
     }
-    const filtered = eras.filter((e) => e.orientation === "landscape");
-    if (filtered.length) return filtered;
-    return eras.filter((e) => e.landscape_url);
+    const withLandscape = eras.filter((e) => e.landscape_url);
+    if (withLandscape.length) return withLandscape;
+    return eras.filter((e) => e.slide_url);
   }
-  const filtered = eras.filter((e) => e.orientation === "portrait");
-  if (filtered.length) return filtered;
-  return eras.filter((e) => e.portrait_url);
+  // Desktop: one slide per release that has portrait and/or landscape art.
+  // Do not filter by primary orientation — landscape-primary releases still
+  // expose portrait_url and must stay in the L/R carousel.
+  const withPortrait = eras.filter((e) => e.portrait_url);
+  if (withPortrait.length) return withPortrait;
+  const withLandscape = eras.filter((e) => e.landscape_url);
+  if (withLandscape.length) return withLandscape;
+  return eras.filter((e) => e.slide_url);
 }
 
 function eraHeroUrl(era: Era, stacked: boolean): string | undefined {
@@ -314,6 +319,22 @@ export default function ArtistAbout({
     return () => window.clearTimeout(t);
   }, [heroUrl]);
 
+  useEffect(() => {
+    if (!slides.length) return;
+    const next = slides[(eraIndex + 1) % slides.length];
+    const prev = slides[(eraIndex - 1 + slides.length) % slides.length];
+    for (const era of [next, prev]) {
+      for (const url of [
+        eraHeroUrl(era, stacked),
+        stacked ? undefined : era.landscape_url ?? undefined,
+      ]) {
+        if (!url) continue;
+        const img = new Image();
+        img.src = url;
+      }
+    }
+  }, [slides, eraIndex, stacked]);
+
   const originText = originLabel(data.city, data.country?.name);
   const visibleLabels = useMemo(
     () => data.labels.filter(isCatalogLabel),
@@ -348,7 +369,8 @@ export default function ArtistAbout({
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const x = e.clientX - rect.left;
-            stepEra(x < rect.width / 2 ? 1 : -1);
+            // Left half → previous release, right half → next.
+            stepEra(x < rect.width / 2 ? -1 : 1);
           }}
           role="presentation"
         >

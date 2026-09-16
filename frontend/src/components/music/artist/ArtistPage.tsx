@@ -684,13 +684,17 @@ export default function ArtistPage({
         }
         if (unique.length) return unique;
       }
-      const filtered = data.eras.filter((e) => e.orientation === "landscape");
-      if (filtered.length) return filtered;
-      return data.eras.filter((e) => e.landscape_url);
+      const withLandscape = data.eras.filter((e) => e.landscape_url);
+      if (withLandscape.length) return withLandscape;
+      return data.eras.filter((e) => e.slide_url);
     }
-    const filtered = data.eras.filter((e) => e.orientation === "portrait");
-    if (filtered.length) return filtered;
-    return data.eras.filter((e) => e.portrait_url);
+    // Match ArtistAbout: include every release with portrait art (not only
+    // orientation==="portrait"), so L/R advances portrait hero + landscape bg.
+    const withPortrait = data.eras.filter((e) => e.portrait_url);
+    if (withPortrait.length) return withPortrait;
+    const withLandscape = data.eras.filter((e) => e.landscape_url);
+    if (withLandscape.length) return withLandscape;
+    return data.eras.filter((e) => e.slide_url);
   }, [data, stacked]);
 
   const era = useMemo(() => {
