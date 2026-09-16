@@ -202,14 +202,33 @@ function MediaItemCard({
       >
         <span
           className="media-release-card__banner-bg"
-          style={{ backgroundImage: bannerBg }}
-        />
+          style={
+            item.banner_url ? undefined : { backgroundImage: bannerBg }
+          }
+        >
+          {item.banner_url ? (
+            <img
+              src={item.banner_url}
+              alt=""
+              className="media-release-card__banner-bg-img"
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+            />
+          ) : null}
+        </span>
         <span className="media-release-card__banner-overlay">
           <span className="media-release-card__banner-glass" aria-hidden />
-          <span
-            className="media-release-card__banner-cover"
-            style={{ backgroundImage: `url("${coverUrl}")` }}
-          />
+          <span className="media-release-card__banner-cover">
+            <img
+              src={coverUrl}
+              alt=""
+              className="media-release-card__banner-cover-img"
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+            />
+          </span>
           <span className="media-release-card__banner-meta">
             <span className="media-release-card__banner-title">{title}</span>
             {(item.era_icon_url || eraLogoSrc) ? (

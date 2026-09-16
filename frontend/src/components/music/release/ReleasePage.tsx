@@ -2225,8 +2225,6 @@ export default function ReleasePage({
           )}
 
         </div>
-          </div>
-        </div>
 
           {!bannerLayout ? (
           <div className="release-page__panel-bottom" ref={panelBottomRef}>

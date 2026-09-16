@@ -89,14 +89,12 @@ function carouselEras(eras: Era[], stacked: boolean): Era[] {
     if (withLandscape.length) return withLandscape;
     return eras.filter((e) => e.slide_url);
   }
-  // Desktop: one slide per release that has portrait and/or landscape art.
+  // Desktop: one slide per release with any scenic Photo - * art.
   // Do not filter by primary orientation — landscape-primary releases still
   // expose portrait_url and must stay in the L/R carousel.
-  const withPortrait = eras.filter((e) => e.portrait_url);
-  if (withPortrait.length) return withPortrait;
-  const withLandscape = eras.filter((e) => e.landscape_url);
-  if (withLandscape.length) return withLandscape;
-  return eras.filter((e) => e.slide_url);
+  return eras.filter(
+    (e) => e.portrait_url || e.landscape_url || e.slide_url || e.banner_url
+  );
 }
 
 function eraHeroUrl(era: Era, stacked: boolean): string | undefined {
@@ -271,7 +269,7 @@ export default function ArtistAbout({
     current: string | undefined;
     outgoing: string | undefined;
   }>(() => ({ current: heroUrl, outgoing: undefined }));
-  const prevHeroRef = useRef(heroUrl);
+  const prevHeroRef = useRef<string | undefined>(heroUrl);
   const photoColRef = useRef<HTMLDivElement>(null);
   const photoStageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -318,6 +316,23 @@ export default function ArtistAbout({
     }, 360);
     return () => window.clearTimeout(t);
   }, [heroUrl]);
+
+  // Prefetch adjacent era portraits/landscapes so L/R clicks feel instant.
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const idxs = [
+      (eraIndex - 1 + slides.length) % slides.length,
+      (eraIndex + 1) % slides.length,
+    ];
+    for (const i of idxs) {
+      const e = slides[i];
+      for (const url of [e.portrait_url, e.landscape_url, e.slide_url]) {
+        if (!url) continue;
+        const img = new Image();
+        img.src = url;
+      }
+    }
+  }, [slides, eraIndex]);
 
   useEffect(() => {
     if (!slides.length) return;
