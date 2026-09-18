@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   deleteCollectionItem,
   fetchCollectionItem,
@@ -58,6 +58,111 @@ const ARTWORK_ORDER = [
   "Autographs",
   "Other",
 ] as const;
+
+type ArtworkItem = {
+  label: string;
+  missing?: boolean;
+  url?: string | null;
+  source?: string | null;
+  canonical?: string | null;
+};
+
+const CODE_ALIASES: Record<string, string> = {
+  "spotify - code": "Code - Spotify",
+  "code - spotify": "Code - Spotify",
+  spotify: "Code - Spotify",
+  "spotify code": "Code - Spotify",
+  "spotify - card": "Code - Spotify Card",
+  "code - spotify card": "Code - Spotify Card",
+  "spotify card": "Code - Spotify Card",
+  "qr - code": "Code - QR",
+  "code - qr": "Code - QR",
+  qr: "Code - QR",
+  "qr code": "Code - QR",
+  "qr - card": "Code - QR Card",
+  "code - qr card": "Code - QR Card",
+  "qr card": "Code - QR Card",
+};
+
+function canonicalArtworkName(raw: string): string {
+  const trimmed = raw.trim();
+  return CODE_ALIASES[trimmed.toLowerCase()] || trimmed;
+}
+
+function shortArtworkLabel(canonical: string): string {
+  for (const prefix of [
+    "Cover - ",
+    "Photo - ",
+    "Photocard - ",
+    "Booklet - ",
+    "Code - ",
+    "Autograph - ",
+    "Logo - ",
+  ]) {
+    if (canonical.toLowerCase().startsWith(prefix.toLowerCase())) {
+      return canonical.slice(prefix.length).trim();
+    }
+  }
+  return canonical;
+}
+
+function artworkGroupFor(canonical: string, fallback: string): string {
+  const low = canonical.toLowerCase();
+  if (CODE_ALIASES[low] || low.startsWith("code - ") || low.startsWith("code-")) {
+    return "Codes";
+  }
+  if (low.startsWith("cover - ") || low.startsWith("animation") || low.startsWith("canvas")) {
+    return "Cover";
+  }
+  if (low.startsWith("photo - ") || low.startsWith("photo-")) return "Photo";
+  if (low.startsWith("photocard")) return "Photocards";
+  if (low.startsWith("booklet")) return "Booklet";
+  if (low === "logo" || low.startsWith("logo ") || low.startsWith("logo-") || low === "icon") {
+    return "Branding";
+  }
+  if (low.startsWith("autograph")) return "Autographs";
+  if (low === "disc" || low.startsWith("side ") || low === "side a" || low === "side b") {
+    return "Media";
+  }
+  return fallback;
+}
+
+function normalizeArtworkGroups(
+  artwork: CollectionPreview["artwork"]
+): [string, ArtworkItem[]][] {
+  if (!artwork) return [];
+  const buckets = new Map<string, ArtworkItem[]>();
+  for (const [group, items] of Object.entries(artwork)) {
+    for (const item of items || []) {
+      const raw = (item.canonical || item.label || "").trim();
+      const canonical = canonicalArtworkName(raw);
+      const nextGroup = artworkGroupFor(canonical, group);
+      const label = shortArtworkLabel(canonical);
+      const list = buckets.get(nextGroup) ?? [];
+      list.push({ ...item, label, canonical });
+      buckets.set(nextGroup, list);
+    }
+  }
+  const entries: [string, ArtworkItem[]][] = [];
+  for (const [group, items] of buckets) {
+    const byLabel = new Map<string, ArtworkItem>();
+    for (const item of items) {
+      const key = item.label.toLowerCase();
+      const prev = byLabel.get(key);
+      if (!prev || (prev.missing && !item.missing)) byLabel.set(key, item);
+    }
+    const sorted = [...byLabel.values()].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+    );
+    if (sorted.length) entries.push([group, sorted]);
+  }
+  entries.sort((a, b) => {
+    const ia = ARTWORK_ORDER.indexOf(a[0] as (typeof ARTWORK_ORDER)[number]);
+    const ib = ARTWORK_ORDER.indexOf(b[0] as (typeof ARTWORK_ORDER)[number]);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  return entries;
+}
 
 function sourceClass(label: string | undefined) {
   const low = (label || "").toLowerCase();
@@ -285,18 +390,21 @@ export default function CollectionModal({
   const showEditionDate = !isStandardEdition && Boolean(editionDate || preview?.release_date);
   const showVersion = !isStandardEdition && Boolean(version.trim());
 
-  const artworkGroups = useMemo(() => {
-    if (!artwork) return [];
-    const entries = Object.entries(artwork).filter(
-      ([, items]) => items && items.length > 0
-    );
-    entries.sort((a, b) => {
-      const ia = ARTWORK_ORDER.indexOf(a[0] as (typeof ARTWORK_ORDER)[number]);
-      const ib = ARTWORK_ORDER.indexOf(b[0] as (typeof ARTWORK_ORDER)[number]);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-    return entries;
-  }, [artwork]);
+  const artworkGroups = useMemo(() => normalizeArtworkGroups(artwork), [artwork]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !open) return;
+    const check = () => {
+      el.classList.toggle("is-scrollable", el.scrollHeight > el.clientHeight + 2);
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  }, [open, artworkGroups, folder, genres, edition, notes]);
 
   async function handleSyncLocal() {
     if (!resolvedBandId || !folder) {
@@ -452,7 +560,7 @@ export default function CollectionModal({
             </button>
           </header>
 
-          <div className="collection-modal__scroll">
+          <div className="collection-modal__scroll" ref={scrollRef}>
             {folder ? (
               <p className="muted collection-modal__hint collection-modal__linked">
                 Linked folder: {folder}

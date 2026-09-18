@@ -344,6 +344,7 @@ def _short_artwork_label(canonical: str) -> str:
         "Booklet - ",
         "Code - ",
         "Autograph - ",
+        "Logo - ",
     ):
         if label.casefold().startswith(prefix.casefold()):
             return label[len(prefix) :].strip()
@@ -732,6 +733,29 @@ def _band_genres(db: Session, band: Band | None) -> list[str]:
     return out
 
 
+def _panel_subgenre_names(
+    db: Session, band_id: int | None, release_id: str | None
+) -> list[str] | None:
+    """Genres shown on the release left panel (overrides, then DB / MusicBrainz)."""
+    if not band_id or not release_id:
+        return None
+    try:
+        from app.release_overview import build_release_overview
+
+        payload = build_release_overview(db, band_id, release_id)
+    except Exception:
+        return None
+    if not payload:
+        return None
+    names: list[str] = []
+    for item in payload.get("subgenres") or []:
+        if isinstance(item, dict) and item.get("name"):
+            names.append(str(item["name"]).strip())
+        elif isinstance(item, str) and item.strip():
+            names.append(item.strip())
+    return [n for n in names if n]
+
+
 def _release_genres(db: Session, band_id: int | None, title: str | None) -> list[str]:
     """Prefer per-release subgenres from DB; fall back to band genres."""
     if band_id and title:
@@ -850,12 +874,14 @@ def build_preview_from_folder(
     version = _version_label_from_folder(folder)
     edition = _edition_label_from_folder(folder)
     title = _release_title_from_folder(folder)
-    genres = _release_genres(db, band_id, title)
     original = _original_date_from_release_folder(folder)
     edition_date = _edition_date_from_folder(folder)
     # Hide edition date when no real edition folder (same as original / Standard)
     show_edition_date = edition.casefold() != "standard edition"
     rel_folder = _release_folder_path(folder, root)
+    release_id = release_id_from_path(rel_folder)
+    panel_genres = _panel_subgenre_names(db, band_id, release_id)
+    genres = panel_genres if panel_genres is not None else _release_genres(db, band_id, title)
     try:
         leaf_rel = folder.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
@@ -891,7 +917,7 @@ def build_preview_from_folder(
         "urls": checklist["urls"],
         "folder_path": leaf_rel,
         "release_folder_path": rel_folder,
-        "release_id": release_id_from_path(rel_folder),
+        "release_id": release_id,
         "in_collection": False,
         "collection_id": None,
     }
@@ -976,6 +1002,10 @@ def serialize_item(db: Session, row: CollectionItem, *, include_previews: bool =
     checklist = scan_artwork_checklist(artwork) if include_previews else None
     pending = compute_pending(row, checklist)
     genres = _json_list(row.col_genres_json)
+    if row.col_band_id and row.col_release_id:
+        panel_genres = _panel_subgenre_names(db, row.col_band_id, row.col_release_id)
+        if panel_genres is not None:
+            genres = panel_genres
     animation = _json_list(row.col_animation_json)
     canvas = _json_list(row.col_canvas_json)
     autographs = _json_list(row.col_autographs_json)

@@ -199,6 +199,61 @@ def _artwork_media_file(
     return None
 
 
+_SPOTIFY_CODE_STEMS = ("code - spotify", "spotify - code", "spotify")
+_QR_CODE_STEMS = ("code - qr", "qr - code", "qr")
+
+
+def _match_code_file(artwork: Path | None, stems: tuple[str, ...]) -> Path | None:
+    """Find Code - Spotify / Code - QR, including legacy Spotify.png names."""
+    if not artwork or not artwork.is_dir():
+        return None
+    want = set(stems)
+    try:
+        entries = list(artwork.iterdir())
+    except OSError:
+        return None
+    for path in entries:
+        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
+            continue
+        if "_small" in path.name.casefold():
+            continue
+        if path.stem.casefold() in want:
+            return path
+    return None
+
+
+def _walk_release_artwork_dirs(folder: Path) -> list[Path]:
+    found: list[Path] = []
+
+    def consider(path: Path) -> None:
+        art = _find_artwork_subdir(path)
+        if art and art.is_dir():
+            found.append(art)
+
+    consider(folder)
+    try:
+        children = [c for c in folder.iterdir() if c.is_dir() and c.name.casefold() != "[artwork]"]
+    except OSError:
+        children = []
+    for child in children:
+        consider(child)
+        try:
+            grands = [g for g in child.iterdir() if g.is_dir() and g.name.casefold() != "[artwork]"]
+        except OSError:
+            grands = []
+        for grand in grands:
+            consider(grand)
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for art in found:
+        key = art.as_posix().casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(art)
+    return unique
+
+
 def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | None]:
     from app.artwork_stems import (
         resolve_cover_banner_file,
@@ -245,8 +300,8 @@ def _artwork_urls(artwork: Path | None, media_root: Path) -> dict[str, str | Non
     canvas = resolve_canvas_album_file(artwork)
     logo = _artwork_file(artwork, LOGO_STEM)
     icon = _artwork_file(artwork, ICON_STEM)
-    spotify = _artwork_file(artwork, "spotify")
-    qr = _artwork_file(artwork, "qr")
+    spotify = _match_code_file(artwork, _SPOTIFY_CODE_STEMS)
+    qr = _match_code_file(artwork, _QR_CODE_STEMS)
     return {
         "cover_front_url": _media_url(cover_front, media_root) if cover_front else None,
         "cover_back_url": _media_url(cover_back, media_root) if cover_back else None,
@@ -812,6 +867,18 @@ def build_release_overview(
     edition = _resolve_standard_edition(content)
     artwork = _standard_artwork_dir(edition)
     urls = _artwork_urls(artwork, media_root)
+    if not urls.get("spotify_url") or not urls.get("qr_url"):
+        for art_dir in _walk_release_artwork_dirs(content):
+            if not urls.get("spotify_url"):
+                hit = _match_code_file(art_dir, _SPOTIFY_CODE_STEMS)
+                if hit:
+                    urls["spotify_url"] = _media_url(hit, media_root)
+            if not urls.get("qr_url"):
+                hit = _match_code_file(art_dir, _QR_CODE_STEMS)
+                if hit:
+                    urls["qr_url"] = _media_url(hit, media_root)
+            if urls.get("spotify_url") and urls.get("qr_url"):
+                break
     from app.release_photocards import resolve_overview_photocards
 
     photocards = resolve_overview_photocards(

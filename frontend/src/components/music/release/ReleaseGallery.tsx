@@ -162,7 +162,7 @@ export default function ReleaseGallery({
     const allTabs = [
       { id: "artwork" as const, label: "ARTWORK", count: activeArtwork.length },
       { id: "photos" as const, label: "PHOTOS", count: data.photos.length },
-      { id: "extras" as const, label: "EXTRAS", count: data.extras.length },
+      { id: "extras" as const, label: "BRANDING", count: data.extras.length },
     ];
     onTabsMetaRef.current?.(allTabs.filter((t) => t.count > 0));
   }, [tabsMetaKey, data, activeArtwork.length]);
@@ -172,7 +172,7 @@ export default function ReleaseGallery({
     return [
       { id: "artwork" as const, label: "ARTWORK", count: activeArtwork.length },
       { id: "photos" as const, label: "PHOTOS", count: data.photos.length },
-      { id: "extras" as const, label: "EXTRAS", count: data.extras.length },
+      { id: "extras" as const, label: "BRANDING", count: data.extras.length },
     ].filter((t) => t.count > 0);
   }, [data, activeArtwork.length]);
 

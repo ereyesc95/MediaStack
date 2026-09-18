@@ -758,7 +758,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       if (prev && data.editions.some((e) => e.id === prev)) return prev;
       return data.editions[0]?.id ?? null;
     });
-  }, [data?.editions, playingPath, bandId, releaseId, activeVersionIds]);
+  }, [data?.editions, playingPath, bandId, releaseId]);
 
   const toggleEdition = (id: string) => {
     setExpandedEditionId((prev) => (prev === id ? null : id));
@@ -806,6 +806,17 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
       );
     };
 
+    const idleTrack = (() => {
+      if (!data?.editions.length) return null;
+      const edition =
+        data.editions.find((ed) => ed.id === expandedEditionId) ?? data.editions[0];
+      return (
+        editionVisibleGroups(edition, activeVersionIds)
+          .flatMap((group) => group.tracks)
+          .find((track) => track.play_path) ?? null
+      );
+    })();
+
     if (rightView === "lyrics") {
       const ctx = resolveTrackContext(playingPath ?? "");
       const bsideSource =
@@ -813,7 +824,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           ? bsideSourceFromGroup(ctx.group, bandId)
           : null;
       onPanelActionsChange({
-        track: lyricsTrack ?? ctx?.track ?? null,
+        track: lyricsTrack ?? ctx?.track ?? idleTrack,
         showLyrics: false,
         showVersions: true,
         panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
@@ -853,7 +864,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
         ? bsideSourceFromGroup(current.group, bandId)
         : null;
     onPanelActionsChange({
-      track: current?.track ?? null,
+      track: current?.track ?? idleTrack,
       showLyrics: true,
       showVersions: true,
       panelDateIso: bsideSource?.date_iso ?? resolvePanelDateIso(playingPath ?? null),
@@ -875,6 +886,9 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
     releaseId,
     releaseNavigateId,
     activeVersionSource,
+    data,
+    expandedEditionId,
+    activeVersionIds,
   ]);
 
   const loadLyricsForTrack = useCallback(

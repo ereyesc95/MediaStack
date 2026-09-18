@@ -33,6 +33,17 @@ export function IconCards({ className }: IconProps) {
   );
 }
 
+export function IconList({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M4 6h2.2v2.2H4V6zm4.2 0H20v2.2H8.2V6zM4 10.9h2.2v2.2H4v-2.2zm4.2 0H20v2.2H8.2v-2.2zM4 15.8h2.2V18H4v-2.2zm4.2 0H20V18H8.2v-2.2z"
+      />
+    </svg>
+  );
+}
+
 export function IconCardLandscape({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>

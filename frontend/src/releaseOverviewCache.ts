@@ -7,7 +7,7 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "release-overview-v13";
+const NAMESPACE = "release-overview-v14";
 
 type CacheKey = string;
 

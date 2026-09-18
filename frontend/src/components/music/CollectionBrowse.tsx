@@ -9,6 +9,7 @@ import {
 } from "../../api";
 import type { CardOrientation, CollectionLeaf } from "../../types";
 import CollectionModal from "./CollectionModal";
+import { IconImport, IconPlus } from "../MenuIcons";
 import {
   DiscFlipPreview,
   ExternalSearchMenu,
@@ -27,6 +28,7 @@ type Props = {
   view?: "table" | "cards";
   onViewChange?: (view: "table" | "cards") => void;
   manageApiRef?: MutableRefObject<CollectionBrowseApi | null>;
+  onInventoryChange?: (hasItems: boolean) => void;
 };
 
 export type CollectionBrowseApi = {
@@ -71,6 +73,7 @@ export default function CollectionBrowse({
   view: viewProp,
   onViewChange,
   manageApiRef,
+  onInventoryChange,
 }: Props) {
   const [viewLocal, setViewLocal] = useState<"table" | "cards">("table");
   const view = viewProp ?? viewLocal;
@@ -80,7 +83,7 @@ export default function CollectionBrowse({
   };
   const [items, setItems] = useState<CollectionLeaf[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [subfilter, setSubfilter] = useState("");
@@ -143,6 +146,9 @@ export default function CollectionBrowse({
       });
       setItems(data.items);
       setTotal(data.total);
+      const unfiltered =
+        !q && !subfilter && !mediaFilter && !animFilter && !canvasFilter;
+      if (unfiltered) setInventoryTotal(data.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setItems([]);
@@ -196,7 +202,13 @@ export default function CollectionBrowse({
     return Math.max(1, Math.ceil(total / pageSize));
   }, [total, pageSize]);
 
-  const emptyInventory = !loading && inventoryTotal === 0;
+  const emptyInventory =
+    !loading && inventoryTotal === 0 && total === 0 && items.length === 0;
+  const hasInventory = !loading && (inventoryTotal > 0 || items.length > 0 || total > 0);
+
+  useEffect(() => {
+    onInventoryChange?.(hasInventory);
+  }, [hasInventory, onInventoryChange]);
 
   const visibleRows = useMemo(() => {
     return items.filter((row) => {
@@ -457,9 +469,11 @@ export default function CollectionBrowse({
               className="btn btn--primary"
               onClick={() => fileRef.current?.click()}
             >
+              <IconImport className="collection-browse__empty-icon" />
               Import Excel
             </button>
             <button type="button" className="btn" onClick={() => setModal({ mode: "manual" })}>
+              <IconPlus className="collection-browse__empty-icon" />
               Add manually
             </button>
           </div>

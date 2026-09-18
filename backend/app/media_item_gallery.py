@@ -20,6 +20,7 @@ from app.release_gallery import (
     _era_gallery_photos,
     _is_excluded_artwork,
     _is_extras_artwork_stem,
+    _is_photo_artwork_stem,
     _photo_display_title,
     _scan_artwork_file,
 )
@@ -82,6 +83,7 @@ def build_media_item_gallery(
     card, _display_entry, folder = found
 
     artwork_items: list[dict] = []
+    photo_items: list[dict] = []
     extras_items: list[dict] = []
     for art_dir in _walk_item_artwork_dirs(folder):
         try:
@@ -92,7 +94,11 @@ def build_media_item_gallery(
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
                 continue
             stem = path.stem.casefold()
-            if _is_extras_artwork_stem(stem):
+            if _is_photo_artwork_stem(stem):
+                photo_items.append(
+                    _scan_artwork_file(path, media_root, section="photos")
+                )
+            elif _is_extras_artwork_stem(stem):
                 extras_items.append(
                     _scan_artwork_file(path, media_root, section="extras")
                 )
@@ -105,7 +111,6 @@ def build_media_item_gallery(
 
     release_year = _release_year(card.get("date_iso") or _parse_folder_date(folder.name))
     release_title = card.get("title") or folder.name
-    photo_items: list[dict] = []
     artist_dir = _artist_dir(media_root, band.bnd_name)
     if artist_dir and release_year is not None:
         photos_dir = _gallery_subdir(artist_dir, "Photos")

@@ -49,10 +49,26 @@ def _is_photocard_stem(stem: str) -> bool:
     return low.startswith("photocard")
 
 
-def _is_extras_artwork_stem(stem: str) -> bool:
-    """Logos (including Logo - Collapsed), Spotify, QR, photocards → Extras."""
+def _is_photo_artwork_stem(stem: str) -> bool:
+    """Release [Artwork] files named Photo - * belong on the Photos tab."""
     low = stem.casefold().strip()
-    if _is_photocard_stem(low) or low in {"spotify", "qr"}:
+    return low.startswith("photo - ") or low.startswith("photo-")
+
+
+def _is_code_artwork_stem(stem: str) -> bool:
+    """Spotify / QR codes, including Code - Spotify and legacy Spotify - Code."""
+    low = stem.casefold().strip()
+    if low.startswith("code - ") or low.startswith("code-"):
+        return True
+    if low in {"spotify", "qr", "spotify code", "qr code", "spotify card", "qr card"}:
+        return True
+    return low.startswith("spotify ") or low.startswith("qr ") or low.startswith("spotify-") or low.startswith("qr-")
+
+
+def _is_extras_artwork_stem(stem: str) -> bool:
+    """Logos (including Logo - Collapsed), codes, photocards → Branding."""
+    low = stem.casefold().strip()
+    if _is_photocard_stem(low) or _is_code_artwork_stem(low):
         return True
     return low == "logo" or low.startswith("logo ") or low.startswith("logo-")
 
@@ -216,6 +232,7 @@ def build_release_gallery(
     band, card, media_root, content = resolved
 
     artwork_items: list[dict] = []
+    photo_items: list[dict] = []
     extras_items: list[dict] = []
 
     for art_dir in _walk_release_artwork_dirs(content):
@@ -223,45 +240,14 @@ def build_release_gallery(
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
                 continue
             stem = path.stem.casefold()
-            if _is_extras_artwork_stem(stem):
+            if _is_photo_artwork_stem(stem):
+                photo_items.append(_scan_artwork_file(path, media_root, section="photos"))
+            elif _is_extras_artwork_stem(stem):
                 extras_items.append(_scan_artwork_file(path, media_root, section="extras"))
             elif _is_excluded_artwork(stem):
                 continue
             else:
                 artwork_items.append(_scan_artwork_file(path, media_root, section="artwork"))
-
-    release_year = _release_year(card.get("date_iso"))
-    release_title = card.get("title") or content.name
-    photo_items: list[dict] = []
-    artist_dir = _artist_dir(media_root, band.bnd_name)
-    if artist_dir:
-        photos_dir = _gallery_subdir(artist_dir, "Photos")
-        photos = _list_photos(photos_dir)
-        category = card.get("category") or ""
-        is_compilation = category == "compilations" and not is_box_set_name(
-            entry_display_name(content)
-        )
-        if is_compilation:
-            matched = _compilation_era_photos(
-                db, band_id, media_root, content, photos
-            )
-            if not matched:
-                matched = _era_gallery_photos(photos, release_year, release_title)
-        else:
-            matched = _era_gallery_photos(photos, release_year, release_title)
-        for photo in matched:
-            rel = safe_relative(photo.path, media_root) or photo.path.name
-            photo_items.append(
-                {
-                    "id": _item_id(rel),
-                    "url": _media_url(photo.path, media_root),
-                    "title": _photo_display_title(photo.path.stem),
-                    "year": photo.year,
-                    "orientation": photo.orientation,
-                    "folder_path": rel,
-                    "section": "photos",
-                }
-            )
 
     return {
         "release_id": card.get("id") or release_id,

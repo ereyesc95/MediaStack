@@ -883,7 +883,7 @@ export default function AppMenu({
               }}
             >
               <IconManageArtists className="menu-item-icon" />
-              Manage Artists
+              My artists
             </button>
           )}
           {isAdmin && onManageCatalog && (
@@ -918,7 +918,7 @@ export default function AppMenu({
                 onClick={() => setManageCollectionOpen((o) => !o)}
               >
                 <IconCollection className="menu-item-icon" />
-                Manage collection
+                My collection
                 <span className="menu-chevron">
                   {manageCollectionOpen ? "▴" : "▾"}
                 </span>

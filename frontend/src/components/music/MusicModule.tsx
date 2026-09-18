@@ -75,7 +75,7 @@ import {
   useMiniAudio,
 } from "./artist/MiniAudioPlayer";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconCards, IconDisc, IconHeadphones } from "../MenuIcons";
+import { IconAddArtist, IconCardCover, IconDisc, IconHeadphones, IconList } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 type Props = {
@@ -192,6 +192,7 @@ export default function MusicModule({
   const [showManageArtists, setShowManageArtists] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
   const [collectionView, setCollectionView] = useState<"table" | "cards">("table");
+  const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
@@ -1195,7 +1196,7 @@ export default function MusicModule({
                   </svg>
                 </button>
               )}
-              {tab === "collection" ? (
+              {tab === "collection" && collectionHasItems ? (
                 <button
                   type="button"
                   className={`catalog-display-toggle catalog-display-toggle--icon${
@@ -1215,7 +1216,11 @@ export default function MusicModule({
                       : "Switch to list"
                   }
                 >
-                  <IconCards className="catalog-display-toggle__icon" />
+                  {collectionView === "cards" ? (
+                    <IconCardCover className="catalog-display-toggle__icon" />
+                  ) : (
+                    <IconList className="catalog-display-toggle__icon" />
+                  )}
                 </button>
               ) : null}
               <AppMenu
@@ -1786,6 +1791,7 @@ export default function MusicModule({
           view={collectionView}
           onViewChange={setCollectionView}
           manageApiRef={collectionManageRef}
+          onInventoryChange={setCollectionHasItems}
           onOpenArtist={(id) => openArtist(id)}
           onOpenRelease={(bandId, releaseId) =>
             openCollectionRelease(bandId, releaseId)

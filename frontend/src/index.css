@@ -10365,6 +10365,20 @@ button.media-release-card--banner {
   gap: 0.45rem;
 }
 
+.release-page:not(.release-page--stacked) .release-page__panel-content > .ms-disclosure.is-open {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  align-self: stretch;
+}
+
+.release-page:not(.release-page--stacked) .release-page__panel-content > .ms-disclosure.is-open > .ms-disclosure__inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
 .release-page__panel--canvas::before {
   opacity: 0.08;
 }
@@ -24298,7 +24312,8 @@ button.lyrics-status-badge--icon-only {
 .collection-browse__empty .muted,
 .collection-browse__empty p { font-size: 0.82rem; }
 .collection-browse__empty-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
-.collection-browse__empty-actions .btn { font-size: 0.78rem; }
+.collection-browse__empty-actions .btn { font-size: 0.78rem; display: inline-flex; align-items: center; gap: 0.35rem; }
+.collection-browse__empty-icon { width: 0.95rem; height: 0.95rem; flex-shrink: 0; }
 .collection-browse__pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.78rem; }
 .collection-browse__pager-nav { display: flex; gap: 0.5rem; align-items: center; }
 .collection-import-preview { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.75rem; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 0.5rem; font-size: 0.82rem; }
@@ -24348,6 +24363,7 @@ button.lyrics-status-badge--icon-only {
 .collection-card__artist { font-size: 0.85rem; opacity: 0.85; }
 .collection-card__versions summary { cursor: pointer; color: var(--accent); font-size: 0.8rem; }
 .collection-modal { position: relative; width: min(52rem, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--bg) 94%, transparent); }
+.modal-panel.collection-modal { overflow: hidden; max-height: 90vh; }
 .collection-modal__header {
   flex-shrink: 0;
   margin: 0 -1.25rem 0;
@@ -24359,8 +24375,11 @@ button.lyrics-status-badge--icon-only {
 .collection-modal__scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 0.15rem;
+}
+.collection-modal__scroll.is-scrollable {
+  overflow-y: auto;
 }
 .collection-modal__linked { margin: 0 0 0.85rem; }
 .collection-modal__linkish {

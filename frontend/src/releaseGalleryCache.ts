@@ -8,7 +8,7 @@ import {
 import type { ReleaseGalleryPayload } from "./types";
 
 const MAX_ENTRIES = 24;
-const NAMESPACE = "release-gallery";
+const NAMESPACE = "release-gallery-v2";
 
 type CacheKey = `${number}:${string}`;
 

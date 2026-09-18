@@ -159,8 +159,21 @@ Other supported extras:
   Photocard - Portrait Back
   Photocard - Landscape Front
   Photocard - Landscape Back
-  Spotify
-  QR
+  Photo - Portrait
+  Photo - Landscape
+  Photo - Square
+  Photo - Banner
+  Wallpaper - Portrait
+  Wallpaper - Landscape
+
+Preferred code filenames (legacy Spotify / QR / Spotify - Code / QR - Code still match):
+  Code - Spotify            Release left panel and Gallery Branding
+  Code - Spotify Card
+  Code - QR
+  Code - QR Card
+
+Release gallery tabs: Artwork, Photos (every Photo - file), Branding
+(logos, photocards, and Code - files).
 
 Exact stem match only — files like ``Cover - Front.jpg_small.jpg`` are ignored.
 
