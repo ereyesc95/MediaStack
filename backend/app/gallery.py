@@ -394,13 +394,14 @@ def resolve_artist_card(
     artist_name: str | None,
     *,
     orientation: str = "landscape",
+    user_id: int | None = None,
 ) -> ArtistCardAssets:
-    """Catalog artist card art from latest Standard release Photo - * + Branding."""
-    from app.release_photo_art import (
-        latest_release_with_photos,
-        resolve_photo_for_release,
-        resolve_standard_photo,
-    )
+    """Catalog artist card art: stable-random Photo - * per account + Branding.
+
+    Photo choice is deterministic for a given ``user_id`` + artist + orientation,
+    so switching profiles yields a different card photo from the release pool.
+    """
+    from app.release_photo_art import list_release_photo_slides
 
     root = Path(settings.media_root) if settings.media_root else None
     if not root or not root.is_dir():
@@ -415,7 +416,7 @@ def resolve_artist_card(
 
     want = normalize_card_orientation(orientation)
     want_collapsed_twin = want == "banner"
-    seed = f"{artist_name or ''}:{want}"
+    seed = f"{user_id if user_id is not None else 0}:{artist_name or ''}:{want}"
 
     def _pack(
         *,
@@ -451,25 +452,63 @@ def resolve_artist_card(
             ),
         )
 
-    photo_ori = "square" if want == "round" else want
-    release_dir = latest_release_with_photos(artist_dir)
-    hit = None
-    if release_dir is not None:
-        hit = resolve_standard_photo(release_dir, photo_ori)
-        if hit is None:
-            hit = resolve_photo_for_release(
-                release_dir, artist_dir, photo_ori, include_neighbors=True
+    def _slide_url(slide: dict) -> str | None:
+        if want == "round":
+            return (
+                slide.get("square_url")
+                or slide.get("portrait_url")
+                or slide.get("landscape_url")
+                or slide.get("banner_url")
+                or slide.get("slide_url")
             )
+        if want == "portrait":
+            return (
+                slide.get("portrait_url")
+                or slide.get("square_url")
+                or slide.get("landscape_url")
+                or slide.get("banner_url")
+                or slide.get("slide_url")
+            )
+        if want == "banner":
+            return (
+                slide.get("banner_url")
+                or slide.get("landscape_url")
+                or slide.get("portrait_url")
+                or slide.get("square_url")
+                or slide.get("slide_url")
+            )
+        # landscape (default)
+        return (
+            slide.get("landscape_url")
+            or slide.get("banner_url")
+            or slide.get("portrait_url")
+            or slide.get("square_url")
+            or slide.get("slide_url")
+        )
+
+    slides = [
+        s
+        for s in list_release_photo_slides(artist_dir, root)
+        if isinstance(s, dict) and _slide_url(s)
+    ]
+    picked = _stable_choice(slides, f"{seed}:photo") if slides else None
+    photo_url = _slide_url(picked) if picked else None
 
     year = None
-    if hit and hit.date_iso and len(hit.date_iso) >= 4 and hit.date_iso[:4].isdigit():
-        year = int(hit.date_iso[:4])
+    if picked:
+        y = picked.get("year")
+        if isinstance(y, int) and y > 0:
+            year = y
+        else:
+            date_iso = picked.get("date_iso") or ""
+            if isinstance(date_iso, str) and len(date_iso) >= 4 and date_iso[:4].isdigit():
+                year = int(date_iso[:4])
     if year is None:
         eras = sorted({b.start for b in brands} | {b.end for b in brands})
         year = _stable_choice(eras, f"{seed}:era") if eras else 2000
 
     return _pack(
-        photo_url=_media_url(hit.path, root) if hit else None,
+        photo_url=photo_url,
         year=year,
         logo=_pick_brand_for_year(
             brands, year, "logo", prefer_collapsed=False, seed=seed

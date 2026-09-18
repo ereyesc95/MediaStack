@@ -22,11 +22,13 @@ function ordinal(day: number): string {
   return `${day}th`;
 }
 
-/** Format stored release date as "September 3rd, 1999". */
+/** Format stored release date as "September 3rd, 1999".
+ * Accepts YYYY-MM-DD, YYYY.MM.DD, YYYY-MM, YYYY.MM, or YYYY.
+ */
 export function formatTrackDate(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
-  const m = trimmed.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/);
+  const m = trimmed.match(/^(\d{4})(?:[.\-](\d{2})(?:[.\-](\d{2}))?)?/);
   if (!m) return trimmed;
   const year = m[1];
   const month = m[2] ? Number(m[2]) : null;

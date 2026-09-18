@@ -592,6 +592,89 @@ export function IconDisc({ className }: IconProps) {
   );
 }
 
+/** Collection shelf — stacked discs; filled check when already in collection. */
+export function IconCollection({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <rect
+        x="4"
+        y="5"
+        width="16"
+        height="3.2"
+        rx="0.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <rect
+        x="4"
+        y="10.4"
+        width="16"
+        height="3.2"
+        rx="0.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <rect
+        x="4"
+        y="15.8"
+        width="16"
+        height="3.2"
+        rx="0.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+export function IconCollectionAdded({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <rect
+        x="3.5"
+        y="4.5"
+        width="14"
+        height="2.8"
+        rx="0.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.55"
+      />
+      <rect
+        x="3.5"
+        y="9.5"
+        width="14"
+        height="2.8"
+        rx="0.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.55"
+      />
+      <rect
+        x="3.5"
+        y="14.5"
+        width="10"
+        height="2.8"
+        rx="0.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.55"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.2 16.2l2.1 2.1 4.2-4.4"
+      />
+    </svg>
+  );
+}
+
 export function IconHeart({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

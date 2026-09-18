@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMenuPresence } from "../useMenuPresence";
-import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme } from "../mediaTheme";
+import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme, isMediaPageThemeSessionActive } from "../mediaTheme";
 import {
   THEMES,
   applyTheme,
@@ -42,6 +42,8 @@ import {
   IconMediaMovies,
   IconMediaBooks,
   IconMediaGames,
+  IconCollection,
+  IconImport,
 } from "./MenuIcons";
 
 const MEDIA_SWITCH_OPTIONS: {
@@ -66,6 +68,10 @@ type Props = {
   manageCatalogLabel?: string;
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
+  showManageCollection?: boolean;
+  onCollectionAddManual?: () => void;
+  onCollectionImport?: () => void;
+  onCollectionExport?: () => void;
   showEditPlaylist?: boolean;
   editPlaylistActive?: boolean;
   onEditPlaylistToggle?: () => void;
@@ -143,6 +149,10 @@ export default function AppMenu({
   manageCatalogLabel = "Manage Catalog",
   onAddPlaylist,
   showAddPlaylist,
+  showManageCollection,
+  onCollectionAddManual,
+  onCollectionImport,
+  onCollectionExport,
   showEditPlaylist,
   editPlaylistActive,
   onEditPlaylistToggle,
@@ -200,6 +210,7 @@ export default function AppMenu({
   const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [mediaSwitchOpen, setMediaSwitchOpen] = useState(false);
+  const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
   const mediaSwitch = useMediaSwitch();
   const showSwitchMedia = Boolean(mediaSwitch?.showSwitchMedia);
   const [customOpen, setCustomOpen] = useState(false);
@@ -242,7 +253,10 @@ export default function AppMenu({
   }, []);
 
   function pickTheme(id: ThemeId) {
-    pinArtistPageTheme(id);
+    // Only pin Adaptive off when the user picks a fixed theme on a media page.
+    if (isMediaPageThemeSessionActive()) {
+      pinArtistPageTheme(id);
+    }
     if (isPlaybackSessionActive() && isPlaybackPlaying()) {
       if (notifyUserThemePickDuringPlayback(id, userId)) {
         setActiveTheme(id);
@@ -895,6 +909,55 @@ export default function AppMenu({
               <IconPlus className="menu-item-icon" />
               Add playlist
             </button>
+          )}
+          {showManageCollection && (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => setManageCollectionOpen((o) => !o)}
+              >
+                <IconCollection className="menu-item-icon" />
+                Manage collection
+                <span className="menu-chevron">
+                  {manageCollectionOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              {manageCollectionOpen && (
+                <div className="app-menu-submenu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCollectionAddManual?.();
+                      setOpen(false);
+                    }}
+                  >
+                    <IconPlus className="menu-item-icon" />
+                    Add manually
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCollectionImport?.();
+                      setOpen(false);
+                    }}
+                  >
+                    <IconImport className="menu-item-icon" />
+                    Import Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCollectionExport?.();
+                      setOpen(false);
+                    }}
+                  >
+                    <IconDownload className="menu-item-icon" />
+                    Export Excel
+                  </button>
+                </div>
+              )}
+            </>
           )}
           {showEditPlaylist && onEditPlaylistToggle && (
             <button

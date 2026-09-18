@@ -99,7 +99,10 @@ def export_collection_xlsx(db: Session, user_id: int) -> bytes:
         if pending:
             if len(pending) >= 10:
                 pending_cell = "Everything"
-            elif len(pending) == 1 and pending[0] == "Spotify - Card":
+            elif len(pending) == 1 and pending[0] in (
+                "Spotify - Card",
+                "Code - Spotify Card",
+            ):
                 pending_cell = "Spotify Code"
             else:
                 pending_cell = ", ".join(pending)

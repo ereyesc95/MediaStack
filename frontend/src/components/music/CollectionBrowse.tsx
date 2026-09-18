@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import {
   commitCollectionImport,
   exportCollectionXlsx,
   fetchCollection,
+  fetchCollectionFacets,
   previewCollectionImport,
 } from "../../api";
 import type { CardOrientation, CollectionLeaf } from "../../types";
@@ -21,6 +23,16 @@ type Props = {
   cardOrientation?: CardOrientation;
   onOpenArtist?: (bandId: number) => void;
   onOpenRelease?: (bandId: number, releaseId: string) => void;
+  isAdmin?: boolean;
+  view?: "table" | "cards";
+  onViewChange?: (view: "table" | "cards") => void;
+  manageApiRef?: MutableRefObject<CollectionBrowseApi | null>;
+};
+
+export type CollectionBrowseApi = {
+  openManual: () => void;
+  importExcel: () => void;
+  exportExcel: () => void;
 };
 
 const PAGE_PRESETS = [10, 30, 70, 100] as const;
@@ -43,20 +55,29 @@ const COLUMNS = [
 const SUBFILTERS = [
   { id: "", label: "All" },
   { id: "pending", label: "Pending" },
-  { id: "autographs", label: "Autographs" },
   { id: "orphan", label: "Orphan" },
-  { id: "matched", label: "Matched" },
   { id: "media", label: "Media" },
   { id: "animation", label: "Animation" },
   { id: "canvas", label: "Canvas" },
+  { id: "autographs", label: "Autographs" },
+  { id: "matched", label: "Matched" },
 ] as const;
 
 export default function CollectionBrowse({
   cardOrientation = "portrait",
   onOpenArtist,
   onOpenRelease,
+  isAdmin = false,
+  view: viewProp,
+  onViewChange,
+  manageApiRef,
 }: Props) {
-  const [view, setView] = useState<"table" | "cards">("table");
+  const [viewLocal, setViewLocal] = useState<"table" | "cards">("table");
+  const view = viewProp ?? viewLocal;
+  const setView = (next: "table" | "cards") => {
+    onViewChange?.(next);
+    if (viewProp === undefined) setViewLocal(next);
+  };
   const [items, setItems] = useState<CollectionLeaf[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -82,6 +103,26 @@ export default function CollectionBrowse({
   const [busy, setBusy] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [inventoryTotal, setInventoryTotal] = useState(0);
+  const [facets, setFacets] = useState<{
+    media: string[];
+    animation: string[];
+    canvas: string[];
+  }>({ media: [], animation: [], canvas: [] });
+
+  const refreshFacets = useCallback(async () => {
+    try {
+      const f = await fetchCollectionFacets();
+      setInventoryTotal(f.total);
+      setFacets({
+        media: f.media || [],
+        animation: f.animation || [],
+        canvas: f.canvas || [],
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,10 +166,37 @@ export default function CollectionBrowse({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void refreshFacets();
+  }, [refreshFacets]);
+
+  useEffect(() => {
+    const onChanged = () => {
+      void load();
+      void refreshFacets();
+    };
+    window.addEventListener("collection-changed", onChanged);
+    return () => window.removeEventListener("collection-changed", onChanged);
+  }, [load, refreshFacets]);
+
+  useEffect(() => {
+    if (!manageApiRef) return;
+    manageApiRef.current = {
+      openManual: () => setModal({ mode: "manual" }),
+      importExcel: () => fileRef.current?.click(),
+      exportExcel: () => void onExport(),
+    };
+    return () => {
+      manageApiRef.current = null;
+    };
+  });
+
   const pageCount = useMemo(() => {
     if (pageSize === "all") return 1;
     return Math.max(1, Math.ceil(total / pageSize));
   }, [total, pageSize]);
+
+  const emptyInventory = !loading && inventoryTotal === 0;
 
   const visibleRows = useMemo(() => {
     return items.filter((row) => {
@@ -235,6 +303,7 @@ export default function CollectionBrowse({
       await commitCollectionImport(importPreview.rows);
       setImportPreview(null);
       await load();
+      await refreshFacets();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -259,12 +328,21 @@ export default function CollectionBrowse({
     }
   }
 
-  const empty = !loading && items.length === 0;
+  const emptyFiltered = !loading && !emptyInventory && items.length === 0;
+  const empty = emptyInventory;
 
   return (
     <div className="collection-browse">
-      <div className="collection-browse__toolbar">
-        <div className="collection-browse__tabs">
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        hidden
+        onChange={(e) => void onPickImport(e.target.files?.[0] ?? null)}
+      />
+
+      {!emptyInventory ? (
+        <nav className="artist-page__subtabs collection-browse__filterbar" aria-label="Collection filters">
           {SUBFILTERS.map((sf) => (
             <button
               key={sf.id || "all"}
@@ -272,16 +350,71 @@ export default function CollectionBrowse({
               className={subfilter === sf.id ? "active" : undefined}
               onClick={() => {
                 setSubfilter(sf.id);
+                if (sf.id !== "media") setMediaFilter("");
+                if (sf.id !== "animation") setAnimFilter("");
+                if (sf.id !== "canvas") setCanvasFilter("");
                 setPage(1);
               }}
             >
               {sf.label}
             </button>
           ))}
-        </div>
-        <div className="collection-browse__actions">
+          {subfilter === "media" ? (
+            <select
+              className="collection-browse__facet-select"
+              value={mediaFilter}
+              onChange={(e) => {
+                setMediaFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Media type"
+            >
+              <option value="">All media</option>
+              {facets.media.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {subfilter === "animation" ? (
+            <select
+              className="collection-browse__facet-select"
+              value={animFilter}
+              onChange={(e) => {
+                setAnimFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Animation source"
+            >
+              <option value="">All animation</option>
+              {facets.animation.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {subfilter === "canvas" ? (
+            <select
+              className="collection-browse__facet-select"
+              value={canvasFilter}
+              onChange={(e) => {
+                setCanvasFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Canvas source"
+            >
+              <option value="">All canvas</option>
+              {facets.canvas.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input
-            className="collection-browse__search"
+            className="filter-subbar-search collection-browse__search"
             placeholder="Search collection…"
             value={q}
             onChange={(e) => {
@@ -289,54 +422,7 @@ export default function CollectionBrowse({
               setPage(1);
             }}
           />
-          <button type="button" className="btn" onClick={() => setView(view === "table" ? "cards" : "table")}>
-            {view === "table" ? "Cards" : "List"}
-          </button>
-          <button type="button" className="btn" onClick={() => setModal({ mode: "manual" })}>
-            Add manually
-          </button>
-          <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
-            Import Excel
-          </button>
-          <button type="button" className="btn" onClick={() => void onExport()}>
-            Export Excel
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            hidden
-            onChange={(e) => void onPickImport(e.target.files?.[0] ?? null)}
-          />
-        </div>
-      </div>
-
-      {subfilter === "media" ? (
-        <div className="collection-browse__subrow">
-          <input
-            placeholder="Media type (LP, CD…)"
-            value={mediaFilter}
-            onChange={(e) => setMediaFilter(e.target.value)}
-          />
-        </div>
-      ) : null}
-      {subfilter === "animation" ? (
-        <div className="collection-browse__subrow">
-          <input
-            placeholder="Animation source"
-            value={animFilter}
-            onChange={(e) => setAnimFilter(e.target.value)}
-          />
-        </div>
-      ) : null}
-      {subfilter === "canvas" ? (
-        <div className="collection-browse__subrow">
-          <input
-            placeholder="Canvas source"
-            value={canvasFilter}
-            onChange={(e) => setCanvasFilter(e.target.value)}
-          />
-        </div>
+        </nav>
       ) : null}
 
       {busy ? <p className="muted">{busy}</p> : null}
@@ -362,17 +448,25 @@ export default function CollectionBrowse({
         <div className="collection-browse__empty">
           <p>Your collection is empty.</p>
           <p className="muted">
-            Import an Excel file, add manually, or use <strong>Add to my collection</strong> on a
+            Import an Excel file, add manually, or use Add to my collection on a
             release tracklist.
           </p>
           <div className="collection-browse__empty-actions">
-            <button type="button" className="btn btn--primary" onClick={() => fileRef.current?.click()}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => fileRef.current?.click()}
+            >
               Import Excel
             </button>
             <button type="button" className="btn" onClick={() => setModal({ mode: "manual" })}>
               Add manually
             </button>
           </div>
+        </div>
+      ) : emptyFiltered ? (
+        <div className="collection-browse__empty">
+          <p>No items match these filters.</p>
         </div>
       ) : view === "cards" ? (
         <div className={`collection-cards collection-cards--${cardOrientation}`}>
@@ -731,8 +825,12 @@ export default function CollectionBrowse({
           open
           mode={modal.mode}
           collectionId={modal.id}
+          isAdmin={isAdmin}
           onClose={() => setModal(null)}
-          onSaved={() => void load()}
+          onSaved={() => {
+            void load();
+            void refreshFacets();
+          }}
         />
       ) : null}
     </div>

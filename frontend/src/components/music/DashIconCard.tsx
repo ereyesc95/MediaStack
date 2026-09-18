@@ -20,6 +20,12 @@ export default function DashIconCard({
   const coverUrl = preferPortrait
     ? artist.portrait_url || artist.photo_url
     : artist.photo_url || artist.portrait_url;
+  // System placeholder when the artist has no Photo - * files
+  const bgUrl =
+    coverUrl ||
+    (preferPortrait
+      ? "/api/assets/default/placeholder-portrait"
+      : "/api/assets/default/placeholder-landscape");
   const name = (artist.name ?? "Untitled")
     .replace(/■/g, ",")
     .replace(/█/g, "'");
@@ -31,15 +37,11 @@ export default function DashIconCard({
       className={`dash-icon-item${revealed ? " is-revealed" : ""}`}
       onClick={onClick}
     >
-      <span
-        className={`dash-icon-item-cover${coverUrl ? "" : " dash-icon-item-cover--empty"}`}
-      >
-        {coverUrl ? (
-          <span
-            className="card-bg-layer"
-            style={{ backgroundImage: `url("${coverUrl}")` }}
-          />
-        ) : null}
+      <span className="dash-icon-item-cover">
+        <span
+          className="card-bg-layer"
+          style={{ backgroundImage: `url("${bgUrl}")` }}
+        />
         <DashHoverTitle title={name} revealed={revealed} />
       </span>
     </button>

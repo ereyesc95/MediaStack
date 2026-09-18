@@ -254,7 +254,7 @@ export default function ArtistAbout({
     return () => ro.disconnect();
   }, [stacked, data.bio]);
   const era: Era | null = slides.length
-    ? slides[Math.min(eraIndex, slides.length - 1)]
+    ? slides[((eraIndex % slides.length) + slides.length) % slides.length]
     : null;
 
   const stepEra = (dir: -1 | 1) => {

@@ -34,12 +34,17 @@ export default function ArtistCard({
       : artist.logo_url;
 
   const isIcons = orientation === "icons";
+  const isRound = orientation === "round";
   const hasPhoto = Boolean(artist.photo_url) && !isIcons;
+  const placeholderUrl =
+    orientation === "portrait" || isRound
+      ? "/api/assets/default/placeholder-portrait"
+      : "/api/assets/default/placeholder-landscape";
   const bg = hasPhoto
     ? `url("${artist.photo_url}")`
     : isIcons
       ? "none"
-      : "linear-gradient(135deg, #1a1f2e, #2d3548)";
+      : `url("${placeholderUrl}")`;
 
   const hasIcon = Boolean(artist.icon_url);
   const hasLogo = Boolean(logoSrc);

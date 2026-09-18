@@ -9,7 +9,7 @@ Fallback (playing / known edition):
   edition → Standard → other editions → previous release (or next if first)
 
 Singles under Singles/{Parent}/… also walk parent-album editions via track match.
-Catalog / idle carousel prefer Standard edition photos only.
+Idle About carousel: one slide per edition (or release-root [Artwork]) with Photo - *.
 """
 from __future__ import annotations
 
@@ -163,16 +163,21 @@ def _is_standard_edition(folder: Path) -> bool:
 
 
 def list_edition_dirs(release_dir: Path) -> list[Path]:
+    from app.media_index import _is_group_subdir_name
     from app.release_versions import list_version_dirs
 
     if not release_dir.is_dir():
         return []
     if list_version_dirs(release_dir):
         return [release_dir]
+    # Disc/Side/Tape group folders hold audio, not scenic Photo - * editions.
+    # Treating them as editions hid release-root [Artwork] (e.g. Razorblade Romance).
     editions = [
         child
         for child in release_dir.iterdir()
-        if child.is_dir() and _is_edition_dir(child)
+        if child.is_dir()
+        and _is_edition_dir(child)
+        and not _is_group_subdir_name(child.name)
     ]
     if not editions:
         return [release_dir]
@@ -399,66 +404,128 @@ def resolve_standard_photo(
     )
 
 
+def resolve_photo_in_single_edition(
+    release_dir: Path,
+    edition: Path,
+    stem_chain: tuple[str, ...],
+) -> ReleasePhotoHit | None:
+    """Resolve Photo - * from one edition only (no Standard/sibling fallback)."""
+    for stem in stem_chain:
+        found = _find_stem_in_edition(edition, stem)
+        if found:
+            title, date_iso = _release_meta(release_dir)
+            ori = None
+            low = stem.casefold()
+            for name, photo_stem in PHOTO_STEMS.items():
+                if low == photo_stem:
+                    ori = name
+                    break
+            return ReleasePhotoHit(
+                path=found,
+                stem=stem,
+                orientation=ori,
+                release_dir=release_dir,
+                edition_dir=edition,
+                date_iso=date_iso,
+                release_title=title,
+            )
+    return None
+
+
 def list_release_photo_slides(artist_dir: Path, media_root: Path) -> list[dict]:
-    """One slide per release (Standard photos), newest first — idle About carousel."""
+    """One slide per release edition with scenic Photo - *, newest first.
+
+    Named editions (Standard / Deluxe / …) each get a slide when they contain
+    Photo - * art. Release-root [Artwork] (no edition folders) is one slide.
+    """
     brands = _list_era_brands(_gallery_subdir(artist_dir, "Branding"))
     slides: list[dict] = []
+    seen_keys: set[str] = set()
     for release_dir in iter_artist_releases(artist_dir):
-        standard = resolve_standard_edition(release_dir)
         title, date_iso = _release_meta(release_dir)
         year = int(date_iso[:4]) if date_iso and len(date_iso) >= 4 else None
+        editions = list_edition_dirs(release_dir)
 
-        def url_for(ori: str) -> str | None:
-            # Idle: this release's editions only (Standard first via preferred_edition).
-            hit = resolve_photo_in_edition_chain(
-                release_dir,
-                ORIENTATION_FALLBACK_CHAIN.get(
-                    ori, ORIENTATION_FALLBACK_CHAIN["landscape"]
-                ),
-                preferred_edition=standard,
+        for edition in editions:
+            def url_for(ori: str) -> str | None:
+                hit = resolve_photo_in_single_edition(
+                    release_dir,
+                    edition,
+                    ORIENTATION_FALLBACK_CHAIN.get(
+                        ori, ORIENTATION_FALLBACK_CHAIN["landscape"]
+                    ),
+                )
+                if not hit:
+                    return None
+                return _media_url(hit.path, media_root)
+
+            portrait_url = url_for("portrait")
+            landscape_url = url_for("landscape")
+            banner_url = url_for("banner")
+            square_url = url_for("square")
+            if not any((portrait_url, landscape_url, banner_url, square_url)):
+                continue
+
+            dedupe = "|".join(
+                u or ""
+                for u in (portrait_url, landscape_url, banner_url, square_url)
             )
-            if not hit:
-                return None
-            return _media_url(hit.path, media_root)
+            if dedupe in seen_keys:
+                continue
+            seen_keys.add(dedupe)
 
-        portrait_url = url_for("portrait")
-        landscape_url = url_for("landscape")
-        banner_url = url_for("banner")
-        square_url = url_for("square")
-        if not any((portrait_url, landscape_url, banner_url, square_url)):
-            continue
-
-        primary_url = banner_url or landscape_url or portrait_url or square_url
-        primary_ori = (
-            "banner"
-            if banner_url
-            else "landscape"
-            if landscape_url
-            else "portrait"
-            if portrait_url
-            else "square"
-        )
-        y = year or 2000
-        icon = _pick_brand_for_year(brands, y, "icon", prefer_collapsed=False, seed=title)
-        logo = _pick_brand_for_year(brands, y, "logo", prefer_collapsed=False, seed=title)
-        rel = safe_relative(release_dir, media_root) or release_dir.name
-        slides.append(
-            {
-                "id": f"relphoto_{hashlib.sha256(rel.casefold().encode()).hexdigest()[:12]}",
-                "year": y,
-                "date_iso": date_iso,
-                "title": title,
-                "orientation": primary_ori,
-                "slide_url": primary_url,
-                "portrait_url": portrait_url,
-                "landscape_url": landscape_url,
-                "banner_url": banner_url,
-                "square_url": square_url,
-                "icon_url": _media_url(icon.path, media_root) if icon else None,
-                "logo_url": _media_url(logo.path, media_root) if logo else None,
-                "folder_path": rel,
-            }
-        )
+            primary_url = banner_url or landscape_url or portrait_url or square_url
+            primary_ori = (
+                "banner"
+                if banner_url
+                else "landscape"
+                if landscape_url
+                else "portrait"
+                if portrait_url
+                else "square"
+            )
+            ed_date = _parse_folder_date(edition.name) or date_iso
+            y = year or 2000
+            if ed_date and len(ed_date) >= 4 and ed_date[:4].isdigit():
+                y = int(ed_date[:4])
+            icon = _pick_brand_for_year(
+                brands, y, "icon", prefer_collapsed=False, seed=title
+            )
+            logo = _pick_brand_for_year(
+                brands, y, "logo", prefer_collapsed=False, seed=title
+            )
+            rel = safe_relative(release_dir, media_root) or release_dir.name
+            ed_rel = safe_relative(edition, media_root) or edition.name
+            ed_label = entry_display_name(edition)
+            # Drop leading date from edition label when it's a nested edition folder
+            slide_title = title
+            if edition.resolve() != release_dir.resolve():
+                core = ed_label
+                m = DATE_PREFIX_RE.match(core.strip())
+                if m:
+                    core = core[m.end() :].lstrip(". ").strip() or core
+                if core and core.casefold() != title.casefold():
+                    slide_title = f"{title} · {core}"
+            slides.append(
+                {
+                    "id": (
+                        "relphoto_"
+                        + hashlib.sha256(ed_rel.casefold().encode()).hexdigest()[:12]
+                    ),
+                    "year": y,
+                    "date_iso": ed_date or date_iso,
+                    "title": slide_title,
+                    "orientation": primary_ori,
+                    "slide_url": primary_url,
+                    "portrait_url": portrait_url,
+                    "landscape_url": landscape_url,
+                    "banner_url": banner_url,
+                    "square_url": square_url,
+                    "icon_url": _media_url(icon.path, media_root) if icon else None,
+                    "logo_url": _media_url(logo.path, media_root) if logo else None,
+                    "folder_path": rel,
+                }
+            )
     return slides
 
 

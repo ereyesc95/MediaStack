@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   deleteCollectionItem,
   fetchCollectionItem,
   fetchCollectionMatches,
   fetchCollectionPreviewFromFolder,
+  pickCollectionFolder,
   upsertCollectionItem,
   updateCollectionItem,
 } from "../../api";
+import { formatTrackDate } from "../../formatDate";
 import type { CollectionLeaf, CollectionPreview } from "../../types";
+import { IconPlus, IconSync, IconTrash } from "../MenuIcons";
 import ModalPortal from "../ModalPortal";
 
 type Props = {
@@ -18,6 +21,7 @@ type Props = {
   bandId?: number | null;
   folderPath?: string | null;
   collectionId?: number | null;
+  isAdmin?: boolean;
 };
 
 const RELEASE_TYPES = [
@@ -43,12 +47,28 @@ const MEDIA_TYPES = [
   "Flexi",
 ];
 
+const ARTWORK_ORDER = [
+  "Cover",
+  "Photo",
+  "Photocards",
+  "Codes",
+  "Media",
+  "Branding",
+  "Booklet",
+  "Autographs",
+  "Other",
+] as const;
+
 function sourceClass(label: string | undefined) {
   const low = (label || "").toLowerCase();
   if (low === "none" || low.split(/[/|,]/).every((p) => p.trim() === "none")) {
     return "collection-modal__none";
   }
   return undefined;
+}
+
+function dispatchCollectionChanged() {
+  window.dispatchEvent(new CustomEvent("collection-changed"));
 }
 
 export default function CollectionModal({
@@ -59,10 +79,13 @@ export default function CollectionModal({
   bandId,
   folderPath,
   collectionId,
+  isAdmin = false,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkToast, setLinkToast] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [preview, setPreview] = useState<CollectionPreview | null>(null);
   const [existingId, setExistingId] = useState<number | null>(collectionId ?? null);
 
@@ -101,6 +124,8 @@ export default function CollectionModal({
     if (!open) return;
     let cancelled = false;
     setError(null);
+    setConfirmRemove(false);
+    setLinkToast(null);
     setLoading(true);
 
     (async () => {
@@ -116,7 +141,6 @@ export default function CollectionModal({
           applyPreview(data);
           setExistingId(data.collection_id ?? null);
         } else {
-          // manual blank
           resetManual();
         }
       } catch (e) {
@@ -186,6 +210,12 @@ export default function CollectionModal({
     };
   }, [open, artist, title, folder]);
 
+  useEffect(() => {
+    if (!linkToast) return;
+    const t = window.setTimeout(() => setLinkToast(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [linkToast]);
+
   function applyMatch(m: {
     band_id: number;
     artist?: string | null;
@@ -251,10 +281,68 @@ export default function CollectionModal({
     setMissing(item.missing_mandatory || item.pending || []);
   }
 
+  const isStandardEdition = edition.trim().toLowerCase() === "standard edition";
+  const showEditionDate = !isStandardEdition && Boolean(editionDate || preview?.release_date);
+  const showVersion = !isStandardEdition && Boolean(version.trim());
+
   const artworkGroups = useMemo(() => {
     if (!artwork) return [];
-    return Object.entries(artwork).filter(([, items]) => items && items.length > 0);
+    const entries = Object.entries(artwork).filter(
+      ([, items]) => items && items.length > 0
+    );
+    entries.sort((a, b) => {
+      const ia = ARTWORK_ORDER.indexOf(a[0] as (typeof ARTWORK_ORDER)[number]);
+      const ib = ARTWORK_ORDER.indexOf(b[0] as (typeof ARTWORK_ORDER)[number]);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    return entries;
   }, [artwork]);
+
+  async function handleSyncLocal() {
+    if (!resolvedBandId || !folder) {
+      setLinkToast("Link a local folder before syncing artwork.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const data = await fetchCollectionPreviewFromFolder(resolvedBandId, folder);
+      setArtwork(data.artwork);
+      setMissing(data.missing_mandatory || []);
+      setAnimation((data.animation || []).join(" / "));
+      setCanvas((data.canvas || []).join(" / "));
+      setAutographs((data.autographs || []).join(", "));
+      setPreview((prev) => ({ ...(prev || {}), ...data }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLinkFolder() {
+    setError(null);
+    try {
+      const res = await pickCollectionFolder();
+      if (res.cancelled) return;
+      if (!res.ok) {
+        setLinkToast(res.error || "Source folder not valid.");
+        return;
+      }
+      if (res.preview) {
+        applyPreview(res.preview);
+        setExistingId(res.preview.collection_id ?? null);
+      } else if (res.folder_path) {
+        setFolder(res.folder_path);
+        setReleaseFolder(res.folder_path);
+        if (res.band_id) setResolvedBandId(res.band_id);
+        if (res.artist_name) setArtist(res.artist_name);
+        if (res.title) setTitle(res.title);
+      }
+    } catch (e) {
+      setLinkToast(e instanceof Error ? e.message : "Source folder not valid.");
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -265,9 +353,9 @@ export default function CollectionModal({
       edition: edition.trim() || "Standard Edition",
       release_type: releaseType,
       original_date: originalDate || null,
-      edition_date: editionDate || null,
+      edition_date: showEditionDate ? editionDate || null : null,
       media_type: mediaType,
-      version: version || null,
+      version: showVersion ? version || null : null,
       genres: genres
         .split(",")
         .map((s) => s.trim())
@@ -298,6 +386,7 @@ export default function CollectionModal({
       } else {
         await upsertCollectionItem(body);
       }
+      dispatchCollectionChanged();
       onSaved?.();
       onClose();
     } catch (e) {
@@ -307,12 +396,13 @@ export default function CollectionModal({
     }
   }
 
-  async function handleRemove() {
+  async function handleRemoveConfirmed() {
     if (!existingId) return;
-    if (!window.confirm("Remove this release from your collection?")) return;
     setSaving(true);
+    setConfirmRemove(false);
     try {
       await deleteCollectionItem(existingId);
+      dispatchCollectionChanged();
       onSaved?.();
       onClose();
     } catch (e) {
@@ -327,229 +417,457 @@ export default function CollectionModal({
   const heading =
     mode === "edit" || existingId
       ? "Edit in my collection"
-      : mode === "manual"
-        ? "Add to my collection"
-        : "Add to my collection";
+      : "Add to my collection";
+
+  const originalDisplay =
+    preview?.original_release_date_display ||
+    formatTrackDate(originalDate) ||
+    originalDate ||
+    "";
+  const editionDisplay =
+    preview?.release_date_display ||
+    formatTrackDate(editionDate) ||
+    editionDate ||
+    "";
 
   return (
     <ModalPortal onClose={onClose}>
       <div className="modal-backdrop" onClick={onClose}>
         <div
-          className="modal collection-modal"
+          className="modal-panel collection-modal"
           role="dialog"
           aria-modal="true"
           aria-label={heading}
           onClick={(e) => e.stopPropagation()}
         >
-          <header className="modal__header">
-            <h2>{heading}</h2>
-            <button type="button" className="modal__close" onClick={onClose} aria-label="Close">
+          <header className="modal-panel-header collection-modal__header">
+            <h3>{heading}</h3>
+            <button
+              type="button"
+              className="artist-word-cloud-modal__close"
+              onClick={onClose}
+              aria-label="Close"
+            >
               ×
             </button>
           </header>
 
-          {loading ? (
-            <p className="muted">Loading…</p>
-          ) : (
-            <div className="collection-modal__body">
-              {error ? <p className="error">{error}</p> : null}
+          <div className="collection-modal__scroll">
+            {folder ? (
+              <p className="muted collection-modal__hint collection-modal__linked">
+                Linked folder: {folder}
+              </p>
+            ) : (
+              <p className="muted collection-modal__hint collection-modal__linked">
+                Release not linked to a local folder yet,{" "}
+                <button
+                  type="button"
+                  className="collection-modal__linkish"
+                  onClick={() => void handleLinkFolder()}
+                >
+                  link here
+                </button>
+              </p>
+            )}
 
-              <div className="collection-modal__grid">
-                <label>
-                  Title
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} />
-                </label>
-                <label>
-                  Artist
-                  <input value={artist} onChange={(e) => setArtist(e.target.value)} />
-                </label>
-                <label>
-                  Original release date
-                  <input
-                    value={originalDate}
-                    onChange={(e) => setOriginalDate(e.target.value)}
-                    placeholder="YYYY.MM.DD"
-                  />
-                  {preview?.original_release_date_display ? (
-                    <span className="muted collection-modal__hint">
-                      {preview.original_release_date_display}
-                    </span>
-                  ) : null}
-                </label>
-                <label>
-                  Edition
-                  <input value={edition} onChange={(e) => setEdition(e.target.value)} />
-                </label>
-                {edition.toLowerCase() !== "standard edition" ? (
-                  <label>
-                    Release date
-                    <input
-                      value={editionDate}
-                      onChange={(e) => setEditionDate(e.target.value)}
-                      placeholder="YYYY.MM.DD"
+            {linkToast ? (
+              <p className="collection-modal__toast" role="status">
+                {linkToast}
+              </p>
+            ) : null}
+
+            {loading ? (
+              <p className="muted">Loading…</p>
+            ) : (
+              <div className="collection-modal__body">
+                {error ? <p className="error">{error}</p> : null}
+
+                <div className="collection-modal__columns">
+                  <section className="collection-modal__col">
+                    <h4 className="collection-modal__section-title">Release</h4>
+                    <EditableField
+                      label="Title"
+                      value={title}
+                      onChange={setTitle}
+                      editable={isAdmin}
                     />
-                  </label>
-                ) : null}
-                <label>
-                  Country
-                  <span className="collection-modal__country">
-                    {countryIso ? (
-                      <span className={`fi fi-${countryIso.toLowerCase()}`} aria-hidden />
+                    <EditableField
+                      label="Artist"
+                      value={artist}
+                      onChange={setArtist}
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Release date"
+                      value={originalDate}
+                      displayValue={originalDisplay}
+                      onChange={setOriginalDate}
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Edition"
+                      value={edition}
+                      onChange={setEdition}
+                      editable={isAdmin}
+                    />
+                    {showEditionDate ? (
+                      <EditableField
+                        label="Edition date"
+                        value={editionDate}
+                        displayValue={editionDisplay}
+                        onChange={setEditionDate}
+                        editable={isAdmin}
+                      />
                     ) : null}
-                    <input value={country} onChange={(e) => setCountry(e.target.value)} />
-                  </span>
-                </label>
-                <label>
-                  Release type
-                  <select value={releaseType} onChange={(e) => setReleaseType(e.target.value)}>
-                    {RELEASE_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Genre
-                  <input value={genres} onChange={(e) => setGenres(e.target.value)} />
-                </label>
-                <label>
-                  Media type
-                  <select value={mediaType} onChange={(e) => setMediaType(e.target.value)}>
-                    {MEDIA_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Version
-                  <input value={version} onChange={(e) => setVersion(e.target.value)} />
-                </label>
-                <label>
-                  Animation
-                  <input
-                    className={sourceClass(animation)}
-                    value={animation}
-                    onChange={(e) => setAnimation(e.target.value)}
-                    placeholder="AI / Official / None"
-                  />
-                </label>
-                <label>
-                  Canvas
-                  <input
-                    className={sourceClass(canvas)}
-                    value={canvas}
-                    onChange={(e) => setCanvas(e.target.value)}
-                    placeholder="Apple / Spotify / None"
-                  />
-                </label>
-                <label>
-                  Autographs
-                  <input
-                    value={autographs}
-                    onChange={(e) => setAutographs(e.target.value)}
-                    placeholder="Cover, Insert…"
-                  />
-                </label>
-                <label className="collection-modal__span2">
-                  Notes
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-                </label>
-              </div>
+                    <EditableField
+                      label="Country"
+                      value={country}
+                      onChange={setCountry}
+                      editable={isAdmin}
+                      prefix={
+                        countryIso ? (
+                          <span
+                            className={`fi fi-${countryIso.toLowerCase()}`}
+                            aria-hidden
+                          />
+                        ) : null
+                      }
+                    />
+                    <EditableField
+                      label="Genre"
+                      value={genres}
+                      onChange={setGenres}
+                      editable={isAdmin}
+                    />
+                  </section>
 
-              {!folder && matches.length > 0 ? (
-                <div className="collection-modal__matches">
-                  <h3>Possible local matches</h3>
-                  <ul>
-                    {matches.map((m) => (
-                      <li key={`${m.band_id}-${m.folder_path || m.release_id || m.title}`}>
-                        <button type="button" className="btn" onClick={() => applyMatch(m)}>
-                          Link
-                        </button>
-                        <span>
-                          {m.artist || artist}
-                          {m.title ? ` — ${m.title}` : ""}
-                          {m.folder_path ? (
-                            <span className="muted"> · {m.folder_path}</span>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <section className="collection-modal__col">
+                    <h4 className="collection-modal__section-title">Media</h4>
+                    <EditableField
+                      label="Release type"
+                      value={releaseType}
+                      onChange={setReleaseType}
+                      options={RELEASE_TYPES}
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Media type"
+                      value={mediaType}
+                      onChange={setMediaType}
+                      options={MEDIA_TYPES}
+                      editable={isAdmin}
+                    />
+                    {showVersion ? (
+                      <EditableField
+                        label="Version"
+                        value={version}
+                        onChange={setVersion}
+                        editable={isAdmin}
+                      />
+                    ) : null}
+                    <EditableField
+                      label="Animation"
+                      value={animation}
+                      onChange={setAnimation}
+                      noneClass
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Canvas"
+                      value={canvas}
+                      onChange={setCanvas}
+                      noneClass
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Autographs"
+                      value={autographs}
+                      onChange={setAutographs}
+                      noneClass
+                      editable={isAdmin}
+                    />
+                    <EditableField
+                      label="Notes"
+                      value={notes}
+                      onChange={setNotes}
+                      multiline
+                      noneClass
+                      editable={isAdmin}
+                    />
+                  </section>
                 </div>
-              ) : null}
 
-              {folder ? (
-                <p className="muted collection-modal__hint">Linked folder: {folder}</p>
-              ) : (
-                <p className="muted collection-modal__hint">Orphan — not linked to a local folder yet.</p>
-              )}
-
-              {artworkGroups.length > 0 ? (
-                <div className="collection-modal__artwork">
-                  <h3>Artwork</h3>
-                  <div className="collection-modal__artwork-cols">
-                    {artworkGroups.map(([group, items]) => (
-                      <div key={group}>
-                        <h4>{group}</h4>
-                        <ul>
-                          {(items || []).map((it) => (
-                            <li key={it.label}>
-                              {it.label}
-                              {it.missing ? (
-                                <span className="collection-modal__missing"> (Missing)</span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                {!folder && matches.length > 0 ? (
+                  <div className="collection-modal__matches">
+                    <h3>Possible local matches</h3>
+                    <ul>
+                      {matches.map((m) => (
+                        <li
+                          key={`${m.band_id}-${m.folder_path || m.release_id || m.title}`}
+                        >
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => applyMatch(m)}
+                          >
+                            Link
+                          </button>
+                          <span>
+                            {m.artist || artist}
+                            {m.title ? ` — ${m.title}` : ""}
+                            {m.folder_path ? (
+                              <span className="muted"> · {m.folder_path}</span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              ) : missing.length > 0 ? (
-                <p className="muted">
-                  Pending:{" "}
-                  {missing.map((m) => (
-                    <span key={m} className="collection-modal__missing">
-                      {m};{" "}
-                    </span>
-                  ))}
-                </p>
-              ) : null}
-            </div>
-          )}
+                ) : null}
+
+                {artworkGroups.length > 0 ? (
+                  <div className="collection-modal__artwork">
+                    <h4 className="collection-modal__section-title">Artwork</h4>
+                    <div className="collection-modal__artwork-cols">
+                      {artworkGroups.map(([group, items]) => (
+                        <div key={group}>
+                          <h5 className="collection-modal__artwork-group">
+                            {group}
+                          </h5>
+                          <ul>
+                            {(items || []).map((it) => {
+                              const showSource =
+                                !it.missing &&
+                                (group === "Cover") &&
+                                /^(animation|canvas)$/i.test(it.label);
+                              const src =
+                                it.source ||
+                                (showSource ? "Official" : null);
+                              return (
+                                <li
+                                  key={`${it.label}-${it.missing ? "m" : "p"}`}
+                                  className={
+                                    it.missing
+                                      ? "collection-modal__missing-item"
+                                      : undefined
+                                  }
+                                >
+                                  {it.label}
+                                  {showSource && src ? (
+                                    <span className="collection-modal__art-source">
+                                      {" "}
+                                      ({src})
+                                    </span>
+                                  ) : null}
+                                  {it.missing ? (
+                                    <span className="collection-modal__missing">
+                                      {" "}
+                                      (Missing)
+                                    </span>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : missing.length > 0 ? (
+                  <p className="muted">
+                    Pending:{" "}
+                    {missing.map((m) => (
+                      <span key={m} className="collection-modal__missing">
+                        {m};{" "}
+                      </span>
+                    ))}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           <footer className="modal__footer collection-modal__footer">
             {existingId ? (
               <button
                 type="button"
-                className="btn btn--danger"
-                onClick={() => void handleRemove()}
+                className="btn btn--danger collection-modal__remove"
+                onClick={() => setConfirmRemove(true)}
                 disabled={saving}
               >
+                <IconTrash className="collection-modal__btn-icon" />
                 Remove from collection
               </button>
             ) : (
               <span />
             )}
             <div className="collection-modal__footer-right">
-              <button type="button" className="btn" onClick={onClose} disabled={saving}>
-                Cancel
-              </button>
+              {folder ? (
+                <button
+                  type="button"
+                  className="btn collection-modal__sync"
+                  onClick={() => void handleSyncLocal()}
+                  disabled={saving}
+                >
+                  <IconSync className="collection-modal__btn-icon" />
+                  Sync local files
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="btn btn--primary"
+                className="btn btn--primary collection-modal__add"
                 onClick={() => void handleSave()}
                 disabled={saving || !title.trim() || !artist.trim()}
               >
+                <IconPlus className="collection-modal__btn-icon" />
                 {saving ? "Saving…" : existingId ? "Save" : "Add"}
               </button>
             </div>
           </footer>
+
+          {confirmRemove ? (
+            <div className="collection-modal__confirm" role="alertdialog">
+              <p>Remove this release from your collection?</p>
+              <div className="collection-modal__confirm-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setConfirmRemove(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  onClick={() => void handleRemoveConfirmed()}
+                  disabled={saving}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </ModalPortal>
+  );
+}
+
+type EditableFieldProps = {
+  label: string;
+  value: string;
+  displayValue?: string;
+  onChange: (next: string) => void;
+  options?: readonly string[];
+  multiline?: boolean;
+  noneClass?: boolean;
+  prefix?: ReactNode;
+  editable?: boolean;
+};
+
+function EditableField({
+  label,
+  value,
+  displayValue,
+  onChange,
+  options,
+  multiline,
+  noneClass,
+  prefix,
+  editable = false,
+}: EditableFieldProps) {
+  const [editing, setEditing] = useState(false);
+  const shown = (displayValue ?? value).trim();
+  const isEmpty = !shown;
+  const text = isEmpty ? "None" : shown;
+
+  if (editable && editing) {
+    if (options) {
+      return (
+        <div className="collection-modal__row collection-modal__row--editing">
+          <span className="collection-modal__row-label">{label}:</span>
+          <select
+            autoFocus
+            value={value || options[0]}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={() => setEditing(false)}
+          >
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+    if (multiline) {
+      return (
+        <div className="collection-modal__row collection-modal__row--editing">
+          <span className="collection-modal__row-label">{label}:</span>
+          <textarea
+            autoFocus
+            rows={2}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={() => setEditing(false)}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="collection-modal__row collection-modal__row--editing">
+        <span className="collection-modal__row-label">{label}:</span>
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setEditing(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const valueInner = (
+    <>
+      {prefix}
+      <span
+        className={
+          isEmpty || (noneClass && sourceClass(value))
+            ? "collection-modal__none"
+            : undefined
+        }
+      >
+        {text}
+      </span>
+      {editable ? (
+        <span className="collection-modal__edit-icon" aria-hidden>
+          ✎
+        </span>
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="collection-modal__row">
+      <span className="collection-modal__row-label">{label}:</span>
+      {editable ? (
+        <button
+          type="button"
+          className="collection-modal__row-value"
+          onClick={() => setEditing(true)}
+        >
+          {valueInner}
+        </button>
+      ) : (
+        <span className="collection-modal__row-value collection-modal__row-value--static">
+          {valueInner}
+        </span>
+      )}
+    </div>
   );
 }

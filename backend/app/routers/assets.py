@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -17,21 +18,29 @@ NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade", "labels", "links"
 DATA_FILE_PREFIXES = ("people", "links")
 
 
+def _norm_stem(stem: str) -> str:
+    """Match stems ignoring case and hyphen/space differences."""
+    return re.sub(r"[^a-z0-9]+", "-", stem.casefold()).strip("-")
+
+
 def _first_existing(base: Path, stem: str) -> Path | None:
     for ext in (".png", ".jpg", ".webp", ".svg", ".jpeg"):
         path = base / f"{stem}{ext}"
         if path.is_file():
             return path
-    # Case-insensitive stem match (e.g. BMG.png ↔ bmg)
+        spaced = base / f"{stem.replace('-', ' ')}{ext}"
+        if spaced.is_file():
+            return spaced
+    # Case-insensitive + hyphen/space-normalized stem match
     if base.is_dir():
-        want = stem.casefold()
+        want = _norm_stem(stem)
         try:
             for f in base.iterdir():
                 if not f.is_file():
                     continue
                 if f.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
                     continue
-                if f.stem.casefold() == want:
+                if f.stem.casefold() == stem.casefold() or _norm_stem(f.stem) == want:
                     return f
         except OSError:
             pass

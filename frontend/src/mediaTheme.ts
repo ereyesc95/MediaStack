@@ -206,22 +206,28 @@ function storedBaseTheme(userId?: number): ThemeId {
   return stored;
 }
 
+/** True while an artist or release page owns the Adaptive theme session. */
+export function isMediaPageThemeSessionActive() {
+  return artistPageActive || albumPageActive;
+}
+
 /** Call when entering a page that samples theme colors from media art. */
 export function beginArtistPageSession(userId?: number) {
-  const pref = getAdaptiveMediaPref(userId);
   if (!artistPageActive) {
     themeBeforeArtist = storedBaseTheme(userId);
     artistPageActive = true;
   }
-  if (pref === false) {
-    const stored = storedBaseTheme(userId);
-    pinArtistPageTheme(stored);
-    applyTheme(stored, userId);
+  // Home theme picks must not stick — Adaptive is always active on entry.
+  clearArtistPageThemePin();
+  setAdaptiveMediaPref(true, userId);
+  const colors = getArtistThemeColors(userId);
+  if (colors) {
+    applyMediaCss(colors);
   } else {
-    // Default / enabled: Adaptive is selected when entering media pages.
-    clearArtistPageThemePin();
-    window.dispatchEvent(new CustomEvent("theme-changed"));
+    applyTheme("artist", userId);
   }
+  document.documentElement.setAttribute("data-theme", "artist");
+  window.dispatchEvent(new CustomEvent("theme-changed"));
 }
 
 /** Apply stored theme unless a media page is currently sampling Adaptive. */

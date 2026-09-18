@@ -751,9 +751,16 @@ def get_band_overview(
                 ):
                     e["banner_url"] = by_year_banner[year]
             cached["eras"] = upgraded
-            # Prefer one slide per year (dedupe portrait/landscape/banner triples).
-            if len(upgraded) > 3 and any(
-                e.get("orientation") == "banner" for e in upgraded
+            # Legacy gallery eras were one orientation per year triple; release
+            # photo slides (relphoto_*) must stay one-per-edition/release.
+            is_release_photo = any(
+                isinstance(e.get("id"), str) and str(e["id"]).startswith("relphoto_")
+                for e in upgraded
+            )
+            if (
+                not is_release_photo
+                and len(upgraded) > 3
+                and any(e.get("orientation") == "banner" for e in upgraded)
             ):
                 by_year: dict[int, dict] = {}
                 for e in upgraded:

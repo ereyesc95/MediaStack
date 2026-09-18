@@ -3305,6 +3305,28 @@ export type CollectionListParams = {
   page_size?: number;
 };
 
+export async function pickCollectionFolder(): Promise<{
+  ok?: boolean;
+  cancelled?: boolean;
+  error?: string;
+  folder_path?: string;
+  artist_name?: string;
+  title?: string;
+  band_id?: number | null;
+  preview?: import("./types").CollectionPreview | null;
+}> {
+  return request(`${API}/music/collection/pick-folder`, { method: "POST" });
+}
+
+export async function fetchCollectionFacets(): Promise<{
+  media: string[];
+  animation: string[];
+  canvas: string[];
+  total: number;
+}> {
+  return request(`${API}/music/collection/facets`);
+}
+
 export async function fetchCollection(
   params: CollectionListParams = {}
 ): Promise<{

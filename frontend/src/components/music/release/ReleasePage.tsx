@@ -418,7 +418,7 @@ export default function ReleasePage({
   } | null>(null);
   const [lineupMemberId, setLineupMemberId] = useState<number | null>(null);
   const [bottomTab, setBottomTab] = useState<"lineup" | "staff" | "singles">(
-    "lineup"
+    "singles"
   );
   const [addStaffOpen, setAddStaffOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<{
@@ -545,14 +545,14 @@ export default function ReleasePage({
 
   useEffect(() => {
     if (!showTabbedBottom || !data) return;
-    if (bottomTab === "lineup" && !showOverviewLineup) {
+    if (bottomTab === "singles" && !showSinglesTab) {
+      setBottomTab(showOverviewLineup ? "lineup" : "staff");
+    } else if (bottomTab === "lineup" && !showOverviewLineup) {
       setBottomTab(
-        showReleaseStaff ? "staff" : showSinglesTab ? "singles" : "lineup"
+        showSinglesTab ? "singles" : showReleaseStaff ? "staff" : "lineup"
       );
     } else if (bottomTab === "staff" && !showReleaseStaff) {
-      setBottomTab(showOverviewLineup ? "lineup" : "singles");
-    } else if (bottomTab === "singles" && !showSinglesTab) {
-      setBottomTab(showOverviewLineup ? "lineup" : "staff");
+      setBottomTab(showSinglesTab ? "singles" : "lineup");
     }
   }, [
     showTabbedBottom,
@@ -1583,7 +1583,7 @@ export default function ReleasePage({
 
   useEffect(() => {
     setMoreInfoOpen(false);
-    setBottomTab("lineup");
+    setBottomTab("singles");
   }, [releaseId]);
 
   // Open info when the active track changes so track meta is visible; user can still collapse.
@@ -2079,7 +2079,7 @@ export default function ReleasePage({
                     ))}
                   </p>
                 )}
-                {bannerLayout && panelActionTrack && miniAudio.playing ? (
+                {bannerLayout && panelActionTrack ? (
                   <div className="release-page__track-actions release-page__track-actions--in-info">
                     {showLyricsAction && (
                       <button
@@ -2266,7 +2266,7 @@ export default function ReleasePage({
             </div>
           )}
 
-          {tab === "tracklist" && panelActionTrack && miniAudio.playing && (
+          {tab === "tracklist" && panelActionTrack && (
             <div className="release-page__track-actions release-page__track-actions--above-player">
               {showLyricsAction && (
                 <button
@@ -2796,6 +2796,15 @@ export default function ReleasePage({
                 {showTabbedBottom && data ? (
                   <div className="series-subseries-overview__cast">
                     <div className="series-subseries-overview__cast-tabs">
+                      {showSinglesTab ? (
+                        <button
+                          type="button"
+                          className={bottomTab === "singles" ? "active" : ""}
+                          onClick={() => setBottomTab("singles")}
+                        >
+                          Singles
+                        </button>
+                      ) : null}
                       {showOverviewLineup ? (
                         <button
                           type="button"
@@ -2812,15 +2821,6 @@ export default function ReleasePage({
                           onClick={() => setBottomTab("staff")}
                         >
                           Staff
-                        </button>
-                      ) : null}
-                      {showSinglesTab ? (
-                        <button
-                          type="button"
-                          className={bottomTab === "singles" ? "active" : ""}
-                          onClick={() => setBottomTab("singles")}
-                        >
-                          Singles
                         </button>
                       ) : null}
                     </div>

@@ -63,7 +63,9 @@ import {
   readSpotifyOAuthError,
 } from "../../spotifyOAuth";
 import ArtistBrowse from "./ArtistBrowse";
-import CollectionBrowse from "./CollectionBrowse";
+import CollectionBrowse, {
+  type CollectionBrowseApi,
+} from "./CollectionBrowse";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -73,7 +75,7 @@ import {
   useMiniAudio,
 } from "./artist/MiniAudioPlayer";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
+import { IconAddArtist, IconCards, IconDisc, IconHeadphones } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 type Props = {
@@ -189,6 +191,8 @@ export default function MusicModule({
 }: Props) {
   const [showManageArtists, setShowManageArtists] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
+  const [collectionView, setCollectionView] = useState<"table" | "cards">("table");
+  const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
@@ -1191,6 +1195,29 @@ export default function MusicModule({
                   </svg>
                 </button>
               )}
+              {tab === "collection" ? (
+                <button
+                  type="button"
+                  className={`catalog-display-toggle catalog-display-toggle--icon${
+                    collectionView === "cards" ? " active" : ""
+                  }`}
+                  onClick={() =>
+                    setCollectionView((v) => (v === "table" ? "cards" : "table"))
+                  }
+                  title={
+                    collectionView === "table"
+                      ? "Switch to cards"
+                      : "Switch to list"
+                  }
+                  aria-label={
+                    collectionView === "table"
+                      ? "Switch to cards"
+                      : "Switch to list"
+                  }
+                >
+                  <IconCards className="catalog-display-toggle__icon" />
+                </button>
+              ) : null}
               <AppMenu
                 onImport={onImport}
                 onSync={onSync}
@@ -1206,6 +1233,16 @@ export default function MusicModule({
                   setAddPlaylistInitialMode("local");
                   setShowAddPlaylist(true);
                 }}
+                showManageCollection={tab === "collection"}
+                onCollectionAddManual={() =>
+                  collectionManageRef.current?.openManual()
+                }
+                onCollectionImport={() =>
+                  collectionManageRef.current?.importExcel()
+                }
+                onCollectionExport={() =>
+                  collectionManageRef.current?.exportExcel()
+                }
                 menuChrome={
                   portraitMenuChrome && showArtistTools ? (
                     <button
@@ -1745,6 +1782,10 @@ export default function MusicModule({
       ) : tab === "collection" ? (
         <CollectionBrowse
           cardOrientation={cardOrientation}
+          isAdmin={isAdmin}
+          view={collectionView}
+          onViewChange={setCollectionView}
+          manageApiRef={collectionManageRef}
           onOpenArtist={(id) => openArtist(id)}
           onOpenRelease={(bandId, releaseId) =>
             openCollectionRelease(bandId, releaseId)

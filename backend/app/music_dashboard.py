@@ -232,9 +232,13 @@ def build_dashboard(db: Session, user_id: int) -> dict:
         band = db.get(Band, aid)
         if not band:
             continue
-        # Round / home icons: Photo - Square → Portrait → Landscape → Banner
-        card = resolve_artist_card(band.bnd_name, orientation="round")
-        portrait = resolve_artist_card(band.bnd_name, orientation="portrait")
+        # Round / home icons: stable-random Photo - * per account
+        card = resolve_artist_card(
+            band.bnd_name, orientation="round", user_id=user_id
+        )
+        portrait = resolve_artist_card(
+            band.bnd_name, orientation="portrait", user_id=user_id
+        )
         photo = card.photo_url or portrait.photo_url
         top_artists.append(
             {
@@ -626,7 +630,9 @@ def list_artist_cards(
     page_rows = rows[start : start + page_size]
     items = []
     for b in page_rows:
-        card = resolve_artist_card(b.bnd_name, orientation=orientation)
+        card = resolve_artist_card(
+            b.bnd_name, orientation=orientation, user_id=user_id
+        )
         items.append(
             {
                 "id": b.bnd_id,

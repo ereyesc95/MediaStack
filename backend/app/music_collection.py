@@ -46,8 +46,8 @@ MANDATORY_ARTWORK = (
     "Photo - Landscape",
     "Photo - Portrait",
     "Photo - Banner",
-    "Spotify - Code",
-    "Spotify - Card",
+    "Code - Spotify",
+    "Code - Spotify Card",
     "Photocard - Landscape - Front",
     "Photocard - Landscape - Back",
     "Photocard - Portrait - Front",
@@ -312,16 +312,60 @@ def _find_artwork_file(artwork: Path, want_stem: str, *, allow_video: bool = Fal
     return None
 
 
+def _normalize_code_stem(base: str) -> str | None:
+    """Map legacy / new code filenames to canonical Code - * labels."""
+    low = base.casefold().strip()
+    aliases = {
+        "spotify - code": "Code - Spotify",
+        "code - spotify": "Code - Spotify",
+        "spotify": "Code - Spotify",
+        "spotify code": "Code - Spotify",
+        "spotify - card": "Code - Spotify Card",
+        "code - spotify card": "Code - Spotify Card",
+        "spotify card": "Code - Spotify Card",
+        "qr - code": "Code - QR",
+        "code - qr": "Code - QR",
+        "qr": "Code - QR",
+        "qr code": "Code - QR",
+        "qr - card": "Code - QR Card",
+        "code - qr card": "Code - QR Card",
+        "qr card": "Code - QR Card",
+    }
+    return aliases.get(low)
+
+
+def _short_artwork_label(canonical: str) -> str:
+    """Strip redundant group prefixes for modal display."""
+    label = canonical
+    for prefix in (
+        "Cover - ",
+        "Photo - ",
+        "Photocard - ",
+        "Booklet - ",
+        "Code - ",
+        "Autograph - ",
+    ):
+        if label.casefold().startswith(prefix.casefold()):
+            return label[len(prefix) :].strip()
+    if label.casefold() == "logo":
+        return "Logo"
+    return label
+
+
+def _sort_group_entries(entries: list[dict]) -> list[dict]:
+    return sorted(entries, key=lambda e: (e.get("label") or "").casefold())
+
+
 def scan_artwork_checklist(artwork: Path | None) -> dict:
     """Classify [Artwork] files into groups + mandatory presence."""
     groups: dict[str, list[dict]] = {
         "Cover": [],
-        "Booklet": [],
-        "Media": [],
         "Photo": [],
-        "Branding": [],
-        "Codes": [],
         "Photocards": [],
+        "Codes": [],
+        "Media": [],
+        "Branding": [],
+        "Booklet": [],
         "Autographs": [],
         "Other": [],
     }
@@ -355,6 +399,22 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
         if path and not urls.get(key):
             urls[key] = _media_url(path, root)
 
+    def push(group: str, canonical: str, *, source: str | None, url: str | None, missing: bool) -> None:
+        short = _short_artwork_label(canonical)
+        # Animation / Canvas always expose a source for the modal suffix
+        src = source
+        if not missing and group == "Cover" and short.casefold() in ("animation", "canvas"):
+            src = source or "Official"
+        groups[group].append(
+            {
+                "label": short,
+                "canonical": canonical,
+                "source": src,
+                "url": url,
+                "missing": missing,
+            }
+        )
+
     try:
         files = sorted(artwork.iterdir(), key=lambda p: p.name.casefold())
     except OSError:
@@ -369,20 +429,13 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             continue
         base, source = _stem_base(path)
         low = base.casefold()
-        entry = {
-            "label": base,
-            "source": source,
-            "url": _media_url(path, root),
-            "missing": False,
-        }
+        url = _media_url(path, root)
+        code_canon = _normalize_code_stem(base)
 
         if low.startswith("cover - "):
-            groups["Cover"].append(entry)
+            present.add(base)
+            push("Cover", base, source=source, url=url, missing=False)
             suffix = base[8:].strip()
-            present.add(f"Cover - {suffix}" if suffix.casefold() in {
-                "front", "landscape", "portrait", "banner", "animation", "canvas",
-                "back", "inner", "inlay", "alternate", "spine",
-            } else base)
             if low == "cover - front":
                 add_url("cover_front_url", path)
             elif low == "cover - banner":
@@ -393,41 +446,53 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             elif low == "cover - canvas":
                 add_url("canvas_url", path)
                 canvas_sources.append(source or "Official")
+            elif suffix.casefold() in {
+                "front", "landscape", "portrait", "banner", "animation", "canvas",
+                "back", "inner", "inlay", "alternate", "spine",
+            }:
+                pass
+        elif low.startswith("animation"):
+            # Animation - Album style
+            present.add("Cover - Animation")
+            push("Cover", "Cover - Animation", source=source or "Official", url=url, missing=False)
+            add_url("animation_url", path)
+            animation_sources.append(source or "Official")
+        elif low.startswith("canvas"):
+            present.add("Cover - Canvas")
+            push("Cover", "Cover - Canvas", source=source or "Official", url=url, missing=False)
+            add_url("canvas_url", path)
+            canvas_sources.append(source or "Official")
         elif low.startswith("booklet - ") or low.startswith("booklet "):
-            groups["Booklet"].append(entry)
+            push("Booklet", base, source=source, url=url, missing=False)
         elif low.startswith("photo - "):
-            groups["Photo"].append(entry)
             present.add(base)
+            push("Photo", base, source=source, url=url, missing=False)
         elif low in ("logo", "collapsed logo", "icon") or low.startswith("logo "):
-            groups["Branding"].append(entry)
+            push("Branding", base, source=source, url=url, missing=False)
             if low == "logo":
                 present.add("Logo")
                 add_url("logo_url", path)
-        elif low.startswith("spotify"):
-            groups["Codes"].append(entry)
-            if low in ("spotify - card", "spotify card"):
-                present.add("Spotify - Card")
+        elif code_canon:
+            present.add(code_canon)
+            push("Codes", code_canon, source=source, url=url, missing=False)
+            if code_canon == "Code - Spotify Card":
                 add_url("spotify_card_url", path)
-            elif low in ("spotify - code", "spotify code", "spotify"):
-                present.add("Spotify - Code")
-        elif low.startswith("qr"):
-            groups["Codes"].append(entry)
         elif low.startswith("photocard - "):
-            groups["Photocards"].append(entry)
             present.add(base)
+            push("Photocards", base, source=source, url=url, missing=False)
         elif low.startswith("autograph - "):
             label = base[12:].strip() or base
-            groups["Autographs"].append({**entry, "label": label})
+            push("Autographs", f"Autograph - {label}", source=source, url=url, missing=False)
             if label not in autograph_labels:
                 autograph_labels.append(label)
         elif low in ("disc", "side a", "side b") or low.startswith("side "):
-            groups["Media"].append(entry)
+            push("Media", base, source=source, url=url, missing=False)
             if low == "disc" or low == "side a":
                 add_url("disc_url", path)
             elif low == "side b":
                 add_url("disc_b_url", path)
         else:
-            groups["Other"].append(entry)
+            push("Other", base, source=source, url=url, missing=False)
 
     # Also mark mandatory via dedicated resolvers (handles Cover - Album alias etc.)
     if resolve_cover_front_file(artwork):
@@ -454,13 +519,29 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
         if not canvas_sources:
             _b, src = _stem_base(canv)
             canvas_sources.append(src or "Official")
+
+    code_lookup_stems = (
+        ("Code - Spotify", ("Code - Spotify", "Spotify - Code", "Spotify")),
+        ("Code - Spotify Card", ("Code - Spotify Card", "Spotify - Card", "Spotify Card")),
+        ("Code - QR", ("Code - QR", "QR - Code", "QR")),
+        ("Code - QR Card", ("Code - QR Card", "QR - Card", "QR Card")),
+    )
+    for canonical, stems in code_lookup_stems:
+        if canonical in present:
+            continue
+        for stem in stems:
+            found = _find_artwork_file(artwork, stem)
+            if found:
+                present.add(canonical)
+                if canonical == "Code - Spotify Card":
+                    add_url("spotify_card_url", found)
+                break
+
     for stem in (
         "Photo - Square",
         "Photo - Landscape",
         "Photo - Portrait",
         "Photo - Banner",
-        "Spotify - Code",
-        "Spotify - Card",
         "Photocard - Landscape - Front",
         "Photocard - Landscape - Back",
         "Photocard - Portrait - Front",
@@ -476,23 +557,34 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             present.add(stem)
             if stem == "Logo":
                 add_url("logo_url", found)
-            if stem == "Spotify - Card":
-                add_url("spotify_card_url", found)
+
+    # Avoid duplicate labels when resolvers already covered files on disk
+    seen_keys: dict[str, set[str]] = {g: set() for g in groups}
+    for gname, entries in list(groups.items()):
+        deduped: list[dict] = []
+        for e in entries:
+            key = (e.get("label") or "").casefold()
+            if key in seen_keys[gname]:
+                continue
+            seen_keys[gname].add(key)
+            deduped.append(e)
+        groups[gname] = deduped
 
     missing = [name for name in MANDATORY_ARTWORK if name not in present]
-    # Attach missing placeholders into Cover/Photo/etc for modal display
     for name in missing:
-        entry = {"label": name, "source": None, "url": None, "missing": True}
         if name.startswith("Cover - "):
-            groups["Cover"].append(entry)
+            push("Cover", name, source=None, url=None, missing=True)
         elif name.startswith("Photo - "):
-            groups["Photo"].append(entry)
-        elif name.startswith("Spotify"):
-            groups["Codes"].append(entry)
+            push("Photo", name, source=None, url=None, missing=True)
+        elif name.startswith("Code - "):
+            push("Codes", name, source=None, url=None, missing=True)
         elif name.startswith("Photocard"):
-            groups["Photocards"].append(entry)
+            push("Photocards", name, source=None, url=None, missing=True)
         elif name == "Logo":
-            groups["Branding"].append(entry)
+            push("Branding", name, source=None, url=None, missing=True)
+
+    for gname in groups:
+        groups[gname] = _sort_group_entries(groups[gname])
 
     return {
         "groups": groups,
@@ -640,6 +732,24 @@ def _band_genres(db: Session, band: Band | None) -> list[str]:
     return out
 
 
+def _release_genres(db: Session, band_id: int | None, title: str | None) -> list[str]:
+    """Prefer per-release subgenres from DB; fall back to band genres."""
+    if band_id and title:
+        try:
+            from app.release_overview import _match_db_release, _resolve_subgenres
+
+            rel = _match_db_release(db, band_id, title)
+            if rel and (rel.rel_fk_subgenres or "").strip():
+                resolved = _resolve_subgenres(db, rel.rel_fk_subgenres)
+                names = [s["name"] for s in resolved if s.get("name")]
+                if names:
+                    return names
+        except Exception:
+            pass
+    band = db.get(Band, band_id) if band_id else None
+    return _band_genres(db, band)
+
+
 def _find_band_by_name(db: Session, artist: str) -> Band | None:
     want = (artist or "").strip().casefold()
     if not want:
@@ -736,11 +846,11 @@ def build_preview_from_folder(
     category = _category_from_path(folder, root)
     release_type = _CATEGORY_TO_TYPE.get(category or "", "Studio Album")
     country, iso = _band_country(db, band)
-    genres = _band_genres(db, band)
     media = _media_from_folder(folder)
     version = _version_label_from_folder(folder)
     edition = _edition_label_from_folder(folder)
     title = _release_title_from_folder(folder)
+    genres = _release_genres(db, band_id, title)
     original = _original_date_from_release_folder(folder)
     edition_date = _edition_date_from_folder(folder)
     # Hide edition date when no real edition folder (same as original / Standard)
@@ -804,12 +914,21 @@ def compute_pending(row: CollectionItem, checklist: dict | None) -> list[str]:
         low = item.casefold()
         if low == "everything":
             continue
-        if low in ("spotify code", "spotify - code"):
-            # Excel mock → Spotify - Card
-            if "Spotify - Card" not in pending and "spotify - card" not in cleared:
-                if not checklist or "Spotify - Card" in (checklist.get("missing_mandatory") or []):
-                    if "Spotify - Card" not in pending:
-                        pending.append("Spotify - Card")
+        if low in ("spotify code", "spotify - code", "code - spotify"):
+            if "Code - Spotify" not in pending and "code - spotify" not in cleared:
+                pending.append("Code - Spotify")
+            continue
+        if low in ("spotify card", "spotify - card", "code - spotify card"):
+            if "Code - Spotify Card" not in pending and "code - spotify card" not in cleared:
+                pending.append("Code - Spotify Card")
+            continue
+        if low in ("qr code", "qr - code", "code - qr"):
+            if "Code - QR" not in pending and "code - qr" not in cleared:
+                pending.append("Code - QR")
+            continue
+        if low in ("qr card", "qr - card", "code - qr card"):
+            if "Code - QR Card" not in pending and "code - qr card" not in cleared:
+                pending.append("Code - QR Card")
             continue
         if item not in pending:
             pending.append(item)
@@ -1243,3 +1362,82 @@ def fuzzy_matches(db: Session, *, artist: str, title: str, limit: int = 8) -> li
                 if len(found) >= limit:
                     return found
     return found
+
+
+def validate_collection_source_folder(abs_or_rel: str) -> dict:
+    """Validate a picked folder as a collection leaf (release / edition / version).
+
+    A valid leaf has a direct ``[Artwork]`` child and lives under ``Music/…``.
+    """
+    root = _media_root()
+    if not root:
+        return {"ok": False, "error": "Media library root is not configured."}
+    raw = (abs_or_rel or "").strip().strip('"')
+    if not raw:
+        return {"ok": False, "error": "No folder selected."}
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (root / path).resolve()
+    else:
+        path = path.resolve()
+    try:
+        rel = path.relative_to(root.resolve())
+    except ValueError:
+        return {
+            "ok": False,
+            "error": "Source folder must be inside your Music library.",
+        }
+    parts = rel.parts
+    if not parts or parts[0].casefold() != "music":
+        return {
+            "ok": False,
+            "error": "Source folder must be under Music/{Letter}/{Artist}/…",
+        }
+    if len(parts) < 4:
+        return {
+            "ok": False,
+            "error": "Pick a release, edition, or version folder — not the artist root.",
+        }
+    if not path.is_dir():
+        return {"ok": False, "error": "Source folder not found."}
+    artwork = _find_artwork_subdir(path)
+    if not artwork or artwork.parent.resolve() != path.resolve():
+        return {
+            "ok": False,
+            "error": "Source folder not valid — it must contain an [Artwork] folder.",
+        }
+    artist_name = parts[2] if len(parts) > 2 else ""
+    return {
+        "ok": True,
+        "folder_path": rel.as_posix(),
+        "artist_name": artist_name,
+        "title": _release_title_from_folder(path),
+    }
+
+
+def collection_facets(db: Session, user_id: int) -> dict:
+    """Distinct media / animation / canvas values for filter dropdowns."""
+    rows = db.scalars(
+        select(CollectionItem).where(CollectionItem.col_user_id == user_id)
+    ).all()
+    media: set[str] = set()
+    animation: set[str] = set()
+    canvas: set[str] = set()
+    for row in rows:
+        mt = normalize_media_type(row.col_media_type)
+        if mt:
+            media.add(mt)
+        for a in _json_list(row.col_animation_json):
+            c = canonicalize_source(a)
+            if c and c.casefold() != "none":
+                animation.add(c)
+        for a in _json_list(row.col_canvas_json):
+            c = canonicalize_source(a)
+            if c and c.casefold() != "none":
+                canvas.add(c)
+    return {
+        "media": sorted(media, key=str.casefold),
+        "animation": sorted(animation, key=str.casefold),
+        "canvas": sorted(canvas, key=str.casefold),
+        "total": len(rows),
+    }

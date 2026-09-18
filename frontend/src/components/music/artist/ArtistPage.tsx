@@ -719,9 +719,6 @@ export default function ArtistPage({
   }, [data?.is_various_artists, data?.various_artists_hub, data?.top_tracks]);
 
   const bgUrl = useMemo(() => {
-    const eraBg =
-      pageBgUrl(era, stacked) ?? shell?.photo_url ?? defaultArtistBgUrl(stacked);
-
     if (playing && playingPath) {
       const track = playableTracks.find((t) => t.play_path === playingPath);
       if (track?.cover_url) return track.cover_url;
@@ -731,8 +728,16 @@ export default function ArtistPage({
       return defaultArtistBgUrl(stacked);
     }
 
-    return eraBg;
+    const eraBg = pageBgUrl(era, stacked);
+    if (eraBg) return eraBg;
+
+    // While overview is loading, avoid flashing catalog-card art (Square/Cover
+    // from Round/Portrait toggles). Prefer neutral default until eras arrive.
+    if (!data) return defaultArtistBgUrl(stacked);
+
+    return shell?.photo_url ?? defaultArtistBgUrl(stacked);
   }, [
+    data,
     data?.is_various_artists,
     playing,
     playingPath,
@@ -746,6 +751,10 @@ export default function ArtistPage({
     outgoing: string | undefined;
   }>(() => ({ current: bgUrl, outgoing: undefined }));
   const prevBgRef = useRef<string | undefined>(bgUrl);
+
+  useEffect(() => {
+    prevBgRef.current = undefined;
+  }, [bandId]);
 
   useEffect(() => {
     if (!bgUrl) {

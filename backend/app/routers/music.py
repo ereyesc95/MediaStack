@@ -2813,6 +2813,61 @@ def collection_list(
     }
 
 
+@router.get("/collection/facets")
+def collection_facets_endpoint(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import collection_facets
+
+    return collection_facets(db, user.usr_id)
+
+
+@router.post("/collection/pick-folder")
+async def collection_pick_folder(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Native folder picker + validate as a collection-linkable leaf."""
+    import asyncio
+
+    from app.folder_picker import pick_folder
+    from app.music_collection import (
+        build_preview_from_folder,
+        validate_collection_source_folder,
+        _find_band_by_name,
+    )
+
+    loop = asyncio.get_running_loop()
+    try:
+        path = await loop.run_in_executor(
+            None,
+            lambda: pick_folder(title="Choose release / edition / version folder"),
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Could not open folder picker: {exc}") from exc
+    if not path:
+        return {"ok": False, "cancelled": True}
+    result = validate_collection_source_folder(path)
+    if not result.get("ok"):
+        return result
+    band = _find_band_by_name(db, result.get("artist_name") or "")
+    band_id = band.bnd_id if band else None
+    preview = None
+    if band_id:
+        try:
+            preview = build_preview_from_folder(
+                db, band_id=band_id, folder_path=result["folder_path"]
+            )
+        except ValueError:
+            preview = None
+    return {
+        **result,
+        "band_id": band_id,
+        "preview": preview,
+    }
+
+
 @router.get("/collection/preview/from-folder")
 def collection_preview_folder(
     band_id: int = Query(...),

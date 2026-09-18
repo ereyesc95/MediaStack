@@ -14,6 +14,7 @@ import {
   fetchTrackVersions,
 } from "../../../api";
 import CollectionModal from "../CollectionModal";
+import { IconCollection, IconCollectionAdded } from "../../MenuIcons";
 import { prefetchReleaseTrackCredits } from "../../../releaseTrackCreditsCache";
 import {
   clearReleaseTracklistCache as clearTracklistCache,
@@ -435,7 +436,6 @@ function versionToTrackItem(version: TrackVersionItem): ReleaseTrackItem {
 
 function CollectionTracklistButton({
   folderPath,
-  label = "short",
   onOpen,
 }: {
   folderPath: string;
@@ -444,33 +444,27 @@ function CollectionTracklistButton({
 }) {
   const [inCollection, setInCollection] = useState(false);
   const [collectionId, setCollectionId] = useState<number | null>(null);
-  const [hover, setHover] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const refresh = useCallback(() => {
     void fetchCollectionStatus({ folder_path: folderPath })
       .then((s) => {
-        if (cancelled) return;
         setInCollection(Boolean(s.in_collection));
         setCollectionId(s.collection_id ?? null);
       })
       .catch(() => {
-        if (cancelled) return;
         setInCollection(false);
         setCollectionId(null);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [folderPath]);
 
-  const text = !inCollection
-    ? label === "long"
-      ? "Add to my collection"
-      : "Collection"
-    : hover
-      ? "Edit in my collection"
-      : "Added in my collection";
+  useEffect(() => {
+    refresh();
+    const onChanged = () => refresh();
+    window.addEventListener("collection-changed", onChanged);
+    return () => window.removeEventListener("collection-changed", onChanged);
+  }, [refresh]);
+
+  const tip = inCollection ? "Edit in collection" : "Add to collection";
 
   return (
     <button
@@ -478,15 +472,18 @@ function CollectionTracklistButton({
       className={`release-tracklist__collection-btn${
         inCollection ? " is-added" : ""
       }`}
-      title={text}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      title={tip}
+      aria-label={tip}
       onClick={(e) => {
         e.stopPropagation();
         onOpen({ folderPath, collectionId });
       }}
     >
-      {text}
+      {inCollection ? (
+        <IconCollectionAdded className="release-tracklist__collection-icon" />
+      ) : (
+        <IconCollection className="release-tracklist__collection-icon" />
+      )}
     </button>
   );
 }
@@ -1060,7 +1057,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           return (
           <section
             key={ed.id}
-            className="release-tracklist__edition-block"
+            className={`release-tracklist__edition-block${open ? " is-open" : ""}`}
           >
             {showHeader && (
               <div className="release-tracklist__edition-head">
@@ -1094,7 +1091,6 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
               <div className="release-tracklist__collection-alone">
                 <CollectionTracklistButton
                   folderPath={ed.folder_path}
-                  label="long"
                   onOpen={(info) => setCollectionModal(info)}
                 />
               </div>
@@ -1587,6 +1583,7 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
           bandId={bandId}
           folderPath={collectionModal.folderPath}
           collectionId={collectionModal.collectionId}
+          isAdmin={isAdmin}
           onClose={() => setCollectionModal(null)}
         />
       ) : null}

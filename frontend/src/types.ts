@@ -297,7 +297,16 @@ export type CollectionLeaf = {
     back_url?: string | null;
   }[] | null;
   autograph_images?: { label: string; url?: string | null }[] | null;
-  artwork?: Record<string, { label: string; missing?: boolean; url?: string | null }[]> | null;
+  artwork?: Record<
+    string,
+    {
+      label: string;
+      missing?: boolean;
+      url?: string | null;
+      source?: string | null;
+      canonical?: string | null;
+    }[]
+  > | null;
   missing_mandatory?: string[];
 };
 
@@ -319,7 +328,16 @@ export type CollectionPreview = {
   animation?: string[];
   canvas?: string[];
   autographs?: string[];
-  artwork?: Record<string, { label: string; missing?: boolean; url?: string | null }[]>;
+  artwork?: Record<
+    string,
+    {
+      label: string;
+      missing?: boolean;
+      url?: string | null;
+      source?: string | null;
+      canonical?: string | null;
+    }[]
+  >;
   missing_mandatory?: string[];
   urls?: Record<string, string | null>;
   folder_path?: string | null;

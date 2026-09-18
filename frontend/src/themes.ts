@@ -200,7 +200,8 @@ export function persistThemeChoice(id: ThemeId, userId?: number) {
     updateFavicon();
     return;
   }
-  setAdaptiveMediaPref(false, userId);
+  // Store the home/global theme. Do not disable Adaptive for media pages —
+  // that only happens when the user pins a fixed theme while on a media page.
   localStorage.setItem(themeKey(userId), id);
   updateFavicon();
 }
