@@ -42,6 +42,7 @@ import {
 } from "../../musicDashboardCache";
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
+import CollectionLayoutPicker from "../CollectionLayoutPicker";
 import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
@@ -75,7 +76,7 @@ import {
   useMiniAudio,
 } from "./artist/MiniAudioPlayer";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconCardCover, IconDisc, IconHeadphones, IconList } from "../MenuIcons";
+import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 
 type Props = {
@@ -191,7 +192,7 @@ export default function MusicModule({
 }: Props) {
   const [showManageArtists, setShowManageArtists] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
-  const [collectionView, setCollectionView] = useState<"table" | "cards">("table");
+  const [collectionView, setCollectionView] = useState<"list" | "cover" | "banner">("list");
   const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
@@ -756,7 +757,11 @@ export default function MusicModule({
       page: String(artistPage),
       page_size: "48",
       orientation:
-        cardOrientation === "badge" ? "icons" : cardOrientation,
+        cardOrientation === "badge"
+          ? "icons"
+          : cardOrientation === "list"
+            ? "landscape"
+            : cardOrientation,
       filter_mode: filterMode,
     });
     if (search.trim()) params.set("search", search.trim());
@@ -815,7 +820,7 @@ export default function MusicModule({
     const params = new URLSearchParams({
       page: String(albumPage),
       page_size: "24",
-      layout: albumCardLayout,
+      layout: albumCardLayout === "list" ? "cover" : albumCardLayout,
       filter_mode: filterMode,
     });
     if (search.trim()) params.set("search", search.trim());
@@ -1171,6 +1176,7 @@ export default function MusicModule({
                   <ReleaseCardLayoutPicker
                     value={albumCardLayout}
                     onChange={setAlbumCardLayoutPersisted}
+                    includeList
                   />
                 ) : (
                   <CardOrientationPicker
@@ -1197,31 +1203,10 @@ export default function MusicModule({
                 </button>
               )}
               {tab === "collection" && collectionHasItems ? (
-                <button
-                  type="button"
-                  className={`catalog-display-toggle catalog-display-toggle--icon${
-                    collectionView === "cards" ? " active" : ""
-                  }`}
-                  onClick={() =>
-                    setCollectionView((v) => (v === "table" ? "cards" : "table"))
-                  }
-                  title={
-                    collectionView === "table"
-                      ? "Switch to cards"
-                      : "Switch to list"
-                  }
-                  aria-label={
-                    collectionView === "table"
-                      ? "Switch to cards"
-                      : "Switch to list"
-                  }
-                >
-                  {collectionView === "cards" ? (
-                    <IconCardCover className="catalog-display-toggle__icon" />
-                  ) : (
-                    <IconList className="catalog-display-toggle__icon" />
-                  )}
-                </button>
+                <CollectionLayoutPicker
+                  value={collectionView}
+                  onChange={setCollectionView}
+                />
               ) : null}
               <AppMenu
                 onImport={onImport}
@@ -1786,7 +1771,6 @@ export default function MusicModule({
         />
       ) : tab === "collection" ? (
         <CollectionBrowse
-          cardOrientation={cardOrientation}
           isAdmin={isAdmin}
           view={collectionView}
           onViewChange={setCollectionView}

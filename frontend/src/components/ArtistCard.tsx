@@ -27,6 +27,30 @@ export default function ArtistCard({
   revealed = false,
   showDateOnHover = false,
 }: Props) {
+  const displayName = (artist.name ?? "Untitled")
+    .replace(/■/g, ",")
+    .replace(/█/g, "'");
+
+  if (orientation === "list") {
+    return (
+      <button
+        type="button"
+        className={[
+          "artist-card",
+          "artist-card--list",
+          "catalog-list-cell",
+          tapReveal ? "artist-card--tap-reveal" : "",
+          revealed ? "artist-card--revealed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={onClick}
+      >
+        <span className="catalog-list-cell__title">{displayName}</span>
+      </button>
+    );
+  }
+
   const preferCollapsed = orientation === "banner";
   const logoSrc =
     preferCollapsed && artist.logo_collapsed_url
@@ -50,10 +74,6 @@ export default function ArtistCard({
   const hasLogo = Boolean(logoSrc);
   const showName = !hasIcon && !hasLogo;
   const year = showDateOnHover ? yearFromArtist(artist) : null;
-
-  const displayName = (artist.name ?? "Untitled")
-    .replace(/■/g, ",")
-    .replace(/█/g, "'");
 
   return (
     <button

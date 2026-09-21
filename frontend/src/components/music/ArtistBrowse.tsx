@@ -22,6 +22,7 @@ import type {
 import ArtistCard from "../ArtistCard";
 import CatalogAlbumCard from "./CatalogAlbumCard";
 import PlaylistBoot from "../PlaylistBoot";
+import { IconSearch } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import { AUDIO_CATEGORY_META } from "./artist/ArtistAudio";
 
@@ -169,7 +170,9 @@ export default function ArtistBrowse({
     catalogScope === "albums" || catalogScope === "singles";
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
-  const [displayMode, setDisplayMode] = useState<"cards" | "list">("cards");
+  const listMode =
+    (isAlbums && albumCardLayout === "list") ||
+    (!isAlbums && orientation === "list");
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupPopoverStyle, setGroupPopoverStyle] = useState<CSSProperties>({});
   const [pageInput, setPageInput] = useState(String(page));
@@ -457,12 +460,15 @@ export default function ArtistBrowse({
                 {l}
               </button>
             ))}
-            <input
-              className="filter-subbar-search"
-              placeholder="Search"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
+            <div className="filter-subbar-search-wrap">
+              <IconSearch className="filter-subbar-search-icon" aria-hidden />
+              <input
+                className="filter-subbar-search"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+            </div>
           </div>
         );
       case "artists":
@@ -746,16 +752,6 @@ export default function ArtistBrowse({
               )}
             </div>
           ))}
-          <button
-            type="button"
-            className={`catalog-display-toggle${displayMode === "list" ? " active" : ""}`}
-            onClick={() =>
-              setDisplayMode((m) => (m === "cards" ? "list" : "cards"))
-            }
-            title={displayMode === "cards" ? "Switch to list view" : "Switch to cards"}
-          >
-            {displayMode === "cards" ? "List" : "Cards"}
-          </button>
         </nav>
         {subBar}
         {showAlbumCategoryBar ? (
@@ -839,10 +835,10 @@ export default function ArtistBrowse({
             {albums.length > 0 && (
               <div
                 className={`media-release-grid${
-                  albumCardLayout === "banner"
+                  !listMode && albumCardLayout === "banner"
                     ? " media-release-grid--banner"
                     : ""
-                }${displayMode === "list" ? " media-release-grid--list" : ""}`}
+                }${listMode ? " media-release-grid--list" : ""}`}
               >
                 {albums.map((a) => {
                   const cardKey =
@@ -876,9 +872,9 @@ export default function ArtistBrowse({
           <>
             {artists.length > 0 && (
               <div
-                className={`artist-grid artist-grid--${orientation}${
-                  displayMode === "list" ? " artist-grid--list" : ""
-                }`}
+                className={`artist-grid artist-grid--${
+                  listMode ? "list" : orientation
+                }${listMode ? " artist-grid--list" : ""}`}
               >
                 {artists.map((a) => (
                   <ArtistCard

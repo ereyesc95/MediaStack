@@ -1,5 +1,6 @@
 /** Shared collection hover / flip / external-search widgets. */
-import { useMemo, useState, type ReactNode, type UIEvent } from "react";
+import { useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { IconSpotify } from "../MenuIcons";
 
 export type PhotocardPair = {
   id: string;
@@ -112,12 +113,31 @@ export function HoverBubble({
   children: ReactNode;
   content: ReactNode;
 }) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+
   return (
-    <span className="collection-hover">
+    <span
+      className="collection-hover"
+      ref={anchorRef}
+      onMouseEnter={() => {
+        const el = anchorRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setPos({ left: r.left, top: r.bottom + 6 });
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
       {children}
-      <span className="collection-hover__bubble" role="tooltip">
-        {content}
-      </span>
+      {pos ? (
+        <span
+          className="collection-hover__bubble collection-hover__bubble--fixed"
+          role="tooltip"
+          style={{ left: pos.left, top: pos.top }}
+        >
+          {content}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -238,7 +258,7 @@ export function SpotifyFlip({
       }}
     >
       <span className="collection-spotify__icon" aria-hidden>
-        ♫
+        <IconSpotify />
       </span>
       {active ? (
         <span className={`collection-spotify__flip${flipped ? " is-flipped" : ""}`}>

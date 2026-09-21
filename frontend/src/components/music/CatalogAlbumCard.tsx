@@ -31,6 +31,37 @@ export default function CatalogAlbumCard({
     onOpen(album);
   };
 
+  if (cardLayout === "list") {
+    return (
+      <article
+        className={[
+          "media-release-card",
+          "media-release-card--list",
+          "catalog-list-cell",
+          "media-release-card--clickable",
+          tapReveal ? "media-release-card--tap-reveal" : "",
+          revealed ? "media-release-card--revealed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        role="button"
+        tabIndex={0}
+        onClick={handleActivate}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleActivate();
+          }
+        }}
+      >
+        <span className="catalog-list-cell__title">{album.title}</span>
+        {album.artist_name ? (
+          <span className="catalog-list-cell__sub">{album.artist_name}</span>
+        ) : null}
+      </article>
+    );
+  }
+
   if (cardLayout === "banner") {
     const bannerBg = album.banner_url
       ? `url("${album.banner_url}")`

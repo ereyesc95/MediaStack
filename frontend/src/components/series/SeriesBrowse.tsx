@@ -162,7 +162,7 @@ export default function SeriesBrowse({
 }: Props) {
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);
-  const [displayMode, setDisplayMode] = useState<"cards" | "list">("cards");
+  const listMode = orientation === "list";
 
   useEffect(() => {
     setRevealedId(null);
@@ -999,16 +999,6 @@ export default function SeriesBrowse({
               {f.label}
             </button>
           ))}
-          <button
-            type="button"
-            className={`catalog-display-toggle${displayMode === "list" ? " active" : ""}`}
-            onClick={() =>
-              setDisplayMode((m) => (m === "cards" ? "list" : "cards"))
-            }
-            title={displayMode === "cards" ? "Switch to list view" : "Switch to cards"}
-          >
-            {displayMode === "cards" ? "List" : "Cards"}
-          </button>
         </nav>
         {subBar}
       </div>
@@ -1025,10 +1015,23 @@ export default function SeriesBrowse({
         {filterReady && filtered.length > 0 ? (
           <div
             className={`artist-grid artist-grid--${
-              orientation === "badge" ? "icons" : orientation
-            }${displayMode === "list" ? " artist-grid--list" : ""}`}
+              listMode ? "list" : orientation === "badge" ? "icons" : orientation
+            }${listMode ? " artist-grid--list" : ""}`}
           >
             {filtered.map((card) => {
+              if (listMode) {
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    className="artist-card artist-card--list catalog-list-cell"
+                    onClick={() => handleCardClick(card)}
+                    title={card.name}
+                  >
+                    <span className="catalog-list-cell__title">{card.name}</span>
+                  </button>
+                );
+              }
               const cover =
                 (orientation === "portrait"
                   ? card.portrait_url || card.landscape_url

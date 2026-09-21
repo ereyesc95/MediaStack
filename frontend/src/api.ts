@@ -3297,6 +3297,9 @@ export type CollectionListParams = {
   media?: string;
   animation?: string;
   canvas?: string;
+  genre?: string;
+  country?: string;
+  continent?: string;
   letter?: string;
   sort?: string;
   order?: string;
@@ -3322,7 +3325,28 @@ export async function fetchCollectionFacets(): Promise<{
   media: string[];
   animation: string[];
   canvas: string[];
+  genres: string[];
+  subgenre_groups: {
+    genre: string;
+    items: { id: number | string; name: string }[];
+  }[];
+  country_groups: {
+    continent: string;
+    items: { id: number; name: string; iso?: string | null }[];
+  }[];
+  continents: { id: number; name: string }[];
   total: number;
+  counts: {
+    pending: number;
+    orphan: number;
+    autographs: number;
+    matched: number;
+    media: number;
+    animation: number;
+    canvas: number;
+    genre: number;
+    country: number;
+  };
 }> {
   return request(`${API}/music/collection/facets`);
 }

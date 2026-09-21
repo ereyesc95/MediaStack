@@ -1,58 +1,39 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import type { CardOrientation } from "../types";
 import { useMenuPresence } from "../useMenuPresence";
 import { usePhoneLayout } from "../usePhoneLayout";
-import {
-  IconCardBadge,
-  IconCardBanner,
-  IconCardIcons,
-  IconCardLandscape,
-  IconCardPortrait,
-  IconCardRound,
-  IconList,
-} from "./MenuIcons";
+import { IconCardBanner, IconCardCover, IconList } from "./MenuIcons";
+
+export type CollectionLayout = "list" | "cover" | "banner";
 
 const OPTIONS: {
-  id: CardOrientation;
+  id: CollectionLayout;
   label: string;
   Icon: (props: { className?: string }) => ReactElement;
 }[] = [
-  { id: "banner", label: "Banner", Icon: IconCardBanner },
-  { id: "landscape", label: "Landscape", Icon: IconCardLandscape },
-  { id: "portrait", label: "Portrait", Icon: IconCardPortrait },
-  { id: "round", label: "Round", Icon: IconCardRound },
-  { id: "icons", label: "Logos", Icon: IconCardIcons },
-  { id: "badge", label: "Badge", Icon: IconCardBadge },
   { id: "list", label: "List", Icon: IconList },
+  { id: "cover", label: "Cover", Icon: IconCardCover },
+  { id: "banner", label: "Banner", Icon: IconCardBanner },
 ];
 
 type Props = {
-  value: CardOrientation;
-  onChange: (next: CardOrientation) => void;
+  value: CollectionLayout;
+  onChange: (next: CollectionLayout) => void;
   className?: string;
-  /** When false (default), Badge is hidden — Music catalog only supports landscape|portrait|banner|icons. */
-  includeBadge?: boolean;
 };
 
 const CLOSE_DELAY_MS = 280;
 
-export default function CardOrientationPicker({
+export default function CollectionLayoutPicker({
   value,
   onChange,
   className = "",
-  includeBadge = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
   const rootRef = useRef<HTMLDivElement>(null);
   const leaveTimer = useRef<number | null>(null);
   const isPhone = usePhoneLayout();
-  const options = includeBadge
-    ? OPTIONS
-    : OPTIONS.filter((o) => o.id !== "badge");
-  const safeValue =
-    !includeBadge && value === "badge" ? "icons" : value;
-  const current = options.find((o) => o.id === safeValue) ?? options[0];
+  const current = OPTIONS.find((o) => o.id === value) ?? OPTIONS[0];
   const CurrentIcon = current.Icon;
 
   const clearLeaveTimer = () => {
@@ -83,7 +64,9 @@ export default function CardOrientationPicker({
   return (
     <div
       ref={rootRef}
-      className={`card-orientation-picker${open ? " is-open" : ""} ${className}`.trim()}
+      className={`card-orientation-picker collection-layout-picker${
+        open ? " is-open" : ""
+      } ${className}`.trim()}
       onMouseEnter={() => {
         if (isPhone) return;
         clearLeaveTimer();
@@ -100,16 +83,17 @@ export default function CardOrientationPicker({
     >
       <button
         type="button"
-        className="card-orientation-toggle"
-        aria-label={`Cards: ${current.label}. Choose layout.`}
+        className="card-orientation-toggle catalog-display-toggle--icon catalog-display-toggle--borderless"
+        aria-label={`Collection: ${current.label}. Choose layout.`}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={`View: ${current.label}`}
         onClick={() => {
           clearLeaveTimer();
           setOpen((v) => !v);
         }}
       >
-        <CurrentIcon />
+        <CurrentIcon className="catalog-display-toggle__icon" />
       </button>
       {menuPresent ? (
         <div
@@ -121,13 +105,13 @@ export default function CardOrientationPicker({
           inert={menuVisible ? undefined : true}
         >
           <div className="card-orientation-picker__menu-panel">
-            {options.map(({ id, label, Icon }) => (
+            {OPTIONS.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"
                 role="menuitemradio"
-                aria-checked={safeValue === id}
-                className={safeValue === id ? "active" : ""}
+                aria-checked={value === id}
+                className={value === id ? "active" : ""}
                 onClick={() => {
                   onChange(id);
                   setOpen(false);

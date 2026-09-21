@@ -1157,6 +1157,9 @@ def list_items(
     media: str | None = None,
     animation: str | None = None,
     canvas: str | None = None,
+    genre: str | None = None,
+    country: str | None = None,
+    continent: str | None = None,
     letter: str | None = None,
     sort: str = "artist",
     order: str = "asc",
@@ -1202,6 +1205,43 @@ def list_items(
             for it in items
             if want and any(canonicalize_source(c) == want for c in it["canvas"])
         ]
+    elif sf == "genre" and genre:
+        want = genre.strip().casefold()
+        items = [
+            it
+            for it in items
+            if any((g or "").casefold() == want for g in (it["genres"] or []))
+        ]
+    elif sf == "country":
+        want_iso = (country or "").strip().casefold()
+        want_cont = (continent or "").strip().casefold()
+        if want_iso:
+            items = [
+                it
+                for it in items
+                if (it.get("country_iso") or "").casefold() == want_iso
+                or (it.get("country") or "").casefold() == want_iso
+            ]
+        elif want_cont:
+            from app.models import Continent, Country
+
+            cont_ids: set[int] = set()
+            for cont in db.scalars(select(Continent)).all():
+                if (
+                    str(cont.con_id) == want_cont
+                    or (cont.con_name or "").casefold() == want_cont
+                ):
+                    cont_ids.add(cont.con_id)
+            iso_set = {
+                (c.cou_iso or "").strip().lower()
+                for c in db.scalars(select(Country)).all()
+                if c.cou_continent_id in cont_ids and c.cou_iso
+            }
+            items = [
+                it
+                for it in items
+                if (it.get("country_iso") or "").casefold() in iso_set
+            ]
 
     if letter:
         L = letter.strip().casefold()[:1]
@@ -1222,7 +1262,8 @@ def list_items(
         if sort_key == "media":
             return ((it["media_type"] or "").casefold(), (it["title"] or "").casefold())
         if sort_key == "genre":
-            return (",".join(it["genres"]).casefold(), (it["title"] or "").casefold())
+            first = (it["genres"][0] if it["genres"] else "").casefold()
+            return (first, (it["title"] or "").casefold())
         # default artist
         return ((it["artist"] or "").casefold(), it["year"] or "", (it["title"] or "").casefold())
 
@@ -1446,14 +1487,35 @@ def validate_collection_source_folder(abs_or_rel: str) -> dict:
 
 
 def collection_facets(db: Session, user_id: int) -> dict:
-    """Distinct media / animation / canvas values for filter dropdowns."""
+    """Distinct facet values + counts for filter tabs / dropdowns."""
+    from app.music_filters import continents_for_country_ids, _country_groups_from_ids
+    from app.models import Continent, Country, Genre, Subgenre
+
     rows = db.scalars(
         select(CollectionItem).where(CollectionItem.col_user_id == user_id)
     ).all()
     media: set[str] = set()
     animation: set[str] = set()
     canvas: set[str] = set()
+    genre_names: set[str] = set()
+    country_isos: set[str] = set()
+    country_names: set[str] = set()
+    pending_n = orphan_n = autograph_n = matched_n = 0
+
     for row in rows:
+        folder = _resolve_folder(row.col_folder_path)
+        artwork = _find_artwork_subdir(folder) if folder else None
+        checklist = scan_artwork_checklist(artwork) if folder else None
+        pending = compute_pending(row, checklist)
+        local = bool(folder)
+        if pending:
+            pending_n += 1
+        if not local:
+            orphan_n += 1
+        else:
+            matched_n += 1
+        if _json_list(row.col_autographs_json):
+            autograph_n += 1
         mt = normalize_media_type(row.col_media_type)
         if mt:
             media.add(mt)
@@ -1465,9 +1527,77 @@ def collection_facets(db: Session, user_id: int) -> dict:
             c = canonicalize_source(a)
             if c and c.casefold() != "none":
                 canvas.add(c)
+        for g in _json_list(row.col_genres_json):
+            if g.strip():
+                genre_names.add(g.strip())
+        if row.col_country_iso:
+            country_isos.add(row.col_country_iso.strip().lower())
+        if row.col_country:
+            country_names.add(row.col_country.strip())
+
+    # Prefer live panel genres for display facets when release is linked
+    for row in rows:
+        if row.col_band_id and row.col_release_id:
+            panel = _panel_subgenre_names(db, row.col_band_id, row.col_release_id)
+            if panel:
+                for g in panel:
+                    genre_names.add(g)
+
+    used_country_ids: set[int] = set()
+    for c in db.scalars(select(Country)).all():
+        iso = (c.cou_iso or "").strip().lower()
+        name = (c.cou_name or "").strip()
+        if iso in country_isos or (name and name.casefold() in {n.casefold() for n in country_names}):
+            used_country_ids.add(c.cou_id)
+
+    # Group collection genres under parent genre when DB knows the subgenre
+    by_parent: dict[str, list[dict]] = {}
+    used: set[str] = set()
+    for name in sorted(genre_names, key=str.casefold):
+        key = name.casefold()
+        if key in used:
+            continue
+        used.add(key)
+        parent = "Other"
+        sgn_id = None
+        sg = (
+            db.query(Subgenre)
+            .filter(Subgenre.sgn_name.ilike(name))
+            .first()
+        )
+        if sg:
+            sgn_id = sg.sgn_id
+            g = db.get(Genre, sg.sgn_genre_id or 0) if sg.sgn_genre_id else None
+            if g and g.gen_name:
+                parent = g.gen_name
+        by_parent.setdefault(parent, []).append(
+            {"id": sgn_id or name, "name": name, "genre_id": None}
+        )
+    subgenre_groups = [
+        {"genre": gname, "items": items}
+        for gname, items in sorted(by_parent.items(), key=lambda x: x[0].casefold())
+    ]
+
     return {
         "media": sorted(media, key=str.casefold),
         "animation": sorted(animation, key=str.casefold),
         "canvas": sorted(canvas, key=str.casefold),
+        "genres": sorted(genre_names, key=str.casefold),
+        "subgenre_groups": subgenre_groups,
+        "country_groups": _country_groups_from_ids(db, used_country_ids or None)
+        if used_country_ids
+        else [],
+        "continents": continents_for_country_ids(db, used_country_ids),
         "total": len(rows),
+        "counts": {
+            "pending": pending_n,
+            "orphan": orphan_n,
+            "autographs": autograph_n,
+            "matched": matched_n,
+            "media": len(media),
+            "animation": len(animation),
+            "canvas": len(canvas),
+            "genre": len(genre_names),
+            "country": len(used_country_ids),
+        },
     }

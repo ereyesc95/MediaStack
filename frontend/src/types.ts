@@ -242,10 +242,11 @@ export type CardOrientation =
   | "banner"
   | "round"
   | "icons"
-  | "badge";
+  | "badge"
+  | "list";
 
-/** Cover vs banner layout for Audio / Video / Library release cards on artist pages. */
-export type ReleaseCardLayout = "cover" | "banner";
+/** Cover / banner / text list for Audio / Video / Library release cards on artist pages. */
+export type ReleaseCardLayout = "cover" | "banner" | "list";
 
 export type MusicTab = "home" | "artists" | "collection" | "playlists";
 

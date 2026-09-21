@@ -214,8 +214,10 @@ const CARD_ORIENTATIONS: CardOrientation[] = [
   "landscape",
   "portrait",
   "banner",
+  "round",
   "icons",
   "badge",
+  "list",
 ];
 
 export function getStoredOrientation(
@@ -242,7 +244,7 @@ export function getStoredReleaseCardLayout(
   fallback: ReleaseCardLayout = "cover"
 ): ReleaseCardLayout {
   const raw = localStorage.getItem(releaseCardLayoutKey(userId));
-  return raw === "banner" || raw === "cover" ? raw : fallback;
+  return raw === "banner" || raw === "cover" || raw === "list" ? raw : fallback;
 }
 
 export function saveReleaseCardLayout(userId: number, value: ReleaseCardLayout) {
