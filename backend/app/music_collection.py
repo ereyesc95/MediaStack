@@ -1184,9 +1184,9 @@ def list_items(
         items = [it for it in items if it["has_pending"]]
     elif sf == "autographs":
         items = [it for it in items if it["autographs"]]
-    elif sf == "orphan":
+    elif sf in ("orphan", "unlinked"):
         items = [it for it in items if it["orphan"]]
-    elif sf == "matched":
+    elif sf in ("matched", "linked"):
         items = [it for it in items if it["local"]]
     elif sf == "media" and media:
         want = normalize_media_type(media)

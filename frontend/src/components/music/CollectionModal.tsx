@@ -563,11 +563,13 @@ export default function CollectionModal({
           <div className="collection-modal__scroll" ref={scrollRef}>
             {folder ? (
               <p className="muted collection-modal__hint collection-modal__linked">
-                Linked folder: {folder}
+                <span className="collection-badge">Linked</span>{" "}
+                {folder}
               </p>
             ) : (
               <p className="muted collection-modal__hint collection-modal__linked">
-                Release not linked to a local folder yet,{" "}
+                <span className="collection-badge">Unlinked</span> No local folder
+                yet,{" "}
                 <button
                   type="button"
                   className="collection-modal__linkish"

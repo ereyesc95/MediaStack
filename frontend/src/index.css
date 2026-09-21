@@ -24377,6 +24377,7 @@ button.lyrics-status-badge--icon-only {
 .collection-table__pending { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; color: var(--accent); }
 .collection-edit-btn { opacity: 0; appearance: none; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 0.85rem; }
 .collection-badge { margin-left: 0.35rem; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); padding: 0.05rem 0.3rem; border-radius: 999px; }
+.collection-modal__hint .collection-badge { margin-left: 0; margin-right: 0.35rem; }
 .collection-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .collection-pill { border: 1px solid color-mix(in srgb, var(--text) 22%, transparent); padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.68rem; }
 .collection-edition { display: inline-flex; align-items: center; gap: 0.35rem; }

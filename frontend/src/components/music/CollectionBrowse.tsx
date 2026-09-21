@@ -57,12 +57,12 @@ const COLUMNS = [
 const SUBFILTERS = [
   { id: "", label: "ALL" },
   { id: "pending", label: "PENDING" },
-  { id: "orphan", label: "ORPHAN" },
+  { id: "linked", label: "LINKED" },
+  { id: "unlinked", label: "UNLINKED" },
   { id: "media", label: "MEDIA" },
   { id: "animation", label: "ANIMATION" },
   { id: "canvas", label: "CANVAS" },
   { id: "autographs", label: "AUTOGRAPHS" },
-  { id: "matched", label: "MATCHED" },
   { id: "genre", label: "GENRE" },
   { id: "country", label: "COUNTRY" },
 ] as const;
@@ -116,10 +116,12 @@ function subfilterCount(id: string, counts: FacetCounts): number {
   switch (id) {
     case "pending":
       return counts.pending;
+    case "unlinked":
     case "orphan":
       return counts.orphan;
     case "autographs":
       return counts.autographs;
+    case "linked":
     case "matched":
       return counts.matched;
     case "media":
@@ -506,14 +508,14 @@ export default function CollectionBrowse({
       return (
         <button type="button" className="linkish" onClick={() => navigateTitle(row)}>
           {row.title}
-          {row.orphan ? <span className="collection-badge">Orphan</span> : null}
+          {row.orphan ? <span className="collection-badge">Unlinked</span> : null}
         </button>
       );
     }
     return (
       <ExternalSearchMenu kind="title" artist={row.artist} title={row.title}>
         {row.title}
-        {row.orphan ? <span className="collection-badge">Orphan</span> : null}
+        {row.orphan ? <span className="collection-badge">Unlinked</span> : null}
       </ExternalSearchMenu>
     );
   }
@@ -942,8 +944,8 @@ export default function CollectionBrowse({
         <div className="collection-import-preview">
           <p>
             Import preview: add {importPreview.counts.add ?? 0}, update{" "}
-            {importPreview.counts.update ?? 0}, orphan {importPreview.counts.orphan ?? 0} (
-            {importPreview.rows.length} rows)
+            {importPreview.counts.update ?? 0}, unlinked{" "}
+            {importPreview.counts.orphan ?? 0} ({importPreview.rows.length} rows)
           </p>
           <button type="button" className="btn btn--primary" onClick={() => void confirmImport()}>
             Confirm import
