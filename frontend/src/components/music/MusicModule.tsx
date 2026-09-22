@@ -195,6 +195,7 @@ export default function MusicModule({
   const [collectionView, setCollectionView] = useState<"list" | "cover" | "banner">("list");
   const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
+  const [collectionClearMode, setCollectionClearMode] = useState(false);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
@@ -1231,6 +1232,7 @@ export default function MusicModule({
                   setShowAddPlaylist(true);
                 }}
                 showManageCollection={tab === "collection"}
+                collectionClearMode={collectionClearMode}
                 onCollectionAddManual={() =>
                   collectionManageRef.current?.openManual()
                 }
@@ -1242,6 +1244,9 @@ export default function MusicModule({
                 }
                 onCollectionClear={() =>
                   collectionManageRef.current?.startClearMode()
+                }
+                onCollectionCancelClear={() =>
+                  collectionManageRef.current?.cancelClearMode()
                 }
                 menuChrome={
                   portraitMenuChrome && showArtistTools ? (
@@ -1802,6 +1807,7 @@ export default function MusicModule({
           onViewChange={setCollectionView}
           manageApiRef={collectionManageRef}
           onInventoryChange={setCollectionHasItems}
+          onClearModeChange={setCollectionClearMode}
           onOpenArtist={(id) => openArtist(id, null, "collection")}
           onOpenRelease={(bandId, releaseId, artist, title) =>
             openCollectionRelease(bandId, releaseId, artist, title)

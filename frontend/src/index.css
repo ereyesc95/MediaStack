@@ -2707,9 +2707,14 @@ input {
   list-style: none;
   margin: 0;
   padding: 0;
-  background: var(--bg-elevated);
+  background: #0a0a0a;
   border: 1px solid var(--border);
   z-index: 40;
+}
+.search-dropdown-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .search-dropdown-list button {
@@ -2740,9 +2745,11 @@ input {
 .search-dropdown-group {
   display: block;
   padding: 0.25rem 0.5rem;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--accent);
   font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 .search-dropdown-empty {
@@ -24535,14 +24542,14 @@ button.lyrics-status-badge--icon-only {
 .collection-hover--interactive > :not(.collection-hover__bubble),
 .collection-hover__bubble--interactive,
 .collection-hover__bubble--interactive *,
-.collection-cover-flip.is-flippable,
-.collection-cover-flip.is-flippable *,
 .collection-spotify-preview.is-flippable,
 .collection-spotify-preview.is-flippable *,
-.collection-disc-preview.is-flippable,
-.collection-disc-preview.is-flippable *,
-.collection-photocard-preview__card {
+.collection-cover-flip.is-flippable,
+.collection-photocard-preview__card.is-flippable {
   cursor: pointer !important;
+}
+.collection-spotify-preview.is-flippable {
+  pointer-events: auto;
 }
 .collection-hover__bridge {
   position: absolute;
@@ -24579,25 +24586,33 @@ button.lyrics-status-badge--icon-only {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
   pointer-events: none;
 }
-.collection-cover-flip__card {
+.collection-cover-flip {
   position: relative;
   width: 10rem;
   height: 10rem;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  perspective: 800px;
-  transform-style: preserve-3d;
-}
-.collection-cover-flip__face {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transition: transform 0.35s ease;
   display: grid;
   place-items: center;
-  transform-style: preserve-3d;
+  overflow: hidden;
+  background: transparent;
+}
+.collection-cover-flip img,
+.collection-cover-flip .collection-hover__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+.collection-cover-flip__label {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.2rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
 }
 .collection-browse__page-size {
   position: relative;
@@ -24622,24 +24637,16 @@ button.lyrics-status-badge--icon-only {
 }
 .collection-browse__page-size-menu {
   position: absolute;
-  z-index: 30;
-  top: calc(100% + 0.25rem);
+  z-index: 80;
+  top: calc(100% + 0.15rem);
   left: 0;
   min-width: 8.5rem;
   margin: 0;
   padding: 0.35rem 0;
   list-style: none;
-  background: color-mix(in srgb, var(--bg) 94%, black);
+  background: #0a0a0a;
   border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-.collection-browse__page-size-menu--fixed {
-  position: fixed;
-  z-index: 450;
-  top: auto;
-  left: auto;
-  max-height: min(18rem, 50vh);
-  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 .collection-browse__page-size-menu button {
   appearance: none;
@@ -24696,9 +24703,17 @@ button.lyrics-status-badge--icon-only {
   text-transform: none;
   letter-spacing: 0;
 }
+.collection-browse__remove-btn:hover:not(:disabled),
+.collection-browse__clear-cancel:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
 .collection-browse__remove-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+.collection-browse__clear-cancel:hover {
+  border-color: transparent;
 }
 .collection-browse__clear-cancel {
   appearance: none;
@@ -24726,29 +24741,33 @@ button.lyrics-status-badge--icon-only {
 .collection-table__check .ms-checkbox {
   justify-content: center;
 }
-.collection-remove-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 500;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, #000 55%, transparent);
-  padding: 1rem;
+.collection-remove-modal__panel {
+  width: min(28rem, 92vw);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
 }
-.collection-remove-modal__card {
-  width: min(28rem, 100%);
-  background: color-mix(in srgb, var(--bg) 96%, black);
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  padding: 1.1rem 1.25rem;
+.collection-remove-modal__panel p {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
-.collection-remove-modal__card h3 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
+.collection-remove-modal__see-items {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: none;
 }
-.collection-remove-modal__card p {
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  line-height: 1.4;
+.collection-remove-modal__see-items:hover,
+.collection-remove-modal__see-items:focus,
+.collection-remove-modal__see-items:active {
+  color: var(--accent);
+  text-decoration: none;
+  background: none;
 }
 .collection-remove-modal__list {
   margin: 0 0 1rem;
@@ -24756,11 +24775,6 @@ button.lyrics-status-badge--icon-only {
   max-height: 10rem;
   overflow: auto;
   font-size: 0.78rem;
-}
-.collection-remove-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 .collection-table__pending { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
 .collection-table__pending-btn {
@@ -24892,8 +24906,8 @@ button.lyrics-status-badge--icon-only {
   background: color-mix(in srgb, #000 35%, transparent);
 }
 .collection-card__versions summary { cursor: pointer; color: var(--accent); font-size: 0.8rem; }
-.collection-modal { position: relative; width: min(52rem, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--bg) 94%, transparent); }
-.modal-panel.collection-modal { overflow: hidden; max-height: 90vh; }
+.collection-modal { position: relative; width: min(52rem, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--bg) 92%, transparent); border: none; }
+.modal-panel.collection-modal { overflow: hidden; max-height: 90vh; border: none; box-shadow: none; }
 .collection-modal__header {
   flex-shrink: 0;
   margin: 0 -1.25rem 0;
@@ -25227,7 +25241,7 @@ button.lyrics-status-badge--icon-only {
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  min-width: 9rem;
+  min-width: 10rem;
   width: max-content;
   max-width: min(18rem, 70vw);
   max-height: 16rem;
@@ -25236,10 +25250,44 @@ button.lyrics-status-badge--icon-only {
   margin: 0;
   padding: 0.25rem 0;
   list-style: none;
-  background: color-mix(in srgb, var(--bg) 94%, black);
+  background: #0a0a0a;
   border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
-  border-radius: 0.35rem;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  border-radius: 0;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.collection-browse__dropdown--searchable {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  max-height: 18rem;
+  overflow: hidden;
+}
+.collection-browse__dropdown--searchable > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0.15rem 0 0.25rem;
+  overflow-y: auto;
+  max-height: 14rem;
+}
+.collection-browse__dropdown-search {
+  appearance: none;
+  width: calc(100% - 0.7rem);
+  margin: 0.35rem 0.35rem 0.15rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: #050505;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  outline: none;
+}
+.collection-browse__dropdown-search:focus {
+  border-color: var(--accent);
+}
+.collection-browse__dropdown-empty {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
 }
 .collection-browse__filterbar .collection-browse__dropdown button {
   width: 100%;
@@ -25276,11 +25324,11 @@ button.lyrics-status-badge--icon-only {
 .collection-browse__dropdown-group-label {
   display: block;
   padding: 0.35rem 0.65rem 0.15rem;
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 75%, var(--text));
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--accent);
   pointer-events: none;
 }
 .collection-browse__dropdown-group ul {
@@ -25480,14 +25528,26 @@ button.lyrics-status-badge--icon-only {
 .collection-ext-search__menu a, .collection-ext-search__menu button { font-size: 0.78rem; color: var(--text); text-decoration: none; text-align: left; }
 .collection-photocard-preview { display: flex; flex-direction: column; gap: 0.35rem; min-width: 9rem; }
 .collection-photocard-preview__tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
-.collection-photocard-preview__tabs button { appearance: none; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: transparent; color: var(--text); font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 999px; cursor: pointer; }
+.collection-photocard-preview__tabs button { appearance: none; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: transparent; color: var(--text); font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 0; cursor: pointer; }
 .collection-photocard-preview__tabs button.active { border-color: var(--accent); color: var(--accent); }
-.collection-photocard-preview__card { position: relative; width: 7.5rem; height: 10rem; border: 0; padding: 0; background: transparent; cursor: pointer; perspective: 800px; }
-.collection-photocard-preview__face { position: absolute; inset: 0; backface-visibility: hidden; transition: transform 0.35s ease; display: grid; place-items: center; }
-.collection-photocard-preview__face img { width: 100%; height: 100%; object-fit: contain; }
-.collection-photocard-preview__face--back { transform: rotateY(180deg); }
-.collection-photocard-preview__card.is-flipped .collection-photocard-preview__face--front { transform: rotateY(180deg); }
-.collection-photocard-preview__card.is-flipped .collection-photocard-preview__face--back { transform: rotateY(0deg); }
+.collection-photocard-preview__card {
+  position: relative;
+  width: 7.5rem;
+  height: 10rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.collection-photocard-preview__card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
 .collection-photocard-preview__hint { font-size: 0.68rem; }
 .collection-edition-assets {
   display: flex;
@@ -25519,34 +25579,35 @@ button.lyrics-status-badge--icon-only {
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-}
-.collection-cover-flip__card {
   position: relative;
   width: 10rem;
   height: 10rem;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  perspective: 800px;
 }
-.collection-cover-flip__face {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  transition: transform 0.35s ease;
-  display: grid;
-  place-items: center;
-}
-.collection-cover-flip__face img {
+.collection-cover-flip img,
+.collection-cover-flip .collection-hover__img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   border-radius: 0;
+  pointer-events: none;
 }
-.collection-cover-flip__face--back { transform: rotateY(180deg); }
-.collection-cover-flip__card.is-flipped .collection-cover-flip__face--front { transform: rotateY(180deg); }
-.collection-cover-flip__card.is-flipped .collection-cover-flip__face--back { transform: rotateY(0deg); }
+.collection-cover-flip__label {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.2rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+.collection-table__type,
+.collection-table__genres,
+.collection-pills,
+.collection-pill {
+  cursor: default;
+}
 .collection-disc-preview { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 .collection-disc-preview__disc { position: relative; width: 7rem; height: 7rem; border: 0; padding: 0; background: transparent; cursor: pointer; perspective: 800px; }
 .collection-disc-preview__face { position: absolute; inset: 0; backface-visibility: hidden; transition: transform 0.35s ease; display: grid; place-items: center; }

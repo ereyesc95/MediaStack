@@ -11,6 +11,7 @@ import {
 } from "../../api";
 import type { CollectionLeaf } from "../../types";
 import CollectionModal from "./CollectionModal";
+import ModalPortal from "../ModalPortal";
 import { IconImport, IconPage, IconPlus, IconSearch } from "../MenuIcons";
 import { DEFAULT_DISC_URL } from "./release/releaseTrackPanelMeta";
 import {
@@ -28,6 +29,14 @@ type BrowseView = "list" | "cover" | "banner";
 
 const PAGE_SIZE_PRESETS = [10, 20, 25, 50, 100] as const;
 
+export type CollectionBrowseApi = {
+  openManual: () => void;
+  importExcel: () => void;
+  exportExcel: () => void;
+  startClearMode: () => void;
+  cancelClearMode: () => void;
+};
+
 type Props = {
   onOpenArtist?: (bandId: number) => void;
   onOpenRelease?: (
@@ -41,6 +50,7 @@ type Props = {
   onViewChange?: (view: BrowseView) => void;
   manageApiRef?: MutableRefObject<CollectionBrowseApi | null>;
   onInventoryChange?: (hasItems: boolean) => void;
+  onClearModeChange?: (active: boolean) => void;
 };
 
 const DROPDOWN_FILTERS = new Set([
@@ -50,13 +60,6 @@ const DROPDOWN_FILTERS = new Set([
   "genre",
   "country",
 ]);
-
-export type CollectionBrowseApi = {
-  openManual: () => void;
-  importExcel: () => void;
-  exportExcel: () => void;
-  startClearMode: () => void;
-};
 
 const ROW_HEIGHT = 44;
 
@@ -124,7 +127,9 @@ function GenrePills({ genres }: { genres: string[] }) {
         </span>
       ))}
       {rest.length ? (
-        <HoverBubble content={<span className="collection-pill-more">{rest.join(", ")}</span>}>
+        <HoverBubble
+          content={<span className="collection-pill-more">{rest.join(", ")}</span>}
+        >
           <span className="collection-pill collection-pill--more">+{rest.length}</span>
         </HoverBubble>
       ) : null}
@@ -333,6 +338,7 @@ export default function CollectionBrowse({
   onViewChange,
   manageApiRef,
   onInventoryChange,
+  onClearModeChange,
 }: Props) {
   const [viewLocal] = useState<BrowseView>("list");
   const view = viewProp ?? viewLocal;
@@ -359,6 +365,7 @@ export default function CollectionBrowse({
   const [pageInput, setPageInput] = useState("1");
   const [pageBarOpen, setPageBarOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [dropdownQuery, setDropdownQuery] = useState("");
   const [modal, setModal] = useState<{
     mode: "edit" | "manual";
     id?: number;
@@ -375,11 +382,8 @@ export default function CollectionBrowse({
   const [clearMode, setClearMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [removeConfirm, setRemoveConfirm] = useState(false);
+  const [removeSeeItems, setRemoveSeeItems] = useState(false);
   const [pageSizeMenuOpen, setPageSizeMenuOpen] = useState(false);
-  const [pageSizeMenuPos, setPageSizeMenuPos] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
   const pageSizeTriggerRef = useRef<HTMLButtonElement>(null);
   const [facets, setFacets] = useState<{
     media: string[];
@@ -645,6 +649,12 @@ export default function CollectionBrowse({
         setPageBarOpen(true);
         if (view !== "list") onViewChange?.("list");
       },
+      cancelClearMode: () => {
+        setClearMode(false);
+        setSelectedIds(new Set());
+        setRemoveConfirm(false);
+        setRemoveSeeItems(false);
+      },
     };
     return () => {
       manageApiRef.current = null;
@@ -652,33 +662,27 @@ export default function CollectionBrowse({
   });
 
   useEffect(() => {
-    if (!pageSizeMenuOpen) {
-      setPageSizeMenuPos(null);
-      return;
-    }
-    const place = () => {
-      const el = pageSizeTriggerRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setPageSizeMenuPos({ left: r.left, top: r.bottom + 4 });
-    };
-    place();
+    onClearModeChange?.(clearMode);
+  }, [clearMode, onClearModeChange]);
+
+  useEffect(() => {
+    if (!pageSizeMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       if (t?.closest(".collection-browse__page-size")) return;
       setPageSizeMenuOpen(false);
     };
-    window.addEventListener("resize", place);
     document.addEventListener("mousedown", onDoc);
-    return () => {
-      window.removeEventListener("resize", place);
-      document.removeEventListener("mousedown", onDoc);
-    };
+    return () => document.removeEventListener("mousedown", onDoc);
   }, [pageSizeMenuOpen]);
 
   useEffect(() => {
     if (!clearMode) setSelectedIds(new Set());
   }, [clearMode, page, pageSize]);
+
+  useEffect(() => {
+    setDropdownQuery("");
+  }, [openDropdown]);
 
   const pageCount = useMemo(() => {
     if (pageSize === "all") return 1;
@@ -928,6 +932,7 @@ export default function CollectionBrowse({
     try {
       await deleteCollectionItems(ids);
       setRemoveConfirm(false);
+      setRemoveSeeItems(false);
       setClearMode(false);
       setSelectedIds(new Set());
       await load();
@@ -1329,127 +1334,184 @@ export default function CollectionBrowse({
       );
     }
     if (id === "genre") {
-      const groups = facets.subgenre_groups;
+      const qn = dropdownQuery.trim().toLowerCase();
+      const groups = facets.subgenre_groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((it) =>
+            !qn
+              ? true
+              : it.name.toLowerCase().includes(qn) ||
+                group.genre.toLowerCase().includes(qn)
+          ),
+        }))
+        .filter((g) => g.items.length > 0);
       const flat =
         groups.length === 0
-          ? facets.genres
-          : groups.flatMap((g) => g.items.map((i) => i.name));
+          ? facets.genres.filter((name) =>
+              !qn ? true : name.toLowerCase().includes(qn)
+            )
+          : [];
       return (
-        <ul className="collection-browse__dropdown" role="listbox">
-          <li>
-            <button
-              type="button"
-              className={!genreFilter ? "active" : undefined}
-              onClick={() => {
-                setGenreFilter("");
-                setOpenDropdown(null);
-                setPage(1);
-              }}
-            >
-              All
-            </button>
-          </li>
-          {groups.length > 0
-            ? groups.map((group) => (
-                <li key={group.genre} className="collection-browse__dropdown-group">
-                  <span className="collection-browse__dropdown-group-label">
-                    {group.genre}
-                  </span>
-                  <ul>
-                    {group.items.map((item) => (
-                      <li key={String(item.id)}>
+        <div className="collection-browse__dropdown collection-browse__dropdown--searchable">
+          <input
+            type="text"
+            className="collection-browse__dropdown-search"
+            placeholder="Search genres…"
+            value={dropdownQuery}
+            autoFocus
+            onChange={(e) => setDropdownQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <ul role="listbox">
+            <li>
+              <button
+                type="button"
+                className={!genreFilter ? "active" : undefined}
+                onClick={() => {
+                  setGenreFilter("");
+                  setOpenDropdown(null);
+                  setPage(1);
+                }}
+              >
+                All
+              </button>
+            </li>
+            {groups.length > 0
+              ? groups.map((group) => (
+                  <li key={group.genre} className="collection-browse__dropdown-group">
+                    <span className="collection-browse__dropdown-group-label">
+                      {group.genre}
+                    </span>
+                    <ul>
+                      {group.items.map((item) => (
+                        <li key={String(item.id)}>
+                          <button
+                            type="button"
+                            className={
+                              genreFilter === item.name ? "active" : undefined
+                            }
+                            onClick={() => {
+                              setGenreFilter(item.name);
+                              setOpenDropdown(null);
+                              setPage(1);
+                            }}
+                          >
+                            {item.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))
+              : flat.map((name) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      className={genreFilter === name ? "active" : undefined}
+                      onClick={() => {
+                        setGenreFilter(name);
+                        setOpenDropdown(null);
+                        setPage(1);
+                      }}
+                    >
+                      {name}
+                    </button>
+                  </li>
+                ))}
+            {groups.length === 0 && flat.length === 0 ? (
+              <li className="collection-browse__dropdown-empty">No matches</li>
+            ) : null}
+          </ul>
+        </div>
+      );
+    }
+    if (id === "country") {
+      const qn = dropdownQuery.trim().toLowerCase();
+      const groups = facets.country_groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((it) => {
+            if (!qn) return true;
+            const name = (it.name || "").toLowerCase();
+            const iso = (it.iso || "").toLowerCase();
+            return (
+              name.includes(qn) ||
+              iso.includes(qn) ||
+              group.continent.toLowerCase().includes(qn)
+            );
+          }),
+        }))
+        .filter((g) => g.items.length > 0);
+      return (
+        <div className="collection-browse__dropdown collection-browse__dropdown--searchable">
+          <input
+            type="text"
+            className="collection-browse__dropdown-search"
+            placeholder="Search countries…"
+            value={dropdownQuery}
+            autoFocus
+            onChange={(e) => setDropdownQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <ul role="listbox">
+            <li>
+              <button
+                type="button"
+                className={!countryFilter && !continentFilter ? "active" : undefined}
+                onClick={() => {
+                  setCountryFilter("");
+                  setContinentFilter("");
+                  setOpenDropdown(null);
+                  setPage(1);
+                }}
+              >
+                All
+              </button>
+            </li>
+            {groups.map((group) => (
+              <li key={group.continent} className="collection-browse__dropdown-group">
+                <span className="collection-browse__dropdown-group-label">
+                  {group.continent}
+                </span>
+                <ul>
+                  {group.items.map((item) => {
+                    const value = (item.iso || item.name || "").trim();
+                    return (
+                      <li key={item.id}>
                         <button
                           type="button"
                           className={
-                            genreFilter === item.name ? "active" : undefined
+                            countryFilter.toLowerCase() === value.toLowerCase()
+                              ? "active"
+                              : undefined
                           }
                           onClick={() => {
-                            setGenreFilter(item.name);
+                            setCountryFilter(value);
+                            setContinentFilter("");
                             setOpenDropdown(null);
                             setPage(1);
                           }}
                         >
+                          {item.iso ? (
+                            <span
+                              className={`fi fi-${String(item.iso).toLowerCase()}`}
+                              aria-hidden
+                            />
+                          ) : null}{" "}
                           {item.name}
                         </button>
                       </li>
-                    ))}
-                  </ul>
-                </li>
-              ))
-            : flat.map((name) => (
-                <li key={name}>
-                  <button
-                    type="button"
-                    className={genreFilter === name ? "active" : undefined}
-                    onClick={() => {
-                      setGenreFilter(name);
-                      setOpenDropdown(null);
-                      setPage(1);
-                    }}
-                  >
-                    {name}
-                  </button>
-                </li>
-              ))}
-        </ul>
-      );
-    }
-    if (id === "country") {
-      return (
-        <ul className="collection-browse__dropdown" role="listbox">
-          <li>
-            <button
-              type="button"
-              className={!countryFilter && !continentFilter ? "active" : undefined}
-              onClick={() => {
-                setCountryFilter("");
-                setContinentFilter("");
-                setOpenDropdown(null);
-                setPage(1);
-              }}
-            >
-              All
-            </button>
-          </li>
-          {facets.country_groups.map((group) => (
-            <li key={group.continent} className="collection-browse__dropdown-group">
-              <span className="collection-browse__dropdown-group-label">
-                {group.continent}
-              </span>
-              <ul>
-                {group.items.map((item) => {
-                  const value = (item.iso || item.name || "").trim();
-                  return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        className={
-                          countryFilter.toLowerCase() === value.toLowerCase()
-                            ? "active"
-                            : undefined
-                        }
-                        onClick={() => {
-                          setCountryFilter(value);
-                          setContinentFilter("");
-                          setOpenDropdown(null);
-                          setPage(1);
-                        }}
-                      >
-                        {item.iso ? (
-                          <span
-                            className={`fi fi-${String(item.iso).toLowerCase()}`}
-                            aria-hidden
-                          />
-                        ) : null}{" "}
-                        {item.name}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
-          ))}
-        </ul>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+            {groups.length === 0 ? (
+              <li className="collection-browse__dropdown-empty">No matches</li>
+            ) : null}
+          </ul>
+        </div>
       );
     }
     return null;
@@ -1550,11 +1612,10 @@ export default function CollectionBrowse({
                     {pageSize === "all" ? "All" : pageSize}
                     <span aria-hidden> ▾</span>
                   </button>
-                  {pageSizeMenuOpen && pageSizeMenuPos ? (
+                  {pageSizeMenuOpen ? (
                     <ul
-                      className="collection-browse__page-size-menu collection-browse__page-size-menu--fixed"
+                      className="collection-browse__page-size-menu"
                       role="listbox"
-                      style={{ left: pageSizeMenuPos.left, top: pageSizeMenuPos.top }}
                     >
                       {PAGE_SIZE_PRESETS.map((n) => (
                         <li key={n}>
@@ -1786,12 +1847,17 @@ export default function CollectionBrowse({
                 const sharedType = row.group_release_type ?? row.release_type;
                 const sharedGenres = row.group_genres ?? row.genres ?? [];
                 const sharedIso = row.group_country_iso || row.country_iso;
-                const groupEditions = (row.group_versions || []).map((v) => ({
+                const siblings =
+                  row.group_versions && row.group_versions.length > 0
+                    ? row.group_versions
+                    : renderRows.filter(
+                        (r) =>
+                          (r.group_key || `${r.artist}|${r.title}`) ===
+                          (row.group_key || `${row.artist}|${row.title}`)
+                      );
+                const groupEditions = siblings.map((v) => ({
                   id: v.id,
-                  label:
-                    [v.media_type, v.version].filter(Boolean).join(" ") ||
-                    v.edition ||
-                    "Edition",
+                  label: v.edition || v.media_type || "Edition",
                   logo_url: v.logo_url,
                   photocard_pairs: v.photocard_pairs,
                 }));
@@ -1819,19 +1885,6 @@ export default function CollectionBrowse({
                   artist: sharedArtist,
                   country_iso: sharedIso,
                 };
-                const spotifySrc =
-                  row.cover_banner_url ||
-                  row.spotify_code_url ||
-                  row.spotify_card_url ||
-                  row.spotify_icon_active
-                    ? row
-                    : (row.group_versions || []).find(
-                        (v) =>
-                          v.cover_banner_url ||
-                          v.spotify_code_url ||
-                          v.spotify_card_url ||
-                          v.spotify_icon_active
-                      ) || row;
                 const blankShared = !isHead;
                 const rowId = row.id;
 
@@ -1894,7 +1947,11 @@ export default function CollectionBrowse({
                         </HoverBubble>
                       )}
                     </td>
-                    <td className={blankShared ? "collection-table__shared-blank" : undefined}>
+                    <td
+                      className={`collection-table__type${
+                        blankShared ? " collection-table__shared-blank" : ""
+                      }`}
+                    >
                       {blankShared ? null : sharedType || "—"}
                     </td>
                     <td className={blankShared ? "collection-table__shared-blank" : undefined}>
@@ -1902,7 +1959,6 @@ export default function CollectionBrowse({
                         <HoverBubble
                           bare
                           disabled={!hasPhotocards}
-                          interactive={hasPhotocards}
                           content={
                             <EditionAssetPreview
                               mode="photocards"
@@ -1914,21 +1970,24 @@ export default function CollectionBrowse({
                         </HoverBubble>
                       )}
                     </td>
-                    <td className={blankShared ? "collection-table__shared-blank" : undefined}>
+                    <td
+                      className={`collection-table__genres${
+                        blankShared ? " collection-table__shared-blank" : ""
+                      }`}
+                    >
                       {blankShared ? null : <GenrePills genres={sharedGenres} />}
                     </td>
                     <td>
                       <span className="collection-edition">
                         <SpotifyFlip
                           active={Boolean(
-                            spotifySrc.spotify_icon_active ||
-                              spotifySrc.cover_banner_url ||
-                              spotifySrc.spotify_code_url ||
-                              spotifySrc.spotify_card_url
+                            row.spotify_icon_active ||
+                              (row.cover_banner_url &&
+                                (row.spotify_code_url || row.spotify_card_url))
                           )}
-                          bannerUrl={spotifySrc.cover_banner_url}
-                          cardUrl={spotifySrc.spotify_card_url}
-                          codeUrl={spotifySrc.spotify_code_url}
+                          bannerUrl={row.cover_banner_url}
+                          cardUrl={row.spotify_card_url}
+                          codeUrl={row.spotify_code_url}
                         />
                         <EditionCoverHover
                           coverUrl={row.cover_url}
@@ -2102,39 +2161,65 @@ export default function CollectionBrowse({
       ) : null}
 
       {removeConfirm ? (
-        <div className="collection-remove-modal" role="dialog" aria-modal="true">
-          <div className="collection-remove-modal__card">
-            <h3>Remove from collection</h3>
+        <ModalPortal
+          onClose={() => {
+            if (busy) return;
+            setRemoveConfirm(false);
+            setRemoveSeeItems(false);
+          }}
+        >
+          <div
+            className="modal-panel collection-remove-modal__panel"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-panel-header">
+              <h3>Remove from collection</h3>
+              <button
+                type="button"
+                className="modal-close-x"
+                aria-label="Close"
+                onClick={() => {
+                  setRemoveConfirm(false);
+                  setRemoveSeeItems(false);
+                }}
+                disabled={Boolean(busy)}
+              >
+                ×
+              </button>
+            </div>
             <p>
               You are about to permanently remove{" "}
               <strong>{selectedIds.size}</strong> item
               {selectedIds.size === 1 ? "" : "s"} from your collection. This cannot be
-              undone.
-            </p>
-            <ul className="collection-remove-modal__list">
-              {visibleRows
-                .filter((r) => r.id && selectedIds.has(r.id))
-                .map((r) => (
-                  <li key={r.id}>
-                    {[r.artist, r.title].filter(Boolean).join(" — ")}
-                    {r.edition || r.media_type
-                      ? ` (${[r.edition, r.media_type].filter(Boolean).join(" · ")})`
-                      : ""}
-                  </li>
-                ))}
-            </ul>
-            <div className="collection-remove-modal__actions">
+              undone.{" "}
               <button
                 type="button"
-                className="btn"
-                onClick={() => setRemoveConfirm(false)}
-                disabled={Boolean(busy)}
+                className="collection-remove-modal__see-items"
+                onClick={() => setRemoveSeeItems((v) => !v)}
               >
-                Cancel
+                {removeSeeItems ? "Hide items" : "See items"}
               </button>
+            </p>
+            {removeSeeItems ? (
+              <ul className="collection-remove-modal__list">
+                {visibleRows
+                  .filter((r) => r.id && selectedIds.has(r.id))
+                  .map((r) => (
+                    <li key={r.id}>
+                      {[r.artist, r.title].filter(Boolean).join(" — ")}
+                      {r.edition || r.media_type
+                        ? ` (${[r.edition, r.media_type].filter(Boolean).join(" · ")})`
+                        : ""}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
+            <div className="modal-panel-actions">
               <button
                 type="button"
-                className="btn btn--primary collection-remove-modal__confirm"
+                className="btn btn--primary"
                 onClick={() => void confirmRemoveSelected()}
                 disabled={Boolean(busy) || selectedIds.size === 0}
               >
@@ -2142,7 +2227,7 @@ export default function CollectionBrowse({
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       ) : null}
     </div>
   );

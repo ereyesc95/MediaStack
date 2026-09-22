@@ -1,5 +1,6 @@
 /** Shared collection hover / flip / external-search widgets. */
 import { useEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { createPortal } from "react-dom";
 import { IconSpotify } from "../MenuIcons";
 
 export type PhotocardPair = {
@@ -194,20 +195,23 @@ export function HoverBubble({
       onMouseLeave={scheduleHide}
     >
       {children}
-      {pos ? (
-        <span
-          className={`collection-hover__bubble collection-hover__bubble--fixed${
-            bare ? " collection-hover__bubble--bare" : ""
-          }${interactive ? " collection-hover__bubble--interactive" : ""}`}
-          role="tooltip"
-          style={{ left: pos.left, top: pos.top }}
-          onMouseEnter={show}
-          onMouseLeave={scheduleHide}
-        >
-          <span className="collection-hover__bridge" aria-hidden />
-          {content}
-        </span>
-      ) : null}
+      {pos
+        ? createPortal(
+            <span
+              className={`collection-hover__bubble collection-hover__bubble--fixed${
+                bare ? " collection-hover__bubble--bare" : ""
+              }${interactive ? " collection-hover__bubble--interactive" : ""}`}
+              role="tooltip"
+              style={{ left: pos.left, top: pos.top }}
+              onMouseEnter={show}
+              onMouseLeave={scheduleHide}
+            >
+              <span className="collection-hover__bridge" aria-hidden />
+              {content}
+            </span>,
+            document.body
+          )
+        : null}
     </span>
   );
 }
@@ -217,8 +221,10 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
   const [flipped, setFlipped] = useState(false);
   if (!pairs.length) return <span className="muted">No photocards</span>;
   const active = pairs[Math.min(tab, pairs.length - 1)];
-  const front = active.front_url;
-  const back = active.back_url;
+  const front = (active.front_url || "").trim();
+  const back = (active.back_url || "").trim();
+  const canFlip = Boolean(front && back);
+  const shown = flipped && back ? back : front || back;
   return (
     <div className="collection-photocard-preview" onClick={(e) => e.stopPropagation()}>
       <div className="collection-photocard-preview__tabs" role="tablist">
@@ -240,21 +246,22 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
       </div>
       <button
         type="button"
-        className={`collection-photocard-preview__card${flipped ? " is-flipped" : ""}`}
-        onClick={() => {
-          if (back) setFlipped((v) => !v);
+        className={`collection-photocard-preview__card${canFlip ? " is-flippable" : ""}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (canFlip) setFlipped((v) => !v);
         }}
-        title={back ? "Click to flip" : "Front only"}
+        title={canFlip ? (flipped ? "Show front" : "Show back") : "Front only"}
       >
-        <span className="collection-photocard-preview__face collection-photocard-preview__face--front">
-          {front ? <img src={front} alt={`${active.label} front`} /> : <span className="muted">No front</span>}
-        </span>
-        <span className="collection-photocard-preview__face collection-photocard-preview__face--back">
-          {back ? <img src={back} alt={`${active.label} back`} /> : <span className="muted">No back</span>}
-        </span>
+        {shown ? (
+          <img key={shown} src={shown} alt={`${active.label} ${flipped ? "back" : "front"}`} draggable={false} />
+        ) : (
+          <span className="muted">No image</span>
+        )}
       </button>
       <span className="muted collection-photocard-preview__hint">
-        {back ? (flipped ? "Back" : "Front") : "Front"}
+        {canFlip ? (flipped ? "Back" : "Front") : "Front"}
       </span>
     </div>
   );
@@ -363,7 +370,11 @@ export function SpotifyFlip({
     <HoverBubble bare content={preview} interactive={canFlip} disabled={!hasPreview}>
       <button
         type="button"
-        className={`collection-spotify${active || hasPreview ? " is-active" : " is-muted"}`}
+        className={`collection-spotify${
+          hasPreview && (active || canFlip || Boolean(frontUrl || backUrl))
+            ? " is-active"
+            : " is-muted"
+        }`}
         title={
           hasPreview
             ? canFlip
@@ -399,36 +410,42 @@ export function CoverPhotoFlip({
     if (onFlippedChange) onFlippedChange(next);
     else setFlippedLocal(next);
   };
-  if (!coverUrl && !photoSquareUrl) return <span className="muted">No cover</span>;
-  const front = coverUrl;
-  const back = photoSquareUrl;
-  const canFlip = Boolean(front && back);
+  const front = (coverUrl || "").trim();
+  const back = (photoSquareUrl || "").trim();
+  if (!front && !back) return <span className="muted">No cover</span>;
+  const canFlip = Boolean(front && back && front !== back);
+  const shown = flipped && back ? back : front || back;
   return (
     <div
       className={`collection-cover-flip${canFlip ? " is-flippable" : ""}`}
+      role={canFlip ? "button" : undefined}
+      tabIndex={canFlip ? 0 : undefined}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         if (canFlip) setFlipped(!flipped);
       }}
+      onKeyDown={(e) => {
+        if (!canFlip) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setFlipped(!flipped);
+        }
+      }}
+      title={canFlip ? (flipped ? "Show cover" : "Show photo") : undefined}
     >
-      <div
-        className={`collection-cover-flip__card${flipped ? " is-flipped" : ""}`}
-        title={canFlip ? (flipped ? "Photo" : "Cover") : undefined}
-      >
-        <span className="collection-cover-flip__face collection-cover-flip__face--front">
-          {front ? (
-            <img src={front} alt="Cover" className="collection-hover__img" />
-          ) : (
-            <span className="muted">No cover</span>
-          )}
+      <img
+        key={shown}
+        src={shown}
+        alt={flipped && back ? "Photo square" : "Cover"}
+        className="collection-hover__img"
+        draggable={false}
+      />
+      {canFlip ? (
+        <span className="collection-cover-flip__label">
+          {flipped ? "Photo" : "Cover"}
         </span>
-        <span className="collection-cover-flip__face collection-cover-flip__face--back">
-          {back ? (
-            <img src={back} alt="Photo square" className="collection-hover__img" />
-          ) : null}
-        </span>
-      </div>
+      ) : null}
     </div>
   );
 }
