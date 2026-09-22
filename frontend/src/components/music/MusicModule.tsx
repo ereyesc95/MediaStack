@@ -240,7 +240,9 @@ export default function MusicModule({
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
   const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
-  const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
+  const [entrySource, setEntrySource] = useState<
+    "home" | "catalog" | "collection"
+  >("catalog");
   const homeAudio = useMiniAudio();
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
   const loadArtistsGeneration = useRef(0);
@@ -279,14 +281,19 @@ export default function MusicModule({
     (
       id: number,
       shellHint?: ArtistCard | null,
-      from: "home" | "catalog" = "catalog"
+      from: "home" | "catalog" | "collection" = "catalog"
     ) => {
-      setEntrySource(from);
+      setEntrySource(from === "collection" ? "collection" : from);
       clearPendingAudioCategory(id);
       saveArtistEntryReferrer({
         source: "music",
         section: "audio",
-        backLabel: from === "home" ? "HOME" : "CATALOG",
+        backLabel:
+          from === "home"
+            ? "HOME"
+            : from === "collection"
+              ? "COLLECTION"
+              : "CATALOG",
       });
       primeArtistShell(id, shellHint);
       onArtistNavigate("overview", "about");
@@ -341,7 +348,7 @@ export default function MusicModule({
 
   const openCollectionRelease = useCallback(
     (bandId: number, releaseId: string, artistName?: string, title?: string) => {
-      setEntrySource("catalog");
+      setEntrySource("collection");
       saveArtistEntryReferrer({
         source: "music",
         section: "audio",
@@ -352,7 +359,7 @@ export default function MusicModule({
         section: "audio",
         category: "albums",
         artistName,
-        source: "catalog",
+        source: "collection",
       });
       primeArtistShell(bandId, {
         id: bandId,
@@ -1233,6 +1240,9 @@ export default function MusicModule({
                 onCollectionExport={() =>
                   collectionManageRef.current?.exportExcel()
                 }
+                onCollectionClear={() =>
+                  collectionManageRef.current?.startClearMode()
+                }
                 menuChrome={
                   portraitMenuChrome && showArtistTools ? (
                     <button
@@ -1524,6 +1534,14 @@ export default function MusicModule({
             onBand(undefined);
             onTab("artists");
           }}
+          onBackToCollection={() => {
+            clearArtistEntryReferrer();
+            clearMediaTheme(userId);
+            window.history.pushState(null, "", "/");
+            onReleaseNavigate?.(undefined, undefined);
+            onBand(undefined);
+            onTab("collection");
+          }}
         />
       ) : bandId ? (
         <ArtistPage
@@ -1587,7 +1605,13 @@ export default function MusicModule({
             clearArtistEntryReferrer();
             window.history.pushState(null, "", "/");
             onBand(undefined);
-            onTab(entrySource === "home" ? "home" : "artists");
+            onTab(
+              entrySource === "home"
+                ? "home"
+                : entrySource === "collection"
+                  ? "collection"
+                  : "artists"
+            );
           }}
           backLabel={
             getArtistEntryReferrer()?.backLabel ||
@@ -1599,7 +1623,9 @@ export default function MusicModule({
                   ? "BOOKS"
                   : entrySource === "home"
                     ? "HOME"
-                    : "CATALOG")
+                    : entrySource === "collection"
+                      ? "COLLECTION"
+                      : "CATALOG")
           }
           onNavigate={(section, overviewTab) =>
             onArtistNavigate(section, overviewTab ?? artistOverviewTab)
@@ -1776,9 +1802,9 @@ export default function MusicModule({
           onViewChange={setCollectionView}
           manageApiRef={collectionManageRef}
           onInventoryChange={setCollectionHasItems}
-          onOpenArtist={(id) => openArtist(id)}
-          onOpenRelease={(bandId, releaseId) =>
-            openCollectionRelease(bandId, releaseId)
+          onOpenArtist={(id) => openArtist(id, null, "collection")}
+          onOpenRelease={(bandId, releaseId, artist, title) =>
+            openCollectionRelease(bandId, releaseId, artist, title)
           }
         />
       ) : (

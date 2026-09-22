@@ -346,7 +346,7 @@ export default function CollectionModal({
     setReleaseType(data.release_type || "Studio Album");
     setOriginalDate(data.original_release_date || "");
     setEditionDate(data.release_date || "");
-    setMediaType(data.media_type || "LP");
+    setMediaType(data.media_type || "Digital");
     setVersion(data.version || "");
     setCountry(data.country || "");
     setCountryIso(data.country_iso || "");
@@ -369,7 +369,7 @@ export default function CollectionModal({
     setReleaseType(item.release_type || "Studio Album");
     setOriginalDate(item.original_date || "");
     setEditionDate(item.edition_date || "");
-    setMediaType(item.media_type || "LP");
+    setMediaType(item.media_type || "Digital");
     setVersion(item.version || "");
     setCountry(item.country || "");
     setCountryIso(item.country_iso || "");

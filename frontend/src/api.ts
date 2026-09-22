@@ -3436,6 +3436,17 @@ export async function deleteCollectionItem(id: number) {
   });
 }
 
+export async function deleteCollectionItems(ids: number[]) {
+  return request<{ ok: boolean; removed: number }>(
+    `${API}/music/collection/delete-batch`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }
+  );
+}
+
 export async function previewCollectionImport(file: File) {
   const form = new FormData();
   form.append("file", file);

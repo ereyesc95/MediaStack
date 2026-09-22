@@ -28,6 +28,7 @@ import {
   pushArtistRoute,
   type ReleaseTab,
 } from "../../../musicRoute";
+import { getArtistEntryReferrer } from "../../../artistEntry";
 import {
   applyMediaTheme,
   beginAdaptivePageSession,
@@ -163,6 +164,7 @@ type Props = {
   onBackToMovies?: (franchiseId: string) => void;
   onBackToHome?: () => void;
   onBackToCatalog?: () => void;
+  onBackToCollection?: () => void;
 };
 
 function isVideoMedia(url: string | null | undefined): boolean {
@@ -351,6 +353,7 @@ export default function ReleasePage({
   onBackToMovies,
   onBackToHome,
   onBackToCatalog,
+  onBackToCollection,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -1033,6 +1036,10 @@ export default function ReleasePage({
   const homeReferrer = releaseReferrer?.source === "home" ? releaseReferrer : null;
   const catalogReferrer =
     releaseReferrer?.source === "catalog" ? releaseReferrer : null;
+  const isCollectionEntry =
+    releaseReferrer?.source === "collection" ||
+    getArtistEntryReferrer()?.backLabel === "COLLECTION";
+  const collectionReferrer = isCollectionEntry;
   const seriesReferrer =
     releaseReferrer?.source === "series" && releaseReferrer.franchiseId
       ? releaseReferrer
@@ -1055,7 +1062,9 @@ export default function ReleasePage({
   ).toUpperCase();
   const backLabel = homeReferrer
     ? "HOME"
-    : catalogReferrer
+    : collectionReferrer
+      ? "COLLECTION"
+      : catalogReferrer
       ? "CATALOG"
       : artistReferrer
         ? (artistReferrer.artistName ??
@@ -1075,7 +1084,9 @@ export default function ReleasePage({
         : (data?.artist_name ?? "Artist");
   const backAriaLabel = homeReferrer
     ? "Back to Home"
-    : catalogReferrer
+    : collectionReferrer
+      ? "Back to Collection"
+      : catalogReferrer
       ? "Back to Catalog"
       : artistReferrer
         ? `Back to ${backLabel ?? "Artist"}`
@@ -1084,10 +1095,17 @@ export default function ReleasePage({
       : `Back to ${backLabel ?? "Artist"}`;
 
   const handleBack = () => {
-    const ref = releaseReferrer;
+    const ref = getReleaseReferrer();
+    const fromCollection =
+      ref?.source === "collection" ||
+      getArtistEntryReferrer()?.backLabel === "COLLECTION";
     clearReleaseReferrer();
     if (ref?.source === "home") {
       onBackToHome?.();
+      return;
+    }
+    if (fromCollection) {
+      onBackToCollection?.();
       return;
     }
     if (ref?.source === "catalog") {

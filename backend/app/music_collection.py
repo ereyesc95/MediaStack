@@ -322,7 +322,9 @@ def _normalize_code_stem(base: str) -> str | None:
         "spotify code": "Code - Spotify",
         "spotify - card": "Code - Spotify Card",
         "code - spotify card": "Code - Spotify Card",
+        "code - spotify - card": "Code - Spotify Card",
         "spotify card": "Code - Spotify Card",
+        "spotify - code - card": "Code - Spotify Card",
         "qr - code": "Code - QR",
         "code - qr": "Code - QR",
         "qr": "Code - QR",
@@ -379,6 +381,8 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
         "cover_front_url": None,
         "cover_banner_url": None,
         "spotify_card_url": None,
+        "spotify_code_url": None,
+        "photo_square_url": None,
         "animation_url": None,
         "canvas_url": None,
         "disc_url": None,
@@ -468,6 +472,8 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
         elif low.startswith("photo - "):
             present.add(base)
             push("Photo", base, source=source, url=url, missing=False)
+            if low == "photo - square":
+                add_url("photo_square_url", path)
         elif low in ("logo", "collapsed logo", "icon") or low.startswith("logo "):
             push("Branding", base, source=source, url=url, missing=False)
             if low == "logo":
@@ -478,6 +484,8 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             push("Codes", code_canon, source=source, url=url, missing=False)
             if code_canon == "Code - Spotify Card":
                 add_url("spotify_card_url", path)
+            elif code_canon == "Code - Spotify":
+                add_url("spotify_code_url", path)
         elif low.startswith("photocard - "):
             present.add(base)
             push("Photocards", base, source=source, url=url, missing=False)
@@ -522,21 +530,36 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             canvas_sources.append(src or "Official")
 
     code_lookup_stems = (
-        ("Code - Spotify", ("Code - Spotify", "Spotify - Code", "Spotify")),
-        ("Code - Spotify Card", ("Code - Spotify Card", "Spotify - Card", "Spotify Card")),
+        (
+            "Code - Spotify",
+            ("Code - Spotify", "Spotify - Code", "Spotify", "Code - Spotify.png"),
+        ),
+        (
+            "Code - Spotify Card",
+            (
+                "Code - Spotify Card",
+                "Code - Spotify - Card",
+                "Spotify - Card",
+                "Spotify Card",
+            ),
+        ),
         ("Code - QR", ("Code - QR", "QR - Code", "QR")),
         ("Code - QR Card", ("Code - QR Card", "QR - Card", "QR Card")),
     )
     for canonical, stems in code_lookup_stems:
-        if canonical in present:
-            continue
+        already = canonical in present
         for stem in stems:
             found = _find_artwork_file(artwork, stem)
-            if found:
-                present.add(canonical)
-                if canonical == "Code - Spotify Card":
-                    add_url("spotify_card_url", found)
+            if not found:
+                continue
+            present.add(canonical)
+            if canonical == "Code - Spotify Card":
+                add_url("spotify_card_url", found)
+            elif canonical == "Code - Spotify":
+                add_url("spotify_code_url", found)
+            if already:
                 break
+            break
 
     for stem in (
         "Photo - Square",
@@ -558,6 +581,8 @@ def scan_artwork_checklist(artwork: Path | None) -> dict:
             present.add(stem)
             if stem == "Logo":
                 add_url("logo_url", found)
+            elif stem == "Photo - Square":
+                add_url("photo_square_url", found)
 
     # Avoid duplicate labels when resolvers already covered files on disk
     seen_keys: dict[str, set[str]] = {g: set() for g in groups}
@@ -650,6 +675,32 @@ def _media_from_folder(folder: Path) -> str | None:
     if meta:
         return normalize_media_type(_FORMAT_MEDIA.get(meta["format_key"], meta["format_key"]))
     return None
+
+
+def _split_edition_variant(
+    edition: str | None, version: str | None = None
+) -> tuple[str, str | None]:
+    """Keep edition name clean; move color/finish into version when jammed into edition."""
+    ed = (edition or "Standard Edition").strip() or "Standard Edition"
+    ver = (version or "").strip() or None
+    if ver:
+        return ed, ver
+    m = re.match(r"^(.+?)\s*[-·—–]\s*(.+)$", ed)
+    if not m:
+        return ed, None
+    left, right = m.group(1).strip(), m.group(2).strip()
+    if not left or not right or len(right) > 40:
+        return ed, None
+    if not re.search(
+        r"\b(edition|remaster|deluxe|limited|expanded|anniversary|standard)\b",
+        left,
+        re.I,
+    ):
+        return ed, None
+    # Avoid splitting "20th Anniversary Edition" style left without a real variant
+    if re.search(r"\b(edition|remaster|deluxe|limited)\b", right, re.I):
+        return ed, None
+    return left, right
 
 
 _FORMAT_MEDIA = {
@@ -870,9 +921,10 @@ def build_preview_from_folder(
     category = _category_from_path(folder, root)
     release_type = _CATEGORY_TO_TYPE.get(category or "", "Studio Album")
     country, iso = _band_country(db, band)
-    media = _media_from_folder(folder)
+    media = _media_from_folder(folder) or "Digital"
     version = _version_label_from_folder(folder)
     edition = _edition_label_from_folder(folder)
+    edition, version = _split_edition_variant(edition, version)
     title = _release_title_from_folder(folder)
     original = _original_date_from_release_folder(folder)
     edition_date = _edition_date_from_folder(folder)
@@ -968,18 +1020,23 @@ def pair_photocards(entries: list[dict] | None) -> list[dict]:
     for entry in entries or []:
         if entry.get("missing"):
             continue
-        label = str(entry.get("label") or "")
-        low = label.casefold()
-        m = re.match(r"^photocard\s*-\s*(.+?)\s*-\s*(front|back)\s*$", low)
+        raw = str(entry.get("canonical") or entry.get("label") or "")
+        low = raw.casefold().strip()
+        m = re.match(r"^(?:photocard\s*-\s*)?(.+?)\s*-\s*(front|back)\s*$", low)
         if not m:
             continue
         orient = m.group(1).strip()
+        if orient.casefold().startswith("photocard"):
+            orient = re.sub(r"^photocard\s*-\s*", "", orient, flags=re.I).strip()
         side = m.group(2)
         if side == "front":
             fronts[orient] = entry
         else:
             backs[orient] = entry
-    keys = sorted(set(fronts) | set(backs), key=lambda k: (0 if "portrait" in k else 1 if "landscape" in k else 2, k))
+    keys = sorted(
+        set(fronts) | set(backs),
+        key=lambda k: (0 if "portrait" in k else 1 if "landscape" in k else 2, k),
+    )
     out: list[dict] = []
     for key in keys:
         front = fronts.get(key)
@@ -1018,19 +1075,30 @@ def serialize_item(db: Session, row: CollectionItem, *, include_previews: bool =
     # Prefer Standard cover for release cards — resolved at group level
     cover_url = urls.get("cover_front_url")
     photo_raw = (checklist or {}).get("groups", {}).get("Photocards") if include_previews else None
+    edition, version = _split_edition_variant(row.col_edition, row.col_version)
+    edition_label = edition or "Standard Edition"
+    is_standard = edition_label.casefold().startswith("standard")
+    # Non-standard editions use their edition date; Standard uses release date.
+    date_iso = (
+        row.col_original_date
+        if is_standard or not row.col_edition_date
+        else row.col_edition_date
+    )
     return {
         "id": row.col_id,
         "artist": row.col_artist,
         "title": row.col_title,
-        "edition": row.col_edition or "Standard Edition",
+        "edition": edition_label,
         "release_type": row.col_release_type,
         "original_date": row.col_original_date,
         "original_date_display": format_display_date(row.col_original_date),
         "edition_date": row.col_edition_date,
         "edition_date_display": format_display_date(row.col_edition_date),
-        "year": (row.col_original_date or "")[:4] or None,
+        "display_date": date_iso,
+        "display_date_display": format_display_date(date_iso),
+        "year": (date_iso or "")[:4] or None,
         "media_type": row.col_media_type,
-        "version": row.col_version,
+        "version": version,
         "genres": genres,
         "country": row.col_country,
         "country_iso": row.col_country_iso,
@@ -1050,11 +1118,16 @@ def serialize_item(db: Session, row: CollectionItem, *, include_previews: bool =
         "logo_url": urls.get("logo_url"),
         "cover_banner_url": urls.get("cover_banner_url"),
         "spotify_card_url": urls.get("spotify_card_url"),
+        "spotify_code_url": urls.get("spotify_code_url"),
+        "photo_square_url": urls.get("photo_square_url"),
         "animation_url": urls.get("animation_url"),
         "canvas_url": urls.get("canvas_url"),
         "disc_url": urls.get("disc_url"),
         "disc_b_url": urls.get("disc_b_url"),
-        "spotify_icon_active": bool(urls.get("cover_banner_url") and urls.get("spotify_card_url")),
+        "spotify_icon_active": bool(
+            urls.get("cover_banner_url")
+            and (urls.get("spotify_card_url") or urls.get("spotify_code_url"))
+        ),
         "artwork": (checklist or {}).get("groups") if include_previews else None,
         "missing_mandatory": (checklist or {}).get("missing_mandatory") if include_previews else pending,
         "match_key": row.col_match_key,
@@ -1141,6 +1214,20 @@ def delete_item(db: Session, user_id: int, item_id: int) -> bool:
     return True
 
 
+def delete_items(db: Session, user_id: int, item_ids: list[int]) -> int:
+    """Delete many collection rows owned by user. Returns count removed."""
+    removed = 0
+    for item_id in item_ids:
+        row = db.get(CollectionItem, item_id)
+        if not row or row.col_user_id != user_id:
+            continue
+        db.delete(row)
+        removed += 1
+    if removed:
+        db.commit()
+    return removed
+
+
 def get_item(db: Session, user_id: int, item_id: int) -> CollectionItem | None:
     row = db.get(CollectionItem, item_id)
     if not row or row.col_user_id != user_id:
@@ -1171,13 +1258,8 @@ def list_items(
 
     qn = (q or "").strip().casefold()
     if qn:
-        items = [
-            it
-            for it in items
-            if qn in (it["title"] or "").casefold()
-            or qn in (it["artist"] or "").casefold()
-            or qn in (it["edition"] or "").casefold()
-        ]
+        # Collection search is title-only.
+        items = [it for it in items if qn in (it["title"] or "").casefold()]
 
     sf = (subfilter or "").strip().casefold()
     if sf == "pending":
@@ -1271,16 +1353,61 @@ def list_items(
     return items
 
 
+def _edition_sort_key(it: dict) -> tuple:
+    """Standard editions first; within that prefer CD over LP / other media."""
+    ed = (it.get("edition") or "").casefold()
+    media = (it.get("media_type") or "").casefold()
+    standard = 0 if ed.startswith("standard") else 1
+    if media == "cd":
+        media_rank = 0
+    elif media == "digital":
+        media_rank = 1
+    elif media == "lp":
+        media_rank = 2
+    else:
+        media_rank = 3
+    return (standard, media_rank, ed, media, it.get("version") or "")
+
+
+def _shared_release_meta(versions: list[dict]) -> dict:
+    """Shared list-column values for a multi-edition release group."""
+    def first(key: str, default=None):
+        for v in versions:
+            val = v.get(key)
+            if val:
+                return val
+        return default
+
+    genres: list[str] = []
+    for v in versions:
+        g = v.get("genres") or []
+        if g:
+            genres = list(g)
+            break
+    return {
+        "title": first("title", ""),
+        "artist": first("artist", ""),
+        "release_type": first("release_type"),
+        "genres": genres,
+        "country_iso": first("country_iso"),
+        "band_id": first("band_id"),
+        "release_id": first("release_id"),
+        "year": first("year"),
+    }
+
+
 def group_for_cards(items: list[dict]) -> list[dict]:
     """Aggregate leaves into release-level cards (preferred Standard cover)."""
     groups: dict[str, dict] = {}
     order: list[str] = []
     for it in items:
+        # Group by release identity — never edition year (remasters share a release).
+        release_year = (it.get("original_date") or "")[:4] or (it.get("year") or "")
         gk = "|".join(
             [
                 (it["artist"] or "").casefold(),
                 (it["title"] or "").casefold(),
-                (it["year"] or ""),
+                release_year,
             ]
         )
         if gk not in groups:
@@ -1294,6 +1421,13 @@ def group_for_cards(items: list[dict]) -> list[dict]:
                 "release_folder_path": it["release_folder_path"],
                 "country_iso": it["country_iso"],
                 "cover_url": None,
+                "cover_banner_url": it.get("cover_banner_url"),
+                "logo_url": it.get("logo_url"),
+                "disc_url": it.get("disc_url"),
+                "edition": it.get("edition"),
+                "media_type": it.get("media_type"),
+                "original_date_display": it.get("original_date_display"),
+                "id": it.get("id"),
                 "versions": [],
                 "version_count": 0,
                 "pending": [],
@@ -1311,53 +1445,95 @@ def group_for_cards(items: list[dict]) -> list[dict]:
             g["band_id"] = it["band_id"]
         if it["release_id"]:
             g["release_id"] = it["release_id"]
+        if it.get("id") and not g.get("id"):
+            g["id"] = it["id"]
         for p in it["pending"]:
             if p not in g["pending"]:
                 g["pending"].append(p)
         g["has_pending"] = bool(g["pending"])
-        # Prefer Standard Edition cover
+        # Prefer Standard Edition cover / banner / branding
         ed = (it["edition"] or "").casefold()
-        if it["cover_url"]:
+        prefer = ed.startswith("standard") or not g["cover_url"]
+        if it["cover_url"] and prefer:
             if ed.startswith("standard") or not g["cover_url"]:
-                if ed.startswith("standard"):
-                    g["cover_url"] = it["cover_url"]
-                elif not g["cover_url"]:
-                    g["cover_url"] = it["cover_url"]
+                g["cover_url"] = it["cover_url"]
+                if it.get("cover_banner_url"):
+                    g["cover_banner_url"] = it["cover_banner_url"]
+                if it.get("logo_url"):
+                    g["logo_url"] = it["logo_url"]
+                if it.get("disc_url"):
+                    g["disc_url"] = it["disc_url"]
+                g["edition"] = it.get("edition")
+                g["media_type"] = it.get("media_type")
+                g["original_date_display"] = it.get("original_date_display")
+                g["id"] = it.get("id") or g.get("id")
+        elif not g["cover_url"] and it["cover_url"]:
+            g["cover_url"] = it["cover_url"]
+            g["cover_banner_url"] = it.get("cover_banner_url") or g.get("cover_banner_url")
+            g["logo_url"] = it.get("logo_url") or g.get("logo_url")
+            g["disc_url"] = it.get("disc_url") or g.get("disc_url")
+            g["edition"] = it.get("edition") or g.get("edition")
+            g["media_type"] = it.get("media_type") or g.get("media_type")
+            g["original_date_display"] = (
+                it.get("original_date_display") or g.get("original_date_display")
+            )
+            g["id"] = it.get("id") or g.get("id")
     for g in groups.values():
+        g["versions"] = sorted(g["versions"], key=_edition_sort_key)
         g["version_count"] = len(g["versions"])
+        # Default card leaf = first after sort (Standard + CD preferred)
+        if g["versions"]:
+            head = g["versions"][0]
+            g["cover_url"] = head.get("cover_url") or g.get("cover_url")
+            g["cover_banner_url"] = head.get("cover_banner_url") or g.get("cover_banner_url")
+            g["logo_url"] = head.get("logo_url") or g.get("logo_url")
+            g["disc_url"] = head.get("disc_url") or g.get("disc_url")
+            g["edition"] = head.get("edition") or g.get("edition")
+            g["media_type"] = head.get("media_type") or g.get("media_type")
+            g["original_date_display"] = (
+                head.get("original_date_display") or g.get("original_date_display")
+            )
+            g["display_date"] = head.get("display_date") or g.get("display_date")
+            g["display_date_display"] = (
+                head.get("display_date_display") or g.get("display_date_display")
+            )
+            g["year"] = head.get("year") or g.get("year")
+            g["id"] = head.get("id") or g.get("id")
+            shared = _shared_release_meta(g["versions"])
+            g["release_type"] = shared.get("release_type")
+            g["genres"] = shared.get("genres") or []
     return [groups[k] for k in order]
 
 
 def group_for_table(items: list[dict]) -> list[dict]:
-    """Parent header + child leaf rows for list view."""
+    """Edition rows only; first row carries rowspan meta for shared columns."""
     cards = group_for_cards(items)
     rows: list[dict] = []
     for g in cards:
-        versions = g["versions"]
+        versions = list(g["versions"])
         if len(versions) <= 1:
             leaf = versions[0]
             rows.append({**leaf, "row_kind": "leaf", "group_key": g["group_key"]})
             continue
-        rows.append(
-            {
-                "row_kind": "group",
-                "group_key": g["group_key"],
-                "title": g["title"],
-                "artist": g["artist"],
-                "year": g["year"],
-                "version_count": g["version_count"],
-                "cover_url": g["cover_url"],
-                "band_id": g["band_id"],
-                "release_id": g["release_id"],
-                "country_iso": g["country_iso"],
-                "local": g["local"],
-                "orphan": g["orphan"],
-                "has_pending": g["has_pending"],
-                "pending": g["pending"],
-            }
-        )
-        for leaf in versions:
-            rows.append({**leaf, "row_kind": "child", "group_key": g["group_key"]})
+        shared = _shared_release_meta(versions)
+        n = len(versions)
+        for i, leaf in enumerate(versions):
+            rows.append(
+                {
+                    **leaf,
+                    "row_kind": "child",
+                    "group_key": g["group_key"],
+                    "is_group_head": i == 0,
+                    "group_span": n if i == 0 else 0,
+                    "version_count": n,
+                    "group_title": shared["title"],
+                    "group_artist": shared["artist"],
+                    "group_release_type": shared["release_type"],
+                    "group_genres": shared["genres"],
+                    "group_country_iso": shared["country_iso"],
+                    "group_versions": versions,
+                }
+            )
     return rows
 
 
@@ -1489,7 +1665,7 @@ def validate_collection_source_folder(abs_or_rel: str) -> dict:
 def collection_facets(db: Session, user_id: int) -> dict:
     """Distinct facet values + counts for filter tabs / dropdowns."""
     from app.music_filters import continents_for_country_ids, _country_groups_from_ids
-    from app.models import Continent, Country, Genre, Subgenre
+    from app.models import Country, Genre, Subgenre
 
     rows = db.scalars(
         select(CollectionItem).where(CollectionItem.col_user_id == user_id)
@@ -1503,10 +1679,14 @@ def collection_facets(db: Session, user_id: int) -> dict:
     pending_n = orphan_n = autograph_n = matched_n = 0
 
     for row in rows:
-        folder = _resolve_folder(row.col_folder_path)
-        artwork = _find_artwork_subdir(folder) if folder else None
-        checklist = scan_artwork_checklist(artwork) if folder else None
-        pending = compute_pending(row, checklist)
+        try:
+            folder = _resolve_folder(row.col_folder_path)
+            artwork = _find_artwork_subdir(folder) if folder else None
+            checklist = scan_artwork_checklist(artwork) if folder else None
+            pending = compute_pending(row, checklist)
+        except Exception:
+            folder = None
+            pending = compute_pending(row, None)
         local = bool(folder)
         if pending:
             pending_n += 1
@@ -1538,17 +1718,37 @@ def collection_facets(db: Session, user_id: int) -> dict:
     # Prefer live panel genres for display facets when release is linked
     for row in rows:
         if row.col_band_id and row.col_release_id:
-            panel = _panel_subgenre_names(db, row.col_band_id, row.col_release_id)
+            try:
+                panel = _panel_subgenre_names(db, row.col_band_id, row.col_release_id)
+            except Exception:
+                panel = None
             if panel:
                 for g in panel:
                     genre_names.add(g)
 
     used_country_ids: set[int] = set()
-    for c in db.scalars(select(Country)).all():
-        iso = (c.cou_iso or "").strip().lower()
-        name = (c.cou_name or "").strip()
-        if iso in country_isos or (name and name.casefold() in {n.casefold() for n in country_names}):
-            used_country_ids.add(c.cou_id)
+    name_keys = {n.casefold() for n in country_names}
+    # Also index trailing country tokens from "City, Country" displays
+    for n in list(country_names):
+        if "," in n:
+            tail = n.rsplit(",", 1)[-1].strip()
+            if tail:
+                name_keys.add(tail.casefold())
+    try:
+        for c in db.scalars(select(Country)).all():
+            iso = (c.cou_iso or "").strip().lower()
+            name = (c.cou_name or "").strip()
+            name_cf = name.casefold() if name else ""
+            if iso and iso in country_isos:
+                used_country_ids.add(c.cou_id)
+                continue
+            if name_cf and (
+                name_cf in name_keys
+                or any(name_cf in nk or nk in name_cf for nk in name_keys)
+            ):
+                used_country_ids.add(c.cou_id)
+    except Exception:
+        used_country_ids = set()
 
     # Group collection genres under parent genre when DB knows the subgenre
     by_parent: dict[str, list[dict]] = {}
@@ -1560,16 +1760,19 @@ def collection_facets(db: Session, user_id: int) -> dict:
         used.add(key)
         parent = "Other"
         sgn_id = None
-        sg = (
-            db.query(Subgenre)
-            .filter(Subgenre.sgn_name.ilike(name))
-            .first()
-        )
-        if sg:
-            sgn_id = sg.sgn_id
-            g = db.get(Genre, sg.sgn_genre_id or 0) if sg.sgn_genre_id else None
-            if g and g.gen_name:
-                parent = g.gen_name
+        try:
+            sg = (
+                db.query(Subgenre)
+                .filter(Subgenre.sgn_name.ilike(name))
+                .first()
+            )
+            if sg:
+                sgn_id = sg.sgn_id
+                g = db.get(Genre, sg.sgn_genre_id or 0) if sg.sgn_genre_id else None
+                if g and g.gen_name:
+                    parent = g.gen_name
+        except Exception:
+            pass
         by_parent.setdefault(parent, []).append(
             {"id": sgn_id or name, "name": name, "genre_id": None}
         )
@@ -1578,26 +1781,58 @@ def collection_facets(db: Session, user_id: int) -> dict:
         for gname, items in sorted(by_parent.items(), key=lambda x: x[0].casefold())
     ]
 
+    country_groups: list = []
+    continents: list = []
+    try:
+        if used_country_ids:
+            country_groups = _country_groups_from_ids(db, used_country_ids)
+            continents = continents_for_country_ids(db, used_country_ids)
+        elif country_isos or country_names:
+            # Fallback when ISO/name didn't resolve to Country rows
+            synthetic: list[dict] = []
+            seen: set[str] = set()
+            for iso in sorted(country_isos):
+                key = iso.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                synthetic.append(
+                    {"id": iso, "name": iso.upper(), "iso": iso, "continent_id": None}
+                )
+            for name in sorted(country_names, key=str.casefold):
+                key = name.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                synthetic.append(
+                    {"id": name, "name": name, "iso": None, "continent_id": None}
+                )
+            if synthetic:
+                country_groups = [{"continent": "Collection", "items": synthetic}]
+    except Exception:
+        country_groups = []
+        continents = []
+
     return {
         "media": sorted(media, key=str.casefold),
         "animation": sorted(animation, key=str.casefold),
         "canvas": sorted(canvas, key=str.casefold),
         "genres": sorted(genre_names, key=str.casefold),
         "subgenre_groups": subgenre_groups,
-        "country_groups": _country_groups_from_ids(db, used_country_ids or None)
-        if used_country_ids
-        else [],
-        "continents": continents_for_country_ids(db, used_country_ids),
+        "country_groups": country_groups,
+        "continents": continents,
         "total": len(rows),
         "counts": {
             "pending": pending_n,
             "orphan": orphan_n,
+            "unlinked": orphan_n,
             "autographs": autograph_n,
             "matched": matched_n,
+            "linked": matched_n,
             "media": len(media),
             "animation": len(animation),
             "canvas": len(canvas),
             "genre": len(genre_names),
-            "country": len(used_country_ids),
+            "country": max(len(used_country_ids), len(country_isos) or len(country_names)),
         },
     }

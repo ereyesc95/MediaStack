@@ -614,6 +614,28 @@ export function IconDisc({ className }: IconProps) {
   );
 }
 
+/** Page / pagination chrome toggle. */
+export function IconPage({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        d="M7 3.5h7.2L19 8.3V20.5H7z"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        d="M14 3.5V8.5h5M9.5 12.5h7M9.5 15.5h7M9.5 18.5h4.5"
+      />
+    </svg>
+  );
+}
+
 /** Collection shelf — stacked discs; filled check when already in collection. */
 export function IconCollection({ className }: IconProps) {
   return (

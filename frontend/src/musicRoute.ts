@@ -90,7 +90,7 @@ export type ReleaseReferrer = {
   section: ArtistSection;
   category?: string;
   artistName?: string;
-  source?: "artist" | "series" | "movies" | "home" | "catalog";
+  source?: "artist" | "series" | "movies" | "home" | "catalog" | "collection";
   franchiseId?: string;
   subseriesId?: string;
   franchiseName?: string;
@@ -118,6 +118,7 @@ export function getReleaseReferrer(): ReleaseReferrer | null {
 export function clearReleaseReferrer() {
   try {
     sessionStorage.removeItem(REFERRER_KEY);
+    sessionStorage.removeItem(LEGACY_REFERRER_KEY);
   } catch {
     /* ignore */
   }

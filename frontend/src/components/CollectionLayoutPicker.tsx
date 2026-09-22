@@ -83,7 +83,7 @@ export default function CollectionLayoutPicker({
     >
       <button
         type="button"
-        className="card-orientation-toggle catalog-display-toggle--icon catalog-display-toggle--borderless"
+        className={`card-orientation-toggle catalog-display-toggle--borderless`}
         aria-label={`Collection: ${current.label}. Choose layout.`}
         aria-haspopup="menu"
         aria-expanded={open}

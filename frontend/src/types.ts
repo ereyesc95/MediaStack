@@ -261,6 +261,9 @@ export type CollectionLeaf = {
   original_date?: string | null;
   original_date_display?: string | null;
   edition_date?: string | null;
+  edition_date_display?: string | null;
+  display_date?: string | null;
+  display_date_display?: string | null;
   year?: string | null;
   media_type?: string | null;
   version?: string | null;
@@ -282,13 +285,23 @@ export type CollectionLeaf = {
   cover_url?: string | null;
   logo_url?: string | null;
   cover_banner_url?: string | null;
+  photo_square_url?: string | null;
   spotify_card_url?: string | null;
+  spotify_code_url?: string | null;
   animation_url?: string | null;
   canvas_url?: string | null;
   disc_url?: string | null;
   disc_b_url?: string | null;
   spotify_icon_active?: boolean;
   version_count?: number;
+  is_group_head?: boolean;
+  group_span?: number;
+  group_title?: string;
+  group_artist?: string;
+  group_release_type?: string | null;
+  group_genres?: string[];
+  group_country_iso?: string | null;
+  group_versions?: CollectionLeaf[];
   versions?: CollectionLeaf[];
   photocards?: { label: string; url?: string | null }[] | null;
   photocard_pairs?: {

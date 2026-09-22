@@ -2803,13 +2803,18 @@ def collection_list(
     else:
         grouped = group_for_table(items)
 
-    total = len(grouped)
+    # Count owned edition leaves (never group-header chrome).
+    total = len(items)
     if page_size >= 10000:
         page_items = grouped
         page = 1
     else:
         start = (page - 1) * page_size
         page_items = grouped[start : start + page_size]
+    # Guard: if a legacy build still emits group headers, don't count them.
+    if any(r.get("row_kind") == "group" for r in page_items):
+        total = sum(1 for r in grouped if r.get("row_kind") != "group")
+        page_items = [r for r in page_items if r.get("row_kind") != "group"]
     return {
         "items": page_items,
         "total": total,
@@ -3039,3 +3044,22 @@ def collection_delete(
     if not delete_item(db, user.usr_id, item_id):
         raise HTTPException(404, "Collection item not found")
     return {"ok": True}
+
+
+class CollectionDeleteBatchBody(BaseModel):
+    ids: list[int]
+
+
+@router.post("/collection/delete-batch")
+def collection_delete_batch(
+    body: CollectionDeleteBatchBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.music_collection import delete_items
+
+    ids = [i for i in (body.ids or []) if isinstance(i, int) and i > 0]
+    if not ids:
+        raise HTTPException(400, "No items selected")
+    removed = delete_items(db, user.usr_id, ids)
+    return {"ok": True, "removed": removed}

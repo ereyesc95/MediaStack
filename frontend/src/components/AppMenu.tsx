@@ -72,6 +72,7 @@ type Props = {
   onCollectionAddManual?: () => void;
   onCollectionImport?: () => void;
   onCollectionExport?: () => void;
+  onCollectionClear?: () => void;
   showEditPlaylist?: boolean;
   editPlaylistActive?: boolean;
   onEditPlaylistToggle?: () => void;
@@ -153,6 +154,7 @@ export default function AppMenu({
   onCollectionAddManual,
   onCollectionImport,
   onCollectionExport,
+  onCollectionClear,
   showEditPlaylist,
   editPlaylistActive,
   onEditPlaylistToggle,
@@ -955,6 +957,18 @@ export default function AppMenu({
                     <IconDownload className="menu-item-icon" />
                     Export Excel
                   </button>
+                  {isAdmin && onCollectionClear ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCollectionClear();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconTrash className="menu-item-icon" />
+                      Clear collection
+                    </button>
+                  ) : null}
                 </div>
               )}
             </>

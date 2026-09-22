@@ -1,5 +1,5 @@
 /** Shared collection hover / flip / external-search widgets. */
-import { useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
 import { IconSpotify } from "../MenuIcons";
 
 export type PhotocardPair = {
@@ -7,6 +7,23 @@ export type PhotocardPair = {
   label: string;
   front_url?: string | null;
   back_url?: string | null;
+};
+
+/** Only one collection hover bubble open at a time. */
+type BubbleGate = { close: () => void };
+const bubbleHub: {
+  active: BubbleGate | null;
+  claim(gate: BubbleGate): void;
+  release(gate: BubbleGate): void;
+} = {
+  active: null,
+  claim(gate) {
+    if (this.active && this.active !== gate) this.active.close();
+    this.active = gate;
+  },
+  release(gate) {
+    if (this.active === gate) this.active = null;
+  },
 };
 
 export function openSearchCascade(
@@ -109,32 +126,85 @@ export function ExternalSearchMenu({
 export function HoverBubble({
   children,
   content,
+  bare = false,
+  disabled = false,
+  interactive = false,
 }: {
   children: ReactNode;
   content: ReactNode;
+  /** Transparent, borderless bubble (artist / edition / animation / canvas). */
+  bare?: boolean;
+  /** Skip bubble entirely (e.g. no assets). */
+  disabled?: boolean;
+  /** Pointer cursor when bubble content can be flipped / clicked. */
+  interactive?: boolean;
 }) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const hideTimer = useRef<number | null>(null);
+  const gateRef = useRef<BubbleGate>({ close: () => undefined });
+
+  const clearHide = () => {
+    if (hideTimer.current != null) {
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  };
+
+  gateRef.current.close = () => {
+    clearHide();
+    setPos(null);
+    bubbleHub.release(gateRef.current);
+  };
+
+  const show = () => {
+    if (disabled) return;
+    clearHide();
+    // Close any other open bubble immediately so previews never overlap.
+    bubbleHub.claim(gateRef.current);
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ left: r.left, top: r.bottom + 2 });
+  };
+
+  const scheduleHide = () => {
+    clearHide();
+    hideTimer.current = window.setTimeout(() => {
+      gateRef.current.close();
+    }, 180);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearHide();
+      bubbleHub.release(gateRef.current);
+    };
+  }, []);
+
+  if (disabled) {
+    return <span className="collection-hover">{children}</span>;
+  }
 
   return (
     <span
-      className="collection-hover"
+      className={`collection-hover${interactive ? " collection-hover--interactive" : ""}`}
       ref={anchorRef}
-      onMouseEnter={() => {
-        const el = anchorRef.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        setPos({ left: r.left, top: r.bottom + 6 });
-      }}
-      onMouseLeave={() => setPos(null)}
+      onMouseEnter={show}
+      onMouseLeave={scheduleHide}
     >
       {children}
       {pos ? (
         <span
-          className="collection-hover__bubble collection-hover__bubble--fixed"
+          className={`collection-hover__bubble collection-hover__bubble--fixed${
+            bare ? " collection-hover__bubble--bare" : ""
+          }${interactive ? " collection-hover__bubble--interactive" : ""}`}
           role="tooltip"
           style={{ left: pos.left, top: pos.top }}
+          onMouseEnter={show}
+          onMouseLeave={scheduleHide}
         >
+          <span className="collection-hover__bridge" aria-hidden />
           {content}
         </span>
       ) : null}
@@ -184,7 +254,7 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
         </span>
       </button>
       <span className="muted collection-photocard-preview__hint">
-        {back ? (flipped ? "Back — click to flip" : "Front — click to flip") : "Front"}
+        {back ? (flipped ? "Back" : "Front") : "Front"}
       </span>
     </div>
   );
@@ -206,16 +276,19 @@ export function DiscFlipPreview({
   const back = discBUrl;
   const canFlip = Boolean(front && back);
   return (
-    <div className="collection-disc-preview" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`collection-disc-preview${canFlip ? " is-flippable" : ""}`}
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         className={`collection-disc-preview__disc${flipped ? " is-flipped" : ""}${
           isVinyl ? " is-round" : ""
-        }`}
+        }${canFlip ? " is-flippable" : ""}`}
         onClick={() => {
           if (canFlip) setFlipped((v) => !v);
         }}
-        title={canFlip ? "Click to flip" : undefined}
+        title={canFlip ? (flipped ? "Side B" : "Side A") : undefined}
       >
         <span className="collection-disc-preview__face collection-disc-preview__face--a">
           {front ? <img src={front} alt="Side A / Disc" /> : <span className="muted">—</span>}
@@ -225,13 +298,7 @@ export function DiscFlipPreview({
         </span>
       </button>
       <span className="muted">
-        {canFlip
-          ? flipped
-            ? "Side B — click to flip"
-            : "Side A — click to flip"
-          : isVinyl
-            ? "Side A"
-            : "Disc"}
+        {canFlip ? (flipped ? "Side B" : "Side A") : isVinyl ? "Side A" : "Disc"}
       </span>
     </div>
   );
@@ -241,32 +308,226 @@ export function SpotifyFlip({
   active,
   bannerUrl,
   cardUrl,
+  codeUrl,
 }: {
   active: boolean;
   bannerUrl?: string | null;
   cardUrl?: string | null;
+  codeUrl?: string | null;
 }) {
   const [flipped, setFlipped] = useState(false);
-  return (
-    <button
-      type="button"
-      className={`collection-spotify${active ? " is-active" : " is-muted"}`}
-      title={active ? "Spotify card" : "Missing Cover - Banner or Spotify - Card"}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (active) setFlipped((v) => !v);
+  // Prefer Code - Spotify Card when present; otherwise Code - Spotify.
+  const backUrl = (cardUrl || codeUrl || "").trim();
+  const frontUrl = (bannerUrl || "").trim();
+  const hasPreview = Boolean(frontUrl || backUrl);
+  const canFlip = Boolean(frontUrl && backUrl && frontUrl !== backUrl);
+  const shown = flipped && backUrl ? backUrl : frontUrl || backUrl;
+
+  const toggle = (e: { preventDefault(): void; stopPropagation(): void }) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (canFlip) setFlipped((v) => !v);
+  };
+
+  const preview = hasPreview ? (
+    <div
+      className={`collection-spotify-preview${canFlip ? " is-flippable" : ""}`}
+      role={canFlip ? "button" : undefined}
+      tabIndex={canFlip ? 0 : undefined}
+      title={canFlip ? (flipped ? "Show banner" : "Show Spotify code") : undefined}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (!canFlip) return;
+        if (e.key === "Enter" || e.key === " ") toggle(e);
       }}
     >
-      <span className="collection-spotify__icon" aria-hidden>
-        <IconSpotify />
-      </span>
-      {active ? (
-        <span className={`collection-spotify__flip${flipped ? " is-flipped" : ""}`}>
-          <img src={bannerUrl || ""} alt="" className="collection-spotify__front" />
-          <img src={cardUrl || ""} alt="" className="collection-spotify__back" />
+      <img
+        key={shown}
+        src={shown}
+        alt={flipped && backUrl ? "Spotify code" : "Cover banner"}
+        draggable={false}
+      />
+      {canFlip ? (
+        <span className="collection-spotify-preview__face-label">
+          {flipped ? "Code" : "Banner"}
         </span>
       ) : null}
-    </button>
+    </div>
+  ) : (
+    <span className="muted">
+      Missing Cover - Banner or Code - Spotify (or Code - Spotify Card)
+    </span>
+  );
+
+  return (
+    <HoverBubble bare content={preview} interactive={canFlip} disabled={!hasPreview}>
+      <button
+        type="button"
+        className={`collection-spotify${active || hasPreview ? " is-active" : " is-muted"}`}
+        title={
+          hasPreview
+            ? canFlip
+              ? "Spotify — hover then click preview to flip"
+              : "Spotify"
+            : "Missing Cover - Banner or Code - Spotify (or Code - Spotify Card)"
+        }
+        onClick={toggle}
+      >
+        <span className="collection-spotify__icon" aria-hidden>
+          <IconSpotify />
+        </span>
+      </button>
+    </HoverBubble>
+  );
+}
+
+/** Cover front ↔ Photo - Square flip for edition hover / click. */
+export function CoverPhotoFlip({
+  coverUrl,
+  photoSquareUrl,
+  flipped: flippedProp,
+  onFlippedChange,
+}: {
+  coverUrl?: string | null;
+  photoSquareUrl?: string | null;
+  flipped?: boolean;
+  onFlippedChange?: (next: boolean) => void;
+}) {
+  const [flippedLocal, setFlippedLocal] = useState(false);
+  const flipped = flippedProp ?? flippedLocal;
+  const setFlipped = (next: boolean) => {
+    if (onFlippedChange) onFlippedChange(next);
+    else setFlippedLocal(next);
+  };
+  if (!coverUrl && !photoSquareUrl) return <span className="muted">No cover</span>;
+  const front = coverUrl;
+  const back = photoSquareUrl;
+  const canFlip = Boolean(front && back);
+  return (
+    <div
+      className={`collection-cover-flip${canFlip ? " is-flippable" : ""}`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (canFlip) setFlipped(!flipped);
+      }}
+    >
+      <div
+        className={`collection-cover-flip__card${flipped ? " is-flipped" : ""}`}
+        title={canFlip ? (flipped ? "Photo" : "Cover") : undefined}
+      >
+        <span className="collection-cover-flip__face collection-cover-flip__face--front">
+          {front ? (
+            <img src={front} alt="Cover" className="collection-hover__img" />
+          ) : (
+            <span className="muted">No cover</span>
+          )}
+        </span>
+        <span className="collection-cover-flip__face collection-cover-flip__face--back">
+          {back ? (
+            <img src={back} alt="Photo square" className="collection-hover__img" />
+          ) : null}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Edition label: hover cover, click flips to Photo - Square when available. */
+export function EditionCoverHover({
+  coverUrl,
+  photoSquareUrl,
+  children,
+  onNavigate,
+}: {
+  coverUrl?: string | null;
+  photoSquareUrl?: string | null;
+  children: ReactNode;
+  onNavigate?: () => void;
+}) {
+  const [flipped, setFlipped] = useState(false);
+  const canFlip = Boolean(coverUrl && photoSquareUrl);
+  const hasPreview = Boolean(coverUrl || photoSquareUrl);
+  return (
+    <HoverBubble
+      bare
+      disabled={!hasPreview}
+      interactive={canFlip}
+      content={
+        <CoverPhotoFlip
+          coverUrl={coverUrl}
+          photoSquareUrl={photoSquareUrl}
+          flipped={flipped}
+          onFlippedChange={setFlipped}
+        />
+      }
+    >
+      <button
+        type="button"
+        className="linkish"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (canFlip) {
+            setFlipped((v) => !v);
+            return;
+          }
+          onNavigate?.();
+        }}
+      >
+        {children}
+      </button>
+    </HoverBubble>
+  );
+}
+
+type EditionAsset = {
+  id?: number;
+  label: string;
+  logo_url?: string | null;
+  photocard_pairs?: PhotocardPair[] | null;
+};
+
+/** Tabs to pick edition assets (logo / photocards) when title/artist are grouped.
+ * Returns null when nothing to show (caller should disable HoverBubble). */
+export function EditionAssetPreview({
+  editions,
+  mode,
+}: {
+  editions: EditionAsset[];
+  mode: "logo" | "photocards";
+}): ReactNode {
+  const usable = editions.filter((e) =>
+    mode === "logo" ? Boolean(e.logo_url) : Boolean(e.photocard_pairs?.length)
+  );
+  const [tab, setTab] = useState(0);
+  if (!usable.length) return null;
+  const active = usable[Math.min(tab, usable.length - 1)];
+  return (
+    <div className="collection-edition-assets" onClick={(e) => e.stopPropagation()}>
+      {usable.length > 1 ? (
+        <div className="collection-edition-assets__tabs" role="tablist">
+          {usable.map((e, i) => (
+            <button
+              key={e.id ?? `${e.label}-${i}`}
+              type="button"
+              role="tab"
+              aria-selected={i === tab}
+              className={i === tab ? "active" : undefined}
+              onClick={() => setTab(i)}
+            >
+              {e.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {mode === "logo" ? (
+        active?.logo_url ? (
+          <img src={active.logo_url} alt="" className="collection-hover__img" />
+        ) : null
+      ) : active?.photocard_pairs && active.photocard_pairs.length > 0 ? (
+        <PhotocardFlipPreview pairs={active.photocard_pairs} />
+      ) : null}
+    </div>
   );
 }
 
