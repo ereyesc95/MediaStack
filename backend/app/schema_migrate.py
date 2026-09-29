@@ -468,6 +468,137 @@ def migrate_schema(eng: Engine) -> None:
                 )
             )
 
+        if "tours" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE tours (
+                        "turID" INTEGER NOT NULL PRIMARY KEY,
+                        "turBandID" INTEGER NOT NULL,
+                        "turFolderPath" VARCHAR(512) NOT NULL,
+                        "turDateIso" VARCHAR(32),
+                        "turTitle" TEXT NOT NULL,
+                        "turIsSupport" INTEGER DEFAULT 0,
+                        "turMainArtistName" TEXT,
+                        "turOpenerLetter" VARCHAR(8),
+                        "turPosterUrl" TEXT,
+                        "turBannerUrl" TEXT,
+                        "turLogoUrl" TEXT,
+                        "turAlbumTitle" TEXT,
+                        "turAlbumCoverUrl" TEXT,
+                        "turSyncedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text('CREATE INDEX IF NOT EXISTS "ix_tours_band" ON tours ("turBandID")')
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tours_folder" ON tours ("turFolderPath")'
+                )
+            )
+
+        if "tour_shows" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE tour_shows (
+                        "tshID" INTEGER NOT NULL PRIMARY KEY,
+                        "tshTourID" INTEGER NOT NULL,
+                        "tshBandID" INTEGER NOT NULL,
+                        "tshFolderPath" VARCHAR(512) NOT NULL,
+                        "tshJoinKey" VARCHAR(512) NOT NULL,
+                        "tshDateIso" VARCHAR(32),
+                        "tshCountry" TEXT,
+                        "tshCity" TEXT,
+                        "tshVenue" TEXT,
+                        "tshPosterUrl" TEXT,
+                        "tshBannerUrl" TEXT,
+                        "tshPromoter" TEXT,
+                        "tshTicketer" TEXT,
+                        "tshSetlistfmId" VARCHAR(64),
+                        "tshHasPromo" INTEGER DEFAULT 0,
+                        "tshHasGallery" INTEGER DEFAULT 0,
+                        "tshHasSouvenirs" INTEGER DEFAULT 0,
+                        "tshHasRecording" INTEGER DEFAULT 0,
+                        "tshSyncedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_shows_tour" ON tour_shows ("tshTourID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_shows_band" ON tour_shows ("tshBandID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_shows_folder" ON tour_shows ("tshFolderPath")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_shows_join" ON tour_shows ("tshJoinKey")'
+                )
+            )
+
+        if "tour_show_bills" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE tour_show_bills (
+                        "tsbID" INTEGER NOT NULL PRIMARY KEY,
+                        "tsbShowID" INTEGER NOT NULL,
+                        "tsbBandID" INTEGER,
+                        "tsbArtistName" TEXT NOT NULL,
+                        "tsbRole" VARCHAR(16) NOT NULL DEFAULT 'main',
+                        "tsbOpenerOrder" VARCHAR(8),
+                        "tsbSyncedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_show_bills_show" '
+                    'ON tour_show_bills ("tsbShowID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_show_bills_band" '
+                    'ON tour_show_bills ("tsbBandID")'
+                )
+            )
+
+        if "tour_show_setlists" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE tour_show_setlists (
+                        "tssID" INTEGER NOT NULL PRIMARY KEY,
+                        "tssShowID" INTEGER NOT NULL UNIQUE,
+                        "tssSetlistfmId" VARCHAR(64),
+                        "tssTracksJson" TEXT,
+                        "tssFetchedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_tour_show_setlists_show" '
+                    'ON tour_show_setlists ("tssShowID")'
+                )
+            )
+
         if "subgenres" in tables:
             # Hentai belongs under Anime (not Adult); still NSFW via adult_content.py.
             conn.execute(

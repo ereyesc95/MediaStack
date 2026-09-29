@@ -565,6 +565,129 @@ export async function fetchBandSeriesIndex(
   return request(`${API}/music/bands/${bandId}/media/series`);
 }
 
+export async function fetchMusicEvents(
+  params: {
+    act?: "all" | "main" | "openers";
+    artist?: string;
+    genre?: string;
+    decade?: number | null;
+    country?: string;
+    continent?: string;
+    promoter?: string;
+    ticketer?: string;
+  } = {}
+): Promise<{
+  events: import("./types").EventCard[];
+  act: string;
+  facets: {
+    artists: string[];
+    genres: string[];
+    decades: number[];
+    countries: string[];
+    continents: string[];
+    promoters: string[];
+    ticketers: string[];
+  };
+  total: number;
+  total_unfiltered: number;
+}> {
+  const q = new URLSearchParams();
+  if (params.act) q.set("act", params.act);
+  if (params.artist) q.set("artist", params.artist);
+  if (params.genre) q.set("genre", params.genre);
+  if (params.decade != null) q.set("decade", String(params.decade));
+  if (params.country) q.set("country", params.country);
+  if (params.continent) q.set("continent", params.continent);
+  if (params.promoter) q.set("promoter", params.promoter);
+  if (params.ticketer) q.set("ticketer", params.ticketer);
+  const qs = q.toString();
+  return request(`${API}/music/events${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchBandTours(
+  bandId: number,
+  sync = true
+): Promise<{ tours: import("./types").TourCard[]; band_id: number }> {
+  const q = sync ? "" : "?sync=false";
+  return request(`${API}/music/bands/${bandId}/media/tours${q}`);
+}
+
+export async function fetchBandTourDetail(
+  bandId: number,
+  tourKey: string,
+  sync = false
+): Promise<import("./types").TourDetail> {
+  const q = sync ? "?sync=true" : "";
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}${q}`
+  );
+}
+
+export async function fetchBandTourShowDetail(
+  bandId: number,
+  tourKey: string,
+  showKey: string,
+  sync = false
+): Promise<import("./types").TourShowDetail> {
+  const q = sync ? "?sync=true" : "";
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}${q}`
+  );
+}
+
+export async function syncBandTours(
+  bandId: number
+): Promise<{ ok: boolean; tours: number; shows: number; error?: string }> {
+  return request(`${API}/music/bands/${bandId}/media/tours/sync`, {
+    method: "POST",
+  });
+}
+
+export async function syncTourShow(
+  bandId: number,
+  tourKey: string,
+  showKey: string
+): Promise<{ ok: boolean; sync?: unknown; show?: import("./types").TourShowCard | null }> {
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}/sync`,
+    { method: "POST" }
+  );
+}
+
+export async function syncTourShowArtists(
+  bandId: number,
+  tourKey: string,
+  showKey: string
+): Promise<{ ok: boolean; bill?: import("./types").TourShowBill[]; error?: string }> {
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}/sync-artists`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchTourShowSetlist(
+  bandId: number,
+  tourKey: string,
+  showKey: string,
+  force = false
+): Promise<import("./types").TourShowSetlistPayload> {
+  const q = force ? "?force=true" : "";
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}/setlist${q}`
+  );
+}
+
+export async function refreshTourShowSetlist(
+  bandId: number,
+  tourKey: string,
+  showKey: string
+): Promise<import("./types").TourShowSetlistPayload> {
+  return request(
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}/setlist/refresh`,
+    { method: "POST" }
+  );
+}
+
 export async function fetchQuizDiscography(bandId: number) {
   return request<{
     releases: {

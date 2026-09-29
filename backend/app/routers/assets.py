@@ -14,7 +14,18 @@ ASSETS_DIR = PROJECT_ROOT / "assets"
 LEGACY_SYSTEM_DIR = ASSETS_DIR / "system"
 MEDIA_SLUGS = ("music", "series", "movies", "books", "games")
 PANE_SLUGS = ("pane-on-repeat", "pane-icons", "pane-vibes", "pane-global")
-NESTED_PREFIXES = ("continent", "genre", "subgenre", "decade", "labels", "links", "people", "universes", "universe")
+NESTED_PREFIXES = (
+    "continent",
+    "genre",
+    "subgenre",
+    "decade",
+    "labels",
+    "companies",
+    "links",
+    "people",
+    "universes",
+    "universe",
+)
 DATA_FILE_PREFIXES = ("people", "links")
 
 
@@ -105,6 +116,8 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
             return None
         if folder == "labels":
             return _first_existing(root / "labels", stem)
+        if folder == "companies":
+            return _first_existing(root / "companies", stem)
         if folder == "links":
             return _first_existing(root / "links", stem)
         if folder == "people":

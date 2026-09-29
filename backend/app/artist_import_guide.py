@@ -24,6 +24,29 @@ ARTIST FOLDERS
 Release categories at the artist root:
 Albums, Extended Plays, Compilations, Live Albums, Soundtracks, Singles
 
+TOURS (peer of Video / Library — folder-gated Tours tab)
+--------------------------------------------------------
+Music/{Letter}/{Artist}/Tours/
+
+Tour folder (tour start date):
+  YYYY.MM.DD. Tour Title/
+    [Artwork]/                 Poster, Banner, Logo, Album - {title}
+    YYYY.MM.DD. Country, City. Venue/
+      Promo/                     Poster, Banner, Video - {Promoter}.mp4,
+                                 Website - {Ticketer}.html
+      Gallery/                   Night photos/videos; Video.mp4 = full recording
+      Souvenirs/                 Ticket - Front/Back, Setlist - *, picks, shirts
+
+Support / opener tour (optional letter when ≥2 openers):
+  YYYY.MM.DD.A. Tour Title [By Main Artist]/
+
+Show folder name is the cross-artist join key (same string under main + openers).
+Front/Back pairs: ``Name - Front.ext`` / ``Name - Back.ext``.
+Venue / promoter / ticketer logos live in project assets/companies/ (not labels/).
+
+A sample tour tree is created when you add an artist — rename dates/titles to match
+shows you attended. Only tours that contain at least one show folder appear in the UI.
+
 ARTIST [ARTWORK] FILENAMES
 --------------------------
 Branding:
@@ -240,16 +263,21 @@ def ensure_artist_user_guide_template(db: Session) -> AppSetting:
     if row:
         value = row.aps_value or ""
         # Force-upgrade built-in templates that still describe Photos / Wallpaper
-        # or that predate format-version docs.
-        if (
+        # or that predate format-version docs / Tours docs.
+        needs_upgrade = (
             (
-                "Photos/" in value
-                or "Wallpaper - " in value
-                or "Animation - Album" in value
-                or "[Artwork]/Photos" in value
+                (
+                    "Photos/" in value
+                    or "Wallpaper - " in value
+                    or "Animation - Album" in value
+                    or "[Artwork]/Photos" in value
+                )
+                and "Photo - Banner" not in value
             )
-            and "Photo - Banner" not in value
-        ) or "FORMAT VERSIONS" not in value:
+            or "FORMAT VERSIONS" not in value
+            or "TOURS (peer of Video / Library" not in value
+        )
+        if needs_upgrade:
             row.aps_value = DEFAULT_ARTIST_USER_GUIDE
             db.commit()
         elif "Logos/      Artist-era branding." in value and "Signature -" not in value:

@@ -728,6 +728,7 @@ def media_visibility_flags(
         "has_video": False,  # Movies franchise content (legacy key)
         "has_series": False,
         "has_library": False,  # Books franchise content (legacy key)
+        "has_tours": False,
         "has_gallery": False,
         "has_exclusive_gallery": False,
         "has_playlists": False,
@@ -750,6 +751,10 @@ def media_visibility_flags(
     library = _resolve_child_dir(artist_dir, "Library")
     flags["has_video"] = _dir_has_entries(video)
     flags["has_library"] = _dir_has_entries(library)
+
+    from app.tours_index import artist_has_tours
+
+    flags["has_tours"] = artist_has_tours(artist_dir)
 
     # New layout: Movies / Series / Books franchise folders for this artist name
     try:

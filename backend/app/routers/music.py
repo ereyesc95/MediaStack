@@ -1016,6 +1016,196 @@ def band_library_index(
     return _enrich_media_tab_banners(db, band_id, data)
 
 
+@router.get("/bands/{band_id}/media/tours")
+def band_tours_index(
+    band_id: int,
+    db: Session = Depends(get_db),
+    sync: bool = Query(True),
+):
+    from app.tours_index import list_tour_cards
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    tours = list_tour_cards(db, row, sync=sync)
+    return {"tours": tours, "band_id": band_id}
+
+
+@router.get("/events")
+def music_events(
+    db: Session = Depends(get_db),
+    act: str = Query("all", pattern="^(all|main|openers)$"),
+    artist: str | None = Query(None),
+    genre: str | None = Query(None),
+    decade: int | None = Query(None),
+    country: str | None = Query(None),
+    continent: str | None = Query(None),
+    promoter: str | None = Query(None),
+    ticketer: str | None = Query(None),
+):
+    """Global EVENTS tab — attended shows across all artists."""
+    from app.events_index import list_event_cards
+
+    return list_event_cards(
+        db,
+        act=act,
+        artist=artist,
+        genre=genre,
+        decade=decade,
+        country=country,
+        continent=continent,
+        promoter=promoter,
+        ticketer=ticketer,
+    )
+
+
+@router.post("/bands/{band_id}/media/tours/sync")
+def band_tours_sync(
+    band_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.tours_index import sync_band_tours
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return sync_band_tours(db, row)
+
+
+@router.get("/bands/{band_id}/media/tours/{tour_key}")
+def band_tour_detail(
+    band_id: int,
+    tour_key: str,
+    db: Session = Depends(get_db),
+    sync: bool = Query(False),
+):
+    from app.tours_index import get_tour_detail
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_tour_detail(db, row, tour_key, sync=sync)
+    if not data:
+        raise HTTPException(404, "Tour not found")
+    return data
+
+
+@router.get("/bands/{band_id}/media/tours/{tour_key}/shows/{show_key}")
+def band_tour_show_detail(
+    band_id: int,
+    tour_key: str,
+    show_key: str,
+    db: Session = Depends(get_db),
+    sync: bool = Query(False),
+):
+    from app.tours_index import get_show_detail
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    data = get_show_detail(db, row, tour_key, show_key, sync=sync)
+    if not data:
+        raise HTTPException(404, "Show not found")
+    return data
+
+
+@router.post("/bands/{band_id}/media/tours/{tour_key}/shows/{show_key}/sync")
+def band_tour_show_sync(
+    band_id: int,
+    tour_key: str,
+    show_key: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.tours_index import sync_show_folder
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return sync_show_folder(db, row, tour_key, show_key)
+
+
+@router.post("/bands/{band_id}/media/tours/{tour_key}/shows/{show_key}/sync-artists")
+def band_tour_show_sync_artists(
+    band_id: int,
+    tour_key: str,
+    show_key: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.tours_index import sync_show_artists
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    return sync_show_artists(db, row, tour_key, show_key)
+
+
+@router.get("/bands/{band_id}/media/tours/{tour_key}/shows/{show_key}/setlist")
+def band_tour_show_setlist(
+    band_id: int,
+    tour_key: str,
+    show_key: str,
+    db: Session = Depends(get_db),
+    force: bool = Query(False),
+):
+    from app.tour_setlists import fetch_and_store_show_setlist
+    from app.tours_index import get_tour_detail
+    from app.models import TourShow
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    tour = get_tour_detail(db, row, tour_key, sync=False)
+    if not tour:
+        raise HTTPException(404, "Tour not found")
+    show_card = next(
+        (s for s in tour["shows"] if s["slug"] == show_key or str(s["id"]) == show_key),
+        None,
+    )
+    if not show_card:
+        raise HTTPException(404, "Show not found")
+    show = db.get(TourShow, show_card["id"])
+    if not show:
+        raise HTTPException(404, "Show not found")
+    api_key = crud.get_setlistfm_key(db) or ""
+    return fetch_and_store_show_setlist(db, row, show, api_key=api_key, force=force)
+
+
+@router.post("/bands/{band_id}/media/tours/{tour_key}/shows/{show_key}/setlist/refresh")
+def band_tour_show_setlist_refresh(
+    band_id: int,
+    tour_key: str,
+    show_key: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.tour_setlists import fetch_and_store_show_setlist
+    from app.tours_index import get_tour_detail
+    from app.models import TourShow
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    tour = get_tour_detail(db, row, tour_key, sync=False)
+    if not tour:
+        raise HTTPException(404, "Tour not found")
+    show_card = next(
+        (s for s in tour["shows"] if s["slug"] == show_key or str(s["id"]) == show_key),
+        None,
+    )
+    if not show_card:
+        raise HTTPException(404, "Show not found")
+    show = db.get(TourShow, show_card["id"])
+    if not show:
+        raise HTTPException(404, "Show not found")
+    api_key = crud.get_setlistfm_key(db) or ""
+    if not api_key:
+        raise HTTPException(404, "Setlist.fm API key not configured")
+    return fetch_and_store_show_setlist(db, row, show, api_key=api_key, force=True)
+
+
 @router.get("/bands/{band_id}/media/series")
 def band_series_index(
     band_id: int,

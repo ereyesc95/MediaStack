@@ -20,10 +20,17 @@ export type ArtistSection =
   | "video"
   | "series"
   | "library"
+  | "tours"
   | "gallery"
   | "quiz";
 export type { ArtistOverviewTab };
 export type ReleaseTab = "overview" | "tracklist" | "gallery";
+export type TourShowTab =
+  | "overview"
+  | "promo"
+  | "setlist"
+  | "gallery"
+  | "souvenirs";
 
 export type ArtistRoute = {
   bandId?: number;
@@ -37,6 +44,9 @@ export type ArtistRoute = {
   releaseTab?: ReleaseTab;
   mediaItemId?: string;
   mediaItemTitle?: string;
+  tourSlug?: string;
+  showSlug?: string;
+  showTab?: TourShowTab;
   playlistSlug?: string;
 };
 
@@ -46,8 +56,16 @@ const SECTIONS: ArtistSection[] = [
   "video",
   "series",
   "library",
+  "tours",
   "gallery",
   "quiz",
+];
+const TOUR_SHOW_TABS: TourShowTab[] = [
+  "overview",
+  "promo",
+  "setlist",
+  "gallery",
+  "souvenirs",
 ];
 const OVERVIEW_TABS: ArtistOverviewTab[] = [
   "about",
@@ -226,6 +244,9 @@ function parseArtistTail(parts: string[]): Omit<
   let releaseId: string | undefined;
   let releaseTab: ReleaseTab = "overview";
   let mediaItemId: string | undefined;
+  let tourSlug: string | undefined;
+  let showSlug: string | undefined;
+  let showTab: TourShowTab | undefined;
   let playlistSlug: string | undefined;
 
   if (parts[0] === "audio" && parts[1] === "playlist" && parts[2]) {
@@ -257,6 +278,17 @@ function parseArtistTail(parts: string[]): Omit<
   } else if (parts[0] === "library" && parts[1]) {
     section = "library";
     mediaItemId = dec(parts[1]);
+  } else if (parts[0] === "tours") {
+    section = "tours";
+    if (parts[1]) {
+      tourSlug = dec(parts[1]);
+      if (parts[2]) {
+        showSlug = dec(parts[2]);
+        showTab = TOUR_SHOW_TABS.includes(parts[3] as TourShowTab)
+          ? (parts[3] as TourShowTab)
+          : "overview";
+      }
+    }
   } else if (parts[0] && SECTIONS.includes(parts[0] as ArtistSection)) {
     section = parts[0] as ArtistSection;
   }
@@ -267,6 +299,9 @@ function parseArtistTail(parts: string[]): Omit<
     releaseId,
     releaseTab,
     mediaItemId,
+    tourSlug,
+    showSlug,
+    showTab,
     playlistSlug,
   };
 }
@@ -330,6 +365,14 @@ export function artistPath(route: ArtistRoute): string {
     route.mediaItemId
   ) {
     path += `/${section}/${enc(route.mediaItemId)}`;
+  } else if (section === "tours" && route.tourSlug) {
+    path += `/tours/${enc(route.tourSlug)}`;
+    if (route.showSlug) {
+      path += `/${enc(route.showSlug)}`;
+      if (route.showTab && route.showTab !== "overview") {
+        path += `/${route.showTab}`;
+      }
+    }
   } else {
     path += `/${section}`;
   }

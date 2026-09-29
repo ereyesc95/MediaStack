@@ -67,6 +67,11 @@ import ArtistBrowse from "./ArtistBrowse";
 import CollectionBrowse, {
   type CollectionBrowseApi,
 } from "./CollectionBrowse";
+import EventsBrowse, {
+  EMPTY_EVENTS_FILTERS,
+  openEventShow,
+  type EventsFilters,
+} from "./EventsBrowse";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -87,6 +92,9 @@ type Props = {
   releaseId?: string;
   releaseTab?: ReleaseTab;
   mediaItemId?: string;
+  tourSlug?: string;
+  showSlug?: string;
+  showTab?: import("../../types").TourShowTab;
   playlistSlug?: string;
   playlistId?: number;
   genreFilterId?: number;
@@ -121,6 +129,11 @@ type Props = {
     itemId?: string,
     section?: ArtistSection
   ) => void;
+  onTourNavigate?: (next: {
+    tourSlug?: string;
+    showSlug?: string;
+    showTab?: import("../../types").TourShowTab;
+  }) => void;
   onPlaylist: (id?: number) => void;
   onGenreFilter: (id?: number) => void;
   onCountryFilter: (id?: number, name?: string) => void;
@@ -157,6 +170,9 @@ export default function MusicModule({
   releaseId,
   releaseTab = "overview",
   mediaItemId,
+  tourSlug,
+  showSlug,
+  showTab,
   playlistSlug,
   playlistId,
   genreFilterId,
@@ -181,6 +197,7 @@ export default function MusicModule({
   onReleaseNavigate,
   onPlaylistNavigate,
   onMediaItemNavigate,
+  onTourNavigate,
   onPlaylist,
   onGenreFilter,
   onCountryFilter,
@@ -196,6 +213,9 @@ export default function MusicModule({
   const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const [collectionClearMode, setCollectionClearMode] = useState(false);
+  const [eventsFilters, setEventsFilters] = useState<EventsFilters>(
+    EMPTY_EVENTS_FILTERS
+  );
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
@@ -492,7 +512,11 @@ export default function MusicModule({
     !bandId &&
     homeAudio.src &&
     !homePlayerBarHidden &&
-    (tab === "home" || tab === "artists" || tab === "collection" || tab === "playlists");
+    (tab === "home" ||
+      tab === "artists" ||
+      tab === "collection" ||
+      tab === "events" ||
+      tab === "playlists");
   const showHomePlayerRestore =
     !bandId && homeAudio.src && homePlayerBarHidden;
 
@@ -1162,6 +1186,12 @@ export default function MusicModule({
               onClick: () => onTab("collection"),
             },
             {
+              id: "events",
+              label: "EVENTS",
+              active: tab === "events",
+              onClick: () => onTab("events"),
+            },
+            {
               id: "playlists",
               label: "PLAYLISTS",
               active: tab === "playlists",
@@ -1313,7 +1343,7 @@ export default function MusicModule({
           </div>
         </div>
       )}
-      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "playlists") && (
+      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "events" || tab === "playlists") && (
         <audio
           ref={homeAudio.audioRef}
           src={homeAudio.src ?? undefined}
@@ -1557,6 +1587,9 @@ export default function MusicModule({
           cardOrientation={cardOrientation}
           isAdmin={isAdmin}
           userId={userId}
+          tourSlug={tourSlug}
+          showSlug={showSlug}
+          showTab={showTab}
           onOpenReleaseNavigate={(bid, rid) => {
             void prefetchReleaseOverview(bid, rid);
             onReleaseNavigate?.(
@@ -1580,6 +1613,43 @@ export default function MusicModule({
           }
           onOpenMoviesLeaf={onOpenMoviesLeaf}
           onOpenSeriesFolder={onOpenSeriesFolder}
+          onOpenTour={(tour) => {
+            pushArtistRoute({
+              bandId,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+              tourSlug: tour.slug,
+              showTab: "overview",
+            });
+            onTourNavigate?.({
+              tourSlug: tour.slug,
+              showSlug: undefined,
+              showTab: "overview",
+            });
+          }}
+          onTourNavigate={(next) => {
+            pushArtistRoute({
+              bandId,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+              tourSlug: next.tourSlug,
+              showSlug: next.showSlug,
+              showTab: next.showTab ?? "overview",
+            });
+            onTourNavigate?.(next);
+          }}
+          onCloseTour={() => {
+            pushArtistRoute({
+              bandId,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+            });
+            onTourNavigate?.({
+              tourSlug: undefined,
+              showSlug: undefined,
+              showTab: undefined,
+            });
+          }}
           onBack={() => {
             clearMediaTheme(userId);
             const ref = getArtistEntryReferrer();
@@ -1812,6 +1882,20 @@ export default function MusicModule({
           onOpenRelease={(bandId, releaseId, artist, title) =>
             openCollectionRelease(bandId, releaseId, artist, title)
           }
+        />
+      ) : tab === "events" ? (
+        <EventsBrowse
+          filters={eventsFilters}
+          onFiltersChange={setEventsFilters}
+          onOpenShow={(ev) => {
+            openEventShow(ev);
+            onBand(ev.band_id, "tours");
+            onTourNavigate?.({
+              tourSlug: ev.tour_slug,
+              showSlug: ev.slug,
+              showTab: "overview",
+            });
+          }}
         />
       ) : (
         <>

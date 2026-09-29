@@ -369,6 +369,7 @@ export default function SystemPlaylistPage({
   const [setlistTourName, setSetlistTourName] = useState<string | null>(null);
   const [setlistTrackCount, setSetlistTrackCount] = useState<number | null>(null);
   const [setlistPlaybackKey, setSetlistPlaybackKey] = useState<string | null>(null);
+  const [liveShowsView, setLiveShowsView] = useState<"grouped" | "flat">("grouped");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverRevision, setCoverRevision] = useState(0);
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
@@ -603,7 +604,7 @@ export default function SystemPlaylistPage({
   }, [isSnapshotPlaylist, snapshotFilterState, tracks]);
 
   const displayTracks = useMemo(() => {
-    if (slug === "live-story") return tracks;
+    if (slug === "live-story" || slug === "live-shows") return tracks;
     const base =
       slug === "music-videos" ? dedupeMusicVideoTracks(filteredTracks) : filteredTracks;
     const sorted = applyTrackSort(base, trackSort.key, trackSort.desc, originalTrackNumbers);
@@ -634,6 +635,7 @@ export default function SystemPlaylistPage({
   useEffect(() => {
     setTrackSort({ key: "original", desc: false });
     setSnapshotFilterState({ artists: [], genres: [] });
+    setLiveShowsView("grouped");
   }, [slug, userPlaylistId]);
 
   useEffect(() => {
@@ -2161,6 +2163,32 @@ export default function SystemPlaylistPage({
               />
             ) : (
               <>
+                {!isUserPlaylist && slug === "live-shows" ? (
+                  <div className="live-shows-view-toggle" role="group" aria-label="Live shows view">
+                    <button
+                      type="button"
+                      className={
+                        liveShowsView === "grouped"
+                          ? "live-shows-view-toggle__btn is-active"
+                          : "live-shows-view-toggle__btn"
+                      }
+                      onClick={() => setLiveShowsView("grouped")}
+                    >
+                      By show
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        liveShowsView === "flat"
+                          ? "live-shows-view-toggle__btn is-active"
+                          : "live-shows-view-toggle__btn"
+                      }
+                      onClick={() => setLiveShowsView("flat")}
+                    >
+                      Flat
+                    </button>
+                  </div>
+                ) : null}
                 {isSnapshotPlaylist && !editPlaylist && (
                   <SnapshotPlaylistFilterBar
                     tracks={tracks}
@@ -2178,7 +2206,13 @@ export default function SystemPlaylistPage({
                 bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
                 artistName={artistName}
                 tracks={displayTracks}
-                sections={!isUserPlaylist && slug === "live-story" ? detail?.sections : undefined}
+                sections={
+                  !isUserPlaylist &&
+                  (slug === "live-story" ||
+                    (slug === "live-shows" && liveShowsView === "grouped"))
+                    ? detail?.sections
+                    : undefined
+                }
                 showSourceReleaseColumn={!isUserPlaylist && slug !== "music-videos"}
                 musicVideosMode={!isUserPlaylist && slug === "music-videos"}
                 onOpenRelease={onOpenRelease}

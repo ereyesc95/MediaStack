@@ -14,6 +14,7 @@ from app.services.musicbrainz import fetch_artist, fetch_artist_with_members
 
 PAR_OFFICIAL = 0
 PAR_ORIGINAL = 1
+PAR_TOURING = 2
 PAR_FORMER = 3
 
 MB_FETCH_DELAY = 1.1
@@ -56,8 +57,11 @@ def _participation_type_ids(
     *,
     has_end: bool,
     is_original: bool,
+    is_touring: bool = False,
 ) -> str:
     ids: list[int] = []
+    if is_touring:
+        ids.append(PAR_TOURING)
     if not has_end:
         ids.append(PAR_OFFICIAL)
     if is_original:
@@ -66,7 +70,8 @@ def _participation_type_ids(
         ids.append(PAR_FORMER)
     if not ids:
         ids.append(PAR_OFFICIAL)
-    return ";".join(str(i) for i in ids)
+    # Preserve order, drop dupes
+    return ";".join(str(i) for i in dict.fromkeys(ids))
 
 
 def _next_artist_id(db: Session) -> int:
@@ -187,7 +192,8 @@ async def import_band_lineup(
         start = (entry.get("begin") or "").strip() or None
         end = (entry.get("end") or "").strip() or None
         has_end = bool(end) or entry.get("ended") is True
-        attrs_lower = [a.lower() for a in entry.get("attributes") or []]
+        attrs_lower = [str(a).lower() for a in entry.get("attributes") or []]
+        is_touring = any("tour" in a for a in attrs_lower)
         is_original = "original" in attrs_lower
         if not is_original and founding and start and start[:4].isdigit():
             is_original = int(start[:4]) <= founding + 2
@@ -218,6 +224,7 @@ async def import_band_lineup(
         existing.arp_fk_participation_types = _participation_type_ids(
             has_end=has_end,
             is_original=is_original,
+            is_touring=is_touring,
         )
         existing.arp_manual = 0
         imported += 1

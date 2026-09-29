@@ -32,6 +32,11 @@ ARTIST_FOLDERS = (
     "Live Albums",
     "Soundtracks",
     "Singles",
+    # Tours sample tree — rename folders after your first attended show
+    "Tours/2000.01.01. Sample Tour/[Artwork]",
+    "Tours/2000.01.01. Sample Tour/2000.01.01. Country, City. Venue/Promo",
+    "Tours/2000.01.01. Sample Tour/2000.01.01. Country, City. Venue/Gallery",
+    "Tours/2000.01.01. Sample Tour/2000.01.01. Country, City. Venue/Souvenirs",
 )
 
 CATEGORY_ORDER = (

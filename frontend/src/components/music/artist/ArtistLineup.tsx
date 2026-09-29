@@ -3,7 +3,7 @@ import type { BandOverview, LineupMember } from "../../../types";
 import { useDeviceLayout } from "../../../usePhoneLayout";
 import ArtistMemberModal from "./ArtistMemberModal";
 
-export type LineupTab = "official" | "original" | "former";
+export type LineupTab = "official" | "original" | "former" | "touring";
 
 type Props = {
   bandId: number;
@@ -113,6 +113,7 @@ export default function ArtistLineup({
   const members = useMemo(() => {
     if (tab === "official") return lineup.current;
     if (tab === "original") return lineup.founding;
+    if (tab === "touring") return lineup.touring || [];
     return lineup.former;
   }, [lineup, tab]);
 

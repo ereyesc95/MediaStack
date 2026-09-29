@@ -50,8 +50,12 @@ function PlaylistCard({
   const cover = systemPlaylistCoverUrl(playlist.slug, playlist.cover_url);
   const trackLabel =
     playlist.slug === "setlists"
-      ? "Live shows"
-      : `${playlist.track_count ?? 0} tracks`;
+      ? "Live setlists"
+      : playlist.slug === "live-shows"
+        ? playlist.show_count
+          ? `${playlist.show_count} shows`
+          : "Live shows"
+        : `${playlist.track_count ?? 0} tracks`;
 
   const handleActivate = () => {
     if (tapReveal && !revealed) {

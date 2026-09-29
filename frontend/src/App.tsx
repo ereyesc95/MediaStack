@@ -674,6 +674,12 @@ export default function App() {
 
             mediaItemId={view.mediaItemId}
 
+            tourSlug={view.tourSlug}
+
+            showSlug={view.showSlug}
+
+            showTab={view.showTab}
+
             playlistSlug={view.playlistSlug}
 
             playlistId={view.playlistId}
@@ -731,6 +737,22 @@ export default function App() {
               openMusic({
                 artistSection: section,
                 artistOverviewTab: overviewTab,
+                releaseId: undefined,
+                releaseTab: undefined,
+                mediaItemId: undefined,
+                tourSlug: undefined,
+                showSlug: undefined,
+                showTab: undefined,
+                playlistSlug: undefined,
+              })
+            }
+
+            onTourNavigate={(next) =>
+              openMusic({
+                artistSection: "tours",
+                tourSlug: next.tourSlug,
+                showSlug: next.showSlug,
+                showTab: next.showTab,
                 releaseId: undefined,
                 releaseTab: undefined,
                 mediaItemId: undefined,

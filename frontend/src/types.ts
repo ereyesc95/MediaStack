@@ -248,7 +248,29 @@ export type CardOrientation =
 /** Cover / banner / text list for Audio / Video / Library release cards on artist pages. */
 export type ReleaseCardLayout = "cover" | "banner" | "list";
 
-export type MusicTab = "home" | "artists" | "collection" | "playlists";
+export type MusicTab = "home" | "artists" | "collection" | "events" | "playlists";
+
+export type EventCard = {
+  id: number;
+  slug: string;
+  date_iso: string | null;
+  country: string | null;
+  city: string | null;
+  venue: string | null;
+  poster_url: string | null;
+  banner_url: string | null;
+  band_id: number;
+  band_name: string | null;
+  tour_id: number;
+  tour_title: string;
+  tour_slug: string;
+  is_support: boolean;
+  main_artist_name: string | null;
+  promoter: string | null;
+  ticketer: string | null;
+  promoter_logo_url?: string | null;
+  ticketer_logo_url?: string | null;
+};
 
 export type CollectionLeaf = {
   id?: number;
@@ -367,9 +389,130 @@ export type ArtistSection =
   | "video"
   | "series"
   | "library"
+  | "tours"
   | "gallery"
   | "quiz";
 export type ArtistOverviewTab = "about" | "lineup" | "links" | "related" | "artists";
+export type TourShowTab =
+  | "overview"
+  | "promo"
+  | "setlist"
+  | "gallery"
+  | "souvenirs";
+
+export type TourCard = {
+  id: number;
+  slug: string;
+  title: string;
+  date_iso: string | null;
+  is_support: boolean;
+  main_artist_name: string | null;
+  opener_letter: string | null;
+  poster_url: string | null;
+  banner_url: string | null;
+  logo_url: string | null;
+  album_title: string | null;
+  album_cover_url: string | null;
+  show_count: number;
+  folder_path: string;
+};
+
+export type TourShowBill = {
+  artist_name: string;
+  role: string;
+  opener_order: string | null;
+  band_id: number | null;
+};
+
+export type TourShowCard = {
+  id: number;
+  slug: string;
+  date_iso: string | null;
+  country: string | null;
+  city: string | null;
+  venue: string | null;
+  join_key: string;
+  poster_url: string | null;
+  banner_url: string | null;
+  promoter: string | null;
+  ticketer: string | null;
+  promoter_logo_url?: string | null;
+  ticketer_logo_url?: string | null;
+  venue_logo_url?: string | null;
+  setlistfm_id: string | null;
+  has_promo: boolean;
+  has_gallery: boolean;
+  has_souvenirs: boolean;
+  has_recording: boolean;
+  folder_path: string;
+  bill?: TourShowBill[];
+};
+
+export type TourDetail = {
+  id: number;
+  slug: string;
+  title: string;
+  date_iso: string | null;
+  is_support: boolean;
+  main_artist_name: string | null;
+  opener_letter: string | null;
+  poster_url: string | null;
+  banner_url: string | null;
+  logo_url: string | null;
+  album_title: string | null;
+  album_cover_url: string | null;
+  folder_path: string;
+  shows: TourShowCard[];
+  prev_tour: { id: number; slug: string; title: string } | null;
+  next_tour: { id: number; slug: string; title: string } | null;
+};
+
+export type TourShowMediaItem = {
+  id: string;
+  label: string;
+  kind: "image" | "video" | "file";
+  url: string;
+  back_url: string | null;
+  has_back: boolean;
+};
+
+export type TourShowSetlistPayload = {
+  setlistfm_id?: string | null;
+  fetched_at?: string | null;
+  tracks?: unknown[];
+  groups?: unknown[];
+  meta?: Record<string, unknown> | null;
+  empty?: boolean;
+};
+
+export type TourShowOverview = {
+  tickets: TourShowMediaItem[];
+  setlist_files: TourShowMediaItem[];
+  recording_url: string | null;
+  lineup: LineupMember[];
+  album: {
+    title: string;
+    cover_url: string | null;
+    folder_path: string | null;
+    release_id: string | null;
+  } | null;
+};
+
+export type TourShowDetail = {
+  tour: Omit<TourDetail, "shows" | "folder_path" | "opener_letter"> & {
+    opener_letter?: string | null;
+    album_release_id?: string | null;
+  };
+  show: TourShowCard;
+  shows: TourShowCard[];
+  prev_show: TourShowCard | null;
+  next_show: TourShowCard | null;
+  promo: TourShowMediaItem[];
+  gallery: TourShowMediaItem[];
+  souvenirs: TourShowMediaItem[];
+  overview?: TourShowOverview;
+  setlist: TourShowSetlistPayload | null;
+};
 
 export type LinkCategory =
   | "social"
@@ -490,6 +633,7 @@ export type BandOverview = {
     current: LineupMember[];
     founding: LineupMember[];
     former: LineupMember[];
+    touring?: LineupMember[];
     lineup_imported_at: string | null;
     importing: boolean;
   };
@@ -570,6 +714,7 @@ export type LineupMember = {
   is_active?: boolean;
   is_founding?: boolean;
   is_former?: boolean;
+  is_touring?: boolean;
   is_official?: boolean;
 };
 
@@ -629,6 +774,8 @@ export type MediaFlags = {
   /** Series franchise folder content for this artist (Music ↔ Series). */
   has_series?: boolean;
   has_library: boolean;
+  /** Concert tours under Music/{Letter}/{Artist}/Tours/. */
+  has_tours?: boolean;
   has_gallery: boolean;
   /** Exclusive gallery folder exists (content gated behind mystacknsfw). */
   has_exclusive_gallery?: boolean;
@@ -1295,6 +1442,9 @@ export type View =
       releaseId?: string;
       releaseTab?: "overview" | "tracklist" | "gallery";
       mediaItemId?: string;
+      tourSlug?: string;
+      showSlug?: string;
+      showTab?: TourShowTab;
       playlistSlug?: string;
       playlistId?: number;
       genreFilterId?: number;

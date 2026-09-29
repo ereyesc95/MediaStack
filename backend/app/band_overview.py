@@ -217,11 +217,13 @@ def _participation_flags(
     if not is_founding and founding_year and start[:4].isdigit():
         is_founding = int(start[:4]) <= founding_year + 2
     is_former = bool(end) or 3 in type_ids
+    is_touring = 2 in type_ids
     is_official = is_active or 0 in type_ids or (not type_ids and is_active)
     return {
         "is_active": is_active,
         "is_founding": is_founding,
         "is_former": is_former,
+        "is_touring": is_touring,
         "is_official": is_official,
     }
 
@@ -297,12 +299,14 @@ def _build_lineup(db: Session, band: Band, media_root: Path | None) -> dict:
     official = [e for e in sorted_entries if e.get("is_official")]
     founding = [e for e in sorted_entries if e.get("is_founding")]
     former = [e for e in sorted_entries if e.get("is_former")]
+    touring = [e for e in sorted_entries if e.get("is_touring")]
 
     return {
         "all": sorted_entries,
         "current": official,
         "founding": founding,
         "former": former,
+        "touring": touring,
         "lineup_imported_at": band.bnd_lineup_imported_at,
         "importing": False,
     }
@@ -525,6 +529,7 @@ def build_band_overview(
         "has_video": False,
         "has_series": False,
         "has_library": False,
+        "has_tours": False,
         "has_gallery": False,
         "has_playlists": False,
         "audio_categories": [],

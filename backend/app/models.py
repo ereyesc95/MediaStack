@@ -712,3 +712,77 @@ class CollectionItem(Base):
     col_notes: Mapped[str | None] = mapped_column("colNotes", Text)
     col_created_at: Mapped[str | None] = mapped_column("colCreatedAt", Text)
     col_updated_at: Mapped[str | None] = mapped_column("colUpdatedAt", Text)
+
+
+class Tour(Base):
+    """Artist concert tour folder under Music/{Letter}/{Artist}/Tours/."""
+
+    __tablename__ = "tours"
+
+    tur_id: Mapped[int] = mapped_column("turID", Integer, primary_key=True)
+    tur_band_id: Mapped[int] = mapped_column("turBandID", Integer, index=True)
+    tur_folder_path: Mapped[str] = mapped_column("turFolderPath", String(512), index=True)
+    tur_date_iso: Mapped[str | None] = mapped_column("turDateIso", String(32))
+    tur_title: Mapped[str] = mapped_column("turTitle", Text)
+    tur_is_support: Mapped[int] = mapped_column("turIsSupport", Integer, default=0)
+    tur_main_artist_name: Mapped[str | None] = mapped_column("turMainArtistName", Text)
+    tur_opener_letter: Mapped[str | None] = mapped_column("turOpenerLetter", String(8))
+    tur_poster_url: Mapped[str | None] = mapped_column("turPosterUrl", Text)
+    tur_banner_url: Mapped[str | None] = mapped_column("turBannerUrl", Text)
+    tur_logo_url: Mapped[str | None] = mapped_column("turLogoUrl", Text)
+    tur_album_title: Mapped[str | None] = mapped_column("turAlbumTitle", Text)
+    tur_album_cover_url: Mapped[str | None] = mapped_column("turAlbumCoverUrl", Text)
+    tur_synced_at: Mapped[str | None] = mapped_column("turSyncedAt", Text)
+
+
+class TourShow(Base):
+    """One attended show folder under a tour."""
+
+    __tablename__ = "tour_shows"
+
+    tsh_id: Mapped[int] = mapped_column("tshID", Integer, primary_key=True)
+    tsh_tour_id: Mapped[int] = mapped_column("tshTourID", Integer, index=True)
+    tsh_band_id: Mapped[int] = mapped_column("tshBandID", Integer, index=True)
+    tsh_folder_path: Mapped[str] = mapped_column("tshFolderPath", String(512), index=True)
+    tsh_join_key: Mapped[str] = mapped_column("tshJoinKey", String(512), index=True)
+    tsh_date_iso: Mapped[str | None] = mapped_column("tshDateIso", String(32))
+    tsh_country: Mapped[str | None] = mapped_column("tshCountry", Text)
+    tsh_city: Mapped[str | None] = mapped_column("tshCity", Text)
+    tsh_venue: Mapped[str | None] = mapped_column("tshVenue", Text)
+    tsh_poster_url: Mapped[str | None] = mapped_column("tshPosterUrl", Text)
+    tsh_banner_url: Mapped[str | None] = mapped_column("tshBannerUrl", Text)
+    tsh_promoter: Mapped[str | None] = mapped_column("tshPromoter", Text)
+    tsh_ticketer: Mapped[str | None] = mapped_column("tshTicketer", Text)
+    tsh_setlistfm_id: Mapped[str | None] = mapped_column("tshSetlistfmId", String(64))
+    tsh_has_promo: Mapped[int] = mapped_column("tshHasPromo", Integer, default=0)
+    tsh_has_gallery: Mapped[int] = mapped_column("tshHasGallery", Integer, default=0)
+    tsh_has_souvenirs: Mapped[int] = mapped_column("tshHasSouvenirs", Integer, default=0)
+    tsh_has_recording: Mapped[int] = mapped_column("tshHasRecording", Integer, default=0)
+    tsh_synced_at: Mapped[str | None] = mapped_column("tshSyncedAt", Text)
+
+
+class TourShowBill(Base):
+    """Main act / support artists for a show (resolved via Sync artists)."""
+
+    __tablename__ = "tour_show_bills"
+
+    tsb_id: Mapped[int] = mapped_column("tsbID", Integer, primary_key=True)
+    tsb_show_id: Mapped[int] = mapped_column("tsbShowID", Integer, index=True)
+    tsb_band_id: Mapped[int | None] = mapped_column("tsbBandID", Integer, index=True)
+    tsb_artist_name: Mapped[str] = mapped_column("tsbArtistName", Text)
+    # main | support
+    tsb_role: Mapped[str] = mapped_column("tsbRole", String(16), default="main")
+    tsb_opener_order: Mapped[str | None] = mapped_column("tsbOpenerOrder", String(8))
+    tsb_synced_at: Mapped[str | None] = mapped_column("tsbSyncedAt", Text)
+
+
+class TourShowSetlist(Base):
+    """Cached setlist.fm tracklist for a show."""
+
+    __tablename__ = "tour_show_setlists"
+
+    tss_id: Mapped[int] = mapped_column("tssID", Integer, primary_key=True)
+    tss_show_id: Mapped[int] = mapped_column("tssShowID", Integer, index=True, unique=True)
+    tss_setlistfm_id: Mapped[str | None] = mapped_column("tssSetlistfmId", String(64))
+    tss_tracks_json: Mapped[str | None] = mapped_column("tssTracksJson", Text)
+    tss_fetched_at: Mapped[str | None] = mapped_column("tssFetchedAt", Text)

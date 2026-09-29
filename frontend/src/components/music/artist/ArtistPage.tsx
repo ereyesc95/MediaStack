@@ -96,7 +96,10 @@ import ArtistAboutEditModal from "./ArtistAboutEditModal";
 import ArtistLineup, { type LineupTab } from "./ArtistLineup";
 import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
+import ArtistTours from "./ArtistTours";
+import TourShowPage from "./TourShowPage";
 import OfficialUnofficialBar from "../../OfficialUnofficialBar";
+import type { TourCard, TourShowTab } from "../../../types";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import {
@@ -185,6 +188,7 @@ const SECTIONS: { id: ArtistSection; label: string }[] = [
   { id: "video", label: "MOVIES" },
   { id: "series", label: "SERIES" },
   { id: "library", label: "BOOKS" },
+  { id: "tours", label: "TOURS" },
   { id: "gallery", label: "GALLERY" },
   { id: "quiz", label: "QUIZ" },
 ];
@@ -199,6 +203,7 @@ const OVERVIEW_TABS: { id: ArtistOverviewTab; label: string }[] = [
 const LINEUP_TABS: { id: LineupTab; label: string }[] = [
   { id: "official", label: "OFFICIAL" },
   { id: "original", label: "ORIGINAL" },
+  { id: "touring", label: "TOURING" },
   { id: "former", label: "FORMER" },
 ];
 
@@ -224,6 +229,9 @@ type Props = {
   cardOrientation: CardOrientation;
   isAdmin: boolean;
   userId?: number;
+  tourSlug?: string;
+  showSlug?: string;
+  showTab?: TourShowTab;
   onBack: () => void;
   /** Top-left back label — HOME when opened from home panes, else CATALOG. */
   backLabel?: string;
@@ -252,6 +260,13 @@ type Props = {
   ) => void;
   /** Open a Series leaf from artist SERIES tab (folder under Series/…). */
   onOpenSeriesFolder?: (folderPath: string) => void;
+  onOpenTour?: (tour: TourCard) => void;
+  onTourNavigate?: (next: {
+    tourSlug: string;
+    showSlug?: string;
+    showTab?: TourShowTab;
+  }) => void;
+  onCloseTour?: () => void;
 };
 
 function pageBgUrl(
@@ -271,6 +286,9 @@ export default function ArtistPage({
   cardOrientation,
   isAdmin,
   userId,
+  tourSlug,
+  showSlug,
+  showTab,
   onBack,
   backLabel = "CATALOG",
   onNavigate,
@@ -289,6 +307,9 @@ export default function ArtistPage({
   onOpenMediaItem,
   onOpenMoviesLeaf,
   onOpenSeriesFolder,
+  onOpenTour,
+  onTourNavigate,
+  onCloseTour,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -420,6 +441,7 @@ export default function ArtistPage({
           if (s.id === "video") return m.has_video;
           if (s.id === "series") return Boolean(m.has_series);
           if (s.id === "library") return m.has_library;
+          if (s.id === "tours") return Boolean(m.has_tours);
           if (s.id === "gallery") {
             return (
               m.has_gallery ||
@@ -812,10 +834,13 @@ export default function ArtistPage({
         artistName: shell?.name ?? undefined,
         section,
         overviewTab,
+        tourSlug: section === "tours" ? tourSlug : undefined,
+        showSlug: section === "tours" ? showSlug : undefined,
+        showTab: section === "tours" ? showTab : undefined,
       },
       true
     );
-  }, [bandId, section, overviewTab, shell?.name]);
+  }, [bandId, section, overviewTab, shell?.name, tourSlug, showSlug, showTab]);
 
   const [quizSongsBeat, setQuizSongsBeat] = useState({
     active: false,
@@ -1491,7 +1516,9 @@ export default function ArtistPage({
                   ? data.lineup.current.length
                   : t.id === "original"
                     ? data.lineup.founding.length
-                    : data.lineup.former.length;
+                    : t.id === "touring"
+                      ? data.lineup.touring?.length ?? 0
+                      : data.lineup.former.length;
               return (
                 <button
                   key={t.id}
@@ -1911,6 +1938,37 @@ export default function ArtistPage({
         {data && section === "library" && !data.media?.has_library && !cachedLibrary && (
           <p className="muted artist-section-empty">No books found.</p>
         )}
+        {section === "tours" && tourSlug && onTourNavigate ? (
+          <TourShowPage
+            bandId={bandId}
+            tourSlug={tourSlug}
+            showSlug={showSlug}
+            showTab={showTab}
+            artistName={data?.name ?? shell?.name ?? undefined}
+            isAdmin={isAdmin}
+            onBack={() => onCloseTour?.()}
+            onNavigate={onTourNavigate}
+            onOpenArtist={onOpenArtist}
+            onOpenRelease={(releaseId) =>
+              onOpenReleaseNavigate?.(bandId, releaseId)
+            }
+          />
+        ) : null}
+        {section === "tours" && !tourSlug && data?.media?.has_tours ? (
+          <ArtistTours
+            bandId={bandId}
+            cardLayout={releaseCardLayout}
+            artistName={data?.name ?? shell?.name ?? undefined}
+            refreshKey={mediaRefreshKey}
+            onOpenTour={(tour) => onOpenTour?.(tour)}
+          />
+        ) : null}
+        {data &&
+          section === "tours" &&
+          !tourSlug &&
+          !data.media?.has_tours && (
+            <p className="muted artist-section-empty">No tours found.</p>
+          )}
         {section === "gallery" && galleryTabVisible(data?.media) && (
           <ArtistGallery state={galleryState} />
         )}

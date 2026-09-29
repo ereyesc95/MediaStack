@@ -10,7 +10,7 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 
 | Module   | Status |
 |----------|--------|
-| **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, **physical Collection** (add/edit owned editions, Excel import/export, artwork checklist), Video/Library/Series tabs |
+| **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, **physical Collection**, Video/Library/Series tabs, **Tours** (folder-gated shows, EVENTS, Live shows playlist) |
 | **Series** | Active — franchise/show pages, cast/staff, episodes, related media, NSFW gating, stable leaf IDs in URLs |
 | **Movies** | Active — works/films, cast, More Movies, NSFW per-film genres, stable leaf IDs in URLs |
 | **Books** | Active — works/volumes, types (Manga/Book/…), More Books, NSFW gating, stable leaf IDs in URLs |
@@ -28,7 +28,7 @@ Canonical paths for Movies, Series, Books, Games, and Music Video/Library catego
 
 | Module | Path pattern |
 |--------|--------------|
-| **Music** | `Music/{Letter}/{Artist}/Audio\|Video\|Library\|Gallery/` |
+| **Music** | `Music/{Letter}/{Artist}/Audio\|Video\|Library\|Gallery\|Tours/` |
 | **Movies** | `Movies/{Letter}/{Work}/{date}. {Film}/` |
 | **Series** | `Series/{Letter}/{Franchise}/[{date}. {Subseries}/]Seasons/…` |
 | **Books** | `Books/{Letter}/{Work}/{date}. {Volume or Edition}/` |
@@ -333,7 +333,7 @@ Place drop-in art under project `assets/` (served via `/api/assets/...`). Exampl
 | `assets/genre/` | Genre filter backgrounds | `rock.png`, `metal.png` |
 | `assets/decade/` | Decade filter backgrounds | `1990s.png`, `2000s.png` |
 | `assets/continent/` | Continent filter backgrounds | `europe.png`, `north-america.png` |
-| `assets/playlists/system/` | System playlist tiles | `top-tracks.png`, `live-story.png`, `most-played.png` |
+| `assets/playlists/system/` | System playlist tiles | `top-tracks.png`, `live-shows.png`, `live-story.png`, `most-played.png` |
 | `assets/playlists/users/` | User playlist covers | `{playlist_id}.jpg` / `.png` (uploads) |
 | `assets/default/` | Fallbacks | `disc.png`, `label.png`, `placeholder - portrait.png` |
 | `assets/subgenre/` | Optional subgenre tiles | `{slug}.png` (optional; empty folder is fine) |
@@ -627,9 +627,9 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 
 ## Music module features
 
-- **Manage Artists → Add artist** — searches MusicBrainz, estimates import time, then creates the artist letter/root tree and every official release-group folder (all singles, no cap). Albums, compilations, and live albums get numbered disc folders when MusicBrainz reports multiple media. Existing local artist folders are never modified; Various Artists receives only the empty category/artwork skeleton. Optional **User guide.txt** is generated from a database-backed template and can be deleted safely. The hamburger item is labeled **My artists**.
+- **Manage Artists → Add artist** — searches MusicBrainz, estimates import time, then creates the artist letter/root tree and every official release-group folder (all singles, no cap). Albums, compilations, and live albums get numbered disc folders when MusicBrainz reports multiple media. Existing local artist folders are never modified; Various Artists receives only the empty category/artwork skeleton. Scaffolds also include a sample **Tours/** tree and optional **User guide.txt** (database-backed template covering Tours layout; safe to delete). The hamburger item is labeled **My artists**.
 - **Home dashboard** — recent plays, shortcuts; **Adaptive** theme (image-sampled colors on artist/franchise/film pages) and cover-based sampling while a track plays (restores on pause/stop; menu theme choice is remembered)
-- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist)
+- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** / **Tours** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist). **Tours** — concert folders under `Tours/`, show pages (Overview / Promo / Setlist / Gallery / Souvenirs), setlist.fm match, opener `[By …]` tours; new artists get a sample Tours tree + User guide section. Home **EVENTS** browses all attended shows with facet filters. System playlist **Live shows** groups setlist tracks by show (flat toggle). Layout: [docs/media_library_layout.md](docs/media_library_layout.md#tours--peer-of-video--library).
 - **Catalog & release card layouts** — Catalog/Related cards: **Landscape / Portrait / Banner / Icons** (desktop: hover the layout control to open options; phone: tap). Artist Audio/Video/Library: **Cover** or **Banner** (era photo background; hover/tap shows cover + release logo / era icon+logo + full date). Banner era logos use a matching-era **Collapsed** artist logo when present (skipped on **mobile portrait**); release `[Artwork]/Logo - Collapsed` is shown larger on banner hover. External source artists (e.g. *By Various Artists*) replace the page artist’s era branding on the banner. On phones, **Cover** and **Banner** both use first-tap reveal / second-tap open.
 - **Artist links** — edit-link modal shows a square logo preview aligned to the right of the Auto-detect / Catalog / Upload options (preview height matches that column, including the catalog dropdown when open)
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery (**Artwork** / **Photos** / **Branding**), credits, lyrics, versions; left panel release date follows the playing track’s edition. Gallery **Photos** lists `[Artwork]` files named `Photo - …`. **Branding** lists logos, photocards, and `Code - Spotify` / `Code - QR`.

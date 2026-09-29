@@ -23,11 +23,12 @@ from app.playlist_tracks import (
     enrich_playlist_tracks,
 )
 
-PLAYLIST_INDEX_VERSION = 24
+PLAYLIST_INDEX_VERSION = 26
 
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",
     "setlists": "Setlists",
+    "live-shows": "Live shows",
     "live-story": "Live Story",
     **{slug: label for slug, label, _ in PLAYLIST_RULES},
     ORIGINALS_SLUG: "Originals",
@@ -204,6 +205,12 @@ def build_playlist_index(
     setlists = _build_setlists(db, band, media_root)
     if setlists:
         playlists.append(setlists)
+
+    from app.live_shows_playlists import build_live_shows_card
+
+    live_shows = build_live_shows_card(db, band)
+    if live_shows:
+        playlists.append(live_shows)
 
     from app.live_story_playlists import build_live_story_card
 
@@ -428,6 +435,14 @@ def get_playlist_detail(
 
     if slug == "setlists":
         detail = _build_setlists_detail(db, band, media_root)
+        if not detail:
+            return None
+        return _finalize_playlist_detail(db, band, media_root, slug, detail, user_id=user_id)
+
+    if slug == "live-shows":
+        from app.live_shows_playlists import build_live_shows_detail
+
+        detail = build_live_shows_detail(db, band, media_root)
         if not detail:
             return None
         return _finalize_playlist_detail(db, band, media_root, slug, detail, user_id=user_id)

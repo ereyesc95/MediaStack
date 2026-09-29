@@ -499,6 +499,9 @@ export async function resolvePathToView(
         releaseId: artistRoute.releaseId,
         releaseTab: artistRoute.releaseTab,
         mediaItemId: artistRoute.mediaItemId,
+        tourSlug: artistRoute.tourSlug,
+        showSlug: artistRoute.showSlug,
+        showTab: artistRoute.showTab,
         playlistSlug: artistRoute.playlistSlug,
       },
       canonicalPath: artistPath(artistRoute),
@@ -664,6 +667,9 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
       releaseId,
       releaseTab: artistParsed.releaseTab,
       mediaItemId: artistParsed.mediaItemId,
+      tourSlug: artistParsed.tourSlug,
+      showSlug: artistParsed.showSlug,
+      showTab: artistParsed.showTab,
       playlistSlug: artistParsed.playlistSlug,
     };
   }
