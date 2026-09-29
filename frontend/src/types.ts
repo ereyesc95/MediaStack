@@ -485,10 +485,19 @@ export type TourShowSetlistPayload = {
   empty?: boolean;
 };
 
+export type TourShowRecordingLink = {
+  label: string;
+  url: string;
+  kind: "full" | "recap" | string;
+};
+
 export type TourShowOverview = {
   tickets: TourShowMediaItem[];
   setlist_files: TourShowMediaItem[];
+  playlist_code?: TourShowMediaItem | null;
+  qr_code?: TourShowMediaItem | null;
   recording_url: string | null;
+  recordings?: TourShowRecordingLink[];
   lineup: LineupMember[];
   album: {
     title: string;

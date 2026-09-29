@@ -32,15 +32,19 @@ Tour folder (tour start date):
   YYYY.MM.DD. Tour Title/
     [Artwork]/                 Poster, Banner, Logo, Album - {title}
     YYYY.MM.DD. Country, City. Venue/
-      Promo/                     Poster, Banner, Video - {Promoter}.mp4,
-                                 Website - {Ticketer}.html
-      Gallery/                   Night photos/videos; Video.mp4 = full recording
-      Souvenirs/                 Ticket - Front/Back, Setlist - *, picks, shirts
+      Promo/                     Poster, Banner, Trailer - {Promoter}.mp4,
+                                 Teaser - *.mp4, Website - {Ticketer}.html
+      Gallery/                   Night photos (001.jpg…); Video.mp4 = full recording;
+                                 Recap.mp4 / Recap - *.mp4; QR.* (overview codes)
+      Souvenirs/                 Ticket - Front/Back or Ticket - Digital,
+                                 Playlist.* (Spotify code), Setlist - *, picks, shirts
 
 Support / opener tour (optional letter when ≥2 openers):
   YYYY.MM.DD.A. Tour Title [By Main Artist]/
 
 Show folder name is the cross-artist join key (same string under main + openers).
+Opener shows fall back to the main act's matching Promo / tour [Artwork] for
+missing posters, banners, Trailer (promoter), and Website (ticketer).
 Front/Back pairs: ``Name - Front.ext`` / ``Name - Back.ext``.
 Venue / promoter / ticketer logos live in project assets/companies/ (not labels/).
 
@@ -276,6 +280,10 @@ def ensure_artist_user_guide_template(db: Session) -> AppSetting:
             )
             or "FORMAT VERSIONS" not in value
             or "TOURS (peer of Video / Library" not in value
+            or (
+                "Video - {Promoter}" in value
+                and "Trailer - {Promoter}" not in value
+            )
         )
         if needs_upgrade:
             row.aps_value = DEFAULT_ARTIST_USER_GUIDE

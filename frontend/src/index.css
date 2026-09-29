@@ -25808,13 +25808,36 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__overview-cols {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
 }
+.tour-show-page__ticket-col {
+  display: flex; flex-direction: column; gap: 0.65rem;
+}
 .tour-show-page__flip-card {
   position: relative; appearance: none; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   background: transparent; color: var(--text); padding: 0; border-radius: 0.35rem;
   overflow: hidden; aspect-ratio: 3/4; width: 100%; max-width: 180px; cursor: pointer;
 }
+.tour-show-page__flip-card--landscape {
+  aspect-ratio: 16 / 10; max-width: 100%;
+}
 .tour-show-page__flip-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tour-show-page__setlist-actions { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; }
+.tour-show-page__codes {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; max-width: 100%;
+}
+.tour-show-page__code-thumb {
+  appearance: none; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  background: transparent; color: var(--text); padding: 0; border-radius: 0.35rem;
+  overflow: hidden; aspect-ratio: 1; cursor: pointer; position: relative;
+}
+.tour-show-page__code-thumb img {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.tour-show-page__code-thumb-label {
+  position: absolute; left: 0.25rem; bottom: 0.25rem;
+  font-size: 0.6rem; padding: 0.1rem 0.3rem; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55); color: #fff;
+}
+.tour-show-page__setlist-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
 .tour-show-page__setlist-tracks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .tour-show-page__setlist-tracks li { display: grid; grid-template-columns: 2rem 1fr; gap: 0.5rem; align-items: baseline; }
 .tour-show-page__setlist-tracks li.is-missing { opacity: 0.55; }

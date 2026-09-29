@@ -110,13 +110,25 @@ function LineupCircles({ members }: { members: LineupMember[] }) {
   );
 }
 
-function FlippableCard({ item, label }: { item: TourShowMediaItem; label: string }) {
+function FlippableCard({
+  item,
+  label,
+  landscape = false,
+}: {
+  item: TourShowMediaItem;
+  label: string;
+  landscape?: boolean;
+}) {
   const [back, setBack] = useState(false);
   const src = back && item.back_url ? item.back_url : item.url;
   return (
     <button
       type="button"
-      className="tour-show-page__flip-card"
+      className={
+        landscape
+          ? "tour-show-page__flip-card tour-show-page__flip-card--landscape"
+          : "tour-show-page__flip-card"
+      }
       onClick={() => item.has_back && setBack((v) => !v)}
       title={label}
     >
@@ -132,14 +144,34 @@ function FlippableCard({ item, label }: { item: TourShowMediaItem; label: string
   );
 }
 
+function CodeThumb({ item, label }: { item: TourShowMediaItem; label: string }) {
+  return (
+    <button
+      type="button"
+      className="tour-show-page__code-thumb"
+      title={label}
+      onClick={() => window.open(item.url, "_blank", "noopener,noreferrer")}
+    >
+      {item.kind === "image" ? (
+        <img src={item.url} alt={label} draggable={false} />
+      ) : (
+        <span>{item.label || label}</span>
+      )}
+      <span className="tour-show-page__code-thumb-label">{label}</span>
+    </button>
+  );
+}
+
 function SetlistPanel({
   payload,
+  recordings,
   recordingUrl,
   loading,
   onRefresh,
   canRefresh,
 }: {
   payload: TourShowSetlistPayload | null;
+  recordings?: { label: string; url: string; kind?: string }[];
   recordingUrl: string | null;
   loading: boolean;
   onRefresh?: () => void;
@@ -155,6 +187,12 @@ function SetlistPanel({
     label?: string;
     tracks?: typeof tracks;
   }[];
+  const links =
+    recordings && recordings.length
+      ? recordings
+      : recordingUrl
+        ? [{ label: "Full recording", url: recordingUrl, kind: "full" }]
+        : [];
 
   if (loading) {
     return <PlaylistBoot className="playlist-boot--compact" label="Loading setlist…" />;
@@ -168,11 +206,17 @@ function SetlistPanel({
             Refresh setlist
           </button>
         ) : null}
-        {recordingUrl ? (
-          <a className="text-btn" href={recordingUrl} target="_blank" rel="noreferrer">
-            Full recording
+        {links.map((r) => (
+          <a
+            key={`${r.kind}-${r.url}`}
+            className="text-btn"
+            href={r.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {r.label}
           </a>
-        ) : null}
+        ))}
       </div>
       {groups.length ? (
         groups.map((g, i) => (
@@ -277,7 +321,7 @@ export default function TourShowPage({
     if (!detail) return TAB_LABELS.filter((t) => t.id === "overview" || t.id === "setlist");
     return TAB_LABELS.filter((t) => {
       if (t.id === "overview" || t.id === "setlist") return true;
-      if (t.id === "promo") return detail.show.has_promo;
+      if (t.id === "promo") return detail.show.has_promo || detail.promo.length > 0;
       if (t.id === "gallery") return detail.show.has_gallery;
       if (t.id === "souvenirs") return detail.show.has_souvenirs;
       return true;
@@ -355,7 +399,10 @@ export default function TourShowPage({
   const overview = detail.overview;
   const ticket = overview?.tickets?.[0];
   const setlistFile = overview?.setlist_files?.[0];
+  const playlistCode = overview?.playlist_code ?? null;
+  const qrCode = overview?.qr_code ?? null;
   const album = overview?.album;
+  const showTicketCol = Boolean(ticket || playlistCode || qrCode);
 
   return (
     <div className="tour-show-page">
@@ -518,10 +565,20 @@ export default function TourShowPage({
                   <FlippableCard item={setlistFile} label="Setlist" />
                 </section>
               ) : null}
-              {ticket ? (
-                <section>
+              {showTicketCol ? (
+                <section className="tour-show-page__ticket-col">
                   <h2>Ticket</h2>
-                  <FlippableCard item={ticket} label="Ticket" />
+                  {ticket ? (
+                    <FlippableCard item={ticket} label="Ticket" landscape />
+                  ) : null}
+                  {playlistCode || qrCode ? (
+                    <div className="tour-show-page__codes">
+                      {playlistCode ? (
+                        <CodeThumb item={playlistCode} label="Playlist" />
+                      ) : null}
+                      {qrCode ? <CodeThumb item={qrCode} label="QR" /> : null}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
               {album ? (
@@ -616,6 +673,7 @@ export default function TourShowPage({
         {activeTab === "setlist" ? (
           <SetlistPanel
             payload={setlist}
+            recordings={overview?.recordings || []}
             recordingUrl={overview?.recording_url || null}
             loading={setlistLoading}
             canRefresh={isAdmin}

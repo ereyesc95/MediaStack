@@ -132,9 +132,9 @@ Music/{Letter}/{Artist}/Tours/
 │   │   ├── Logo.png
 │   │   └── Album - Greatest Lovesongs Vol. 666.jpg   ← supported release cover
 │   └── {YYYY.MM.DD}. {Country}, {City}. {Venue}/
-│       ├── Promo/                              ← show posters, videos, Website - {Ticketer}.html, Video - {Promoter}.mp4
-│       ├── Gallery/                            ← photos/videos of the night (Video.mp4 = full recording)
-│       └── Souvenirs/                          ← Ticket - Front/Back, Setlist - Digital.*, picks, shirts, …
+│       ├── Promo/                              ← Poster, Banner, Trailer - {Promoter}.mp4, Teaser - *.mp4, Website - {Ticketer}.html
+│       ├── Gallery/                            ← photos (001…), Video.mp4 (full), Recap*.mp4, QR.*
+│       └── Souvenirs/                          ← Ticket - Front/Back|Digital, Playlist.*, Setlist - *, picks, …
 └── {YYYY.MM.DD}.A. {Tour Title} [By {Main Artist}]/   ← support-act tour (letter only if ≥2 openers)
 ```
 
@@ -145,10 +145,14 @@ Music/{Letter}/{Artist}/Tours/
 | **Shows** | Only tours with ≥1 show folder appear in the grid / prev-next |
 | **Openers** | Tour folder suffix `[By {Main Artist}]`; optional `{A.}` / `{B.}` order when multiple openers |
 | **Show join key** | Normalized show folder name (same string under main + support artists) |
+| **Opener promo fallback** | Missing local Promo / tour `[Artwork]` (poster, banner, Trailer→promoter, Website→ticketer) resolve from the main act’s matching show / tour |
+| **Promoter** | From `Trailer - {Company}.mp4` (legacy `Video - {Company}` still read) |
 | **Front / Back** | `Name - Front.ext` / `Name - Back.ext` — grid shows Front; click/flip for Back |
 | **Companies** | Venue / promoter / ticketer logos under project `assets/companies/` (record labels stay in `assets/labels/`) |
 
 Show page tabs: **Overview** · **Promo** · **Setlist** · **Gallery** · **Souvenirs** (hide empty Promo/Gallery/Souvenirs). Multi-show tours get a show picker bar; switching shows keeps the active content tab.
+
+Overview ticket column: landscape **Ticket** (flip Front/Back) on top; bottom row **Playlist** (Souvenirs) + **QR** (Gallery). Setlist tab lists **Video** (full recording) and **Recap** clips from Gallery.
 
 **Artist scaffold:** creating an artist seeds a sample `Tours/…` tree (rename dates/titles) plus a **User guide.txt** section documenting Tours. Only tours with ≥1 show folder appear in the UI.
 

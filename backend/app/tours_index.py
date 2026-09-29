@@ -31,9 +31,12 @@ _SHOW_FOLDER_RE = re.compile(
 )
 _BY_MAIN_RE = re.compile(r"\[By\s+([^\]]+)\]\s*$", re.I)
 _ALBUM_STEM_RE = re.compile(r"^Album\s*[-–]\s*(.+)$", re.I)
-_VIDEO_PROMOTER_RE = re.compile(r"^Video\s*[-–]\s*(.+)$", re.I)
+# Promoter from Trailer - {Company}.mp4 (legacy: Video - {Company}.mp4)
+_TRAILER_PROMOTER_RE = re.compile(r"^Trailer\s*[-–]\s*(.+)$", re.I)
+_LEGACY_VIDEO_PROMOTER_RE = re.compile(r"^Video\s*[-–]\s*(.+)$", re.I)
 _WEBSITE_TICKETER_RE = re.compile(r"^Website\s*[-–]\s*(.+)$", re.I)
 _FRONT_BACK_RE = re.compile(r"^(.+?)\s*[-–]\s*(Front|Back)\s*$", re.I)
+_RECAP_STEM_RE = re.compile(r"^Recap(?:\s*[-–]\s*.+)?$", re.I)
 
 
 def _now() -> str:
@@ -211,18 +214,24 @@ def _dir_has_media(folder: Path | None) -> bool:
 
 
 def _parse_promoter(promo: Path | None) -> str | None:
+    """Promoter company from ``Trailer - {Company}`` (legacy ``Video -`` still accepted)."""
     if not promo or not promo.is_dir():
         return None
+    legacy: str | None = None
     try:
-        for f in promo.iterdir():
+        for f in sorted(promo.iterdir(), key=lambda p: p.name.casefold()):
             if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
                 continue
-            m = _VIDEO_PROMOTER_RE.match(f.stem)
+            m = _TRAILER_PROMOTER_RE.match(f.stem)
             if m:
                 return m.group(1).strip()
+            if legacy is None:
+                m2 = _LEGACY_VIDEO_PROMOTER_RE.match(f.stem)
+                if m2:
+                    legacy = m2.group(1).strip()
     except OSError:
         return None
-    return None
+    return legacy
 
 
 def _parse_ticketer(promo: Path | None) -> str | None:
@@ -255,16 +264,105 @@ def _parse_album_art(artwork: Path | None, media_root: Path) -> tuple[str | None
     return None, None
 
 
+def _is_recap_stem(stem: str) -> bool:
+    return bool(_RECAP_STEM_RE.match((stem or "").strip()))
+
+
 def _has_recording(gallery: Path | None) -> bool:
+    """True when Gallery has ``Video.*`` (full) and/or ``Recap*.*`` clips."""
     if not gallery or not gallery.is_dir():
         return False
     try:
         for f in gallery.iterdir():
-            if f.is_file() and f.stem.casefold() == "video" and f.suffix.lower() in VIDEO_EXTS:
+            if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
+                continue
+            stem = f.stem
+            if stem.casefold() == "video" or _is_recap_stem(stem):
                 return True
     except OSError:
         return False
     return False
+
+
+def _find_peer_show_dirs(
+    media_root: Path,
+    artist_name: str,
+    join_key: str,
+    *,
+    headlining_only: bool = True,
+) -> tuple[Path | None, Path | None]:
+    """Locate ``(tour_dir, show_dir)`` under an artist's Tours matching join_key."""
+    artist_dir = _artist_dir(media_root, artist_name)
+    root = tours_root(artist_dir) if artist_dir else None
+    if not root:
+        return None, None
+    want = (join_key or "").strip().casefold()
+    if not want:
+        return None, None
+    try:
+        for tour_dir in sorted(root.iterdir(), key=lambda p: p.name.casefold()):
+            if not tour_dir.is_dir() or tour_dir.name.startswith("."):
+                continue
+            meta = parse_tour_folder_name(tour_dir.name)
+            if headlining_only and meta.get("is_support"):
+                continue
+            try:
+                children = list(tour_dir.iterdir())
+            except OSError:
+                continue
+            for show_dir in children:
+                if not show_dir.is_dir() or show_dir.name.startswith("."):
+                    continue
+                if show_dir.name.casefold() in (ARTWORK_DIR, "artwork"):
+                    continue
+                if normalize_show_join_key(show_dir.name) == want:
+                    return tour_dir, show_dir
+    except OSError:
+        return None, None
+    return None, None
+
+
+def _merge_media_items(primary: list[dict], fallback: list[dict]) -> list[dict]:
+    """Keep local items; append fallback entries whose label is not already present."""
+    seen = {(i.get("label") or "").casefold() for i in primary if i.get("label")}
+    seen_ids = {i.get("id") for i in primary if i.get("id")}
+    out = list(primary)
+    for item in fallback:
+        label_key = (item.get("label") or "").casefold()
+        if label_key and label_key in seen:
+            continue
+        if not label_key and item.get("id") in seen_ids:
+            continue
+        out.append(item)
+        if label_key:
+            seen.add(label_key)
+        if item.get("id"):
+            seen_ids.add(item.get("id"))
+    return out
+
+
+def _gallery_recording_links(gallery_items: list[dict]) -> list[dict]:
+    """Full ``Video`` + ``Recap`` / ``Recap - …`` clips for the setlist panel."""
+    out: list[dict] = []
+    for g in gallery_items:
+        if g.get("kind") != "video" or not g.get("url"):
+            continue
+        label = (g.get("label") or "").strip()
+        cf = label.casefold()
+        if cf == "video":
+            out.append({"label": "Full recording", "url": g["url"], "kind": "full"})
+        elif _is_recap_stem(label):
+            display = "Recap" if cf == "recap" else label
+            out.append({"label": display, "url": g["url"], "kind": "recap"})
+    return out
+
+
+def _pick_labeled_item(items: list[dict], *names: str) -> dict | None:
+    want = {n.casefold() for n in names}
+    for item in items:
+        if (item.get("label") or "").casefold() in want:
+            return item
+    return None
 
 
 def _stable_id(*parts: str) -> int:
@@ -293,6 +391,12 @@ def scan_tours_on_disk(band: Band, media_root: Path) -> list[dict]:
         banner = _artwork_url(artwork, "Banner", media_root) or poster
         logo = _artwork_url(artwork, "Logo", media_root)
         album_title, album_cover = _parse_album_art(artwork, media_root)
+        # Opener tours: fall back to main act tour [Artwork] when local art is sparse/missing
+        main_tour_cache: Path | None = None
+        main_show_cache: dict[str, Path | None] = {}
+        if meta.get("is_support") and meta.get("main_artist_name"):
+            # Resolve main tour via first matching show later; tour art filled after shows scan
+            pass
         shows: list[dict] = []
         try:
             show_dirs = sorted(tour_dir.iterdir(), key=lambda p: p.name.casefold())
@@ -309,20 +413,57 @@ def scan_tours_on_disk(band: Band, media_root: Path) -> list[dict]:
             souvenirs = _subdir(show_dir, "Souvenirs")
             show_posters = _list_prefixed_images(promo, "Poster") if promo else []
             show_banners = _list_prefixed_images(promo, "Banner") if promo else []
+            poster_url = _media_url(show_posters[0], media_root) if show_posters else None
+            banner_url = (
+                _media_url(show_banners[0], media_root)
+                if show_banners
+                else (_media_url(show_posters[0], media_root) if show_posters else None)
+            )
+            promoter = _parse_promoter(promo)
+            ticketer = _parse_ticketer(promo)
+            has_promo = _dir_has_media(promo)
+            # Opener → main-act Promo fallback for missing poster/banner/companies
+            if meta.get("is_support") and meta.get("main_artist_name"):
+                join_key = sm.get("join_key") or ""
+                if join_key not in main_show_cache:
+                    mt, ms = _find_peer_show_dirs(
+                        media_root,
+                        meta["main_artist_name"],
+                        join_key,
+                        headlining_only=True,
+                    )
+                    if mt is not None:
+                        main_tour_cache = mt
+                    main_show_cache[join_key] = ms
+                main_show = main_show_cache.get(join_key)
+                if main_show is not None:
+                    main_promo = _subdir(main_show, "Promo")
+                    if not show_posters and main_promo:
+                        mp = _list_prefixed_images(main_promo, "Poster")
+                        if mp:
+                            poster_url = _media_url(mp[0], media_root)
+                    if not show_banners and main_promo:
+                        mb = _list_prefixed_images(main_promo, "Banner")
+                        if mb:
+                            banner_url = _media_url(mb[0], media_root)
+                        elif not banner_url and poster_url:
+                            banner_url = poster_url
+                    if not promoter:
+                        promoter = _parse_promoter(main_promo)
+                    if not ticketer:
+                        ticketer = _parse_ticketer(main_promo)
+                    if not has_promo:
+                        has_promo = _dir_has_media(main_promo)
             shows.append(
                 {
                     "folder_path": show_dir.resolve().relative_to(media_root.resolve()).as_posix(),
                     "folder_name": show_dir.name,
                     **sm,
-                    "poster_url": _media_url(show_posters[0], media_root) if show_posters else None,
-                    "banner_url": (
-                        _media_url(show_banners[0], media_root)
-                        if show_banners
-                        else (_media_url(show_posters[0], media_root) if show_posters else None)
-                    ),
-                    "promoter": _parse_promoter(promo),
-                    "ticketer": _parse_ticketer(promo),
-                    "has_promo": _dir_has_media(promo),
+                    "poster_url": poster_url,
+                    "banner_url": banner_url or poster_url,
+                    "promoter": promoter,
+                    "ticketer": ticketer,
+                    "has_promo": has_promo,
                     "has_gallery": _dir_has_media(gallery),
                     "has_souvenirs": _dir_has_media(souvenirs),
                     "has_recording": _has_recording(gallery),
@@ -331,6 +472,23 @@ def scan_tours_on_disk(band: Band, media_root: Path) -> list[dict]:
             )
         if not shows:
             continue
+        # Fill tour artwork from main act when opener [Artwork] is missing/partial
+        if meta.get("is_support") and meta.get("main_artist_name") and main_tour_cache:
+            main_art = (
+                _subdir(main_tour_cache, "[Artwork]")
+                or _subdir(main_tour_cache, "Artwork")
+            )
+            if main_art:
+                if not poster:
+                    poster = _artwork_url(main_art, "Poster", media_root)
+                if not banner or banner == poster:
+                    banner = (
+                        _artwork_url(main_art, "Banner", media_root) or poster or banner
+                    )
+                if not logo:
+                    logo = _artwork_url(main_art, "Logo", media_root)
+                if not album_title:
+                    album_title, album_cover = _parse_album_art(main_art, media_root)
         rel = tour_dir.resolve().relative_to(media_root.resolve()).as_posix()
         tours.append(
             {
@@ -762,10 +920,76 @@ def get_show_detail(
     promo: list[dict] = []
     gallery: list[dict] = []
     souvenirs: list[dict] = []
+    main_promo: list[dict] = []
     if root and show.get("folder_path"):
         promo = list_show_folder_items(root, show["folder_path"], "Promo")
         gallery = list_show_folder_items(root, show["folder_path"], "Gallery")
         souvenirs = list_show_folder_items(root, show["folder_path"], "Souvenirs")
+        # Opener show: merge main-act Promo (+ tour art already coalesced at scan)
+        if tour.get("is_support") and tour.get("main_artist_name") and show.get("join_key"):
+            _mt, main_show = _find_peer_show_dirs(
+                root,
+                tour["main_artist_name"],
+                show["join_key"],
+                headlining_only=True,
+            )
+            if main_show is not None:
+                try:
+                    main_rel = main_show.resolve().relative_to(root.resolve()).as_posix()
+                except ValueError:
+                    main_rel = None
+                if main_rel:
+                    main_promo = list_show_folder_items(root, main_rel, "Promo")
+                    promo = _merge_media_items(promo, main_promo)
+                    # Fill company fields on the live show payload if still empty
+                    if not show.get("promoter"):
+                        p = _parse_promoter(_subdir(main_show, "Promo"))
+                        if p:
+                            show = {**show, "promoter": p, "promoter_logo_url": company_logo_url(p)}
+                    if not show.get("ticketer"):
+                        t = _parse_ticketer(_subdir(main_show, "Promo"))
+                        if t:
+                            show = {**show, "ticketer": t, "ticketer_logo_url": company_logo_url(t)}
+                    if not show.get("poster_url") or not show.get("banner_url"):
+                        mp = _subdir(main_show, "Promo")
+                        posters = _list_prefixed_images(mp, "Poster") if mp else []
+                        banners = _list_prefixed_images(mp, "Banner") if mp else []
+                        patch: dict = {}
+                        if not show.get("poster_url") and posters:
+                            patch["poster_url"] = _media_url(posters[0], root)
+                        if not show.get("banner_url"):
+                            if banners:
+                                patch["banner_url"] = _media_url(banners[0], root)
+                            elif patch.get("poster_url") or show.get("poster_url"):
+                                patch["banner_url"] = patch.get("poster_url") or show.get(
+                                    "poster_url"
+                                )
+                        if patch:
+                            show = {**show, **patch}
+                    if main_promo and not show.get("has_promo"):
+                        show = {**show, "has_promo": True}
+            # Tour-level artwork fallback from main tour [Artwork]
+            if _mt is not None:
+                main_art = _subdir(_mt, "[Artwork]") or _subdir(_mt, "Artwork")
+                if main_art:
+                    tpatch: dict = {}
+                    if not tour.get("poster_url"):
+                        tpatch["poster_url"] = _artwork_url(main_art, "Poster", root)
+                    if not tour.get("banner_url"):
+                        tpatch["banner_url"] = (
+                            _artwork_url(main_art, "Banner", root)
+                            or tpatch.get("poster_url")
+                            or tour.get("poster_url")
+                        )
+                    if not tour.get("logo_url"):
+                        tpatch["logo_url"] = _artwork_url(main_art, "Logo", root)
+                    if not tour.get("album_title"):
+                        at, ac = _parse_album_art(main_art, root)
+                        if at:
+                            tpatch["album_title"] = at
+                            tpatch["album_cover_url"] = ac
+                    if tpatch:
+                        tour = {**tour, **tpatch}
     shows = tour["shows"]
     idx = next((i for i, s in enumerate(shows) if s["id"] == show["id"]), -1)
 
@@ -780,11 +1004,13 @@ def get_show_detail(
         for s in souvenirs
         if (s.get("label") or "").casefold().startswith("setlist")
     ]
-    recording_url = None
-    for g in gallery:
-        if (g.get("label") or "").casefold() == "video" and g.get("kind") == "video":
-            recording_url = g.get("url")
-            break
+    playlist_code = _pick_labeled_item(souvenirs, "Playlist")
+    qr_code = _pick_labeled_item(gallery, "QR")
+    recordings = _gallery_recording_links(gallery)
+    recording_url = next(
+        (r["url"] for r in recordings if r.get("kind") == "full"),
+        recordings[0]["url"] if recordings else None,
+    )
 
     album = _match_supported_album(db, band, tour.get("album_title"), root)
     lineup = _lineup_for_show_date(db, band, show.get("date_iso"), root)
@@ -825,7 +1051,10 @@ def get_show_detail(
         "overview": {
             "tickets": tickets,
             "setlist_files": setlist_files,
+            "playlist_code": playlist_code,
+            "qr_code": qr_code,
             "recording_url": recording_url,
+            "recordings": recordings,
             "lineup": lineup,
             "album": album,
         },
