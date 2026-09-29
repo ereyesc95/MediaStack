@@ -6,6 +6,10 @@ import argparse
 import os
 import subprocess
 import sys
+import threading
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -29,6 +33,24 @@ def open_chrome(url: str) -> None:
             print(f"Opened in Chrome: {url}")
             return
     print(f"Chrome not found. Open manually: {url}")
+
+
+def open_chrome_when_ready(url: str, port: int, *, attempts: int = 60) -> None:
+    """Wait until /api/health responds so the SPA does not race startup."""
+
+    def _wait() -> None:
+        health = f"http://127.0.0.1:{port}/api/health"
+        for _ in range(attempts):
+            try:
+                with urllib.request.urlopen(health, timeout=0.5) as res:
+                    if 200 <= getattr(res, "status", 200) < 300:
+                        open_chrome(url)
+                        return
+            except (urllib.error.URLError, TimeoutError, OSError):
+                time.sleep(0.15)
+        print(f"API did not become ready; open manually: {url}")
+
+    threading.Thread(target=_wait, daemon=True).start()
 
 
 def ensure_deps() -> None:
@@ -89,7 +111,9 @@ def main() -> None:
         print("Dev UI: cd frontend && npm install && npm run dev")
 
     if not args.no_browser:
-        open_chrome(open_url)
+        # Browser must open after uvicorn is accepting connections; otherwise the
+        # SPA's first /api call fails with "Cannot reach the API".
+        open_chrome_when_ready(open_url, args.port)
 
     import uvicorn
 

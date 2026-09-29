@@ -25,6 +25,7 @@ export default function ProfilePickerModal({
   const [editProfile, setEditProfile] = useState<ProfileUser | null>(null);
 
   function loadProfiles() {
+    setError(null);
     fetchProfiles()
       .then((items) => setProfiles(items))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
@@ -33,6 +34,36 @@ export default function ProfilePickerModal({
   useEffect(() => {
     loadProfiles();
   }, []);
+
+  // If Chrome opened before the API was listening, retry a few times.
+  useEffect(() => {
+    if (!error || profiles.length) return;
+    if (!/cannot reach the api/i.test(error)) return;
+    let cancelled = false;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      if (cancelled) return;
+      tries += 1;
+      if (tries > 8) {
+        window.clearInterval(id);
+        return;
+      }
+      fetchProfiles()
+        .then((items) => {
+          if (cancelled) return;
+          setProfiles(items);
+          setError(null);
+          window.clearInterval(id);
+        })
+        .catch(() => {
+          /* keep waiting */
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [error, profiles.length]);
 
   async function pick(userId: number, password?: string) {
     setBusy(userId);
