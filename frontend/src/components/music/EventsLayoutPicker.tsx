@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import type { EventsCardLayout } from "../types";
-import { useMenuPresence } from "../useMenuPresence";
-import { usePhoneLayout } from "../usePhoneLayout";
+import type { EventsCardLayout } from "../../types";
+import { useMenuPresence } from "../../useMenuPresence";
+import { usePhoneLayout } from "../../usePhoneLayout";
 import {
   IconCardBanner,
   IconCardCover,
@@ -9,7 +9,7 @@ import {
   IconCardLandscape,
   IconCardPortrait,
   IconList,
-} from "./MenuIcons";
+} from "../MenuIcons";
 
 const OPTIONS: {
   id: EventsCardLayout;

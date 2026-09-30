@@ -32,8 +32,9 @@ Tour folder (tour start date):
   YYYY.MM.DD. Tour Title/
     [Artwork]/                 Poster, Banner, Logo, Album - {title}
     YYYY.MM.DD. Country, City. Venue/
-      Promo/                     Poster, Banner, Trailer - {Promoter}.mp4,
-                                 Teaser - *.mp4, Website - {Ticketer}.html
+      Promo/                     Poster.*, Thumbnail.*, Banner.*, Playlist.*,
+                                 Trailer - {Promoter}.mp4, Teaser - *.mp4,
+                                 Website - {Ticketer}.html
       Gallery/                   Night photos (001.jpg…); Video.mp4 = full recording;
                                  Recap.mp4 / Recap - *.mp4; QR.* (overview codes)
       Souvenirs/                 Ticket - Front/Back or Ticket - Digital,
@@ -44,9 +45,35 @@ Support / opener tour (optional letter when ≥2 openers):
 
 Show folder name is the cross-artist join key (same string under main + openers).
 Opener shows fall back to the main act's matching Promo / tour [Artwork] for
-missing posters, banners, Trailer (promoter), and Website (ticketer).
+missing posters, banners, Logo, Trailer (promoter), and Website (ticketer).
 Front/Back pairs: ``Name - Front.ext`` / ``Name - Back.ext``.
 Venue / promoter / ticketer logos live in project assets/companies/ (not labels/).
+
+Opening a tour or show leaves the artist page and opens a dedicated show page
+(like a release page). Desktop uses the show Promo Poster on the left; mobile
+portrait uses Banner. Tabs: Overview · Promo · Setlist · Gallery · Souvenirs.
+
+Artist Tours tab lists tour cards (cover = tour Poster). Clicking a card opens
+the dedicated show page for that tour.
+
+EVENTS (Music home tab)
+-----------------------
+Home → EVENTS lists every attended show across artists.
+
+Act toggle (ALL ACTS / MAIN ACTS / OPENERS) and card layout picker:
+  Portrait   → show Promo/Poster.*
+  Landscape  → show Promo/Thumbnail.*
+  Banner     → show Promo/Banner.*
+  Cover      → show Promo/Playlist.* (square cards)
+  Logos      → tour [Artwork]/Logo.*
+  List       → venue / artist / date text rows
+
+Hover on a card: tour Logo when present (else tour title); artist era Icon + Logo
+from that artist's [Artwork]/Branding (matched to the show year), else the act
+name. Opener cards use the opener artist's name and branding, not the headliner.
+
+Filters: Artist, Origin, Country, Venue, Date (by year), Genre (subgenres grouped
+by parent genre), Promoter, Ticketer.
 
 A sample tour tree is created when you add an artist — rename dates/titles to match
 shows you attended. Only tours that contain at least one show folder appear in the UI.
@@ -284,6 +311,8 @@ def ensure_artist_user_guide_template(db: Session) -> AppSetting:
                 "Video - {Promoter}" in value
                 and "Trailer - {Promoter}" not in value
             )
+            or "EVENTS (Music home tab)" not in value
+            or "Promo/Thumbnail" not in value
         )
         if needs_upgrade:
             row.aps_value = DEFAULT_ARTIST_USER_GUIDE

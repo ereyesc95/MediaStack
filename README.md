@@ -67,25 +67,34 @@ npm install
 
 ## Quick start
 
+You need **two terminals** while developing — the API and the Vite UI must both stay running.
+
 ```powershell
 cd "c:\path\to\MyStack"
 
-# First run: import legacy metadata (bands, releases, tracks, links, etc.)
+# First run only: import legacy metadata (bands, releases, tracks, links, etc.)
 python run.py --import-sql --import-replace
 
-# Terminal 1 — API (opens browser when frontend/dist exists)
+# Terminal 1 — API on port 8766 (leave this running; do not stop it for the UI)
 python run.py
 
-# Terminal 2 — UI with hot reload (recommended while developing)
+# Terminal 2 — Dev UI with hot reload (leave this running too)
 cd frontend
+npm install          # first time only
 npm run dev
 ```
 
-| Service | URL |
-|---------|-----|
-| API | http://127.0.0.1:8766 |
-| Dev UI | http://localhost:5174 |
-| Production UI | http://127.0.0.1:8766 (when `frontend/dist` is built) |
+Then open **http://localhost:5174** (Vite). The UI talks to the API at **http://127.0.0.1:8766**.
+
+| Service | URL | How to start |
+|---------|-----|----------------|
+| API | http://127.0.0.1:8766 | `python run.py` from project root |
+| Dev UI | http://localhost:5174 | `cd frontend` → `npm run dev` |
+| Production UI | http://127.0.0.1:8766 | Build with `npm run build`, then only `python run.py` (serves `frontend/dist`) |
+
+**Common mistake:** stopping `python run.py` before starting Vite. Keep the API process alive in Terminal 1; open a **second** terminal for `npm run dev`. If the browser shows “Cannot reach the API”, Terminal 1 is not running or port 8766 is blocked.
+
+If `frontend/dist` exists, `python run.py` opens Chrome to the API URL after `/api/health` is ready. For day-to-day UI work, prefer the Vite URL above.
 
 ### Custom hostname
 
@@ -629,7 +638,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 
 - **Manage Artists → Add artist** — searches MusicBrainz, estimates import time, then creates the artist letter/root tree and every official release-group folder (all singles, no cap). Albums, compilations, and live albums get numbered disc folders when MusicBrainz reports multiple media. Existing local artist folders are never modified; Various Artists receives only the empty category/artwork skeleton. Scaffolds also include a sample **Tours/** tree and optional **User guide.txt** (database-backed template covering Tours layout; safe to delete). The hamburger item is labeled **My artists**.
 - **Home dashboard** — recent plays, shortcuts; **Adaptive** theme (image-sampled colors on artist/franchise/film pages) and cover-based sampling while a track plays (restores on pause/stop; menu theme choice is remembered)
-- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** / **Tours** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist). **Tours** — concert folders under `Tours/`, show pages (Overview / Promo / Setlist / Gallery / Souvenirs), setlist.fm match, opener `[By …]` tours; new artists get a sample Tours tree + User guide section. Home **EVENTS** browses all attended shows with facet filters. System playlist **Live shows** groups setlist tracks by show (flat toggle). Layout: [docs/media_library_layout.md](docs/media_library_layout.md#tours--peer-of-video--library).
+- **Artist page** — bio, lineup, discography, singles, **system playlists** (Audio tab), **Video** / **Library** / **Tours** tabs when those folders exist under the artist (same level as `Audio` / `Gallery`) — portrait cards with Audio-style hover dates; flat folders/shortcuts or Pattern A categories are auto-detected. Item pages reuse the release chrome (cover + disc, Overview / Videos|Volumes tabs, numbered rows with optional date + duration). A library item with a single PDF opens in a new tab. Gallery, word cloud, quizzes (song quiz strips vinyl prefixes like the tracklist). **Tours** — concert folders under `Tours/`; clicking a tour opens a **dedicated show page** (Overview / Promo / Setlist / Gallery / Souvenirs; desktop Poster hero, mobile-portrait Banner), setlist.fm match, opener `[By …]` tours; new artists get a sample Tours tree + User guide section. Home **EVENTS** browses all attended shows (act toggle, Portrait→List layouts, year + subgenre filters, tour/era branding on hover). System playlist **Live shows** groups setlist tracks by show (flat toggle). Layout: [docs/media_library_layout.md](docs/media_library_layout.md#tours--peer-of-video--library).
 - **Catalog & release card layouts** — Catalog/Related cards: **Landscape / Portrait / Banner / Icons** (desktop: hover the layout control to open options; phone: tap). Artist Audio/Video/Library: **Cover** or **Banner** (era photo background; hover/tap shows cover + release logo / era icon+logo + full date). Banner era logos use a matching-era **Collapsed** artist logo when present (skipped on **mobile portrait**); release `[Artwork]/Logo - Collapsed` is shown larger on banner hover. External source artists (e.g. *By Various Artists*) replace the page artist’s era branding on the banner. On phones, **Cover** and **Banner** both use first-tap reveal / second-tap open.
 - **Artist links** — edit-link modal shows a square logo preview aligned to the right of the Auto-detect / Catalog / Upload options (preview height matches that column, including the catalog dropdown when open)
 - **Release page** — unified tracklist across editions + B-sides, cover/disc/canvas playback, gallery (**Artwork** / **Photos** / **Branding**), credits, lyrics, versions; left panel release date follows the playing track’s edition. Gallery **Photos** lists `[Artwork]` files named `Photo - …`. **Branding** lists logos, photocards, and `Code - Spotify` / `Code - QR`.

@@ -32,7 +32,7 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 
 | Area | Status |
 |------|--------|
-| Music Audio / Video / Library / Tours | Done (Tours: folder scan, show pages, EVENTS, Live shows) |
+| Music Audio / Video / Library / Tours | Done (Tours: dedicated show pages, EVENTS layouts/filters, Live shows) |
 | Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, NSFW) |
 | Universes | Done (multi-module hubs + SFW filter) |
 | Human-readable URL slugs | Done (dual-parse legacy + slug; see README) |

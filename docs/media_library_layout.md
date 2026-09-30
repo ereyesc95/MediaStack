@@ -120,19 +120,21 @@ Legacy `Gallery/Logos/` remains readable, but new artist scaffolds use Branding.
 
 ### Tours — peer of Video / Library
 
-Concert tours you attended. Folder-gated **Tours** tab on the artist page (same chrome as Video / Library).
+Concert tours you attended. Folder-gated **Tours** tab on the artist page (same chrome as Video / Library). Clicking a tour opens a **dedicated show page** (release-style chrome — not embedded in the artist tab). Desktop hero = show **Poster**; mobile portrait hero = **Banner**.
 
 ```
 Music/{Letter}/{Artist}/Tours/
 ├── {YYYY.MM.DD}. {Tour Title}/                 ← tour start date
 │   ├── [Artwork]/                             ← tour promo (Poster, Banner, Logo, Album - *, Photo.*)
-│   │   ├── Poster.jpg                          ← main poster (card cover)
+│   │   ├── Poster.jpg                          ← tour-grid cover
 │   │   ├── Poster - Alt.jpg                    ← extra posters
-│   │   ├── Banner.jpg                          ← banner view / mobile hero
-│   │   ├── Logo.png
+│   │   ├── Banner.jpg
+│   │   ├── Logo.png                            ← EVENTS Logos layout + card hover
 │   │   └── Album - Greatest Lovesongs Vol. 666.jpg   ← supported release cover
 │   └── {YYYY.MM.DD}. {Country}, {City}. {Venue}/
-│       ├── Promo/                              ← Poster, Banner, Trailer - {Promoter}.mp4, Teaser - *.mp4, Website - {Ticketer}.html
+│       ├── Promo/                              ← Poster, Thumbnail, Banner, Playlist,
+│       │                                         Trailer - {Promoter}.mp4, Teaser - *.mp4,
+│       │                                         Website - {Ticketer}.html
 │       ├── Gallery/                            ← photos (001…), Video.mp4 (full), Recap*.mp4, QR.*
 │       └── Souvenirs/                          ← Ticket - Front/Back|Digital, Playlist.*, Setlist - *, picks, …
 └── {YYYY.MM.DD}.A. {Tour Title} [By {Main Artist}]/   ← support-act tour (letter only if ≥2 openers)
@@ -141,22 +143,40 @@ Music/{Letter}/{Artist}/Tours/
 | Rule | Detail |
 |------|--------|
 | **Tour date** | Tour start (`YYYY.MM.DD`) |
-| **Tour cards** | Portrait; cover `Poster.*`, banner `Banner.*` (Poster fallback), hover logo `Logo.*` |
+| **Tour cards (artist tab)** | Cover `Poster.*`, banner `Banner.*` (Poster fallback); hover may show `Logo.*` |
 | **Shows** | Only tours with ≥1 show folder appear in the grid / prev-next |
 | **Openers** | Tour folder suffix `[By {Main Artist}]`; optional `{A.}` / `{B.}` order when multiple openers |
 | **Show join key** | Normalized show folder name (same string under main + support artists) |
-| **Opener promo fallback** | Missing local Promo / tour `[Artwork]` (poster, banner, Trailer→promoter, Website→ticketer) resolve from the main act’s matching show / tour |
+| **Opener promo fallback** | Missing local Promo / tour `[Artwork]` (poster, banner, logo, Trailer→promoter, Website→ticketer) resolve from the main act’s matching show / tour |
 | **Promoter** | From `Trailer - {Company}.mp4` (legacy `Video - {Company}` still read) |
 | **Front / Back** | `Name - Front.ext` / `Name - Back.ext` — grid shows Front; click/flip for Back |
 | **Companies** | Venue / promoter / ticketer logos under project `assets/companies/` (record labels stay in `assets/labels/`) |
+| **Show page** | Dedicated route (not inside artist Tours tab). Desktop: left Poster. Mobile portrait: Banner. |
 
 Show page tabs: **Overview** · **Promo** · **Setlist** · **Gallery** · **Souvenirs** (hide empty Promo/Gallery/Souvenirs). Multi-show tours get a show picker bar; switching shows keeps the active content tab.
 
 Overview ticket column: landscape **Ticket** (flip Front/Back) on top; bottom row **Playlist** (Souvenirs) + **QR** (Gallery). Setlist tab lists **Video** (full recording) and **Recap** clips from Gallery.
 
-**Artist scaffold:** creating an artist seeds a sample `Tours/…` tree (rename dates/titles) plus a **User guide.txt** section documenting Tours. Only tours with ≥1 show folder appear in the UI.
+**Artist scaffold:** creating an artist seeds a sample `Tours/…` tree (rename dates/titles) plus a **User guide.txt** section documenting Tours + EVENTS. Only tours with ≥1 show folder appear in the UI.
 
-Home **EVENTS** tab lists show cards globally (filters: act / artist / genre / decade / country / continent / promoter / ticketer). Artist system playlist **Live shows** aggregates attended-show setlist tracks (grouped by show by default, with a flat toggle; missing local matches keep YouTube fallbacks).
+### EVENTS (Music home tab)
+
+Home **EVENTS** lists attended shows across all artists.
+
+| Control | Behavior |
+|---------|----------|
+| **Act** | ALL ACTS → MAIN ACTS → OPENERS |
+| **Layout** | Portrait (default) / Landscape / Banner / Cover / Logos / List |
+| **Portrait** | `…/Promo/Poster.*` |
+| **Landscape** | `…/Promo/Thumbnail.*` |
+| **Banner** | `…/Promo/Banner.*` |
+| **Cover** | `…/Promo/Playlist.*` (square cards) |
+| **Logos** | `Tours/{tour}/[Artwork]/Logo.*` |
+| **List** | Venue / act / date text rows |
+| **Hover** | Tour `Logo` (else title) + act era Icon/Logo from that artist’s `[Artwork]/Branding` matched to the show year (else act name). Opener cards use the **opener** act, not the headliner. |
+| **Filters** | Artist, Origin, Country, Venue, **Date (year)**, **Genre (subgenres by parent)**, Promoter, Ticketer |
+
+Artist system playlist **Live shows** aggregates attended-show setlist tracks (grouped by show by default, with a flat toggle; missing local matches keep YouTube fallbacks).
 
 ---
 
