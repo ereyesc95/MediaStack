@@ -80,11 +80,22 @@ const FILTER_TABS: { id: FilterId; label: string }[] = [
   { id: "ticketer", label: "Ticketer" },
 ];
 
+type LiveShowsCard = {
+  slug: string;
+  name: string;
+  cover_url?: string | null;
+  track_count?: number | null;
+};
+
 type Props = {
   filters: EventsFilters;
   onFiltersChange: (next: EventsFilters) => void;
   onOpenShow: (event: EventCard) => void;
   cardLayout?: EventsCardLayout;
+  /** Bump after Sync folders so logos/artwork re-resolve from disk. */
+  refreshKey?: number;
+  liveShowsCard?: LiveShowsCard | null;
+  onOpenLiveShows?: () => void;
 };
 
 function eventCoverUrl(ev: EventCard, layout: EventsCardLayout): string | null {
@@ -103,21 +114,15 @@ function eventCoverUrl(ev: EventCard, layout: EventsCardLayout): string | null {
   }
 }
 
-function EventHoverBrand({ ev }: { ev: EventCard }) {
+function EventHoverBrand({
+  ev,
+  layout,
+}: {
+  ev: EventCard;
+  layout: EventsCardLayout;
+}) {
   const actName =
     ev.hover_artist_name || ev.band_name || ev.main_artist_name || "";
-  const tourBlock = ev.tour_logo_url ? (
-    <img
-      src={ev.tour_logo_url}
-      alt=""
-      className="media-release-card__logo"
-      draggable={false}
-    />
-  ) : (
-    <span className="media-release-card__title-hover">
-      <BillboardText short={ev.tour_title} full={ev.tour_title} maxLines={2} />
-    </span>
-  );
 
   const artistBlock =
     ev.era_icon_url || ev.era_logo_url ? (
@@ -144,6 +149,29 @@ function EventHoverBrand({ ev }: { ev: EventCard }) {
     ) : (
       <span className="muted">{actName}</span>
     );
+
+  // Logos layout already shows the tour logo as the card face — hover only
+  // the act branding (date stays in the date strip).
+  if (layout === "logos") {
+    return (
+      <span className="media-release-card__title-hover media-release-card__title-hover--event media-release-card__title-hover--logos">
+        {artistBlock}
+      </span>
+    );
+  }
+
+  const tourBlock = ev.tour_logo_url ? (
+    <img
+      src={ev.tour_logo_url}
+      alt=""
+      className="media-release-card__logo media-release-card__logo--event-tour"
+      draggable={false}
+    />
+  ) : (
+    <span className="media-release-card__title-hover-text">
+      <BillboardText short={ev.tour_title} full={ev.tour_title} maxLines={2} />
+    </span>
+  );
 
   return (
     <span className="media-release-card__title-hover media-release-card__title-hover--event">
@@ -196,8 +224,9 @@ function EventCardView({
   }
 
   if (layout === "banner") {
+    // Background: Banner → Thumbnail → Poster. Cover tile: Playlist → Poster.
     const bannerUrl = ev.banner_url || ev.thumbnail_url || ev.poster_url;
-    const thumb = ev.poster_url || ev.playlist_url;
+    const thumb = ev.playlist_url || ev.poster_url;
     return (
       <article
         className="media-release-card media-release-card--banner media-release-card--clickable media-beat-frame"
@@ -328,7 +357,7 @@ function EventCardView({
       </span>
       <span className="media-release-card__dim" aria-hidden />
       <span className="media-release-card__hover">
-        <EventHoverBrand ev={ev} />
+        <EventHoverBrand ev={ev} layout={layout} />
       </span>
       {dateLabel ? (
         <span className="media-release-card__date">
@@ -340,10 +369,13 @@ function EventCardView({
 }
 
 export default function EventsBrowse({
+  liveShowsCard = null,
+  onOpenLiveShows,
   filters,
   onFiltersChange,
   onOpenShow,
   cardLayout = "portrait",
+  refreshKey = 0,
 }: Props) {
   const [events, setEvents] = useState<EventCard[] | null>(null);
   const [facets, setFacets] = useState<Facets | null>(null);
@@ -367,8 +399,8 @@ export default function EventsBrowse({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const doRefresh = !refreshedOnce.current;
-    if (doRefresh) refreshedOnce.current = true;
+    const doRefresh = !refreshedOnce.current || refreshKey > 0;
+    if (!refreshedOnce.current) refreshedOnce.current = true;
     void fetchMusicEvents({
       act: filters.act,
       artist: filters.artist || undefined,
@@ -408,7 +440,7 @@ export default function EventsBrowse({
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, refreshKey]);
 
   const patch = (partial: Partial<EventsFilters>) =>
     onFiltersChange({ ...filters, ...partial });
@@ -609,6 +641,32 @@ export default function EventsBrowse({
         <p className="muted artist-section-empty">
           No events match these filters. Add Tours folders under artists.
         </p>
+      ) : null}
+
+      {liveShowsCard && onOpenLiveShows ? (
+        <div className="events-browse__live-shows">
+          <button
+            type="button"
+            className="playlist-card playlist-card--system events-browse__live-shows-card"
+            onClick={onOpenLiveShows}
+          >
+            <span
+              className="playlist-card-bg card-bg-layer"
+              style={{
+                backgroundImage: liveShowsCard.cover_url
+                  ? `url("${liveShowsCard.cover_url}")`
+                  : "linear-gradient(145deg, #252a38, #3d4660)",
+              }}
+            />
+            <span className="playlist-card-dim" />
+            <span className="playlist-card-label">{liveShowsCard.name}</span>
+            <span className="playlist-card-meta">
+              {liveShowsCard.track_count != null
+                ? `${liveShowsCard.track_count} tracks`
+                : "System"}
+            </span>
+          </button>
+        </div>
       ) : null}
 
       {events && events.length ? (

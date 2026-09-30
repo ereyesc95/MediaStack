@@ -114,6 +114,7 @@ type Props = {
   onRemoveArtist?: () => void;
   onAddMember?: () => void;
   addMemberLabel?: string;
+  onAddSupportPersonnel?: () => void;
   onAddLink?: () => void;
   onAddSimilar?: () => void;
   addSimilarLabel?: string;
@@ -131,6 +132,11 @@ type Props = {
   artistThemeActive?: boolean;
   /** Extra controls rendered at the top of the dropdown (e.g. mobile chrome). */
   menuChrome?: ReactNode;
+  /** Tour show page: resync folder / bill artists. */
+  showManageEvent?: boolean;
+  onSyncTourShow?: () => void;
+  onSyncTourShowArtists?: () => void;
+  onRefreshTourSetlist?: () => void;
 };
 
 const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
@@ -191,6 +197,7 @@ export default function AppMenu({
   onRemoveArtist,
   onAddMember,
   addMemberLabel = "Update cast",
+  onAddSupportPersonnel,
   onAddLink,
   onAddSimilar,
   addSimilarLabel = "Add similar artist",
@@ -204,6 +211,10 @@ export default function AppMenu({
   adaptiveThemeActive,
   artistThemeActive = false,
   menuChrome,
+  showManageEvent,
+  onSyncTourShow,
+  onSyncTourShowArtists,
+  onRefreshTourSetlist,
 }: Props) {
   void _refreshLocalFlat;
   const showAdaptiveTheme =
@@ -217,6 +228,7 @@ export default function AppMenu({
   const [themeOpen, setThemeOpen] = useState(false);
   const [mediaSwitchOpen, setMediaSwitchOpen] = useState(false);
   const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
+  const [manageEventOpen, setManageEventOpen] = useState(false);
   useEffect(() => {
     if (collectionClearMode) setManageCollectionOpen(true);
   }, [collectionClearMode]);
@@ -648,6 +660,18 @@ export default function AppMenu({
               {addMemberLabel}
             </button>
           )}
+          {onAddSupportPersonnel && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddSupportPersonnel();
+                setOpen(false);
+              }}
+            >
+              <IconAddArtist className="menu-item-icon" />
+              Support personnel
+            </button>
+          )}
           {onAddLink && (
             <button
               type="button"
@@ -906,6 +930,61 @@ export default function AppMenu({
               <IconManageArtists className="menu-item-icon" />
               {manageCatalogLabel}
             </button>
+          )}
+          {isAdmin &&
+            showManageEvent &&
+            (onSyncTourShow || onSyncTourShowArtists || onRefreshTourSetlist) && (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => setManageEventOpen((o) => !o)}
+              >
+                <IconSync className="menu-item-icon" />
+                Manage event
+                <span className="menu-chevron">{manageEventOpen ? "▴" : "▾"}</span>
+              </button>
+              {manageEventOpen && (
+                <div className="app-menu-submenu">
+                  {onSyncTourShow ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSyncTourShow();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Sync show
+                    </button>
+                  ) : null}
+                  {onSyncTourShowArtists ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSyncTourShowArtists();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Sync artists
+                    </button>
+                  ) : null}
+                  {onRefreshTourSetlist ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRefreshTourSetlist();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSync className="menu-item-icon" />
+                      Refresh setlist
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </>
           )}
           {showAddPlaylist && onAddPlaylist && (
             <button

@@ -3,6 +3,7 @@ import {
   fetchAlbumCards,
   fetchArtistCards,
   fetchFilterOptions,
+  fetchGlobalLiveShowsCard,
   fetchUserPlaylists,
   playTrack,
 } from "../../api";
@@ -85,7 +86,7 @@ import {
 } from "./artist/MiniAudioPlayer";
 import TourShowPage from "./artist/TourShowPage";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
+import { IconAddArtist, IconDisc, IconHeadphones, IconLineup, IconStar, IconUniverse } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import type { EventsCardLayout } from "../../types";
 
@@ -265,6 +266,16 @@ export default function MusicModule({
   const [label, setLabel] = useState("");
   const [producer, setProducer] = useState("");
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
+  const [globalLiveShowsCard, setGlobalLiveShowsCard] = useState<{
+    slug: string;
+    name: string;
+    cover_url: string;
+    track_count: number | null;
+  } | null>(null);
+  const [catalogLiveShowsOpen, setCatalogLiveShowsOpen] = useState(false);
+  const [liveShowsReturnTab, setLiveShowsReturnTab] = useState<
+    "playlists" | "events"
+  >("playlists");
   const [error, setError] = useState<string | null>(null);
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
@@ -792,19 +803,13 @@ export default function MusicModule({
   const loadArtists = useCallback(async () => {
     const generation = ++loadArtistsGeneration.current;
     setError(null);
-    // Drop stale cards immediately so orientation/layout switches cannot keep
-    // the previous photo cropped in the new shape while the refetch is in flight.
     setArtists([]);
     setArtistsLoading(true);
     const params = new URLSearchParams({
       page: String(artistPage),
       page_size: "48",
-      orientation:
-        cardOrientation === "badge"
-          ? "icons"
-          : cardOrientation === "list"
-            ? "landscape"
-            : cardOrientation,
+      // Multi-aspect URLs returned once; client picks cover by orientation.
+      orientation: "landscape",
       filter_mode: filterMode,
     });
     if (search.trim()) params.set("search", search.trim());
@@ -839,7 +844,6 @@ export default function MusicModule({
     artistPage,
     search,
     letter,
-    cardOrientation,
     filterMode,
     memberCount,
     memberArtistId,
@@ -976,7 +980,6 @@ export default function MusicModule({
     gender,
     label,
     producer,
-    cardOrientation,
     catalogScope,
     albumArtistId,
     albumCategory,
@@ -988,6 +991,9 @@ export default function MusicModule({
     fetchUserPlaylists()
       .then((d) => setPlaylists(d.items))
       .catch(() => {});
+    fetchGlobalLiveShowsCard()
+      .then((card) => setGlobalLiveShowsCard(card))
+      .catch(() => setGlobalLiveShowsCard(null));
   }, []);
 
   useEffect(() => {
@@ -1048,7 +1054,12 @@ export default function MusicModule({
   }, []);
 
   const userPlaylistOpen = tab === "playlists" && playlistId != null;
-  const showModuleChrome = !bandId && !userPlaylistOpen;
+  const catalogLiveShowsOpenActive =
+    catalogLiveShowsOpen &&
+    !playlistId &&
+    !bandId &&
+    (tab === "playlists" || tab === "events");
+  const showModuleChrome = !bandId && !userPlaylistOpen && !catalogLiveShowsOpenActive;
 
 
   const homeTracks = dashboard.top_tracks;
@@ -1271,6 +1282,13 @@ export default function MusicModule({
                       }))
                     }
                   >
+                    {eventsFilters.act === "main" ? (
+                      <IconStar className="catalog-scope-toggle__icon" />
+                    ) : eventsFilters.act === "openers" ? (
+                      <IconLineup className="catalog-scope-toggle__icon" />
+                    ) : (
+                      <IconUniverse className="catalog-scope-toggle__icon" />
+                    )}
                     {eventsActLabel(eventsFilters.act)}
                   </button>
                   <EventsLayoutPicker
@@ -1384,7 +1402,32 @@ export default function MusicModule({
         />
       )}
 
-      {userPlaylistOpen ? (
+      {catalogLiveShowsOpenActive ? (
+        <SystemPlaylistPage
+          slug="live-shows"
+          catalogLiveShows
+          backLabel={liveShowsReturnTab === "events" ? "EVENTS" : "PLAYLISTS"}
+          userId={userId}
+          isAdmin={isAdmin}
+          onBack={() => setCatalogLiveShowsOpen(false)}
+          onOpenPlaylist={() => {}}
+          onOpenRelease={(bid, rid) => {
+            setCatalogLiveShowsOpen(false);
+            void prefetchReleaseOverview(bid, rid);
+            onBand(bid, "audio");
+            onReleaseNavigate?.(rid, "overview");
+          }}
+          onOpenArtist={(id) => {
+            setCatalogLiveShowsOpen(false);
+            openArtist(id);
+          }}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource ?? (() => {})}
+          onSwitchProfile={onSwitchProfile ?? (() => {})}
+          onEditProfile={onEditProfile ?? (() => {})}
+        />
+      ) : userPlaylistOpen ? (
         <SystemPlaylistPage
           userPlaylistId={playlistId!}
           userId={userId}
@@ -1501,9 +1544,9 @@ export default function MusicModule({
           }}
           onImport={onImport}
           onSync={onSync}
-          onChooseSource={onChooseSource}
-          onSwitchProfile={onSwitchProfile}
-          onEditProfile={onEditProfile}
+          onChooseSource={onChooseSource ?? (() => {})}
+          onSwitchProfile={onSwitchProfile ?? (() => {})}
+          onEditProfile={onEditProfile ?? (() => {})}
         />
       ) : bandId && tourSlug ? (
         <TourShowPage
@@ -1566,6 +1609,12 @@ export default function MusicModule({
             void prefetchReleaseOverview(bandId, releaseId);
             onReleaseNavigate?.(releaseId, "overview");
           }}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource ?? (() => {})}
+          onSwitchProfile={onSwitchProfile ?? (() => {})}
+          onEditProfile={onEditProfile ?? (() => {})}
+          userId={userId}
         />
       ) : bandId && releaseId ? (
         <ReleasePage
@@ -1961,6 +2010,12 @@ export default function MusicModule({
           filters={eventsFilters}
           onFiltersChange={setEventsFilters}
           cardLayout={eventsCardLayout}
+          refreshKey={syncTick}
+          liveShowsCard={globalLiveShowsCard}
+          onOpenLiveShows={() => {
+            setLiveShowsReturnTab("events");
+            setCatalogLiveShowsOpen(true);
+          }}
           onOpenShow={(ev) => {
             tourEntryRef.current = "events";
             openEventShow(ev);
@@ -1989,7 +2044,15 @@ export default function MusicModule({
           )}
           <PlaylistsView
             playlists={playlists}
+            systemPlaylists={globalLiveShowsCard ? [globalLiveShowsCard] : []}
+            onOpenSystem={(slug) => {
+              if (slug === "live-shows") {
+                setLiveShowsReturnTab("playlists");
+                setCatalogLiveShowsOpen(true);
+              }
+            }}
             onOpen={(id) => {
+              setCatalogLiveShowsOpen(false);
               pushUserPlaylistRoute(id);
               onPlaylist(id);
             }}

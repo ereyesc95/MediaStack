@@ -1153,33 +1153,32 @@ def _lineup_for_show_date(
     date_iso: str | None,
     media_root: Path | None,
 ) -> list[dict]:
-    """Members active on show date; fall back to all Official if no dates."""
+    """Touring members active on the show date only (empty when none registered)."""
     from app.band_overview import _build_lineup
 
     lineup = _build_lineup(db, band, media_root)
+    touring = [m for m in (lineup.get("touring") or []) if m.get("is_touring")]
+    if not touring:
+        return []
+
     year = int(date_iso[:4]) if date_iso and len(date_iso) >= 4 and date_iso[:4].isdigit() else None
-    members = lineup.get("all") or []
-    if year is None:
-        return list(lineup.get("current") or [])
-    dated = []
-    for m in members:
+
+    def active_on_show(m: dict) -> bool:
+        if year is None:
+            return bool(m.get("is_active"))
         start = (m.get("start") or "")[:4]
         end = (m.get("end") or "")[:4]
         sy = int(start) if start.isdigit() else None
         ey = int(end) if end.isdigit() else None
         if sy is not None and sy > year:
-            continue
+            return False
         if ey is not None and ey < year:
-            continue
-        # Prefer Official + Touring for the night
-        if m.get("is_official") or m.get("is_touring") or m.get("is_active"):
-            dated.append(m)
-    if dated:
-        return dated
-    # No membership dates → all Official
-    undated = [m for m in (lineup.get("current") or []) if not m.get("start") and not m.get("end")]
-    if undated or any(not m.get("start") and not m.get("end") for m in members):
-        return list(lineup.get("current") or [])
+            return False
+        if not start and not end:
+            return True
+        return True
+
+    dated = [m for m in touring if active_on_show(m)]
     return dated
 
 

@@ -203,6 +203,7 @@ class CreateParticipationBody(BaseModel):
     is_official: bool = True
     is_founding: bool = False
     is_former: bool = False
+    is_touring: bool = False
 
 
 class AddSimilarBody(BaseModel):
@@ -1786,9 +1787,13 @@ def create_participation_endpoint(
             is_official=body.is_official,
             is_founding=body.is_founding,
             is_former=body.is_former,
+            is_touring=body.is_touring,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    from app.band_overview_cache import invalidate_overview_cache
+
+    invalidate_overview_cache(band_id)
     return {"ok": True, "participation_id": arp.arp_id, "artist_id": arp.arp_fk_artists}
 
 
@@ -2745,6 +2750,35 @@ def add_playlist_track(
     if not result.get("ok"):
         raise HTTPException(404, result.get("error") or "Failed")
     return result
+
+
+@router.get("/playlists/global/live-shows")
+def global_live_shows_playlist(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    del user
+    from app.global_live_shows_playlists import build_global_live_shows_detail
+
+    root = Path(settings.media_root) if settings.media_root else None
+    detail = build_global_live_shows_detail(db, root)
+    if not detail:
+        raise HTTPException(404, "Playlist not found")
+    return detail
+
+
+@router.get("/playlists/global/live-shows/card")
+def global_live_shows_playlist_card(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    del user
+    from app.global_live_shows_playlists import build_global_live_shows_card
+
+    card = build_global_live_shows_card(db)
+    if not card:
+        raise HTTPException(404, "Playlist not found")
+    return card
 
 
 @router.get("/playlists/{playlist_id}")

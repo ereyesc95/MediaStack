@@ -354,6 +354,7 @@ export default function ArtistPage({
   const [removeArtistOpen, setRemoveArtistOpen] = useState(false);
   const [removeArtistBusy, setRemoveArtistBusy] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addSupportOpen, setAddSupportOpen] = useState(false);
   const [vaContributorSort, setVaContributorSort] = useState<
     "tracks" | "compilations" | "name"
   >("tracks");
@@ -1306,7 +1307,8 @@ export default function ArtistPage({
             {(section === "audio" ||
               section === "video" ||
               section === "series" ||
-              section === "library") &&
+              section === "library" ||
+              section === "tours") &&
               !portraitMenuChrome && (
               <ReleaseCardLayoutPicker
                 value={releaseCardLayout}
@@ -1344,7 +1346,8 @@ export default function ArtistPage({
                     {(section === "audio" ||
                       section === "video" ||
                       section === "series" ||
-                      section === "library") && (
+                      section === "library" ||
+                      section === "tours") && (
                       <button
                         type="button"
                         onClick={() =>
@@ -1420,6 +1423,11 @@ export default function ArtistPage({
                 overviewTab === "lineup" &&
                 data?.show_lineup
                   ? () => setAddMemberOpen(true)
+                  : undefined
+              }
+              onAddSupportPersonnel={
+                isAdmin && data?.is_solo && !data?.show_lineup
+                  ? () => setAddSupportOpen(true)
                   : undefined
               }
               addMemberLabel="Add member"
@@ -1757,6 +1765,21 @@ export default function ArtistPage({
               })();
             }}
             onClose={() => !removeArtistBusy && setRemoveArtistOpen(false)}
+          />
+        )}
+
+        {addSupportOpen && data && (
+          <MemberFormModal
+            mode="add"
+            bandId={bandId}
+            bandName={data.name}
+            stackLayer={1}
+            participationPreset="support"
+            onClose={() => setAddSupportOpen(false)}
+            onSaved={() => {
+              setAddSupportOpen(false);
+              load();
+            }}
           />
         )}
 

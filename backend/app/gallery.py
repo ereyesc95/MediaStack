@@ -63,6 +63,10 @@ class ArtistCardAssets:
     era_year: int | None
     show_name_on_hover: bool
     logo_collapsed_url: str | None = None
+    portrait_url: str | None = None
+    landscape_url: str | None = None
+    banner_url: str | None = None
+    square_url: str | None = None
 
 
 def _brand_url(brand: EraBrand | None, root: Path) -> str | None:
@@ -361,7 +365,12 @@ def pick_brand_closest_to_year(
 
 def _media_url(rel_path: Path, media_root: Path) -> str:
     rel = rel_path.relative_to(media_root).as_posix()
-    return f"/api/media/file?path={quote(rel, safe='/')}"
+    try:
+        # Bust browser cache when the file is replaced under the same path.
+        v = int(rel_path.stat().st_mtime)
+        return f"/api/media/file?path={quote(rel, safe='/')}&v={v}"
+    except OSError:
+        return f"/api/media/file?path={quote(rel, safe='/')}"
 
 
 def _photo_pool(photos: list[GalleryPhoto], orientation: str) -> list[GalleryPhoto]:
@@ -398,8 +407,9 @@ def resolve_artist_card(
 ) -> ArtistCardAssets:
     """Catalog artist card art: stable-random Photo - * per account + Branding.
 
-    Photo choice is deterministic for a given ``user_id`` + artist + orientation,
-    so switching profiles yields a different card photo from the release pool.
+    Slide choice is deterministic for ``user_id`` + artist (orientation-independent)
+    so catalog can return all aspect URLs and switch client-side without refetch.
+    ``orientation`` still selects which URL is exposed as ``photo_url`` for legacy callers.
     """
     from app.release_photo_art import list_release_photo_slides
 
@@ -416,7 +426,8 @@ def resolve_artist_card(
 
     want = normalize_card_orientation(orientation)
     want_collapsed_twin = want == "banner"
-    seed = f"{user_id if user_id is not None else 0}:{artist_name or ''}:{want}"
+    # Orientation-independent seed so the same slide backs every aspect URL.
+    seed = f"{user_id if user_id is not None else 0}:{artist_name or ''}"
 
     def _pack(
         *,
@@ -424,6 +435,10 @@ def resolve_artist_card(
         year: int | None,
         logo: EraBrand | None,
         icon: EraBrand | None,
+        portrait_url: str | None = None,
+        landscape_url: str | None = None,
+        banner_url: str | None = None,
+        square_url: str | None = None,
     ) -> ArtistCardAssets:
         collapsed = (
             _collapsed_twin(brands, logo) if want_collapsed_twin and logo else None
@@ -435,6 +450,10 @@ def resolve_artist_card(
             era_year=year,
             show_name_on_hover=not (logo or icon),
             logo_collapsed_url=_media_url(collapsed.path, root) if collapsed else None,
+            portrait_url=portrait_url,
+            landscape_url=landscape_url,
+            banner_url=banner_url,
+            square_url=square_url,
         )
 
     # Icons mode: branding only (no photo background)
@@ -452,8 +471,8 @@ def resolve_artist_card(
             ),
         )
 
-    def _slide_url(slide: dict) -> str | None:
-        if want == "round":
+    def _pick_oriented(slide: dict, mode: str) -> str | None:
+        if mode == "round":
             return (
                 slide.get("square_url")
                 or slide.get("portrait_url")
@@ -461,7 +480,7 @@ def resolve_artist_card(
                 or slide.get("banner_url")
                 or slide.get("slide_url")
             )
-        if want == "portrait":
+        if mode == "portrait":
             return (
                 slide.get("portrait_url")
                 or slide.get("square_url")
@@ -469,7 +488,7 @@ def resolve_artist_card(
                 or slide.get("banner_url")
                 or slide.get("slide_url")
             )
-        if want == "banner":
+        if mode == "banner":
             return (
                 slide.get("banner_url")
                 or slide.get("landscape_url")
@@ -477,7 +496,6 @@ def resolve_artist_card(
                 or slide.get("square_url")
                 or slide.get("slide_url")
             )
-        # landscape (default)
         return (
             slide.get("landscape_url")
             or slide.get("banner_url")
@@ -489,10 +507,21 @@ def resolve_artist_card(
     slides = [
         s
         for s in list_release_photo_slides(artist_dir, root)
-        if isinstance(s, dict) and _slide_url(s)
+        if isinstance(s, dict)
+        and (
+            s.get("landscape_url")
+            or s.get("portrait_url")
+            or s.get("banner_url")
+            or s.get("square_url")
+            or s.get("slide_url")
+        )
     ]
     picked = _stable_choice(slides, f"{seed}:photo") if slides else None
-    photo_url = _slide_url(picked) if picked else None
+    portrait_url = _pick_oriented(picked, "portrait") if picked else None
+    landscape_url = _pick_oriented(picked, "landscape") if picked else None
+    banner_url = _pick_oriented(picked, "banner") if picked else None
+    square_url = _pick_oriented(picked, "round") if picked else None
+    photo_url = _pick_oriented(picked, want) if picked else None
 
     year = None
     if picked:
@@ -516,6 +545,10 @@ def resolve_artist_card(
         icon=_pick_brand_for_year(
             brands, year, "icon", prefer_collapsed=False, seed=seed
         ),
+        portrait_url=portrait_url,
+        landscape_url=landscape_url,
+        banner_url=banner_url,
+        square_url=square_url,
     )
 
 

@@ -630,8 +630,9 @@ def list_artist_cards(
     page_rows = rows[start : start + page_size]
     items = []
     for b in page_rows:
+        # Orientation-independent slide; client picks aspect from multi-URL fields.
         card = resolve_artist_card(
-            b.bnd_name, orientation=orientation, user_id=user_id
+            b.bnd_name, orientation="landscape", user_id=user_id
         )
         items.append(
             {
@@ -639,12 +640,17 @@ def list_artist_cards(
                 "code": b.bnd_code,
                 "name": b.bnd_name,
                 "starting_dates": b.bnd_starting_dates,
-                "photo_url": card.photo_url,
+                "photo_url": card.photo_url or card.landscape_url,
+                "portrait_url": card.portrait_url,
+                "landscape_url": card.landscape_url,
+                "banner_url": card.banner_url,
+                "square_url": card.square_url,
                 "logo_url": card.logo_url,
                 "logo_collapsed_url": card.logo_collapsed_url,
                 "icon_url": card.icon_url,
                 "era_year": card.era_year,
-                "show_name_on_hover": card.show_name_on_hover or not card.photo_url,
+                "show_name_on_hover": card.show_name_on_hover
+                or not (card.photo_url or card.landscape_url),
                 "play_count": play_counts.get(b.bnd_id, 0) if play_counts else None,
             }
         )

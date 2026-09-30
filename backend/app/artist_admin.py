@@ -12,6 +12,7 @@ from app.models import Artist, ArtistParticipation, Band
 
 PAR_OFFICIAL = 0
 PAR_ORIGINAL = 1
+PAR_TOURING = 2
 PAR_FORMER = 3
 
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
@@ -50,8 +51,11 @@ def participation_types_from_flags(
     is_official: bool,
     is_founding: bool,
     is_former: bool,
+    is_touring: bool = False,
 ) -> str:
     ids: list[int] = []
+    if is_touring:
+        ids.append(PAR_TOURING)
     if is_official:
         ids.append(PAR_OFFICIAL)
     if is_founding:
@@ -177,6 +181,7 @@ def create_participation(
     is_official: bool = True,
     is_founding: bool = False,
     is_former: bool = False,
+    is_touring: bool = False,
 ) -> ArtistParticipation:
     artist: Artist | None = None
     if artist_id:
@@ -207,6 +212,7 @@ def create_participation(
             is_official=is_official,
             is_founding=is_founding,
             is_former=is_former,
+            is_touring=is_touring,
         ),
         arp_manual=1,
     )

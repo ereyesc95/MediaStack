@@ -46,6 +46,7 @@ import TrackYoutubeButton, { trackYoutubeVideos } from "../TrackYoutubeButton";
 import FindInDiskModal from "../FindInDiskModal";
 import SortChevron from "../SortChevron";
 import type { PlaylistTrackSortKey } from "../playlistTrackSort";
+import { livePlaysTooltip } from "../../../liveShowsTransform";
 import {
   filterGenresToKnown,
   formatArtistFeat,
@@ -124,6 +125,11 @@ type Props = {
   sections?: ArtistPlaylistSection[];
   showSourceReleaseColumn?: boolean;
   musicVideosMode?: boolean;
+  /** Live shows playlist: setlist-style rows (album center, YouTube at end). */
+  liveShowsMode?: boolean;
+  /** Global live shows: artist name in center column instead of album. */
+  catalogLiveShows?: boolean;
+  liveShowsViewMode?: "by-show" | "by-artist" | "all-tracks";
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   sortKey?: PlaylistTrackSortKey;
   sortDesc?: boolean;
@@ -495,6 +501,9 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       sections,
       showSourceReleaseColumn = false,
       musicVideosMode = false,
+      liveShowsMode = false,
+      catalogLiveShows: _catalogLiveShows = false,
+      liveShowsViewMode = "by-show",
       onOpenRelease,
       sortKey = "original",
       sortDesc = false,
@@ -766,6 +775,10 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       musicVideosMode && !editMode && !snapshotMetadataMode
     );
 
+    const useLiveShowsColumns = Boolean(
+      liveShowsMode && !editMode && !snapshotMetadataMode
+    );
+
     const handleMusicVideoRow = (track: ArtistPlaylistTrack) => {
       const url =
         (track.local_video_path
@@ -797,7 +810,25 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       </button>
     );
 
-    const columnHeader = useMusicVideoColumns ? (
+    const columnHeader = useLiveShowsColumns ? (
+      <li className="user-playlist-tracklist__header live-shows-tracklist__header">
+        <div className="user-playlist-tracklist__header-row live-shows-tracklist__header-row">
+          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--num">
+            #
+          </span>
+          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--title">
+            Title
+          </span>
+          {liveShowsViewMode !== "by-artist" ? (
+            <span className="user-playlist-tracklist__header-btn">Artist</span>
+          ) : null}
+          <span className="user-playlist-tracklist__header-btn">Release</span>
+          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--trailing">
+            {stacked ? "Length" : "Duration"}
+          </span>
+        </div>
+      </li>
+    ) : useMusicVideoColumns ? (
       <li className="user-playlist-tracklist__header music-videos-tracklist__header">
         <div className="music-videos-tracklist__header-row">
           {headerCell("#", "number", "user-playlist-tracklist__header-btn--num")}
@@ -850,6 +881,112 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       index: number,
       displayNumber: number
     ) => {
+            if (liveShowsMode) {
+              const item = trackItems[index]!;
+              const active = Boolean(track.play_path && playingPath === track.play_path);
+              const unavailable = Boolean(track.unavailable || !track.play_path);
+              const displayTitle = track.title;
+              const durationLabel = formatTrackDuration(track);
+              const youtubeQuery = track.youtube_query ?? null;
+              const videos = unavailable ? [] : trackYoutubeVideos(track);
+              const youtubeBtn =
+                videos.length > 0 ? (
+                  <TrackYoutubeButton videos={videos} onBeforeOpen={onPausePlayback} />
+                ) : null;
+              const artistCol = formatArtistFeat(
+                track.snapshot?.artist?.trim() ||
+                  track.artist_name?.trim() ||
+                  "—"
+              );
+              const releaseCol =
+                track.album_title?.trim() ||
+                liveFileReleaseTitle(track) ||
+                "—";
+              const playCount = track.live_plays_count ?? track.play_occurrences?.length;
+              const playsTip = livePlaysTooltip(track);
+              const rowClass = [
+                "release-tracklist__row",
+                "live-shows-tracklist__row",
+                active ? "active" : "",
+                unavailable ? "release-tracklist__row--unavailable" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const endActions = (
+                <span className="live-shows-tracklist__end-actions">
+                  {unavailable && youtubeQuery ? (
+                    <a
+                      className="setlist-tracklist__youtube-link"
+                      href={youtubeSearchUrl(youtubeQuery)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Search ${trackDisplayTitle(track.title)} on YouTube`}
+                      title="Search on YouTube"
+                    >
+                      <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
+                    </a>
+                  ) : (
+                    youtubeBtn || (
+                      <span
+                        className="setlist-tracklist__youtube-link setlist-tracklist__youtube-link--empty"
+                        aria-hidden
+                      />
+                    )
+                  )}
+                  <span
+                    className={`release-tracklist__duration${
+                      !durationLabel ? " release-tracklist__duration--empty" : ""
+                    }`}
+                  >
+                    {durationLabel ?? ""}
+                  </span>
+                </span>
+              );
+              const titleInner = (
+                <>
+                  <ReleaseTrackTitle title={displayTitle} />
+                  {playCount && playCount > 1 ? (
+                    <span
+                      className="live-shows-tracklist__play-count"
+                      title={playsTip}
+                    >
+                      ×{playCount}
+                    </span>
+                  ) : null}
+                </>
+              );
+              const rowInner = (
+                <>
+                  <span className="release-tracklist__num">{displayNumber}</span>
+                  <span className="release-tracklist__title-wrap">{titleInner}</span>
+                  {liveShowsViewMode !== "by-artist" ? (
+                    <span className="live-shows-tracklist__artist-col">{artistCol}</span>
+                  ) : null}
+                  <span className="live-shows-tracklist__album-col">{releaseCol}</span>
+                  {endActions}
+                </>
+              );
+              return (
+                <li key={item.id} className={`${rowClass} user-playlist-tracklist__row`}>
+                  {unavailable ? (
+                    <div className="release-tracklist__play release-tracklist__play--static live-shows-tracklist__play-row">
+                      {rowInner}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="release-tracklist__play live-shows-tracklist__play-row"
+                      onClick={() => handlePlayRow(track, item)}
+                      disabled={!track.play_path}
+                      aria-label={`Play ${track.title}`}
+                    >
+                      {rowInner}
+                    </button>
+                  )}
+                </li>
+              );
+            }
+
             if (musicVideosMode) {
               const songTitle = trackMainTitle(track.title);
               const videoLabel = musicVideoDisplayLabel(track.video_label);
@@ -1197,9 +1334,18 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       renderPlaylistTrackRow(track, index, index + 1)
     );
 
+    const liveShowsLayoutClass =
+      liveShowsViewMode === "by-artist"
+        ? " live-shows-tracklist--by-artist"
+        : liveShowsViewMode === "all-tracks"
+          ? " live-shows-tracklist--all-tracks"
+          : " live-shows-tracklist--by-show";
+
     const sectionTracklistBody =
       sections && sections.length > 0 ? (
-        sections.map((section) => {
+        <>
+          {useLiveShowsColumns ? columnHeader : null}
+          {sections.map((section) => {
           const open = expandedSectionId === section.id;
           return (
           <section key={section.id} className="release-tracklist__edition-block live-story-tracklist__section">
@@ -1223,7 +1369,11 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               ) : null}
             </button>
             <MsDisclosure open={open}>
-            <ol className="release-tracklist__tracks live-story-tracklist__tracks">
+            <ol
+              className={`release-tracklist__tracks live-story-tracklist__tracks${
+                liveShowsMode ? ` live-shows-tracklist__tracks live-shows-tracklist${liveShowsLayoutClass}` : ""
+              }`}
+            >
               {section.tracks.map((track, sectionIndex) => {
                 const index =
                   track.play_path != null
@@ -1235,7 +1385,8 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
             </MsDisclosure>
           </section>
           );
-        })
+        })}
+        </>
       ) : null;
 
     const tracklistBody = (
@@ -1280,6 +1431,10 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
         {sectionTracklistBody ?? (
           <ol
             className={`release-tracklist__tracks${
+              liveShowsMode
+                ? ` live-shows-tracklist__tracks live-shows-tracklist${liveShowsLayoutClass}`
+                : ""
+            }${
               showSourceReleaseColumn ? " live-story-tracklist__tracks" : ""
             }`}
           >
@@ -1343,6 +1498,8 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           rightView === "lyrics" ? " release-tracklist--lyrics" : ""
         }${
           editMode ? " release-tracklist--edit-mode" : ""
+        }${
+          liveShowsMode ? " live-shows-tracklist" : ""
         }${
           stacked && mobileView === "tracks" && mobileBackdropUrl
             ? " release-tracklist--mobile-canvas"

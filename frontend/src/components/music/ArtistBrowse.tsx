@@ -824,7 +824,7 @@ export default function ArtistBrowse({
       </div>
 
       <div className="artist-browse-scroll">
-        {loading && !isAlbums && (
+        {loading && !isAlbums && artists.length === 0 && (
           <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
         )}
         {isAlbums ? (
@@ -878,7 +878,7 @@ export default function ArtistBrowse({
               >
                 {artists.map((a) => (
                   <ArtistCard
-        key={`${a.id}-${orientation}-${a.photo_url || ""}`}
+                    key={String(a.id)}
                     artist={a}
                     orientation={orientation}
                     tapReveal={isPhone}

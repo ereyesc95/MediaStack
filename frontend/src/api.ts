@@ -1282,6 +1282,26 @@ export async function fetchBandPlaylistDetail(
   );
 }
 
+export async function fetchGlobalLiveShowsCard(): Promise<{
+  slug: string;
+  name: string;
+  track_count: number | null;
+  show_count: number;
+  cover_url: string;
+}> {
+  return request(`${API}/music/playlists/global/live-shows/card`);
+}
+
+export async function fetchGlobalLiveShowsDetail(): Promise<
+  import("./types").ArtistPlaylistDetail
+> {
+  return request(
+    `${API}/music/playlists/global/live-shows`,
+    undefined,
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function fetchSetlistShows(
   bandId: number,
   year: string
@@ -1391,6 +1411,7 @@ export async function createParticipation(
     is_official?: boolean;
     is_founding?: boolean;
     is_former?: boolean;
+    is_touring?: boolean;
   }
 ) {
   return request<{ ok: boolean; participation_id: number; artist_id: number }>(

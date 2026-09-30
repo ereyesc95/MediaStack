@@ -39,6 +39,7 @@ type Props = {
   bandName: string;
   artistId?: number;
   stackLayer?: 1 | 2;
+  participationPreset?: "default" | "support";
   onClose: () => void;
   onSaved: () => void;
 };
@@ -113,9 +114,11 @@ export default function MemberFormModal({
   bandName,
   artistId,
   stackLayer = 1,
+  participationPreset = "default",
   onClose,
   onSaved,
 }: Props) {
+  const supportPreset = participationPreset === "support";
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +233,12 @@ export default function MemberFormModal({
       .finally(() => setLoading(false));
   }, [mode, artistId, bandId, bandName]);
 
-  const title = mode === "add" ? "Add member" : "Edit member";
+  const title =
+    mode === "add"
+      ? supportPreset
+        ? "Support personnel"
+        : "Add member"
+      : "Edit member";
 
   const handleMbSearch = async () => {
     const q = (stageName || name).trim();
@@ -322,9 +330,10 @@ export default function MemberFormModal({
             start: row.start.trim() || undefined,
             end: row.end.trim() || undefined,
             roles_text: rolesText || undefined,
-            is_official: row.is_official,
-            is_founding: row.is_founding,
-            is_former: row.is_former,
+            is_official: supportPreset ? false : row.is_official,
+            is_founding: supportPreset ? false : row.is_founding,
+            is_former: supportPreset ? false : row.is_former,
+            is_touring: supportPreset,
           };
           if (!createdArtist) {
             const created = await createParticipation(targetBandId, {

@@ -77,38 +77,34 @@ def _resolve_tour_logo(
     tour: Tour,
     media_root: Path | None,
 ) -> str | None:
-    if tour.tur_logo_url:
-        return tour.tur_logo_url
-    if not media_root or not tour.tur_folder_path:
-        return None
-    try:
-        tour_dir = media_root / tour.tur_folder_path
-        art = _subdir(tour_dir, "[Artwork]") or _subdir(tour_dir, "Artwork")
-        url = _artwork_url(art, "Logo", media_root)
-        if url:
-            return url
-        # Opener tours: fall back to main-artist tour Artwork when local logo missing
-        if tour.tur_is_support and tour.tur_main_artist_name:
-            main_dir = _artist_dir(media_root, tour.tur_main_artist_name)
-            if main_dir:
-                # Match by tour title under main artist's Tours/
-                tours_root = _subdir(main_dir, "Tours")
-                if tours_root:
-                    title = (tour.tur_title or "").casefold()
-                    for child in tours_root.iterdir():
-                        if not child.is_dir():
-                            continue
-                        # Skip other openers' folders
-                        if "[by " in child.name.casefold():
-                            continue
-                        if title and title in child.name.casefold():
-                            main_art = _subdir(child, "[Artwork]") or _subdir(
-                                child, "Artwork"
-                            )
-                            return _artwork_url(main_art, "Logo", media_root)
-    except OSError:
-        return None
-    return None
+    """Resolve tour Logo from disk (mtime-busted URL). DB URL is fallback only."""
+    if media_root and tour.tur_folder_path:
+        try:
+            tour_dir = media_root / tour.tur_folder_path
+            art = _subdir(tour_dir, "[Artwork]") or _subdir(tour_dir, "Artwork")
+            url = _artwork_url(art, "Logo", media_root)
+            if url:
+                return url
+            # Opener tours: fall back to main-artist tour Artwork when local logo missing
+            if tour.tur_is_support and tour.tur_main_artist_name:
+                main_dir = _artist_dir(media_root, tour.tur_main_artist_name)
+                if main_dir:
+                    tours_root = _subdir(main_dir, "Tours")
+                    if tours_root:
+                        title = (tour.tur_title or "").casefold()
+                        for child in tours_root.iterdir():
+                            if not child.is_dir():
+                                continue
+                            if "[by " in child.name.casefold():
+                                continue
+                            if title and title in child.name.casefold():
+                                main_art = _subdir(child, "[Artwork]") or _subdir(
+                                    child, "Artwork"
+                                )
+                                return _artwork_url(main_art, "Logo", media_root)
+        except OSError:
+            pass
+    return tour.tur_logo_url
 
 
 def _era_branding_for_year(

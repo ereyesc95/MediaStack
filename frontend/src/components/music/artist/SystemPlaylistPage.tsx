@@ -7,6 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import {
+  fetchGlobalLiveShowsDetail,
   fetchTrackSourceArt,
   playTrack,
   resolveArtistName,
@@ -30,12 +31,21 @@ import { prefetchTrackCredits, getCachedTrackCredits } from "../../../releaseTra
 import { pushArtistRoute, pushUserPlaylistRoute } from "../../../musicRoute";
 import {
   applyAlbumTheme,
+  applyMediaTheme,
+  beginAdaptivePageSession,
   beginAlbumPageSession,
   beginArtistPageSession,
   clearAlbumTheme,
+  clearMediaTheme,
   clearUserPlaylistPageTheme,
   colorsFromImageUrl,
 } from "../../../mediaTheme";
+import {
+  buildLiveShowsArtistSections,
+  buildUniqueLiveTracks,
+  nextLiveShowsViewMode,
+  type LiveShowsViewMode,
+} from "../../../liveShowsTransform";
 import {
   isMobileLandscapeLayout,
   isMobilePortraitLayout,
@@ -93,6 +103,7 @@ import {
 import MediaBeatFrame from "../MediaBeatFrame";
 import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
+import { IconCards, IconLineup, IconList } from "../../MenuIcons";
 
 type PanelBrand = {
   bandId: number;
@@ -140,6 +151,10 @@ type Props = {
   onChooseSource: () => void;
   onSwitchProfile: () => void;
   onEditProfile: () => void;
+  /** Music home → Playlists: all-artists live shows aggregate. */
+  catalogLiveShows?: boolean;
+  /** Back button label when opened from Events / Playlists. */
+  backLabel?: string;
 };
 
 function dedupeMusicVideoTracks(tracks: ArtistPlaylistTrack[]): ArtistPlaylistTrack[] {
@@ -311,8 +326,12 @@ export default function SystemPlaylistPage({
   onChooseSource,
   onSwitchProfile,
   onEditProfile,
+  catalogLiveShows = false,
+  backLabel = "Playlists",
 }: Props) {
   const isUserPlaylist = userPlaylistId != null;
+  const isGlobalLiveShows = catalogLiveShows && slug === "live-shows";
+  const isLiveShowsPlaylist = !isUserPlaylist && slug === "live-shows";
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
   const tabletPortrait = layout === "tablet-portrait";
@@ -369,7 +388,7 @@ export default function SystemPlaylistPage({
   const [setlistTourName, setSetlistTourName] = useState<string | null>(null);
   const [setlistTrackCount, setSetlistTrackCount] = useState<number | null>(null);
   const [setlistPlaybackKey, setSetlistPlaybackKey] = useState<string | null>(null);
-  const [liveShowsView, setLiveShowsView] = useState<"grouped" | "flat">("grouped");
+  const [liveShowsView, setLiveShowsView] = useState<LiveShowsViewMode>("by-show");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverRevision, setCoverRevision] = useState(0);
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
@@ -416,20 +435,27 @@ export default function SystemPlaylistPage({
   }, [bandId]);
 
   useEffect(() => {
-    // User playlists must not start an artist theme session — that leaves
-    // sampled cover colors stuck when returning to the Playlists grid.
-    if (!isUserPlaylist && userId) {
+    if (isUserPlaylist) {
+      beginAlbumPageSession();
+      return () => clearUserPlaylistPageTheme(userId);
+    }
+    if (isGlobalLiveShows) {
+      beginAdaptivePageSession(userId);
+      return () => clearMediaTheme(userId);
+    }
+    if (bandId != null && userId) {
       beginArtistPageSession(userId);
     }
     beginAlbumPageSession();
-    return () => {
-      if (isUserPlaylist) {
-        clearUserPlaylistPageTheme(userId);
-      } else {
-        clearAlbumTheme(userId);
-      }
-    };
-  }, [userId, isUserPlaylist]);
+    return () => clearAlbumTheme(userId);
+  }, [bandId, isGlobalLiveShows, isUserPlaylist, userId]);
+
+  useEffect(() => {
+    if (!isGlobalLiveShows || !detail?.cover_url) return;
+    void colorsFromImageUrl(detail.cover_url).then((c) => {
+      if (c) applyMediaTheme(c, userId);
+    });
+  }, [detail?.cover_url, isGlobalLiveShows, userId]);
 
   useEffect(() => {
     if (isUserPlaylist && userPlaylistId != null) {
@@ -540,12 +566,32 @@ export default function SystemPlaylistPage({
         cancelled = true;
       };
     }
+    const loadGlobalLiveShows = async () => {
+      setLoading(true);
+      try {
+        const d = await fetchGlobalLiveShowsDetail();
+        if (!cancelled) setDetail(d);
+      } catch (e) {
+        if (!cancelled) {
+          setError(parseApiError(e instanceof Error ? e.message : String(e)));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    if (isGlobalLiveShows) {
+      void loadGlobalLiveShows();
+      return () => {
+        cancelled = true;
+      };
+    }
     if (bandId == null || !slug) return;
     void loadArtist();
     return () => {
       cancelled = true;
     };
-  }, [bandId, isUserPlaylist, slug, userPlaylistId]);
+  }, [bandId, isGlobalLiveShows, isUserPlaylist, slug, userPlaylistId]);
 
   useEffect(() => {
     miniAudio.clear();
@@ -603,13 +649,38 @@ export default function SystemPlaylistPage({
     return applySnapshotFilters(tracks, snapshotFilterState);
   }, [isSnapshotPlaylist, snapshotFilterState, tracks]);
 
+  const liveShowsTracks = useMemo(() => {
+    if (!isLiveShowsPlaylist) return tracks;
+    if (liveShowsView === "by-show") return tracks;
+    return buildUniqueLiveTracks(tracks);
+  }, [isLiveShowsPlaylist, liveShowsView, tracks]);
+
+  const liveShowsSections = useMemo(() => {
+    if (!isLiveShowsPlaylist || !detail) return detail?.sections;
+    if (liveShowsView === "by-show") return detail.sections;
+    if (liveShowsView === "by-artist") {
+      return buildLiveShowsArtistSections(tracks);
+    }
+    return undefined;
+  }, [detail, isLiveShowsPlaylist, liveShowsView, tracks]);
+
   const displayTracks = useMemo(() => {
-    if (slug === "live-story" || slug === "live-shows") return tracks;
+    if (slug === "live-shows") return liveShowsTracks;
+    if (slug === "live-story") return tracks;
     const base =
       slug === "music-videos" ? dedupeMusicVideoTracks(filteredTracks) : filteredTracks;
     const sorted = applyTrackSort(base, trackSort.key, trackSort.desc, originalTrackNumbers);
     return isSnapshotPlaylist ? dedupeTracksByPlayPath(sorted) : sorted;
-  }, [filteredTracks, isSnapshotPlaylist, originalTrackNumbers, slug, trackSort.desc, trackSort.key, tracks]);
+  }, [
+    filteredTracks,
+    isSnapshotPlaylist,
+    liveShowsTracks,
+    originalTrackNumbers,
+    slug,
+    trackSort.desc,
+    trackSort.key,
+    tracks,
+  ]);
 
   const handleSnapshotFilterStateChange = useCallback((state: SnapshotFilterState) => {
     setSnapshotFilterState(state);
@@ -635,7 +706,7 @@ export default function SystemPlaylistPage({
   useEffect(() => {
     setTrackSort({ key: "original", desc: false });
     setSnapshotFilterState({ artists: [], genres: [] });
-    setLiveShowsView("grouped");
+    setLiveShowsView("by-show");
   }, [slug, userPlaylistId]);
 
   useEffect(() => {
@@ -1412,7 +1483,7 @@ export default function SystemPlaylistPage({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span>Playlists</span>
+              <span>{backLabel}</span>
             </button>
           </div>
           <div className="release-page__top-center">
@@ -1422,6 +1493,31 @@ export default function SystemPlaylistPage({
             />
           </div>
           <div className="release-page__top-right">
+            {isLiveShowsPlaylist ? (
+              <button
+                type="button"
+                className="catalog-scope-toggle catalog-scope-toggle--switch live-shows-scope-toggle"
+                aria-label={`Live shows view: ${liveShowsView}. Click to change.`}
+                onClick={() => setLiveShowsView((v) => nextLiveShowsViewMode(v))}
+              >
+                {liveShowsView === "by-show" ? (
+                  <>
+                    <IconLineup className="catalog-scope-toggle__icon" />
+                    BY SHOW
+                  </>
+                ) : liveShowsView === "by-artist" ? (
+                  <>
+                    <IconCards className="catalog-scope-toggle__icon" />
+                    BY ARTIST
+                  </>
+                ) : (
+                  <>
+                    <IconList className="catalog-scope-toggle__icon" />
+                    ALL TRACKS
+                  </>
+                )}
+              </button>
+            ) : null}
             {!isUserPlaylist && bandId != null && (
               <MediaInlineSearch
                 mode="artist-releases"
@@ -2163,32 +2259,6 @@ export default function SystemPlaylistPage({
               />
             ) : (
               <>
-                {!isUserPlaylist && slug === "live-shows" ? (
-                  <div className="live-shows-view-toggle" role="group" aria-label="Live shows view">
-                    <button
-                      type="button"
-                      className={
-                        liveShowsView === "grouped"
-                          ? "live-shows-view-toggle__btn is-active"
-                          : "live-shows-view-toggle__btn"
-                      }
-                      onClick={() => setLiveShowsView("grouped")}
-                    >
-                      By show
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        liveShowsView === "flat"
-                          ? "live-shows-view-toggle__btn is-active"
-                          : "live-shows-view-toggle__btn"
-                      }
-                      onClick={() => setLiveShowsView("flat")}
-                    >
-                      Flat
-                    </button>
-                  </div>
-                ) : null}
                 {isSnapshotPlaylist && !editPlaylist && (
                   <SnapshotPlaylistFilterBar
                     tracks={tracks}
@@ -2209,12 +2279,17 @@ export default function SystemPlaylistPage({
                 sections={
                   !isUserPlaylist &&
                   (slug === "live-story" ||
-                    (slug === "live-shows" && liveShowsView === "grouped"))
-                    ? detail?.sections
+                    (isLiveShowsPlaylist && liveShowsView !== "all-tracks"))
+                    ? liveShowsSections
                     : undefined
                 }
-                showSourceReleaseColumn={!isUserPlaylist && slug !== "music-videos"}
+                liveShowsViewMode={isLiveShowsPlaylist ? liveShowsView : undefined}
+                showSourceReleaseColumn={
+                  !isUserPlaylist && slug !== "music-videos" && slug !== "live-shows"
+                }
                 musicVideosMode={!isUserPlaylist && slug === "music-videos"}
+                liveShowsMode={!isUserPlaylist && slug === "live-shows"}
+                catalogLiveShows={isGlobalLiveShows}
                 onOpenRelease={onOpenRelease}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}

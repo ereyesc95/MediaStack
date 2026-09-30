@@ -16,12 +16,12 @@ const OPTIONS: {
   label: string;
   Icon: (props: { className?: string }) => ReactElement;
 }[] = [
-  { id: "portrait", label: "PORTRAIT", Icon: IconCardPortrait },
-  { id: "landscape", label: "LANDSCAPE", Icon: IconCardLandscape },
-  { id: "banner", label: "BANNER", Icon: IconCardBanner },
-  { id: "cover", label: "COVER", Icon: IconCardCover },
-  { id: "logos", label: "LOGOS", Icon: IconCardIcons },
-  { id: "list", label: "LIST", Icon: IconList },
+  { id: "portrait", label: "Portrait", Icon: IconCardPortrait },
+  { id: "landscape", label: "Landscape", Icon: IconCardLandscape },
+  { id: "banner", label: "Banner", Icon: IconCardBanner },
+  { id: "cover", label: "Cover", Icon: IconCardCover },
+  { id: "logos", label: "Logos", Icon: IconCardIcons },
+  { id: "list", label: "List", Icon: IconList },
 ];
 
 type Props = {
@@ -32,6 +32,7 @@ type Props = {
 
 const CLOSE_DELAY_MS = 280;
 
+/** Icon-only hover picker — same chrome as catalog CardOrientationPicker. */
 export default function EventsLayoutPicker({
   value,
   onChange,
@@ -92,7 +93,7 @@ export default function EventsLayoutPicker({
     >
       <button
         type="button"
-        className="catalog-scope-toggle catalog-scope-toggle--switch"
+        className="card-orientation-toggle"
         aria-label={`Cards: ${current.label}. Choose layout.`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -102,8 +103,7 @@ export default function EventsLayoutPicker({
           setOpen((v) => !v);
         }}
       >
-        <CurrentIcon className="catalog-scope-toggle__icon" />
-        {current.label}
+        <CurrentIcon />
       </button>
       {menuPresent ? (
         <div

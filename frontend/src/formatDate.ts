@@ -43,3 +43,23 @@ export function formatTrackDate(raw: string | null | undefined): string | null {
   }
   return year;
 }
+
+/** CAPS month + smaller ordinal for tour show date tabs. */
+export function formatShowTabDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const m = trimmed.match(/^(\d{4})(?:[.\-](\d{2})(?:[.\-](\d{2}))?)?/);
+  if (!m) return trimmed.toUpperCase();
+  const year = m[1];
+  const month = m[2] ? Number(m[2]) : null;
+  const day = m[3] ? Number(m[3]) : null;
+  if (month && day) {
+    const label = (MONTHS[month - 1] ?? String(month)).toUpperCase();
+    return `${label} ${ordinal(day).toUpperCase()}, ${year}`;
+  }
+  if (month) {
+    const label = (MONTHS[month - 1] ?? String(month)).toUpperCase();
+    return `${label} ${year}`;
+  }
+  return year;
+}

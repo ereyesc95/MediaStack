@@ -590,46 +590,92 @@ export default function ArtistAbout({
             </div>
           </div>
           {data.solo_performer && onOpenPerformer && (
-            <section className="artist-about__performer">
-              <h3 className="artist-about__tracks-title">Performer</h3>
-              <div className="artist-about__performer-grid">
-                <button
-                  type="button"
-                  className={`artist-about__performer-card${
-                    data.solo_performer.is_deceased
-                      ? " artist-about__performer-card--deceased"
-                      : ""
-                  }`}
-                  onClick={() => onOpenPerformer(data.solo_performer!.id)}
-                >
-                  {data.solo_performer.photo_url ? (
-                    <img
-                      src={data.solo_performer.photo_url}
-                      alt=""
-                      className="media-beat-glow"
-                    />
-                  ) : (
-                    <span className="artist-about__performer-ph">
-                      {data.solo_performer.name
-                        .split(/\s+/)
-                        .slice(0, 2)
-                        .map((w) => w[0])
-                        .join("")
-                        .toUpperCase()}
-                    </span>
-                  )}
-                  <span className="artist-about__performer-name">
-                    {data.solo_performer.name}
-                    {data.solo_performer.is_deceased && (
-                      <span title="Deceased"> †</span>
-                    )}
-                  </span>
-                  {data.solo_performer.years && (
-                    <span className="artist-about__performer-years">
-                      {data.solo_performer.years}
-                    </span>
-                  )}
-                </button>
+            <section className="artist-about__solo-lineup">
+              <div className="release-page__section-glass artist-about__solo-lineup-glass">
+                <div className="artist-about__solo-lineup-split">
+                  <div className="artist-about__solo-lineup-side">
+                    <h3 className="artist-about__solo-lineup-label">Performer</h3>
+                    <button
+                      type="button"
+                      className={`artist-lineup-card${
+                        data.solo_performer.is_deceased
+                          ? " artist-lineup-card--deceased"
+                          : ""
+                      }`}
+                      onClick={() => onOpenPerformer(data.solo_performer!.id)}
+                    >
+                      <span className="artist-lineup-card__photo">
+                        {data.solo_performer.photo_url ? (
+                          <img
+                            src={data.solo_performer.photo_url}
+                            alt=""
+                            className="lineup-photo-image"
+                          />
+                        ) : (
+                          <span className="artist-lineup-card__ph">
+                            {data.solo_performer.name
+                              .split(/\s+/)
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")
+                              .toUpperCase()}
+                          </span>
+                        )}
+                        {data.solo_performer.signature_url ? (
+                          <img
+                            src={data.solo_performer.signature_url}
+                            alt=""
+                            className="lineup-signature-overlay"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="artist-lineup-card__name">
+                        {data.solo_performer.name}
+                      </span>
+                    </button>
+                  </div>
+                  {(data.lineup?.touring?.length ?? 0) > 0 ? (
+                    <div className="artist-about__solo-lineup-side artist-about__solo-lineup-side--support">
+                      <h3 className="artist-about__solo-lineup-label">
+                        Support personnel
+                      </h3>
+                      <div className="artist-about__solo-lineup-support">
+                        {(data.lineup.touring || []).map((m) => (
+                          <button
+                            key={m.participation_id ?? m.id}
+                            type="button"
+                            className={`artist-lineup-card${
+                              m.is_deceased ? " artist-lineup-card--deceased" : ""
+                            }`}
+                            onClick={() => onOpenPerformer(m.id)}
+                          >
+                            <span className="artist-lineup-card__photo">
+                              {m.photo_url ? (
+                                <img
+                                  src={m.photo_url}
+                                  alt=""
+                                  className="lineup-photo-image"
+                                />
+                              ) : (
+                                <span className="artist-lineup-card__ph">
+                                  {m.name.slice(0, 2).toUpperCase()}
+                                </span>
+                              )}
+                              {m.signature_url ? (
+                                <img
+                                  src={m.signature_url}
+                                  alt=""
+                                  className="lineup-signature-overlay"
+                                />
+                              ) : null}
+                            </span>
+                            <span className="artist-lineup-card__name">{m.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </section>
           )}

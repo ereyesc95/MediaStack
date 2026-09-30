@@ -44,6 +44,9 @@ export type ArtistCard = {
   name: string | null;
   photo_url: string | null;
   portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  square_url?: string | null;
   logo_url: string | null;
   logo_collapsed_url?: string | null;
   icon_url: string | null;
@@ -876,6 +879,19 @@ export type ArtistPlaylistTrack = {
   track_number?: number | null;
   is_music_video?: boolean;
   snapshot?: PlaylistSnapshotMeta | null;
+  show_date_iso?: string | null;
+  show_label?: string | null;
+  tour_title?: string | null;
+  city?: string | null;
+  venue?: string | null;
+  show_key?: string | null;
+  play_occurrences?: {
+    date_iso?: string | null;
+    display_date?: string | null;
+    venue?: string | null;
+    city?: string | null;
+  }[];
+  live_plays_count?: number | null;
 };
 
 export type ArtistPlaylistNeighbor = {
@@ -927,6 +943,7 @@ export type SetlistShowSummary = {
 };
 
 export type SetlistTrackItem = ReleaseTrackItem & {
+  album_title?: string | null;
   is_tape?: boolean;
   unavailable?: boolean;
   youtube_query?: string;

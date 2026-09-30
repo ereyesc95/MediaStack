@@ -47,6 +47,7 @@ type Props = {
   setlistId: string;
   onPlay: (path: string, title: string, playbackKey: string) => void;
   onPanelTrack?: (track: ReleaseTrackItem) => void;
+  showReleaseTitles?: boolean;
 };
 
 export default function SetlistTracklist({
@@ -55,6 +56,7 @@ export default function SetlistTracklist({
   setlistId,
   onPlay,
   onPanelTrack,
+  showReleaseTitles = false,
 }: Props) {
   return (
     <div className="release-tracklist setlist-tracklist">
@@ -97,6 +99,11 @@ export default function SetlistTracklist({
                                 </span>
                                 <span className="release-tracklist__title-wrap">
                                   <ReleaseTrackTitle title={titleForDisplay} />
+                                  {showReleaseTitles && track.album_title ? (
+                                    <span className="setlist-tracklist__release-title">
+                                      {track.album_title}
+                                    </span>
+                                  ) : null}
                                 </span>
                                 {track.youtube_query ? (
                                   <a
@@ -141,6 +148,11 @@ export default function SetlistTracklist({
                                 </span>
                                 <span className="release-tracklist__title-wrap">
                                   <ReleaseTrackTitle title={titleForDisplay} />
+                                  {showReleaseTitles && track.album_title ? (
+                                    <span className="setlist-tracklist__release-title">
+                                      {track.album_title}
+                                    </span>
+                                  ) : null}
                                 </span>
                                 {track.duration ? (
                                   <span className="release-tracklist__duration">{track.duration}</span>

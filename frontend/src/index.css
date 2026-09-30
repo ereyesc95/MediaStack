@@ -25655,10 +25655,8 @@ button.lyrics-status-badge--icon-only {
 
 /* Tours / show page */
 .tour-show-page {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 0.75rem 1rem 2rem;
+  position: relative;
+  min-height: calc(100dvh - 2rem);
 }
 .tour-show-page--standalone {
   min-height: calc(100dvh - 2rem);
@@ -25884,8 +25882,126 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__setlist-tracks li { display: grid; grid-template-columns: 2rem 1fr; gap: 0.5rem; align-items: baseline; }
 .tour-show-page__setlist-tracks li.is-missing { opacity: 0.55; }
 .tour-show-page__setlist-num { opacity: 0.55; font-size: 0.8rem; }
-.tour-show-page__album { appearance: none; border: none; background: transparent; color: var(--text); display: flex; align-items: center; gap: 0.75rem; padding: 0; cursor: pointer; text-align: left; }
+.tour-show-page__album { appearance: none; border: none; background: transparent; color: var(--text); display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; padding: 0; cursor: pointer; text-align: left; font: inherit; }
 .tour-show-page__album:disabled { cursor: default; }
+.tour-show-page__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.tour-show-page__bg {
+  position: absolute;
+  inset: -8%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) saturate(1.15);
+  opacity: 0;
+  transform: scale(1.06);
+  transition: opacity 0.45s ease;
+}
+.tour-show-page__bg--visible { opacity: 0.38; }
+.tour-show-page__bg--in { animation: tour-show-bg-in 0.45s ease forwards; }
+@keyframes tour-show-bg-in {
+  from { opacity: 0; }
+  to { opacity: 0.38; }
+}
+.tour-show-page__chrome {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.tour-show-page__show-date-tab { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.68rem; font-weight: 650; }
+.tour-show-page__show-date-ord { font-size: 0.58rem; font-weight: 600; vertical-align: baseline; }
+.tour-show-page--poster-hero .artist-about__layout.tour-show-page__hero {
+  display: grid;
+  grid-template-columns: minmax(9rem, 16rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+.tour-show-page__overview-cols { align-items: stretch; }
+.tour-show-page__overview-col--stretch { display: flex; flex-direction: column; min-height: 100%; }
+.tour-show-page__album--stretch { flex: 1; display: flex; align-items: stretch; justify-content: center; }
+.tour-show-page__album--stretch img { width: 100%; height: 100%; object-fit: cover; max-height: none; flex: 1; }
+.tour-show-page__overview-col--stretch .tour-show-page__flip-wrap { flex: 1; display: flex; max-width: none; }
+.tour-show-page__overview-col--stretch .tour-show-page__photocard { flex: 1; }
+.tour-show-page__setlist-tab.release-page__tracklist-layout { display: grid; grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.tour-show-page__setlist-cover { width: 100%; border-radius: 6px; display: block; }
+.tour-show-page__setlist-panel-title { margin: 0.5rem 0 0; font-weight: 600; font-size: 0.92rem; }
+.tour-show-page__setlist-panel-meta { margin: 0.2rem 0 0; font-size: 0.78rem; }
+.setlist-tracklist__release-title { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.12rem; }
+.tour-show-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.55rem; }
+.tour-show-media-card { padding: 0; border: none; background: transparent; border-radius: 4px; overflow: hidden; aspect-ratio: 1; }
+.tour-show-media-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.artist-about__solo-lineup { margin-top: 0.75rem; }
+.artist-about__solo-lineup-split { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+.artist-about__solo-lineup-label { margin: 0 0 0.45rem; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.artist-about__solo-lineup-support { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.events-browse__live-shows { padding: 0 0.85rem 0.65rem; }
+.events-browse__live-shows-card { max-width: 11rem; }
+.tour-show-page__body { padding: 0 0.85rem 2rem; }
+.tour-show-page__hero-col { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+.tour-show-page__poster-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.15rem; }
+.tour-show-page__poster-tabs button {
+  appearance: none; border: none; background: transparent; color: var(--text-muted);
+  font: inherit; font-size: 0.62rem; font-weight: 650; letter-spacing: 0.08em;
+  padding: 0.2rem 0.35rem; cursor: pointer;
+}
+.tour-show-page__poster-tabs button.active { color: var(--text); }
+.tour-show-page__photo-col { cursor: pointer; }
+.tour-show-page--banner-hero .tour-show-page__banner {
+  width: 100%; max-height: min(42vw, 220px); object-fit: cover; display: block; border-radius: 0;
+}
+.tour-show-page__tour-nav {
+  display: flex; align-items: stretch; justify-content: space-between; gap: 0.5rem; margin-top: 0.35rem;
+}
+.tour-show-page__overview-main { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+.tour-show-page__bill-panel { padding: 0.65rem 0.75rem; }
+.tour-show-page__bill-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.tour-show-page__bill-side { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: flex-start; }
+.tour-show-page__bill-side--openers { justify-content: flex-end; margin-left: auto; }
+.tour-show-page__bill-circle { width: 4.75rem; }
+.tour-show-page__info-rows {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.45rem 1rem; margin: 0; font-size: 0.82rem;
+}
+.tour-show-page__info-rows dt {
+  margin: 0; font-size: 0.62rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+}
+.tour-show-page__info-rows dd { margin: 0.12rem 0 0; }
+.tour-show-page__info-with-logo { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.tour-show-page__section-label {
+  margin: 0 0 0.35rem; font-size: 0.62rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+}
+.tour-show-page__lineup-grid { justify-content: flex-start; }
+.tour-show-page__lineup-card { pointer-events: none; }
+.tour-show-page__overview-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.85rem; align-items: start; }
+@media (max-width: 720px) {
+  .tour-show-page__overview-cols { grid-template-columns: 1fr; }
+}
+.tour-show-page__flip-wrap { max-width: 140px; }
+.tour-show-page__flip-wrap--landscape { max-width: 100%; }
+.tour-show-page__photocard { width: 100%; }
+.tour-show-page__setlist-tab .setlist-tracklist .release-tracklist__play,
+.tour-show-page__setlist-tab .setlist-tracklist .release-tracklist__play--static {
+  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) auto;
+}
+.tour-show-media-grid { gap: 0; }
+.tour-show-media-card { border: none; border-radius: 0; transition: transform 0.22s ease; }
+.tour-show-media-card:hover { transform: scale(1.04); z-index: 1; }
+.tour-show-media-card__flip {
+  top: 0.35rem; right: 0.35rem; bottom: auto; left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.65rem; height: 1.65rem; padding: 0; border: none; background: transparent;
+  color: rgba(255, 255, 255, 0.88); opacity: 0; transition: opacity 0.18s ease; border-radius: 0;
+}
+.tour-show-media-card:hover .tour-show-media-card__flip { opacity: 1; }
+.tour-show-media-card__flip-icon { width: 1.15rem; height: 1.15rem; }
+.live-shows-scope-toggle.catalog-scope-toggle { border-radius: 4px; gap: 0.28rem; }
 
 .events-browse { padding: 0 0 2rem; }
 .events-browse__sticky { margin-bottom: 0.75rem; }
@@ -25899,27 +26015,50 @@ button.lyrics-status-badge--icon-only {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   text-align: center;
+  /* Keep hover branding clear of the date strip */
+  max-height: calc(100% - 2.1rem);
+  padding: 0.4rem 0.5rem 2.1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.media-release-card__title-hover--logos {
+  padding-bottom: 2.1rem;
+}
+.media-release-card__logo--event-tour {
+  max-height: 38%;
+  max-width: 78%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 .media-release-card__event-artist-brand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   max-width: 90%;
+  flex-shrink: 0;
 }
 .media-release-card__event-era-icon {
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.15rem;
+  height: 1.15rem;
   object-fit: contain;
   flex-shrink: 0;
 }
 .media-release-card__event-era-logo {
-  max-height: 1.5rem;
-  max-width: 7rem;
+  max-height: 1.25rem;
+  max-width: 6.5rem;
   width: auto;
   object-fit: contain;
+}
+.media-release-card--landscape .media-release-card__logo--event-tour {
+  max-height: 42%;
+  max-width: 55%;
+}
+.media-release-card--cover .media-release-card__logo--event-tour {
+  max-height: 34%;
 }
 .media-release-card__cover-img--contain {
   object-fit: contain;
@@ -25954,15 +26093,70 @@ button.lyrics-status-badge--icon-only {
 .events-layout-picker .catalog-scope-toggle {
   gap: 0.28rem;
 }
-.live-shows-view-toggle {
-  display: flex; flex-wrap: wrap; gap: 0.35rem;
-  margin: 0 0 0.65rem; padding: 0 0.15rem;
+.live-shows-tracklist__play-row,
+.live-shows-tracklist .release-tracklist__play.live-shows-tracklist__play-row,
+.live-shows-tracklist .release-tracklist__play--static.live-shows-tracklist__play-row {
+  display: grid;
+  width: 100%;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 0.35rem 0.5rem;
 }
-.live-shows-view-toggle__btn {
-  appearance: none; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
-  background: transparent; color: var(--text); font-size: 0.72rem;
-  padding: 0.22rem 0.6rem; border-radius: 999px; cursor: pointer;
+.live-shows-tracklist--by-show .live-shows-tracklist__play-row,
+.live-shows-tracklist--all-tracks .live-shows-tracklist__play-row {
+  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) auto;
 }
-.live-shows-view-toggle__btn.is-active {
-  border-color: var(--accent); color: var(--accent);
+.live-shows-tracklist--by-artist .live-shows-tracklist__play-row {
+  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) auto;
+}
+.live-shows-tracklist__header-row {
+  display: grid;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+.live-shows-tracklist--by-show .live-shows-tracklist__header-row,
+.live-shows-tracklist--all-tracks .live-shows-tracklist__header-row {
+  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) auto;
+}
+.live-shows-tracklist--by-artist .live-shows-tracklist__header-row {
+  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) auto;
+}
+.live-shows-tracklist__artist-col {
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  align-self: center;
+}
+.live-shows-tracklist__play-count {
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+.live-shows-tracklist .release-tracklist__title-cluster .release-tracklist__youtube-wrap,
+.live-shows-tracklist .user-playlist-tracklist__title-main .release-tracklist__youtube-wrap {
+  display: none;
+}
+.live-shows-tracklist .live-shows-tracklist__album-col {
+  display: block;
+  min-width: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  align-self: center;
+}
+.live-shows-tracklist .live-shows-tracklist__end-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-width: 2.5rem;
 }

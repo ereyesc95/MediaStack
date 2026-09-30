@@ -19,6 +19,49 @@ function yearFromArtist(artist: ArtistCardType): string | null {
   return null;
 }
 
+/** Pick cover URL by orientation (Series catalog parity — no refetch). */
+export function pickArtistCoverUrl(
+  artist: ArtistCardType,
+  orientation: CardOrientation
+): string | null {
+  if (orientation === "icons" || orientation === "list") return null;
+  if (orientation === "portrait") {
+    return (
+      artist.portrait_url ||
+      artist.square_url ||
+      artist.photo_url ||
+      artist.landscape_url ||
+      artist.banner_url ||
+      null
+    );
+  }
+  if (orientation === "banner") {
+    return (
+      artist.banner_url ||
+      artist.landscape_url ||
+      artist.portrait_url ||
+      artist.photo_url ||
+      null
+    );
+  }
+  if (orientation === "round") {
+    return (
+      artist.square_url ||
+      artist.portrait_url ||
+      artist.photo_url ||
+      artist.landscape_url ||
+      null
+    );
+  }
+  return (
+    artist.landscape_url ||
+    artist.photo_url ||
+    artist.banner_url ||
+    artist.portrait_url ||
+    null
+  );
+}
+
 export default function ArtistCard({
   artist,
   orientation,
@@ -59,13 +102,14 @@ export default function ArtistCard({
 
   const isIcons = orientation === "icons";
   const isRound = orientation === "round";
-  const hasPhoto = Boolean(artist.photo_url) && !isIcons;
+  const coverUrl = pickArtistCoverUrl(artist, orientation);
+  const hasPhoto = Boolean(coverUrl) && !isIcons;
   const placeholderUrl =
     orientation === "portrait" || isRound
       ? "/api/assets/default/placeholder-portrait"
       : "/api/assets/default/placeholder-landscape";
   const bg = hasPhoto
-    ? `url("${artist.photo_url}")`
+    ? `url("${coverUrl}")`
     : isIcons
       ? "none"
       : `url("${placeholderUrl}")`;
