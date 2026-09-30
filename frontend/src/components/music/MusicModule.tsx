@@ -69,9 +69,12 @@ import CollectionBrowse, {
 } from "./CollectionBrowse";
 import EventsBrowse, {
   EMPTY_EVENTS_FILTERS,
+  eventsActLabel,
+  nextEventsAct,
   openEventShow,
   type EventsFilters,
 } from "./EventsBrowse";
+import EventsLayoutPicker from "./EventsLayoutPicker";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -80,9 +83,11 @@ import {
   MiniAudioPlayerControls,
   useMiniAudio,
 } from "./artist/MiniAudioPlayer";
+import TourShowPage from "./artist/TourShowPage";
 import { useBeatPulse } from "../../useBeatPulse";
 import { IconAddArtist, IconDisc, IconHeadphones } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
+import type { EventsCardLayout } from "../../types";
 
 type Props = {
   tab: MusicTab;
@@ -216,6 +221,9 @@ export default function MusicModule({
   const [eventsFilters, setEventsFilters] = useState<EventsFilters>(
     EMPTY_EVENTS_FILTERS
   );
+  const [eventsCardLayout, setEventsCardLayout] =
+    useState<EventsCardLayout>("portrait");
+  const tourEntryRef = useRef<"events" | "artist">("artist");
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
@@ -784,6 +792,9 @@ export default function MusicModule({
   const loadArtists = useCallback(async () => {
     const generation = ++loadArtistsGeneration.current;
     setError(null);
+    // Drop stale cards immediately so orientation/layout switches cannot keep
+    // the previous photo cropped in the new shape while the refetch is in flight.
+    setArtists([]);
     setArtistsLoading(true);
     const params = new URLSearchParams({
       page: String(artistPage),
@@ -1246,6 +1257,28 @@ export default function MusicModule({
                   onChange={setCollectionView}
                 />
               ) : null}
+              {tab === "events" ? (
+                <>
+                  <button
+                    type="button"
+                    className="catalog-scope-toggle catalog-scope-toggle--switch events-act-toggle"
+                    title="Cycle All acts / Main acts / Openers"
+                    aria-label={`Show filter: ${eventsActLabel(eventsFilters.act)}. Click to change.`}
+                    onClick={() =>
+                      setEventsFilters((prev) => ({
+                        ...prev,
+                        act: nextEventsAct(prev.act),
+                      }))
+                    }
+                  >
+                    {eventsActLabel(eventsFilters.act)}
+                  </button>
+                  <EventsLayoutPicker
+                    value={eventsCardLayout}
+                    onChange={setEventsCardLayout}
+                  />
+                </>
+              ) : null}
               <AppMenu
                 onImport={onImport}
                 onSync={onSync}
@@ -1472,6 +1505,68 @@ export default function MusicModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
         />
+      ) : bandId && tourSlug ? (
+        <TourShowPage
+          bandId={bandId}
+          tourSlug={tourSlug}
+          showSlug={showSlug}
+          showTab={showTab}
+          artistName={artistShell?.name ?? undefined}
+          isAdmin={isAdmin}
+          standalone
+          backLabel={tourEntryRef.current === "events" ? "EVENTS" : "TOURS"}
+          onBack={() => {
+            if (tourEntryRef.current === "events") {
+              onTourNavigate?.({
+                tourSlug: undefined,
+                showSlug: undefined,
+                showTab: undefined,
+              });
+              onBand(undefined);
+              onTab("events");
+              window.history.pushState(null, "", "/music");
+              return;
+            }
+            pushArtistRoute({
+              bandId,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+            });
+            onTourNavigate?.({
+              tourSlug: undefined,
+              showSlug: undefined,
+              showTab: undefined,
+            });
+          }}
+          onNavigate={(next) => {
+            pushArtistRoute({
+              bandId,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+              tourSlug: next.tourSlug,
+              showSlug: next.showSlug,
+              showTab: next.showTab ?? "overview",
+            });
+            onTourNavigate?.(next);
+          }}
+          onOpenArtist={(id) => {
+            onTourNavigate?.({
+              tourSlug: undefined,
+              showSlug: undefined,
+              showTab: undefined,
+            });
+            openArtist(id);
+          }}
+          onOpenRelease={(releaseId) => {
+            onTourNavigate?.({
+              tourSlug: undefined,
+              showSlug: undefined,
+              showTab: undefined,
+            });
+            void prefetchReleaseOverview(bandId, releaseId);
+            onReleaseNavigate?.(releaseId, "overview");
+          }}
+        />
       ) : bandId && releaseId ? (
         <ReleasePage
           bandId={bandId}
@@ -1614,6 +1709,7 @@ export default function MusicModule({
           onOpenMoviesLeaf={onOpenMoviesLeaf}
           onOpenSeriesFolder={onOpenSeriesFolder}
           onOpenTour={(tour) => {
+            tourEntryRef.current = "artist";
             pushArtistRoute({
               bandId,
               section: "tours",
@@ -1625,29 +1721,6 @@ export default function MusicModule({
               tourSlug: tour.slug,
               showSlug: undefined,
               showTab: "overview",
-            });
-          }}
-          onTourNavigate={(next) => {
-            pushArtistRoute({
-              bandId,
-              section: "tours",
-              overviewTab: artistOverviewTab,
-              tourSlug: next.tourSlug,
-              showSlug: next.showSlug,
-              showTab: next.showTab ?? "overview",
-            });
-            onTourNavigate?.(next);
-          }}
-          onCloseTour={() => {
-            pushArtistRoute({
-              bandId,
-              section: "tours",
-              overviewTab: artistOverviewTab,
-            });
-            onTourNavigate?.({
-              tourSlug: undefined,
-              showSlug: undefined,
-              showTab: undefined,
             });
           }}
           onBack={() => {
@@ -1887,8 +1960,20 @@ export default function MusicModule({
         <EventsBrowse
           filters={eventsFilters}
           onFiltersChange={setEventsFilters}
+          cardLayout={eventsCardLayout}
           onOpenShow={(ev) => {
+            tourEntryRef.current = "events";
             openEventShow(ev);
+            primeArtistShell(ev.band_id, {
+              id: ev.band_id,
+              name: ev.band_name,
+              photo_url: ev.poster_url,
+              logo_url: ev.era_logo_url ?? null,
+              logo_collapsed_url: null,
+              icon_url: ev.era_icon_url ?? null,
+              era_year: ev.year ?? null,
+              show_name_on_hover: true,
+            });
             onBand(ev.band_id, "tours");
             onTourNavigate?.({
               tourSlug: ev.tour_slug,

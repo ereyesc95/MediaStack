@@ -243,9 +243,11 @@ export default function ArtistTours({
   return (
     <div
       className={[
+        "media-release-grid",
         "artist-media-grid",
-        "artist-playlist-grid",
-        cardLayout === "banner" ? "artist-playlist-grid--banner" : "",
+        "events-browse__grid",
+        cardLayout === "banner" ? "media-release-grid--banner" : "",
+        cardLayout === "list" ? "media-release-grid--list" : "",
       ]
         .filter(Boolean)
         .join(" ")}

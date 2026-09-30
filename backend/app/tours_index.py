@@ -566,6 +566,51 @@ def _sync_bills_for_show(db: Session, show: TourShow, tour: Tour, band: Band, no
         )
 
 
+def sync_all_band_tours(db: Session, media_root: Path | None = None) -> dict:
+    """Rescan Tours for every band that has disk Tours and/or DB tour rows (purge orphans)."""
+    root = media_root or _media_root()
+    if not root:
+        return {"ok": False, "error": "media_root not configured", "bands": 0, "tours": 0, "shows": 0}
+
+    band_ids: set[int] = set()
+    music = root / "Music"
+    if music.is_dir():
+        try:
+            for letter_dir in music.iterdir():
+                if not letter_dir.is_dir():
+                    continue
+                for artist_dir in letter_dir.iterdir():
+                    if not artist_dir.is_dir():
+                        continue
+                    if not artist_has_tours(artist_dir):
+                        continue
+                    band = db.scalar(
+                        select(Band).where(Band.bnd_name == artist_dir.name).limit(1)
+                    )
+                    if band:
+                        band_ids.add(band.bnd_id)
+        except OSError:
+            pass
+
+    for bid in db.scalars(select(Tour.tur_band_id).distinct()).all():
+        if bid:
+            band_ids.add(int(bid))
+    for bid in db.scalars(select(TourShow.tsh_band_id).distinct()).all():
+        if bid:
+            band_ids.add(int(bid))
+
+    tours_n = 0
+    shows_n = 0
+    for bid in sorted(band_ids):
+        band = db.get(Band, bid)
+        if not band:
+            continue
+        result = sync_band_tours(db, band)
+        tours_n += int(result.get("tours") or 0)
+        shows_n += int(result.get("shows") or 0)
+    return {"ok": True, "bands": len(band_ids), "tours": tours_n, "shows": shows_n}
+
+
 def sync_band_tours(db: Session, band: Band) -> dict:
     """Scan disk and upsert Tour / TourShow rows for this band."""
     root = _media_root()

@@ -250,15 +250,30 @@ export type ReleaseCardLayout = "cover" | "banner" | "list";
 
 export type MusicTab = "home" | "artists" | "collection" | "events" | "playlists";
 
+/** Events tab card layouts (Portrait default). Cover = square Playlist art. */
+export type EventsCardLayout =
+  | "portrait"
+  | "landscape"
+  | "banner"
+  | "cover"
+  | "logos"
+  | "list";
+
 export type EventCard = {
   id: number;
   slug: string;
   date_iso: string | null;
+  year?: number | null;
   country: string | null;
   city: string | null;
   venue: string | null;
   poster_url: string | null;
   banner_url: string | null;
+  thumbnail_url?: string | null;
+  playlist_url?: string | null;
+  tour_logo_url?: string | null;
+  era_icon_url?: string | null;
+  era_logo_url?: string | null;
   band_id: number;
   band_name: string | null;
   tour_id: number;
@@ -266,10 +281,14 @@ export type EventCard = {
   tour_slug: string;
   is_support: boolean;
   main_artist_name: string | null;
+  /** Act on the card (folder owner) — openers use the opener name, not the headliner. */
+  hover_artist_name?: string | null;
   promoter: string | null;
   ticketer: string | null;
   promoter_logo_url?: string | null;
   ticketer_logo_url?: string | null;
+  subgenre_names?: string[];
+  genre_names?: string[];
 };
 
 export type CollectionLeaf = {

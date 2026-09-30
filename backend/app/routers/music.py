@@ -1036,12 +1036,15 @@ def music_events(
     db: Session = Depends(get_db),
     act: str = Query("all", pattern="^(all|main|openers)$"),
     artist: str | None = Query(None),
-    genre: str | None = Query(None),
-    decade: int | None = Query(None),
+    origin: str | None = Query(None),
     country: str | None = Query(None),
-    continent: str | None = Query(None),
+    venue: str | None = Query(None),
+    genre: str | None = Query(None),
+    year: int | None = Query(None),
+    decade: int | None = Query(None),
     promoter: str | None = Query(None),
     ticketer: str | None = Query(None),
+    refresh: bool = Query(False),
 ):
     """Global EVENTS tab — attended shows across all artists."""
     from app.events_index import list_event_cards
@@ -1050,12 +1053,15 @@ def music_events(
         db,
         act=act,
         artist=artist,
-        genre=genre,
-        decade=decade,
+        origin=origin,
         country=country,
-        continent=continent,
+        venue=venue,
+        genre=genre,
+        year=year,
+        decade=decade,
         promoter=promoter,
         ticketer=ticketer,
+        refresh=refresh,
     )
 
 

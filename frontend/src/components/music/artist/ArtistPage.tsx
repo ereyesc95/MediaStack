@@ -97,7 +97,6 @@ import ArtistLineup, { type LineupTab } from "./ArtistLineup";
 import ArtistLinks from "./ArtistLinks";
 import ArtistMediaGrid from "./ArtistMediaGrid";
 import ArtistTours from "./ArtistTours";
-import TourShowPage from "./TourShowPage";
 import OfficialUnofficialBar from "../../OfficialUnofficialBar";
 import type { TourCard, TourShowTab } from "../../../types";
 import MediaBeatFx from "../MediaBeatFx";
@@ -261,12 +260,6 @@ type Props = {
   /** Open a Series leaf from artist SERIES tab (folder under Series/…). */
   onOpenSeriesFolder?: (folderPath: string) => void;
   onOpenTour?: (tour: TourCard) => void;
-  onTourNavigate?: (next: {
-    tourSlug: string;
-    showSlug?: string;
-    showTab?: TourShowTab;
-  }) => void;
-  onCloseTour?: () => void;
 };
 
 function pageBgUrl(
@@ -308,8 +301,6 @@ export default function ArtistPage({
   onOpenMoviesLeaf,
   onOpenSeriesFolder,
   onOpenTour,
-  onTourNavigate,
-  onCloseTour,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1938,23 +1929,7 @@ export default function ArtistPage({
         {data && section === "library" && !data.media?.has_library && !cachedLibrary && (
           <p className="muted artist-section-empty">No books found.</p>
         )}
-        {section === "tours" && tourSlug && onTourNavigate ? (
-          <TourShowPage
-            bandId={bandId}
-            tourSlug={tourSlug}
-            showSlug={showSlug}
-            showTab={showTab}
-            artistName={data?.name ?? shell?.name ?? undefined}
-            isAdmin={isAdmin}
-            onBack={() => onCloseTour?.()}
-            onNavigate={onTourNavigate}
-            onOpenArtist={onOpenArtist}
-            onOpenRelease={(releaseId) =>
-              onOpenReleaseNavigate?.(bandId, releaseId)
-            }
-          />
-        ) : null}
-        {section === "tours" && !tourSlug && data?.media?.has_tours ? (
+        {section === "tours" && data?.media?.has_tours ? (
           <ArtistTours
             bandId={bandId}
             cardLayout={releaseCardLayout}
@@ -1965,7 +1940,6 @@ export default function ArtistPage({
         ) : null}
         {data &&
           section === "tours" &&
-          !tourSlug &&
           !data.media?.has_tours && (
             <p className="muted artist-section-empty">No tours found.</p>
           )}

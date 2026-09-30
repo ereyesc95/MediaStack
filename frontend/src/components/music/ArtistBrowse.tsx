@@ -878,7 +878,7 @@ export default function ArtistBrowse({
               >
                 {artists.map((a) => (
                   <ArtistCard
-                    key={a.id}
+        key={`${a.id}-${orientation}-${a.photo_url || ""}`}
                     artist={a}
                     orientation={orientation}
                     tapReveal={isPhone}

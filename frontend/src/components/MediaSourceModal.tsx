@@ -91,10 +91,7 @@ export default function MediaSourceModal({
         ) : (
           <>
             {required ? (
-              <p className="muted">
-                Choose the folder that contains your media library (e.g. a folder with{" "}
-                <strong>Music</strong>, <strong>Series</strong>, and other modules inside).
-              </p>
+              <p className="muted">Choose your media folder.</p>
             ) : (
               <p className="muted">
                 Select a new source folder for your media library. Gallery images, audio

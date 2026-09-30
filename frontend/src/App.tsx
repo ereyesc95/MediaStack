@@ -235,9 +235,12 @@ export default function App() {
           setSourceModal("welcome");
         }
       } catch {
-        setMediaRootConfigured(false);
-        rememberMediaRootConfigured(false);
-        setSourceModal("welcome");
+        // API down (e.g. only Vite running) — keep any cached flag and do not
+        // reopen the welcome picker as if the media root was cleared.
+        const cached = readCachedMediaRootConfigured();
+        if (cached != null) {
+          setMediaRootConfigured(cached);
+        }
       }
     }
 

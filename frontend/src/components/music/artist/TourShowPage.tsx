@@ -16,6 +16,10 @@ import type {
   TourShowSetlistPayload,
   TourShowTab,
 } from "../../../types";
+import {
+  isMobilePortraitLayout,
+  useDeviceLayout,
+} from "../../../usePhoneLayout";
 import PlaylistBoot from "../../PlaylistBoot";
 
 type Props = {
@@ -25,6 +29,10 @@ type Props = {
   showTab?: TourShowTab;
   artistName?: string;
   isAdmin?: boolean;
+  /** Full-page chrome (not embedded in artist Tours tab). */
+  standalone?: boolean;
+  /** Top-left back control label (default TOURS). */
+  backLabel?: string;
   onBack: () => void;
   onNavigate: (next: {
     tourSlug: string;
@@ -257,11 +265,16 @@ export default function TourShowPage({
   showTab = "overview",
   artistName,
   isAdmin = false,
+  standalone = false,
+  backLabel = "TOURS",
   onBack,
   onNavigate,
   onOpenArtist,
   onOpenRelease,
 }: Props) {
+  const deviceLayout = useDeviceLayout();
+  const bannerHero = isMobilePortraitLayout(deviceLayout);
+  const backText = `← ${backLabel}`;
   const [tour, setTour] = useState<TourDetail | null>(null);
   const [detail, setDetail] = useState<TourShowDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -374,9 +387,9 @@ export default function TourShowPage({
   }
   if (error && !detail) {
     return (
-      <div className="tour-show-page">
-        <button type="button" className="text-btn" onClick={onBack}>
-          ← Tours
+      <div className="tour-show-page tour-show-page--standalone">
+        <button type="button" className="catalog-scope-toggle" onClick={onBack}>
+          {backText}
         </button>
         <p className="error">{error}</p>
       </div>
@@ -384,9 +397,9 @@ export default function TourShowPage({
   }
   if (!tour || !detail) {
     return (
-      <div className="tour-show-page">
-        <button type="button" className="text-btn" onClick={onBack}>
-          ← Tours
+      <div className="tour-show-page tour-show-page--standalone">
+        <button type="button" className="catalog-scope-toggle" onClick={onBack}>
+          {backText}
         </button>
         <p className="muted">No shows on this tour.</p>
       </div>
@@ -403,19 +416,29 @@ export default function TourShowPage({
   const qrCode = overview?.qr_code ?? null;
   const album = overview?.album;
   const showTicketCol = Boolean(ticket || playlistCode || qrCode);
+  const posterUrl = show.poster_url || tour.poster_url;
+  const bannerUrl = show.banner_url || tour.banner_url || posterUrl;
 
   return (
-    <div className="tour-show-page">
+    <div
+      className={[
+        "tour-show-page",
+        standalone ? "tour-show-page--standalone" : "",
+        bannerHero ? "tour-show-page--banner-hero" : "tour-show-page--poster-hero",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <header className="tour-show-page__header">
         <div className="tour-show-page__nav">
-          <button type="button" className="text-btn" onClick={onBack}>
-            ← Tours
+          <button type="button" className="catalog-scope-toggle" onClick={onBack}>
+            {backText}
           </button>
           <div className="tour-show-page__tour-nav">
             {tour.prev_tour ? (
               <button
                 type="button"
-                className="text-btn"
+                className="catalog-scope-toggle"
                 onClick={() =>
                   onNavigate({ tourSlug: tour.prev_tour!.slug, showTab: activeTab })
                 }
@@ -428,7 +451,7 @@ export default function TourShowPage({
             {tour.next_tour ? (
               <button
                 type="button"
-                className="text-btn"
+                className="catalog-scope-toggle"
                 onClick={() =>
                   onNavigate({ tourSlug: tour.next_tour!.slug, showTab: activeTab })
                 }
@@ -443,25 +466,45 @@ export default function TourShowPage({
 
         {isAdmin ? (
           <div className="tour-show-page__admin">
-            <button type="button" className="text-btn" onClick={() => void runSyncShow()} disabled={Boolean(busy)}>
-              Sync show
+            <button
+              type="button"
+              className="catalog-scope-toggle"
+              onClick={() => void runSyncShow()}
+              disabled={Boolean(busy)}
+            >
+              SYNC SHOW
             </button>
-            <button type="button" className="text-btn" onClick={() => void runSyncArtists()} disabled={Boolean(busy)}>
-              Sync artists
+            <button
+              type="button"
+              className="catalog-scope-toggle"
+              onClick={() => void runSyncArtists()}
+              disabled={Boolean(busy)}
+            >
+              SYNC ARTISTS
             </button>
             {busy ? <span className="muted">{busy}</span> : null}
           </div>
         ) : null}
 
         <div className="tour-show-page__hero">
-          {(show.banner_url || tour.banner_url) && (
+          {bannerHero && bannerUrl ? (
             <img
-              src={show.banner_url || tour.banner_url || ""}
+              src={bannerUrl}
               alt=""
               className="tour-show-page__banner"
               draggable={false}
             />
-          )}
+          ) : null}
+          {!bannerHero && posterUrl ? (
+            <div className="tour-show-page__poster-col">
+              <img
+                src={posterUrl}
+                alt=""
+                className="tour-show-page__poster"
+                draggable={false}
+              />
+            </div>
+          ) : null}
           <div className="tour-show-page__hero-copy">
             <p className="tour-show-page__tour-title">{tour.title}</p>
             <h1 className="tour-show-page__show-title">{show.venue || "Show"}</h1>

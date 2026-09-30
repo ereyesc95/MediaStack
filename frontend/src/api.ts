@@ -39,8 +39,18 @@ async function errorMessageFromResponse(res: Response): Promise<string> {
   } catch {
     /* plain text body */
   }
+  if (
+    res.status === 502 ||
+    res.status === 503 ||
+    res.status === 504 ||
+    /econnrefused/i.test(message) ||
+    /proxy error/i.test(message)
+  ) {
+    return "Cannot reach the API. Start python run.py (port 8766).";
+  }
   if (/^internal server error$/i.test(message.trim())) {
-    return "Couldn't complete that request right now. Please try again in a moment.";
+    // Vite's /api proxy often surfaces ECONNREFUSED as a bare 500.
+    return "Couldn't complete that request right now. If Browse/settings fail, start python run.py (port 8766) and try again.";
   }
   return message;
 }
@@ -569,22 +579,28 @@ export async function fetchMusicEvents(
   params: {
     act?: "all" | "main" | "openers";
     artist?: string;
-    genre?: string;
-    decade?: number | null;
+    origin?: string;
     country?: string;
-    continent?: string;
+    venue?: string;
+    genre?: string;
+    year?: number | null;
+    decade?: number | null;
     promoter?: string;
     ticketer?: string;
+    refresh?: boolean;
   } = {}
 ): Promise<{
   events: import("./types").EventCard[];
   act: string;
   facets: {
     artists: string[];
-    genres: string[];
-    decades: number[];
+    origins: string[];
     countries: string[];
-    continents: string[];
+    venues: string[];
+    genres: string[];
+    genre_groups?: { genre: string; items: string[] }[];
+    years?: number[];
+    decades: number[];
     promoters: string[];
     ticketers: string[];
   };
@@ -594,12 +610,15 @@ export async function fetchMusicEvents(
   const q = new URLSearchParams();
   if (params.act) q.set("act", params.act);
   if (params.artist) q.set("artist", params.artist);
-  if (params.genre) q.set("genre", params.genre);
-  if (params.decade != null) q.set("decade", String(params.decade));
+  if (params.origin) q.set("origin", params.origin);
   if (params.country) q.set("country", params.country);
-  if (params.continent) q.set("continent", params.continent);
+  if (params.venue) q.set("venue", params.venue);
+  if (params.genre) q.set("genre", params.genre);
+  if (params.year != null) q.set("year", String(params.year));
+  if (params.decade != null) q.set("decade", String(params.decade));
   if (params.promoter) q.set("promoter", params.promoter);
   if (params.ticketer) q.set("ticketer", params.ticketer);
+  if (params.refresh) q.set("refresh", "true");
   const qs = q.toString();
   return request(`${API}/music/events${qs ? `?${qs}` : ""}`);
 }

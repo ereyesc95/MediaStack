@@ -223,6 +223,14 @@ async def run_folder_sync(
         results.append(
             await sync_bands(db, root, user_agent=musicbrainz_ua)
         )
+        try:
+            from app.tours_index import sync_all_band_tours
+
+            results.append(
+                {"table": "tours", **sync_all_band_tours(db, root)}
+            )
+        except Exception as e:
+            results.append({"table": "tours", "error": str(e)})
     if module in ("series", "all"):
         if not tmdb_api_key:
             results.append({"table": "series", "error": "TMDb API key not configured"})
