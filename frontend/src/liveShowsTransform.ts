@@ -15,6 +15,13 @@ function trackKey(t: ArtistPlaylistTrack): string {
   return `${artist}|${title}`;
 }
 
+function occurrenceKey(o: LiveShowsPlayOccurrence): string {
+  const date = (o.date_iso || "").trim();
+  const venue = (o.venue || "").trim().toLowerCase();
+  const city = (o.city || "").trim().toLowerCase();
+  return `${date}|${city}|${venue}`;
+}
+
 function occurrenceLabel(o: LiveShowsPlayOccurrence): string {
   const date = o.display_date || o.date_iso || "";
   const place = [o.venue, o.city].filter(Boolean).join(", ");
@@ -28,8 +35,8 @@ function mergeOccurrences(
   const out: LiveShowsPlayOccurrence[] = [];
   const seen = new Set<string>();
   for (const o of [...(a || []), ...(b || [])]) {
-    const key = occurrenceLabel(o);
-    if (seen.has(key)) continue;
+    const key = occurrenceKey(o);
+    if (!key.replace(/\|/g, "") || seen.has(key)) continue;
     seen.add(key);
     out.push(o);
   }
@@ -51,18 +58,22 @@ export function buildUniqueLiveTracks(tracks: ArtistPlaylistTrack[]): ArtistPlay
     const key = trackKey(t);
     const existing = map.get(key);
     if (!existing) {
+      const seedOccs =
+        t.play_occurrences && t.play_occurrences.length
+          ? t.play_occurrences
+          : [
+              {
+                date_iso: t.show_date_iso,
+                display_date: undefined,
+                venue: t.venue,
+                city: t.city,
+              },
+            ];
+      const occs = mergeOccurrences(seedOccs, undefined);
       map.set(key, {
         ...t,
-        play_occurrences: mergeOccurrences(t.play_occurrences, [
-          {
-            date_iso: t.show_date_iso,
-            venue: t.venue,
-            city: t.city,
-          },
-        ]),
-        live_plays_count:
-          t.live_plays_count ??
-          (t.play_occurrences?.length || 1),
+        play_occurrences: occs,
+        live_plays_count: occs.length || 1,
       });
       continue;
     }
@@ -101,7 +112,7 @@ export function buildLiveShowsArtistSections(
       const unique = buildUniqueLiveTracks(artistTracks);
       return {
         id: `artist-${artist}`,
-        title: `${artist} (${unique.length})`,
+        title: artist,
         tracks: unique,
       };
     });

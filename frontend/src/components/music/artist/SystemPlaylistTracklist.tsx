@@ -810,25 +810,22 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       </button>
     );
 
-    const columnHeader = useLiveShowsColumns ? (
+    const columnHeader =
+      useLiveShowsColumns && liveShowsViewMode === "all-tracks" ? (
       <li className="user-playlist-tracklist__header live-shows-tracklist__header">
         <div className="user-playlist-tracklist__header-row live-shows-tracklist__header-row">
-          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--num">
-            #
-          </span>
-          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--title">
-            Title
-          </span>
-          {liveShowsViewMode !== "by-artist" ? (
-            <span className="user-playlist-tracklist__header-btn">Artist</span>
-          ) : null}
-          <span className="user-playlist-tracklist__header-btn">Release</span>
-          <span className="user-playlist-tracklist__header-btn user-playlist-tracklist__header-btn--trailing">
-            {stacked ? "Length" : "Duration"}
-          </span>
+          {headerCell("#", "number", "user-playlist-tracklist__header-btn--num")}
+          {headerCell("Title", "title", "user-playlist-tracklist__header-btn--title")}
+          {headerCell("Artist", "artist")}
+          {headerCell("Release", "album")}
+          {headerCell(
+            stacked ? "Length" : "Duration",
+            "duration",
+            "user-playlist-tracklist__header-btn--trailing"
+          )}
         </div>
       </li>
-    ) : useMusicVideoColumns ? (
+    ) : useLiveShowsColumns ? null : useMusicVideoColumns ? (
       <li className="user-playlist-tracklist__header music-videos-tracklist__header">
         <div className="music-videos-tracklist__header-row">
           {headerCell("#", "number", "user-playlist-tracklist__header-btn--num")}
@@ -914,9 +911,21 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 .join(" ");
               const endActions = (
                 <span className="live-shows-tracklist__end-actions">
-                  {unavailable && youtubeQuery ? (
+                  {durationLabel ? (
+                    <>
+                      {youtubeBtn || (
+                        <span
+                          className="setlist-tracklist__youtube-link setlist-tracklist__youtube-link--empty"
+                          aria-hidden
+                        />
+                      )}
+                      <span className="release-tracklist__duration">
+                        {durationLabel}
+                      </span>
+                    </>
+                  ) : unavailable && youtubeQuery ? (
                     <a
-                      className="setlist-tracklist__youtube-link"
+                      className="setlist-tracklist__youtube-link live-shows-tracklist__youtube-end"
                       href={youtubeSearchUrl(youtubeQuery)}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -933,13 +942,6 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       />
                     )
                   )}
-                  <span
-                    className={`release-tracklist__duration${
-                      !durationLabel ? " release-tracklist__duration--empty" : ""
-                    }`}
-                  >
-                    {durationLabel ?? ""}
-                  </span>
                 </span>
               );
               const titleInner = (
@@ -1361,7 +1363,20 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               }
               aria-expanded={open}
             >
-              <span className="release-tracklist__edition-name">{section.title}</span>
+              <span className="release-tracklist__edition-name">
+                {liveShowsMode && liveShowsViewMode === "by-artist" ? (
+                  <>
+                    {section.title}
+                    <span className="live-shows-tracklist__artist-count">
+                      {" "}
+                      · {section.tracks.length}{" "}
+                      {section.tracks.length === 1 ? "track" : "tracks"}
+                    </span>
+                  </>
+                ) : (
+                  section.title
+                )}
+              </span>
               {section.display_date ? (
                 <span className="release-tracklist__title-suffix release-tracklist__edition-date">
                   {section.display_date}

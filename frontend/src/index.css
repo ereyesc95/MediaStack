@@ -25792,7 +25792,7 @@ button.lyrics-status-badge--icon-only {
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: 0.25rem;
+  border-radius: 0;
 }
 .tour-show-media-grid {
   display: grid;
@@ -25920,9 +25920,69 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__show-date-ord { font-size: 0.58rem; font-weight: 600; vertical-align: baseline; }
 .tour-show-page--poster-hero .artist-about__layout.tour-show-page__hero {
   display: grid;
-  grid-template-columns: minmax(9rem, 16rem) minmax(0, 1fr);
+  grid-template-columns: minmax(11rem, min(34vw, 22rem)) minmax(0, 1fr);
   align-items: start;
   gap: 1.25rem;
+}
+.tour-show-page__hero-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+  width: 100%;
+}
+.tour-show-page__hero-col .artist-about__photo-col,
+.tour-show-page__photo-col {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+  top: auto;
+}
+.tour-show-page__hero-col .artist-about__photo,
+.tour-show-page__hero-col .artist-about__photo--layer {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: min(72vh, 36rem);
+  object-fit: contain;
+  object-position: center top;
+}
+.tour-show-page__album img {
+  border-radius: 0;
+}
+.tour-show-page__code-thumb--natural {
+  aspect-ratio: auto;
+  width: 100%;
+  max-width: 100%;
+}
+.tour-show-page__code-thumb--natural img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+.tour-show-page__place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.tour-show-page__place-flag {
+  font-size: 0.95rem;
+  line-height: 1;
+  border-radius: 2px;
+}
+.tour-show-page__paged-media {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+.tour-show-page__paged-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
 }
 .tour-show-page__overview-cols { align-items: stretch; }
 .tour-show-page__overview-col--stretch { display: flex; flex-direction: column; min-height: 100%; }
@@ -25939,13 +25999,39 @@ button.lyrics-status-badge--icon-only {
 .tour-show-media-card { padding: 0; border: none; background: transparent; border-radius: 4px; overflow: hidden; aspect-ratio: 1; }
 .tour-show-media-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .artist-about__solo-lineup { margin-top: 0.75rem; }
+.artist-about__solo-lineup--centered {
+  display: flex;
+  justify-content: center;
+}
 .artist-about__solo-lineup-split { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+.artist-about__solo-lineup-split--centered {
+  justify-content: center;
+  width: 100%;
+}
 .artist-about__solo-lineup-label { margin: 0 0 0.45rem; font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
 .artist-about__solo-lineup-support { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.artist-about__solo-performer-card {
+  --lineup-photo: 4.5rem;
+  max-width: calc(var(--lineup-photo) + 2rem);
+}
+.artist-about__solo-performer-card .artist-lineup-card__photo {
+  width: var(--lineup-photo);
+  height: var(--lineup-photo);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.artist-about__solo-performer-card .artist-lineup-card__photo img,
+.artist-about__solo-performer-card .artist-lineup-card__ph {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
 .events-browse__live-shows { padding: 0 0.85rem 0.65rem; }
 .events-browse__live-shows-card { max-width: 11rem; }
 .tour-show-page__body { padding: 0 0.85rem 2rem; }
-.tour-show-page__hero-col { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
 .tour-show-page__poster-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.15rem; }
 .tour-show-page__poster-tabs button {
   appearance: none; border: none; background: transparent; color: var(--text-muted);
@@ -26107,13 +26193,6 @@ button.lyrics-status-badge--icon-only {
   color: inherit;
   padding: 0.35rem 0.5rem;
 }
-.live-shows-tracklist--by-show .live-shows-tracklist__play-row,
-.live-shows-tracklist--all-tracks .live-shows-tracklist__play-row {
-  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) auto;
-}
-.live-shows-tracklist--by-artist .live-shows-tracklist__play-row {
-  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) auto;
-}
 .live-shows-tracklist__header-row {
   display: grid;
   align-items: center;
@@ -26122,10 +26201,28 @@ button.lyrics-status-badge--icon-only {
 }
 .live-shows-tracklist--by-show .live-shows-tracklist__header-row,
 .live-shows-tracklist--all-tracks .live-shows-tracklist__header-row {
-  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) auto;
+  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) minmax(4.25rem, auto);
 }
-.live-shows-tracklist--by-artist .live-shows-tracklist__header-row {
-  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) auto;
+.live-shows-tracklist--by-show .live-shows-tracklist__play-row,
+.live-shows-tracklist--all-tracks .live-shows-tracklist__play-row {
+  grid-template-columns: 2rem minmax(0, 1.2fr) minmax(4.5rem, 0.55fr) minmax(5rem, 0.75fr) minmax(4.25rem, auto);
+}
+.live-shows-tracklist--by-artist .live-shows-tracklist__play-row {
+  grid-template-columns: 2rem minmax(0, 1.35fr) minmax(6rem, 0.85fr) minmax(4.25rem, auto);
+}
+.live-shows-tracklist__header-row .user-playlist-tracklist__header-btn {
+  text-align: inherit;
+  justify-content: inherit;
+}
+.live-shows-tracklist__header-row .user-playlist-tracklist__header-btn:nth-child(3),
+.live-shows-tracklist__header-row .user-playlist-tracklist__header-btn:nth-child(4) {
+  justify-content: center;
+  text-align: center;
+}
+.live-shows-tracklist__header-row .user-playlist-tracklist__header-btn--trailing {
+  justify-content: flex-end;
+  text-align: right;
+  width: 100%;
 }
 .live-shows-tracklist__artist-col {
   min-width: 0;
@@ -26157,6 +26254,21 @@ button.lyrics-status-badge--icon-only {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.25rem;
-  min-width: 2.5rem;
+  gap: 0.35rem;
+  min-width: 4.25rem;
+  width: 100%;
+  justify-self: end;
+}
+.live-shows-tracklist .live-shows-tracklist__end-actions .release-tracklist__duration {
+  text-align: right;
+  min-width: 2.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.live-shows-tracklist .live-shows-tracklist__youtube-end {
+  margin-left: auto;
+}
+.live-shows-tracklist__artist-count {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }

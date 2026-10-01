@@ -2011,11 +2011,6 @@ export default function MusicModule({
           onFiltersChange={setEventsFilters}
           cardLayout={eventsCardLayout}
           refreshKey={syncTick}
-          liveShowsCard={globalLiveShowsCard}
-          onOpenLiveShows={() => {
-            setLiveShowsReturnTab("events");
-            setCatalogLiveShowsOpen(true);
-          }}
           onOpenShow={(ev) => {
             tourEntryRef.current = "events";
             openEventShow(ev);

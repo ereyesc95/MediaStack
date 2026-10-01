@@ -21,7 +21,7 @@ import SearchableDropdown, {
 
 type ProjectRow = {
   key: string;
-  participation_id?: number;
+  participation_id?: number | null;
   band_id: number;
   band_name: string;
   start: string;

@@ -87,10 +87,20 @@ def _merge_track_into_section(
     t["live_plays_count"] = 1
 
     key = _track_dedupe_key(t.get("title"), t.get("artist_name") or artist_name)
+    occ_key = show_join_key(
+        occurrence.get("date_iso"),
+        occurrence.get("city"),
+        occurrence.get("venue"),
+    )
     for existing in tracks:
         if _track_dedupe_key(existing.get("title"), existing.get("artist_name")) == key:
             occs = list(existing.get("play_occurrences") or [])
-            if occurrence not in occs:
+            already = {
+                show_join_key(o.get("date_iso"), o.get("city"), o.get("venue"))
+                for o in occs
+                if isinstance(o, dict)
+            }
+            if occ_key not in already:
                 occs.append(occurrence)
             existing["play_occurrences"] = occs
             existing["live_plays_count"] = len(occs)
@@ -123,7 +133,7 @@ def build_live_shows_card(db: Session, band: Band) -> dict | None:
         track_n += len(tracks or [])
     return {
         "slug": LIVE_SHOWS_SLUG,
-        "name": "Live shows",
+        "name": "Live Shows",
         "track_count": track_n or None,
         "show_count": len(shows),
         "cover_url": playlist_cover_url(LIVE_SHOWS_SLUG),
@@ -226,7 +236,7 @@ def build_live_shows_detail(
     )
     return {
         "slug": LIVE_SHOWS_SLUG,
-        "name": "Live shows",
+        "name": "Live Shows",
         "description": description,
         "cover_url": playlist_cover_url(LIVE_SHOWS_SLUG),
         "view": "grouped",

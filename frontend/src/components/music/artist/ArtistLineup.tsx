@@ -9,6 +9,7 @@ type Props = {
   bandId: number;
   bandName: string;
   lineup: BandOverview["lineup"];
+  soloPerformer?: LineupMember | null;
   tab: LineupTab;
   hidden?: boolean;
   isAdmin?: boolean;
@@ -100,6 +101,7 @@ export default function ArtistLineup({
   bandId,
   bandName,
   lineup,
+  soloPerformer = null,
   tab,
   hidden,
   isAdmin,
@@ -111,11 +113,14 @@ export default function ArtistLineup({
   const deviceLayout = useDeviceLayout();
 
   const members = useMemo(() => {
-    if (tab === "official") return lineup.current;
+    if (tab === "official") {
+      if (soloPerformer) return [soloPerformer];
+      return lineup.current;
+    }
     if (tab === "original") return lineup.founding;
     if (tab === "touring") return lineup.touring || [];
     return lineup.former;
-  }, [lineup, tab]);
+  }, [lineup, soloPerformer, tab]);
 
   const rows = useMemo(
     () =>
@@ -130,7 +135,7 @@ export default function ArtistLineup({
     return null;
   }
 
-  if (!lineup.all.length) {
+  if (!lineup.all.length && !soloPerformer) {
     return null;
   }
 

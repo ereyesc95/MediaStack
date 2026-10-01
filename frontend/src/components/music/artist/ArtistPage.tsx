@@ -206,6 +206,11 @@ const LINEUP_TABS: { id: LineupTab; label: string }[] = [
   { id: "former", label: "FORMER" },
 ];
 
+const SOLO_LINEUP_TABS: { id: LineupTab; label: string }[] = [
+  { id: "official", label: "PERFORMER" },
+  { id: "touring", label: "TOURING" },
+];
+
 const LINK_TAB_SHORT: Record<LinkCategory, string> = {
   social: "SOCIAL",
   streaming: "STREAM",
@@ -1509,10 +1514,14 @@ export default function ArtistPage({
 
         {section === "overview" && overviewTab === "lineup" && data?.show_lineup && (
           <nav className="artist-page__subtabs artist-page__lineup-subtabs">
-            {LINEUP_TABS.map((t) => {
+            {(data.is_solo ? SOLO_LINEUP_TABS : LINEUP_TABS).map((t) => {
               const count =
                 t.id === "official"
-                  ? data.lineup.current.length
+                  ? data.is_solo
+                    ? data.solo_performer
+                      ? 1
+                      : 0
+                    : data.lineup.current.length
                   : t.id === "original"
                     ? data.lineup.founding.length
                     : t.id === "touring"
@@ -1711,6 +1720,7 @@ export default function ArtistPage({
             bandId={bandId}
             bandName={data.name}
             lineup={data.lineup}
+            soloPerformer={data.is_solo ? data.solo_performer : null}
             tab={lineupTab}
             hidden={!(section === "overview" && overviewTab === "lineup")}
             isAdmin={isAdmin}

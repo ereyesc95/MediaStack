@@ -34,7 +34,7 @@ def build_global_live_shows_card(db: Session) -> dict | None:
         return None
     return {
         "slug": LIVE_SHOWS_SLUG,
-        "name": "Live shows",
+        "name": "Live Shows",
         "track_count": track_n or None,
         "show_count": show_n,
         "cover_url": playlist_cover_url(LIVE_SHOWS_SLUG),
@@ -139,7 +139,7 @@ def build_global_live_shows_detail(
     )
     return {
         "slug": LIVE_SHOWS_SLUG,
-        "name": "Live shows",
+        "name": "Live Shows",
         "description": "Tracks from concerts you attended across your library.",
         "cover_url": playlist_cover_url(LIVE_SHOWS_SLUG),
         "view": "grouped",

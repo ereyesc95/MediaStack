@@ -271,7 +271,7 @@ export default function ArtistMemberModal({
                         {data.participations.map((p) => {
                           const years = formatYears(p.start, p.end);
                           return (
-                            <li key={`arp-${p.participation_id}`}>
+                            <li key={`arp-${p.participation_id ?? p.band_db_id ?? p.name}`}>
                               {p.in_library && p.band_id ? (
                                 <button
                                   type="button"

@@ -589,15 +589,27 @@ export default function ArtistAbout({
               </dl>
             </div>
           </div>
-          {data.solo_performer && onOpenPerformer && (
-            <section className="artist-about__solo-lineup">
+          {data.solo_performer && onOpenPerformer && !data.show_lineup && (
+            <section
+              className={`artist-about__solo-lineup${
+                (data.lineup?.touring?.length ?? 0) === 0
+                  ? " artist-about__solo-lineup--centered"
+                  : ""
+              }`}
+            >
               <div className="release-page__section-glass artist-about__solo-lineup-glass">
-                <div className="artist-about__solo-lineup-split">
+                <div
+                  className={`artist-about__solo-lineup-split${
+                    (data.lineup?.touring?.length ?? 0) === 0
+                      ? " artist-about__solo-lineup-split--centered"
+                      : ""
+                  }`}
+                >
                   <div className="artist-about__solo-lineup-side">
                     <h3 className="artist-about__solo-lineup-label">Performer</h3>
                     <button
                       type="button"
-                      className={`artist-lineup-card${
+                      className={`artist-lineup-card artist-about__solo-performer-card${
                         data.solo_performer.is_deceased
                           ? " artist-lineup-card--deceased"
                           : ""

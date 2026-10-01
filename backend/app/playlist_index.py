@@ -28,7 +28,7 @@ PLAYLIST_INDEX_VERSION = 26
 PLAYLIST_LABELS: dict[str, str] = {
     "top-tracks": "Top Tracks",
     "setlists": "Setlists",
-    "live-shows": "Live shows",
+    "live-shows": "Live Shows",
     "live-story": "Live Story",
     **{slug: label for slug, label, _ in PLAYLIST_RULES},
     ORIGINALS_SLUG: "Originals",

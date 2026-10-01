@@ -564,9 +564,11 @@ def build_band_overview(
         and not solo
         and not is_various
     )
-    show_lineup = not solo and not is_various and (
-        bool(lineup.get("all")) or needs_lineup_import
-    )
+    show_lineup = (
+        not solo
+        and not is_various
+        and (bool(lineup.get("all")) or needs_lineup_import)
+    ) or (solo and bool((lineup.get("touring") or [])))
     solo_performer = _solo_performer(db, band, root) if solo else None
 
     from app.entity_links import links_payload_for_band

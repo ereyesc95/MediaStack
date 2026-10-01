@@ -103,7 +103,7 @@ import {
 import MediaBeatFrame from "../MediaBeatFrame";
 import AppMenu from "../../AppMenu";
 import MediaInlineSearch from "../MediaInlineSearch";
-import { IconCards, IconLineup, IconList } from "../../MenuIcons";
+import { IconByArtist, IconByShow, IconList } from "../../MenuIcons";
 
 type PanelBrand = {
   bandId: number;
@@ -833,7 +833,7 @@ export default function SystemPlaylistPage({
 
   const bgUrl = usePlaylistCoverArt
     ? coverUrl
-    : playingPath
+    : hasActiveTrack
       ? (playbackArt?.background_layers?.[0] ??
         playbackArt?.cover_url ??
         displayCover ??
@@ -1502,12 +1502,12 @@ export default function SystemPlaylistPage({
               >
                 {liveShowsView === "by-show" ? (
                   <>
-                    <IconLineup className="catalog-scope-toggle__icon" />
+                    <IconByShow className="catalog-scope-toggle__icon" />
                     BY SHOW
                   </>
                 ) : liveShowsView === "by-artist" ? (
                   <>
-                    <IconCards className="catalog-scope-toggle__icon" />
+                    <IconByArtist className="catalog-scope-toggle__icon" />
                     BY ARTIST
                   </>
                 ) : (

@@ -451,6 +451,7 @@ export type TourShowCard = {
   slug: string;
   date_iso: string | null;
   country: string | null;
+  country_iso?: string | null;
   city: string | null;
   venue: string | null;
   join_key: string;
@@ -750,7 +751,7 @@ export type LineupMember = {
 };
 
 export type ArtistParticipationRef = {
-  participation_id: number;
+  participation_id: number | null;
   band_id: number | null;
   band_db_id?: number;
   name: string;

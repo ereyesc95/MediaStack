@@ -745,11 +745,23 @@ def _show_payload(db: Session, s: TourShow) -> dict:
         .where(TourShowBill.tsb_show_id == s.tsh_id)
         .order_by(TourShowBill.tsb_role.asc(), TourShowBill.tsb_opener_order.asc())
     ).all()
+    country_iso = None
+    if s.tsh_country:
+        from app.models import Country
+
+        crow = db.scalars(
+            select(Country).where(Country.cou_name.ilike(s.tsh_country.strip()))
+        ).first()
+        if crow and crow.cou_iso:
+            country_iso = crow.cou_iso.lower()
+        elif len((s.tsh_country or "").strip()) == 2:
+            country_iso = s.tsh_country.strip().lower()
     return {
         "id": s.tsh_id,
         "slug": show_slug(s.tsh_date_iso, s.tsh_city, s.tsh_venue),
         "date_iso": s.tsh_date_iso,
         "country": s.tsh_country,
+        "country_iso": country_iso,
         "city": s.tsh_city,
         "venue": s.tsh_venue,
         "join_key": s.tsh_join_key,

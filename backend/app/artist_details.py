@@ -143,6 +143,67 @@ def build_artist_details(
             }
         )
 
+    # Solo projects often share the person MBID (or use a stage/alias as the
+    # folder name) without an ArtistParticipation row.
+    seen_band_ids = {
+        int(p["band_db_id"])
+        for p in participations
+        if p.get("band_db_id") is not None
+    }
+
+    def _append_related_band(
+        band: Band, *, start: str | None = None, end: str | None = None
+    ) -> None:
+        if band.bnd_id in seen_band_ids or not band.bnd_name:
+            return
+        in_lib = _band_in_library(db, band, media_root)
+        if not in_lib:
+            return
+        seen_band_ids.add(band.bnd_id)
+        participations.append(
+            {
+                "participation_id": None,
+                "band_id": band.bnd_id,
+                "band_db_id": band.bnd_id,
+                "name": _display_name(band.bnd_name),
+                "mbid": band.bnd_code,
+                "in_library": True,
+                "start": start,
+                "end": end,
+                "roles": [],
+                "participation_types": None,
+                "urls": _external_urls_for_band(band),
+                "is_official": True,
+                "is_founding": False,
+                "is_former": bool(end),
+            }
+        )
+
+    if artist.art_code:
+        for band in db.scalars(
+            select(Band).where(Band.bnd_code == artist.art_code).order_by(Band.bnd_id)
+        ).all():
+            _append_related_band(
+                band,
+                start=(band.bnd_starting_dates or "").split(";")[0].strip() or None,
+                end=(band.bnd_ending_dates or "").split(";")[0].strip() or None,
+            )
+
+    name_candidates: list[str] = []
+    for raw in [stage, *aliases]:
+        n = (raw or "").strip()
+        if n and n.casefold() not in {x.casefold() for x in name_candidates}:
+            name_candidates.append(n)
+    for cand in name_candidates:
+        for band in db.scalars(
+            select(Band).where(Band.bnd_name == cand).order_by(Band.bnd_id)
+        ).all():
+            _append_related_band(
+                band,
+                start=(band.bnd_starting_dates or "").split(";")[0].strip() or None,
+                end=(band.bnd_ending_dates or "").split(";")[0].strip() or None,
+            )
+
     urls = _parse_urls(artist.art_external_urls)
     if artist.art_code and "musicbrainz" not in urls:
         urls["musicbrainz"] = f"https://musicbrainz.org/artist/{artist.art_code}"
