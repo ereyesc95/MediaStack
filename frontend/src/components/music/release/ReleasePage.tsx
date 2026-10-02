@@ -1100,6 +1100,10 @@ export default function ReleasePage({
       ref?.source === "collection" ||
       getArtistEntryReferrer()?.backLabel === "COLLECTION";
     clearReleaseReferrer();
+    if (ref?.source === "playlist") {
+      onBack();
+      return;
+    }
     if (ref?.source === "home") {
       onBackToHome?.();
       return;

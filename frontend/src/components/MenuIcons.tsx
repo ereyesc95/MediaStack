@@ -800,3 +800,47 @@ export function IconZoom({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconTabHome({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 3.4 4 9.6V20a1 1 0 0 0 1 1h5.2v-6.2h3.6V21H19a1 1 0 0 0 1-1V9.6L12 3.4z"
+      />
+    </svg>
+  );
+}
+
+export function IconTabCatalog({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M5 4h6.2v7.2H5V4zm7.8 0H19v4.8h-6.2V4zM5 12.8h6.2V20H5v-7.2zm7.8 2.4H19V20h-6.2v-4.8z"
+      />
+    </svg>
+  );
+}
+
+export function IconTabEvents({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M7 3.5h1.6v1.8h6.8V3.5H17v1.8h1.4A1.6 1.6 0 0 1 20 6.9v12A1.6 1.6 0 0 1 18.4 20.5H5.6A1.6 1.6 0 0 1 4 18.9v-12A1.6 1.6 0 0 1 5.6 5.3H7V3.5zm11.4 6.2H5.6v9.2h12.8v-9.2zM7.4 12.2h3.1v2.4H7.4v-2.4z"
+      />
+    </svg>
+  );
+}
+
+export function IconTabPlaylists({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M4.5 6.2h11.2v1.7H4.5V6.2zm0 4.2h11.2v1.7H4.5v-1.7zm0 4.2h7.4v1.7H4.5v-1.7zm12.3-2a2.7 2.7 0 1 0 .9 2V8.6h2.1V6.9h-3.7v5.7z"
+      />
+    </svg>
+  );
+}

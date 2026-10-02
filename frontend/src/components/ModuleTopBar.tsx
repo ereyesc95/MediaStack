@@ -1,6 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { mediaTypeIcon, toStackName } from "../mediaStack";
 import { useMenuPresence } from "../useMenuPresence";
+import {
+  isMobilePortraitLayout,
+  useDeviceLayout,
+} from "../usePhoneLayout";
+import {
+  IconCollection,
+  IconTabCatalog,
+  IconTabEvents,
+  IconTabHome,
+  IconTabPlaylists,
+} from "./MenuIcons";
 
 export type MediaOption = {
   id: number;
@@ -13,6 +24,7 @@ type Tab = {
   label: string;
   active: boolean;
   onClick: () => void;
+  icon?: ReactNode;
 };
 
 type Props = {
@@ -22,6 +34,18 @@ type Props = {
   tabs: Tab[];
   menu: React.ReactNode;
 };
+
+function defaultTabIcon(id: string, label: string): ReactNode {
+  const key = id.toLowerCase();
+  const text = label.toLowerCase();
+  if (key === "home" || text === "home") return <IconTabHome />;
+  if (key === "artists" || key === "catalog" || text === "catalog")
+    return <IconTabCatalog />;
+  if (key === "collection" || text === "collection") return <IconCollection />;
+  if (key === "events" || text === "events") return <IconTabEvents />;
+  if (key === "playlists" || text === "playlists") return <IconTabPlaylists />;
+  return <IconTabCatalog />;
+}
 
 export default function ModuleTopBar({
   media,
@@ -34,6 +58,8 @@ export default function ModuleTopBar({
   const { present: menuPresent, visible: menuVisible } =
     useMenuPresence(mediaOpen);
   const mediaRef = useRef<HTMLDivElement>(null);
+  const deviceLayout = useDeviceLayout();
+  const iconTabs = isMobilePortraitLayout(deviceLayout);
 
   useEffect(() => {
     function close(e: MouseEvent) {
@@ -98,15 +124,28 @@ export default function ModuleTopBar({
         ) : null}
       </div>
 
-      <nav className="module-top-bar__tabs" aria-label="Module sections">
+      <nav
+        className={`module-top-bar__tabs${
+          iconTabs ? " module-top-bar__tabs--icons" : ""
+        }`}
+        aria-label="Module sections"
+      >
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             className={t.active ? "active" : ""}
             onClick={t.onClick}
+            aria-label={t.label}
+            title={t.label}
           >
-            {t.label}
+            {iconTabs ? (
+              <span className="module-top-bar__tab-icon" aria-hidden>
+                {t.icon ?? defaultTabIcon(t.id, t.label)}
+              </span>
+            ) : (
+              t.label
+            )}
           </button>
         ))}
       </nav>

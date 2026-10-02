@@ -108,7 +108,7 @@ export type ReleaseReferrer = {
   section: ArtistSection;
   category?: string;
   artistName?: string;
-  source?: "artist" | "series" | "movies" | "home" | "catalog" | "collection";
+  source?: "artist" | "series" | "movies" | "home" | "catalog" | "collection" | "playlist";
   franchiseId?: string;
   subseriesId?: string;
   franchiseName?: string;

@@ -60,6 +60,11 @@ import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
 import { pushArtistRoute, parseArtistPath, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory, saveReleaseReferrer } from "../../musicRoute";
 import {
+  clearPlaylistReturn,
+  getPlaylistReturn,
+  savePlaylistReturn,
+} from "../../playlistReturn";
+import {
   clearSpotifyOAuthErrorHash,
   consumeSpotifyOAuthAwaiting,
   readSpotifyOAuthError,
@@ -426,6 +431,48 @@ export default function MusicModule({
     },
     [onBand, onReleaseNavigate, primeArtistShell]
   );
+
+  const restorePlaylistReturn = useCallback(() => {
+    const ret = getPlaylistReturn();
+    if (!ret) return false;
+    clearPlaylistReturn();
+    clearArtistEntryReferrer();
+    if (ret.kind === "catalog-live-shows") {
+      onReleaseNavigate?.(undefined, undefined);
+      onBand(undefined);
+      setCatalogLiveShowsOpen(true);
+      onTab(ret.backLabel === "EVENTS" ? "events" : "playlists");
+      return true;
+    }
+    if (ret.kind === "user-playlist" && ret.userPlaylistId != null) {
+      onReleaseNavigate?.(undefined, undefined);
+      onBand(undefined);
+      onTab("playlists");
+      pushUserPlaylistRoute(ret.userPlaylistId);
+      onPlaylist(ret.userPlaylistId);
+      return true;
+    }
+    if (ret.kind === "artist-playlist" && ret.bandId != null && ret.slug) {
+      onReleaseNavigate?.(undefined, undefined);
+      pushArtistRoute({
+        bandId: ret.bandId,
+        section: "audio",
+        overviewTab: artistOverviewTab,
+        playlistSlug: ret.slug,
+      });
+      onBand(ret.bandId, "audio");
+      onPlaylistNavigate?.(ret.slug);
+      return true;
+    }
+    return false;
+  }, [
+    artistOverviewTab,
+    onBand,
+    onPlaylist,
+    onPlaylistNavigate,
+    onReleaseNavigate,
+    onTab,
+  ]);
 
   const setAlbumCardLayoutPersisted = useCallback(
     (next: ReleaseCardLayout) => {
@@ -1412,14 +1459,37 @@ export default function MusicModule({
           onBack={() => setCatalogLiveShowsOpen(false)}
           onOpenPlaylist={() => {}}
           onOpenRelease={(bid, rid) => {
+            savePlaylistReturn({
+              kind: "catalog-live-shows",
+              backLabel: liveShowsReturnTab === "events" ? "EVENTS" : "PLAYLISTS",
+            });
+            saveArtistEntryReferrer({
+              source: "music",
+              section: "audio",
+              backLabel: "LIVE SHOWS",
+            });
+            saveReleaseReferrer({
+              bandId: bid,
+              section: "audio",
+              source: "playlist",
+            });
             setCatalogLiveShowsOpen(false);
             void prefetchReleaseOverview(bid, rid);
             onBand(bid, "audio");
             onReleaseNavigate?.(rid, "overview");
           }}
           onOpenArtist={(id) => {
+            savePlaylistReturn({
+              kind: "catalog-live-shows",
+              backLabel: liveShowsReturnTab === "events" ? "EVENTS" : "PLAYLISTS",
+            });
             setCatalogLiveShowsOpen(false);
             openArtist(id);
+            saveArtistEntryReferrer({
+              source: "music",
+              section: "audio",
+              backLabel: "LIVE SHOWS",
+            });
           }}
           onImport={onImport}
           onSync={onSync}
@@ -1442,14 +1512,39 @@ export default function MusicModule({
             }
           }}
           onOpenRelease={(bid, rid) => {
+            savePlaylistReturn({
+              kind: "user-playlist",
+              userPlaylistId: playlistId!,
+              backLabel: "PLAYLISTS",
+            });
+            saveArtistEntryReferrer({
+              source: "music",
+              section: "audio",
+              backLabel: "PLAYLISTS",
+            });
+            saveReleaseReferrer({
+              bandId: bid,
+              section: "audio",
+              source: "playlist",
+            });
             void prefetchReleaseOverview(bid, rid);
             onPlaylist(undefined);
             onBand(bid, "audio");
             onReleaseNavigate?.(rid, "overview", bid);
           }}
           onOpenArtist={(id) => {
+            savePlaylistReturn({
+              kind: "user-playlist",
+              userPlaylistId: playlistId!,
+              backLabel: "PLAYLISTS",
+            });
             onPlaylist(undefined);
             openArtist(id);
+            saveArtistEntryReferrer({
+              source: "music",
+              section: "audio",
+              backLabel: "PLAYLISTS",
+            });
           }}
           onOpenCatalogSubgenre={(id, subgenreName) => {
             clearMediaTheme(userId);
@@ -1528,6 +1623,26 @@ export default function MusicModule({
             onPlaylistNavigate?.(nextSlug);
           }}
           onOpenRelease={(bid, rid) => {
+            if (bandId && playlistSlug) {
+              savePlaylistReturn({
+                kind: "artist-playlist",
+                bandId,
+                slug: playlistSlug,
+                backLabel: "LIVE SHOWS",
+              });
+              saveArtistEntryReferrer({
+                source: "music",
+                section: "audio",
+                backLabel: playlistSlug === "live-shows" ? "LIVE SHOWS" : "PLAYLISTS",
+              });
+              saveReleaseReferrer({
+                bandId: bid,
+                section: "audio",
+                source: "playlist",
+                category: "playlists",
+                artistName: artistShell?.name ?? undefined,
+              });
+            }
             void prefetchReleaseOverview(bid, rid);
             pushArtistRoute({
               bandId: bid,
@@ -1539,8 +1654,23 @@ export default function MusicModule({
             onReleaseNavigate?.(rid, "overview", bid !== bandId ? bid : undefined);
           }}
           onOpenArtist={(id) => {
+            if (bandId && playlistSlug) {
+              savePlaylistReturn({
+                kind: "artist-playlist",
+                bandId,
+                slug: playlistSlug,
+                backLabel: playlistSlug === "live-shows" ? "LIVE SHOWS" : "PLAYLISTS",
+              });
+            }
             onPlaylistNavigate?.(undefined);
             openArtist(id);
+            if (bandId && playlistSlug) {
+              saveArtistEntryReferrer({
+                source: "music",
+                section: "audio",
+                backLabel: playlistSlug === "live-shows" ? "LIVE SHOWS" : "PLAYLISTS",
+              });
+            }
           }}
           onImport={onImport}
           onSync={onSync}
@@ -1624,6 +1754,7 @@ export default function MusicModule({
           isAdmin={isAdmin}
           userId={userId}
           onBack={() => {
+            if (restorePlaylistReturn()) return;
             onReleaseNavigate?.(undefined, undefined);
             onArtistNavigate("audio", artistOverviewTab);
           }}
@@ -1774,6 +1905,7 @@ export default function MusicModule({
           }}
           onBack={() => {
             clearMediaTheme(userId);
+            if (restorePlaylistReturn()) return;
             const ref = getArtistEntryReferrer();
             const restore: ArtistBackRestore = {
               tab: ref?.fromTab || "catalog",
@@ -1811,6 +1943,7 @@ export default function MusicModule({
             );
           }}
           backLabel={
+            getPlaylistReturn()?.backLabel ||
             getArtistEntryReferrer()?.backLabel ||
             (getArtistEntryReferrer()?.source === "series"
               ? "SERIES"

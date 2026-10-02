@@ -930,18 +930,15 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                     >
                       <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
                     </a>
-                  ) : (
-                    youtubeBtn || (
-                      <span
-                        className="setlist-tracklist__youtube-link setlist-tracklist__youtube-link--empty"
-                        aria-hidden
-                      />
-                    )
-                  )}
-                  {durationLabel ? (
+                  ) : durationLabel ? (
                     <span className="release-tracklist__duration">{durationLabel}</span>
+                  ) : youtubeBtn ? (
+                    youtubeBtn
                   ) : (
-                    <span className="release-tracklist__duration release-tracklist__duration--empty" aria-hidden />
+                    <span
+                      className="release-tracklist__duration release-tracklist__duration--empty"
+                      aria-hidden
+                    />
                   )}
                 </span>
               );
@@ -1174,7 +1171,20 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 </span>
                 {stacked && useMetaColumns && displayArtist ? (
                   <span className="user-playlist-tracklist__title-artist">
-                    {formatArtistFeat(displayArtist)}
+                    {track.navigate_band_id && onOpenArtist ? (
+                      <button
+                        type="button"
+                        className="live-shows-tracklist__link user-playlist-tracklist__link"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenArtist(track.navigate_band_id!);
+                        }}
+                      >
+                        {formatArtistFeat(displayArtist)}
+                      </button>
+                    ) : (
+                      formatArtistFeat(displayArtist)
+                    )}
                   </span>
                 ) : null}
               </span>
@@ -1195,18 +1205,58 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
             const artistCol =
               useMetaColumns && !stacked ? (
               <span className="user-playlist-tracklist__col user-playlist-tracklist__col--artist">
-                {multiArtist
-                  ? formatArtistFeat(displayArtist || "—")
-                  : ""}
+                {multiArtist && displayArtist ? (
+                  track.navigate_band_id && onOpenArtist ? (
+                    <button
+                      type="button"
+                      className="live-shows-tracklist__link user-playlist-tracklist__link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenArtist(track.navigate_band_id!);
+                      }}
+                    >
+                      {formatArtistFeat(displayArtist)}
+                    </button>
+                  ) : (
+                    formatArtistFeat(displayArtist)
+                  )
+                ) : (
+                  ""
+                )}
               </span>
             ) : null;
             const albumCol =
               useMetaColumns && !stacked ? (
               <span className="user-playlist-tracklist__col user-playlist-tracklist__col--album">
-                {(!unavailable && track.album_title?.trim()) ||
-                  track.snapshot?.album?.trim() ||
-                  track.album_title?.trim() ||
-                  "—"}
+                {(() => {
+                  const albumLabel =
+                    (!unavailable && track.album_title?.trim()) ||
+                    track.snapshot?.album?.trim() ||
+                    track.album_title?.trim() ||
+                    "—";
+                  const releaseId = track.navigate_release_id ?? null;
+                  const releaseBandId = track.navigate_band_id ?? bandId;
+                  if (
+                    albumLabel !== "—" &&
+                    releaseId &&
+                    onOpenRelease &&
+                    releaseBandId
+                  ) {
+                    return (
+                      <button
+                        type="button"
+                        className="live-shows-tracklist__link user-playlist-tracklist__link"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenRelease(releaseBandId, releaseId);
+                        }}
+                      >
+                        {albumLabel}
+                      </button>
+                    );
+                  }
+                  return albumLabel;
+                })()}
               </span>
             ) : null;
             const yearCol =

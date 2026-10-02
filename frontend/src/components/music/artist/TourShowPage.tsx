@@ -19,7 +19,6 @@ import {
 import { formatShowTabDate, formatTrackDate } from "../../../formatDate";
 import { useBeatPulse } from "../../../useBeatPulse";
 import type {
-  LineupMember,
   ReleaseEdition,
   SetlistTrackItem,
   TourDetail,
@@ -35,7 +34,6 @@ import {
 } from "../../../usePhoneLayout";
 import AppMenu from "../../AppMenu";
 import TopBarTitle from "../../TopBarTitle";
-import MediaBeatFrame from "../MediaBeatFrame";
 import MediaBeatFx from "../MediaBeatFx";
 import PlaylistBoot from "../../PlaylistBoot";
 import GalleryViewerModal, {
@@ -47,7 +45,16 @@ import SetlistTracklist, {
 } from "./SetlistTracklist";
 import ArtistMemberModal from "./ArtistMemberModal";
 import ReleasePhotocard from "../release/ReleasePhotocard";
-import { DEFAULT_DISC_URL } from "../release/releaseTrackPanelMeta";
+import {
+  DEFAULT_DISC_URL,
+  parseTrackPanelMeta,
+} from "../release/releaseTrackPanelMeta";
+import {
+  TrackActionLyricsIcon,
+  TrackActionPlaylistIcon,
+  TrackActionVersionsIcon,
+} from "../release/releaseTrackActionIcons";
+import MediaBeatFrame from "../MediaBeatFrame";
 
 type Props = {
   bandId: number;
@@ -243,15 +250,15 @@ function BillCircle({
       >
         <span className="release-lineup-card__photo">
           <span className="release-lineup-card__initials">{initial}</span>
+          {signatureUrl ? (
+            <img
+              src={signatureUrl}
+              alt=""
+              className="tour-show-page__bill-signature"
+              draggable={false}
+            />
+          ) : null}
         </span>
-        {signatureUrl ? (
-          <img
-            src={signatureUrl}
-            alt=""
-            className="tour-show-page__bill-signature"
-            draggable={false}
-          />
-        ) : null}
       </button>
       <button
         type="button"
@@ -262,6 +269,25 @@ function BillCircle({
       </button>
     </div>
   );
+}
+
+function youtubeThumbUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    let id = "";
+    if (u.hostname.includes("youtu.be")) {
+      id = u.pathname.replace("/", "");
+    } else if (u.hostname.includes("youtube.com")) {
+      id = u.searchParams.get("v") || "";
+      if (!id && u.pathname.startsWith("/embed/")) {
+        id = u.pathname.split("/")[2] || "";
+      }
+    }
+    if (!id) return null;
+    return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  } catch {
+    return null;
+  }
 }
 
 function TourShowMediaSection({
@@ -286,6 +312,10 @@ function TourShowMediaSection({
           const showBack = Boolean(flipped[item.id] && item.back_url);
           const src = showBack && item.back_url ? item.back_url : item.url;
           const galleryIdx = galleryItems.findIndex((g) => g.id === item.id);
+          const ytThumb =
+            item.kind === "video" || item.kind === "file"
+              ? youtubeThumbUrl(item.url)
+              : null;
           return (
             <button
               key={item.id}
@@ -308,8 +338,20 @@ function TourShowMediaSection({
             >
               {item.kind === "image" ? (
                 <img src={src} alt={item.label} loading="lazy" draggable={false} />
+              ) : ytThumb ? (
+                <span className="tour-show-media-card__video-thumb">
+                  <img src={ytThumb} alt="" loading="lazy" draggable={false} />
+                  <span className="tour-show-media-card__video-badge" aria-hidden>
+                    ▶
+                  </span>
+                </span>
               ) : (
-                <span className="tour-show-media-card__label">{item.label}</span>
+                <span className="tour-show-media-card__label tour-show-media-card__label--file">
+                  <span className="tour-show-media-card__file-icon" aria-hidden>
+                    ▶
+                  </span>
+                  <span>{item.label}</span>
+                </span>
               )}
               {item.has_back ? (
                 <span className="tour-show-media-card__flip" aria-hidden>
@@ -372,6 +414,32 @@ function OverviewFlipCard({
   );
 }
 
+function PagedChevron({
+  direction,
+  className,
+}: {
+  direction: "prev" | "next";
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={direction === "next" ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path
+        d="M15 6l-6 6 6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function OverviewPagedImages({
   items,
   landscape = false,
@@ -392,30 +460,27 @@ function OverviewPagedImages({
         <button
           type="button"
           className="tour-show-page__paged-chevron tour-show-page__paged-chevron--prev"
-          disabled={index <= 0}
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
+          onClick={() =>
+            setIndex((i) => (i <= 0 ? images.length - 1 : i - 1))
+          }
           aria-label="Previous page"
         >
-          ‹
+          <PagedChevron direction="prev" className="tour-show-page__paged-chevron-icon" />
         </button>
       ) : null}
       <div className="tour-show-page__paged-media-body">
         <OverviewFlipCard item={current} landscape={landscape} />
-        {multi ? (
-          <span className="muted tour-show-page__paged-count">
-            {index + 1}/{images.length}
-          </span>
-        ) : null}
       </div>
       {multi ? (
         <button
           type="button"
           className="tour-show-page__paged-chevron tour-show-page__paged-chevron--next"
-          disabled={index >= images.length - 1}
-          onClick={() => setIndex((i) => Math.min(images.length - 1, i + 1))}
+          onClick={() =>
+            setIndex((i) => (i >= images.length - 1 ? 0 : i + 1))
+          }
           aria-label="Next page"
         >
-          ›
+          <PagedChevron direction="next" className="tour-show-page__paged-chevron-icon" />
         </button>
       ) : null}
     </div>
@@ -429,6 +494,7 @@ function SetlistTabPanel({
   recordingUrl,
   loading,
   coverUrl,
+  heroPosterUrl,
   tourTitle,
   showMeta,
   artistName,
@@ -440,6 +506,7 @@ function SetlistTabPanel({
   recordingUrl: string | null;
   loading: boolean;
   coverUrl?: string | null;
+  heroPosterUrl?: string | null;
   tourTitle?: string | null;
   showMeta?: string | null;
   artistName?: string | null;
@@ -448,12 +515,16 @@ function SetlistTabPanel({
   const editions = useMemo(() => setlistPayloadToEditions(payload), [payload]);
   const playable = useMemo(() => flattenPlayableSetlistTracks(editions), [editions]);
   const miniAudio = useMiniAudio();
+  const canvasRef = useRef<HTMLVideoElement>(null);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<SetlistTrackItem | null>(null);
   const [panelArt, setPanelArt] = useState<{
     cover_url?: string | null;
     disc_url?: string | null;
     logo_url?: string | null;
+    icon_url?: string | null;
+    canvas_url?: string | null;
+    background_layers?: string[];
     album_title?: string | null;
     release_id?: string | null;
   } | null>(null);
@@ -467,6 +538,13 @@ function SetlistTabPanel({
   const hasActiveTrack = Boolean(playingPath);
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   useBeatPulse(miniAudio.audioRef, hasActiveTrack, isPlaying);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el || !panelArt?.canvas_url) return;
+    if (isPlaying) void el.play().catch(() => {});
+    else el.pause();
+  }, [isPlaying, panelArt?.canvas_url]);
 
   const handlePlay = useCallback(
     async (path: string, title: string, _playbackKey: string) => {
@@ -490,40 +568,38 @@ function SetlistTabPanel({
         miniAudio.loadSrc(res.stream_url, true);
         const releaseId = track?.navigate_release_id;
         const artBandId = track?.navigate_band_id ?? bandId;
-        let disc: string | null = null;
-        let logo: string | null = null;
-        let albumTitle = track?.album_title || null;
+        let next = {
+          cover_url: res.cover_url || track?.cover_url || coverUrl || null,
+          disc_url: null as string | null,
+          logo_url: null as string | null,
+          icon_url: null as string | null,
+          canvas_url: null as string | null,
+          background_layers: [] as string[],
+          album_title: track?.album_title || null,
+          release_id: releaseId || null,
+        };
         if (releaseId) {
           try {
             const art = await fetchTrackSourceArt(artBandId, releaseId, path);
-            disc = art.playback?.disc_url ?? null;
-            logo = art.playback?.logo_url ?? null;
-            if (art.playback?.cover_url) {
-              setPanelArt((prev) => ({
-                ...(prev || {}),
-                cover_url: art.playback.cover_url,
-                disc_url: disc,
-                logo_url: logo,
-                album_title: albumTitle,
-                release_id: releaseId,
-              }));
-            }
+            next = {
+              ...next,
+              cover_url: art.playback?.cover_url || next.cover_url,
+              disc_url: art.playback?.disc_url ?? null,
+              logo_url: art.playback?.logo_url ?? null,
+              icon_url: (art.playback as { icon_url?: string | null })?.icon_url ?? null,
+              canvas_url: art.playback?.canvas_url ?? null,
+              background_layers: art.playback?.background_layers ?? [],
+            };
           } catch {
-            /* optional art enrichment */
+            /* optional */
           }
         }
-        setPanelArt({
-          cover_url: res.cover_url || track?.cover_url || coverUrl || null,
-          disc_url: disc,
-          logo_url: logo,
-          album_title: albumTitle,
-          release_id: releaseId || null,
-        });
+        setPanelArt(next);
         if (res.cover_url && track) {
           setNowPlaying({ ...track, title, cover_url: res.cover_url });
         }
       } catch {
-        /* keep UI; stream failed */
+        /* stream failed */
       }
     },
     [bandId, coverUrl, miniAudio, playable, playingPath]
@@ -533,121 +609,271 @@ function SetlistTabPanel({
     return <PlaylistBoot className="playlist-boot--compact" label="Loading setlist…" />;
   }
 
-  const panelCover =
-    (hasActiveTrack && (panelArt?.cover_url || nowPlaying?.cover_url || coverUrl)) ||
-    coverUrl;
+  const panelCover = hasActiveTrack
+    ? panelArt?.cover_url || nowPlaying?.cover_url || coverUrl || null
+    : null;
   const panelDisc = panelArt?.disc_url || DEFAULT_DISC_URL;
-  const panelTitle =
-    hasActiveTrack && nowPlaying?.title ? nowPlaying.title : tourTitle;
-  const panelAlbum =
-    hasActiveTrack && (panelArt?.album_title || nowPlaying?.album_title)
-      ? panelArt?.album_title || nowPlaying?.album_title
-      : showMeta;
+  const trackMeta =
+    hasActiveTrack && nowPlaying?.title
+      ? parseTrackPanelMeta(nowPlaying.title)
+      : null;
+  const panelTitle = trackMeta?.mainTitle || (hasActiveTrack ? nowPlaying?.title : null);
+  const panelAlbum = hasActiveTrack
+    ? panelArt?.album_title || nowPlaying?.album_title || null
+    : null;
   const releaseId = panelArt?.release_id;
+  const canvasUrl = hasActiveTrack ? panelArt?.canvas_url || null : null;
+  const bgLayer = hasActiveTrack
+    ? panelArt?.background_layers?.[0] || panelCover || null
+    : null;
+  const idleHero = heroPosterUrl || coverUrl || null;
+  const featuringLine = trackMeta?.lines.find((l) => l.kind === "featuring");
+  const coverLine = trackMeta?.lines.find((l) => l.kind === "cover");
+  const otherLines =
+    trackMeta?.lines.filter(
+      (l) => l.kind !== "featuring" && l.kind !== "cover" && l.kind !== "performer"
+    ) ?? [];
 
   return (
     <div
       className={[
         "tour-show-page__setlist-tab",
         "release-page__tracklist-layout",
+        hasActiveTrack
+          ? "tour-show-page__setlist-tab--playing"
+          : "tour-show-page__setlist-tab--idle",
         hasActiveTrack ? "release-page--beat-ready" : "",
         isPlaying ? "release-page--playing" : "",
+        canvasUrl ? "release-page--canvas" : "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      {panelCover ? (
-        <div
-          className="tour-show-page__setlist-bg"
-          style={{ backgroundImage: `url("${panelCover}")` } as CSSProperties}
-          aria-hidden
-        />
-      ) : null}
-      <aside className="release-page__aside tour-show-page__setlist-aside">
-        <div className="release-page__panel-card tour-show-page__setlist-panel">
-          <div className="release-page__panel-content">
-            <div className="release-page__art">
-              <div
-                className={`release-page__art-stage${
-                  !panelCover && panelDisc ? " release-page__art-stage--disc-only" : ""
-                }`}
-              >
-                {panelCover ? (
-                  <span className="release-page__cover-wrap">
-                    <img
-                      src={panelCover}
-                      alt=""
-                      className="release-page__cover"
-                      draggable={false}
-                    />
-                  </span>
-                ) : null}
-                <img
-                  src={panelDisc}
-                  alt=""
-                  className={[
-                    "release-page__disc",
-                    hasActiveTrack && isPlaying ? "release-page__disc--spin" : "",
-                    hasActiveTrack && !isPlaying ? "release-page__disc--spin-paused" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  draggable={false}
-                />
-              </div>
+      {!hasActiveTrack ? (
+        <aside className="tour-show-page__setlist-hero-col">
+          {idleHero ? (
+            <img
+              src={idleHero}
+              alt=""
+              className="tour-show-page__setlist-idle-hero"
+              draggable={false}
+            />
+          ) : (
+            <div className="tour-show-page__setlist-idle-hero tour-show-page__setlist-idle-hero--empty" />
+          )}
+          {links.length ? (
+            <div className="tour-show-page__setlist-actions">
+              {links.map((r) => (
+                <a
+                  key={`${r.kind}-${r.url}`}
+                  className="text-btn"
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {r.label}
+                </a>
+              ))}
             </div>
-            <div className="release-page__panel-meta">
-              <div className="release-page__panel-body">
-                {artistName ? (
-                  <p className="release-page__artist-link release-page__artist-link--text">
-                    {artistName}
-                  </p>
-                ) : null}
-                {panelTitle ? (
-                  <h2 className="release-page__track-panel-title">{panelTitle}</h2>
-                ) : null}
-                {panelAlbum ? (
-                  releaseId && onOpenRelease ? (
-                    <button
-                      type="button"
-                      className="release-page__release-link"
-                      onClick={() => onOpenRelease(releaseId)}
-                    >
-                      {panelAlbum}
-                    </button>
-                  ) : (
-                    <p className="muted tour-show-page__setlist-panel-meta">{panelAlbum}</p>
-                  )
-                ) : null}
+          ) : null}
+        </aside>
+      ) : (
+        <aside className="release-page__aside tour-show-page__setlist-aside">
+          <div
+            className={[
+              "release-page__panel",
+              "release-page__panel--track",
+              "tour-show-page__setlist-panel",
+              canvasUrl ? "release-page__panel--canvas" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={
+              bgLayer
+                ? ({ ["--panel-fade" as string]: `url("${bgLayer}")` } as CSSProperties)
+                : undefined
+            }
+          >
+            {canvasUrl ? (
+              <div className="release-page__panel-canvas-layer" aria-hidden>
+                <video
+                  ref={canvasRef}
+                  className="release-page__panel-canvas"
+                  src={canvasUrl}
+                  muted
+                  loop
+                  playsInline
+                />
+                <div className="release-page__panel-canvas-shade" />
               </div>
-              {hasActiveTrack ? (
-                <div className="release-page__panel-player tour-show-page__setlist-transport">
-                  <MiniAudioPlayerControls
-                    playing={miniAudio.playing}
-                    progress={miniAudio.progress}
-                    duration={miniAudio.duration}
-                    toggle={miniAudio.toggle}
-                    seek={miniAudio.seek}
+            ) : null}
+            <div className="release-page__panel-content">
+              <div className="release-page__art">
+                <div className="release-page__art-stage">
+                  {panelCover ? (
+                    <span className="release-page__cover-wrap">
+                      <img
+                        src={panelCover}
+                        alt=""
+                        className="release-page__cover"
+                        draggable={false}
+                      />
+                    </span>
+                  ) : null}
+                  <img
+                    src={panelDisc}
+                    alt=""
+                    className={[
+                      "release-page__disc",
+                      isPlaying
+                        ? "release-page__disc--spin"
+                        : "release-page__disc--spin-paused",
+                    ].join(" ")}
+                    draggable={false}
                   />
                 </div>
-              ) : null}
-              <div className="tour-show-page__setlist-actions">
-                {links.map((r) => (
-                  <a
-                    key={`${r.kind}-${r.url}`}
-                    className="text-btn"
-                    href={r.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {r.label}
-                  </a>
-                ))}
+              </div>
+              <div className="release-page__panel-meta">
+                <div className="release-page__panel-fit">
+                  <div className="release-page__panel-fit-inner">
+                    <div className="release-page__panel-body">
+                      <div className="release-page__brand-row">
+                        {panelArt?.logo_url || panelArt?.icon_url ? (
+                          <span className="release-page__artist-brand">
+                            {panelArt.icon_url ? (
+                              <MediaBeatFrame variant="logo">
+                                <img
+                                  src={panelArt.icon_url}
+                                  alt=""
+                                  className="release-page__meta-icon"
+                                  draggable={false}
+                                />
+                              </MediaBeatFrame>
+                            ) : null}
+                            {panelArt.logo_url ? (
+                              <MediaBeatFrame variant="logo">
+                                <img
+                                  src={panelArt.logo_url}
+                                  alt=""
+                                  className="release-page__meta-logo"
+                                  draggable={false}
+                                />
+                              </MediaBeatFrame>
+                            ) : null}
+                          </span>
+                        ) : artistName ? (
+                          <p className="release-page__artist-link release-page__artist-link--text">
+                            {artistName}
+                          </p>
+                        ) : null}
+                      </div>
+                      {panelTitle ? (
+                        <div className="release-page__track-panel">
+                          <h2 className="release-page__track-panel-title">{panelTitle}</h2>
+                          {coverLine && coverLine.kind === "cover" ? (
+                            <p className="release-page__track-panel-cover">
+                              {coverLine.artist} cover
+                            </p>
+                          ) : null}
+                          {trackMeta?.versionLabel ? (
+                            <p className="release-page__track-panel-version">
+                              {trackMeta.versionLabel}
+                            </p>
+                          ) : null}
+                          {panelAlbum ? (
+                            releaseId && onOpenRelease ? (
+                              <p className="release-page__track-panel-source">
+                                Taken from{" "}
+                                <button
+                                  type="button"
+                                  className="release-page__release-link"
+                                  onClick={() => onOpenRelease(releaseId)}
+                                >
+                                  {panelAlbum}
+                                </button>
+                              </p>
+                            ) : (
+                              <p className="release-page__track-panel-source">
+                                Taken from {panelAlbum}
+                              </p>
+                            )
+                          ) : null}
+                          {featuringLine && featuringLine.kind === "featuring" ? (
+                            <p className="release-page__track-panel-line">
+                              Featuring{" "}
+                              {featuringLine.artists.map((name, j) => (
+                                <span key={name}>
+                                  {j > 0 &&
+                                    (j === featuringLine.artists.length - 1
+                                      ? " and "
+                                      : ", ")}
+                                  {name}
+                                </span>
+                              ))}
+                            </p>
+                          ) : null}
+                          {otherLines.map((line, i) =>
+                            line.kind === "other" ? (
+                              <p key={i} className="release-page__track-panel-line">
+                                {line.text}
+                              </p>
+                            ) : null
+                          )}
+                          {tourTitle ? (
+                            <p className="release-page__track-panel-line">{tourTitle}</p>
+                          ) : null}
+                          {showMeta ? (
+                            <p className="muted tour-show-page__setlist-panel-meta">{showMeta}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="release-page__track-actions" aria-hidden>
+                        <span className="release-page__track-action" title="Lyrics">
+                          <TrackActionLyricsIcon className="release-page__track-action-icon" />
+                        </span>
+                        <span className="release-page__track-action" title="Versions">
+                          <TrackActionVersionsIcon className="release-page__track-action-icon" />
+                        </span>
+                        <span className="release-page__track-action" title="Add to playlist">
+                          <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="release-page__panel-bottom">
+                  <div className="release-page__panel-footer">
+                    <div className="release-page__panel-player">
+                      <MiniAudioPlayerControls
+                        playing={miniAudio.playing}
+                        progress={miniAudio.progress}
+                        duration={miniAudio.duration}
+                        toggle={miniAudio.toggle}
+                        seek={miniAudio.seek}
+                      />
+                    </div>
+                    {links.length ? (
+                      <div className="tour-show-page__setlist-actions">
+                        {links.map((r) => (
+                          <a
+                            key={`${r.kind}-${r.url}`}
+                            className="text-btn"
+                            href={r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {r.label}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
       <div className="release-page__main tour-show-page__setlist-main">
         {editions.length ? (
           <SetlistTracklist
@@ -699,7 +925,6 @@ export default function TourShowPage({
   const [setlist, setSetlist] = useState<TourShowSetlistPayload | null>(null);
   const [setlistLoading, setSetlistLoading] = useState(false);
   const [busy, setBusy] = useState("");
-  const [posterScope, setPosterScope] = useState<"show" | "tour">("show");
   const [posterIndex, setPosterIndex] = useState(0);
   const [posterSlide, setPosterSlide] = useState<"none" | "up" | "down" | "left" | "right">(
     "none"
@@ -741,6 +966,11 @@ export default function TourShowPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPosterIndex(0);
+    setPosterSlide("none");
+  }, [detail?.show.id, tour?.id]);
 
   useEffect(() => {
     if (showTab !== "setlist" || !detail) return;
@@ -862,11 +1092,13 @@ export default function TourShowPage({
   }
 
   const show = detail.show;
-  const place = [show.city, show.country].filter(Boolean).join(", ");
+  const placeLocality = [show.city].filter(Boolean).join(", ");
+  const placeCountry = (show.country || "").trim();
+  const place = placeLocality || placeCountry;
   const placeIso = (() => {
     const iso = (show.country_iso || "").trim().toLowerCase();
     if (iso) return iso;
-    const country = (show.country || "").trim().toLowerCase();
+    const country = placeCountry.toLowerCase();
     if (country === "united states" || country === "usa" || country === "u.s.a." || country === "u.s.") {
       return "us";
     }
@@ -905,28 +1137,28 @@ export default function TourShowPage({
     const urls = [tour.poster_url, tour.banner_url].filter((u): u is string => Boolean(u));
     return [...new Set(urls)];
   })();
-  const activePosterList =
-    posterScope === "show"
-      ? showPosterUrls.length
-        ? showPosterUrls
-        : tourPosterUrls
-      : tourPosterUrls.length
-        ? tourPosterUrls
-        : showPosterUrls;
+  const activePosterList = [...new Set([...showPosterUrls, ...tourPosterUrls])];
   const heroPoster =
     activePosterList[Math.min(posterIndex, Math.max(0, activePosterList.length - 1))] ||
     null;
-  const heroBanner =
-    posterScope === "show"
-      ? show.banner_url || show.poster_url || null
-      : tour.banner_url || tour.poster_url || null;
+  const heroBanner = show.banner_url || show.poster_url || tour.banner_url || tour.poster_url || null;
 
   const animatePoster = (kind: "up" | "down" | "left" | "right", next: () => void) => {
     setPosterSlide(kind);
     window.setTimeout(() => {
       next();
-      setPosterSlide("none");
-    }, 220);
+      window.setTimeout(() => setPosterSlide("none"), 40);
+    }, 320);
+  };
+
+  const stepPoster = (delta: number, anim: "up" | "down" | "left" | "right") => {
+    if (activePosterList.length <= 1) return;
+    animatePoster(anim, () =>
+      setPosterIndex((i) => {
+        const n = activePosterList.length;
+        return ((i + delta) % n + n) % n;
+      })
+    );
   };
 
   const handleHeroPointer = (clientX: number, clientY: number, el: HTMLElement) => {
@@ -936,28 +1168,17 @@ export default function TourShowPage({
     const topZone = rect.height * 0.28;
     const bottomZone = rect.height * 0.72;
     if (y <= topZone) {
-      animatePoster("up", () => {
-        setPosterScope("tour");
-        setPosterIndex(0);
-      });
+      stepPoster(-1, "up");
       return;
     }
     if (y >= bottomZone) {
-      animatePoster("down", () => {
-        setPosterScope("show");
-        setPosterIndex(0);
-      });
+      stepPoster(1, "down");
       return;
     }
-    if (activePosterList.length <= 1) return;
     if (x < rect.width / 2) {
-      animatePoster("left", () =>
-        setPosterIndex((i) => (i <= 0 ? activePosterList.length - 1 : i - 1))
-      );
+      stepPoster(-1, "left");
     } else {
-      animatePoster("right", () =>
-        setPosterIndex((i) => (i >= activePosterList.length - 1 ? 0 : i + 1))
-      );
+      stepPoster(1, "right");
     }
   };
 
@@ -1246,15 +1467,15 @@ export default function TourShowPage({
                                       {m.name.slice(0, 2).toUpperCase()}
                                     </span>
                                   )}
+                                  {m.signature_url ? (
+                                    <img
+                                      src={m.signature_url}
+                                      alt=""
+                                      className="tour-show-page__bill-signature"
+                                      draggable={false}
+                                    />
+                                  ) : null}
                                 </span>
-                                {m.signature_url ? (
-                                  <img
-                                    src={m.signature_url}
-                                    alt=""
-                                    className="tour-show-page__bill-signature"
-                                    draggable={false}
-                                  />
-                                ) : null}
                                 <span className="release-lineup-card__name">{m.name}</span>
                               </button>
                             ))}
@@ -1282,10 +1503,11 @@ export default function TourShowPage({
                           {placeIso ? (
                             <span
                               className={`fi fi-${placeIso} tour-show-page__place-flag`}
-                              aria-hidden
+                              title={placeCountry || undefined}
+                              aria-label={placeCountry || undefined}
                             />
                           ) : null}
-                          {place}
+                          <span>{placeLocality || (!placeIso ? placeCountry : "")}</span>
                         </dd>
                       </div>
                     ) : null}
@@ -1298,6 +1520,7 @@ export default function TourShowPage({
                               src={show.venue_logo_url}
                               alt=""
                               className="tour-show-page__company-logo"
+                              title={show.venue}
                             />
                           ) : null}
                           {!show.venue_logo_url ? show.venue : null}
@@ -1313,6 +1536,7 @@ export default function TourShowPage({
                               src={show.promoter_logo_url}
                               alt=""
                               className="tour-show-page__company-logo"
+                              title={show.promoter}
                             />
                           ) : null}
                           {!show.promoter_logo_url ? show.promoter : null}
@@ -1328,6 +1552,7 @@ export default function TourShowPage({
                               src={show.ticketer_logo_url}
                               alt=""
                               className="tour-show-page__company-logo"
+                              title={show.ticketer}
                             />
                           ) : null}
                           {!show.ticketer_logo_url ? show.ticketer : null}
@@ -1458,6 +1683,7 @@ export default function TourShowPage({
               recordingUrl={overview?.recording_url || null}
               loading={setlistLoading}
               coverUrl={heroPoster || tourPoster || showPoster}
+              heroPosterUrl={heroPoster || tourPoster || showPoster}
               tourTitle={tour.title}
               showMeta={[dateLabel, place].filter(Boolean).join(" · ") || null}
               artistName={artistName}
