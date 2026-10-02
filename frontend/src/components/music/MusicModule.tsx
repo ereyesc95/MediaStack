@@ -1315,7 +1315,7 @@ export default function MusicModule({
                   onChange={setCollectionView}
                 />
               ) : null}
-              {tab === "events" ? (
+              {tab === "events" && !portraitMenuChrome ? (
                 <>
                   <button
                     type="button"
@@ -1343,6 +1343,12 @@ export default function MusicModule({
                     onChange={setEventsCardLayout}
                   />
                 </>
+              ) : null}
+              {tab === "events" && portraitMenuChrome ? (
+                <EventsLayoutPicker
+                  value={eventsCardLayout}
+                  onChange={setEventsCardLayout}
+                />
               ) : null}
               <AppMenu
                 onImport={onImport}
@@ -1377,32 +1383,56 @@ export default function MusicModule({
                   collectionManageRef.current?.cancelClearMode()
                 }
                 menuChrome={
-                  portraitMenuChrome && showArtistTools ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCatalogScopeChange(
-                          catalogScope === "artists"
-                            ? "albums"
-                            : catalogScope === "albums"
-                              ? "singles"
-                              : "artists"
-                        )
-                      }
-                    >
-                      {catalogScope === "artists" ? (
-                        <IconAddArtist className="menu-item-icon" />
-                      ) : catalogScope === "singles" ? (
-                        <IconHeadphones className="menu-item-icon" />
-                      ) : (
-                        <IconDisc className="menu-item-icon" />
-                      )}
-                      {catalogScope === "artists"
-                        ? "Artists"
-                        : catalogScope === "singles"
-                          ? "Singles"
-                          : "Albums"}
-                    </button>
+                  portraitMenuChrome && (showArtistTools || tab === "events") ? (
+                    <>
+                      {showArtistTools ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCatalogScopeChange(
+                              catalogScope === "artists"
+                                ? "albums"
+                                : catalogScope === "albums"
+                                  ? "singles"
+                                  : "artists"
+                            )
+                          }
+                        >
+                          {catalogScope === "artists" ? (
+                            <IconAddArtist className="menu-item-icon" />
+                          ) : catalogScope === "singles" ? (
+                            <IconHeadphones className="menu-item-icon" />
+                          ) : (
+                            <IconDisc className="menu-item-icon" />
+                          )}
+                          {catalogScope === "artists"
+                            ? "Artists"
+                            : catalogScope === "singles"
+                              ? "Singles"
+                              : "Albums"}
+                        </button>
+                      ) : null}
+                      {tab === "events" ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEventsFilters((prev) => ({
+                              ...prev,
+                              act: nextEventsAct(prev.act),
+                            }))
+                          }
+                        >
+                          {eventsFilters.act === "main" ? (
+                            <IconStar className="menu-item-icon" />
+                          ) : eventsFilters.act === "openers" ? (
+                            <IconLineup className="menu-item-icon" />
+                          ) : (
+                            <IconUniverse className="menu-item-icon" />
+                          )}
+                          {eventsActLabel(eventsFilters.act)}
+                        </button>
+                      ) : null}
+                    </>
                   ) : undefined
                 }
               />
