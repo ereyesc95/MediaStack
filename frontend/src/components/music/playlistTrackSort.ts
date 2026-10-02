@@ -9,6 +9,7 @@ export type PlaylistTrackSortKey =
   | "year"
   | "director"
   | "duration"
+  | "shows"
   | "genres"
   | "label"
   | "tempo"
@@ -157,6 +158,8 @@ function sortValue(
       // toggling asc/desc (asc: missing first; desc: on-disk first).
       return trackDurationSecForSort(track) ?? -1;
     }
+    case "shows":
+      return track.live_plays_count ?? track.play_occurrences?.length ?? 1;
     case "genres":
       return (snap?.genres ?? "").toLowerCase();
     case "label":

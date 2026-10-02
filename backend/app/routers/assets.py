@@ -126,6 +126,24 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
             if nested.is_file():
                 return nested
             return _first_existing(root / "people", stem)
+        if folder == "signatures":
+            # signatures/{Letter}/{Name}.png (flat preferred)
+            nested = root / "signatures" / name
+            if nested.is_file():
+                return nested
+            # Also allow signatures/{Letter}/{Name}/{Name}.ext
+            parts = name.replace("\\", "/").split("/")
+            if len(parts) >= 2:
+                letter, rest = parts[0], "/".join(parts[1:])
+                nested2 = root / "signatures" / letter / rest
+                if nested2.is_file():
+                    return nested2
+                # nested folder form: Letter/Name/Name.ext
+                if "/" in rest:
+                    nested3 = root / "signatures" / letter / rest
+                    if nested3.is_file():
+                        return nested3
+            return None
         if folder in ("universes", "universe"):
             return _first_existing(root / "universes", stem)
         if folder == "default":

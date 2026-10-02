@@ -102,7 +102,7 @@ def build_global_live_shows_detail(
 
             sec = section_by_key[show_key]
             for raw in raw_list:
-                _merge_track_into_section(
+                enriched = _merge_track_into_section(
                     sec["tracks"],
                     raw,
                     artist_name=artist,
@@ -116,17 +116,18 @@ def build_global_live_shows_detail(
                 )
                 flat_tracks.append(
                     {
-                        **dict(raw),
-                        "artist_name": artist,
-                        "navigate_band_id": band.bnd_id,
+                        **enriched,
+                        "artist_name": enriched.get("artist_name") or artist,
                         "show_label": title,
                         "show_date_iso": s.tsh_date_iso,
                         "tour_title": tour_title,
                         "city": s.tsh_city,
                         "venue": s.tsh_venue,
                         "show_key": show_key,
-                        "play_occurrences": [occurrence],
-                        "live_plays_count": 1,
+                        "play_occurrences": list(
+                            enriched.get("play_occurrences") or [occurrence]
+                        ),
+                        "live_plays_count": enriched.get("live_plays_count") or 1,
                     }
                 )
 
@@ -140,7 +141,7 @@ def build_global_live_shows_detail(
     return {
         "slug": LIVE_SHOWS_SLUG,
         "name": "Live Shows",
-        "description": "Tracks from concerts you attended across your library.",
+        "description": "Tracks from live shows you have attended.",
         "cover_url": playlist_cover_url(LIVE_SHOWS_SLUG),
         "view": "grouped",
         "sections": sections,

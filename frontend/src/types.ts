@@ -525,6 +525,9 @@ export type TourShowOverview = {
   album: {
     title: string;
     cover_url: string | null;
+    logo_url?: string | null;
+    release_date?: string | null;
+    label?: string | null;
     folder_path: string | null;
     release_id: string | null;
   } | null;

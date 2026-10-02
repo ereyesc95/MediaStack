@@ -117,6 +117,9 @@ def build_artist_details(
     ).all():
         if not arp.arp_fk_bands:
             continue
+        # Skip the band page currently being viewed (Related Projects).
+        if band_id is not None and arp.arp_fk_bands == band_id:
+            continue
         band = db.get(Band, arp.arp_fk_bands)
         if not band or not band.bnd_name:
             continue
@@ -155,6 +158,9 @@ def build_artist_details(
         band: Band, *, start: str | None = None, end: str | None = None
     ) -> None:
         if band.bnd_id in seen_band_ids or not band.bnd_name:
+            return
+        # Don't list the band page you are already viewing as a related project.
+        if band_id is not None and band.bnd_id == band_id:
             return
         in_lib = _band_in_library(db, band, media_root)
         if not in_lib:

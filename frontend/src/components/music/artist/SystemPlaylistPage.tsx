@@ -664,8 +664,37 @@ export default function SystemPlaylistPage({
     return undefined;
   }, [detail, isLiveShowsPlaylist, liveShowsView, tracks]);
 
+  const displayLiveShowsSections = useMemo(() => {
+    if (!liveShowsSections) return undefined;
+    if (liveShowsView === "all-tracks" || trackSort.key === "original") {
+      return liveShowsSections;
+    }
+    return liveShowsSections.map((section) => ({
+      ...section,
+      tracks: applyTrackSort(
+        section.tracks,
+        trackSort.key,
+        trackSort.desc,
+        originalTrackNumbers
+      ),
+    }));
+  }, [
+    liveShowsSections,
+    liveShowsView,
+    originalTrackNumbers,
+    trackSort.desc,
+    trackSort.key,
+  ]);
+
   const displayTracks = useMemo(() => {
-    if (slug === "live-shows") return liveShowsTracks;
+    if (slug === "live-shows") {
+      return applyTrackSort(
+        liveShowsTracks,
+        trackSort.key,
+        trackSort.desc,
+        originalTrackNumbers
+      );
+    }
     if (slug === "live-story") return tracks;
     const base =
       slug === "music-videos" ? dedupeMusicVideoTracks(filteredTracks) : filteredTracks;
@@ -707,7 +736,14 @@ export default function SystemPlaylistPage({
     setTrackSort({ key: "original", desc: false });
     setSnapshotFilterState({ artists: [], genres: [] });
     setLiveShowsView("by-show");
-  }, [slug, userPlaylistId]);
+  }, [slug, userPlaylistId, catalogLiveShows]);
+
+  useEffect(() => {
+    if (!isLiveShowsPlaylist) return;
+    if (!isGlobalLiveShows && liveShowsView === "by-artist") {
+      setLiveShowsView("by-show");
+    }
+  }, [isGlobalLiveShows, isLiveShowsPlaylist, liveShowsView]);
 
   useEffect(() => {
     if (!isSnapshotPlaylist) return;
@@ -1498,7 +1534,11 @@ export default function SystemPlaylistPage({
                 type="button"
                 className="catalog-scope-toggle catalog-scope-toggle--switch live-shows-scope-toggle"
                 aria-label={`Live shows view: ${liveShowsView}. Click to change.`}
-                onClick={() => setLiveShowsView((v) => nextLiveShowsViewMode(v))}
+                onClick={() =>
+                  setLiveShowsView((v) =>
+                    nextLiveShowsViewMode(v, { allowByArtist: isGlobalLiveShows })
+                  )
+                }
               >
                 {liveShowsView === "by-show" ? (
                   <>
@@ -2271,7 +2311,7 @@ export default function SystemPlaylistPage({
                   />
                 )}
                 <SystemPlaylistTracklist
-                key={isUserPlaylist ? `user-${userPlaylistId}` : slug}
+                key={`${isUserPlaylist ? `user-${userPlaylistId}` : slug}-${liveShowsView}-${trackSort.key}-${trackSort.desc ? "d" : "a"}`}
                 ref={tracklistRef}
                 bandId={bandId ?? playingTrack?.navigate_band_id ?? 0}
                 artistName={artistName}
@@ -2280,7 +2320,7 @@ export default function SystemPlaylistPage({
                   !isUserPlaylist &&
                   (slug === "live-story" ||
                     (isLiveShowsPlaylist && liveShowsView !== "all-tracks"))
-                    ? liveShowsSections
+                    ? displayLiveShowsSections
                     : undefined
                 }
                 liveShowsViewMode={isLiveShowsPlaylist ? liveShowsView : undefined}
@@ -2291,6 +2331,7 @@ export default function SystemPlaylistPage({
                 liveShowsMode={!isUserPlaylist && slug === "live-shows"}
                 catalogLiveShows={isGlobalLiveShows}
                 onOpenRelease={onOpenRelease}
+                onOpenArtist={onOpenArtist}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}
                 sortDesc={trackSort.desc}

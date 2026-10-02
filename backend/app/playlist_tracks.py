@@ -74,7 +74,7 @@ def _album_rel_path(play_path: str) -> str:
 PLAYLIST_DESCRIPTIONS: dict[str, str] = {
     "top-tracks": "Most popular tracks across the artist library.",
     "setlists": "Live setlists matched from setlist.fm.",
-    "live-shows": "Tracks from concerts you attended (Tours setlists).",
+    "live-shows": "Tracks from live shows you have attended.",
     "live-story": "Live versions of the artist's records.",
     "originals": "Studio originals without remix, live, acoustic, or demo tags.",
     "remixes": "Remix and mix versions from albums and singles.",
@@ -196,13 +196,23 @@ def enrich_playlist_track(track: dict, media_root: Path, db=None) -> dict:
         out["album_folder"] = album_rel
         out["navigate_release_id"] = release_id_from_path(album_rel)
     if db is not None:
-        audio_file = _audio_file_for_play_path(play_path, media_root)
-        if audio_file:
-            from app.media_index import _band_id_from_content_path
+        from app.media_index import _band_id_from_content_path
 
-            nav_band_id = _band_id_from_content_path(db, media_root, audio_file.parent)
-            if nav_band_id:
-                out["navigate_band_id"] = nav_band_id
+        # Prefer the release folder's owning band (covers / shortcuts / By-tags
+        # often live under the performer while the release belongs to the source).
+        nav_band_id = None
+        if release_rel:
+            nav_band_id = _band_id_from_content_path(
+                db, media_root, media_root / Path(release_rel)
+            )
+        if not nav_band_id:
+            audio_file = _audio_file_for_play_path(play_path, media_root)
+            if audio_file:
+                nav_band_id = _band_id_from_content_path(
+                    db, media_root, audio_file.parent
+                )
+        if nav_band_id:
+            out["navigate_band_id"] = nav_band_id
     disk_date = _resolve_track_release_date(play_path, media_root)
     if disk_date:
         out["release_date"] = disk_date

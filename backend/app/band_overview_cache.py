@@ -7,7 +7,7 @@ from pathlib import Path
 from app.paths import DATA_DIR
 
 CACHE_DIR = DATA_DIR / "overview_cache"
-OVERVIEW_CACHE_VERSION = 16  # per-edition Photo slides; Disc folders ≠ editions
+OVERVIEW_CACHE_VERSION = 17  # related self-exclude + flat signature URLs
 
 
 def _cache_path(band_id: int, orientation: str) -> Path:

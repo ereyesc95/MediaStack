@@ -72,7 +72,7 @@ def _merge_track_into_section(
     show_date_iso: str | None,
     media_root: Path | None,
     db: Session | None,
-) -> None:
+) -> dict:
     t = dict(raw)
     if media_root and t.get("play_path"):
         from app.playlist_tracks import enrich_playlist_track
@@ -108,8 +108,9 @@ def _merge_track_into_section(
                 for k, v in t.items():
                     if k not in ("play_occurrences", "live_plays_count"):
                         existing[k] = v
-            return
+            return existing
     tracks.append(t)
+    return t
 
 
 def build_live_shows_card(db: Session, band: Band) -> dict | None:
@@ -185,7 +186,7 @@ def build_live_shows_detail(
         show_key = show_join_key(s.tsh_date_iso, s.tsh_city, s.tsh_venue)
 
         for raw in raw_list:
-            _merge_track_into_section(
+            enriched = _merge_track_into_section(
                 tracks,
                 raw,
                 artist_name=artist_name,
@@ -199,17 +200,18 @@ def build_live_shows_detail(
             )
             flat_tracks.append(
                 {
-                    **dict(raw),
-                    "artist_name": artist_name,
-                    "navigate_band_id": band.bnd_id,
+                    **enriched,
+                    "artist_name": enriched.get("artist_name") or artist_name,
                     "show_label": title,
                     "show_date_iso": s.tsh_date_iso,
                     "tour_title": tour_title,
                     "city": s.tsh_city,
                     "venue": s.tsh_venue,
                     "show_key": show_key,
-                    "play_occurrences": [occurrence],
-                    "live_plays_count": 1,
+                    "play_occurrences": list(
+                        enriched.get("play_occurrences") or [occurrence]
+                    ),
+                    "live_plays_count": enriched.get("live_plays_count") or 1,
                 }
             )
 
@@ -229,11 +231,7 @@ def build_live_shows_detail(
         }
         sections.append(section)
 
-    description = (
-        f"Tracks from concerts you attended with {artist_name}."
-        if artist_name
-        else "Tracks from concerts you attended (Tours setlists)."
-    )
+    description = "Tracks from live shows you have attended."
     return {
         "slug": LIVE_SHOWS_SLUG,
         "name": "Live Shows",

@@ -46,7 +46,7 @@ import TrackYoutubeButton, { trackYoutubeVideos } from "../TrackYoutubeButton";
 import FindInDiskModal from "../FindInDiskModal";
 import SortChevron from "../SortChevron";
 import type { PlaylistTrackSortKey } from "../playlistTrackSort";
-import { livePlaysTooltip } from "../../../liveShowsTransform";
+import { livePlaysTooltip, liveShowsCountLabel } from "../../../liveShowsTransform";
 import {
   filterGenresToKnown,
   formatArtistFeat,
@@ -131,6 +131,7 @@ type Props = {
   catalogLiveShows?: boolean;
   liveShowsViewMode?: "by-show" | "by-artist" | "all-tracks";
   onOpenRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number) => void;
   sortKey?: PlaylistTrackSortKey;
   sortDesc?: boolean;
   onSortChange?: (key: PlaylistTrackSortKey, desc: boolean) => void;
@@ -505,6 +506,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       catalogLiveShows: _catalogLiveShows = false,
       liveShowsViewMode = "by-show",
       onOpenRelease,
+      onOpenArtist,
       sortKey = "original",
       sortDesc = false,
       onSortChange,
@@ -818,6 +820,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           {headerCell("Title", "title", "user-playlist-tracklist__header-btn--title")}
           {headerCell("Artist", "artist")}
           {headerCell("Release", "album")}
+          {headerCell("Shows", "shows", "live-shows-tracklist__header-shows")}
           {headerCell(
             stacked ? "Length" : "Duration",
             "duration",
@@ -890,17 +893,21 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 videos.length > 0 ? (
                   <TrackYoutubeButton videos={videos} onBeforeOpen={onPausePlayback} />
                 ) : null;
-              const artistCol = formatArtistFeat(
+              const artistName =
                 track.snapshot?.artist?.trim() ||
-                  track.artist_name?.trim() ||
-                  "—"
-              );
-              const releaseCol =
-                track.album_title?.trim() ||
-                liveFileReleaseTitle(track) ||
-                "—";
-              const playCount = track.live_plays_count ?? track.play_occurrences?.length;
+                track.artist_name?.trim() ||
+                "";
+              const artistCol = artistName ? formatArtistFeat(artistName) : "—";
+              const releaseTitle =
+                track.album_title?.trim() || liveFileReleaseTitle(track) || "";
+              const releaseCol = releaseTitle || "—";
+              const playCount =
+                track.live_plays_count ?? track.play_occurrences?.length ?? 1;
               const playsTip = livePlaysTooltip(track);
+              const showShowsCol = liveShowsViewMode !== "by-show";
+              const artistBandId = track.navigate_band_id ?? null;
+              const releaseId = track.navigate_release_id ?? null;
+              const releaseBandId = track.navigate_band_id ?? bandId;
               const rowClass = [
                 "release-tracklist__row",
                 "live-shows-tracklist__row",
@@ -911,19 +918,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 .join(" ");
               const endActions = (
                 <span className="live-shows-tracklist__end-actions">
-                  {durationLabel ? (
-                    <>
-                      {youtubeBtn || (
-                        <span
-                          className="setlist-tracklist__youtube-link setlist-tracklist__youtube-link--empty"
-                          aria-hidden
-                        />
-                      )}
-                      <span className="release-tracklist__duration">
-                        {durationLabel}
-                      </span>
-                    </>
-                  ) : unavailable && youtubeQuery ? (
+                  {unavailable && youtubeQuery ? (
                     <a
                       className="setlist-tracklist__youtube-link live-shows-tracklist__youtube-end"
                       href={youtubeSearchUrl(youtubeQuery)}
@@ -931,6 +926,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       rel="noopener noreferrer"
                       aria-label={`Search ${trackDisplayTitle(track.title)} on YouTube`}
                       title="Search on YouTube"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <TrackActionYoutubeIcon className="setlist-tracklist__youtube-icon" />
                     </a>
@@ -942,29 +938,66 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       />
                     )
                   )}
+                  {durationLabel ? (
+                    <span className="release-tracklist__duration">{durationLabel}</span>
+                  ) : (
+                    <span className="release-tracklist__duration release-tracklist__duration--empty" aria-hidden />
+                  )}
                 </span>
               );
-              const titleInner = (
-                <>
-                  <ReleaseTrackTitle title={displayTitle} />
-                  {playCount && playCount > 1 ? (
-                    <span
-                      className="live-shows-tracklist__play-count"
-                      title={playsTip}
-                    >
-                      ×{playCount}
-                    </span>
-                  ) : null}
-                </>
-              );
+              const artistCell =
+                artistBandId && onOpenArtist && artistName ? (
+                  <button
+                    type="button"
+                    className="live-shows-tracklist__link"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenArtist(artistBandId);
+                    }}
+                  >
+                    {artistCol}
+                  </button>
+                ) : (
+                  <span>{artistCol}</span>
+                );
+              const releaseCell =
+                releaseId && onOpenRelease && releaseTitle ? (
+                  <button
+                    type="button"
+                    className="live-shows-tracklist__link"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenRelease(releaseBandId, releaseId);
+                    }}
+                  >
+                    {releaseCol}
+                  </button>
+                ) : (
+                  <span>{releaseCol}</span>
+                );
               const rowInner = (
                 <>
                   <span className="release-tracklist__num">{displayNumber}</span>
-                  <span className="release-tracklist__title-wrap">{titleInner}</span>
+                  <span className="release-tracklist__title-wrap">
+                    <ReleaseTrackTitle title={displayTitle} />
+                  </span>
                   {liveShowsViewMode !== "by-artist" ? (
-                    <span className="live-shows-tracklist__artist-col">{artistCol}</span>
+                    <span className="live-shows-tracklist__artist-col">{artistCell}</span>
                   ) : null}
-                  <span className="live-shows-tracklist__album-col">{releaseCol}</span>
+                  <span className="live-shows-tracklist__album-col">{releaseCell}</span>
+                  {showShowsCol ? (
+                    <button
+                      type="button"
+                      className="live-shows-tracklist__shows-col"
+                      title={playsTip}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (playsTip) window.alert(playsTip);
+                      }}
+                    >
+                      {liveShowsCountLabel(playCount)}
+                    </button>
+                  ) : null}
                   {endActions}
                 </>
               );
@@ -1137,7 +1170,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                       E
                     </span>
                   ) : null}
-                  {youtubeBtn}
+                  {!unavailable ? youtubeBtn : null}
                 </span>
                 {stacked && useMetaColumns && displayArtist ? (
                   <span className="user-playlist-tracklist__title-artist">
@@ -1246,7 +1279,9 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               editMode && track.entry_id ? (
                 removeCell
               ) : unavailable ? (
-                rowActions
+                <span className="user-playlist-tracklist__trailing">
+                  {rowActions}
+                </span>
               ) : (
                 <span className="user-playlist-tracklist__trailing">
                   {durationLabel ? (
@@ -1274,9 +1309,6 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 {artistCol}
                 {albumCol}
                 {yearCol}
-                {unavailable || editMode || snapshotMetadataMode
-                  ? trailingCell
-                  : null}
               </>
             ) : (
               <>
@@ -1311,9 +1343,17 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 }}
               >
                 {unavailable || editMode || snapshotMetadataMode ? (
-                  <div className={playClass}>
-                    {rowContent}
-                  </div>
+                  useMetaColumns && !editMode && !snapshotMetadataMode ? (
+                    <div className="release-tracklist__row-inner">
+                      <div className={playClass}>{rowContent}</div>
+                      {trailingCell}
+                    </div>
+                  ) : (
+                    <div className={playClass}>
+                      {rowContent}
+                      {editMode || snapshotMetadataMode ? trailingCell : null}
+                    </div>
+                  )
                 ) : (
                   <div className="release-tracklist__row-inner">
                     <button

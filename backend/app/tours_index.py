@@ -749,13 +749,29 @@ def _show_payload(db: Session, s: TourShow) -> dict:
     if s.tsh_country:
         from app.models import Country
 
+        raw_country = s.tsh_country.strip()
         crow = db.scalars(
-            select(Country).where(Country.cou_name.ilike(s.tsh_country.strip()))
+            select(Country).where(Country.cou_name.ilike(raw_country))
         ).first()
+        if not crow and raw_country:
+            crow = db.scalars(
+                select(Country).where(Country.cou_name.ilike(f"%{raw_country}%"))
+            ).first()
         if crow and crow.cou_iso:
             country_iso = crow.cou_iso.lower()
-        elif len((s.tsh_country or "").strip()) == 2:
-            country_iso = s.tsh_country.strip().lower()
+        elif len(raw_country) == 2:
+            country_iso = raw_country.lower()
+        else:
+            # Common folder labels when Country table misspell / mismatch.
+            aliases = {
+                "united states": "us",
+                "usa": "us",
+                "u.s.a.": "us",
+                "u.s.": "us",
+                "united kingdom": "gb",
+                "uk": "gb",
+            }
+            country_iso = aliases.get(raw_country.casefold())
     return {
         "id": s.tsh_id,
         "slug": show_slug(s.tsh_date_iso, s.tsh_city, s.tsh_venue),
@@ -1150,9 +1166,32 @@ def _match_supported_album(
             if _normalize_title_for_match(title) != want:
                 continue
             folder = album.get("folder_path")
+            logo_url = None
+            cover_url = album.get("cover_url")
+            if folder and media_root:
+                from app.media_paths_util import resolve_media_entry
+                from app.release_overview import (
+                    _artwork_urls,
+                    _resolve_standard_edition,
+                    _standard_artwork_dir,
+                )
+
+                content = resolve_media_entry(
+                    media_root / Path(str(folder).replace("\\", "/")),
+                    media_root=media_root,
+                )
+                if content and content.is_dir():
+                    edition = _resolve_standard_edition(content)
+                    artwork = _standard_artwork_dir(edition)
+                    urls = _artwork_urls(artwork, media_root)
+                    logo_url = urls.get("logo_url")
+                    cover_url = cover_url or urls.get("cover_front_url")
             return {
                 "title": title,
-                "cover_url": album.get("cover_url"),
+                "cover_url": cover_url,
+                "logo_url": logo_url,
+                "release_date": album.get("date_iso") or album.get("date"),
+                "label": album.get("label"),
                 "folder_path": folder,
                 "release_id": release_id_from_path(folder) if folder else None,
             }

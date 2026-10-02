@@ -38,7 +38,9 @@ export default function PlaylistsView({
             }}
           />
           <span className="playlist-card-dim" />
-          <span className="playlist-card-label">{p.name}</span>
+          <span className="playlist-card-label">
+            {p.slug === "live-shows" ? "Live Shows" : p.name}
+          </span>
           <span className="playlist-card-meta">
             {p.track_count != null ? `${p.track_count} tracks` : "System"}
           </span>

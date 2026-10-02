@@ -527,6 +527,55 @@ def _db_participations_for_band(db: Session, band: Band) -> list[dict]:
                 }
                 by_target[bid] = entry
             entry["via_members"].add(member_name)
+    # Solo projects for members (same MBID / alias folder) without an ARP row.
+    from app.band_overview import _display_name
+
+    for mid in member_ids:
+        artist = db.get(Artist, mid)
+        if not artist:
+            continue
+        member_name = _member_display(db, mid)
+        aliases = [
+            a.strip()
+            for a in (artist.art_aliases or "").replace("█", "'").split(";")
+            if a.strip()
+        ]
+        stage = _display_name(artist.art_stage_name or artist.art_name)
+        candidates: list[Band] = []
+        if artist.art_code:
+            candidates.extend(
+                db.scalars(
+                    select(Band)
+                    .where(Band.bnd_code == artist.art_code)
+                    .order_by(Band.bnd_id)
+                ).all()
+            )
+        for raw in [stage, *aliases]:
+            n = (raw or "").strip()
+            if not n:
+                continue
+            candidates.extend(
+                db.scalars(
+                    select(Band).where(Band.bnd_name == n).order_by(Band.bnd_id)
+                ).all()
+            )
+        for b in candidates:
+            bid = b.bnd_id
+            if not bid or bid == band.bnd_id or not b.bnd_name:
+                continue
+            if _is_tribute_name(b.bnd_name):
+                continue
+            entry = by_target.get(bid)
+            if not entry:
+                entry = {
+                    "name": b.bnd_name,
+                    "local_band_id": b.bnd_id,
+                    "mbid": b.bnd_code,
+                    "source": "db",
+                    "via_members": set(),
+                }
+                by_target[bid] = entry
+            entry["via_members"].add(member_name)
     out: list[dict] = []
     for entry in by_target.values():
         entry["via_members"] = sorted(entry["via_members"])
@@ -559,6 +608,45 @@ def _db_participations_for_artist(db: Session, artist: Artist) -> list[dict]:
                 "source": "db",
             }
         )
+
+    # Solo / alias projects that share the person MBID or folder name.
+    from app.band_overview import _display_name
+
+    aliases = [
+        a.strip()
+        for a in (artist.art_aliases or "").replace("█", "'").split(";")
+        if a.strip()
+    ]
+    stage = _display_name(artist.art_stage_name or artist.art_name)
+    name_candidates: list[str] = []
+    for raw in [stage, *aliases]:
+        n = (raw or "").strip()
+        if n and n.casefold() not in {x.casefold() for x in name_candidates}:
+            name_candidates.append(n)
+
+    def _append_band(b: Band) -> None:
+        if not b.bnd_name or b.bnd_id in seen or _is_tribute_name(b.bnd_name):
+            return
+        seen.add(b.bnd_id)
+        out.append(
+            {
+                "name": b.bnd_name,
+                "local_band_id": b.bnd_id,
+                "mbid": b.bnd_code,
+                "source": "db",
+            }
+        )
+
+    if artist.art_code:
+        for b in db.scalars(
+            select(Band).where(Band.bnd_code == artist.art_code).order_by(Band.bnd_id)
+        ).all():
+            _append_band(b)
+    for cand in name_candidates:
+        for b in db.scalars(
+            select(Band).where(Band.bnd_name == cand).order_by(Band.bnd_id)
+        ).all():
+            _append_band(b)
     return out
 
 
@@ -982,6 +1070,77 @@ def _sort_related_cards(cards: list[dict]) -> list[dict]:
     )
 
 
+def _card_from_local_band(
+    db: Session,
+    band: Band,
+    *,
+    orientation: str,
+    media_root: Path | None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.gallery import resolve_artist_card
+    from app.band_overview import _display_name
+
+    del db, media_root
+    name = _display_name(band.bnd_name)
+    card = resolve_artist_card(band.bnd_name, orientation=orientation)
+    return {
+        "id": f"local-{band.bnd_id}",
+        "name": name,
+        "code": band.bnd_code,
+        "local_band_id": band.bnd_id,
+        "in_library": True,
+        "photo_url": card.photo_url,
+        "logo_url": card.logo_url,
+        "logo_collapsed_url": card.logo_collapsed_url,
+        "icon_url": card.icon_url,
+        "era_year": card.era_year,
+        "show_name_on_hover": card.show_name_on_hover,
+        "external_urls": {},
+        "via_members": via_members or [],
+        "manual": False,
+        "source": "db",
+    }
+
+
+def _merge_local_participation_cards(
+    db: Session,
+    cards: list[dict],
+    items: list[dict],
+    *,
+    orientation: str,
+    media_root: Path | None,
+    exclude_band_id: int | None = None,
+) -> list[dict]:
+    seen: set[int] = set()
+    for c in cards:
+        lid = c.get("local_band_id")
+        if lid is not None:
+            seen.add(int(lid))
+    out = list(cards)
+    for item in items:
+        lid = item.get("local_band_id")
+        if lid is None or int(lid) in seen:
+            continue
+        if exclude_band_id is not None and int(lid) == exclude_band_id:
+            continue
+        band = db.get(Band, int(lid))
+        if not band or not band.bnd_name:
+            continue
+        via = item.get("via_members")
+        out.append(
+            _card_from_local_band(
+                db,
+                band,
+                orientation=orientation,
+                media_root=media_root,
+                via_members=list(via) if via else None,
+            )
+        )
+        seen.add(int(lid))
+    return _sort_related_cards(out)
+
+
 def related_payload(
     db: Session,
     *,
@@ -997,19 +1156,48 @@ def related_payload(
         art = db.get(Artist, solo_artist_id)
         if not art:
             return _empty_payload("artist", solo_artist_id)
+        exclude_self = band.bnd_id if band else None
         similar = _sort_related_cards(
             [
                 _serialize_card(db, r, orientation=orientation, media_root=root)
                 for r in _list_rows(db, kind=KIND_SIMILAR, artist_id=solo_artist_id)
             ]
         )
+        self_name = (band.bnd_name or "").casefold() if band else ""
+
+        def _not_self_card(c: dict) -> bool:
+            if exclude_self is None:
+                return True
+            lid = c.get("local_band_id")
+            if lid is not None:
+                try:
+                    if int(lid) == int(exclude_self):
+                        return False
+                except (TypeError, ValueError):
+                    pass
+            if self_name and (c.get("name") or "").casefold() == self_name:
+                return False
+            return True
+
         participations = _sort_related_cards(
             [
-                _serialize_card(db, r, orientation=orientation, media_root=root)
+                c
                 for r in _list_rows(
                     db, kind=KIND_PARTICIPATION, artist_id=solo_artist_id
                 )
+                for c in [
+                    _serialize_card(db, r, orientation=orientation, media_root=root)
+                ]
+                if _not_self_card(c)
             ]
+        )
+        participations = _merge_local_participation_cards(
+            db,
+            participations,
+            _db_participations_for_artist(db, art),
+            orientation=orientation,
+            media_root=root,
+            exclude_band_id=exclude_self,
         )
         return {
             "entity_type": "artist",
@@ -1044,9 +1232,20 @@ def related_payload(
             media_root=root,
             owner_band_id=band.bnd_id,
         )
-        if card.get("via_members"):
+        if card.get("local_band_id") == band.bnd_id:
+            continue
+        # Prefer rows with via_members, but keep any local-library target.
+        if card.get("via_members") or card.get("in_library"):
             participations.append(card)
     participations = _sort_related_cards(participations)
+    participations = _merge_local_participation_cards(
+        db,
+        participations,
+        _db_participations_for_band(db, band),
+        orientation=orientation,
+        media_root=root,
+        exclude_band_id=band.bnd_id,
+    )
     return {
         "entity_type": "band",
         "entity_id": band.bnd_id,

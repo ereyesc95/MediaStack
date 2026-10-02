@@ -179,13 +179,54 @@ def member_signature_url(
     member_name: str | None,
     media_root: Path | None,
 ) -> str | None:
-    """Return ``Signature - {member}.<image>`` from the artist Branding folder."""
-    if not artist_dir or not media_root or not member_name:
+    """Return signature image URL for a member.
+
+    Preferred layout (project assets)::
+
+        assets/signatures/{Letter}/{Member Name}.png
+
+    Also accepts nested::
+
+        assets/signatures/{Letter}/{Member Name}/{Member Name}.png
+
+    Legacy fallback: ``Signature - {member}.<image>`` under the artist Branding folder.
+    """
+    if not member_name:
+        return None
+    display = _display_name(member_name).strip()
+    if not display:
+        return None
+    letter = display[0].upper()
+    if not letter.isalpha():
+        letter = "#"
+
+    from urllib.parse import quote
+
+    from app.paths import PROJECT_ROOT
+
+    assets_sig = PROJECT_ROOT / "assets" / "signatures" / letter
+    # Prefer flat Letter/Name.ext (current layout).
+    candidates: list[Path] = [
+        assets_sig / f"{display}.png",
+        assets_sig / f"{display}.webp",
+        assets_sig / f"{display}.jpg",
+        assets_sig / f"{display}.jpeg",
+        assets_sig / display / f"{display}.png",
+        assets_sig / display / f"{display}.webp",
+        assets_sig / display / f"{display}.jpg",
+        assets_sig / display / f"{display}.jpeg",
+    ]
+    for path in candidates:
+        if path.is_file():
+            rel = path.relative_to(PROJECT_ROOT / "assets").as_posix()
+            return f"/api/assets/{quote(rel, safe='/')}"
+
+    if not artist_dir or not media_root:
         return None
     branding = _gallery_subdir(artist_dir, "Branding")
     if not branding.is_dir():
         return None
-    wanted = f"signature - {_display_name(member_name)}".casefold()
+    wanted = f"signature - {display}".casefold()
     try:
         for path in branding.iterdir():
             if (

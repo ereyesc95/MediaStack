@@ -124,8 +124,17 @@ export function livePlaysTooltip(track: ArtistPlaylistTrack): string | undefined
   return occs.map(occurrenceLabel).join("\n");
 }
 
-export function nextLiveShowsViewMode(mode: LiveShowsViewMode): LiveShowsViewMode {
-  if (mode === "by-show") return "by-artist";
+export function liveShowsCountLabel(count: number): string {
+  const n = Math.max(0, Math.floor(count));
+  return n === 1 ? "1 show" : `${n} shows`;
+}
+
+export function nextLiveShowsViewMode(
+  mode: LiveShowsViewMode,
+  options?: { allowByArtist?: boolean }
+): LiveShowsViewMode {
+  const allowByArtist = options?.allowByArtist !== false;
+  if (mode === "by-show") return allowByArtist ? "by-artist" : "all-tracks";
   if (mode === "by-artist") return "all-tracks";
   return "by-show";
 }

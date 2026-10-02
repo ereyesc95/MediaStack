@@ -54,7 +54,7 @@ function PlaylistCard({
       : playlist.slug === "live-shows"
         ? playlist.show_count
           ? `${playlist.show_count} shows`
-          : "Live shows"
+          : "Live Shows"
         : `${playlist.track_count ?? 0} tracks`;
 
   const handleActivate = () => {
