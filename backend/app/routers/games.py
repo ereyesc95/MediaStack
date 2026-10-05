@@ -369,21 +369,27 @@ def games_game_overview(
 
 
 @router.get("/games/{game_id}/gallery")
-def games_game_gallery(game_id: str):
+def games_game_gallery(
+    game_id: str,
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     detail = build_game_detail(game_id)
     if not detail:
         raise HTTPException(404, "Game not found")
     path = detail.get("folder_path") or ""
-    return build_games_gallery(path)
+    return build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.get("/franchises/{work_id}/gallery")
-def games_franchise_gallery(work_id: str):
+def games_franchise_gallery(
+    work_id: str,
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     detail = build_work_detail(work_id)
     if not detail:
         raise HTTPException(404, "Games franchise not found")
     path = detail.get("folder_path") or ""
-    return build_games_gallery(path)
+    return build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
 
 
 @router.post("/games/{game_id}/launch")

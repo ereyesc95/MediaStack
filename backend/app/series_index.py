@@ -1337,6 +1337,7 @@ def build_series_gallery(
     under_series = True
     under_movies = True
     under_books = True
+    under_games = True
     try:
         folder.relative_to(root / "Series")
     except ValueError:
@@ -1349,7 +1350,11 @@ def build_series_gallery(
         folder.relative_to(root / "Books")
     except ValueError:
         under_books = False
-    if not under_series and not under_movies and not under_books:
+    try:
+        folder.relative_to(root / "Games")
+    except ValueError:
+        under_games = False
+    if not under_series and not under_movies and not under_books and not under_games:
         return {"folder_path": rel_path, "items": [], "sections": []}
 
     sections = gallery_sections(folder, root)

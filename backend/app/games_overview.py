@@ -331,8 +331,13 @@ def build_game_overview(
     }
 
 
-def build_games_gallery(folder_path: str, media_root: Path | None = None) -> dict:
+def build_games_gallery(
+    folder_path: str,
+    media_root: Path | None = None,
+    *,
+    nsfw_unlocked: bool = False,
+) -> dict:
     from app.series_index import build_series_gallery
 
     root = media_root or _root()
-    return build_series_gallery(folder_path, root)
+    return build_series_gallery(folder_path, root, nsfw_unlocked=nsfw_unlocked)

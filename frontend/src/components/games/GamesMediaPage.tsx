@@ -8,7 +8,9 @@ import {
   refreshGamesFranchiseMetadata,
   refreshGamesGameMetadata,
   resolveBooksPath,
+  resolveGamesPath,
   resolveMoviesPath,
+  type FranchiseQuizCatalogItem,
 } from "../../api";
 import { pushRecentGameId } from "../../gamesRecent";
 import type { GamesOverviewTab, GamesSection } from "../../gamesRoute";
@@ -386,6 +388,46 @@ export default function GamesMediaPage({
     );
   }
 
+  function openQuizCatalogItem(item: FranchiseQuizCatalogItem) {
+    if (item.module === "game") {
+      void resolveGamesPath(item.path)
+        .then((hit) => {
+          onNavigate({
+            franchiseId: hit.franchise_id || franchiseId,
+            gameId: hit.game_id ?? item.navigate_id,
+            section: "overview",
+          });
+        })
+        .catch(() => {
+          onNavigate({
+            franchiseId,
+            gameId: item.navigate_id,
+            section: "overview",
+          });
+        });
+      return;
+    }
+    if (item.module === "series") {
+      onOpenSeriesFranchise?.(item.navigate_id || franchiseId);
+      return;
+    }
+    if (item.module === "movie") {
+      openRelatedMovies({
+        path: item.path,
+        navigate_franchise_id: item.navigate_id,
+        title: item.title,
+      });
+      return;
+    }
+    if (item.module === "book") {
+      openRelatedBooks({
+        path: item.path,
+        navigate_franchise_id: item.navigate_id,
+        title: item.title,
+      });
+    }
+  }
+
   return (
     <div className="series-franchise-page games-media-page">
       <header className="header header--minimal">
@@ -614,7 +656,10 @@ export default function GamesMediaPage({
       ) : null}
 
       {!loading && section === "quiz" && !isLeaf ? (
-        <FranchiseQuiz franchiseId={franchiseId} />
+        <FranchiseQuiz
+          franchiseId={franchiseId}
+          onOpenCatalogItem={openQuizCatalogItem}
+        />
       ) : null}
 
       {universeOpen && isAdmin ? (
