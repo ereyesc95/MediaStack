@@ -27,6 +27,7 @@ MODULE_LABELS = {
     "series": "Series",
     "movie": "Movies",
     "book": "Books",
+    "game": "Games",
 }
 MODULE_ORDER = {"series": 0, "movie": 1, "book": 2, "game": 3}
 QUIZ_ENTRY_KINDS = frozenset(MODULE_LABELS)

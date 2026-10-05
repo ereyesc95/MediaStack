@@ -4,6 +4,7 @@ const PANES = [
   { id: 300, slug: "movies", label: "Movies" },
   { id: 500, slug: "books", label: "Books" },
   { id: 600, slug: "games", label: "Games" },
+  { id: 700, slug: "photos", label: "Photos" },
 ] as const;
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
 
 export default function HubPage({ onSelect }: Props) {
   return (
-    <div className="hub-panes">
+    <div className="hub-panes hub-panes--grid">
       {PANES.map((p) => (
         <button
           key={p.id}

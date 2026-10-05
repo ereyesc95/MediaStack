@@ -54,7 +54,53 @@ const LABELS: Record<
     provider: "Google Books",
     providerUrl: "https://books.google.com/",
   },
+  games: {
+    singular: "game",
+    plural: "Games",
+    titlePlaceholder: "Game title or IGDB ID",
+    provider: "IGDB",
+    providerUrl: "https://www.igdb.com/",
+  },
 };
+
+/** Mirrors backend GAME_PLATFORMS for the create form. */
+const GAMES_PLATFORM_OPTIONS = [
+  "Amiga",
+  "Arcade",
+  "Browser",
+  "Commodore 64",
+  "Flash",
+  "Game Boy",
+  "Game Boy Advance",
+  "Game Boy Color",
+  "Mac",
+  "Nintendo 3DS",
+  "Nintendo 64",
+  "Nintendo DS",
+  "Nintendo Entertainment System",
+  "Nintendo Switch",
+  "Nintendo Wii",
+  "Nintendo Wii U",
+  "PC",
+  "PlayStation",
+  "PlayStation 2",
+  "PlayStation 3",
+  "PlayStation 4",
+  "PlayStation 5",
+  "PlayStation Portable",
+  "PlayStation Vita",
+  "Sega 32X",
+  "Sega CD",
+  "Sega Dreamcast",
+  "Sega Genesis",
+  "Sega Master System",
+  "Sega Saturn",
+  "Super Nintendo",
+  "Xbox",
+  "Xbox 360",
+  "Xbox One",
+  "Xbox Series",
+];
 
 function SearchIconButton({
   searching,
@@ -165,6 +211,10 @@ export default function ManageCatalogModal({
   const [franchiseHome, setFranchiseHome] = useState(false);
   const [includeGuide, setIncludeGuide] = useState(true);
   const [nestedSeries, setNestedSeries] = useState(false);
+  const [platform, setPlatform] = useState("");
+  const [platformOptions, setPlatformOptions] = useState<string[]>(() =>
+    module === "games" ? GAMES_PLATFORM_OPTIONS : []
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -291,6 +341,15 @@ export default function ManageCatalogModal({
       setFranchiseName(
         (current) => current || data.franchise_name || item.title
       );
+      const previewPlatforms = (data as { platforms?: string[] }).platforms;
+      if (Array.isArray(previewPlatforms) && previewPlatforms.length) {
+        setPlatformOptions(previewPlatforms);
+      }
+      const hinted =
+        item.platform ||
+        (item.platforms && item.platforms[0]) ||
+        "";
+      if (hinted) setPlatform((current) => current || hinted);
       setStep("details");
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -362,6 +421,10 @@ export default function ManageCatalogModal({
 
   async function create() {
     if (!franchiseName.trim() || !chosenItems.length || saving) return;
+    if (module === "games" && !platform.trim()) {
+      setError("Choose a platform for Games (e.g. Nintendo Switch).");
+      return;
+    }
     setSaving(true);
     setCloseWarning(false);
     setError(null);
@@ -371,6 +434,7 @@ export default function ManageCatalogModal({
         franchise_home: franchiseHome,
         include_guide: includeGuide,
         nested_series: nestedSeries,
+        ...(module === "games" ? { platform: platform.trim() } : {}),
         items: chosenItems.map(({ key: _key, ...item }) => item),
       });
       if (result.metadata_errors.length) {
@@ -709,6 +773,26 @@ export default function ManageCatalogModal({
               />
             </label>
 
+            {module === "games" ? (
+              <label>
+                Platform
+                <select
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                >
+                  <option value="">Select platform…</option>
+                  {(platformOptions.length
+                    ? platformOptions
+                    : GAMES_PLATFORM_OPTIONS
+                  ).map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
             {module === "series" ? (
               <Checkbox
                 className="manage-artists-modal__guide-option"
@@ -839,7 +923,10 @@ export default function ManageCatalogModal({
                 type="button"
                 className="btn btn--primary"
                 disabled={
-                  saving || !franchiseName.trim() || chosenItems.length === 0
+                  saving ||
+                  !franchiseName.trim() ||
+                  chosenItems.length === 0 ||
+                  (module === "games" && !platform.trim())
                 }
                 onClick={() => void create()}
               >

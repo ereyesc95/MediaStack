@@ -29,6 +29,15 @@ ADULT_SUBGENRES = frozenset(
         "adult ai",
         "adult magazines",
         "furry & anthro adult",
+        # Games (media type 600)
+        "hentai game",
+        "nude / explicit",
+        "adult adventure",
+        "adult rpg",
+        "adult visual novel",
+        "adult simulation",
+        "adult horror",
+        "adult fighting",
     }
 )
 

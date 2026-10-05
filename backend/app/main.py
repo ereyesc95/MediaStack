@@ -16,6 +16,7 @@ from app.routers import (
     books,
     franchise_quiz,
     games,
+    photos,
     import_router,
     media,
     metadata,
@@ -71,6 +72,7 @@ app.include_router(books.router)
 app.include_router(franchise_quiz.router)
 app.include_router(catalog_import.router)
 app.include_router(games.router)
+app.include_router(photos.router)
 app.include_router(import_router.router)
 app.include_router(sync.router)
 app.include_router(media.router)

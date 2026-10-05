@@ -1,10 +1,17 @@
 /** Return path when leaving a playlist for an artist/release page. */
 
+import type { TourShowTab } from "./types";
+
 export type PlaylistReturn = {
-  kind: "artist-playlist" | "user-playlist" | "catalog-live-shows";
+  kind: "artist-playlist" | "user-playlist" | "catalog-live-shows" | "tour-show";
   bandId?: number;
   slug?: string;
   userPlaylistId?: number;
+  tourSlug?: string;
+  showSlug?: string;
+  showTab?: TourShowTab;
+  /** Where the tour show was opened from (events browse vs artist tours). */
+  tourEntry?: "events" | "artist";
   backLabel: string;
 };
 

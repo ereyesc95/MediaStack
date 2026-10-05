@@ -36,7 +36,7 @@ const FILTER_MODES: { id: SeriesFilterMode; label: string }[] = [
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
-export type SeriesCatalogScope = "franchises" | "shows" | "universes";
+export type SeriesCatalogScope = "franchises" | "shows" | "universes" | "platforms";
 
 export type SeriesCatalogCard = {
   key: string;
@@ -75,10 +75,10 @@ function showMeta(s: SeriesSubseriesCard): string {
 
 function franchiseMeta(
   f: SeriesFranchiseCard,
-  unitNoun: "season" | "film" | "book" = "season"
+  unitNoun: "season" | "film" | "book" | "game" = "season"
 ): string {
   const unit = `${f.season_count} ${unitNoun}${f.season_count === 1 ? "" : "s"}`;
-  if (unitNoun === "film" || unitNoun === "book") return unit;
+  if (unitNoun === "film" || unitNoun === "book" || unitNoun === "game") return unit;
   return f.subseries_count > 0
     ? `${f.subseries_count} subseries · ${unit}`
     : unit;
@@ -100,8 +100,10 @@ type Props = {
   subgenreId: number | "";
   publisher: string;
   writer: string;
-  /** Movies catalog uses film counts; Books uses book counts (mapped onto season_count). */
-  unitNoun?: "season" | "film" | "book";
+  /** Movies catalog uses film counts; Books uses book counts; Games uses game counts. */
+  unitNoun?: "season" | "film" | "book" | "game";
+  /** Optional platform cards when catalogScope is "platforms" (Games). */
+  platforms?: SeriesFranchiseCard[];
   /** Override filter tabs (e.g. Films scope hides END DATE, renames START). */
   filterModes?: { id: SeriesFilterMode; label: string }[];
   loading?: boolean;
@@ -131,6 +133,7 @@ type Props = {
 export default function SeriesBrowse({
   franchises,
   universes = [],
+  platforms = [],
   orientation,
   filterMode,
   filterOptions,
@@ -235,6 +238,8 @@ export default function SeriesBrowse({
     };
     if (catalogScope === "universes") {
       for (const u of universes) add(u.name || "");
+    } else if (catalogScope === "platforms") {
+      for (const p of platforms) add(p.name || "");
     } else if (catalogScope === "shows") {
       for (const f of franchises) {
         for (const s of f.subseries || []) add(s.title || "");
@@ -247,7 +252,7 @@ export default function SeriesBrowse({
     const letters = LETTERS.filter((l) => set.has(l));
     if (set.has(HASH)) letters.push(HASH);
     return letters;
-  }, [catalogScope, franchises, universes]);
+  }, [catalogScope, franchises, universes, platforms]);
 
   const visibleFilterModes = useMemo(() => {
     // While options are still loading, keep the active mode visible so pending
@@ -617,18 +622,61 @@ export default function SeriesBrowse({
       );
       return list.map(
         (u): SeriesCatalogCard => ({
-          key: `universe:${u.id}`,
-          franchiseId: "",
-          universeId: u.id,
+          key: `uni-${u.id}`,
+          franchiseId: String(u.id),
           name: u.name,
           letter: (u.name.slice(0, 1) || "#").toUpperCase(),
           cover_url: u.cover_url || u.portrait_url || null,
           portrait_url: u.portrait_url || u.cover_url || null,
           landscape_url: u.landscape_url || u.cover_url || null,
           banner_url: u.banner_url || u.landscape_url || u.cover_url || null,
-          logo_url: u.logo_url || null,
+          logo_url: u.logo_url ?? null,
+          icon_url: null,
+          badge_url: null,
           date_iso: null,
-          meta: `${u.member_count ?? u.members?.length ?? 0} members`,
+          meta:
+            u.member_count != null
+              ? `${u.member_count} members`
+              : "",
+          universeId: u.id,
+        })
+      );
+    }
+
+    if (catalogScope === "platforms") {
+      let list = [...platforms];
+      if (q) {
+        list = list.filter((p) => p.name.toLowerCase().includes(q));
+      }
+      if (filterMode === "name" && letter) {
+        const want = letter === HASH ? "#" : letter.toUpperCase();
+        list = list.filter((p) => {
+          const L = (p.name.slice(0, 1) || "").toUpperCase();
+          if (want === "#") return !/[A-Z]/.test(L);
+          return L === want;
+        });
+      }
+      list.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      );
+      return list.map(
+        (p): SeriesCatalogCard => ({
+          key: `plat-${p.id}`,
+          franchiseId: String(p.id),
+          name: p.name,
+          letter: (p.name.slice(0, 1) || "#").toUpperCase(),
+          cover_url: p.cover_url,
+          portrait_url: p.portrait_url || p.cover_url,
+          landscape_url: p.landscape_url || p.cover_url,
+          banner_url: p.banner_url || p.landscape_url || p.cover_url,
+          logo_url: p.logo_url ?? null,
+          icon_url: p.icon_url ?? null,
+          badge_url: p.badge_url ?? null,
+          date_iso: null,
+          meta:
+            p.season_count > 0
+              ? `${p.season_count} game${p.season_count === 1 ? "" : "s"}`
+              : "",
         })
       );
     }
@@ -773,6 +821,7 @@ export default function SeriesBrowse({
     catalogScope,
     franchises,
     universes,
+    platforms,
     search,
     letter,
     filterMode,

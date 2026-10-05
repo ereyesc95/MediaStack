@@ -50,7 +50,7 @@ def api_list_universes(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     prefer: str | None = None
-    if module in ("movies", "series", "books"):
+    if module in ("movies", "series", "books", "games"):
         prefer = module
     return {
         "universes": list_universes(
@@ -79,8 +79,8 @@ def api_lookup_universe(
     leaf_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    if module not in ("movies", "series"):
-        raise HTTPException(400, "module must be movies or series")
+    if module not in ("movies", "series", "books", "games"):
+        raise HTTPException(400, "module must be movies, series, books, or games")
     from app.universes import (
         franchise_has_sync,
         universes_for_franchise,
@@ -206,8 +206,8 @@ def api_unlink_member(
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ):
-    if module not in ("movies", "series"):
-        raise HTTPException(400, "module must be movies or series")
+    if module not in ("movies", "series", "books", "games"):
+        raise HTTPException(400, "module must be movies, series, books, or games")
     unlink_franchise(
         db,
         module=module,  # type: ignore[arg-type]

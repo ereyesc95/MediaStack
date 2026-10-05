@@ -27,6 +27,54 @@ def _norm(text: str | None) -> str:
     return _VENUE_NORM_RE.sub("", (text or "").casefold())
 
 
+def _enrich_cached_navigate_bands(db: Session, payload: dict) -> dict:
+    """Fill missing navigate_band_id on cached setlist tracks from disk paths."""
+    from app.media_index import _band_id_from_content_path
+    from app.playlist_tracks import _audio_file_for_play_path, _resolve_track_source_labels
+
+    root = _media_root()
+    if not root:
+        return payload
+
+    def patch_track(track: dict) -> dict:
+        if not isinstance(track, dict):
+            return track
+        if track.get("navigate_band_id") or not track.get("play_path"):
+            return track
+        out = dict(track)
+        play_path = out["play_path"]
+        _, release_rel = _resolve_track_source_labels(play_path, root)
+        nav_band_id = None
+        if release_rel:
+            nav_band_id = _band_id_from_content_path(db, root, root / Path(release_rel))
+        if not nav_band_id:
+            audio_file = _audio_file_for_play_path(play_path, root)
+            if audio_file:
+                nav_band_id = _band_id_from_content_path(db, root, audio_file.parent)
+        if nav_band_id:
+            out["navigate_band_id"] = nav_band_id
+        return out
+
+    groups = payload.get("groups")
+    if isinstance(groups, list):
+        patched_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                patched_groups.append(group)
+                continue
+            g = dict(group)
+            tracks = g.get("tracks")
+            if isinstance(tracks, list):
+                g["tracks"] = [patch_track(t) for t in tracks]
+            patched_groups.append(g)
+        payload = {**payload, "groups": patched_groups}
+
+    tracks = payload.get("tracks")
+    if isinstance(tracks, list):
+        payload = {**payload, "tracks": [patch_track(t) for t in tracks]}
+    return payload
+
+
 def get_cached_show_setlist(db: Session, show_id: int) -> dict | None:
     row = (
         db.query(TourShowSetlist)
@@ -39,7 +87,7 @@ def get_cached_show_setlist(db: Session, show_id: int) -> dict | None:
         tracks = json.loads(row.tss_tracks_json)
     except json.JSONDecodeError:
         return None
-    return {
+    payload = {
         "setlistfm_id": row.tss_setlistfm_id,
         "fetched_at": row.tss_fetched_at,
         "tracks": tracks.get("tracks") if isinstance(tracks, dict) else tracks,
@@ -49,6 +97,7 @@ def get_cached_show_setlist(db: Session, show_id: int) -> dict | None:
             (tracks.get("tracks") if isinstance(tracks, dict) else tracks) or []
         ),
     }
+    return _enrich_cached_navigate_bands(db, payload)
 
 
 def _score_summary(show: TourShow, summary: dict) -> int:

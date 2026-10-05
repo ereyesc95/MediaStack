@@ -2,14 +2,14 @@
 export type MediaEntrySource = "home" | "catalog";
 
 export type UniverseReturnTarget = {
-  module: "series" | "movies" | "books";
+  module: "series" | "movies" | "books" | "games";
   source: MediaEntrySource;
   universeId?: number;
   universeName?: string;
 };
 
 export type PendingCatalogBrowse = {
-  module: "series" | "movies" | "books";
+  module: "series" | "movies" | "books" | "games";
   mode: "name" | "genre" | "country" | "publisher" | "writer";
   countryId?: number;
   subgenreId?: number;

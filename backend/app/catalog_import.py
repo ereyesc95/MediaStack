@@ -1,4 +1,4 @@
-"""Provider-backed Movies, Series and Books folder scaffolding."""
+"""Provider-backed Movies, Series, Books and Games folder scaffolding."""
 from __future__ import annotations
 
 import asyncio
@@ -20,6 +20,7 @@ from app.database import get_db
 from app.deps import require_admin
 from app.franchise_identity import set_explicit_franchise_home
 from app.franchise_index import (
+    GAME_PLATFORMS,
     build_franchise_index,
     normalize_franchise_slug,
     save_franchise_index,
@@ -27,6 +28,7 @@ from app.franchise_index import (
 from app.gallery import _letter_folder
 from app.models import BookLeaf, BookWork, MovieWork, Series, User
 from app.services.google_books import get_google_book, search_google_books
+from app.services.igdb import IgdbNotConfigured, get_game as igdb_get_game, igdb_configured, search_games as igdb_search_games
 from app.services.tmdb import (
     TMDB_BASE,
     fetch_collection,
@@ -37,7 +39,12 @@ from app.services.tmdb import (
 
 router = APIRouter(prefix="/api/catalog-import", tags=["catalog-import"])
 
-MODULE_DIRS = {"movies": "Movies", "series": "Series", "books": "Books"}
+MODULE_DIRS = {
+    "movies": "Movies",
+    "series": "Series",
+    "books": "Books",
+    "games": "Games",
+}
 AUDIO_CATEGORIES = (
     "Albums",
     "Extended Plays",
@@ -134,20 +141,42 @@ def _local_franchises(module: str, query: str) -> list[dict]:
     wanted = query.casefold()
     out: list[dict] = []
     if module_root.is_dir():
-        for letter in module_root.iterdir():
-            if not letter.is_dir():
-                continue
-            for folder in letter.iterdir():
-                if folder.is_dir() and wanted in folder.name.casefold():
-                    out.append(
-                        {
-                            "source": "local",
-                            "kind": "franchise",
-                            "provider_id": normalize_franchise_slug(folder.name),
-                            "title": folder.name,
-                            "subtitle": f"Existing {module.title()} franchise",
-                        }
-                    )
+        if module == "games":
+            for platform in module_root.iterdir():
+                if not platform.is_dir():
+                    continue
+                for letter in platform.iterdir():
+                    if not letter.is_dir():
+                        continue
+                    for folder in letter.iterdir():
+                        if folder.is_dir() and wanted in folder.name.casefold():
+                            out.append(
+                                {
+                                    "source": "local",
+                                    "kind": "franchise",
+                                    "provider_id": normalize_franchise_slug(
+                                        folder.name
+                                    ),
+                                    "title": folder.name,
+                                    "subtitle": f"Existing Games · {platform.name}",
+                                    "platform": platform.name,
+                                }
+                            )
+        else:
+            for letter in module_root.iterdir():
+                if not letter.is_dir():
+                    continue
+                for folder in letter.iterdir():
+                    if folder.is_dir() and wanted in folder.name.casefold():
+                        out.append(
+                            {
+                                "source": "local",
+                                "kind": "franchise",
+                                "provider_id": normalize_franchise_slug(folder.name),
+                                "title": folder.name,
+                                "subtitle": f"Existing {module.title()} franchise",
+                            }
+                        )
     music_root = root / "Music"
     if music_root.is_dir():
         for letter in music_root.iterdir():
@@ -465,6 +494,35 @@ async def search_catalog_import(
                     if item.get("id")
                 ]
             )
+    elif module == "games":
+        if not igdb_configured():
+            raise HTTPException(
+                400,
+                "IGDB client id/secret not configured "
+                "(MYSTACK_IGDB_CLIENT_ID / MYSTACK_IGDB_CLIENT_SECRET)",
+            )
+        try:
+            hits = await igdb_search_games(q, limit=20)
+        except IgdbNotConfigured as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(400, f"IGDB search failed: {exc}") from exc
+        remote = [
+            {
+                "source": "igdb",
+                "provider_id": h.get("provider_id") or "",
+                "title": h.get("name") or "Untitled",
+                "name": h.get("name") or "Untitled",
+                "date": h.get("date_iso"),
+                "poster_url": h.get("cover_url"),
+                "backdrop_url": None,
+                "overview": h.get("overview"),
+                "platforms": h.get("platforms") or [],
+                "kind": "game",
+            }
+            for h in hits
+            if h.get("provider_id")
+        ]
     else:
         api_key = get_tmdb_key(db)
         if not api_key:
@@ -499,6 +557,27 @@ async def preview_catalog_import(
     kind = str(body.get("kind") or "").strip()
     if module not in MODULE_DIRS or not provider_id:
         raise HTTPException(400, "Invalid preview request")
+    if module == "games":
+        if not igdb_configured():
+            raise HTTPException(400, "IGDB client id/secret not configured")
+        game = await igdb_get_game(provider_id)
+        if not game:
+            raise HTTPException(404, "IGDB game not found")
+        return {
+            "franchise_name": game.get("name") or body.get("title") or "Untitled",
+            "items": [
+                {
+                    "provider_id": game.get("provider_id") or provider_id,
+                    "title": game.get("name") or "Untitled",
+                    "date": game.get("date_iso"),
+                    "poster_url": game.get("cover_url"),
+                    "backdrop_url": None,
+                    "platforms": game.get("platforms") or [],
+                }
+            ],
+            "platforms": list(GAME_PLATFORMS),
+            "scope": "single",
+        }
     if module == "movies":
         api_key = get_tmdb_key(db)
         if not api_key:
@@ -694,9 +773,29 @@ async def create_catalog_import(
     ):
         raise HTTPException(400, "Select at least one title")
 
-    franchise_dir = (
-        root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
-    )
+    platform_name = ""
+    if module == "games":
+        platform_raw = str(body.get("platform") or "").strip()
+        platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
+        platform_name = platform_cf.get(platform_raw.casefold()) or _safe_name(
+            platform_raw, fallback=""
+        )
+        if not platform_name:
+            raise HTTPException(
+                400,
+                "Platform is required for Games (e.g. Nintendo Switch)",
+            )
+        franchise_dir = (
+            root
+            / "Games"
+            / platform_name
+            / _letter_folder(franchise_name)
+            / franchise_name
+        )
+    else:
+        franchise_dir = (
+            root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
+        )
     franchise_existed = franchise_dir.exists()
     franchise_dir.mkdir(parents=True, exist_ok=True)
     make_home = bool(body.get("franchise_home"))
@@ -751,6 +850,11 @@ async def create_catalog_import(
                 (leaf_dir / "Episodes" / season_name).mkdir(parents=True, exist_ok=True)
         else:
             _gallery_tree(leaf_dir)
+            if module == "games":
+                _mkdir_tree(
+                    leaf_dir,
+                    (*(f"Audio/{category}" for category in AUDIO_CATEGORIES),),
+                )
 
         covers = leaf_dir / "Gallery" / "Covers"
         await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
@@ -778,6 +882,20 @@ async def create_catalog_import(
                     tmdb_id=provider_id,
                     subseries_titles=[title] if nested_series else None,
                     cache_artwork=False,
+                )
+            elif module == "games" and provider_id:
+                from app.games_index import _game_id
+                from app.games_refresh import refresh_game_metadata
+
+                game_id = _game_id(_relative(leaf_dir, root))
+                await refresh_game_metadata(
+                    db,
+                    game_id,
+                    {
+                        "title": title,
+                        "folder_path": _relative(leaf_dir, root),
+                        "name": title,
+                    },
                 )
             elif module == "books" and provider_id:
                 from app.books_store import (

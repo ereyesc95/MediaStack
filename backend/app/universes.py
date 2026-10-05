@@ -14,7 +14,7 @@ from app.franchise_index import normalize_franchise_slug
 from app.gallery import IMAGE_EXTS, _media_url
 from app.models import Universe, UniverseFranchiseSync, UniverseMember
 
-ModuleKind = Literal["movies", "series", "books"]
+ModuleKind = Literal["movies", "series", "books", "games"]
 ART_KINDS = ("Portrait", "Landscape", "Banner", "Logo")
 
 
@@ -1009,6 +1009,29 @@ def _leaf_cards_for_member(module: ModuleKind, slug: str) -> list[dict]:
                     "franchise_id": work_id,
                     "leaf_id": b.get("id"),
                     "kind": "book",
+                }
+            )
+        _leaf_cards_cache[cache_key] = out
+        return out
+
+    if module == "games":
+        from app.games_index import build_work_detail as build_games_work_detail
+
+        detail = build_games_work_detail(slug)
+        if not detail:
+            _leaf_cards_cache[cache_key] = []
+            return []
+        work_id = detail.get("id") or detail.get("slug") or slug
+        games = detail.get("games") or detail.get("films") or []
+        out = []
+        for g in games:
+            out.append(
+                {
+                    **g,
+                    "module": "games",
+                    "franchise_id": work_id,
+                    "leaf_id": g.get("id"),
+                    "kind": "game",
                 }
             )
         _leaf_cards_cache[cache_key] = out

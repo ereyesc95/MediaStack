@@ -64,9 +64,11 @@ def init_db() -> None:
         elif not has_meta:
             seed_reference_data(db)
         from app.seed_music import ensure_music_lookup_data
+        from app.seed_games import ensure_games_genres
         from app.profiles import ensure_profiles
 
         ensure_music_lookup_data(db)
+        ensure_games_genres(db)
         ensure_profiles(db)
         from app.artist_import_guide import ensure_artist_user_guide_template
         from app.catalog_import_guide import ensure_catalog_user_guide_templates

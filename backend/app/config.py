@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     media_root: str = ""
     media_server_url: str = "http://127.0.0.1:8887"
     tmdb_api_key: str = ""
+    igdb_client_id: str = ""
+    igdb_client_secret: str = ""
     lastfm_api_key: str = ""
     setlistfm_api_key: str = ""
     musicbrainz_user_agent: str = (

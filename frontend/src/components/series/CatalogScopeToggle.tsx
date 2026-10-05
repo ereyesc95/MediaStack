@@ -8,18 +8,14 @@ type Props = {
   className?: string;
   /** Secondary scope label when not Groups (default Shows; Movies uses Films). */
   itemsLabel?: string;
-  /** Icon for the leaf items mode (Shows / Films / Books). */
+  /** Icon for the leaf items mode (Shows / Films / Books / Games). */
   itemsIcon?: ReactNode;
-  /** When true, cycle includes Universes as a third mode. */
+  /** When true, cycle includes Universes. */
   hasUniverses?: boolean;
+  /** When true (Games), cycle starts with Platforms. */
+  hasPlatforms?: boolean;
+  platformsIcon?: ReactNode;
 };
-
-const ORDER_BASE: SeriesCatalogScope[] = ["franchises", "shows"];
-const ORDER_WITH_UNI: SeriesCatalogScope[] = [
-  "franchises",
-  "shows",
-  "universes",
-];
 
 /** Single control that cycles Franchises → Shows/Films → Universes (like Cover/Banner). */
 export default function CatalogScopeToggle({
@@ -29,25 +25,42 @@ export default function CatalogScopeToggle({
   itemsLabel = "SHOWS",
   itemsIcon,
   hasUniverses = false,
+  hasPlatforms = false,
+  platformsIcon,
 }: Props) {
-  const order = hasUniverses ? ORDER_WITH_UNI : ORDER_BASE;
-  const idx = Math.max(0, order.indexOf(value === "universes" && !hasUniverses ? "franchises" : value));
+  const order: SeriesCatalogScope[] = [
+    ...(hasPlatforms ? (["platforms"] as const) : []),
+    "franchises",
+    "shows",
+    ...(hasUniverses ? (["universes"] as const) : []),
+  ];
+  const safeValue =
+    value === "universes" && !hasUniverses
+      ? "franchises"
+      : value === "platforms" && !hasPlatforms
+        ? "franchises"
+        : value;
+  const idx = Math.max(0, order.indexOf(safeValue));
   const current = order[idx] ?? "franchises";
   const next = order[(idx + 1) % order.length] ?? "franchises";
 
   const label =
-    current === "franchises"
-      ? "FRANCHISES"
-      : current === "universes"
-        ? "UNIVERSES"
-        : itemsLabel.toLocaleUpperCase();
+    current === "platforms"
+      ? "PLATFORMS"
+      : current === "franchises"
+        ? "FRANCHISES"
+        : current === "universes"
+          ? "UNIVERSES"
+          : itemsLabel.toLocaleUpperCase();
 
   const title =
-    next === "franchises"
-      ? "Switch to Franchises"
-      : next === "universes"
-        ? "Switch to Universes"
-        : `Switch to ${itemsLabel}`;
+    next === "platforms"
+      ? "Switch to Platforms"
+      : next === "franchises"
+        ? "Switch to Franchises"
+        : next === "universes"
+          ? "Switch to Universes"
+          : `Switch to ${itemsLabel}`;
 
   return (
     <button
@@ -57,7 +70,9 @@ export default function CatalogScopeToggle({
       title={title}
       onClick={() => onChange(next)}
     >
-      {current === "franchises" ? (
+      {current === "platforms" ? (
+        platformsIcon ?? <IconSeriesScope className="catalog-scope-toggle__icon" />
+      ) : current === "franchises" ? (
         <IconSeriesScope className="catalog-scope-toggle__icon" />
       ) : current === "universes" ? (
         <IconUniverse className="catalog-scope-toggle__icon" />

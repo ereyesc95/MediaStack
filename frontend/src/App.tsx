@@ -48,9 +48,10 @@ import type { MediaOption } from "./components/ModuleTopBar";
 import MusicModule from "./components/music/MusicModule";
 import MoviesModule from "./components/movies/MoviesModule";
 import BooksModule from "./components/books/BooksModule";
+import GamesModule from "./components/games/GamesModule";
+import PhotosModule from "./components/photos/PhotosModule";
 import SeriesModule from "./components/series/SeriesModule";
 
-import { toStackName } from "./mediaStack";
 import { applyProfilePreferences, getStoredOrientation, saveOrientation } from "./themes";
 import { applyStoredThemeOrKeepAdaptive, clearMediaTheme } from "./mediaTheme";
 import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
@@ -64,6 +65,8 @@ import {
   pushBooksRootRoute,
   pushBooksRoute,
 } from "./booksRoute";
+import { pushGamesCatalogRoute, pushGamesRootRoute, pushGamesRoute } from "./gamesRoute";
+import { pushPhotosRootRoute } from "./photosRoute";
 import {
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
@@ -122,6 +125,8 @@ const MEDIA_OPTIONS: MediaOption[] = [
 
   { id: 600, kind: "games", label: "Games" },
 
+  { id: 700, kind: "photos", label: "Photos" },
+
 ];
 
 function viewFromLocationPath(pathname: string): View {
@@ -132,6 +137,7 @@ function viewFromLocationPath(pathname: string): View {
   if (path.startsWith("/movies")) return { kind: "movies" };
   if (path.startsWith("/books")) return { kind: "books" };
   if (path.startsWith("/games")) return { kind: "games" };
+  if (path.startsWith("/photos")) return { kind: "photos" };
   if (path.startsWith("/universe")) return { kind: "universe", universeId: 0 };
   return { kind: "hub" };
 }
@@ -461,12 +467,21 @@ export default function App() {
       return;
     }
 
-    if (opt.kind === "games") setView({ kind: "games" });
+    if (opt.kind === "games") {
+      pushGamesRootRoute();
+      setView({ kind: "games" });
+      return;
+    }
+
+    if (opt.kind === "photos") {
+      pushPhotosRootRoute();
+      setView({ kind: "photos" });
+    }
   }
 
   function openUniversePage(
     universeId: number,
-    fromModule: "series" | "movies" | "books",
+    fromModule: "series" | "movies" | "books" | "games",
     from: "home" | "catalog" = "catalog",
     universeName?: string
   ) {
@@ -505,6 +520,12 @@ export default function App() {
       if (from === "home") pushBooksRootRoute();
       else pushBooksCatalogRoute();
       setView({ kind: "books" });
+      return;
+    }
+    if (ret.module === "games") {
+      if (from === "home") pushGamesRootRoute();
+      else pushGamesCatalogRoute();
+      setView({ kind: "games" });
       return;
     }
     if (from === "home") pushSeriesRootRoute();
@@ -1057,6 +1078,32 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
+            onBackToGames={(franchiseId, _restore, gameId) => {
+              if (!franchiseId) {
+                pushGamesRootRoute();
+                setView({
+                  kind: "games",
+                  franchiseId: undefined,
+                  gameId: undefined,
+                  section: "overview",
+                  overviewTab: "about",
+                });
+                return;
+              }
+              pushGamesRoute({
+                franchiseId,
+                gameId,
+                section: gameId ? "audio" : "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
+                section: gameId ? "audio" : "overview",
+                overviewTab: "about",
+              });
+            }}
 
           />
 
@@ -1584,41 +1631,125 @@ export default function App() {
           />
         )}
 
-        {appReady &&
-          view.kind !== "hub" &&
-          view.kind !== "music" &&
-          view.kind !== "series" &&
-          view.kind !== "movies" &&
-          view.kind !== "books" &&
-          view.kind !== "universe" && (
+        {showApp && view.kind === "games" && (
+          <GamesModule
+            key={`games-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            busy={busy}
+            syncTick={syncTick}
+            onImport={handleImport}
+            onSync={handleSync}
+            onSelectMedia={selectMedia}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+            franchiseId={view.franchiseId}
+            gameId={view.gameId}
+            section={view.section}
+            overviewTab={view.overviewTab}
+            universeId={view.universeId}
+            cardOrientation={cardOrientation}
+            onSetOrientation={setOrientation}
+            onNavigate={(patch) =>
+              setView({
+                kind: "games",
+                franchiseId:
+                  "franchiseId" in patch ? patch.franchiseId : view.franchiseId,
+                gameId: "gameId" in patch ? patch.gameId : view.gameId,
+                section: patch.section ?? view.section,
+                overviewTab:
+                  "overviewTab" in patch
+                    ? patch.overviewTab
+                    : view.overviewTab,
+                universeId:
+                  "universeId" in patch ? patch.universeId : view.universeId,
+              })
+            }
+            onOpenSeriesFranchise={(franchiseId, subseriesId) => {
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenMoviesFranchise={(franchiseId, filmId) => {
+              pushMoviesRoute({
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenBooksFranchise={(franchiseId, bookId) => {
+              pushBooksRoute({
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenMusicRelease={(bandId, releaseId) => {
+              pushArtistRoute({
+                bandId,
+                section: "audio",
+                overviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "audio",
+                artistOverviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+            }}
+            onOpenUniverse={(id) => openUniversePage(id, "games", "home")}
+          />
+        )}
 
-          <>
-
-            <header className="header header--minimal">
-
-              <span className="header-title">
-                {toStackName(
-                  MEDIA_OPTIONS.find((m) => m.kind === view.kind)?.label ??
-                    view.kind.charAt(0).toUpperCase() + view.kind.slice(1)
-                )}
-              </span>
-
-              <span className="spacer" />
-
-              {busy && <span className="status-bar">{busy}</span>}
-
-              {hubMenu}
-
-            </header>
-
-            <p className="muted module-placeholder">
-
-              {view.kind} module UI coming next — same pattern as Music.
-
-            </p>
-
-          </>
-
+        {showApp && view.kind === "photos" && (
+          <PhotosModule
+            key={`photos-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            busy={busy}
+            onImport={handleImport}
+            onSync={handleSync}
+            onSelectMedia={selectMedia}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+          />
         )}
 
       </main>

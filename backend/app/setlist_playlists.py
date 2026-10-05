@@ -485,7 +485,6 @@ def build_setlist_tracklist(
     *,
     api_key: str,
 ) -> dict | None:
-    del db  # reserved for future enrichment
     detail = fetch_setlist_detail(setlist_id, api_key=api_key)
     if not detail:
         return None
@@ -547,7 +546,7 @@ def build_setlist_tracklist(
             if entry:
                 from app.playlist_tracks import enrich_playlist_track
 
-                track = enrich_playlist_track(entry, media_root)
+                track = enrich_playlist_track(entry, media_root, db=db)
                 track.update(
                     _setlist_track_meta(
                         track_id=track_id,

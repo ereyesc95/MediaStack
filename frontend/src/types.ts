@@ -1532,7 +1532,15 @@ export type View =
       overviewTab?: import("./booksRoute").BooksOverviewTab;
       universeId?: number;
     }
-  | { kind: "games" };
+  | {
+      kind: "games";
+      franchiseId?: string;
+      gameId?: string;
+      section?: import("./gamesRoute").GamesSection;
+      overviewTab?: import("./gamesRoute").GamesOverviewTab;
+      universeId?: number;
+    }
+  | { kind: "photos" };
 
 export type MoviesFilmCard = {
   id: string;

@@ -48,8 +48,33 @@ type Props = {
   onPlay: (path: string, title: string, playbackKey: string) => void;
   onPanelTrack?: (track: ReleaseTrackItem) => void;
   showReleaseTitles?: boolean;
-  onOpenRelease?: (releaseId: string) => void;
+  onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
 };
+
+function SetlistReleaseTitle({
+  track,
+  onOpenRelease,
+}: {
+  track: SetlistTrackItem;
+  onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
+}) {
+  if (!track.album_title) return <span className="setlist-tracklist__release-title" aria-hidden />;
+  if (track.navigate_release_id && onOpenRelease) {
+    return (
+      <button
+        type="button"
+        className="setlist-tracklist__release-title setlist-tracklist__release-link"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenRelease(track.navigate_release_id!, track.navigate_band_id);
+        }}
+      >
+        {track.album_title}
+      </button>
+    );
+  }
+  return <span className="setlist-tracklist__release-title">{track.album_title}</span>;
+}
 
 export default function SetlistTracklist({
   editions,
@@ -61,7 +86,15 @@ export default function SetlistTracklist({
   onOpenRelease,
 }: Props) {
   return (
-    <div className="release-tracklist setlist-tracklist">
+    <div
+      className={[
+        "release-tracklist",
+        "setlist-tracklist",
+        showReleaseTitles ? "setlist-tracklist--with-releases" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="release-tracklist__body">
         <div className="release-tracklist__content">
           {editions.map((ed) => (
@@ -91,7 +124,15 @@ export default function SetlistTracklist({
                               .join(" ")}
                           >
                             {unavailable ? (
-                              <div className="release-tracklist__play release-tracklist__play--static">
+                              <div
+                                className={[
+                                  "release-tracklist__play",
+                                  "release-tracklist__play--static",
+                                  showReleaseTitles ? "setlist-tracklist__play--with-release" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              >
                                 <span className="release-tracklist__num">
                                   {track.is_tape ? (
                                     <TapeTrackIcon className="release-tracklist__tape-icon" />
@@ -101,25 +142,10 @@ export default function SetlistTracklist({
                                 </span>
                                 <span className="release-tracklist__title-wrap">
                                   <ReleaseTrackTitle title={titleForDisplay} />
-                                  {showReleaseTitles && track.album_title ? (
-                                    track.navigate_release_id && onOpenRelease ? (
-                                      <button
-                                        type="button"
-                                        className="setlist-tracklist__release-title setlist-tracklist__release-link"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onOpenRelease(track.navigate_release_id!);
-                                        }}
-                                      >
-                                        {track.album_title}
-                                      </button>
-                                    ) : (
-                                      <span className="setlist-tracklist__release-title">
-                                        {track.album_title}
-                                      </span>
-                                    )
-                                  ) : null}
                                 </span>
+                                {showReleaseTitles ? (
+                                  <SetlistReleaseTitle track={track} onOpenRelease={onOpenRelease} />
+                                ) : null}
                                 {track.youtube_query ? (
                                   <a
                                     className="setlist-tracklist__youtube-link"
@@ -138,7 +164,12 @@ export default function SetlistTracklist({
                             ) : (
                               <button
                                 type="button"
-                                className="release-tracklist__play"
+                                className={[
+                                  "release-tracklist__play",
+                                  showReleaseTitles ? "setlist-tracklist__play--with-release" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
                                 onClick={() => {
                                   if (!track.play_path) return;
                                   onPlay(
@@ -163,28 +194,15 @@ export default function SetlistTracklist({
                                 </span>
                                 <span className="release-tracklist__title-wrap">
                                   <ReleaseTrackTitle title={titleForDisplay} />
-                                  {showReleaseTitles && track.album_title ? (
-                                    track.navigate_release_id && onOpenRelease ? (
-                                      <button
-                                        type="button"
-                                        className="setlist-tracklist__release-title setlist-tracklist__release-link"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onOpenRelease(track.navigate_release_id!);
-                                        }}
-                                      >
-                                        {track.album_title}
-                                      </button>
-                                    ) : (
-                                      <span className="setlist-tracklist__release-title">
-                                        {track.album_title}
-                                      </span>
-                                    )
-                                  ) : null}
                                 </span>
+                                {showReleaseTitles ? (
+                                  <SetlistReleaseTitle track={track} onOpenRelease={onOpenRelease} />
+                                ) : null}
                                 {track.duration ? (
                                   <span className="release-tracklist__duration">{track.duration}</span>
-                                ) : null}
+                                ) : (
+                                  <span className="release-tracklist__duration" aria-hidden />
+                                )}
                               </button>
                             )}
                           </li>

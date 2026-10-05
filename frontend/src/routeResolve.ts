@@ -25,6 +25,7 @@ import {
   stripDatedFolderTitle,
 } from "./routeSlug";
 import { parseBooksPath } from "./booksRoute";
+import { parseGamesPath } from "./gamesRoute";
 import { parseFranchisePath, parseLegacyFranchiseHubPath } from "./franchiseRoute";
 import { parseMoviesPath } from "./moviesRoute";
 import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath } from "./musicRoute";
@@ -484,6 +485,31 @@ export async function resolvePathToView(
     return { view: { kind: "books" } };
   }
 
+  const gamesParsed = parseGamesPath(pathname, search);
+  if (gamesParsed) {
+    return {
+      view: {
+        kind: "games",
+        franchiseId: gamesParsed.franchiseId,
+        gameId: gamesParsed.gameId,
+        section: gamesParsed.section,
+        overviewTab: gamesParsed.overviewTab,
+        universeId: gamesParsed.universeId,
+      },
+    };
+  }
+
+  if (
+    pathname.match(/^\/games\/?$/) ||
+    pathname.match(/^\/games\/catalog\/?$/)
+  ) {
+    return { view: { kind: "games" } };
+  }
+
+  if (pathname.match(/^\/photos\/?$/)) {
+    return { view: { kind: "photos" } };
+  }
+
   const artistParsed = parseArtistPath(pathname);
   if (artistParsed) {
     const artistRoute = await resolveArtistRouteDeep(artistParsed);
@@ -646,6 +672,26 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
 
   if (pathname.match(/^\/books\/?$/) || pathname.match(/^\/books\/catalog\/?$/)) {
     return { kind: "books" };
+  }
+
+  const gamesParsed = parseGamesPath(pathname, search);
+  if (gamesParsed) {
+    return {
+      kind: "games",
+      franchiseId: gamesParsed.franchiseId,
+      gameId: gamesParsed.gameId,
+      section: gamesParsed.section,
+      overviewTab: gamesParsed.overviewTab,
+      universeId: gamesParsed.universeId,
+    };
+  }
+
+  if (pathname.match(/^\/games\/?$/) || pathname.match(/^\/games\/catalog\/?$/)) {
+    return { kind: "games" };
+  }
+
+  if (pathname.match(/^\/photos\/?$/)) {
+    return { kind: "photos" };
   }
 
   const artistParsed = parseArtistPath(pathname);

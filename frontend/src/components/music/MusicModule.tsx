@@ -164,6 +164,11 @@ type Props = {
     restore?: ArtistBackRestore,
     bookId?: string
   ) => void;
+  onBackToGames?: (
+    franchiseId: string,
+    restore?: ArtistBackRestore,
+    gameId?: string
+  ) => void;
   /** Open Series module from an artist SERIES folder path. */
   onOpenSeriesFolder?: (folderPath: string) => void;
   onOpenMoviesLeaf?: (
@@ -215,6 +220,7 @@ export default function MusicModule({
   onBackToSeries,
   onBackToMovies,
   onBackToBooks,
+  onBackToGames,
   onOpenSeriesFolder,
   onOpenMoviesLeaf,
 }: Props) {
@@ -464,6 +470,30 @@ export default function MusicModule({
       onPlaylistNavigate?.(ret.slug);
       return true;
     }
+    if (
+      ret.kind === "tour-show" &&
+      ret.bandId != null &&
+      ret.tourSlug &&
+      ret.showSlug
+    ) {
+      onReleaseNavigate?.(undefined, undefined);
+      tourEntryRef.current = ret.tourEntry === "events" ? "events" : "artist";
+      pushArtistRoute({
+        bandId: ret.bandId,
+        section: "tours",
+        overviewTab: artistOverviewTab,
+        tourSlug: ret.tourSlug,
+        showSlug: ret.showSlug,
+        showTab: ret.showTab ?? "setlist",
+      });
+      onBand(ret.bandId, "tours");
+      onTourNavigate?.({
+        tourSlug: ret.tourSlug,
+        showSlug: ret.showSlug,
+        showTab: ret.showTab ?? "setlist",
+      });
+      return true;
+    }
     return false;
   }, [
     artistOverviewTab,
@@ -472,6 +502,7 @@ export default function MusicModule({
     onPlaylistNavigate,
     onReleaseNavigate,
     onTab,
+    onTourNavigate,
   ]);
 
   const setAlbumCardLayoutPersisted = useCallback(
@@ -1760,14 +1791,44 @@ export default function MusicModule({
             });
             openArtist(id);
           }}
-          onOpenRelease={(releaseId) => {
+          onOpenRelease={(releaseId, navBandId) => {
+            const targetBand =
+              typeof navBandId === "number" && navBandId > 0 ? navBandId : bandId;
+            if (!targetBand || !tourSlug || !showSlug) return;
+            savePlaylistReturn({
+              kind: "tour-show",
+              bandId,
+              tourSlug,
+              showSlug,
+              showTab: showTab ?? "setlist",
+              tourEntry: tourEntryRef.current,
+              backLabel: tourEntryRef.current === "events" ? "EVENTS" : "TOURS",
+            });
+            saveReleaseReferrer({
+              bandId: targetBand,
+              section: "audio",
+              source: "playlist",
+              artistName: artistShell?.name ?? undefined,
+            });
             onTourNavigate?.({
               tourSlug: undefined,
               showSlug: undefined,
               showTab: undefined,
             });
-            void prefetchReleaseOverview(bandId, releaseId);
-            onReleaseNavigate?.(releaseId, "overview");
+            void prefetchReleaseOverview(targetBand, releaseId);
+            pushArtistRoute({
+              bandId: targetBand,
+              section: "audio",
+              overviewTab: artistOverviewTab,
+              releaseId,
+              releaseTab: "overview",
+            });
+            onBand(targetBand, "audio");
+            onReleaseNavigate?.(
+              releaseId,
+              "overview",
+              targetBand !== bandId ? targetBand : undefined
+            );
           }}
           onImport={onImport}
           onSync={onSync}
@@ -1858,6 +1919,12 @@ export default function MusicModule({
           onEditProfile={onEditProfile}
           onBackToSeries={onBackToSeries}
           onBackToMovies={onBackToMovies}
+          onBackToBooks={(franchiseId, bookId) =>
+            onBackToBooks?.(franchiseId, undefined, bookId)
+          }
+          onBackToGames={(franchiseId, gameId) =>
+            onBackToGames?.(franchiseId, undefined, gameId)
+          }
           onBackToHome={() => {
             clearArtistEntryReferrer();
             clearMediaTheme(userId);

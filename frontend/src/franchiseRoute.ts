@@ -102,7 +102,12 @@ export function parseLegacyFranchiseHubPath(
   pathname: string,
   search = typeof window !== "undefined" ? window.location.search : ""
 ): FranchiseRoute | null {
-  for (const prefix of ["/series/franchise/", "/movies/franchise/", "/books/franchise/"]) {
+  for (const prefix of [
+    "/series/franchise/",
+    "/movies/franchise/",
+    "/books/franchise/",
+    "/games/franchise/",
+  ]) {
     if (!pathname.startsWith(prefix)) continue;
     const rest = pathname.slice(prefix.length);
     const slash = rest.indexOf("/");

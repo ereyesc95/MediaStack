@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["assets"])
 # Flat layout: assets/{media,icons,playlists,...} (formerly assets/...)
 ASSETS_DIR = PROJECT_ROOT / "assets"
 LEGACY_SYSTEM_DIR = ASSETS_DIR / "system"
-MEDIA_SLUGS = ("music", "series", "movies", "books", "games")
+MEDIA_SLUGS = ("music", "series", "movies", "books", "games", "photos")
 PANE_SLUGS = ("pane-on-repeat", "pane-icons", "pane-vibes", "pane-global")
 NESTED_PREFIXES = (
     "continent",

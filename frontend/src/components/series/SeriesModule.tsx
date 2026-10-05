@@ -178,7 +178,9 @@ export default function SeriesModule({
   const [error, setError] = useState<string | null>(null);
   const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
   const [filterMode, setFilterMode] = useState<SeriesFilterMode>("name");
-  const [catalogScope, setCatalogScope] = useState<"franchises" | "shows" | "universes">(
+  const [catalogScope, setCatalogScope] = useState<
+    "franchises" | "shows" | "universes" | "platforms"
+  >(
     "shows"
   );
   const [universes, setUniverses] = useState<Universe[]>(
@@ -1060,10 +1062,12 @@ export default function SeriesModule({
                         universes.length > 0
                           ? ["franchises", "shows", "universes"]
                           : ["franchises", "shows"];
-                      const current =
-                        catalogScope === "universes" && universes.length === 0
-                          ? "franchises"
-                          : catalogScope;
+                      const current: "franchises" | "shows" | "universes" =
+                        catalogScope === "universes" && universes.length > 0
+                          ? "universes"
+                          : catalogScope === "shows"
+                            ? "shows"
+                            : "franchises";
                       const i = Math.max(0, order.indexOf(current));
                       setCatalogScope(order[(i + 1) % order.length]!);
                     }}

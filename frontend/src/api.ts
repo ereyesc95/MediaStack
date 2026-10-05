@@ -2468,7 +2468,7 @@ export async function fetchUniverse(universeId: number) {
 }
 
 export async function lookupUniverse(
-  module: "movies" | "series" | "books",
+  module: "movies" | "series" | "books" | "games",
   slug: string,
   leafId?: string | null
 ) {
@@ -2538,7 +2538,7 @@ export async function fetchUniverseLanding(
 
 export async function linkUniverseMember(
   universeId: number,
-  module: "movies" | "series" | "books",
+  module: "movies" | "series" | "books" | "games",
   slug: string,
   leafId?: string | null
 ) {
@@ -2555,7 +2555,7 @@ export async function linkUniverseMember(
 
 export async function unlinkUniverseMember(
   universeId: number,
-  module: "movies" | "series" | "books",
+  module: "movies" | "series" | "books" | "games",
   slug: string,
   leafId?: string | null
 ) {
@@ -3203,16 +3203,25 @@ export async function fetchMediaRelated(path: string) {
   );
 }
 
-export type CatalogImportModule = "movies" | "series" | "books";
+export type CatalogImportModule = "movies" | "series" | "books" | "games";
 
 export type CatalogImportSearchItem = {
-  source: "local" | "tmdb" | "google_books";
-  kind: "franchise" | "music_artist" | "movie" | "collection" | "tv" | "book";
+  source: "local" | "tmdb" | "google_books" | "igdb";
+  kind:
+    | "franchise"
+    | "music_artist"
+    | "movie"
+    | "collection"
+    | "tv"
+    | "book"
+    | "game";
   provider_id: string;
   title: string;
   date?: string | null;
   subtitle?: string | null;
   cover_url?: string | null;
+  platforms?: string[];
+  platform?: string | null;
 };
 
 export type CatalogImportItem = {
@@ -3247,6 +3256,7 @@ export async function previewCatalogImport(
     franchise_name: string;
     scope: "single" | "collection" | "series";
     items: CatalogImportItem[];
+    platforms?: string[];
   }>(`${API}/catalog-import/${module}/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3262,6 +3272,7 @@ export async function createCatalogImport(
     franchise_home: boolean;
     include_guide: boolean;
     nested_series: boolean;
+    platform?: string;
     items: CatalogImportItem[];
   }
 ) {
@@ -3659,4 +3670,118 @@ export async function fetchCollectionMatches(artist: string, title = "") {
       release_id?: string | null;
     }[];
   }>(`${API}/music/collection/matches?${q}`);
+}
+
+/* ---- Games ---- */
+
+export async function fetchGamesCatalog() {
+  return request<{
+    franchises: import("./types").SeriesFranchiseCard[];
+    games?: import("./types").MoviesFilmCard[];
+    films?: import("./types").MoviesFilmCard[];
+    platforms?: import("./types").SeriesFranchiseCard[];
+    scanned_at: string | null;
+  }>(`${API}/games/catalog`);
+}
+
+export async function fetchGamesDashboard(recentIds: string[] = []) {
+  const q = recentIds.length
+    ? `?recent=${encodeURIComponent(recentIds.join(","))}`
+    : "";
+  return request<
+    import("./types").SeriesDashboard & {
+      platforms?: import("./types").SeriesFranchiseCard[];
+      recent_games?: import("./types").MoviesFilmCard[];
+      top_games?: import("./types").MoviesFilmCard[];
+      top_franchises?: import("./types").SeriesFranchiseCard[];
+      franchise_count?: number;
+      game_count?: number;
+      platform_count?: number;
+    }
+  >(`${API}/games/dashboard${q}`);
+}
+
+export async function fetchGamesFilterOptions() {
+  return request<SeriesFilterOptions>(`${API}/games/filters/options`);
+}
+
+export async function resolveGamesPath(path: string) {
+  return request<{
+    franchise_id: string;
+    game_id: string | null;
+    platform?: string;
+    letter?: string;
+    path?: string;
+  }>(`${API}/games/resolve?path=${encodeURIComponent(path)}`);
+}
+
+export async function fetchGamesFranchiseOverview(
+  workId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<import("./types").SeriesOverview>(
+    `${API}/games/franchises/${encodeURIComponent(workId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function fetchGamesFranchise(workId: string) {
+  return request<import("./types").MoviesWorkDetail>(
+    `${API}/games/franchises/${encodeURIComponent(workId)}`
+  );
+}
+
+export async function fetchGamesFranchiseMedia(workId: string, kind: string) {
+  return request<{ items: Array<Record<string, unknown>> }>(
+    `${API}/games/franchises/${encodeURIComponent(workId)}/media/${encodeURIComponent(kind)}`
+  );
+}
+
+export async function fetchGamesGame(gameId: string) {
+  return request<import("./types").MoviesFilmCard & Record<string, unknown>>(
+    `${API}/games/games/${encodeURIComponent(gameId)}`
+  );
+}
+
+export async function fetchGamesGameOverview(
+  gameId: string,
+  orientation: "portrait" | "landscape" = "portrait"
+) {
+  return request<import("./types").SeriesOverview & Record<string, unknown>>(
+    `${API}/games/games/${encodeURIComponent(gameId)}/overview?orientation=${encodeURIComponent(orientation)}`
+  );
+}
+
+export async function launchGame(gameId: string) {
+  return request<{ ok: boolean; path?: string }>(
+    `${API}/games/games/${encodeURIComponent(gameId)}/launch`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchGamesFranchiseAudio(workId: string) {
+  return request<{
+    releases: Array<Record<string, unknown>>;
+    categories?: string[];
+  }>(`${API}/games/franchises/${encodeURIComponent(workId)}/media/audio`);
+}
+
+export async function fetchGamesGameAudio(gameId: string) {
+  return request<{
+    releases: Array<Record<string, unknown>>;
+    categories?: string[];
+  }>(`${API}/games/games/${encodeURIComponent(gameId)}/media/audio`);
+}
+
+export async function refreshGamesFranchiseMetadata(workId: string) {
+  return request<{ ok: boolean; about?: Record<string, unknown>; error?: string }>(
+    `${API}/games/franchises/${encodeURIComponent(workId)}/refresh-metadata`,
+    { method: "POST" }
+  );
+}
+
+export async function refreshGamesGameMetadata(gameId: string) {
+  return request<{ ok: boolean; about?: Record<string, unknown>; error?: string }>(
+    `${API}/games/games/${encodeURIComponent(gameId)}/refresh-metadata`,
+    { method: "POST" }
+  );
 }

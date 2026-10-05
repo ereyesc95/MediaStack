@@ -14,7 +14,7 @@ import { IconEditRelease } from "./MenuIcons";
 import ModalPortal from "./ModalPortal";
 
 type Props = {
-  module: "movies" | "series" | "books";
+  module: "movies" | "series" | "books" | "games";
   franchiseId: string;
   /** When set, link/unlink this film or subseries only (not bulk franchise). */
   leafId?: string | null;

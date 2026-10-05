@@ -162,6 +162,8 @@ type Props = {
   onEditProfile?: () => void;
   onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
   onBackToMovies?: (franchiseId: string) => void;
+  onBackToBooks?: (franchiseId: string, bookId?: string) => void;
+  onBackToGames?: (franchiseId: string, gameId?: string) => void;
   onBackToHome?: () => void;
   onBackToCatalog?: () => void;
   onBackToCollection?: () => void;
@@ -351,6 +353,8 @@ export default function ReleasePage({
   onEditProfile,
   onBackToSeries,
   onBackToMovies,
+  onBackToBooks,
+  onBackToGames,
   onBackToHome,
   onBackToCatalog,
   onBackToCollection,
@@ -1048,7 +1052,16 @@ export default function ReleasePage({
     releaseReferrer?.source === "movies" && releaseReferrer.franchiseId
       ? releaseReferrer
       : null;
-  const franchiseReferrer = seriesReferrer || moviesReferrer;
+  const booksReferrer =
+    releaseReferrer?.source === "books" && releaseReferrer.franchiseId
+      ? releaseReferrer
+      : null;
+  const gamesReferrer =
+    releaseReferrer?.source === "games" && releaseReferrer.franchiseId
+      ? releaseReferrer
+      : null;
+  const franchiseReferrer =
+    seriesReferrer || moviesReferrer || booksReferrer || gamesReferrer;
   const artistReferrer =
     releaseReferrer?.source === "artist" ? releaseReferrer : null;
   const referrerOverview = releaseReferrer
@@ -1122,6 +1135,14 @@ export default function ReleasePage({
     }
     if (ref?.source === "movies" && ref.franchiseId) {
       onBackToMovies?.(ref.franchiseId);
+      return;
+    }
+    if (ref?.source === "books" && ref.franchiseId) {
+      onBackToBooks?.(ref.franchiseId, ref.subseriesId);
+      return;
+    }
+    if (ref?.source === "games" && ref.franchiseId) {
+      onBackToGames?.(ref.franchiseId, ref.subseriesId);
       return;
     }
     if (ref && ref.bandId !== bandId) {
