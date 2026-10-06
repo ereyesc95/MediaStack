@@ -2188,32 +2188,34 @@ export default function SystemPlaylistPage({
                       />
                     </div>
                   ) : null}
-                  <div className="release-page__panel-bottom-bar">
-                    {detail.prev ? (
-                      <PlaylistNeighborLink
-                        neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
-                        direction="prev"
-                        onClick={() => {
-                          if (editPlaylist) setEditPlaylist(false);
-                          onOpenPlaylist(detail.prev!.slug);
-                        }}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                    {detail.next ? (
-                      <PlaylistNeighborLink
-                        neighbor={{ id: detail.next.slug, title: detail.next.name }}
-                        direction="next"
-                        onClick={() => {
-                          if (editPlaylist) setEditPlaylist(false);
-                          onOpenPlaylist(detail.next!.slug);
-                        }}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                  </div>
+                  {detail.prev || detail.next ? (
+                    <div className="release-page__panel-bottom-bar">
+                      {detail.prev ? (
+                        <PlaylistNeighborLink
+                          neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
+                          direction="prev"
+                          onClick={() => {
+                            if (editPlaylist) setEditPlaylist(false);
+                            onOpenPlaylist(detail.prev!.slug);
+                          }}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {detail.next ? (
+                        <PlaylistNeighborLink
+                          neighbor={{ id: detail.next.slug, title: detail.next.name }}
+                          direction="next"
+                          onClick={() => {
+                            if (editPlaylist) setEditPlaylist(false);
+                            onOpenPlaylist(detail.next!.slug);
+                          }}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               ) : null}
@@ -2238,32 +2240,34 @@ export default function SystemPlaylistPage({
                       />
                     </div>
                   ) : null}
-                  <div className="release-page__panel-bottom-bar">
-                    {detail.prev ? (
-                      <PlaylistNeighborLink
-                        neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
-                        direction="prev"
-                        onClick={() => {
-                          if (editPlaylist) setEditPlaylist(false);
-                          onOpenPlaylist(detail.prev!.slug);
-                        }}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                    {detail.next ? (
-                      <PlaylistNeighborLink
-                        neighbor={{ id: detail.next.slug, title: detail.next.name }}
-                        direction="next"
-                        onClick={() => {
-                          if (editPlaylist) setEditPlaylist(false);
-                          onOpenPlaylist(detail.next!.slug);
-                        }}
-                      />
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                  </div>
+                  {detail.prev || detail.next ? (
+                    <div className="release-page__panel-bottom-bar">
+                      {detail.prev ? (
+                        <PlaylistNeighborLink
+                          neighbor={{ id: detail.prev.slug, title: detail.prev.name }}
+                          direction="prev"
+                          onClick={() => {
+                            if (editPlaylist) setEditPlaylist(false);
+                            onOpenPlaylist(detail.prev!.slug);
+                          }}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {detail.next ? (
+                        <PlaylistNeighborLink
+                          neighbor={{ id: detail.next.slug, title: detail.next.name }}
+                          direction="next"
+                          onClick={() => {
+                            if (editPlaylist) setEditPlaylist(false);
+                            onOpenPlaylist(detail.next!.slug);
+                          }}
+                        />
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}

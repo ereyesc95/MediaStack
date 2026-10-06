@@ -1739,7 +1739,16 @@ export default function TourShowPage({
           {activeTab === "overview" ? (
             <div className="artist-about tour-show-page__overview">
               <div className="artist-about__layout tour-show-page__hero">
-                <div className="tour-show-page__hero-col">
+                <div
+                  className={[
+                    "tour-show-page__hero-col",
+                    tour.prev_tour || tour.next_tour
+                      ? "tour-show-page__hero-col--has-tour-nav"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
                   {bannerHero && heroBanner ? (
                     <img
                       src={heroBanner}
@@ -1753,48 +1762,50 @@ export default function TourShowPage({
                     <div className="tour-show-page__poster tour-show-page__poster--empty" />
                   )}
 
-                  <div className="tour-show-page__tour-nav">
-                    {tour.prev_tour ? (
-                      <button
-                        type="button"
-                        className="release-page__neighbor release-page__neighbor--prev"
-                        onClick={() =>
-                          onNavigate({ tourSlug: tour.prev_tour!.slug, showTab: activeTab })
-                        }
-                      >
-                        <span className="release-page__neighbor-arrow" aria-hidden>
-                          ‹
-                        </span>
-                        <span className="release-page__neighbor-text">
-                          <span className="release-page__neighbor-title">
-                            {tour.prev_tour.title}
+                  {(tour.prev_tour || tour.next_tour) ? (
+                    <div className="tour-show-page__tour-nav">
+                      {tour.prev_tour ? (
+                        <button
+                          type="button"
+                          className="release-page__neighbor release-page__neighbor--prev"
+                          onClick={() =>
+                            onNavigate({ tourSlug: tour.prev_tour!.slug, showTab: activeTab })
+                          }
+                        >
+                          <span className="release-page__neighbor-arrow" aria-hidden>
+                            ‹
                           </span>
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                    {tour.next_tour ? (
-                      <button
-                        type="button"
-                        className="release-page__neighbor release-page__neighbor--next"
-                        onClick={() =>
-                          onNavigate({ tourSlug: tour.next_tour!.slug, showTab: activeTab })
-                        }
-                      >
-                        <span className="release-page__neighbor-text">
-                          <span className="release-page__neighbor-title">
-                            {tour.next_tour.title}
+                          <span className="release-page__neighbor-text">
+                            <span className="release-page__neighbor-title">
+                              {tour.prev_tour.title}
+                            </span>
                           </span>
-                        </span>
-                        <span className="release-page__neighbor-arrow" aria-hidden>
-                          ›
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="release-page__neighbor-spacer" />
-                    )}
-                  </div>
+                        </button>
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                      {tour.next_tour ? (
+                        <button
+                          type="button"
+                          className="release-page__neighbor release-page__neighbor--next"
+                          onClick={() =>
+                            onNavigate({ tourSlug: tour.next_tour!.slug, showTab: activeTab })
+                          }
+                        >
+                          <span className="release-page__neighbor-text">
+                            <span className="release-page__neighbor-title">
+                              {tour.next_tour.title}
+                            </span>
+                          </span>
+                          <span className="release-page__neighbor-arrow" aria-hidden>
+                            ›
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="release-page__neighbor-spacer" />
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="artist-about__content tour-show-page__overview-main">

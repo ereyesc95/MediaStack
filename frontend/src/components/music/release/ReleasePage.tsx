@@ -2362,36 +2362,38 @@ export default function ReleasePage({
               onRepeatToggle={() => setRepeatOne((r) => !r)}
             />
           </div>
-          <div className="release-page__panel-bottom-bar">
-            {data.prev ? (
-              <ReleaseNeighborLink
-                neighbor={data.prev}
-                direction="prev"
-                onClick={() =>
-                  onOpenRelease(
-                    data.prev!.navigate_band_id ?? bandId,
-                    data.prev!.navigate_release_id || data.prev!.id
-                  )
-                }
-              />
-            ) : (
-              <span className="release-page__neighbor-spacer" />
-            )}
-            {data.next ? (
-              <ReleaseNeighborLink
-                neighbor={data.next}
-                direction="next"
-                onClick={() =>
-                  onOpenRelease(
-                    data.next!.navigate_band_id ?? bandId,
-                    data.next!.navigate_release_id || data.next!.id
-                  )
-                }
-              />
-            ) : (
-              <span className="release-page__neighbor-spacer" />
-            )}
-          </div>
+          {data.prev || data.next ? (
+            <div className="release-page__panel-bottom-bar">
+              {data.prev ? (
+                <ReleaseNeighborLink
+                  neighbor={data.prev}
+                  direction="prev"
+                  onClick={() =>
+                    onOpenRelease(
+                      data.prev!.navigate_band_id ?? bandId,
+                      data.prev!.navigate_release_id || data.prev!.id
+                    )
+                  }
+                />
+              ) : (
+                <span className="release-page__neighbor-spacer" />
+              )}
+              {data.next ? (
+                <ReleaseNeighborLink
+                  neighbor={data.next}
+                  direction="next"
+                  onClick={() =>
+                    onOpenRelease(
+                      data.next!.navigate_band_id ?? bandId,
+                      data.next!.navigate_release_id || data.next!.id
+                    )
+                  }
+                />
+              ) : (
+                <span className="release-page__neighbor-spacer" />
+              )}
+            </div>
+          ) : null}
         </div>
         </div>
           ) : showPanelReleaseMeta ? (
@@ -2439,7 +2441,7 @@ export default function ReleasePage({
 
       {bannerLayout ? (
         <div className="release-page__panel-dock" ref={panelBottomRef}>
-          <div className="release-page__panel-footer">
+            <div className="release-page__panel-footer">
             <div className="release-page__panel-player">
               <MiniAudioPlayerControls
                 {...miniAudio}
@@ -2450,36 +2452,38 @@ export default function ReleasePage({
                 onRepeatToggle={() => setRepeatOne((r) => !r)}
               />
             </div>
-            <div className="release-page__panel-bottom-bar">
-              {data.prev ? (
-                <ReleaseNeighborLink
-                  neighbor={data.prev}
-                  direction="prev"
-                  onClick={() =>
-                    onOpenRelease(
-                      data.prev!.navigate_band_id ?? bandId,
-                      data.prev!.navigate_release_id || data.prev!.id
-                    )
-                  }
-                />
-              ) : (
-                <span className="release-page__neighbor-spacer" />
-              )}
-              {data.next ? (
-                <ReleaseNeighborLink
-                  neighbor={data.next}
-                  direction="next"
-                  onClick={() =>
-                    onOpenRelease(
-                      data.next!.navigate_band_id ?? bandId,
-                      data.next!.navigate_release_id || data.next!.id
-                    )
-                  }
-                />
-              ) : (
-                <span className="release-page__neighbor-spacer" />
-              )}
-            </div>
+            {data.prev || data.next ? (
+              <div className="release-page__panel-bottom-bar">
+                {data.prev ? (
+                  <ReleaseNeighborLink
+                    neighbor={data.prev}
+                    direction="prev"
+                    onClick={() =>
+                      onOpenRelease(
+                        data.prev!.navigate_band_id ?? bandId,
+                        data.prev!.navigate_release_id || data.prev!.id
+                      )
+                    }
+                  />
+                ) : (
+                  <span className="release-page__neighbor-spacer" />
+                )}
+                {data.next ? (
+                  <ReleaseNeighborLink
+                    neighbor={data.next}
+                    direction="next"
+                    onClick={() =>
+                      onOpenRelease(
+                        data.next!.navigate_band_id ?? bandId,
+                        data.next!.navigate_release_id || data.next!.id
+                      )
+                    }
+                  />
+                ) : (
+                  <span className="release-page__neighbor-spacer" />
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

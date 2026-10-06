@@ -739,6 +739,12 @@ input {
   position: relative;
 }
 
+.music-module > .tour-show-page,
+.music-module > .artist-page {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .music-module__backdrop {
   position: absolute;
   inset: 0;
@@ -11640,6 +11646,10 @@ button.media-release-card--banner {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.release-page__panel-footer:not(:has(.release-page__panel-bottom-bar)) {
+  gap: 0;
 }
 
 .release-page__panel-player {
@@ -25921,11 +25931,23 @@ button.lyrics-status-badge--icon-only {
 /* Tours / show page */
 .tour-show-page {
   position: relative;
-  min-height: calc(100dvh - 2rem);
-  background: transparent;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  background: #050505;
+}
+.tour-show-page.artist-page {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
 }
 .tour-show-page--standalone {
-  min-height: calc(100dvh - 2rem);
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
 }
 .tour-show-page__nav,
 .tour-show-page__tour-nav {
@@ -25940,7 +25962,7 @@ button.lyrics-status-badge--icon-only {
   gap: 0.75rem;
 }
 .tour-show-page--poster-hero .tour-show-page__hero {
-  grid-template-columns: minmax(16rem, min(46vw, calc((100dvh - 9.25rem) * 0.7))) minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, min(46vw, 22rem)) minmax(0, 1fr);
   align-items: stretch;
   gap: 1.25rem;
 }
@@ -26159,7 +26181,21 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__ticket-col .release-photocard__clip img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
+}
+.tour-show-page__overview-col--setlist .tour-show-page__paged-media--overlay,
+.tour-show-page__overview-col--setlist .tour-show-page__paged-media-open,
+.tour-show-page__overview-col--setlist .tour-show-page__paged-stage {
+  min-height: 0;
+  overflow: hidden;
+}
+.tour-show-page__overview-col--setlist .tour-show-page__paged-sizer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  visibility: hidden;
+  object-fit: cover;
 }
 .tour-show-page__flip-card {
   position: relative; appearance: none; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
@@ -26196,6 +26232,7 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  overflow: hidden;
 }
 .tour-show-page__overview-cols {
   display: grid;
@@ -26204,12 +26241,14 @@ button.lyrics-status-badge--icon-only {
   align-items: stretch;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 .tour-show-page__overview-col {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
+  overflow: hidden;
 }
 .tour-show-page__album--square {
   width: 100%;
@@ -26223,7 +26262,7 @@ button.lyrics-status-badge--icon-only {
   display: block;
   width: 100%;
   flex: 1 1 auto;
-  min-height: min(48vh, 26rem);
+  min-height: 0;
   height: 100%;
   aspect-ratio: auto;
   overflow: hidden;
@@ -26247,9 +26286,9 @@ button.lyrics-status-badge--icon-only {
   grid-template-columns: minmax(15rem, 22rem) minmax(0, 1fr);
   gap: 1.25rem;
   align-items: stretch;
-  min-height: calc(100dvh - 9rem);
+  min-height: 0;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
 }
 .tour-show-page__setlist-tab--idle.release-page__tracklist-layout {
   grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
@@ -26265,14 +26304,16 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__setlist-idle-hero {
   width: 100%;
   flex: 1 1 auto;
-  min-height: calc(100dvh - 8.75rem);
+  min-height: 0;
+  max-height: none;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   border-radius: 0;
   padding-top: 0.35rem;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 .tour-show-page__setlist-idle-hero--empty {
   background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -26281,14 +26322,16 @@ button.lyrics-status-badge--icon-only {
   position: sticky;
   top: 0;
   align-self: stretch;
-  max-width: min(46vw, calc((100dvh - 9.25rem) * 0.7));
+  max-width: min(46vw, 22rem);
   width: 100%;
   height: 100%;
 }
 .tour-show-page__setlist-panel {
   height: 100%;
-  min-height: calc(100dvh - 8.5rem);
+  min-height: 0;
+  max-height: none;
   padding-top: 0.2rem;
+  padding-bottom: 0.35rem;
 }
 .tour-show-page__setlist-panel .release-page__art-stage {
   display: inline-flex;
@@ -26345,7 +26388,12 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__setlist-panel .release-page__panel-bottom {
   margin-top: auto;
-  padding-bottom: 0.85rem;
+  padding-bottom: 0.15rem;
+}
+.tour-show-page__setlist-panel .release-page__panel-footer {
+  gap: 0;
+  margin-top: 0;
+  padding-top: 0.4rem;
 }
 .tour-show-page__setlist-recording-btn {
   appearance: none;
@@ -26361,7 +26409,7 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__setlist-main {
   overflow-y: auto;
   min-height: 0;
-  max-height: calc(100dvh - 9rem);
+  max-height: none;
 }
 .tour-show-page__paged-media--side-nav {
   max-width: none;
@@ -26373,7 +26421,7 @@ button.lyrics-status-badge--icon-only {
   max-width: min(100%, 18rem);
 }
 .tour-show-page__setlist-main {
-  min-height: calc(100vh - 10rem);
+  min-height: 0;
   min-width: 0;
   max-width: none;
   width: 100%;
@@ -26395,11 +26443,12 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__album { appearance: none; border: none; background: transparent; color: var(--text); display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; padding: 0; cursor: pointer; text-align: left; font: inherit; }
 .tour-show-page__album:disabled { cursor: default; }
 .tour-show-page__backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  background: #050505;
 }
 .tour-show-page__bg {
   position: absolute;
@@ -26430,11 +26479,16 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__show-date-ord { font-size: 0.58rem; font-weight: 600; vertical-align: baseline; }
 .tour-show-page--poster-hero .artist-about__layout.tour-show-page__hero {
   display: grid;
-  grid-template-columns: minmax(16rem, min(46vw, calc((100dvh - 9.25rem) * 0.7))) minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, min(46vw, 22rem)) minmax(0, 1fr);
   align-items: stretch;
   gap: 1.25rem;
-  min-height: calc(100dvh - 7.4rem);
-  padding-bottom: 1.25rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  padding: 0.75rem 0 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .tour-show-page__hero-col {
   display: flex;
@@ -26445,14 +26499,18 @@ button.lyrics-status-badge--icon-only {
   min-height: 0;
   height: 100%;
   position: relative;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0;
   box-sizing: border-box;
+  overflow: hidden;
+}
+.tour-show-page__hero-col--has-tour-nav {
+  padding-bottom: 2rem;
 }
 .tour-show-page__hero-col .tour-show-page__tour-nav {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0.35rem;
+  bottom: 0.15rem;
   z-index: 3;
   margin: 0;
   padding: 0 0.2rem;
@@ -26478,9 +26536,14 @@ button.lyrics-status-badge--icon-only {
   width: 100%;
   max-width: none;
   flex: 1 1 auto;
-  min-height: calc(100dvh - 9.25rem);
-  height: 100%;
+  min-height: 0;
+  max-height: none;
+  height: auto;
+  align-self: stretch;
   overflow: hidden;
+  /* Kill intrinsic sizer growth so the stage fills the flex column. */
+  display: flex;
+  flex-direction: column;
 }
 .tour-show-page__hero-col .artist-about__photo,
 .tour-show-page__hero-col .artist-about__photo--layer,
@@ -26492,9 +26555,18 @@ button.lyrics-status-badge--icon-only {
   max-width: none;
   height: 100%;
   max-height: none;
-  min-height: calc(100dvh - 9.25rem);
+  min-height: 0;
+  flex: 1 1 auto;
   object-fit: cover;
   object-position: center top;
+}
+.tour-show-page__hero-col .artist-about__photo--sizer,
+.tour-show-page__setlist-idle-hero .artist-about__photo--sizer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  flex: none;
 }
 .tour-show-page__hero-col .artist-about__photo-col:hover .artist-about__photo--layer:not(.artist-about__photo--layer-out),
 .tour-show-page__setlist-idle-hero .artist-about__photo-col:hover .artist-about__photo--layer:not(.artist-about__photo--layer-out) {
@@ -26572,7 +26644,7 @@ button.lyrics-status-badge--icon-only {
   display: block;
   width: 100%;
   flex: 1 1 auto;
-  min-height: min(48vh, 26rem);
+  min-height: 0;
   height: 100%;
   aspect-ratio: auto;
   overflow: hidden;
@@ -26887,7 +26959,8 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__body--media {
   background: var(--bg, #0a0a0a);
-  min-height: calc(100dvh - 7.4rem);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .tour-show-page__body--media .tour-show-media-grid {
   background: transparent;
@@ -26926,10 +26999,23 @@ button.lyrics-status-badge--icon-only {
 .events-browse__live-shows { padding: 0 0.85rem 0.65rem; }
 .events-browse__live-shows-card { max-width: 11rem; }
 .tour-show-page__body {
-  padding: 0 0.85rem 1.25rem 0.35rem;
+  padding: 0 1.25rem 0.85rem 1.25rem;
   background: transparent;
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tour-show-page__overview.artist-about {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.tour-show-page .artist-about:not(.artist-about--stacked) .artist-about__layout {
+  min-height: 0;
 }
 .tour-show-page__hub {
   display: grid;
@@ -26937,7 +27023,8 @@ button.lyrics-status-badge--icon-only {
   gap: 1rem 1.25rem;
   align-items: stretch;
   padding: 0.85rem 1rem;
-  min-height: 8.5rem;
+  min-height: 0;
+  flex: 0 0 auto;
 }
 .tour-show-page__hub-performer-col {
   border-right: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
@@ -27120,6 +27207,7 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  overflow: hidden;
 }
 .tour-show-page__bill-panel { padding: 0.65rem 0.75rem; }
 .tour-show-page__bill-row {
@@ -27211,17 +27299,20 @@ button.lyrics-status-badge--icon-only {
   align-items: stretch;
   flex: 1 1 auto;
   min-height: 0;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .tour-show-page__overview-col--setlist {
   display: flex;
   min-height: 0;
   height: 100%;
   padding-bottom: 0;
+  overflow: hidden;
 }
 .tour-show-page__ticket-col {
   padding-bottom: 0;
+  overflow: hidden;
 }
 .tour-show-page__codes-col {
   display: flex;
@@ -27229,17 +27320,21 @@ button.lyrics-status-badge--icon-only {
   gap: 0.45rem;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   overflow: hidden;
+  justify-content: flex-start;
 }
 .tour-show-page__codes-col > .tour-show-page__code-thumb--natural {
-  flex: 0 1 42%;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 46%;
+  max-height: none;
   overflow: hidden;
+  display: flex;
 }
 .tour-show-page__codes-col > .tour-show-page__code-thumb--natural img {
   width: 100%;
   height: 100%;
+  max-height: none;
   object-fit: contain;
   object-position: top center;
 }
@@ -27247,8 +27342,8 @@ button.lyrics-status-badge--icon-only {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.45rem;
-  align-items: end;
-  margin-top: auto;
+  align-items: start;
+  margin-top: 0;
   flex: 0 0 auto;
   min-height: 0;
 }
@@ -27276,15 +27371,20 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__setlist-tab.release-page__tracklist-layout {
   display: grid;
-  grid-template-columns: minmax(16rem, min(46vw, calc((100dvh - 9.25rem) * 0.7))) minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, min(46vw, 22rem)) minmax(0, 1fr);
   gap: 1.25rem;
   align-items: stretch;
-  min-height: calc(100dvh - 9rem);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+  padding-left: 0;
+  box-sizing: border-box;
 }
 .tour-show-page__setlist-tab--idle.release-page__tracklist-layout {
-  grid-template-columns: minmax(16rem, min(46vw, calc((100dvh - 9.25rem) * 0.7))) minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, min(46vw, 22rem)) minmax(0, 1fr);
 }
 .tour-show-page__setlist-hero-col {
   position: relative;
@@ -27297,14 +27397,16 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__setlist-idle-hero {
   width: 100%;
   flex: 1 1 auto;
-  min-height: calc(100dvh - 8.75rem);
+  min-height: 0;
+  max-height: none;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   border-radius: 0;
   padding-top: 0.35rem;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 .tour-show-page__setlist-idle-hero--empty {
   background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -27316,7 +27418,7 @@ button.lyrics-status-badge--icon-only {
   position: sticky;
   top: 0;
   align-self: stretch;
-  max-width: min(46vw, calc((100dvh - 9.25rem) * 0.7));
+  max-width: min(46vw, 22rem);
   width: 100%;
   height: 100%;
   margin-top: 0;
@@ -27325,9 +27427,10 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__setlist-panel {
   height: 100%;
-  min-height: calc(100dvh - 8.5rem);
+  min-height: 0;
+  max-height: none;
   padding-top: 0.75rem;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0.35rem;
 }
 .tour-show-page__setlist-panel .release-page__art-stage {
   display: inline-flex;
@@ -27384,7 +27487,12 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__setlist-panel .release-page__panel-bottom {
   margin-top: auto;
-  padding-bottom: 0.85rem;
+  padding-bottom: 0.15rem;
+}
+.tour-show-page__setlist-panel .release-page__panel-footer {
+  gap: 0;
+  margin-top: 0;
+  padding-top: 0.4rem;
 }
 .tour-show-page__setlist-recording-btn {
   appearance: none;
@@ -27400,7 +27508,7 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__setlist-main {
   overflow-y: auto;
   min-height: 0;
-  max-height: calc(100dvh - 9rem);
+  max-height: none;
   padding-top: 0.35rem;
 }
 .tour-show-page__paged-media--side-nav {
@@ -27416,7 +27524,7 @@ button.lyrics-status-badge--icon-only {
   position: sticky;
   top: 0;
   align-self: stretch;
-  max-width: min(46vw, calc((100dvh - 9.25rem) * 0.7));
+  max-width: min(46vw, 22rem);
   width: 100%;
   height: 100%;
 }
@@ -27455,6 +27563,10 @@ button.lyrics-status-badge--icon-only {
   .tour-show-page__overview-cols { grid-template-columns: 1fr; }
 }
 .tour-show-page__flip-wrap { max-width: 140px; }
+.tour-show-page__ticket-col .tour-show-page__flip-wrap,
+.tour-show-page__overview-col--stretch .tour-show-page__flip-wrap {
+  max-width: none;
+}
 .tour-show-page__flip-wrap--landscape { max-width: 100%; }
 .tour-show-page__photocard { width: 100%; }
 .tour-show-page__setlist-tab .setlist-tracklist .release-tracklist__play,
