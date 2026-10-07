@@ -393,6 +393,13 @@ function TourShowHeroPoster({
     outgoing: string | undefined;
   }>(() => ({ current: heroUrl, outgoing: undefined }));
   const prevHeroRef = useRef<string | undefined>(heroUrl);
+  /** Lock sizer src to first poster (frame size comes from the CSS grid cell) */
+  const sizerUrlRef = useRef<string | undefined>(undefined);
+  if (!sizerUrlRef.current) {
+    sizerUrlRef.current =
+      showPosterUrls[0] || tourPosterUrls[0] || heroUrl || undefined;
+  }
+  const sizerUrl = sizerUrlRef.current;
   const photoColRef = useRef<HTMLDivElement>(null);
   const photoStageRef = useRef<HTMLDivElement>(null);
   const [photoHoverSide, setPhotoHoverSide] = useState<
@@ -400,11 +407,8 @@ function TourShowHeroPoster({
   >(null);
 
   useEffect(() => {
-    if (!heroUrl) {
-      setPhotoLayers({ current: undefined, outgoing: undefined });
-      prevHeroRef.current = undefined;
-      return;
-    }
+    // Keep last image if the other scope has no posters (don't blank the hero / lose clicks)
+    if (!heroUrl) return;
     if (heroUrl === prevHeroRef.current) return;
     const outgoing = prevHeroRef.current;
     prevHeroRef.current = heroUrl;
@@ -414,12 +418,6 @@ function TourShowHeroPoster({
     }, 360);
     return () => window.clearTimeout(t);
   }, [heroUrl]);
-
-  const toggleScope = () => {
-    const next: PosterScope = posterScope === "show" ? "tour" : "show";
-    onScopeChange(next);
-    onIndexChange(0);
-  };
 
   const stepIndex = (delta: number) => {
     if (activeList.length <= 1) return;
@@ -434,21 +432,21 @@ function TourShowHeroPoster({
     const y = clientY - rect.top;
     const topZone = rect.height * 0.28;
     const bottomZone = rect.height * 0.72;
-    if (y <= topZone) {
-      toggleScope();
+    // Top / bottom → switch show ↔ tour poster sets
+    if (y <= topZone || y >= bottomZone) {
+      const next: PosterScope = posterScope === "show" ? "tour" : "show";
+      const nextList = next === "show" ? showPosterUrls : tourPosterUrls;
+      if (!nextList.length) return;
+      onScopeChange(next);
+      onIndexChange(0);
       return;
     }
-    if (y >= bottomZone) {
-      toggleScope();
-      return;
-    }
+    // Left / right → cycle within the active set
     if (x < rect.width / 2) stepIndex(-1);
     else stepIndex(1);
   };
 
-  if (!photoLayers.current) {
-    return <div className="artist-about__photo artist-about__photo--empty tour-show-page__poster--empty" />;
-  }
+  const displayUrl = photoLayers.current || sizerUrl;
 
   return (
     <div
@@ -475,32 +473,38 @@ function TourShowHeroPoster({
             aria-hidden
           />
         ) : null}
-        <img
-          src={photoLayers.current}
-          alt=""
-          className="artist-about__photo artist-about__photo--sizer"
-          aria-hidden="true"
-        />
-        <div className="artist-about__photo-stack">
-          {photoLayers.outgoing ? (
+        {sizerUrl ? (
+          <img
+            src={sizerUrl}
+            alt=""
+            className="artist-about__photo artist-about__photo--sizer"
+            aria-hidden="true"
+          />
+        ) : null}
+        {displayUrl ? (
+          <div className="artist-about__photo-stack">
+            {photoLayers.outgoing ? (
+              <img
+                key={photoLayers.outgoing}
+                src={photoLayers.outgoing}
+                alt=""
+                className="artist-about__photo artist-about__photo--layer artist-about__photo--layer-out"
+                draggable={false}
+              />
+            ) : null}
             <img
-              key={photoLayers.outgoing}
-              src={photoLayers.outgoing}
+              key={photoLayers.current || displayUrl}
+              src={photoLayers.current || displayUrl}
               alt=""
-              className="artist-about__photo artist-about__photo--layer artist-about__photo--layer-out"
+              className={`artist-about__photo artist-about__photo--layer${
+                photoLayers.outgoing ? " artist-about__photo--layer-in" : " media-beat-glow"
+              }`}
               draggable={false}
             />
-          ) : null}
-          <img
-            key={photoLayers.current}
-            src={photoLayers.current}
-            alt=""
-            className={`artist-about__photo artist-about__photo--layer${
-              photoLayers.outgoing ? " artist-about__photo--layer-in" : " media-beat-glow"
-            }`}
-            draggable={false}
-          />
-        </div>
+          </div>
+        ) : (
+          <div className="artist-about__photo artist-about__photo--empty tour-show-page__poster--empty" />
+        )}
       </div>
     </div>
   );
@@ -759,6 +763,8 @@ function OverviewPagedImages({
   if (!images.length) {
     return items[0] ? <OverviewFlipCard item={items[0]} /> : null;
   }
+  // Lock frame to first page so later pages cannot resize the overview layout
+  const sizerUrl = images[0]?.url;
   const multi = images.length > 1;
   const openGalleryAt = (imageIndex: number) => {
     if (onOpenGallery) {
@@ -781,10 +787,10 @@ function OverviewPagedImages({
             openGalleryAt(galleryIdx >= 0 ? galleryIdx : index);
           }}
         >
-          {photoLayers.current ? (
+          {sizerUrl && photoLayers.current ? (
             <span className="tour-show-page__paged-stage">
               <img
-                src={photoLayers.current}
+                src={sizerUrl}
                 alt=""
                 className="tour-show-page__paged-sizer"
                 aria-hidden
@@ -820,6 +826,7 @@ function OverviewPagedImages({
               onClick={(e) => {
                 e.stopPropagation();
                 step(-1);
+                e.currentTarget.blur();
               }}
               aria-label="Previous page"
             >
@@ -831,6 +838,7 @@ function OverviewPagedImages({
               onClick={(e) => {
                 e.stopPropagation();
                 step(1);
+                e.currentTarget.blur();
               }}
               aria-label="Next page"
             >
@@ -861,6 +869,7 @@ function SetlistTabPanel({
   heroPoster,
   artistName,
   visible = true,
+  showKey,
   onOpenRelease,
   onPlaybackBackdrop,
   onPlayingChange,
@@ -874,6 +883,8 @@ function SetlistTabPanel({
   heroPoster: ReactNode;
   artistName?: string | null;
   visible?: boolean;
+  /** When this changes (show switch), stop playback and reset panel art. */
+  showKey?: string | null;
   onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
   onPlaybackBackdrop?: (url: string | null) => void;
   onPlayingChange?: (playing: boolean) => void;
@@ -919,6 +930,18 @@ function SetlistTabPanel({
     if (isPlaying) void el.play().catch(() => {});
     else el.pause();
   }, [isPlaying, panelArt?.canvas_url]);
+
+  // Switching shows must stop audio and clear playing UI (backdrop, panel art, etc.).
+  useEffect(() => {
+    miniAudio.clear();
+    setPlayingPath(null);
+    setNowPlaying(null);
+    setPanelArt(null);
+    onPlaybackBackdrop?.(null);
+    onPlayingChange?.(false);
+    // Only when the show changes — miniAudio.clear is stable enough for this purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showKey]);
 
   const handlePlay = useCallback(
     async (path: string, title: string, _playbackKey: string) => {
@@ -1391,6 +1414,11 @@ export default function TourShowPage({
   }, [detail?.show.id, tour?.id]);
 
   useEffect(() => {
+    setSetlistIsPlaying(false);
+    setPlaybackBackdrop(null);
+  }, [activeShowSlug]);
+
+  useEffect(() => {
     if (!detail) return;
     const slug = detail.show.slug;
     let cancelled = false;
@@ -1540,6 +1568,24 @@ export default function TourShowPage({
   const setlistFiles = overview?.setlist_files || [];
   const playlistCode = overview?.playlist_code ?? null;
   const qrCode = overview?.qr_code ?? null;
+  /** Tour [Artwork]/Photo.* — fall back from Poster.* URL if API omits photo_url */
+  const tourPhotoUrl = (() => {
+    const direct =
+      detail.tour.photo_url || overview?.photo_url || null;
+    if (direct) return direct;
+    const posters = [
+      ...(detail.tour.poster_urls || []),
+      detail.tour.poster_url,
+    ].filter((u): u is string => Boolean(u));
+    for (const u of posters) {
+      // Only main Poster.* (not "Poster - Alternative")
+      if (/Poster%20-|Poster\s*-/i.test(u)) continue;
+      if (/Poster\.(jpg|jpeg|png|webp|gif)/i.test(u)) {
+        return u.replace(/Poster\.(jpg|jpeg|png|webp|gif)/i, "Photo.$1");
+      }
+    }
+    return null;
+  })();
   const album = overview?.album;
   const bill = show.bill || [];
   const mains = bill.filter((b) => b.role === "main");
@@ -1556,20 +1602,29 @@ export default function TourShowPage({
       .map((p) => p.url);
     return uniqueUrls([show.poster_url, ...fromPromo]);
   })();
-  const tourPosterUrls = uniqueUrls([tour.poster_url]);
+  /** Tour [Artwork] posters only — never mix in show Promo posters */
+  const tourPosterUrls = (() => {
+    const fromApi = detail.tour.poster_urls || [];
+    const raw = uniqueUrls([
+      ...fromApi,
+      tour.poster_url,
+      detail.tour.poster_url,
+    ]);
+    const showSet = new Set(showPosterUrls);
+    const tourOnly = raw.filter((u) => !showSet.has(u));
+    return tourOnly.length ? tourOnly : raw;
+  })();
   const heroBanner = show.banner_url || tour.banner_url || null;
   const ticketerWebsiteUrl = promoTicketerWebsite(detail.promo || []);
   const setlistGalleryItems = mediaToGalleryItems(setlistFiles);
-  const heroPosterNode = (
-    <TourShowHeroPoster
-      showPosterUrls={showPosterUrls}
-      tourPosterUrls={tourPosterUrls}
-      posterScope={posterScope}
-      posterIndex={posterIndex}
-      onScopeChange={setPosterScope}
-      onIndexChange={setPosterIndex}
-    />
-  );
+  const heroPosterProps = {
+    showPosterUrls,
+    tourPosterUrls,
+    posterScope,
+    posterIndex,
+    onScopeChange: setPosterScope,
+    onIndexChange: setPosterIndex,
+  };
   const openVenueSearch = () => {
     if (!show.venue) return;
     const q = [show.venue, placeLocality || placeCountry].filter(Boolean).join(" ");
@@ -1757,7 +1812,7 @@ export default function TourShowPage({
                       draggable={false}
                     />
                   ) : showPosterUrls.length || tourPosterUrls.length ? (
-                    heroPosterNode
+                    <TourShowHeroPoster key="overview-hero" {...heroPosterProps} />
                   ) : (
                     <div className="tour-show-page__poster tour-show-page__poster--empty" />
                   )}
@@ -2007,24 +2062,33 @@ export default function TourShowPage({
                         <OverviewFlipCard item={ticket} />
                       </section>
                     ) : null}
-                    {(playlistCode || qrCode || album || tour.album_title) ? (
+                    {(playlistCode ||
+                      qrCode ||
+                      tourPhotoUrl ||
+                      album ||
+                      tour.album_title) ? (
                       <section className="tour-show-page__overview-col tour-show-page__codes-col">
-                        {playlistCode ? (
-                          <div
-                            className="tour-show-page__code-thumb tour-show-page__code-thumb--natural"
-                            title="Playlist code"
-                          >
-                            {playlistCode.kind === "image" ? (
-                              <img src={playlistCode.url} alt="" draggable={false} />
+                        {(playlistCode || qrCode) ? (
+                          <div className="tour-show-page__codes-row tour-show-page__codes-row--top">
+                            {playlistCode ? (
+                              <div
+                                className="tour-show-page__code-thumb tour-show-page__code-thumb--natural"
+                                title="Playlist code"
+                              >
+                                {playlistCode.kind === "image" ? (
+                                  <img src={playlistCode.url} alt="" draggable={false} />
+                                ) : (
+                                  <span>{playlistCode.label || "Playlist"}</span>
+                                )}
+                              </div>
                             ) : (
-                              <span>{playlistCode.label || "Playlist"}</span>
+                              <span className="tour-show-page__codes-row-spacer" aria-hidden />
                             )}
-                          </div>
-                        ) : null}
-                        {qrCode || album || tour.album_title ? (
-                          <div className="tour-show-page__codes-row">
                             {qrCode ? (
-                              <div className="tour-show-page__code-thumb" title="QR">
+                              <div
+                                className="tour-show-page__code-thumb tour-show-page__code-thumb--qr"
+                                title="QR"
+                              >
                                 {qrCode.kind === "image" ? (
                                   <img src={qrCode.url} alt="" draggable={false} />
                                 ) : (
@@ -2032,15 +2096,31 @@ export default function TourShowPage({
                                 )}
                               </div>
                             ) : null}
+                          </div>
+                        ) : null}
+                        {(tourPhotoUrl || album || tour.album_title) ? (
+                          <div className="tour-show-page__codes-row">
+                            {tourPhotoUrl ? (
+                              <div
+                                className="tour-show-page__tour-photo"
+                                title="Tour photo"
+                              >
+                                <img
+                                  src={tourPhotoUrl}
+                                  alt=""
+                                  draggable={false}
+                                />
+                              </div>
+                            ) : null}
                             {album || tour.album_title ? (
                               <button
                                 type="button"
                                 className="tour-show-page__album tour-show-page__album--square tour-show-page__album--compact"
-                            onClick={() => {
-                              const rid = album?.release_id;
-                              if (rid) onOpenRelease?.(rid, bandId);
-                            }}
-                            disabled={!album?.release_id}
+                                onClick={() => {
+                                  const rid = album?.release_id;
+                                  if (rid) onOpenRelease?.(rid, bandId);
+                                }}
+                                disabled={!album?.release_id}
                               >
                                 <span className="tour-show-page__album-frame">
                                   {(album?.cover_url || tour.album_cover_url) ? (
@@ -2069,7 +2149,8 @@ export default function TourShowPage({
                                     {(album?.release_date || album?.label) && (
                                       <span className="tour-show-page__album-hover-meta">
                                         {album?.release_date
-                                          ? formatTrackDate(album.release_date) || album.release_date
+                                          ? formatTrackDate(album.release_date) ||
+                                            album.release_date
                                           : null}
                                         {album?.release_date && album?.label ? " · " : null}
                                         {album?.label ? album.label : null}
@@ -2104,12 +2185,14 @@ export default function TourShowPage({
             <TourShowMediaSection items={detail.souvenirs} empty="No souvenirs." />
           ) : null}
           <SetlistTabPanel
+            key={activeShowSlug || "setlist"}
             bandId={bandId}
             payload={setlist}
             recordings={overview?.recordings || []}
             recordingUrl={overview?.recording_url || null}
             loading={setlistLoading}
             visible={activeTab === "setlist"}
+            showKey={activeShowSlug}
             coverUrl={
               showPosterUrls[0] ||
               tourPosterUrls[0] ||
@@ -2117,7 +2200,11 @@ export default function TourShowPage({
               tour.poster_url ||
               null
             }
-            heroPoster={heroPosterNode}
+            heroPoster={
+              activeTab === "setlist" ? (
+                <TourShowHeroPoster key="setlist-hero" {...heroPosterProps} />
+              ) : null
+            }
             artistName={artistName}
             onOpenRelease={onOpenRelease}
             onPlaybackBackdrop={setPlaybackBackdrop}

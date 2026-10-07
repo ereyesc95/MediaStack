@@ -519,6 +519,8 @@ export type TourShowOverview = {
   setlist_files: TourShowMediaItem[];
   playlist_code?: TourShowMediaItem | null;
   qr_code?: TourShowMediaItem | null;
+  /** Tour [Artwork]/Photo.* — square crop left of album */
+  photo_url?: string | null;
   recording_url: string | null;
   recordings?: TourShowRecordingLink[];
   lineup: LineupMember[];
@@ -537,6 +539,10 @@ export type TourShowDetail = {
   tour: Omit<TourDetail, "shows" | "folder_path" | "opener_letter"> & {
     opener_letter?: string | null;
     album_release_id?: string | null;
+    /** All [Artwork] Poster.* / Poster - * images for top/bottom hero scope */
+    poster_urls?: string[];
+    /** [Artwork] Photo.* — square crop beside album on overview */
+    photo_url?: string | null;
   };
   show: TourShowCard;
   shows: TourShowCard[];

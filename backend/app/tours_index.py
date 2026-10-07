@@ -200,6 +200,18 @@ def _artwork_url(folder: Path | None, stem: str, media_root: Path) -> str | None
     return _media_url(found, media_root) if found else None
 
 
+def _artwork_poster_urls(folder: Path | None, media_root: Path) -> list[str]:
+    """All ``Poster.*`` / ``Poster - *`` images under tour [Artwork]."""
+    if not folder:
+        return []
+    out: list[str] = []
+    for path in _list_prefixed_images(folder, "Poster"):
+        url = _media_url(path, media_root)
+        if url:
+            out.append(url)
+    return out
+
+
 def _dir_has_media(folder: Path | None) -> bool:
     if not folder or not folder.is_dir():
         return False
@@ -1088,6 +1100,26 @@ def get_show_detail(
     album = _match_supported_album(db, band, tour.get("album_title"), root)
     lineup = _lineup_for_show_date(db, band, show.get("date_iso"), root)
 
+    # Tour-level posters + square Photo from [Artwork]
+    tour_poster_urls: list[str] = []
+    tour_photo_url: str | None = None
+    if root and tour.get("folder_path"):
+        try:
+            tour_dir = (root / Path(str(tour["folder_path"]).replace("\\", "/"))).resolve()
+        except OSError:
+            tour_dir = None
+        if tour_dir is not None and tour_dir.is_dir():
+            art = _subdir(tour_dir, "[Artwork]") or _subdir(tour_dir, "Artwork")
+            tour_poster_urls = _artwork_poster_urls(art, root)
+            # Photo.* first, then Photo - * extras
+            photo_files = _list_prefixed_images(art, "Photo") if art else []
+            if photo_files:
+                tour_photo_url = _media_url(photo_files[0], root)
+            else:
+                tour_photo_url = _artwork_url(art, "Photo", root)
+    if not tour_poster_urls and tour.get("poster_url"):
+        tour_poster_urls = [tour["poster_url"]]
+
     # Auto-resolve setlist from cache if present
     setlist_payload = None
     try:
@@ -1105,7 +1137,9 @@ def get_show_detail(
             "date_iso": tour["date_iso"],
             "is_support": tour["is_support"],
             "main_artist_name": tour["main_artist_name"],
-            "poster_url": tour["poster_url"],
+            "poster_url": tour["poster_url"] or (tour_poster_urls[0] if tour_poster_urls else None),
+            "poster_urls": tour_poster_urls,
+            "photo_url": tour_photo_url,
             "banner_url": tour["banner_url"],
             "logo_url": tour["logo_url"],
             "album_title": tour["album_title"],
@@ -1126,6 +1160,7 @@ def get_show_detail(
             "setlist_files": setlist_files,
             "playlist_code": playlist_code,
             "qr_code": qr_code,
+            "photo_url": tour_photo_url,
             "recording_url": recording_url,
             "recordings": recordings,
             "lineup": lineup,
