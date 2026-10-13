@@ -104,14 +104,23 @@ def parse_tour_folder_name(folder_name: str) -> dict:
 
 
 def parse_show_folder_name(folder_name: str) -> dict:
-    """Parse show folder → date, country, city, venue, join_key."""
+    """Parse show folder → date, country, city, venue, join_key.
+
+    Supports ``Country, City. Venue`` and ``Country, State, City. Venue``
+    (US-style). When the city group has commas, the last segment is the city.
+    """
     name = folder_name.strip()
     m = _SHOW_FOLDER_RE.match(name)
     if m:
         date_iso = _date_dots_to_iso(m.group("date"))
         country = m.group("country").strip()
-        city = m.group("city").strip()
+        city_raw = m.group("city").strip()
         venue = m.group("venue").strip()
+        # "Florida, Fort Lauderdale" → city Fort Lauderdale
+        if "," in city_raw:
+            city = city_raw.split(",")[-1].strip() or city_raw
+        else:
+            city = city_raw
         return {
             "date_iso": date_iso,
             "country": country,
