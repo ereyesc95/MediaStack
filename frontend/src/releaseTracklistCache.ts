@@ -9,7 +9,7 @@ import type { ReleaseTracklist } from "./types";
 
 const MAX_ENTRIES = 32;
 const NAMESPACE = "release-tracklist";
-const CACHE_VERSION = "v18";
+const CACHE_VERSION = "v19";
 
 type CacheKey = `${string}:${number}:${string}`;
 

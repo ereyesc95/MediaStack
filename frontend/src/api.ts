@@ -242,6 +242,31 @@ export async function searchMusicBrainz(
   );
 }
 
+export type MbArtistFormFields = {
+  mbid: string;
+  name: string;
+  sort_name?: string;
+  legal_name?: string;
+  aliases: string[];
+  birth_date?: string;
+  death_date?: string;
+  birth_place?: string;
+  country?: string;
+  type?: string;
+  disambiguation?: string;
+};
+
+/** Full MusicBrainz artist payload for member / support-personnel autofill. */
+export async function fetchMusicBrainzArtist(
+  mbid: string,
+  signal?: AbortSignal
+): Promise<MbArtistFormFields> {
+  return request(
+    `${API}/music/musicbrainz/artist/${encodeURIComponent(mbid)}`,
+    { signal }
+  );
+}
+
 export type ArtistImportEstimate = {
   name: string;
   release_group_count: number;
@@ -650,7 +675,9 @@ export async function fetchBandTourShowDetail(
 ): Promise<import("./types").TourShowDetail> {
   const q = sync ? "?sync=true" : "";
   return request(
-    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}${q}`
+    `${API}/music/bands/${bandId}/media/tours/${encodeURIComponent(tourKey)}/shows/${encodeURIComponent(showKey)}${q}`,
+    // Gallery/Souvenirs are disk-live; avoid stale browser caches after adding files
+    { cache: "no-store" }
   );
 }
 

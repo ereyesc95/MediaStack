@@ -595,6 +595,41 @@ def _scan_tracks_in_dir(
                     if track:
                         tracks.append(track)
                 continue
+            # Resolve shortcut target, else nearest title match under this artist
+            # (same as compilation / B-side .lnk handling).
+            if db is not None and band_id is not None:
+                audio_file = _resolve_lnk_audio_file(
+                    db, band_id, media_root, entry, lnk_stem
+                )
+                if audio_file:
+                    index += 1
+                    band_name = (
+                        art_ctx.band_name
+                        if art_ctx and art_ctx.band_name
+                        else ""
+                    )
+                    if not band_name:
+                        from app.models import Band
+
+                        band_row = db.get(Band, band_id)
+                        band_name = band_row.bnd_name if band_row else ""
+                    track = _build_link_track(
+                        lnk_stem=lnk_stem,
+                        audio_file=audio_file,
+                        media_root=media_root,
+                        band_name=band_name or "Artist",
+                        band_id=band_id,
+                        db_durations=db_durations,
+                        index=index,
+                    )
+                    if track:
+                        # Keep order/number/title from the .lnk name, not the target file
+                        track["number"] = _track_number(lnk_stem, index)
+                        track["title"] = (
+                            display_track_title_from_path(entry) or track.get("title")
+                        )
+                        tracks.append(track)
+                continue
             target = resolve_media_entry(entry)
             if target and _is_audio_file(target):
                 index += 1

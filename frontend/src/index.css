@@ -8142,18 +8142,77 @@ input {
   gap: 0.65rem;
 }
 
-.member-form__mb-row {
+.member-form__stage-row {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
+  align-items: stretch;
+  gap: 0.4rem;
 }
 
-.member-form__mbid {
+.member-form__stage-row input {
   flex: 1;
+  min-width: 0;
+}
+
+.member-form__mb-search {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  min-height: 2.35rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.member-form__mb-search:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.member-form__mb-search:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.member-form__mb-search-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.member-form__mb-search-busy {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .member-form__mb-matches {
   margin: 0;
+  list-style: none;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.member-form__mb-matches li + li {
+  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.member-form__mb-matches button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.member-form__mb-matches button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .member-form__dates {
@@ -27748,6 +27807,8 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__codes-row--top .tour-show-page__code-thumb--qr {
   aspect-ratio: 1;
   align-self: start;
+  /* Black QR modules need a light mat or they vanish on dark UI */
+  background: #fff;
 }
 .tour-show-page__codes-row--top .tour-show-page__code-thumb--qr img {
   width: 100%;
@@ -27755,7 +27816,7 @@ button.lyrics-status-badge--icon-only {
   object-fit: contain;
   object-position: center center;
   display: block;
-  background: transparent;
+  background: #fff;
 }
 .tour-show-page__codes-row--top .tour-show-page__codes-row-spacer {
   min-width: 0;
@@ -27780,7 +27841,15 @@ button.lyrics-status-badge--icon-only {
   width: 100%;
   min-width: 0;
 }
-/* Tour [Artwork]/Photo.* — square crop where QR used to sit */
+/* Overview codes: Photo + Album always render as 1:1 (cover-crop non-square sources) */
+.tour-show-page__codes-row .tour-show-page__tour-photo,
+.tour-show-page__codes-row .tour-show-page__album--compact {
+  aspect-ratio: 1;
+  height: auto;
+  flex: 0 0 auto;
+  align-self: stretch;
+  overflow: hidden;
+}
 .tour-show-page__tour-photo {
   aspect-ratio: 1;
   overflow: hidden;
@@ -27794,6 +27863,19 @@ button.lyrics-status-badge--icon-only {
   object-position: center center;
   display: block;
   border-radius: 0;
+}
+.tour-show-page__codes-row .tour-show-page__album--compact .tour-show-page__album-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.tour-show-page__codes-row .tour-show-page__album--compact .tour-show-page__album-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
 }
 .tour-show-page__album--compact .tour-show-page__album-frame {
   min-height: 0;
@@ -28058,6 +28140,27 @@ button.lyrics-status-badge--icon-only {
   border-radius: 0;
   transition: transform 0.22s ease;
   perspective: 900px;
+}
+.tour-show-media-card--qr {
+  background: #fff;
+}
+.tour-show-media-card--qr img {
+  object-fit: contain;
+  background: #fff;
+}
+.tour-show-media-card__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  pointer-events: none;
+  text-align: left;
 }
 .tour-show-media-card:hover { transform: scale(1.04); z-index: 1; }
 .tour-show-media-card--flippable:hover { transform: none; }

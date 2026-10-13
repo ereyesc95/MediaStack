@@ -138,6 +138,12 @@ function normalizePlaybackArt(art: ReleasePlaybackArt): ReleasePlaybackArt {
   };
 }
 
+/** Self-released labels omit the "Distributed by" prefix in the left panel. */
+function isSelfReleasedLabel(label: string | null | undefined): boolean {
+  const low = (label || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+  return low === "self released" || low.startsWith("self released ");
+}
+
 type Props = {
   bandId: number;
   releaseId: string;
@@ -2291,7 +2297,7 @@ export default function ReleasePage({
                 />
               </button>
               <p className="release-page__label-name">
-                Distributed by{" "}
+                {isSelfReleasedLabel(data.label) ? null : "Distributed by "}
                 <button
                   type="button"
                   className="release-page__person-link"
@@ -2418,7 +2424,7 @@ export default function ReleasePage({
                     />
                   </button>
                   <p className="release-page__label-name">
-                    Distributed by{" "}
+                    {isSelfReleasedLabel(data.label) ? null : "Distributed by "}
                     <button
                       type="button"
                       className="release-page__person-link"

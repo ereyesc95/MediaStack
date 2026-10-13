@@ -1006,7 +1006,7 @@ export default function SeriesModule({
           },
           {
             id: "catalog",
-            label: "CATALOG",
+            label: "SERIES",
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");

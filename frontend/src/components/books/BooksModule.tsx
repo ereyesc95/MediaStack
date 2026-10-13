@@ -992,7 +992,7 @@ export default function BooksModule({
           },
           {
             id: "catalog",
-            label: "CATALOG",
+            label: "BOOKS",
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import httpx
 
@@ -8,6 +9,16 @@ MB_BASE = "https://musicbrainz.org/ws/2"
 DEFAULT_UA = "MyStack/1.0 (https://github.com/local/mystack)"
 MB_PAGE_SIZE = 100
 MB_REQUEST_DELAY = 1.1
+
+_log = logging.getLogger(__name__)
+
+# After a corporate-MITM SSL failure, reuse verify=False for this process.
+_ssl_verify: bool = True
+
+
+def _is_ssl_error(exc: BaseException) -> bool:
+    msg = str(exc).casefold()
+    return "certificate" in msg or "ssl" in msg
 
 
 async def _get_json_with_retries(
@@ -18,10 +29,12 @@ async def _get_json_with_retries(
     attempts: int = 5,
 ) -> dict:
     """GET MusicBrainz JSON, respecting its rate limit and busy responses."""
+    global _ssl_verify
     last_error: Exception | None = None
     for attempt in range(attempts):
+        verify = _ssl_verify
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=60.0, verify=verify) as client:
                 response = await client.get(
                     f"{MB_BASE}/{endpoint.lstrip('/')}",
                     params={**params, "fmt": "json"},
@@ -37,6 +50,13 @@ async def _get_json_with_retries(
             await asyncio.sleep(MB_REQUEST_DELAY)
             return data
         except (httpx.HTTPError, ValueError) as exc:
+            if verify and _is_ssl_error(exc):
+                _ssl_verify = False
+                _log.warning(
+                    "MusicBrainz SSL verify failed; retrying without verify"
+                )
+                last_error = exc
+                continue
             if (
                 isinstance(exc, httpx.HTTPStatusError)
                 and 400 <= exc.response.status_code < 500
@@ -167,6 +187,7 @@ async def search_artists(
     *,
     limit: int = 3,
     user_agent: str = DEFAULT_UA,
+    sort_alpha: bool = False,
 ) -> list[dict]:
     folder_name = name.replace("■", ",").replace("█", "'").strip()
     if not folder_name:
@@ -188,11 +209,12 @@ async def search_artists(
                 "disambiguation": a.get("disambiguation"),
             }
         )
-    out.sort(
-        key=lambda item: (
-            str(item.get("sort_name") or item.get("name") or "").casefold()
+    if sort_alpha:
+        out.sort(
+            key=lambda item: (
+                str(item.get("sort_name") or item.get("name") or "").casefold()
+            )
         )
-    )
     return out
 
 
@@ -209,6 +231,76 @@ async def lookup_artist(
         "country": artist.get("country"),
         "disambiguation": artist.get("disambiguation"),
     }
+
+
+def _mb_date_for_input(raw: str | None) -> str:
+    """Normalize MusicBrainz life-span dates to ``YYYY-MM-DD`` when possible."""
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    if len(value) == 4 and value.isdigit():
+        return f"{value}-01-01"
+    if len(value) == 7 and value[4] == "-":
+        return f"{value}-01"
+    return value[:10]
+
+
+def artist_form_fields(data: dict) -> dict:
+    """Map a MusicBrainz artist payload into member-form fields."""
+    life = data.get("life-span") or {}
+    begin_area = data.get("begin-area") or {}
+    area = data.get("area") or {}
+    aliases_raw = data.get("aliases") or []
+    legal_name = next(
+        (
+            (a.get("name") or "").strip()
+            for a in aliases_raw
+            if (a.get("type") or "").casefold() == "legal name"
+            and (a.get("name") or "").strip()
+        ),
+        "",
+    )
+    alias_names = [
+        (a.get("name") or "").strip()
+        for a in aliases_raw
+        if (a.get("name") or "").strip()
+        and (a.get("type") or "").casefold() != "legal name"
+    ]
+    # Dedupe while preserving order
+    seen: set[str] = set()
+    aliases: list[str] = []
+    for name in alias_names:
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(name)
+    country = (data.get("country") or "").strip().upper()
+    if not country:
+        codes = area.get("iso-3166-1-codes") or begin_area.get("iso-3166-1-codes") or []
+        if codes:
+            country = str(codes[0]).strip().upper()
+    return {
+        "mbid": data.get("id") or "",
+        "name": (data.get("name") or "").strip(),
+        "sort_name": (data.get("sort-name") or "").strip(),
+        "legal_name": legal_name,
+        "aliases": aliases,
+        "birth_date": _mb_date_for_input(life.get("begin")),
+        "death_date": _mb_date_for_input(life.get("end")),
+        "birth_place": (begin_area.get("name") or "").strip(),
+        "country": country,
+        "type": data.get("type"),
+        "disambiguation": data.get("disambiguation"),
+    }
+
+
+async def lookup_artist_form(
+    mbid: str, *, user_agent: str = DEFAULT_UA
+) -> dict:
+    """Full artist lookup for Support personnel / member form autofill."""
+    artist = await fetch_artist(mbid, user_agent=user_agent)
+    return artist_form_fields(artist)
 
 
 async def fetch_artist(

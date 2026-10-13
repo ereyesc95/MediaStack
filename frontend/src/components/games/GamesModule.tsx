@@ -368,7 +368,7 @@ export default function GamesModule({
           },
           {
             id: "catalog",
-            label: "CATALOG",
+            label: "GAMES",
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");

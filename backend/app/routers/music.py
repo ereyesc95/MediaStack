@@ -34,7 +34,11 @@ from app.music_dashboard import (
     playlist_tracks,
 )
 from app.music_filters import filter_options, search_roster_artists, search_roster_bands
-from app.services.musicbrainz import lookup_artist, search_artists
+from app.services.musicbrainz import (
+    lookup_artist,
+    lookup_artist_form,
+    search_artists,
+)
 from app.schemas import BandListOut, BandOut, PlaylistOut, ReleaseListOut, TrackOut
 
 router = APIRouter(prefix="/api/music", tags=["music"])
@@ -380,7 +384,22 @@ async def mb_search(q: str = Query(..., min_length=1)):
                 return {"items": []}
             raise
         return {"items": [item] if item.get("mbid") else []}
-    return {"items": await search_artists(value, limit=10)}
+    # Member / support-personnel picker shows top 3
+    return {"items": await search_artists(value, limit=3)}
+
+
+@router.get("/musicbrainz/artist/{mbid}")
+async def mb_artist_detail(mbid: str):
+    """MusicBrainz artist fields for member / support-personnel form autofill."""
+    id_match = _MUSICBRAINZ_ARTIST_ID_RE.search((mbid or "").strip())
+    if not id_match:
+        raise HTTPException(400, "Invalid MusicBrainz artist id")
+    try:
+        return await lookup_artist_form(id_match.group(0))
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(404, "Artist not found on MusicBrainz") from exc
+        raise
 
 
 @router.get("/bands/import-estimate/{mbid}")

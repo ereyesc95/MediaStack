@@ -5,6 +5,7 @@ import {
   fetchArtistDetails,
   fetchFilterOptions,
   fetchInstrumentOptions,
+  fetchMusicBrainzArtist,
   patchArtist,
   patchParticipation,
   searchMusicBrainz,
@@ -12,6 +13,7 @@ import {
   uploadArtistPhoto,
 } from "../../../api";
 import type { MbArtistMatch } from "../../../types";
+import { IconSearch } from "../../MenuIcons";
 import ModalPortal from "../../ModalPortal";
 import PlaylistBoot from "../../PlaylistBoot";
 import MultiSelectDropdown from "../../MultiSelectDropdown";
@@ -241,9 +243,9 @@ export default function MemberFormModal({
       : "Edit member";
 
   const handleMbSearch = async () => {
-    const q = (stageName || name).trim();
+    const q = stageName.trim();
     if (!q) {
-      setError("Enter a name to search MusicBrainz");
+      setError("Enter a name or MusicBrainz ID to search");
       return;
     }
     setMbBusy(true);
@@ -251,7 +253,11 @@ export default function MemberFormModal({
     setMbMatches([]);
     try {
       const data = await searchMusicBrainz(q);
-      setMbMatches(data.items ?? []);
+      const items = (data.items ?? []).slice(0, 3);
+      setMbMatches(items);
+      if (!items.length) {
+        setError("No MusicBrainz matches found");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -259,11 +265,43 @@ export default function MemberFormModal({
     }
   };
 
-  const pickMbMatch = (m: MbArtistMatch) => {
-    setStageName(m.name);
-    if (!name.trim()) setName(m.name);
-    setMbid(m.mbid);
+  const pickMbMatch = async (m: MbArtistMatch) => {
+    setMbBusy(true);
+    setError(null);
     setMbMatches([]);
+    // Always put the resolved display name in the search field (replaces a pasted MBID)
+    setStageName(m.name);
+    setMbid(m.mbid);
+    try {
+      const detail = await fetchMusicBrainzArtist(m.mbid);
+      setStageName(detail.name || m.name);
+      setMbid(detail.mbid || m.mbid);
+      const legal = (detail.legal_name || "").trim();
+      if (legal) {
+        setName(legal);
+      } else if (!name.trim()) {
+        setName(detail.name || m.name);
+      }
+      if (detail.aliases?.length) {
+        setAliases(detail.aliases.join("; "));
+      }
+      if (detail.birth_date) setBirthDate(detail.birth_date);
+      if (detail.death_date) setDeathDate(detail.death_date);
+      if (detail.birth_place) setBirthPlace(detail.birth_place);
+      const iso = (detail.country || "").trim().toUpperCase();
+      if (iso) {
+        const match = countryOptions.find(
+          (c) => (c.iso || "").toUpperCase() === iso
+        );
+        if (match) setBirthCountryId(match.value);
+      }
+    } catch (e) {
+      // Search hit is enough to link the MBID even if detail fetch fails
+      if (!name.trim()) setName(m.name);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMbBusy(false);
+    }
   };
 
   const handlePhotoPick = (file: File | undefined) => {
@@ -471,44 +509,54 @@ export default function MemberFormModal({
               <div className="member-form__identity-fields">
                 <label>
                   Stage / display name
-                  <input
-                    value={stageName}
-                    onChange={(e) => setStageName(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Birth / legal name
-                  <input value={name} onChange={(e) => setName(e.target.value)} />
-                </label>
-                <div className="member-form__mb-row">
-                  <label className="member-form__mbid">
-                    MusicBrainz ID
+                  <div className="member-form__stage-row">
+                    <button
+                      type="button"
+                      className="member-form__mb-search"
+                      disabled={mbBusy}
+                      onClick={() => void handleMbSearch()}
+                      title="Search MusicBrainz by name or MBID"
+                      aria-label="Search MusicBrainz"
+                    >
+                      {mbBusy ? (
+                        <span className="member-form__mb-search-busy" aria-hidden>
+                          …
+                        </span>
+                      ) : (
+                        <IconSearch className="member-form__mb-search-icon" />
+                      )}
+                    </button>
                     <input
-                      value={mbid}
-                      onChange={(e) => setMbid(e.target.value)}
-                      placeholder="Optional UUID"
+                      value={stageName}
+                      onChange={(e) => {
+                        setStageName(e.target.value);
+                        if (mbMatches.length) setMbMatches([]);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleMbSearch();
+                        }
+                      }}
+                      placeholder="Name or MusicBrainz ID"
                     />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn--small"
-                    disabled={mbBusy}
-                    onClick={() => void handleMbSearch()}
-                  >
-                    {mbBusy ? "…" : "Lookup"}
-                  </button>
-                </div>
+                  </div>
+                </label>
                 {mbMatches.length > 0 && (
                   <ul className="mb-matches member-form__mb-matches">
                     {mbMatches.map((m) => (
                       <li key={m.mbid}>
                         <button
                           type="button"
-                          onClick={() => pickMbMatch(m)}
+                          disabled={mbBusy}
+                          onClick={() => void pickMbMatch(m)}
                         >
                           <strong>{m.name}</strong>
                           {m.disambiguation && (
                             <span className="muted"> — {m.disambiguation}</span>
+                          )}
+                          {m.country && (
+                            <span className="muted"> · {m.country}</span>
                           )}
                           {m.type && <span className="badge">{m.type}</span>}
                         </button>
@@ -516,6 +564,10 @@ export default function MemberFormModal({
                     ))}
                   </ul>
                 )}
+                <label>
+                  Birth / legal name
+                  <input value={name} onChange={(e) => setName(e.target.value)} />
+                </label>
                 <label>
                   Aliases (semicolon-separated)
                   <input

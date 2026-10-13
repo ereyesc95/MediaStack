@@ -563,6 +563,10 @@ function TourShowMediaSection({
             !ytThumb &&
             (item.kind === "video" ||
               (item.kind === "file" && isVideoMediaUrl(item.url)));
+          const labelKey = (item.label || "").trim().toLowerCase();
+          const isQr =
+            item.kind === "image" &&
+            (labelKey === "qr" || /^qr\s*[·\-–]/.test(labelKey));
           return (
             <button
               key={item.id}
@@ -571,6 +575,7 @@ function TourShowMediaSection({
                 "tour-show-media-card",
                 canFlip ? "tour-show-media-card--flippable" : "",
                 canFlip && isFlipped ? "tour-show-media-card--flipped" : "",
+                isQr ? "tour-show-media-card--qr" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -642,6 +647,9 @@ function TourShowMediaSection({
                   <span>{item.label}</span>
                 </span>
               )}
+              {item.label ? (
+                <span className="tour-show-media-card__caption">{item.label}</span>
+              ) : null}
               {canFlip ? (
                 <span className="tour-show-media-card__flip" aria-hidden>
                   <FlipIcon className="tour-show-media-card__flip-icon" />
@@ -1628,7 +1636,17 @@ export default function TourShowPage({
     setBusy("Syncing show…");
     try {
       await syncTourShow(bandId, tour.slug, detail.show.slug);
-      await load();
+      // Re-read disk (Gallery/Souvenirs/[Artwork]) so newly added files appear immediately
+      const showData = await fetchBandTourShowDetail(
+        bandId,
+        tour.slug,
+        detail.show.slug,
+        true
+      );
+      setDetail(showData);
+      setSetlist(showData.setlist);
+      const tourData = await fetchBandTourDetail(bandId, tourSlug, true);
+      setTour(tourData);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
     } finally {

@@ -1275,7 +1275,7 @@ export default function MusicModule({
             },
             {
               id: "artists",
-              label: "CATALOG",
+              label: "ARTISTS",
               active: tab === "artists",
               onClick: () => onTab("artists"),
             },

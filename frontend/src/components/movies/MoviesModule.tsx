@@ -1051,7 +1051,7 @@ export default function MoviesModule({
           },
           {
             id: "catalog",
-            label: "CATALOG",
+            label: "MOVIES",
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");
