@@ -18571,6 +18571,23 @@ button.lyrics-status-badge--icon-only {
   color: var(--text);
 }
 
+/* Cover-artist links: bold, no underline, no hover restyle */
+.release-page__person-link--plain,
+.release-page__person-link--plain:hover,
+.release-page__person-link--plain:focus,
+.release-tracklist__title-suffix .release-page__person-link--plain,
+.release-tracklist__title-suffix .release-page__person-link--plain:hover {
+  text-decoration: none;
+  color: inherit;
+  font-weight: 700;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
 .series-subseries-page__country-link {
   display: inline-flex;
   align-items: center;
@@ -24863,17 +24880,6 @@ button.lyrics-status-badge--icon-only {
   border-radius: 0;
   pointer-events: none;
 }
-.collection-spotify-preview__face-label {
-  position: absolute;
-  right: 0.35rem;
-  bottom: 0.2rem;
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-  pointer-events: none;
-}
 .collection-cover-flip {
   position: relative;
   width: 10rem;
@@ -24887,20 +24893,18 @@ button.lyrics-status-badge--icon-only {
 .collection-cover-flip .collection-hover__img {
   width: 100%;
   height: 100%;
+  /* Portrait → fit width; landscape → fit height (same square as cover) */
   object-fit: contain;
+  object-position: center center;
   display: block;
   pointer-events: none;
 }
-.collection-cover-flip__label {
-  position: absolute;
-  right: 0.35rem;
-  bottom: 0.2rem;
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-  pointer-events: none;
+.collection-cover-flip__img--photo {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .collection-browse__page-size {
   position: relative;
@@ -25820,23 +25824,37 @@ button.lyrics-status-badge--icon-only {
 .collection-photocard-preview__tabs button.active { border-color: var(--accent); color: var(--accent); }
 .collection-photocard-preview__card {
   position: relative;
-  width: 7.5rem;
-  height: 10rem;
   border: 0;
   padding: 0;
+  margin: 0;
   background: transparent;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+  /* Size to the image — no forced frame that crops portrait bottoms */
+  display: block;
+  width: fit-content;
+  height: auto;
+  max-width: 100%;
+  line-height: 0;
+  overflow: visible;
+}
+.collection-photocard-preview__card--portrait img {
+  width: auto;
+  height: auto;
+  max-height: 16rem;
+  max-width: 12rem;
+}
+.collection-photocard-preview__card--landscape img {
+  width: auto;
+  height: auto;
+  max-width: 16rem;
+  max-height: 11rem;
 }
 .collection-photocard-preview__card img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
   display: block;
+  object-fit: contain;
+  object-position: center center;
   pointer-events: none;
+  border-radius: 0;
 }
-.collection-photocard-preview__hint { font-size: 0.68rem; }
 .collection-edition-assets {
   display: flex;
   flex-direction: column;
@@ -25863,31 +25881,21 @@ button.lyrics-status-badge--icon-only {
   color: var(--accent);
 }
 .collection-cover-flip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
+  display: grid;
+  place-items: center;
   position: relative;
   width: 10rem;
   height: 10rem;
+  overflow: hidden;
+  background: transparent;
 }
 .collection-cover-flip img,
 .collection-cover-flip .collection-hover__img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center center;
   border-radius: 0;
-  pointer-events: none;
-}
-.collection-cover-flip__label {
-  position: absolute;
-  right: 0.35rem;
-  bottom: 0.2rem;
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
   pointer-events: none;
 }
 .collection-table__type,
@@ -26437,14 +26445,21 @@ button.lyrics-status-badge--icon-only {
   position: relative;
   overflow: visible;
 }
-.tour-show-page__setlist-tab--idle.release-page__tracklist-layout {
+.tour-show-page__setlist-tab--idle.release-page__tracklist-layout,
+.tour-show-page__setlist-tab--playing.release-page__tracklist-layout {
   grid-template-columns: auto minmax(0, 1fr);
-  /* start: hero is fixed-size; tracklist scrolls independently */
+  /* start: hero/playing panel is fixed-size; tracklist scrolls independently */
   align-items: start;
   gap: 0.75rem;
 }
-.tour-show-page__setlist-hero-col {
-  /* Same fixed frame as overview .tour-show-page__hero-col (not shorter tracklist stretch) */
+.tour-show-page__player-slot {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.tour-show-page__setlist-hero-col,
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside {
+  /* Same fixed frame as overview .tour-show-page__hero-col */
   --tour-hero-poster-ratio: 4501 / 6365;
   --tour-hero-max-h: calc(100dvh - 7.5rem);
   position: relative;
@@ -26468,9 +26483,53 @@ button.lyrics-status-badge--icon-only {
   box-sizing: border-box;
 }
 @supports not (height: 100dvh) {
-  .tour-show-page__setlist-hero-col {
+  .tour-show-page__setlist-hero-col,
+  .tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside {
     --tour-hero-max-h: calc(100vh - 7.5rem);
   }
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside {
+  max-width: calc(var(--tour-hero-max-h) * 4501 / 6365);
+  width: auto;
+  height: var(--tour-hero-max-h);
+  /* Keep poster frame; art/canvas live inside the panel */
+  overflow: hidden;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__art {
+  display: flex;
+  flex-shrink: 0;
+  overflow: visible;
+  min-height: 14.5rem;
+  padding-top: 0.35rem;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__art-stage {
+  /* Rem-based — % of indefinite parent collapses cover+disc to 0 */
+  --release-cover-size: 13.25rem;
+  overflow: visible;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__cover {
+  width: var(--release-cover-size);
+  max-width: var(--release-cover-size);
+  max-height: var(--release-cover-size);
+  display: block;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__disc {
+  width: calc(var(--release-cover-size) * 0.96);
+  height: calc(var(--release-cover-size) * 0.96);
+  margin-left: calc(var(--release-cover-size) * -0.38);
+  display: block;
+}
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__panel-canvas-layer {
+  display: block;
+  opacity: 1;
 }
 .tour-show-page__setlist-idle-hero {
   width: 100%;
@@ -27776,6 +27835,15 @@ button.lyrics-status-badge--icon-only {
   padding-top: 0;
   overflow: hidden;
 }
+.tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside.release-page__aside,
+.tour-show-page__setlist-tab--playing .release-page__aside.tour-show-page__setlist-aside {
+  /* Match hero frame — override idle aside width */
+  max-width: calc(var(--tour-hero-max-h, calc(100dvh - 7.5rem)) * 4501 / 6365);
+  width: auto;
+  height: var(--tour-hero-max-h, calc(100dvh - 7.5rem));
+  aspect-ratio: 4501 / 6365;
+  overflow: hidden;
+}
 .tour-show-page__setlist-panel {
   height: 100%;
   min-height: 0;
@@ -27891,6 +27959,12 @@ button.lyrics-status-badge--icon-only {
   max-width: min(46vw, 22rem);
   width: 100%;
   height: 100%;
+}
+.tour-show-page__setlist-tab--playing > .release-page__aside.tour-show-page__setlist-aside {
+  max-width: calc(var(--tour-hero-max-h, calc(100dvh - 7.5rem)) * 4501 / 6365);
+  width: auto;
+  height: var(--tour-hero-max-h, calc(100dvh - 7.5rem));
+  aspect-ratio: 4501 / 6365;
 }
 .tour-show-page__setlist-tab > .release-page__aside,
 .tour-show-page__setlist-tab > .release-page__main,

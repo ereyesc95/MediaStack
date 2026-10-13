@@ -22,7 +22,7 @@ ARTIST FOLDERS
   Covers/     Optional covers for artist/user media.
 
 Release categories at the artist root:
-Albums, Extended Plays, Compilations, Live Albums, Soundtracks, Singles
+Albums, Extended Plays, Compilations, Demos, Live Albums, Soundtracks, Singles
 
 TOURS (peer of Video / Library — folder-gated Tours tab)
 --------------------------------------------------------

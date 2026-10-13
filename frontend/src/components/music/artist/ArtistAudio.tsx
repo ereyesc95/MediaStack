@@ -35,6 +35,7 @@ export const AUDIO_CATEGORY_META: {
   { key: "albums", desktop: "STUDIO ALBUMS", mobile: "STUDIO" },
   { key: "extended_plays", desktop: "EXTENDED PLAYS", mobile: "EPs" },
   { key: "compilations", desktop: "COMPILATIONS", mobile: "COMPs" },
+  { key: "demos", desktop: "DEMOS", mobile: "DEMOS" },
   { key: "live_albums", desktop: "LIVE ALBUMS", mobile: "LIVE" },
   { key: "soundtracks", desktop: "SOUNDTRACKS", mobile: "OST" },
   { key: "singles", desktop: "SINGLES", mobile: "SINGLES" },

@@ -12,6 +12,7 @@ import {
   fetchTrackVersions,
 } from "../../api";
 import { formatTrackDate } from "../../formatDate";
+import { isVideoMediaUrl as isVideoUrl } from "../../isVideoMediaUrl";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -111,11 +112,6 @@ type Props = {
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
 };
-
-function isVideoUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
-}
 
 function displayTitleParts(t: SeriesOpEdTrack): {
   main: string;

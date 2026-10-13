@@ -70,11 +70,31 @@ LOGO_STEM = "logo"
 ICON_STEM = "icon"
 TAPE_RE = re.compile(r"^\d+\.\s*(Tape|Cassette)\s+", re.I)
 
+# Canonical: Photocard - {Orientation} - Front/Back (also accept legacy
+# "Photocard - Portrait Front" without the middle dash).
 PHOTOCARD_STEMS = {
-    "portrait_front": "photocard - portrait front",
-    "portrait_back": "photocard - portrait back",
-    "landscape_front": "photocard - landscape front",
-    "landscape_back": "photocard - landscape back",
+    "portrait_front": "photocard - portrait - front",
+    "portrait_back": "photocard - portrait - back",
+    "landscape_front": "photocard - landscape - front",
+    "landscape_back": "photocard - landscape - back",
+}
+PHOTOCARD_STEM_ALIASES: dict[str, tuple[str, ...]] = {
+    "portrait_front": (
+        "photocard - portrait - front",
+        "photocard - portrait front",
+    ),
+    "portrait_back": (
+        "photocard - portrait - back",
+        "photocard - portrait back",
+    ),
+    "landscape_front": (
+        "photocard - landscape - front",
+        "photocard - landscape front",
+    ),
+    "landscape_back": (
+        "photocard - landscape - back",
+        "photocard - landscape back",
+    ),
 }
 
 CATEGORY_TYPE_LABELS: dict[str, str] = {
@@ -344,10 +364,12 @@ def _photocards(artwork: Path | None, media_root: Path) -> dict[str, str | None]
     out: dict[str, str | None] = {k: None for k in PHOTOCARD_STEMS}
     if not artwork:
         return out
-    for key, stem in PHOTOCARD_STEMS.items():
-        f = _artwork_file(artwork, stem)
-        if f:
-            out[key] = _media_url(f, media_root)
+    for key, aliases in PHOTOCARD_STEM_ALIASES.items():
+        for stem in aliases:
+            f = _artwork_file(artwork, stem)
+            if f:
+                out[key] = _media_url(f, media_root)
+                break
     return out
 
 

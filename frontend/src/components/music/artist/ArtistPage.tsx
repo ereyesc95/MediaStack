@@ -131,6 +131,7 @@ function albumFolderDisplayTitle(folder: string | null | undefined): string | nu
     "albums",
     "extended plays",
     "compilations",
+    "demos",
     "singles",
     "soundtracks",
     "live albums",

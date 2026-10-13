@@ -34,7 +34,7 @@ Media/
 
 Preferred layout: release categories directly under the artist folder:
 
-`Albums`, `Extended Plays`, `Compilations`, `Soundtracks`, `Live Albums`, `Singles`
+`Albums`, `Extended Plays`, `Compilations`, `Demos`, `Live Albums`, `Soundtracks`, `Singles`
 
 Legacy `Audio/{Category}/` trees are still scanned as a fallback.
 
@@ -270,6 +270,7 @@ Series/D/Dragon Ball/1986.02.26. Dragon Ball/
 │   ├── Albums/
 │   │   └── 1995.11.21. Dragon Ball Z Music Collection [By Shunsuke Kikuchi].lnk
 │   ├── Compilations/
+│   ├── Demos/
 │   ├── Singles/
 │   └── Soundtracks/
 │       └── 1986.02.26. Dragon Ball Original Soundtrack.lnk
@@ -278,7 +279,7 @@ Series/D/Dragon Ball/1986.02.26. Dragon Ball/
 └── …
 ```
 
-- Category folders match Music: `Albums`, `Extended Plays`, `Compilations`, `Soundtracks`, `Live Albums`, `Singles`.
+- Category folders match Music: `Albums`, `Extended Plays`, `Compilations`, `Demos`, `Live Albums`, `Soundtracks`, `Singles`.
 - Entries are usually **`.lnk`** (or `.path`) shortcuts to the real release under `Music/{Letter}/{Artist}/Audio/…`.
 - Shortcut names use the dated release form; optional **`[By Artist]`** names the Music artist that owns the release.
 - If there is **no** `[By …]` tag, the app assumes **Various Artists**.

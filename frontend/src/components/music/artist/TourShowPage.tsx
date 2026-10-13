@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   fetchBandTourDetail,
   fetchBandTourShowDetail,
@@ -14,10 +15,12 @@ import {
   fetchTrackSourceArt,
   playTrack,
   refreshTourShowSetlist,
+  resolveArtistName,
   syncTourShow,
   syncTourShowArtists,
 } from "../../../api";
 import { formatShowTabDate, formatTrackDate } from "../../../formatDate";
+import { isVideoMediaUrl } from "../../../isVideoMediaUrl";
 import { useBeatPulse } from "../../../useBeatPulse";
 import type {
   ReleaseEdition,
@@ -49,6 +52,7 @@ import ReleasePhotocard from "../release/ReleasePhotocard";
 import {
   DEFAULT_DISC_URL,
   parseTrackPanelMeta,
+  writerSearchUrl,
 } from "../release/releaseTrackPanelMeta";
 import {
   TrackActionLyricsIcon,
@@ -56,7 +60,7 @@ import {
   TrackActionVersionsIcon,
 } from "../release/releaseTrackActionIcons";
 import MediaBeatFrame from "../MediaBeatFrame";
-import { IconVideo } from "../../MenuIcons";
+import { IconMediaMusic, IconVideo } from "../../MenuIcons";
 
 type Props = {
   bandId: number;
@@ -558,7 +562,7 @@ function TourShowMediaSection({
           const isLocalVideo =
             !ytThumb &&
             (item.kind === "video" ||
-              (item.kind === "file" && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(item.url)));
+              (item.kind === "file" && isVideoMediaUrl(item.url)));
           return (
             <button
               key={item.id}
@@ -871,8 +875,10 @@ function SetlistTabPanel({
   visible = true,
   showKey,
   onOpenRelease,
+  onOpenArtist,
   onPlaybackBackdrop,
   onPlayingChange,
+  playerSlotEl,
 }: {
   bandId: number;
   payload: TourShowSetlistPayload | null;
@@ -886,8 +892,11 @@ function SetlistTabPanel({
   /** When this changes (show switch), stop playback and reset panel art. */
   showKey?: string | null;
   onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
+  onOpenArtist?: (bandId: number) => void;
   onPlaybackBackdrop?: (url: string | null) => void;
   onPlayingChange?: (playing: boolean) => void;
+  /** Header mount for paused-state floating player (left of hamburger). */
+  playerSlotEl?: HTMLElement | null;
 }) {
   const editions = useMemo(() => setlistPayloadToEditions(payload), [payload]);
   const playable = useMemo(() => flattenPlayableSetlistTracks(editions), [editions]);
@@ -901,12 +910,15 @@ function SetlistTabPanel({
     logo_url?: string | null;
     icon_url?: string | null;
     canvas_url?: string | null;
+    cover_animation_url?: string | null;
     background_layers?: string[];
     album_title?: string | null;
     release_id?: string | null;
     release_date?: string | null;
   } | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
+  const [playerBubbleOpen, setPlayerBubbleOpen] = useState(false);
+  const playerBubbleRef = useRef<HTMLDivElement>(null);
   const links =
     recordings && recordings.length
       ? recordings
@@ -915,10 +927,54 @@ function SetlistTabPanel({
         : [];
   const fullRecordingUrl = links[0]?.url ?? null;
 
-  const hasActiveTrack = Boolean(playingPath);
+  const hasActiveTrack = Boolean(playingPath && miniAudio.src);
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const showPlayingPanel = isPlaying;
+  /** When paused, hero returns — keep player reachable via top-bar bubble. */
+  const showHeaderPlayer = Boolean(visible && hasActiveTrack && !isPlaying);
   useBeatPulse(miniAudio.audioRef, showPlayingPanel, isPlaying);
+
+  const openCoverArtist = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      try {
+        const res = await resolveArtistName(trimmed);
+        if (res.band_id && onOpenArtist) {
+          onOpenArtist(res.band_id);
+          return;
+        }
+        if (res.urls?.wikipedia) {
+          window.open(res.urls.wikipedia, "_blank", "noopener,noreferrer");
+          return;
+        }
+        if (res.urls?.musicbrainz) {
+          window.open(res.urls.musicbrainz, "_blank", "noopener,noreferrer");
+          return;
+        }
+        window.open(writerSearchUrl(trimmed), "_blank", "noopener,noreferrer");
+      } catch {
+        window.open(writerSearchUrl(trimmed), "_blank", "noopener,noreferrer");
+      }
+    },
+    [onOpenArtist]
+  );
+
+  useEffect(() => {
+    if (!showHeaderPlayer) setPlayerBubbleOpen(false);
+  }, [showHeaderPlayer]);
+
+  useEffect(() => {
+    if (!playerBubbleOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (playerBubbleRef.current?.contains(target)) return;
+      setPlayerBubbleOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [playerBubbleOpen]);
 
   useEffect(() => {
     onPlayingChange?.(isPlaying);
@@ -973,6 +1029,7 @@ function SetlistTabPanel({
           logo_url: null as string | null,
           icon_url: null as string | null,
           canvas_url: null as string | null,
+          cover_animation_url: null as string | null,
           background_layers: [] as string[],
           album_title: track?.album_title || null,
           release_id: releaseId || null,
@@ -989,6 +1046,7 @@ function SetlistTabPanel({
               logo_url: art.playback?.logo_url ?? null,
               icon_url: (art.playback as { icon_url?: string | null })?.icon_url ?? null,
               canvas_url: art.playback?.canvas_url ?? null,
+              cover_animation_url: art.playback?.cover_animation_url ?? null,
               background_layers: art.playback?.background_layers ?? [],
             };
           } catch {
@@ -1072,9 +1130,14 @@ function SetlistTabPanel({
     );
   }
 
-  const panelCover = hasActiveTrack
+  const panelCoverStill = hasActiveTrack
     ? panelArt?.cover_url || nowPlaying?.cover_url || coverUrl || null
     : null;
+  const coverAnimUrl =
+    isPlaying && hasActiveTrack ? panelArt?.cover_animation_url || null : null;
+  const coverAnimIsVideo = isVideoMediaUrl(coverAnimUrl);
+  const panelCover = coverAnimIsVideo ? coverAnimUrl : panelCoverStill;
+  const panelCoverIsVideo = coverAnimIsVideo;
   const panelDisc = panelArt?.disc_url || DEFAULT_DISC_URL;
   const trackMeta =
     hasActiveTrack && nowPlaying?.title
@@ -1085,9 +1148,12 @@ function SetlistTabPanel({
     ? panelArt?.album_title || nowPlaying?.album_title || null
     : null;
   const releaseId = panelArt?.release_id;
-  const canvasUrl = hasActiveTrack ? panelArt?.canvas_url || null : null;
+  const canvasUrl =
+    isPlaying && hasActiveTrack && isVideoMediaUrl(panelArt?.canvas_url)
+      ? panelArt?.canvas_url || null
+      : null;
   const bgLayer = hasActiveTrack
-    ? panelArt?.background_layers?.[0] || panelCover || null
+    ? panelArt?.background_layers?.[0] || panelCoverStill || null
     : null;
   const releaseDateRaw =
     panelArt?.release_date ||
@@ -1156,12 +1222,24 @@ function SetlistTabPanel({
                 <div className="release-page__art-stage">
                   {panelCover ? (
                     <span className="release-page__cover-wrap">
-                      <img
-                        src={panelCover}
-                        alt=""
-                        className="release-page__cover"
-                        draggable={false}
-                      />
+                      {panelCoverIsVideo ? (
+                        <video
+                          className="release-page__cover release-page__cover--video"
+                          src={panelCover}
+                          muted
+                          loop
+                          playsInline
+                          autoPlay
+                          draggable={false}
+                        />
+                      ) : (
+                        <img
+                          src={panelCover}
+                          alt=""
+                          className="release-page__cover"
+                          draggable={false}
+                        />
+                      )}
                     </span>
                   ) : null}
                   <img
@@ -1216,7 +1294,14 @@ function SetlistTabPanel({
                           <h2 className="release-page__track-panel-title">{panelTitle}</h2>
                           {coverLine && coverLine.kind === "cover" ? (
                             <p className="release-page__track-panel-cover">
-                              {coverLine.artist} cover
+                              <button
+                                type="button"
+                                className="release-page__person-link release-page__person-link--plain"
+                                onClick={() => void openCoverArtist(coverLine.artist)}
+                              >
+                                {coverLine.artist}
+                              </button>{" "}
+                              cover
                             </p>
                           ) : null}
                           {trackMeta?.versionLabel ? (
@@ -1325,6 +1410,7 @@ function SetlistTabPanel({
             setlistId="tour-show"
             showReleaseTitles
             onOpenRelease={onOpenRelease}
+            onOpenCoverArtist={openCoverArtist}
             onPlay={(path, title, key) => {
               void handlePlay(path, title, key);
             }}
@@ -1336,6 +1422,54 @@ function SetlistTabPanel({
         )}
       </div>
       <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+      {showHeaderPlayer && playerSlotEl
+        ? createPortal(
+            <div
+              ref={playerBubbleRef}
+              className={`series-audio-player${playerBubbleOpen ? " is-open" : ""}`}
+            >
+              <button
+                type="button"
+                className={`series-audio-player__toggle${
+                  !playerBubbleOpen ? " series-audio-player__toggle--live" : ""
+                }`}
+                aria-pressed={playerBubbleOpen}
+                aria-label={playerBubbleOpen ? "Hide player" : "Show player"}
+                title={playerBubbleOpen ? "Hide player" : "Show player"}
+                onClick={() => setPlayerBubbleOpen((v) => !v)}
+              >
+                <IconMediaMusic className="series-audio-player__icon" />
+              </button>
+              {playerBubbleOpen ? (
+                <div className="series-audio-player__dock">
+                  <div className="series-audio-player__now">
+                    {panelCoverStill ? (
+                      <img src={panelCoverStill} alt="" />
+                    ) : null}
+                    <div>
+                      <strong>{panelTitle || "Now playing"}</strong>
+                      {panelAlbum ? (
+                        <span className="muted">{panelAlbum}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <MiniAudioPlayerControls
+                    playing={miniAudio.playing}
+                    progress={miniAudio.progress}
+                    duration={miniAudio.duration}
+                    toggle={miniAudio.toggle}
+                    seek={miniAudio.seek}
+                    onPrev={() => playAdjacentTrack("prev")}
+                    onNext={() => playAdjacentTrack("next")}
+                    repeatOne={repeatOne}
+                    onRepeatToggle={() => setRepeatOne((r) => !r)}
+                  />
+                </div>
+              ) : null}
+            </div>,
+            playerSlotEl
+          )
+        : null}
     </div>
   );
 }
@@ -1376,6 +1510,11 @@ export default function TourShowPage({
     {}
   );
   const [setlistIsPlaying, setSetlistIsPlaying] = useState(false);
+  const [setlistPlayerSlotEl, setSetlistPlayerSlotEl] =
+    useState<HTMLElement | null>(null);
+  const setlistPlayerSlotRef = useCallback((el: HTMLSpanElement | null) => {
+    setSetlistPlayerSlotEl(el);
+  }, []);
   const [playbackBackdrop, setPlaybackBackdrop] = useState<string | null>(null);
   const [setlistGalleryIndex, setSetlistGalleryIndex] = useState<number | null>(null);
   const setlistSlugRef = useRef<string | null>(null);
@@ -1716,6 +1855,10 @@ export default function TourShowPage({
           </div>
           <div className="artist-page__top-right">
             {busy ? <span className="muted">{busy}</span> : null}
+            <span
+              ref={setlistPlayerSlotRef}
+              className="tour-show-page__player-slot"
+            />
             <AppMenu
               onImport={onImport}
               onSync={onSync ?? (() => {})}
@@ -2207,8 +2350,10 @@ export default function TourShowPage({
             }
             artistName={artistName}
             onOpenRelease={onOpenRelease}
+            onOpenArtist={onOpenArtist}
             onPlaybackBackdrop={setPlaybackBackdrop}
             onPlayingChange={setSetlistIsPlaying}
+            playerSlotEl={setlistPlayerSlotEl}
           />
         </div>
       </div>

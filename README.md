@@ -168,8 +168,9 @@ Media/
             ├── Albums/
             ├── Extended Plays/
             ├── Compilations/
-            ├── Soundtracks/
+            ├── Demos/
             ├── Live Albums/
+            ├── Soundtracks/
             ├── Singles/
             └── [Artwork]/
                 ├── Exclusive/
@@ -200,8 +201,9 @@ Folder names are matched case-insensitively. Special characters in DB names (`�
 | `Albums` | Album |
 | `Extended Plays` | EP |
 | `Compilations` | Compilation |
-| `Soundtracks` | Soundtrack |
+| `Demos` | Demo |
 | `Live Albums` | Live album |
+| `Soundtracks` | Soundtrack |
 | `Singles` | Single |
 
 ---
@@ -284,7 +286,7 @@ Compilations **without** `[Box Set]` stay **Compilation**, even if they contain 
 
 Inside a box set, each `.lnk` shortcut becomes its own **tracklist section**. The app resolves each link by **filename** (order prefix kept, bracket suffixes become `: Edition Name`):
 
-1. Look up the release title across **Studio Albums → EPs → Singles → Compilations → Live Albums**
+1. Look up the release title across **Studio Albums → EPs → Singles → Compilations → Live Albums** (Demos are never preferred over studio releases)
 2. If the link has no edition bracket, use **Standard Edition** (or the first dated edition)
 3. If the link has `[Remastered Edition]` etc., match that edition folder on the found release
 4. If nothing matches, the section header still appears (dimmed) with no playable tracks

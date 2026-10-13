@@ -54,6 +54,7 @@ import {
 } from "../../../usePhoneLayout";
 import { useBeatPulse } from "../../../useBeatPulse";
 import { formatTrackDate } from "../../../formatDate";
+import { isVideoMediaUrl as isVideoMedia } from "../../../isVideoMediaUrl";
 import type {
   ArtistPlaylistDetail,
   ArtistPlaylistTrack,
@@ -258,10 +259,6 @@ function parseApiError(message: string): string {
     /* ignore */
   }
   return message;
-}
-
-function isVideoMedia(url: string | null | undefined): boolean {
-  return Boolean(url && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url));
 }
 
 function normalizePlaybackArt(art: ReleasePlaybackArt): ReleasePlaybackArt {

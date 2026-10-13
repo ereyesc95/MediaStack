@@ -7,7 +7,8 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 32;
-const NAMESPACE = "release-overview-v14";
+/* v15: photocard stem aliases (Photocard - Portrait - Front) + Photo fallback */
+const NAMESPACE = "release-overview-v15";
 
 type CacheKey = string;
 
@@ -91,7 +92,13 @@ export function prefetchReleaseOverview(
     orientation,
     neighborBandId
   );
-  if (cached) return Promise.resolve(cached);
+  // Keep cache only when photocards resolved (avoids sticky pre-fix empties)
+  if (
+    cached &&
+    (cached.photocards?.portrait_front || cached.photocards?.landscape_front)
+  ) {
+    return Promise.resolve(cached);
+  }
 
   const existing = inflight.get(key);
   if (existing) return existing;

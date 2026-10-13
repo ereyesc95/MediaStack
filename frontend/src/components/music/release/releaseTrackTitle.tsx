@@ -79,16 +79,70 @@ function trackTitlePlain(title: string): string {
   return suffix ? `${main} ${suffix}` : main;
 }
 
+function CoverArtistSuffix({
+  suffix,
+  onOpenCoverArtist,
+}: {
+  suffix: string;
+  onOpenCoverArtist?: (name: string) => void;
+}) {
+  // suffix is like "(HIM cover)" or "(Live; HIM cover)"
+  const inner = suffix.replace(/^\(/, "").replace(/\)$/, "");
+  const parts = inner.split(",").map((p) => p.trim()).filter(Boolean);
+  if (!onOpenCoverArtist || !parts.length) {
+    return <span className="release-tracklist__title-suffix">{suffix}</span>;
+  }
+  return (
+    <span className="release-tracklist__title-suffix">
+      (
+      {parts.map((part, i) => {
+        const coverMatch = part.match(/^(.+?)\s+cover$/i);
+        const sep = i > 0 ? ", " : "";
+        if (coverMatch) {
+          const artist = coverMatch[1];
+          return (
+            <span key={`${part}-${i}`}>
+              {sep}
+              <button
+                type="button"
+                className="release-page__person-link release-page__person-link--plain"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenCoverArtist(artist);
+                }}
+              >
+                {artist}
+              </button>{" "}
+              cover
+            </span>
+          );
+        }
+        return (
+          <span key={`${part}-${i}`}>
+            {sep}
+            {part}
+          </span>
+        );
+      })}
+      )
+    </span>
+  );
+}
+
 export function ReleaseTrackTitle({
   title,
   billboard = false,
   hidePerformer,
   hideCoverArtist,
+  onOpenCoverArtist,
 }: {
   title: string;
   billboard?: boolean;
   hidePerformer?: string;
   hideCoverArtist?: string;
+  /** When set, ``{Artist} cover`` in the suffix becomes an in-app artist link. */
+  onOpenCoverArtist?: (name: string) => void;
 }) {
   const { main, suffix } = splitTrackTitleDisplay(title, { hidePerformer, hideCoverArtist });
   if (billboard) {
@@ -101,7 +155,7 @@ export function ReleaseTrackTitle({
       >
         {main}
         {suffix ? (
-          <span className="release-tracklist__title-suffix">{suffix}</span>
+          <CoverArtistSuffix suffix={suffix} onOpenCoverArtist={onOpenCoverArtist} />
         ) : null}
       </BillboardText>
     );
@@ -111,8 +165,8 @@ export function ReleaseTrackTitle({
   }
   return (
     <span className="release-tracklist__title">
-      {main}
-      <span className="release-tracklist__title-suffix">{suffix}</span>
+      {main}{" "}
+      <CoverArtistSuffix suffix={suffix} onOpenCoverArtist={onOpenCoverArtist} />
     </span>
   );
 }

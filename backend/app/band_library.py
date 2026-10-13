@@ -16,12 +16,14 @@ AUDIO_CATEGORIES = {
     "albums": "Albums",
     "extended_plays": "Extended Plays",
     "compilations": "Compilations",
-    "soundtracks": "Soundtracks",
+    "demos": "Demos",
     "live_albums": "Live Albums",
+    "soundtracks": "Soundtracks",
     "singles": "Singles",
 }
 
 # Preferred search order when resolving covers under another artist's Audio/
+# (Demos / Live are intentionally omitted — never preferred over studio releases.)
 COVER_SEARCH_CATEGORY_ORDER = (
     "Albums",
     "Extended Plays",

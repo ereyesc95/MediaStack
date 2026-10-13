@@ -216,6 +216,12 @@ export function HoverBubble({
   );
 }
 
+function photocardOrientation(label: string): "portrait" | "landscape" {
+  const low = label.toLowerCase();
+  if (low.includes("landscape")) return "landscape";
+  return "portrait";
+}
+
 export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
   const [tab, setTab] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -225,6 +231,7 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
   const back = (active.back_url || "").trim();
   const canFlip = Boolean(front && back);
   const shown = flipped && back ? back : front || back;
+  const orientation = photocardOrientation(active.label || active.id || "");
   return (
     <div className="collection-photocard-preview" onClick={(e) => e.stopPropagation()}>
       <div className="collection-photocard-preview__tabs" role="tablist">
@@ -246,7 +253,9 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
       </div>
       <button
         type="button"
-        className={`collection-photocard-preview__card${canFlip ? " is-flippable" : ""}`}
+        className={`collection-photocard-preview__card collection-photocard-preview__card--${orientation}${
+          canFlip ? " is-flippable" : ""
+        }`}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -255,14 +264,16 @@ export function PhotocardFlipPreview({ pairs }: { pairs: PhotocardPair[] }) {
         title={canFlip ? (flipped ? "Show front" : "Show back") : "Front only"}
       >
         {shown ? (
-          <img key={shown} src={shown} alt={`${active.label} ${flipped ? "back" : "front"}`} draggable={false} />
+          <img
+            key={shown}
+            src={shown}
+            alt={`${active.label} ${flipped ? "back" : "front"}`}
+            draggable={false}
+          />
         ) : (
           <span className="muted">No image</span>
         )}
       </button>
-      <span className="muted collection-photocard-preview__hint">
-        {canFlip ? (flipped ? "Back" : "Front") : "Front"}
-      </span>
     </div>
   );
 }
@@ -354,11 +365,6 @@ export function SpotifyFlip({
         alt={flipped && backUrl ? "Spotify code" : "Cover banner"}
         draggable={false}
       />
-      {canFlip ? (
-        <span className="collection-spotify-preview__face-label">
-          {flipped ? "Code" : "Banner"}
-        </span>
-      ) : null}
     </div>
   ) : (
     <span className="muted">
@@ -437,15 +443,12 @@ export function CoverPhotoFlip({
       <img
         key={shown}
         src={shown}
-        alt={flipped && back ? "Photo square" : "Cover"}
-        className="collection-hover__img"
+        alt={flipped && back ? "Photo" : "Cover"}
+        className={`collection-hover__img${
+          flipped && back ? " collection-cover-flip__img--photo" : ""
+        }`}
         draggable={false}
       />
-      {canFlip ? (
-        <span className="collection-cover-flip__label">
-          {flipped ? "Photo" : "Cover"}
-        </span>
-      ) : null}
     </div>
   );
 }

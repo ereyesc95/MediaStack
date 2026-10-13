@@ -163,7 +163,7 @@ def _taken_from_folder_parent(
     matches: list[tuple[int, str, dict]] = []
     for row in audio_data.get("releases") or []:
         cat = row.get("category") or ""
-        if cat == "live_albums" or cat not in ALLOWED_APPEARS_ON_CATEGORIES:
+        if cat in ("live_albums", "demos") or cat not in ALLOWED_APPEARS_ON_CATEGORIES:
             continue
         if _normalize_release_match(row.get("title") or "") != parent_norm:
             continue
@@ -264,7 +264,7 @@ def find_taken_from_release(
         if not rel_card:
             continue
         cat = rel_card.get("category") or ""
-        if cat == "live_albums" or cat not in ALLOWED_APPEARS_ON_CATEGORIES:
+        if cat in ("live_albums", "demos") or cat not in ALLOWED_APPEARS_ON_CATEGORIES:
             continue
         candidates.append(
             (

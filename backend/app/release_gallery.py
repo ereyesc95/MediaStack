@@ -23,6 +23,7 @@ from app.gallery import (
 from app.media_index import DISC_DIR_RE, _is_edition_content_dir, _release_dir_from_content_folder, is_box_set_name
 from app.media_paths_util import entry_display_name, safe_relative
 from app.release_overview import (
+    PHOTOCARD_STEM_ALIASES,
     PHOTOCARD_STEMS,
     _normalize_release_match,
     _release_year,
@@ -39,6 +40,7 @@ EXCLUDED_ARTWORK_STEMS = {
     "spotify",
     "qr",
     *PHOTOCARD_STEMS.values(),
+    *(stem for aliases in PHOTOCARD_STEM_ALIASES.values() for stem in aliases),
 }
 PHOTO_YEAR_PREFIX_RE = re.compile(r"^\d{4}(?:\.\d{2})?\.\s*")
 PHOTO_ORIENTATION_SUFFIX_RE = re.compile(r",\s*(landscape|portrait)\s*$", re.I)

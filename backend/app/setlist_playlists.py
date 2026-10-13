@@ -383,7 +383,7 @@ def _resolve_setlist_local_path(
     Order:
     1. Performer artist folder (any match)
     2. Performer folder again, requiring ``[CoverArtist cover]`` bracket tag
-    3. Covered artist folder (Albums → EPs → Compilations → Singles → Soundtracks → rest)
+    3. Covered artist folder (Albums → EPs → Compilations → Singles → Soundtracks → rest; demos last)
     """
     if match_title and performer_files:
         matched = _find_audio_by_title(performer_files, match_title)

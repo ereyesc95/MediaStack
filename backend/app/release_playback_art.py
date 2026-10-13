@@ -354,7 +354,12 @@ def apply_track_artwork_overrides(
     track_title: str,
     media_root: Path,
 ) -> dict[str, str | None]:
-    """Prefer track-specific cover/animation/canvas; suppress album motion when absent."""
+    """Prefer track-specific Cover / Animation / Canvas.
+
+    ``Cover - {title}`` (still) takes priority over album ``Cover - Animation`` /
+    ``Cover - Canvas`` — same as a linked single's ``Cover - Front``.
+    Track ``Animation - {title}`` / ``Canvas - {title}`` override when present.
+    """
     if not album_artwork or not album_artwork.is_dir():
         return urls
     out = dict(urls)
@@ -367,6 +372,7 @@ def apply_track_artwork_overrides(
     if track_animation:
         out["cover_animation_url"] = track_animation
     elif track_cover:
+        # Still track cover wins over album Cover - Animation
         out["cover_animation_url"] = None
     if track_canvas:
         out["canvas_url"] = track_canvas

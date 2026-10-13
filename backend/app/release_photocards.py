@@ -10,6 +10,7 @@ from app.band_overview import _photo_for_orientation
 from app.gallery import _artist_dir, _gallery_subdir, _list_photos, _media_url
 from app.release_overview import (
     COVER_BACK_STEM,
+    PHOTOCARD_STEM_ALIASES,
     PHOTOCARD_STEMS,
     _artwork_file,
     _release_year,
@@ -193,10 +194,12 @@ def scan_photocards(artwork: Path | None, media_root: Path) -> dict[str, str | N
     out: dict[str, str | None] = {k: None for k in PHOTOCARD_STEMS}
     if not artwork or not artwork.is_dir():
         return out
-    for key, stem in PHOTOCARD_STEMS.items():
-        f = _artwork_file(artwork, stem)
-        if f:
-            out[key] = _media_url(f, media_root)
+    for key, aliases in PHOTOCARD_STEM_ALIASES.items():
+        for stem in aliases:
+            f = _artwork_file(artwork, stem)
+            if f:
+                out[key] = _media_url(f, media_root)
+                break
     return out
 
 
@@ -286,7 +289,8 @@ def resolve_overview_photocards(
             cards = parent_cards
             cards_source = "dedicated"
 
-    if _photocards_empty(cards) and is_various_artists:
+    # Fallback: Photo - Portrait / Photo - Landscape (all artists, not only VA)
+    if _photocards_empty(cards):
         cards = _artwork_photo_photocards(artwork, media_root)
         if not _photocards_empty(cards):
             cards_source = "artwork"

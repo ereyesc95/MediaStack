@@ -79,6 +79,7 @@ LNK_LOOKUP_CATEGORIES = (
     "extended_plays",
     "singles",
     "compilations",
+    "demos",
     "live_albums",
 )
 

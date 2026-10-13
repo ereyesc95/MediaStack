@@ -28,6 +28,7 @@ const RELEASE_TYPES = [
   "Studio Album",
   "Extended Play",
   "Compilation",
+  "Demo",
   "Soundtrack",
   "Live Album",
   "Single",

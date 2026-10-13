@@ -1,0 +1,518 @@
+================================================================================
+MyStack / MediaStack — AGENT HANDOFF (cross-machine)
+Generated for continuing work on another computer / new agent session.
+Repo display name: MediaStack · Product name in docs: MyStack
+================================================================================
+
+HOW TO USE THIS FILE
+--------------------
+1. Read this whole file first.
+2. Then open the source-of-truth docs listed below (they win if anything conflicts).
+3. Do NOT invent layout rules; update docs when you intentionally change them.
+4. Secrets: never commit .env, API keys, or *key*.txt. Ask the human for keys locally.
+
+
+================================================================================
+1. WHAT THIS PROJECT IS
+================================================================================
+
+Modern reimplementation of **MediaBinger** — personal media library + player for:
+  Music, Series, Movies, Books, Games, Universes.
+
+Reads files from a media root on disk, enriches with a legacy SQL dump / SQLite DB,
+serves a FastAPI API + React SPA.
+
+Stack:
+  - Backend: FastAPI + Uvicorn + SQLAlchemy + Pydantic Settings (Python 3.11+)
+  - Frontend: React 19 + Vite 6 + TypeScript (no router library — custom route helpers)
+  - DB: SQLite by default (data/mystack.db); optional MySQL import
+  - Default API port: 8766
+  - Default Vite port: 5174 (proxies /api → 8766)
+
+
+================================================================================
+2. SOURCE-OF-TRUTH DOCS (READ THESE)
+================================================================================
+
+| File                              | Purpose                                              |
+|-----------------------------------|------------------------------------------------------|
+| README.md                         | User/dev docs, music layout, artwork, features       |
+| AGENTS.md                         | Agent continuation: layout, franchise, next work     |
+| docs/media_library_layout.md      | Canonical on-disk paths all modules                  |
+| docs/franchise_index.md           | Cross-module Related media, slug contract, phases    |
+| backend/app/artist_import_guide.py| Human-facing import/filename guide (API-served too)  |
+| backend/app/artwork_stems.py      | Canonical artwork stem constants (code truth)        |
+
+If README and artwork_stems disagree on a stem name, **trust artwork_stems.py**.
+
+
+================================================================================
+3. REQUIREMENTS / SETUP (NEW MACHINE)
+================================================================================
+
+Prerequisites:
+  - Python 3.11+ (3.14 tested)
+  - Node.js 18+ and npm
+  - Optional Chrome (run.py can auto-open)
+  - A media library root containing Music/, Series/, Movies/, Books/, Games/
+
+Install:
+  pip install -r backend/requirements.txt
+  cd frontend && npm install
+
+First-time DB (from project root):
+  python run.py --import-sql --import-replace
+  Source dump: data/databinger.sql (legacy MediaBinger schema)
+
+Daily dev — TWO terminals:
+  Terminal 1 (API):   python run.py          → http://127.0.0.1:8766
+  Terminal 2 (UI):    cd frontend && npm run dev → http://localhost:5174
+
+Common mistake: stopping the API before starting Vite. Keep both running.
+If UI says “Cannot reach the API”, Terminal 1 is down or port 8766 blocked.
+
+Production-style: npm run build in frontend/, then python run.py serves frontend/dist.
+
+Optional hosts entry:
+  127.0.0.1 mystack
+  Then http://mystack:5174 (Vite allowedHosts includes mystack).
+
+
+================================================================================
+4. CONFIGURATION
+================================================================================
+
+Env prefix: MYSTACK_ (legacy MEDIASTACK_ is auto-mapped in config.py)
+.env at project root is supported (gitignored).
+
+Important variables:
+  MYSTACK_MEDIA_ROOT          Library root (Music/, Series/, …)
+  MYSTACK_DATABASE_URL        Default sqlite:///…/data/mystack.db
+  MYSTACK_MYSQL_IMPORT_URL    Optional live MySQL import
+  MYSTACK_MEDIA_SERVER_URL    Stream base if not local (default http://127.0.0.1:8887)
+  MYSTACK_TMDB_API_KEY        Series/movies
+  MYSTACK_MUSICBRAINZ_USER_AGENT
+  MYSTACK_LASTFM_API_KEY
+  MYSTACK_SETLISTFM_API_KEY
+  MYSTACK_SPOTIFY_CLIENT_ID / SECRET / REDIRECT_URI
+  MYSTACK_PUBLIC_URL          OAuth return when UI/API hosts differ
+  MYSTACK_ADMIN_PASSWORD      Default often "mystack" (change in real deploys)
+
+Media root can also be set in-app (Settings) and is persisted; that overrides env on startup
+(see user_settings.apply_saved_media_root).
+
+Test media root used in development (gitignored /Media/):
+  MYSTACK_MEDIA_ROOT=<repo>/Media
+  Fixture artists include HIM + Various Artists; Series golden path Dragon Ball scaffolding.
+
+
+================================================================================
+5. REPO LAYOUT
+================================================================================
+
+MediaStack/
+  run.py                 Entry: deps, SQL import flags, uvicorn on 8766
+  AGENTS.md              Agent guide
+  README.md
+  AGENT_HANDOFF.txt      This file
+  .env                   Local secrets (gitignored)
+  assets/                Static UI assets (labels, people, playlists, default disc)
+  backend/
+    requirements.txt
+    app/
+      main.py            FastAPI app
+      config.py          Settings
+      models.py / crud.py / schemas.py / database.py
+      routers/           music, series, movies, books, games, media, auth, …
+      release_*.py       Release overview, tracklist, playback art, gallery, lyrics
+      artwork_stems.py   Cover/animation/canvas stem resolution
+      franchise_index.py Cross-module related index
+      media_paths_util.py resolve_media_entry (symlink, .path, .lnk)
+      tours_index.py / events_index.py
+      series_index.py / movies_index.py / books_index.py / games_index.py
+      adult_content.py   NSFW filtering
+      staff_roles.py
+      services/          tmdb, musicbrainz, setlistfm, sync_folders, lyrics, …
+  frontend/
+    package.json
+    vite.config.ts       port 5174, proxy /api → 8766
+    src/
+      api.ts             API client
+      *Route.ts          musicRoute, seriesRoute, moviesRoute, booksRoute, …
+      routeSlug.ts / routeResolve.ts / franchiseRoute.ts
+      components/
+        music/           Artist, release, playlists, tours/events, collection
+        series/          Shared franchise/leaf UI (also Movies/Books)
+      index.css          Large shared stylesheet (music + tour/event pages)
+  data/                  DB, caches, overrides (many caches gitignored)
+  docs/                  media_library_layout.md, franchise_index.md
+  Media/                 Local test library (gitignored)
+  scripts/               Misc helpers
+
+
+================================================================================
+6. ARCHITECTURE SUMMARY
+================================================================================
+
+MUSIC is artist-centric:
+  Music/{Letter}/{Artist}/Albums|Singles|…   (preferred)
+  Legacy: Music/{Letter}/{Artist}/Audio/{Category}/
+  Also: Video/, Library/, Gallery/, Tours/
+
+MOVIES / SERIES / BOOKS / GAMES use franchise/work folder names as the cross-module key.
+  Same {Franchise} folder name across modules → Related media (franchise index).
+  Exceptions: .path sidecars, symlinks, future franchise_overrides.json.
+  Music artist name ≠ movie franchise (e.g. HIM vs Elvis biopic) — needs subject/DB links later.
+
+Routing:
+  Custom push*Route helpers + history; dual-parse legacy IDs/hashes AND human-readable slugs.
+  Pass display titles into push*Route when possible so slug URLs appear immediately.
+
+Profiles / admin:
+  Multi-profile support; admin password gates write/tag/fetch tools.
+  NSFW gating (admin NSFW password separate).
+
+Playback:
+  Mini audio player shared across release / playlist / event setlist pages.
+  Media URLs: /api/media/file?path=…&v={mtime}  (cache-buster after extension!)
+
+
+================================================================================
+7. LIBRARY LAYOUT RULES (LOCKED — DO NOT CHANGE LIGHTLY)
+================================================================================
+
+Letter tier: first letter of grouping title (H/ = HIM). Use # for non-alpha.
+Date folders: {YYYY.MM.DD}. {Title} or {YYYY}. {Title}
+Special chars in DB names: █ → '   ■ → ,
+Franchise slug: casefold + whitespace normalize; aliases off by default.
+
+Seasons (Series): {YYYY.MM.DD}. Season N/ under show/subseries — NO Seasons/ wrapper
+  (docs may still mention older patterns; prefer AGENTS.md + layout doc current text)
+
+Movies: always {Work}/{date}. {Film}/ — never leave the feature file at work root.
+
+Cross-media: franchise index Related panel — no nested portal farms inside modules.
+
+Series audio: …/[Audio]/{Albums|…}/ with .lnk shortcuts into Music releases.
+
+Golden path fixture: Series/D/Dragon Ball/ (+ Movies/Books/Games scaffolding)
+
+Music audio categories: Albums, Extended Plays, Compilations, Demos, Live Albums, Soundtracks, Singles
+  (Demos: tab after Compilations; Collection type "Demo"; excluded from Appears on / Taken from;
+   never preferred over studio for cover/title match)
+Box set: folder tag [Box Set] on compilations with .lnk sections.
+
+Editions: sibling folders under release (Standard Edition preferred default).
+Format versions: CD / LP / Digital sibling folders (≥2); each has own [Artwork].
+Discs/sides/tapes: Disc N/, Side A/, Tape/, or flat A1./B1. vinyl naming.
+
+
+================================================================================
+8. ARTWORK STEMS (CRITICAL FOR MUSIC PLAYBACK UI)
+================================================================================
+
+Code truth: backend/app/artwork_stems.py
+
+Album / edition motion (hard cut — these exact stems):
+  Cover - Animation   (.mp4/.webm/.mov/.m4v)  → cover_animation_url
+  Cover - Canvas      (.mp4/.webm/.mov/.m4v)  → canvas_url
+
+Static:
+  Cover - Front / Cover - Album
+  Cover - Back / Inner / Banner / Landscape / Portrait
+  Disc, Disc 01, …
+
+Track-specific:
+  Cover - {Track Title}       still — OVERRIDES album front for that track
+  Animation - {Track Title}   track motion video
+  Canvas - {Track Title}      track canvas video
+
+Photocards / photos:
+  Photocard - Portrait - Front (and Back / Landscape variants; legacy aliases exist)
+  Photo - Portrait / Landscape / Square / Banner  (gallery + fallbacks)
+  Code - Spotify / Code - QR
+
+PRIORITY FOR NOW-PLAYING COVER SLOT (must preserve):
+  1. Track Animation - {title} if present
+  2. Else if track has own still (Cover - {title} OR linked single Cover - Front):
+       show STILL; suppress album Cover - Animation / Cover - Canvas
+  3. Else album Cover - Animation (video) over Cover - Front
+  Linked singles: album track that also exists under Singles/… uses single artwork
+  (see release_playback_art.playback_art_for_audio_file / apply_track_artwork_overrides).
+
+Frontend gotcha (fixed Oct 2026 — do not reintroduce):
+  ReleaseTracklist trackArt() must NOT do:
+    track.cover_animation_url ?? edition.cover_animation_url
+  when the track has its own cover URL different from the edition.
+  Intentional null means “suppressed”; ?? would resurrect album animation.
+
+Video URL detection gotcha (fixed Oct 2026):
+  Media URLs look like: …Cover%20-%20Animation.mp4&v=123456
+  Extension is followed by & not ? or EOS.
+  Use frontend/src/isVideoMediaUrl.ts:
+    /\.(mp4|webm|mov|m4v)(?:$|[?#&])/i
+  Do not use /(\?|$)/ only — animation/canvas will never play.
+
+
+================================================================================
+9. KEY BACKEND MODULES (WHERE TO LOOK)
+================================================================================
+
+Playback / release art:
+  release_playback_art.py   — playback_art_for_audio_file, single linking, overrides
+  release_overview.py       — _artwork_urls, overview payload
+  release_tracklist.py      — editions/groups/tracks; per-track art via playback_art
+  release_photocards.py     — overview photocards + stem aliases
+  release_gallery.py        — gallery tabs
+  artwork_stems.py          — stem resolution
+  gallery.py                — _media_url (adds &v= mtime), IMAGE_EXTS
+
+Tours / events / setlists:
+  tours_index.py, events_index.py
+  Frontend: TourShowPage.tsx, SetlistTracklist.tsx
+
+Playlists:
+  playlist_tracks.py, system_playlists.py, user_playlist.py
+  Frontend: SystemPlaylistPage.tsx, SystemPlaylistTracklist.tsx
+
+Franchise / non-music:
+  franchise_index.py, series_index.py, movies_index.py, books_index.py
+  media_paths_util.py — resolve_media_entry()
+  adult_content.py, staff_roles.py
+
+Path sync:
+  services/sync_folders.py
+
+API entry:
+  main.py + routers/music.py (large), series.py, movies.py, books.py, games.py, media.py
+
+
+================================================================================
+10. KEY FRONTEND MODULES
+================================================================================
+
+Release pages:
+  components/music/release/ReleasePage.tsx
+  ReleaseTracklist.tsx          — trackArt() priority logic
+  releaseTrackPanelMeta.tsx / releaseTrackTitle.tsx
+  releaseOverviewCache.ts       — bump cache version when overview shape changes
+
+Artist / tours / events:
+  components/music/artist/TourShowPage.tsx   — setlist playing panel, canvas, bubble player
+  SetlistTracklist.tsx
+  SystemPlaylistPage.tsx
+
+Shared series chrome (also Movies/Books):
+  components/series/*
+
+Routing:
+  musicRoute.ts, seriesRoute.ts, moviesRoute.ts, booksRoute.ts, gamesRoute.ts
+  routeSlug.ts, routeResolve.ts, franchiseRoute.ts
+
+Styles:
+  index.css — search for tour-show-page__, release-page__, setlist
+
+Helpers:
+  isVideoMediaUrl.ts
+  formatDate.ts
+  mediaTheme.ts
+
+
+================================================================================
+11. IMPLEMENTATION STATUS (AS OF LATE 2026)
+================================================================================
+
+Done / mature:
+  Music Audio, Video, Library, Gallery, Collection, playlists, lyrics, tags, quizzes
+  Tours / EVENTS / show pages / setlists / Live shows playlists
+  Series, Movies, Books modules (franchise + leaf, cast, related, NSFW)
+  Universes hubs + SFW filter
+  Human-readable URL slugs (legacy still resolves)
+  Staff roles Original/Dub/Hybrid
+  Per-film NSFW genres
+  franchise_index Phase 1–2: scan/save/load + GET /api/media/related
+
+Placeholders / next:
+  Games module UI (same franchise patterns)
+  Pass display titles into more push*Route sites
+  Enrich related API with cover URLs; rebuild franchise index on media scan
+  Phase 5: aliases/overrides; biopic/subject DB links
+  Title-collision disambiguation for slug leaves
+
+
+================================================================================
+12. RECENT WORK CONTEXT (OCT 2026 SESSIONS) — DO NOT REGRESS
+================================================================================
+
+A. Event / Tour show pages
+  - Overview codes: Spotify playlist + QR (equal height; CSS grid 4fr/1fr)
+  - Photo.* square left of album on codes row
+  - Setlist playing: left panel matches hero aspect; larger cover/disc (~13.25rem)
+  - Paused: floating mini player left of hamburger
+  - Cover-artist links in setlist titles (person-link--plain)
+
+B. Collection hover photocards
+  - Portrait natural size in landscape frame; no Front/Back/Banner labels
+  - Photo in cover square
+
+C. Release overview photocards
+  - Stem aliases: Photocard - Portrait - Front (+ legacy)
+  - Photo - * fallback
+  - releaseOverviewCache version bumped when API shape changed (check current v#)
+
+D. Cover - Animation / Canvas playback (release tracklist, overview, setlist, playlists)
+  - Fixed isVideoMedia for &v= cache-busters (shared isVideoMediaUrl.ts)
+  - Backend: apply_track_artwork_overrides suppresses album motion when track still exists
+  - Frontend trackArt: own-cover tracks must not ??-fallback to edition animation
+  - Verified on HIM Greatest Lovesongs Vol. 666:
+      Wicked Game → Singles/…/Cover - Front (no album animation)
+      When Love and Death Embrace → Cover - When Love and Death Embrace.jpg (no anim)
+      Plain album tracks → Cover - Animation.mp4 + Cover - Canvas.mp4
+
+E. Setlist playing CSS
+  .tour-show-page__setlist-tab--playing … --release-cover-size: 13.25rem
+  Rem-based sizes required — % of indefinite parent collapsed cover to 0
+
+
+================================================================================
+13. DATA / CACHES
+================================================================================
+
+Safe to delete (regenerate):
+  data/overview_cache/, media_index/, lyrics_cache/, setlist_cache/,
+  release_mb_cache/, franchise_index/
+
+Keep if you care:
+  data/quiz_scores/, release_overrides/, media_item_overrides/, backups/
+  assets/playlists/users/ (uploaded covers)
+  data/mystack.db (main DB — also may appear as mediastack.db historically)
+
+Rebuild franchise index (from backend/):
+  python -c "from pathlib import Path; from app.config import settings; from app.franchise_index import build_franchise_index, save_franchise_index; p=save_franchise_index(build_franchise_index(Path(settings.media_root))); print(p)"
+
+
+================================================================================
+14. DEV COMMANDS CHEAT SHEET
+================================================================================
+
+# API
+python run.py
+python run.py --import-sql
+python run.py --import-sql --import-replace
+
+# UI
+cd frontend
+npm install
+npm run dev
+npm run build
+
+# Quick Python check of playback art for a file
+cd backend
+python -c "from pathlib import Path; from app.config import settings; from app.release_playback_art import playback_art_for_audio_file, PlaybackArtContext; ..."
+
+# Health
+curl http://127.0.0.1:8766/api/health
+
+
+================================================================================
+15. CODING CONVENTIONS FOR AGENTS
+================================================================================
+
+- Prefer focused diffs; do not drive-by refactor unrelated files.
+- Do not commit unless the human asks.
+- Do not invent markdown docs unless asked (this handoff was explicitly requested).
+- Match existing naming, CSS BEM-ish classes (release-page__, tour-show-page__).
+- When changing overview/tracklist API shapes, bump frontend cache versions.
+- Frontend design: within existing MediaStack dark red/brown music UI — do not impose
+  generic AI landing-page aesthetics on library pages.
+- Windows paths are normal; PowerShell is the shell.
+- .lnk (Windows shortcuts), .path sidecars, and symlinks are first-class via
+  resolve_media_entry().
+
+Git:
+  - Local commits OK when asked; do not push to unapproved remotes.
+  - data/mystack.db may show dirty — usually do not commit DB unless human wants it.
+  - Media/ is gitignored.
+
+
+================================================================================
+16. TESTING MENTAL MODEL
+================================================================================
+
+Primary fixture artist: HIM under Media/Music/H/HIM/
+  Albums/1997.11.03. Greatest Lovesongs Vol. 666/
+  Singles/1997.11.03. Greatest Lovesongs Vol. 666/1998.02.03. Wicked Game/
+  Artwork includes Cover - Animation.mp4, Cover - Canvas.mp4, track stills.
+
+When changing playback art:
+  1. Call playback_art_for_audio_file for album track + single-linked track + track-still track
+  2. Confirm cover URL path (Singles vs Albums vs Cover - Title)
+  3. Confirm cover_animation_url / canvas_url null vs present
+  4. In UI: release tracklist tab, event setlist tab, playlist page — all three
+
+When changing photocards: hard-refresh or bump releaseOverviewCache; stem aliases matter.
+
+
+================================================================================
+17. KNOWN PITFALLS
+================================================================================
+
+1. Video regex missing & after .mp4 → animation never plays.
+2. ?? fallback from track null → edition animation overrides single/track still.
+3. Setlist cover size using % → collapses to 0; use rem.
+4. QR/Spotify codes row: flex height:0 tricks; prefer grid fr tracks.
+5. Stale overview/tracklist caches after API field changes.
+6. Stopping API while developing UI → mysterious empty states.
+7. README may say "Animation - Album"; code uses "Cover - Animation" for album motion.
+8. Track title stems strip bracket suffixes and trailing (parens) before matching files.
+
+
+================================================================================
+18. MODULE STATUS QUICK TABLE
+================================================================================
+
+Music      Mature
+Series     Active
+Movies     Active
+Books      Active
+Universes  Active
+Games      API stubs / browse shell — full UI pending
+Tours      Done (show pages, EVENTS, setlists, Live shows)
+
+
+================================================================================
+19. WHAT TO DO FIRST ON A NEW MACHINE
+================================================================================
+
+1. Clone/copy repo (without relying on gitignored Media/ and .env — bring those separately).
+2. Create .env with at least MYSTACK_MEDIA_ROOT pointing at a real library.
+3. pip install -r backend/requirements.txt
+4. npm install in frontend/
+5. Import SQL if no DB: python run.py --import-sql --import-replace
+6. Start API + Vite; open http://localhost:5174
+7. Settings → confirm media root
+8. Smoke-test: open HIM → release Greatest Lovesongs → play a plain track (animation),
+   Wicked Game (single cover), When Love and Death Embrace (track still),
+   then an Events show → Setlist tab.
+
+Optional: copy local Media/ test library + data/mystack.db if the human provides them.
+
+
+================================================================================
+20. CONTACT POINTS IN CODE FOR COMMON TASKS
+================================================================================
+
+Change artwork stem names     → artwork_stems.py + artist_import_guide.py + README
+Change playback priority      → release_playback_art.apply_track_artwork_overrides
+                                + ReleaseTracklist.trackArt + isVideoMediaUrl
+Release overview fields       → release_overview.py + releaseOverviewCache.ts
+Event setlist playing UI      → TourShowPage.tsx + index.css (tour-show-page__setlist*)
+Franchise related             → franchise_index.py + docs/franchise_index.md
+Series/Movies leaf pages      → components/series/* + *_index.py
+NSFW                          → adult_content.py
+Slug URLs                     → routeSlug.ts, routeResolve.ts, *Route.ts
+
+
+END OF HANDOFF — prefer repo docs above if this file ages; update this file when
+major contracts change (artwork stems, ports, layout locks, playback priority).
+================================================================================

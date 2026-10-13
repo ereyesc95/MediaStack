@@ -60,6 +60,7 @@ import {
 } from "../../../usePhoneLayout";
 import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem } from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
+import { isVideoMediaUrl as isVideoMedia } from "../../../isVideoMediaUrl";
 import { isReleaseId, slugMatch } from "../../../routeSlug";
 import { rememberReleaseSlug, releaseIdFromSlug } from "../../../routeEntityCache";
 import AppMenu from "../../AppMenu";
@@ -168,10 +169,6 @@ type Props = {
   onBackToCatalog?: () => void;
   onBackToCollection?: () => void;
 };
-
-function isVideoMedia(url: string | null | undefined): boolean {
-  return Boolean(url && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url));
-}
 
 function ReleaseNeighborLink({
   neighbor,
@@ -959,10 +956,18 @@ export default function ReleasePage({
   const displayCoverBack = hasActiveTrack
     ? (playbackArt?.cover_back_url ?? data?.cover_back_url ?? null)
     : (data?.cover_back_url ?? null);
-  const displayAnim =
-    showPlaybackMotion ? (playbackArt?.cover_animation_url ?? null) : null;
+  // When playbackArt is set, null animation/canvas is intentional (track cover /
+  // linked single suppress album Cover - Animation / Cover - Canvas). Do not
+  // fall back to release overview motion in that case.
+  const displayAnim = showPlaybackMotion
+    ? (playbackArt
+        ? (playbackArt.cover_animation_url ?? null)
+        : (data?.cover_animation_url ?? null))
+    : null;
   const displayCanvas = showPlaybackMotion
-    ? (playbackArt?.canvas_url ?? data?.canvas_url ?? null)
+    ? (playbackArt
+        ? (playbackArt.canvas_url ?? null)
+        : (data?.canvas_url ?? null))
     : null;
   const displayDisc = hasActiveTrack
     ? (playbackArt?.disc_url ?? data?.disc_url ?? DEFAULT_DISC_URL)

@@ -133,7 +133,7 @@ Show/subseries folders may contain:
   Episodes/YYYY.MM.DD. Season N/
   Specials/
   Extras/
-  Audio/Albums|Extended Plays|Compilations|Live Albums|Soundtracks|Singles/
+  Audio/Albums|Extended Plays|Compilations|Demos|Live Albums|Soundtracks|Singles/
 
 The franchise root contains [Artwork]/ only when Series is its franchise home.
 

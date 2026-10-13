@@ -365,19 +365,30 @@ function trackArt(
   groupDisc?: string | null
 ): ReleasePlaybackArt {
   const trackLayers = track.background_layers;
+  // Linked single Cover - Front or Cover - {title} still — do not ??-fallback
+  // onto edition Cover - Animation / Cover - Canvas (null means suppressed).
+  const trackHasOwnCover = Boolean(
+    track.cover_url && track.cover_url !== edition.cover_url
+  );
+  const coverAnimationUrl = trackHasOwnCover
+    ? (track.cover_animation_url ?? null)
+    : (track.cover_animation_url ?? edition.cover_animation_url ?? null);
+  const canvasUrl = trackHasOwnCover
+    ? (track.canvas_url ?? null)
+    : (track.canvas_url ?? edition.canvas_url ?? null);
   const hasTrackArt = Boolean(
     trackLayers?.length ||
       track.canvas_url ||
       track.cover_animation_url ||
-      (track.cover_url && track.cover_url !== edition.cover_url)
+      trackHasOwnCover
   );
 
   if (hasTrackArt) {
     return {
       cover_url: track.cover_url ?? edition.cover_url ?? null,
       cover_back_url: track.cover_back_url ?? edition.cover_back_url ?? null,
-      cover_animation_url: track.cover_animation_url ?? edition.cover_animation_url ?? null,
-      canvas_url: track.canvas_url ?? edition.canvas_url ?? null,
+      cover_animation_url: coverAnimationUrl,
+      canvas_url: canvasUrl,
       disc_url: track.disc_url ?? groupDisc ?? edition.disc_url ?? null,
       background_layers:
         trackLayers && trackLayers.length > 0 ? trackLayers : edition.background_layers,
@@ -397,8 +408,8 @@ function trackArt(
   return {
     cover_url: cover,
     cover_back_url: track.cover_back_url ?? edition.cover_back_url ?? null,
-    cover_animation_url: track.cover_animation_url ?? edition.cover_animation_url ?? null,
-    canvas_url: track.canvas_url ?? edition.canvas_url ?? null,
+    cover_animation_url: coverAnimationUrl,
+    canvas_url: canvasUrl,
     disc_url: track.disc_url ?? groupDisc ?? edition.disc_url ?? null,
     background_layers,
   };

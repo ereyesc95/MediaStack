@@ -49,6 +49,7 @@ type Props = {
   onPanelTrack?: (track: ReleaseTrackItem) => void;
   showReleaseTitles?: boolean;
   onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
+  onOpenCoverArtist?: (name: string) => void;
 };
 
 function SetlistReleaseTitle({
@@ -84,6 +85,7 @@ export default function SetlistTracklist({
   onPanelTrack,
   showReleaseTitles = false,
   onOpenRelease,
+  onOpenCoverArtist,
 }: Props) {
   return (
     <div
@@ -141,7 +143,10 @@ export default function SetlistTracklist({
                                   )}
                                 </span>
                                 <span className="release-tracklist__title-wrap">
-                                  <ReleaseTrackTitle title={titleForDisplay} />
+                                  <ReleaseTrackTitle
+                                    title={titleForDisplay}
+                                    onOpenCoverArtist={onOpenCoverArtist}
+                                  />
                                 </span>
                                 {showReleaseTitles ? (
                                   <SetlistReleaseTitle track={track} onOpenRelease={onOpenRelease} />
@@ -193,7 +198,10 @@ export default function SetlistTracklist({
                                   )}
                                 </span>
                                 <span className="release-tracklist__title-wrap">
-                                  <ReleaseTrackTitle title={titleForDisplay} />
+                                  <ReleaseTrackTitle
+                                    title={titleForDisplay}
+                                    onOpenCoverArtist={onOpenCoverArtist}
+                                  />
                                 </span>
                                 {showReleaseTitles ? (
                                   <SetlistReleaseTitle track={track} onOpenRelease={onOpenRelease} />
