@@ -362,43 +362,6 @@ def _merge_media_items(primary: list[dict], fallback: list[dict]) -> list[dict]:
     return out
 
 
-def _merge_opener_gallery_items(
-    primary: list[dict],
-    opener_items: list[dict],
-    opener_artist: str,
-) -> list[dict]:
-    """Append opener gallery files onto a headliner gallery.
-
-    Duplicate labels (e.g. both have ``QR.png``) are kept with a disambiguated
-    label/id so files added under the support-act folder still appear on the
-    headliner event page.
-    """
-    seen_ids = {i.get("id") for i in primary if i.get("id")}
-    seen_urls = {i.get("url") for i in primary if i.get("url")}
-    out = list(primary)
-    artist = (opener_artist or "Support").strip() or "Support"
-    for item in opener_items:
-        url = item.get("url")
-        if url and url in seen_urls:
-            continue
-        label = (item.get("label") or "").strip() or "Item"
-        base_id = str(item.get("id") or label).casefold()
-        new_id = f"{base_id}·{artist.casefold()}"
-        if new_id in seen_ids:
-            continue
-        # Always tag opener-sourced rows so headliner duplicates stay distinct
-        tagged = {
-            **item,
-            "id": new_id,
-            "label": f"{label} · {artist}",
-        }
-        out.append(tagged)
-        seen_ids.add(new_id)
-        if url:
-            seen_urls.add(url)
-    return out
-
-
 def _gallery_recording_links(gallery_items: list[dict]) -> list[dict]:
     """Full ``Video`` + ``Recap`` / ``Recap - …`` clips for the setlist panel."""
     out: list[dict] = []
@@ -421,33 +384,6 @@ def _pick_labeled_item(items: list[dict], *names: str) -> dict | None:
         if (item.get("label") or "").casefold() in want:
             return item
     return None
-
-
-def _media_url_mtime(url: str | None) -> int:
-    """Parse ``&v=mtime`` cache-buster from a media URL (0 if missing)."""
-    if not url:
-        return 0
-    try:
-        from urllib.parse import parse_qs, urlsplit
-
-        q = parse_qs(urlsplit(url).query)
-        raw = (q.get("v") or ["0"])[0]
-        return int(raw)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _pick_qr_code(gallery: list[dict]) -> dict | None:
-    """Prefer the newest QR.* among headliner + opener-tagged gallery rows."""
-    candidates: list[dict] = []
-    for item in gallery:
-        label = (item.get("label") or "").casefold()
-        if label == "qr" or label.startswith("qr ·") or label.startswith("qr -"):
-            candidates.append(item)
-    if not candidates:
-        return None
-    candidates.sort(key=lambda i: _media_url_mtime(i.get("url")), reverse=True)
-    return candidates[0]
 
 
 def _stable_id(*parts: str) -> int:
@@ -1054,6 +990,8 @@ def list_show_folder_items(
                 "has_back": False,
             }
         )
+    # Front/Back pairing and image-vs-file split can scramble order; sort by label.
+    items.sort(key=lambda i: (i.get("label") or "").casefold())
     return items
 
 
@@ -1083,45 +1021,6 @@ def get_show_detail(
         promo = list_show_folder_items(root, show["folder_path"], "Promo")
         gallery = list_show_folder_items(root, show["folder_path"], "Gallery")
         souvenirs = list_show_folder_items(root, show["folder_path"], "Souvenirs")
-        # Headliner: surface support-act Gallery files (e.g. opener QR.png)
-        if (
-            not tour.get("is_support")
-            and show.get("join_key")
-            and show.get("id") is not None
-        ):
-            peer_shows = db.scalars(
-                select(TourShow).where(
-                    TourShow.tsh_join_key == show["join_key"],
-                    TourShow.tsh_id != show["id"],
-                )
-            ).all()
-            for peer in peer_shows:
-                peer_tour = db.get(Tour, peer.tsh_tour_id)
-                if not peer_tour or not peer_tour.tur_is_support:
-                    continue
-                peer_band = db.get(Band, peer.tsh_band_id)
-                peer_name = (
-                    peer_band.bnd_name
-                    if peer_band and peer_band.bnd_name
-                    else f"Band {peer.tsh_band_id}"
-                )
-                if not peer.tsh_folder_path:
-                    continue
-                peer_gal = list_show_folder_items(
-                    root, peer.tsh_folder_path, "Gallery"
-                )
-                # Only pull opener QR.* — avoid duplicating shared 001/Video dumps
-                peer_qr = [
-                    g
-                    for g in peer_gal
-                    if (g.get("label") or "").casefold() == "qr"
-                ]
-                if peer_qr:
-                    gallery = _merge_opener_gallery_items(
-                        gallery, peer_qr, peer_name
-                    )
-                    if not show.get("has_gallery"):
-                        show = {**show, "has_gallery": True}
         # Opener show: merge main-act Promo (+ tour art already coalesced at scan)
         if tour.get("is_support") and tour.get("main_artist_name") and show.get("join_key"):
             _mt, main_show = _find_peer_show_dirs(
@@ -1239,7 +1138,7 @@ def get_show_detail(
                     ]
                 if not playlist_code:
                     playlist_code = _pick_labeled_item(main_souvenirs, "Playlist")
-    qr_code = _pick_qr_code(gallery)
+    qr_code = _pick_labeled_item(gallery, "QR")
     recordings = _gallery_recording_links(gallery)
     recording_url = next(
         (r["url"] for r in recordings if r.get("kind") == "full"),

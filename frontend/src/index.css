@@ -9801,8 +9801,9 @@ button.media-release-card--banner {
 
 .gallery-viewer {
   position: relative;
-  width: min(96vw, 72rem);
-  max-height: 92vh;
+  /* Narrower shell so prev/next sit closer; taller so portrait pages scale up. */
+  width: min(72vw, 42rem);
+  max-height: 96vh;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -9814,8 +9815,8 @@ button.media-release-card--banner {
 
 .gallery-viewer__close {
   position: absolute;
-  top: 0.45rem;
-  right: 0.55rem;
+  top: 0.35rem;
+  right: 0.4rem;
   z-index: 3;
   border: none;
   background: transparent;
@@ -9838,21 +9839,21 @@ button.media-release-card--banner {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2.25rem 3rem 0.75rem;
+  padding: 1.75rem 2.4rem 0.35rem;
   cursor: pointer;
   position: relative;
   overflow: hidden;
   /* Explicit stage height so img max-height:100% can contain without cropping. */
-  height: min(72vh, calc(92vh - 9.5rem));
-  max-height: min(72vh, calc(92vh - 9.5rem));
+  height: min(84vh, calc(96vh - 6.5rem));
+  max-height: min(84vh, calc(96vh - 6.5rem));
 }
 
 .gallery-viewer__image,
 .gallery-viewer__img,
 .gallery-viewer__video {
   display: block;
-  max-width: min(100%, calc(96vw - 6rem));
-  max-height: min(100%, calc(92vh - 10rem));
+  max-width: min(100%, calc(72vw - 4.8rem), 38rem);
+  max-height: min(100%, calc(96vh - 7rem));
   width: auto;
   height: auto;
   object-fit: contain;
@@ -9861,7 +9862,7 @@ button.media-release-card--banner {
 
 .gallery-viewer__nav {
   position: absolute;
-  top: 42%;
+  top: 50%;
   transform: translateY(-50%);
   z-index: 2;
   border: none;
@@ -9875,18 +9876,18 @@ button.media-release-card--banner {
 }
 
 .gallery-viewer__nav--prev {
-  left: 0.35rem;
+  left: 0.25rem;
 }
 
 .gallery-viewer__nav--next {
-  right: 0.35rem;
+  right: 0.25rem;
 }
 
 .gallery-viewer__footer {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.35rem 0.75rem 0.95rem;
+  gap: 0.28rem;
+  padding: 0.15rem 0.65rem 0.45rem;
   flex-shrink: 0;
   background: transparent;
   position: relative;
@@ -9900,7 +9901,7 @@ button.media-release-card--banner {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
-  padding: 0.35rem calc(50% - 1.55rem) 0.15rem;
+  padding: 0.15rem calc(50% - 1.55rem) 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -9958,8 +9959,8 @@ button.media-release-card--banner {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
-  gap: 0.35rem 0.65rem;
-  padding: 0.15rem 0.5rem 0;
+  gap: 0.25rem 0.55rem;
+  padding: 0;
   font-size: 0.82rem;
   text-align: center;
   border-top: none;
