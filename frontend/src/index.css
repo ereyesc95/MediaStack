@@ -1438,14 +1438,87 @@ input {
   overflow: hidden;
 }
 
-/* Series / Movies / Books Best panes: same row height as Music; narrower portrait covers */
+/* Series / Movies / Books / Games Best panes: same row height as Music; narrower portrait covers */
 .series-dashboard .dash-row--icons,
 .movies-dashboard .dash-row--icons,
-.books-dashboard .dash-row--icons {
+.books-dashboard .dash-row--icons,
+.games-dashboard .dash-row--icons {
   /* keep Music flex: 1 row height — do not grow/shrink panes independently */
   align-items: stretch;
   overflow: hidden;
   min-height: 0;
+}
+
+/* Games platform squares: hover zooms/dims and reveals logo/icon/title */
+.games-dashboard .dash-row--platforms .dash-scroll--platforms {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  cursor: grab;
+}
+
+.dash-platform {
+  scroll-snap-align: start;
+}
+
+.dash-platform__art {
+  position: relative;
+  overflow: hidden;
+}
+
+.dash-platform__dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.dash-platform__hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.dash-platform__logo,
+.dash-platform__icon {
+  max-width: 78%;
+  max-height: 58%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+}
+
+.dash-platform:hover .dash-track-art-bg,
+.dash-platform.is-revealed .dash-track-art-bg {
+  transform: scale(1.1);
+  filter: brightness(0.72) blur(1px);
+}
+
+.dash-platform:hover .dash-platform__dim,
+.dash-platform.is-revealed .dash-platform__dim,
+.dash-platform:hover .dash-platform__hover,
+.dash-platform.is-revealed .dash-platform__hover {
+  opacity: 1;
+}
+
+.dash-platform .dash-hover-title {
+  opacity: 1;
+}
+
+.filter-subbar--platform .search-dropdown {
+  min-width: 10rem;
+  flex: 0 1 14rem;
 }
 
 .series-dashboard .dash-row--icons .dash-scroll,
@@ -24662,6 +24735,12 @@ button.lyrics-status-badge--icon-only {
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 0.75rem;
   background: color-mix(in srgb, var(--bg-elevated) 65%, transparent);
+}
+
+.manage-catalog-modal__platforms {
+  max-height: min(14rem, 28vh);
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.2rem 0.35rem;
 }
 
 .manage-catalog-modal__selection > .muted {

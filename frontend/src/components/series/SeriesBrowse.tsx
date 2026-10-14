@@ -100,6 +100,8 @@ type Props = {
   subgenreId: number | "";
   publisher: string;
   writer: string;
+  /** Games PLATFORM filter (selected platform display name). */
+  platformName?: string;
   /** Movies catalog uses film counts; Books uses book counts; Games uses game counts. */
   unitNoun?: "season" | "film" | "book" | "game";
   /** Optional platform cards when catalogScope is "platforms" (Games). */
@@ -117,6 +119,7 @@ type Props = {
   onSubgenreIdChange: (v: number | "") => void;
   onPublisherChange: (v: string) => void;
   onWriterChange: (v: string) => void;
+  onPlatformNameChange?: (v: string) => void;
   onOpen: (
     franchiseId: string,
     subseriesId?: string,
@@ -147,6 +150,7 @@ export default function SeriesBrowse({
   subgenreId,
   publisher,
   writer,
+  platformName = "",
   unitNoun = "season",
   filterModes = FILTER_MODES,
   loading,
@@ -158,6 +162,7 @@ export default function SeriesBrowse({
   onStartDecadeChange,
   onEndDecadeChange,
   onSubgenreIdChange,
+  onPlatformNameChange,
   onPublisherChange,
   onWriterChange,
   onOpen,
@@ -279,6 +284,12 @@ export default function SeriesBrowse({
           return (
             (filterOptions.writers?.length ?? 0) > 0 || Boolean(writer.trim())
           );
+        case "platform":
+          return (
+            platforms.length > 0 ||
+            (filterOptions.platforms?.length ?? 0) > 0 ||
+            Boolean(platformName.trim())
+          );
         default:
           return true;
       }
@@ -290,6 +301,8 @@ export default function SeriesBrowse({
     availableDecades,
     publisher,
     writer,
+    platforms,
+    platformName,
   ]);
 
   useEffect(() => {
@@ -304,10 +317,20 @@ export default function SeriesBrowse({
 
   // Auto-select first subbar option when entering a filter tab (Music catalog parity)
   useEffect(() => {
-    if (filterMode === "name") {
+    if (filterMode === "name" || filterMode === "platform") {
       if (!letter || (availableLetters.length && !availableLetters.includes(letter))) {
         const first = availableLetters[0];
         if (first) onLetterChange(first);
+      }
+      if (filterMode === "platform") {
+        if (!filterOptions && !platforms.length) return;
+        if (!platformName.trim()) {
+          const first =
+            platforms[0]?.name ||
+            filterOptions?.platforms?.[0]?.name ||
+            "";
+          if (first) onPlatformNameChange?.(first);
+        }
       }
       return;
     }
@@ -388,6 +411,8 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
+    platformName,
+    platforms,
     onLetterChange,
     onContinentIdChange,
     onCountryIdChange,
@@ -396,6 +421,7 @@ export default function SeriesBrowse({
     onSubgenreIdChange,
     onPublisherChange,
     onWriterChange,
+    onPlatformNameChange,
   ]);
 
   const filterReady = useMemo(() => {
@@ -417,6 +443,8 @@ export default function SeriesBrowse({
         return publisher.trim() !== "";
       case "writer":
         return writer.trim() !== "";
+      case "platform":
+        return platformName.trim() !== "";
       default:
         return true;
     }
@@ -429,12 +457,13 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
+    platformName,
   ]);
 
   const countryOptions: DropdownOption[] = useMemo(() => {
     if (!filterOptions) return [];
-    return filterOptions.country_groups.flatMap((g) =>
-      g.items.map((c) => ({
+    return (filterOptions.country_groups || []).flatMap((g) =>
+      (g.items || []).map((c) => ({
         value: String(c.id),
         label: c.name ?? "",
         iso: c.iso ?? undefined,
@@ -445,8 +474,8 @@ export default function SeriesBrowse({
 
   const genreOptions: DropdownOption[] = useMemo(() => {
     if (!filterOptions) return [];
-    return filterOptions.subgenre_groups.flatMap((g) =>
-      g.items.map((s) => ({
+    return (filterOptions.subgenre_groups || []).flatMap((g) =>
+      (g.items || []).map((s) => ({
         value: String(s.id),
         label: s.name ?? "",
         group: g.genre,
@@ -456,13 +485,25 @@ export default function SeriesBrowse({
 
   const publisherOptions: DropdownOption[] = useMemo(() => {
     if (!filterOptions) return [];
-    return filterOptions.publishers.map((p) => ({ value: p, label: p }));
+    return (filterOptions.publishers || []).map((p) => ({ value: p, label: p }));
   }, [filterOptions]);
 
   const writerOptions: DropdownOption[] = useMemo(() => {
     if (!filterOptions) return [];
-    return filterOptions.writers.map((w) => ({ value: w, label: w }));
+    return (filterOptions.writers || []).map((w) => ({ value: w, label: w }));
   }, [filterOptions]);
+
+  const platformOptions: DropdownOption[] = useMemo(() => {
+    const fromProp = platforms.map((p) => ({
+      value: p.name,
+      label: p.name,
+    }));
+    if (fromProp.length) return fromProp;
+    return (filterOptions?.platforms || [])
+      .map((p) => p.name)
+      .filter(Boolean)
+      .map((name) => ({ value: name, label: name }));
+  }, [platforms, filterOptions]);
 
   const matchesDate = useCallback(
     (dateIso: string | null | undefined) => {
@@ -646,25 +687,31 @@ export default function SeriesBrowse({
     if (catalogScope === "platforms") {
       let list = [...platforms];
       if (q) {
-        list = list.filter((p) => p.name.toLowerCase().includes(q));
+        list = list.filter((p) =>
+          (p.name || "").toLowerCase().includes(q)
+        );
       }
-      if (filterMode === "name" && letter) {
-        const want = letter === HASH ? "#" : letter.toUpperCase();
-        list = list.filter((p) => {
-          const L = (p.name.slice(0, 1) || "").toUpperCase();
-          if (want === "#") return !/[A-Z]/.test(L);
-          return L === want;
-        });
-      }
-      list.sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-      );
-      return list.map(
-        (p): SeriesCatalogCard => ({
+    if ((filterMode === "name" || filterMode === "platform") && letter) {
+      const want = letter === HASH ? "#" : letter.toUpperCase();
+      list = list.filter((p) => {
+        const L = ((p.name || "").slice(0, 1) || "").toUpperCase();
+        if (want === "#") return !/[A-Z]/.test(L);
+        return L === want;
+      });
+    }
+    list.sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, {
+        sensitivity: "base",
+      })
+    );
+    return list.map((p): SeriesCatalogCard => {
+        const name = p.name || "Platform";
+        const count = p.season_count || 0;
+        return {
           key: `plat-${p.id}`,
           franchiseId: String(p.id),
-          name: p.name,
-          letter: (p.name.slice(0, 1) || "#").toUpperCase(),
+          name,
+          letter: (name.slice(0, 1) || "#").toUpperCase(),
           cover_url: p.cover_url,
           portrait_url: p.portrait_url || p.cover_url,
           landscape_url: p.landscape_url || p.cover_url,
@@ -674,11 +721,11 @@ export default function SeriesBrowse({
           badge_url: p.badge_url ?? null,
           date_iso: null,
           meta:
-            p.season_count > 0
-              ? `${p.season_count} game${p.season_count === 1 ? "" : "s"}`
+            count > 0
+              ? `${count} game${count === 1 ? "" : "s"}`
               : "",
-        })
-      );
+        };
+      });
     }
 
     if (catalogScope === "shows") {
@@ -704,7 +751,7 @@ export default function SeriesBrowse({
           if (q && !s.title.toLowerCase().includes(q) && !f.name.toLowerCase().includes(q)) {
             continue;
           }
-          if (filterMode === "name" && letter) {
+          if ((filterMode === "name" || filterMode === "platform") && letter) {
             const want = letter === HASH ? "#" : letter.toUpperCase();
             // Films/shows A–Z must use the leaf title, not the parent work letter
             // (e.g. Poison Arrow under HIM → P, not H).
@@ -769,7 +816,7 @@ export default function SeriesBrowse({
     if (q) {
       list = list.filter((f) => f.name.toLowerCase().includes(q));
     }
-    if (filterMode === "name" && letter) {
+    if ((filterMode === "name" || filterMode === "platform") && letter) {
       const want = letter === HASH ? "#" : letter.toUpperCase();
       list = list.filter((f) => {
         const L = (f.letter || f.name.slice(0, 1)).toUpperCase();
@@ -864,7 +911,14 @@ export default function SeriesBrowse({
   );
 
   const subBar = useMemo(() => {
-    if (!filterOptions && filterMode !== "name" && filterMode !== "writer" && filterMode !== "publisher" && filterMode !== "genre") {
+    if (
+      !filterOptions &&
+      filterMode !== "name" &&
+      filterMode !== "platform" &&
+      filterMode !== "writer" &&
+      filterMode !== "publisher" &&
+      filterMode !== "genre"
+    ) {
       return null;
     }
     switch (filterMode) {
@@ -881,6 +935,34 @@ export default function SeriesBrowse({
                 {l}
               </button>
             ))}
+            <input
+              className="filter-subbar-search"
+              placeholder="Search"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </div>
+        );
+      case "platform":
+        return (
+          <div className="filter-subbar filter-subbar--spread filter-subbar--platform">
+            {availableLetters.map((l) => (
+              <button
+                key={l}
+                type="button"
+                className={letter === l ? "active" : ""}
+                onClick={() => onLetterChange(l)}
+              >
+                {l}
+              </button>
+            ))}
+            <SearchableDropdown
+              options={platformOptions}
+              value={platformName}
+              onChange={(v) => onPlatformNameChange?.(v)}
+              placeholder="Platform"
+              visibleRows={7}
+            />
             <input
               className="filter-subbar-search"
               placeholder="Search"
@@ -1022,6 +1104,8 @@ export default function SeriesBrowse({
     genreOptions,
     publisherOptions,
     writerOptions,
+    platformOptions,
+    platformName,
     filterModes,
     onLetterChange,
     onSearchChange,
@@ -1032,6 +1116,7 @@ export default function SeriesBrowse({
     onSubgenreIdChange,
     onPublisherChange,
     onWriterChange,
+    onPlatformNameChange,
   ]);
 
   return (

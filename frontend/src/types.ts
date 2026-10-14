@@ -1821,6 +1821,8 @@ export type SeriesFranchiseCard = {
   parent_genre_names?: string[];
   publishers?: string[];
   writers?: string[];
+  /** Games: platforms this franchise appears on. */
+  platforms?: string[];
   /** Same-named Music artist folder exists — open Artist page instead of franchise. */
   is_music_franchise?: boolean;
   music_band_id?: number | null;
@@ -2014,7 +2016,8 @@ export type SeriesFilterMode =
   | "genre"
   | "publisher"
   | "writer"
-  | "most_played";
+  | "most_played"
+  | "platform";
 
 export type SeriesFilterOptions = {
   continents: { id: number; name: string }[];
@@ -2038,6 +2041,8 @@ export type SeriesFilterOptions = {
   }[];
   /** Flat genre/subgenre list (books filters). */
   genres?: { id: number | string; name: string }[];
+  /** Games platform filter options. */
+  platforms?: { id?: string; name: string }[];
   decades: number[];
   publishers: string[];
   writers: string[];

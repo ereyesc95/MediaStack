@@ -211,7 +211,9 @@ export default function ManageCatalogModal({
   const [franchiseHome, setFranchiseHome] = useState(false);
   const [includeGuide, setIncludeGuide] = useState(true);
   const [nestedSeries, setNestedSeries] = useState(false);
-  const [platform, setPlatform] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(
+    () => new Set()
+  );
   const [platformOptions, setPlatformOptions] = useState<string[]>(() =>
     module === "games" ? GAMES_PLATFORM_OPTIONS : []
   );
@@ -342,14 +344,38 @@ export default function ManageCatalogModal({
         (current) => current || data.franchise_name || item.title
       );
       const previewPlatforms = (data as { platforms?: string[] }).platforms;
+      const optionList =
+        Array.isArray(previewPlatforms) && previewPlatforms.length
+          ? previewPlatforms
+          : platformOptions.length
+            ? platformOptions
+            : GAMES_PLATFORM_OPTIONS;
       if (Array.isArray(previewPlatforms) && previewPlatforms.length) {
         setPlatformOptions(previewPlatforms);
       }
-      const hinted =
-        item.platform ||
-        (item.platforms && item.platforms[0]) ||
-        "";
-      if (hinted) setPlatform((current) => current || hinted);
+      const fromItems = (data.items || []).flatMap(
+        (row) => row.platforms || []
+      );
+      const hintedList = [
+        ...(item.platforms || []),
+        ...(item.platform ? [item.platform] : []),
+        ...fromItems,
+      ]
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (hintedList.length) {
+        const matched = new Set<string>();
+        for (const hint of hintedList) {
+          const hit =
+            optionList.find(
+              (opt) => opt.toLowerCase() === hint.toLowerCase()
+            ) || hint;
+          matched.add(hit);
+        }
+        setSelectedPlatforms((current) =>
+          current.size ? current : matched
+        );
+      }
       setStep("details");
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -410,19 +436,31 @@ export default function ManageCatalogModal({
     () => items.filter((item) => selectedKeys.has(item.key)),
     [items, selectedKeys]
   );
+  const platformCount =
+    module === "games" ? Math.max(1, selectedPlatforms.size) : 1;
   const estimatedSeconds = Math.max(
     10,
-    chosenItems.length * (module === "books" ? 5 : 12)
+    chosenItems.length * platformCount * (module === "books" ? 5 : 12)
   );
   const queuedIdentities = useMemo(
     () => new Set(items.map(itemIdentity)),
     [items]
   );
 
+  function togglePlatform(name: string) {
+    setSelectedPlatforms((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
   async function create() {
     if (!franchiseName.trim() || !chosenItems.length || saving) return;
-    if (module === "games" && !platform.trim()) {
-      setError("Choose a platform for Games (e.g. Nintendo Switch).");
+    const platforms = [...selectedPlatforms];
+    if (module === "games" && !platforms.length) {
+      setError("Choose at least one platform for Games (e.g. Nintendo Switch).");
       return;
     }
     setSaving(true);
@@ -434,7 +472,7 @@ export default function ManageCatalogModal({
         franchise_home: franchiseHome,
         include_guide: includeGuide,
         nested_series: nestedSeries,
-        ...(module === "games" ? { platform: platform.trim() } : {}),
+        ...(module === "games" ? { platforms } : {}),
         items: chosenItems.map(({ key: _key, ...item }) => item),
       });
       if (result.metadata_errors.length) {
@@ -774,23 +812,30 @@ export default function ManageCatalogModal({
             </label>
 
             {module === "games" ? (
-              <label>
-                Platform
-                <select
-                  value={platform}
-                  onChange={(e) => setPlatform(e.target.value)}
-                >
-                  <option value="">Select platform…</option>
+              <div className="manage-catalog-modal__selection">
+                <small className="muted">
+                  Platforms
+                  {selectedPlatforms.size
+                    ? ` · ${selectedPlatforms.size} selected`
+                    : ""}
+                </small>
+                <div className="manage-catalog-modal__items manage-catalog-modal__platforms">
                   {(platformOptions.length
                     ? platformOptions
                     : GAMES_PLATFORM_OPTIONS
                   ).map((p) => (
-                    <option key={p} value={p}>
+                    <Checkbox
+                      key={p}
+                      className="manage-catalog-modal__item"
+                      checked={selectedPlatforms.has(p)}
+                      disabled={saving}
+                      onChange={() => togglePlatform(p)}
+                    >
                       {p}
-                    </option>
+                    </Checkbox>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
             ) : null}
 
             {module === "series" ? (
@@ -926,7 +971,7 @@ export default function ManageCatalogModal({
                   saving ||
                   !franchiseName.trim() ||
                   chosenItems.length === 0 ||
-                  (module === "games" && !platform.trim())
+                  (module === "games" && selectedPlatforms.size === 0)
                 }
                 onClick={() => void create()}
               >

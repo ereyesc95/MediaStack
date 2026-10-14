@@ -250,6 +250,24 @@ def _game_card_from_dir(
     launch = _pick_launch_file(game_dir, title=title)
     logo_url, icon_url = find_logo_file(game_dir, media_root)
     launch_rel = safe_relative(launch, media_root) if launch else None
+    genre_names: list[str] = []
+    about_path = game_dir / "[Artwork]" / "about.json"
+    if about_path.is_file():
+        try:
+            import json
+
+            about = json.loads(about_path.read_text(encoding="utf-8"))
+            raw_genres = about.get("genres") or []
+            if isinstance(raw_genres, list):
+                for g in raw_genres:
+                    if isinstance(g, str) and g.strip():
+                        genre_names.append(g.strip())
+                    elif isinstance(g, dict):
+                        name = (g.get("name") or "").strip()
+                        if name:
+                            genre_names.append(name)
+        except Exception:
+            genre_names = []
     return {
         "id": _game_id(rel),
         "title": title or parse_folder_bracket_tags(game_dir.name)[0],
@@ -278,6 +296,7 @@ def _game_card_from_dir(
         "open_label": "Launch" if launch else None,
         "hub_title": hub_title,
         "official": not is_unofficial_folder(game_dir.name),
+        "genre_names": genre_names,
     }
 
 
@@ -417,18 +436,21 @@ def build_games_catalog(media_root: Path | None = None) -> dict:
         slug = part["id"]
         plat_key = platform.casefold()
         if plat_key not in platforms_map:
+            from app.platform_assets import platform_card_urls
+
+            plat_art = platform_card_urls(platform)
             platforms_map[plat_key] = {
                 "id": normalize_franchise_slug(platform) or plat_key,
                 "name": platform,
                 "slug": normalize_franchise_slug(platform) or plat_key,
                 "game_count": 0,
                 "franchise_count": 0,
-                "cover_url": part.get("cover_url"),
-                "portrait_url": part.get("portrait_url"),
-                "landscape_url": part.get("landscape_url"),
-                "banner_url": part.get("banner_url"),
-                "logo_url": part.get("logo_url"),
-                "icon_url": part.get("icon_url"),
+                "cover_url": plat_art.get("cover_url") or part.get("cover_url"),
+                "portrait_url": plat_art.get("cover_url") or part.get("portrait_url"),
+                "landscape_url": plat_art.get("cover_url") or part.get("landscape_url"),
+                "banner_url": plat_art.get("cover_url") or part.get("banner_url"),
+                "logo_url": plat_art.get("logo_url"),
+                "icon_url": plat_art.get("icon_url"),
             }
         platforms_map[plat_key]["game_count"] += int(part.get("game_count") or 0)
         platforms_map[plat_key]["franchise_count"] += 1

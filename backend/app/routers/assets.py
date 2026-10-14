@@ -25,6 +25,7 @@ NESTED_PREFIXES = (
     "people",
     "universes",
     "universe",
+    "platforms",
 )
 DATA_FILE_PREFIXES = ("people", "links")
 
@@ -116,6 +117,12 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
             return None
         if folder == "labels":
             return _first_existing(root / "labels", stem)
+        if folder == "platforms":
+            # Preserve spaces in platform filenames (e.g. "Nintendo Switch.png")
+            nested = root / "platforms" / name
+            if nested.is_file():
+                return nested
+            return _first_existing(root / "platforms", stem)
         if folder == "companies":
             return _first_existing(root / "companies", stem)
         if folder == "links":

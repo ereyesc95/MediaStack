@@ -3299,7 +3299,9 @@ export async function createCatalogImport(
     franchise_home: boolean;
     include_guide: boolean;
     nested_series: boolean;
+    /** @deprecated Prefer `platforms` for Games multi-create. */
     platform?: string;
+    platforms?: string[];
     items: CatalogImportItem[];
   }
 ) {
@@ -3307,6 +3309,8 @@ export async function createCatalogImport(
     ok: boolean;
     franchise_name: string;
     franchise_path: string;
+    franchise_paths?: string[];
+    platforms?: string[];
     created: string[];
     skipped: string[];
     metadata_errors: string[];

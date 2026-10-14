@@ -128,6 +128,7 @@ def games_filter_options(
         ],
         "platforms": platforms,
         "publishers": [],
+        "writers": [],
         "studios": [],
         "decades": [],
         "country_groups": [],

@@ -752,6 +752,30 @@ def update_catalog_folders(
     }
 
 
+def _resolve_game_platforms(body: dict) -> list[str]:
+    """Normalize Games create platforms from `platforms[]` or legacy `platform`."""
+    raw_list = body.get("platforms")
+    candidates: list[str] = []
+    if isinstance(raw_list, list):
+        candidates = [str(x).strip() for x in raw_list if str(x).strip()]
+    if not candidates:
+        single = str(body.get("platform") or "").strip()
+        if single:
+            candidates = [single]
+    platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
+    out: list[str] = []
+    seen: set[str] = set()
+    for platform_raw in candidates:
+        name = platform_cf.get(platform_raw.casefold()) or _safe_name(
+            platform_raw, fallback=""
+        )
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            out.append(name)
+    return out
+
+
 @router.post("/{module}/create")
 async def create_catalog_import(
     module: str,
@@ -774,189 +798,200 @@ async def create_catalog_import(
     ):
         raise HTTPException(400, "Select at least one title")
 
-    platform_name = ""
+    platform_names: list[str] = []
     if module == "games":
-        platform_raw = str(body.get("platform") or "").strip()
-        platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
-        platform_name = platform_cf.get(platform_raw.casefold()) or _safe_name(
-            platform_raw, fallback=""
-        )
-        if not platform_name:
+        platform_names = _resolve_game_platforms(body)
+        if not platform_names:
             raise HTTPException(
                 400,
-                "Platform is required for Games (e.g. Nintendo Switch)",
+                "At least one platform is required for Games (e.g. Nintendo Switch)",
             )
-        franchise_dir = (
+        franchise_dirs = [
             root
             / "Games"
             / platform_name
             / _letter_folder(franchise_name)
             / franchise_name
-        )
+            for platform_name in platform_names
+        ]
     else:
-        franchise_dir = (
+        franchise_dirs = [
             root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
-        )
-    franchise_existed = franchise_dir.exists()
-    franchise_dir.mkdir(parents=True, exist_ok=True)
+        ]
+
     make_home = bool(body.get("franchise_home"))
+    include_guide = bool(body.get("include_guide", True))
+    nested_series = bool(body.get("nested_series", False))
     if make_home:
         set_explicit_franchise_home(db, franchise_name, module)
-        if not franchise_existed:
-            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
-                (franchise_dir / "[Artwork]" / child).mkdir(
-                    parents=True, exist_ok=True
-                )
-    if bool(body.get("include_guide", True)) and not franchise_existed:
-        (franchise_dir / "User guide.txt").write_text(
-            get_catalog_user_guide(db, module), encoding="utf-8"
-        )
     db.commit()
 
     created: list[str] = []
     skipped: list[str] = []
     metadata_errors: list[str] = []
     first_item = items[0] if items else {}
-    if make_home and not franchise_existed:
-        artwork = franchise_dir / "[Artwork]"
-        await _download_primary(first_item.get("poster_url"), artwork / "Cover - Front")
-        await _download_primary(first_item.get("backdrop_url"), artwork / "Cover - Banner")
 
-    for raw in items:
-        provider_id = str(raw.get("provider_id") or "").strip()
-        title = _safe_name(str(raw.get("title") or "Untitled"))
-        date = str(raw.get("date") or "").strip() or None
-        nested_series = bool(body.get("nested_series", False))
-        if module == "series" and not nested_series:
-            leaf_dir = franchise_dir
-        else:
-            leaf_dir = franchise_dir / f"{_date_prefix(date)}{title}"
-        if leaf_dir.exists() and leaf_dir != franchise_dir:
-            skipped.append(_relative(leaf_dir, root))
-            continue
-        if module == "series" and not nested_series and franchise_existed:
-            skipped.append(_relative(leaf_dir, root))
-            continue
-
-        if module == "series":
-            _series_tree(leaf_dir)
-            for season in raw.get("seasons") or []:
-                number = season.get("number")
-                if number == 0:
-                    (leaf_dir / "Specials").mkdir(parents=True, exist_ok=True)
-                    continue
-                if not isinstance(number, int) or number < 1:
-                    continue
-                season_name = f"{_date_prefix(season.get('date'))}Season {number}"
-                (leaf_dir / "Episodes" / season_name).mkdir(parents=True, exist_ok=True)
-        else:
-            _gallery_tree(leaf_dir)
-            if module == "games":
-                _mkdir_tree(
-                    leaf_dir,
-                    (*(f"Audio/{category}" for category in AUDIO_CATEGORIES),),
+    for franchise_dir in franchise_dirs:
+        franchise_existed = franchise_dir.exists()
+        franchise_dir.mkdir(parents=True, exist_ok=True)
+        if make_home and not franchise_existed:
+            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
+                (franchise_dir / "[Artwork]" / child).mkdir(
+                    parents=True, exist_ok=True
                 )
+            artwork = franchise_dir / "[Artwork]"
+            await _download_primary(
+                first_item.get("poster_url"), artwork / "Cover - Front"
+            )
+            await _download_primary(
+                first_item.get("backdrop_url"), artwork / "Cover - Banner"
+            )
+        if include_guide and not franchise_existed:
+            (franchise_dir / "User guide.txt").write_text(
+                get_catalog_user_guide(db, module), encoding="utf-8"
+            )
 
-        covers = leaf_dir / "Gallery" / "Covers"
-        await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
-        await _download_primary(raw.get("backdrop_url"), covers / "Cover - Banner")
-        created.append(_relative(leaf_dir, root))
+        for raw in items:
+            provider_id = str(raw.get("provider_id") or "").strip()
+            title = _safe_name(str(raw.get("title") or "Untitled"))
+            date = str(raw.get("date") or "").strip() or None
+            if module == "series" and not nested_series:
+                leaf_dir = franchise_dir
+            else:
+                leaf_dir = franchise_dir / f"{_date_prefix(date)}{title}"
+            if leaf_dir.exists() and leaf_dir != franchise_dir:
+                skipped.append(_relative(leaf_dir, root))
+                continue
+            if module == "series" and not nested_series and franchise_existed:
+                skipped.append(_relative(leaf_dir, root))
+                continue
 
-        try:
-            if module == "movies" and provider_id:
-                from app.movies_index import _film_id
-                from app.movies_refresh import refresh_film_metadata
+            if module == "series":
+                _series_tree(leaf_dir)
+                for season in raw.get("seasons") or []:
+                    number = season.get("number")
+                    if number == 0:
+                        (leaf_dir / "Specials").mkdir(parents=True, exist_ok=True)
+                        continue
+                    if not isinstance(number, int) or number < 1:
+                        continue
+                    season_name = f"{_date_prefix(season.get('date'))}Season {number}"
+                    (leaf_dir / "Episodes" / season_name).mkdir(
+                        parents=True, exist_ok=True
+                    )
+            else:
+                _gallery_tree(leaf_dir)
+                if module == "games":
+                    _mkdir_tree(
+                        leaf_dir,
+                        (*(f"Audio/{category}" for category in AUDIO_CATEGORIES),),
+                    )
 
-                film_id = _film_id(_relative(leaf_dir, root))
-                await refresh_film_metadata(
-                    db,
-                    film_id,
-                    tmdb_id=provider_id,
-                    cache_artwork=False,
-                )
-            elif module == "series" and provider_id:
-                from app.series_refresh import refresh_series_metadata
+            covers = leaf_dir / "Gallery" / "Covers"
+            await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
+            await _download_primary(raw.get("backdrop_url"), covers / "Cover - Banner")
+            created.append(_relative(leaf_dir, root))
 
-                await refresh_series_metadata(
-                    db,
-                    franchise_name,
-                    tmdb_id=provider_id,
-                    subseries_titles=[title] if nested_series else None,
-                    cache_artwork=False,
-                )
-            elif module == "games" and provider_id:
-                from app.games_index import _game_id
-                from app.games_refresh import refresh_game_metadata
+            try:
+                if module == "movies" and provider_id:
+                    from app.movies_index import _film_id
+                    from app.movies_refresh import refresh_film_metadata
 
-                game_id = _game_id(_relative(leaf_dir, root))
-                await refresh_game_metadata(
-                    db,
-                    game_id,
-                    {
-                        "title": title,
-                        "folder_path": _relative(leaf_dir, root),
-                        "name": title,
-                    },
-                )
-            elif module == "books" and provider_id:
-                from app.books_store import (
-                    book_id_for_dir,
-                    ensure_book_leaf,
-                    ensure_book_work,
-                )
-
-                data = (
-                    await asyncio.to_thread(get_google_book, provider_id) or {}
-                )
-                work_slug = normalize_franchise_slug(franchise_name)
-                rel = _relative(leaf_dir, root)
-                ensure_book_work(
-                    db,
-                    work_slug=work_slug,
-                    name=franchise_name,
-                    folder_path=_relative(franchise_dir, root),
-                )
-                book_id = book_id_for_dir(leaf_dir)
-                if book_id:
-                    leaf = ensure_book_leaf(
+                    film_id = _film_id(_relative(leaf_dir, root))
+                    await refresh_film_metadata(
                         db,
-                        book_id=book_id,
-                        work_slug=work_slug,
-                        folder_path=rel,
-                        title=title,
+                        film_id,
+                        tmdb_id=provider_id,
+                        cache_artwork=False,
                     )
-                    leaf.blk_metadata_json = json.dumps(
+                elif module == "series" and provider_id:
+                    from app.series_refresh import refresh_series_metadata
+
+                    await refresh_series_metadata(
+                        db,
+                        franchise_name,
+                        tmdb_id=provider_id,
+                        subseries_titles=[title] if nested_series else None,
+                        cache_artwork=False,
+                    )
+                elif module == "games" and provider_id:
+                    from app.games_index import _game_id
+                    from app.games_refresh import refresh_game_metadata
+
+                    game_id = _game_id(_relative(leaf_dir, root))
+                    await refresh_game_metadata(
+                        db,
+                        game_id,
                         {
-                            "google_books_id": provider_id,
-                            "bio": data.get("description"),
-                            "writers": data.get("authors") or [],
-                            "authors": data.get("authors") or [],
-                            "publishers": [data["publisher"]]
-                            if data.get("publisher")
-                            else [],
-                            "genres": data.get("categories") or [],
-                            "language": data.get("language"),
-                            "page_count": data.get("page_count"),
-                            "links": [
-                                {"type": "Google Books", "url": data["info_link"]}
-                            ]
-                            if data.get("info_link")
-                            else [],
+                            "title": title,
+                            "folder_path": _relative(leaf_dir, root),
+                            "name": title,
                         },
-                        ensure_ascii=False,
                     )
-                    leaf.blk_refreshed_at = datetime.now(timezone.utc).isoformat()
-                    db.commit()
-        except Exception as exc:
-            db.rollback()
-            metadata_errors.append(f"{title}: {exc}")
+                elif module == "books" and provider_id:
+                    from app.books_store import (
+                        book_id_for_dir,
+                        ensure_book_leaf,
+                        ensure_book_work,
+                    )
+
+                    data = (
+                        await asyncio.to_thread(get_google_book, provider_id) or {}
+                    )
+                    work_slug = normalize_franchise_slug(franchise_name)
+                    rel = _relative(leaf_dir, root)
+                    ensure_book_work(
+                        db,
+                        work_slug=work_slug,
+                        name=franchise_name,
+                        folder_path=_relative(franchise_dir, root),
+                    )
+                    book_id = book_id_for_dir(leaf_dir)
+                    if book_id:
+                        leaf = ensure_book_leaf(
+                            db,
+                            book_id=book_id,
+                            work_slug=work_slug,
+                            folder_path=rel,
+                            title=title,
+                        )
+                        leaf.blk_metadata_json = json.dumps(
+                            {
+                                "google_books_id": provider_id,
+                                "bio": data.get("description"),
+                                "writers": data.get("authors") or [],
+                                "authors": data.get("authors") or [],
+                                "publishers": [data["publisher"]]
+                                if data.get("publisher")
+                                else [],
+                                "genres": data.get("categories") or [],
+                                "language": data.get("language"),
+                                "page_count": data.get("page_count"),
+                                "links": [
+                                    {"type": "Google Books", "url": data["info_link"]}
+                                ]
+                                if data.get("info_link")
+                                else [],
+                            },
+                            ensure_ascii=False,
+                        )
+                        leaf.blk_refreshed_at = datetime.now(
+                            timezone.utc
+                        ).isoformat()
+                        db.commit()
+            except Exception as exc:
+                db.rollback()
+                metadata_errors.append(f"{title}: {exc}")
 
     db.commit()
     _rebuild_franchise_index(root)
+    primary_dir = franchise_dirs[0]
     return {
         "ok": True,
         "franchise_name": franchise_name,
-        "franchise_path": _relative(franchise_dir, root),
+        "franchise_path": _relative(primary_dir, root),
+        "franchise_paths": [_relative(d, root) for d in franchise_dirs],
+        "platforms": platform_names,
         "created": created,
         "skipped": skipped,
         "metadata_errors": metadata_errors,
