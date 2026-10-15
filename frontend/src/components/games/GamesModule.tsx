@@ -16,6 +16,7 @@ import {
   type GamesSection,
 } from "../../gamesRoute";
 import { getRecentGameIds } from "../../gamesRecent";
+import { saveFranchiseHomeReferrer } from "../../franchiseHome";
 import type {
   CardOrientation,
   MoviesFilmCard,
@@ -468,9 +469,20 @@ export default function GamesModule({
               : patch.section) as GamesSection | undefined;
             if (!nextGid) {
               clearMediaTheme(userId);
+              // Prefer GAMES tab order on the shared /franchise hub (even if
+              // artwork home resolves to Series).
+              saveFranchiseHomeReferrer({
+                source: "games",
+                home: "series",
+                franchiseId: nextFid,
+                franchiseName: workCard?.name || game?.work_name,
+                preferredSection: "games",
+                backLabel: "GAMES",
+              });
             }
             pushGamesRoute({
               franchiseId: nextFid,
+              franchiseName: workCard?.name || game?.work_name,
               gameId: nextGid,
               section: nextSection ?? "overview",
               overviewTab: patch.overviewTab as GamesOverviewTab | undefined,

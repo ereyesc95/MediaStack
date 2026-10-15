@@ -24875,82 +24875,195 @@ button.lyrics-status-badge--icon-only {
   flex: 0 0 auto;
   min-height: 3.25rem;
   max-height: min(10rem, 22vh);
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35))
+    var(--scrollbar-track, rgba(255, 255, 255, 0.06));
   padding: 0.5rem;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 0.75rem;
   background: color-mix(in srgb, var(--bg-elevated) 65%, transparent);
 }
 
-.manage-catalog-modal__platforms {
-  max-height: min(14rem, 28vh);
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0 0.35rem;
-  /* Always show scrollbar so users know the list continues */
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track, transparent);
-}
-
-.manage-catalog-modal__platforms::-webkit-scrollbar {
+.manage-catalog-modal__items::-webkit-scrollbar {
   width: 8px;
+  background: var(--scrollbar-track, rgba(255, 255, 255, 0.06));
 }
 
-.manage-catalog-modal__platforms::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+.manage-catalog-modal__items::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35));
   border-radius: 4px;
 }
 
-.manage-catalog-modal__platforms .manage-catalog-modal__item,
-.artist-admin-form label.manage-catalog-modal__platforms .manage-catalog-modal__item,
-.artist-admin-form label.manage-catalog-modal__item {
-  padding: 0.08rem 0.3rem;
-  min-height: 0;
-}
-
-.manage-catalog-modal__new-platform {
+.manage-catalog-modal__platform-pills {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.35rem;
+  gap: 0.4rem 0.45rem;
 }
 
-.manage-catalog-modal__new-platform-btn {
+.manage-catalog-modal__platform-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.manage-catalog-modal__platform-pill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+
+.manage-catalog-modal__platform-pill-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.manage-catalog-modal__platform-pill-remove:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.manage-catalog-modal__platform-select {
+  min-width: 8.5rem;
+  max-width: 12rem;
+  padding: 0.22rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.manage-catalog-modal__platform-add-btn {
   border: none;
   background: transparent;
   color: var(--accent, #7dd3c7);
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
-  padding: 0.15rem 0;
+  padding: 0.2rem 0.35rem;
+  text-decoration: none;
 }
 
-.manage-catalog-modal__new-platform-btn:hover {
-  text-decoration: underline;
+.manage-catalog-modal__platform-add-btn:hover,
+.manage-catalog-modal__platform-add-btn:focus-visible {
+  color: var(--accent, #7dd3c7);
+  text-decoration: none;
+  opacity: 0.88;
+}
+
+.manage-catalog-modal__new-platform-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
 }
 
 .manage-catalog-modal__new-platform-input {
-  flex: 1 1 10rem;
-  min-width: 8rem;
+  flex: 1 1 8rem;
+  min-width: 7rem;
+  max-width: 14rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.manage-catalog-modal__platform-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: none;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--accent, #7dd3c7);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+}
+
+.manage-catalog-modal__platform-icon-btn:hover,
+.manage-catalog-modal__platform-icon-btn:focus-visible {
+  color: var(--accent, #7dd3c7);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.manage-catalog-modal__platform-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.manage-catalog-modal__platform-icon-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  display: block;
+}
+
+.manage-catalog-modal__items::-webkit-scrollbar,
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.manage-catalog-modal__items::-webkit-scrollbar-track,
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.manage-catalog-modal__items::-webkit-scrollbar-thumb,
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.42) !important;
+  border-radius: 4px;
 }
 
 .manage-catalog-modal__suggest-scroll {
   /* ~5 result rows visible; scroll for the rest */
   max-height: 12.5rem;
-  overflow-y: scroll;
+  overflow-y: scroll !important;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track, transparent);
+  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35))
+    var(--scrollbar-track, rgba(255, 255, 255, 0.06));
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 0.75rem;
   padding: 0.25rem;
 }
 
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar {
+  width: 8px;
+  background: var(--scrollbar-track, rgba(255, 255, 255, 0.06));
+}
+
 .manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35));
+  border-radius: 4px;
 }
 
 .manage-catalog-modal__form--details .manage-catalog-modal__suggest-scroll .add-similar-results,

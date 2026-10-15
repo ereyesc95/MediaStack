@@ -3260,6 +3260,8 @@ export type CatalogImportItem = {
   poster_url?: string | null;
   backdrop_url?: string | null;
   seasons?: { number: number; name?: string | null; date?: string | null }[];
+  /** Games: platforms this title should be created under. */
+  platforms?: string[];
 };
 
 export async function searchCatalogImport(

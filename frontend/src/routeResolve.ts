@@ -3,6 +3,7 @@ import {
   fetchBandVideoIndex,
   fetchBooksFranchise,
   fetchBooksFranchiseOverview,
+  fetchGamesFranchise,
   fetchMoviesFranchise,
   fetchSeriesFranchise,
   fetchUniverses,
@@ -27,6 +28,7 @@ import {
 import { parseBooksPath } from "./booksRoute";
 import { parseGamesPath } from "./gamesRoute";
 import { parseFranchisePath, parseLegacyFranchiseHubPath } from "./franchiseRoute";
+import { getFranchiseHomeReferrer } from "./franchiseHome";
 import { parseMoviesPath } from "./moviesRoute";
 import { parseArtistPath, parsePlaylistsGridPath, parseUserPlaylistPath } from "./musicRoute";
 import { parseSeriesPath } from "./seriesRoute";
@@ -40,7 +42,7 @@ import {
   releaseIdFromSlug,
 } from "./routeEntityCache";
 
-type FranchiseHomeModule = "series" | "movies" | "books";
+type FranchiseHomeModule = "series" | "movies" | "books" | "games";
 
 function matchLeafTitle<
   T extends { id: string; title?: string | null; name?: string | null; folder_name?: string | null },
@@ -85,6 +87,12 @@ async function resolveFranchiseHomeModule(
   try {
     const books = await fetchBooksFranchiseOverview(franchiseId);
     if (books?.id) return "books";
+  } catch {
+    /* try games */
+  }
+  try {
+    const games = await fetchGamesFranchise(franchiseId);
+    if (games?.id) return "games";
   } catch {
     /* default */
   }
@@ -309,6 +317,19 @@ export function franchiseRouteToView(
       universeId: route.universeId,
     };
   }
+  if (module === "games") {
+    return {
+      kind: "games",
+      franchiseId: route.franchiseId,
+      section: (route.section === "episodes"
+        ? "overview"
+        : route.section) as import("./gamesRoute").GamesSection,
+      overviewTab: route.overviewTab as
+        | import("./gamesRoute").GamesOverviewTab
+        | undefined,
+      universeId: route.universeId,
+    };
+  }
   return {
     kind: "series",
     franchiseId: route.franchiseId,
@@ -350,7 +371,16 @@ export async function resolvePathToView(
 
   const franchiseRoute = parseFranchisePath(pathname, search);
   if (franchiseRoute) {
-    const module = await resolveFranchiseHomeModule(franchiseRoute.franchiseId);
+    const ref = getFranchiseHomeReferrer();
+    const refMatches =
+      ref &&
+      slugMatch(String(ref.franchiseId || ""), franchiseRoute.franchiseId);
+    const module =
+      refMatches && ref!.source === "games"
+        ? ("games" as FranchiseHomeModule)
+        : refMatches && (ref!.source === "movies" || ref!.source === "books")
+          ? ref!.source
+          : await resolveFranchiseHomeModule(franchiseRoute.franchiseId);
     return { view: franchiseRouteToView(franchiseRoute, module) };
   }
 
@@ -487,6 +517,26 @@ export async function resolvePathToView(
 
   const gamesParsed = parseGamesPath(pathname, search);
   if (gamesParsed) {
+    if (gamesParsed.franchiseOnly) {
+      const { franchisePath } = await import("./franchiseRoute");
+      const fr: FranchiseRoute = {
+        franchiseId: gamesParsed.franchiseId,
+        section: gamesParsed.section as FranchiseRoute["section"],
+        overviewTab: gamesParsed.overviewTab as FranchiseRoute["overviewTab"],
+        universeId: gamesParsed.universeId,
+        franchiseName: gamesParsed.franchiseName,
+      };
+      return {
+        view: {
+          kind: "games",
+          franchiseId: gamesParsed.franchiseId,
+          section: gamesParsed.section,
+          overviewTab: gamesParsed.overviewTab,
+          universeId: gamesParsed.universeId,
+        },
+        canonicalPath: franchisePath(fr),
+      };
+    }
     return {
       view: {
         kind: "games",
@@ -540,6 +590,14 @@ export async function resolvePathToView(
 function syncFranchiseModule(pathname: string): FranchiseHomeModule {
   if (pathname.startsWith("/movies")) return "movies";
   if (pathname.startsWith("/books")) return "books";
+  if (pathname.startsWith("/games")) return "games";
+  // Shared /franchise/… — honor games referrer so GAMES stays after OVERVIEW.
+  if (pathname.startsWith("/franchise")) {
+    const ref = getFranchiseHomeReferrer();
+    if (ref?.source === "games") return "games";
+    if (ref?.source === "movies") return "movies";
+    if (ref?.source === "books") return "books";
+  }
   return "series";
 }
 

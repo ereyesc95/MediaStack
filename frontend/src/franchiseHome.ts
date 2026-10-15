@@ -1,6 +1,6 @@
 /** Cross-module franchise routing when [Artwork] lives in another media root. */
 
-export type FranchiseHomeModule = "series" | "movies" | "books";
+export type FranchiseHomeModule = "series" | "movies" | "books" | "games";
 
 export type FranchiseHomeReferrer = {
   /** Module the user clicked from. */
@@ -59,6 +59,8 @@ export function preferredSectionForSource(
       return "movies";
     case "books":
       return "library";
+    case "games":
+      return "games";
     case "series":
     default:
       return "series";
@@ -69,7 +71,14 @@ export function artworkHomeModule(
   card: { artwork_home_module?: string | null } | null | undefined
 ): FranchiseHomeModule | null {
   const home = String(card?.artwork_home_module || "").toLowerCase();
-  if (home === "series" || home === "movies" || home === "books") return home;
+  if (
+    home === "series" ||
+    home === "movies" ||
+    home === "books" ||
+    home === "games"
+  ) {
+    return home;
+  }
   return null;
 }
 

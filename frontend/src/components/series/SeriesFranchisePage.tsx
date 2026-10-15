@@ -374,6 +374,7 @@ export default function SeriesFranchisePage({
     if (isGames) return GAMES_SECTIONS;
     if (isBooks) return BOOKS_SECTIONS;
     if (isMoviesOnly) return MOVIES_SECTIONS;
+    if (homeReferrer?.source === "games") return GAMES_SECTIONS;
     if (homeReferrer?.source === "movies") return MOVIES_SECTIONS;
     if (homeReferrer?.source === "books") return SERIES_FROM_BOOKS_SECTIONS;
     return SERIES_SECTIONS;

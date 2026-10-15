@@ -1,3 +1,4 @@
+import { franchisePath, type FranchiseRoute } from "./franchiseRoute";
 import {
   dec,
   enc,
@@ -128,20 +129,16 @@ function parseFlatGamesPath(pathname: string, search: string): GamesRoute | null
 }
 
 export function gamesPath(route: GamesRoute): string {
+  // Franchise hub (no leaf) uses the shared /franchise/… URL.
   if (!route.gameId) {
-    const base = `/games/${enc(route.franchiseId)}`;
-    const section = SECTIONS.includes(route.section) ? route.section : "overview";
-    let path = base;
-    if (section === "overview") {
-      const tab =
-        route.overviewTab && OVERVIEW_TABS.includes(route.overviewTab)
-          ? route.overviewTab
-          : "about";
-      path += `/overview/${tab}`;
-    } else {
-      path += `/${section}`;
-    }
-    return withUniverseQuery(path, route.universeId);
+    const fr: FranchiseRoute = {
+      franchiseId: route.franchiseId,
+      franchiseName: route.franchiseName,
+      section: route.section as FranchiseRoute["section"],
+      overviewTab: route.overviewTab as FranchiseRoute["overviewTab"],
+      universeId: route.universeId,
+    };
+    return franchisePath(fr);
   }
 
   let path = `/games/${enc(route.franchiseId)}/${enc(route.gameId!)}`;

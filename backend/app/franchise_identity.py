@@ -38,7 +38,11 @@ def explicit_franchise_home(franchise_name: str) -> str | None:
     try:
         row = db.get(AppSetting, f"{FRANCHISE_HOME_KEY_PREFIX}{slug}")
         value = (row.aps_value or "").strip().casefold() if row else ""
-        return value if value in {"music", "series", "movies", "books"} else None
+        return (
+            value
+            if value in {"music", "series", "movies", "books", "games"}
+            else None
+        )
     finally:
         db.close()
 
@@ -48,7 +52,7 @@ def set_explicit_franchise_home(
 ) -> None:
     slug = normalize_franchise_slug(franchise_name)
     value = module.strip().casefold()
-    if not slug or value not in {"music", "series", "movies", "books"}:
+    if not slug or value not in {"music", "series", "movies", "books", "games"}:
         raise ValueError("Invalid franchise home")
     key = f"{FRANCHISE_HOME_KEY_PREFIX}{slug}"
     row = db.get(AppSetting, key)

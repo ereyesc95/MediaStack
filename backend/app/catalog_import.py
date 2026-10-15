@@ -579,6 +579,7 @@ async def preview_catalog_import(
         game = await igdb_get_game(provider_id)
         if not game:
             raise HTTPException(404, "IGDB game not found")
+        game_platforms = list(game.get("platforms") or [])
         return {
             "franchise_name": game.get("name") or body.get("title") or "Untitled",
             "items": [
@@ -588,10 +589,12 @@ async def preview_catalog_import(
                     "date": game.get("date_iso"),
                     "poster_url": game.get("cover_url"),
                     "backdrop_url": None,
-                    "platforms": game.get("platforms") or [],
+                    "platforms": game_platforms,
                 }
             ],
-            "platforms": list(GAME_PLATFORMS),
+            # Full catalog for the checkbox list; selection uses item.platforms only.
+            "platform_options": list(GAME_PLATFORMS),
+            "platforms": game_platforms,
             "scope": "single",
         }
     if module == "movies":
@@ -767,6 +770,14 @@ def update_catalog_folders(
     }
 
 
+def _canonicalize_platform_name(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
+    return platform_cf.get(text.casefold()) or _safe_name(text, fallback="")
+
+
 def _resolve_game_platforms(body: dict) -> list[str]:
     """Normalize Games create platforms from `platforms[]` or legacy `platform`."""
     raw_list = body.get("platforms")
@@ -777,18 +788,45 @@ def _resolve_game_platforms(body: dict) -> list[str]:
         single = str(body.get("platform") or "").strip()
         if single:
             candidates = [single]
-    platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
+    # Also collect platforms declared on individual items.
+    for raw in body.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        for p in raw.get("platforms") or []:
+            text = str(p or "").strip()
+            if text:
+                candidates.append(text)
     out: list[str] = []
     seen: set[str] = set()
     for platform_raw in candidates:
-        name = platform_cf.get(platform_raw.casefold()) or _safe_name(
-            platform_raw, fallback=""
-        )
+        name = _canonicalize_platform_name(platform_raw)
         key = name.casefold()
         if name and key not in seen:
             seen.add(key)
             out.append(name)
     return out
+
+
+def _item_platform_names(raw: dict, fallback: list[str]) -> list[str]:
+    """Platforms this title should be created under.
+
+    Empty item platforms → ``fallback`` (all selected platforms) for
+    backwards compatibility with older clients.
+    """
+    candidates: list[str] = []
+    for p in raw.get("platforms") or []:
+        text = str(p or "").strip()
+        if text:
+            candidates.append(text)
+    out: list[str] = []
+    seen: set[str] = set()
+    for platform_raw in candidates:
+        name = _canonicalize_platform_name(platform_raw)
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            out.append(name)
+    return out or list(fallback)
 
 
 @router.post("/{module}/create")
@@ -845,10 +883,23 @@ async def create_catalog_import(
     skipped: list[str] = []
     metadata_errors: list[str] = []
     first_item = items[0] if items else {}
+    # Precompute per-item platforms so each game lands only on its platforms.
+    item_platforms: list[list[str]] = []
+    if module == "games":
+        for raw in items:
+            if isinstance(raw, dict):
+                item_platforms.append(
+                    _item_platform_names(raw, platform_names)
+                )
+            else:
+                item_platforms.append(list(platform_names))
 
-    for franchise_dir in franchise_dirs:
+    for platform_idx, franchise_dir in enumerate(franchise_dirs):
         franchise_existed = franchise_dir.exists()
         franchise_dir.mkdir(parents=True, exist_ok=True)
+        platform_name = (
+            platform_names[platform_idx] if module == "games" else ""
+        )
         if make_home and not franchise_existed:
             for child in ("Branding", "Covers", "Gallery", "Exclusive"):
                 (franchise_dir / "[Artwork]" / child).mkdir(
@@ -866,7 +917,14 @@ async def create_catalog_import(
                 get_catalog_user_guide(db, module), encoding="utf-8"
             )
 
-        for raw in items:
+        for idx, raw in enumerate(items):
+            if module == "games":
+                allowed = item_platforms[idx] if idx < len(item_platforms) else []
+                if platform_name and platform_name.casefold() not in {
+                    p.casefold() for p in allowed
+                }:
+                    # Empty franchise folder under this platform — intentional.
+                    continue
             provider_id = str(raw.get("provider_id") or "").strip()
             title = _safe_name(str(raw.get("title") or "Untitled"))
             date = str(raw.get("date") or "").strip() or None
@@ -941,6 +999,7 @@ async def create_catalog_import(
                             "title": title,
                             "folder_path": _relative(leaf_dir, root),
                             "name": title,
+                            "platform": platform_name or None,
                         },
                     )
                 elif module == "books" and provider_id:
