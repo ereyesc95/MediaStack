@@ -1052,7 +1052,7 @@ export default function SeriesModule({
                   ? () => setManageCatalogOpen(true)
                   : undefined
               }
-              manageCatalogLabel="Manage Series"
+              manageCatalogLabel="My series"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

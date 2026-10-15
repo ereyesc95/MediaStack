@@ -38,13 +38,13 @@ import SeriesSubseriesPage, {
   type SeriesCatalogBrowseTarget,
 } from "../series/SeriesSubseriesPage";
 import GamesHome from "./GamesHome";
-import GamesMediaPage from "./GamesMediaPage";
+import GamesFranchisePage from "./GamesFranchisePage";
+import GamesPlatformFilter from "./GamesPlatformFilter";
 
 type GamesTab = "home" | "catalog";
 
 const FILTER_MODES: { id: SeriesFilterMode; label: string }[] = [
   { id: "name", label: "TITLE" },
-  { id: "platform", label: "PLATFORM" },
   { id: "genre", label: "GENRE" },
   { id: "start", label: "RELEASE DATE" },
   { id: "developer", label: "DEVELOPER" },
@@ -61,6 +61,7 @@ type Props = {
   onSync: () => void;
   onChooseSource?: () => void;
   isAdmin?: boolean;
+  userId?: number;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   onSelectMedia: (opt: MediaOption) => void;
@@ -93,6 +94,7 @@ export default function GamesModule({
   onSync,
   onChooseSource,
   isAdmin,
+  userId,
   onSwitchProfile,
   onEditProfile,
   onSelectMedia,
@@ -173,16 +175,46 @@ export default function GamesModule({
   }, []);
 
   useEffect(() => {
-    clearMediaTheme();
+    clearMediaTheme(userId);
     loadDashboard();
     loadCatalog();
-    void fetchGamesFilterOptions()
-      .then(setFilterOptions)
+    void Promise.all([fetchGamesFilterOptions(), fetchGamesCatalog()])
+      .then(([opts, catalog]) => {
+        const used = new Set(
+          (catalog.games || catalog.films || [])
+            .flatMap((g) => (g as { genre_names?: string[] }).genre_names || [])
+            .map((n) => String(n).trim().toLowerCase())
+            .filter(Boolean)
+        );
+        // Never fall back to all_subgenre_groups (full seed taxonomy).
+        const sourceGroups = opts.subgenre_groups || [];
+        const groups = used.size
+          ? sourceGroups
+              .map((group) => ({
+                ...group,
+                items: (group.items || []).filter((item) =>
+                  used.has(String(item.name || "").trim().toLowerCase())
+                ),
+              }))
+              .filter((group) => (group.items || []).length > 0)
+          : sourceGroups;
+        setFilterOptions({
+          ...opts,
+          all_subgenre_groups: groups,
+          subgenre_groups: groups,
+          genres: groups.flatMap((g) =>
+            (g.items || []).map((item) => ({
+              id: item.id,
+              name: item.name || "",
+            }))
+          ),
+        });
+      })
       .catch(() => setFilterOptions(null));
     void prefetchUniverses("games", { force: true }).then((u) => {
       if (u) setUniverses(u.filter((uni) => Boolean(uni.has_games)));
     });
-  }, [loadCatalog, loadDashboard, syncTick]);
+  }, [loadCatalog, loadDashboard, syncTick, userId]);
 
   useEffect(() => {
     if (franchiseId || gameId) setTab("catalog");
@@ -258,7 +290,11 @@ export default function GamesModule({
           };
         });
     }
-    if (catalogScope === "shows") {
+    // Platforms scope with a selected platform → game cards (same as GAMES view).
+    if (
+      catalogScope === "shows" ||
+      (catalogScope === "platforms" && platformFilter)
+    ) {
       const list = platformFilter
         ? games.filter(
             (g) =>
@@ -303,9 +339,10 @@ export default function GamesModule({
             : [],
           open_url: (g as { open_url?: string | null }).open_url,
           open_mode: (g as { open_mode?: string | null }).open_mode,
-          open_label:
-            (g as { open_label?: string | null }).open_label ||
-            ((g as { has_rom?: boolean }).has_rom ? "Play game" : null),
+          has_rom: Boolean((g as { has_rom?: boolean }).has_rom),
+          open_label: (g as { has_rom?: boolean }).has_rom
+            ? "Play game"
+            : null,
           subseries: [
             {
               id: g.id,
@@ -342,6 +379,7 @@ export default function GamesModule({
           universeId={universeId}
           busy={busy}
           isAdmin={isAdmin}
+          userId={userId}
           cardOrientation={cardOrientation}
           onSetOrientation={onSetOrientation}
           onImport={onImport}
@@ -350,6 +388,7 @@ export default function GamesModule({
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
           onBack={() => {
+            clearMediaTheme(userId);
             pushGamesCatalogRoute();
             onNavigate({
               franchiseId: undefined,
@@ -422,10 +461,14 @@ export default function GamesModule({
           }}
           onNavigate={(patch) => {
             const nextFid = patch.franchiseId ?? franchiseId;
-            const nextGid = patch.subseriesId ?? gameId;
+            const nextGid =
+              "subseriesId" in patch ? patch.subseriesId : gameId;
             const nextSection = (patch.section === "library"
               ? "books"
               : patch.section) as GamesSection | undefined;
+            if (!nextGid) {
+              clearMediaTheme(userId);
+            }
             pushGamesRoute({
               franchiseId: nextFid,
               gameId: nextGid,
@@ -445,31 +488,35 @@ export default function GamesModule({
       );
     }
     return (
-      <GamesMediaPage
-        franchiseId={franchiseId}
-        gameId={gameId}
+      <GamesFranchisePage
+        workId={franchiseId}
         section={section}
         overviewTab={overviewTab}
+        universeId={universeId}
         cardOrientation={cardOrientation}
         onSetOrientation={onSetOrientation}
         isAdmin={isAdmin}
+        userId={userId}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
+        backLabel="GAMES"
         onBack={() => {
+          clearMediaTheme(userId);
           pushGamesRootRoute();
           onNavigate({
             franchiseId: undefined,
             gameId: undefined,
-            section: "overview",
+            section: undefined,
+            overviewTab: undefined,
           });
           setTab("home");
         }}
         onNavigate={(patch) => {
           const nextFid = patch.franchiseId ?? franchiseId;
-          const nextGid = "gameId" in patch ? patch.gameId : gameId;
+          const nextGid = "gameId" in patch ? patch.gameId : undefined;
           const nextSec = patch.section ?? section;
           const nextTab = patch.overviewTab ?? overviewTab;
           pushGamesRoute({
@@ -477,19 +524,54 @@ export default function GamesModule({
             gameId: nextGid,
             section: nextSec,
             overviewTab: nextTab,
-            universeId,
+            universeId: patch.universeId ?? universeId,
           });
           onNavigate({
             franchiseId: nextFid,
             gameId: nextGid,
             section: nextSec,
             overviewTab: nextTab,
+            universeId: patch.universeId ?? universeId,
           });
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
-        onOpenMoviesFranchise={onOpenMoviesFranchise}
-        onOpenBooksFranchise={onOpenBooksFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
+        onOpenMoviesPath={(path) => {
+          void resolveMoviesPath(path)
+            .then((hit) => {
+              onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
+            })
+            .catch(() => undefined);
+        }}
+        onOpenBooksPath={(path) => {
+          void resolveBooksPath(path)
+            .then((hit) => {
+              onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+            })
+            .catch(() => undefined);
+        }}
+        onBrowseCatalog={(target) => {
+          setTab("catalog");
+          setCatalogScope("shows");
+          setFilterMode(target.mode);
+          setSearch("");
+          setLetter(target.mode === "name" ? "A" : "");
+          setPlatformFilter(null);
+          setSubgenreId(target.subgenreId ?? "");
+          setDeveloper(
+            (target as { developer?: string }).developer ?? ""
+          );
+          setPublisher(target.publisher ?? "");
+          setWriter(target.writer ?? "");
+          pushGamesCatalogRoute();
+          onNavigate({
+            franchiseId: undefined,
+            gameId: undefined,
+            section: undefined,
+            overviewTab: undefined,
+            universeId: undefined,
+          });
+        }}
       />
     );
   }
@@ -537,18 +619,25 @@ export default function GamesModule({
             ) : null}
             {tab === "catalog" ? (
               <>
-                <CardOrientationPicker
-                  value={cardOrientation}
-                  onChange={onSetOrientation}
-                  includeBadge={catalogScope === "franchises"}
-                />
+                {catalogScope === "platforms" ? (
+                  <GamesPlatformFilter
+                    platforms={platforms}
+                    value={platformFilter}
+                    onChange={(name) => {
+                      setPlatformFilter(name);
+                      setFilterMode("name");
+                      setLetter("A");
+                    }}
+                  />
+                ) : null}
                 <CatalogScopeToggle
                   value={catalogScope}
                   onChange={(next) => {
                     setCatalogScope(next);
                     if (next === "platforms") {
-                      setPlatformFilter(null);
                       setFilterMode("name");
+                    } else {
+                      setPlatformFilter(null);
                     }
                   }}
                   itemsLabel="GAMES"
@@ -561,6 +650,11 @@ export default function GamesModule({
                     <IconMediaGames className="catalog-scope-toggle__icon" />
                   }
                 />
+                <CardOrientationPicker
+                  value={cardOrientation}
+                  onChange={onSetOrientation}
+                  includeBadge={catalogScope === "franchises"}
+                />
               </>
             ) : null}
             <AppMenu
@@ -571,9 +665,11 @@ export default function GamesModule({
               onSwitchProfile={onSwitchProfile}
               onEditProfile={onEditProfile}
               onManageCatalog={
-                isAdmin ? () => setManageCatalogOpen(true) : undefined
+                isAdmin && tab === "catalog"
+                  ? () => setManageCatalogOpen(true)
+                  : undefined
               }
-              manageCatalogLabel="Manage Games"
+              manageCatalogLabel="My games"
             />
           </>
         }
@@ -591,8 +687,8 @@ export default function GamesModule({
             onPlatform={(_platformId, platformName) => {
               setTab("catalog");
               pushGamesCatalogRoute();
-              setCatalogScope("shows");
-              setFilterMode("platform");
+              setCatalogScope("platforms");
+              setFilterMode("name");
               setPlatformFilter(platformName || _platformId);
               setSubgenreId("");
               setLetter("A");
@@ -632,7 +728,11 @@ export default function GamesModule({
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
-          catalogScope={catalogScope}
+          catalogScope={
+            catalogScope === "platforms" && platformFilter
+              ? "shows"
+              : catalogScope
+          }
           search={search}
           letter={letter}
           continentId={continentId}
@@ -651,14 +751,16 @@ export default function GamesModule({
           onLetterChange={setLetter}
           onFilterModeChange={(next) => {
             setFilterMode(next);
-            if (next !== "platform") setPlatformFilter(null);
-            else setCatalogScope("shows");
+            // Keep Platforms scope when a platform is selected (game cards + ALL filter).
+            if (catalogScope === "platforms" && platformFilter) return;
             if (
               next === "developer" ||
               next === "publisher" ||
               next === "writer" ||
               next === "genre" ||
-              next === "start"
+              next === "start" ||
+              next === "name" ||
+              next === "most_played"
             ) {
               setCatalogScope("shows");
             }
@@ -675,15 +777,15 @@ export default function GamesModule({
             setPlatformFilter(name || null);
             if (name) {
               setCatalogScope("shows");
-              setFilterMode("platform");
+              setFilterMode("name");
             }
           }}
           onOpen={(fid, subId) => {
-            if (catalogScope === "platforms") {
+            if (catalogScope === "platforms" && !platformFilter) {
               const plat = platforms.find((p) => p.id === fid);
-              setCatalogScope("shows");
-              setFilterMode("platform");
+              setFilterMode("name");
               setPlatformFilter(plat?.name || fid);
+              setLetter("A");
               return;
             }
             if (catalogScope === "shows") {

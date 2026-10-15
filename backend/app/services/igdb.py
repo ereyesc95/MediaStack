@@ -1,6 +1,6 @@
 """IGDB (Twitch) client for Games catalog import + metadata refresh.
 
-Requires MYSTACK_IGDB_CLIENT_ID and MYSTACK_IGDB_CLIENT_SECRET (Twitch app).
+Credentials: env MYSTACK_IGDB_* or ApiAuth row named IGDB (same pattern as Spotify).
 """
 from __future__ import annotations
 
@@ -9,11 +9,15 @@ from typing import Any
 
 import httpx
 
-from app.config import settings
+from app.igdb_auth import get_igdb_credentials, igdb_credentials_configured
 
 _TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 _API_URL = "https://api.igdb.com/v4"
-_token_cache: dict[str, Any] = {"access_token": None, "expires_at": 0.0}
+_token_cache: dict[str, Any] = {
+    "access_token": None,
+    "expires_at": 0.0,
+    "client_id": None,
+}
 
 
 class IgdbNotConfigured(RuntimeError):
@@ -21,24 +25,34 @@ class IgdbNotConfigured(RuntimeError):
 
 
 def igdb_configured() -> bool:
-    return bool(
-        (settings.igdb_client_id or "").strip()
-        and (settings.igdb_client_secret or "").strip()
-    )
+    return igdb_credentials_configured()
 
 
-async def _access_token() -> str:
-    if not igdb_configured():
-        raise IgdbNotConfigured("IGDB client id/secret not configured")
+def _require_credentials() -> tuple[str, str]:
+    cid, sec = get_igdb_credentials()
+    if not cid or not sec:
+        raise IgdbNotConfigured(
+            "IGDB client id/secret not configured "
+            "(env or ApiAuth IGDB row)"
+        )
+    return cid, sec
+
+
+async def _access_token() -> tuple[str, str]:
+    client_id, client_secret = _require_credentials()
     now = time.time()
-    if _token_cache["access_token"] and float(_token_cache["expires_at"]) > now + 60:
-        return str(_token_cache["access_token"])
+    if (
+        _token_cache["access_token"]
+        and _token_cache.get("client_id") == client_id
+        and float(_token_cache["expires_at"]) > now + 60
+    ):
+        return str(_token_cache["access_token"]), client_id
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             _TOKEN_URL,
             params={
-                "client_id": settings.igdb_client_id,
-                "client_secret": settings.igdb_client_secret,
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "grant_type": "client_credentials",
             },
         )
@@ -46,17 +60,18 @@ async def _access_token() -> str:
         data = resp.json()
     _token_cache["access_token"] = data["access_token"]
     _token_cache["expires_at"] = now + float(data.get("expires_in") or 3600)
-    return str(_token_cache["access_token"])
+    _token_cache["client_id"] = client_id
+    return str(_token_cache["access_token"]), client_id
 
 
 async def igdb_query(endpoint: str, body: str) -> list[dict]:
-    token = await _access_token()
+    token, client_id = await _access_token()
     async with httpx.AsyncClient(timeout=45) as client:
         resp = await client.post(
             f"{_API_URL}/{endpoint.lstrip('/')}",
             content=body,
             headers={
-                "Client-ID": settings.igdb_client_id,
+                "Client-ID": client_id,
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/json",
                 "Content-Type": "text/plain",

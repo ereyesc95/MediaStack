@@ -47,7 +47,7 @@ async def refresh_game_metadata(
     if not igdb_configured():
         return {
             "ok": False,
-            "error": "IGDB client id/secret not configured (MYSTACK_IGDB_CLIENT_ID / MYSTACK_IGDB_CLIENT_SECRET)",
+            "error": "IGDB client id/secret not configured (env or ApiAuth IGDB)",
         }
     title = (detail.get("title") or detail.get("name") or "").strip()
     if not title:

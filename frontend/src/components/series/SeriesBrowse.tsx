@@ -4,6 +4,8 @@ import {
   useMemo,
   useState,
 } from "react";
+import { launchGame } from "../../api";
+import { formatTrackDate } from "../../formatDate";
 import type {
   CardOrientation,
   SeriesFilterMode,
@@ -54,8 +56,12 @@ export type SeriesCatalogCard = {
   icon_url?: string | null;
   badge_url?: string | null;
   date_iso: string | null;
+  display_date?: string | null;
   meta: string;
+  /** Games: show Play game only when a local ROM/exe exists. */
   open_label?: string | null;
+  /** Games: launch target id when Play game is clicked. */
+  launch_game_id?: string | null;
 };
 
 function decadeLabel(d: number) {
@@ -842,11 +848,22 @@ export default function SeriesBrowse({
             icon_url: s.icon_url || f.icon_url,
             badge_url: s.badge_url || f.badge_url,
             date_iso: s.date_iso,
+            display_date: s.display_date ?? null,
             meta: showMeta(s, unitNoun),
             open_label:
+              unitNoun === "game" &&
+              Boolean(
+                (f as SeriesFranchiseCard & { has_rom?: boolean }).has_rom ||
+                  (f as SeriesFranchiseCard & { open_url?: string | null })
+                    .open_url
+              )
+                ? "Play game"
+                : null,
+            launch_game_id:
               unitNoun === "game"
-                ? (f as SeriesFranchiseCard & { open_label?: string | null })
-                    .open_label || "Play game"
+                ? f.subseries.length > 0
+                  ? s.id
+                  : f.id
                 : null,
           });
         }
@@ -1307,6 +1324,17 @@ export default function SeriesBrowse({
                   ? card.logo_url || card.icon_url || card.badge_url
                   : null;
               const revealed = isPhone && revealedId === card.key;
+              const showDate =
+                (filterMode === "start" || filterMode === "end") &&
+                Boolean(card.display_date || card.date_iso);
+              const dateLabel =
+                card.display_date ||
+                formatTrackDate(card.date_iso) ||
+                null;
+              const playLabel =
+                card.open_label === "Play game" || card.open_label === "Launch"
+                  ? "Play game"
+                  : card.open_label || null;
               return (
                 <button
                   key={card.key}
@@ -1319,6 +1347,8 @@ export default function SeriesBrowse({
                     isBadge ? "artist-card--badge" : "",
                     isPhone ? "artist-card--tap-reveal" : "",
                     revealed ? "artist-card--revealed" : "",
+                    playLabel ? "artist-card--with-play" : "",
+                    showDate ? "artist-card--with-date" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -1335,24 +1365,70 @@ export default function SeriesBrowse({
                   />
                   <span className="artist-card-dim" />
                   <span className="artist-card-footer">
-                    {brandSrc ? (
-                      <img
-                        src={brandSrc}
-                        alt=""
-                        className={
-                          isBadge || isIcons
-                            ? "artist-card-icon"
-                            : "artist-card-logo"
-                        }
-                      />
-                    ) : (
-                      <span className="artist-card-name">{card.name}</span>
-                    )}
-                    {card.open_label ? (
-                      <span className="artist-card-play-label">
-                        {card.open_label}
+                    {playLabel ? (
+                      <span className="artist-card-title-stack">
+                        {brandSrc ? (
+                          <img
+                            src={brandSrc}
+                            alt=""
+                            className={
+                              isBadge || isIcons
+                                ? "artist-card-icon"
+                                : "artist-card-logo"
+                            }
+                          />
+                        ) : (
+                          <span className="artist-card-name">{card.name}</span>
+                        )}
+                        {showDate && dateLabel ? (
+                          <span className="artist-card-date">{dateLabel}</span>
+                        ) : null}
+                        {card.launch_game_id ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="artist-card-play-label"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void launchGame(card.launch_game_id!).catch(
+                                () => undefined
+                              );
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void launchGame(card.launch_game_id!).catch(
+                                  () => undefined
+                                );
+                              }
+                            }}
+                          >
+                            {playLabel}
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
+                    ) : (
+                      <>
+                        {brandSrc ? (
+                          <img
+                            src={brandSrc}
+                            alt=""
+                            className={
+                              isBadge || isIcons
+                                ? "artist-card-icon"
+                                : "artist-card-logo"
+                            }
+                          />
+                        ) : (
+                          <span className="artist-card-name">{card.name}</span>
+                        )}
+                        {showDate && dateLabel ? (
+                          <span className="artist-card-date">{dateLabel}</span>
+                        ) : null}
+                      </>
+                    )}
                   </span>
                 </button>
               );

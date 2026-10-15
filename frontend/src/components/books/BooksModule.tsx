@@ -1035,7 +1035,7 @@ export default function BooksModule({
                   ? () => setManageCatalogOpen(true)
                   : undefined
               }
-              manageCatalogLabel="Manage Books"
+              manageCatalogLabel="My books"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

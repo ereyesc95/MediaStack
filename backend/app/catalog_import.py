@@ -26,7 +26,7 @@ from app.franchise_index import (
     save_franchise_index,
 )
 from app.gallery import _letter_folder
-from app.models import BookLeaf, BookWork, MovieWork, Series, User
+from app.models import BookLeaf, BookWork, Game, MovieWork, Series, User
 from app.services.google_books import get_google_book, search_google_books
 from app.services.igdb import IgdbNotConfigured, get_game as igdb_get_game, igdb_configured, search_games as igdb_search_games
 from app.services.tmdb import (
@@ -69,6 +69,7 @@ REGISTRATION_MODELS = {
     "movies": (MovieWork, "mwk_id", "mwk_name", "mwk_slug"),
     "series": (Series, "ser_id", "ser_name", None),
     "books": (BookWork, "bwk_id", "bwk_name", "bwk_slug"),
+    "games": (Game, "gam_id", "gam_name", None),
 }
 
 
@@ -262,16 +263,30 @@ def remove_catalog_registration(
     if not row:
         raise HTTPException(404, "Registration not found")
     name = str(getattr(row, name_attr, "") or "").strip()
-    local = (
-        _root()
-        / MODULE_DIRS[module]
-        / _letter_folder(name)
-        / _safe_name(name)
-    )
-    if local.is_dir():
-        raise HTTPException(
-            409, "This item has a local folder and cannot be removed."
-        )
+    safe = _safe_name(name)
+    letter = _letter_folder(name)
+    root = _root()
+    if module == "games":
+        games_root = root / MODULE_DIRS[module]
+        local_exists = False
+        if games_root.is_dir():
+            for platform_dir in games_root.iterdir():
+                if not platform_dir.is_dir():
+                    continue
+                candidate = platform_dir / letter / safe
+                if candidate.is_dir():
+                    local_exists = True
+                    break
+        if local_exists:
+            raise HTTPException(
+                409, "This item has a local folder and cannot be removed."
+            )
+    else:
+        local = root / MODULE_DIRS[module] / letter / safe
+        if local.is_dir():
+            raise HTTPException(
+                409, "This item has a local folder and cannot be removed."
+            )
     if module == "books" and slug_attr:
         slug = str(getattr(row, slug_attr, "") or "")
         for leaf in db.scalars(

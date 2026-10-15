@@ -1093,7 +1093,7 @@ export default function MoviesModule({
                   ? () => setManageCatalogOpen(true)
                   : undefined
               }
-              manageCatalogLabel="Manage Movies"
+              manageCatalogLabel="My movies"
               menuChrome={
                 portraitMenuChrome && tab === "catalog" ? (
                   <button

@@ -1,0 +1,136 @@
+import { useCallback, useState } from "react";
+import type { CardOrientation } from "../../types";
+import type { GamesOverviewTab, GamesSection } from "../../gamesRoute";
+import SeriesFranchisePage from "../series/SeriesFranchisePage";
+import type { SeriesSection } from "../../types";
+import AddToUniverseModal from "../AddToUniverseModal";
+
+type Props = {
+  workId: string;
+  section?: GamesSection;
+  overviewTab?: GamesOverviewTab;
+  universeId?: number;
+  isAdmin?: boolean;
+  userId?: number;
+  cardOrientation?: CardOrientation;
+  onSetOrientation?: (next: CardOrientation) => void;
+  onBack: () => void;
+  backLabel?: string;
+  onNavigate: (patch: {
+    franchiseId?: string;
+    gameId?: string;
+    section?: GamesSection;
+    overviewTab?: GamesOverviewTab;
+    universeId?: number;
+  }) => void;
+  onOpenSeriesFranchise?: (
+    franchiseId: string,
+    subseriesId?: string,
+    universeId?: number
+  ) => void;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenMoviesPath?: (path: string) => void;
+  onOpenBooksPath?: (path: string) => void;
+  onBrowseCatalog?: (target: {
+    mode: "name" | "genre" | "country" | "publisher" | "writer" | "developer";
+    countryId?: number;
+    subgenreId?: number;
+    publisher?: string;
+    writer?: string;
+    developer?: string;
+  }) => void;
+  onImport: () => void;
+  onSync: () => void;
+  onChooseSource?: () => void;
+  onSwitchProfile?: () => void;
+  onEditProfile?: () => void;
+};
+
+export default function GamesFranchisePage({
+  workId,
+  section = "overview",
+  overviewTab = "about",
+  universeId,
+  isAdmin,
+  userId,
+  cardOrientation = "portrait",
+  onSetOrientation,
+  onBack,
+  backLabel,
+  onNavigate,
+  onOpenSeriesFranchise,
+  onOpenMusicRelease,
+  onOpenMoviesPath,
+  onOpenBooksPath,
+  onBrowseCatalog,
+  onImport,
+  onSync,
+  onChooseSource,
+  onSwitchProfile,
+  onEditProfile,
+}: Props) {
+  const [universeOpen, setUniverseOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const openUniverseAdmin = useCallback(() => {
+    setUniverseOpen(true);
+  }, []);
+
+  return (
+    <>
+      <SeriesFranchisePage
+        key={`${workId}-${reloadKey}`}
+        module="games"
+        franchiseId={workId}
+        section={section as SeriesSection}
+        overviewTab={overviewTab}
+        universeId={universeId}
+        isAdmin={isAdmin}
+        userId={userId}
+        cardOrientation={cardOrientation}
+        onSetOrientation={onSetOrientation}
+        onBack={onBack}
+        backLabel={backLabel}
+        onNavigate={(patch) => {
+          const next: {
+            franchiseId?: string;
+            gameId?: string;
+            section?: GamesSection;
+            overviewTab?: GamesOverviewTab;
+            universeId?: number;
+          } = {
+            section: patch.section as GamesSection | undefined,
+            overviewTab: patch.overviewTab as GamesOverviewTab | undefined,
+          };
+          if ("franchiseId" in patch) next.franchiseId = patch.franchiseId;
+          if ("subseriesId" in patch) next.gameId = patch.subseriesId;
+          if ("universeId" in patch) next.universeId = patch.universeId;
+          onNavigate(next);
+        }}
+        onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onOpenMusicRelease={onOpenMusicRelease}
+        onOpenMoviesPath={onOpenMoviesPath}
+        onOpenBooksPath={onOpenBooksPath}
+        onBrowseCatalog={onBrowseCatalog}
+        onImport={onImport}
+        onSync={onSync}
+        onChooseSource={onChooseSource}
+        onSwitchProfile={onSwitchProfile}
+        onEditProfile={onEditProfile}
+        onAddToUniverse={isAdmin ? openUniverseAdmin : undefined}
+      />
+
+      {universeOpen && isAdmin ? (
+        <AddToUniverseModal
+          module="games"
+          franchiseId={workId}
+          onClose={() => setUniverseOpen(false)}
+          onSaved={() => {
+            setReloadKey((k) => k + 1);
+            setUniverseOpen(false);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}

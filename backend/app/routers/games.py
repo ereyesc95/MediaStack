@@ -195,8 +195,9 @@ def games_filter_options(
         "decades": decades,
         "country_groups": [],
         "all_country_groups": [],
+        # Do not expose the full seeded taxonomy to the catalog Genre filter.
         "subgenre_groups": subgenre_groups,
-        "all_subgenre_groups": all_subgenre_groups,
+        "all_subgenre_groups": subgenre_groups,
         "content_categories": [],
     }
 

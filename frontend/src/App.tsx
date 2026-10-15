@@ -1642,6 +1642,7 @@ export default function App() {
             onSelectMedia={selectMedia}
             onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
             isAdmin={isAdmin}
+            userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
             onEditProfile={
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined

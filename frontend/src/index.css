@@ -1556,21 +1556,77 @@ input {
   color: var(--accent, #7dd3c7);
 }
 
+.artist-card--with-play .artist-card-footer,
+.artist-card--with-date .artist-card-footer {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+}
+
+.artist-card--banner.artist-card--with-play .artist-card-footer,
+.artist-card--banner.artist-card--with-date .artist-card-footer {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+/* Title/logo + Play game always stack as a column, even if footer is row */
+.artist-card-title-stack {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.artist-card--banner .artist-card-title-stack {
+  align-items: flex-start;
+}
+
 .artist-card-play-label {
   display: block;
-  margin-top: 0.2rem;
-  font-size: 0.68rem;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-align: center;
+  color: aliceblue;
+  text-shadow: 0 1px 6px #000;
+  cursor: pointer;
+  pointer-events: auto;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease;
+  text-decoration: none;
+}
+
+.artist-card--banner .artist-card-play-label {
+  text-align: left;
 }
 
 .artist-card:not(.artist-card--tap-reveal):hover .artist-card-play-label,
 .artist-card--tap-reveal.artist-card--revealed .artist-card-play-label {
-  opacity: 0.92;
+  opacity: 1;
   transform: translateY(0);
+}
+
+.artist-card-play-label:hover,
+.artist-card-play-label:focus-visible {
+  color: var(--accent, #7dd3c7);
+  text-decoration: none;
 }
 
 .series-dashboard .dash-row--icons .dash-scroll,
@@ -2654,6 +2710,43 @@ input {
   justify-content: center;
   align-items: center;
   gap: 0.35rem;
+}
+
+/* Round + Play game: center the title stack (column lives inside .artist-card-title-stack) */
+.artist-card--round.artist-card--with-play .artist-card-footer,
+.artist-card--round.artist-card--with-play.artist-card--with-date .artist-card-footer,
+.artist-card--round.artist-card--with-play:not(.artist-card--tap-reveal):hover .artist-card-footer,
+.artist-card--round.artist-card--with-play.artist-card--tap-reveal.artist-card--revealed .artist-card-footer {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.artist-card--round.artist-card--with-play .artist-card-name,
+.artist-card--round.artist-card--with-play .artist-card-play-label {
+  text-align: center;
+}
+
+/* Banner + Play game: vertically center title/play (not top-left) */
+.artist-card--banner.artist-card--with-play .artist-card-footer,
+.artist-card--banner.artist-card--with-play:not(.artist-card--tap-reveal):hover .artist-card-footer,
+.artist-card--banner.artist-card--with-play.artist-card--tap-reveal.artist-card--revealed .artist-card-footer {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  gap: 0.25rem;
+}
+
+.artist-card--banner.artist-card--with-play.artist-card--tap-reveal.artist-card--revealed .artist-card-footer {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .artist-card--round .artist-card-logo {
@@ -24792,7 +24885,162 @@ button.lyrics-status-badge--icon-only {
 .manage-catalog-modal__platforms {
   max-height: min(14rem, 28vh);
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.2rem 0.35rem;
+  gap: 0 0.35rem;
+  /* Always show scrollbar so users know the list continues */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track, transparent);
+}
+
+.manage-catalog-modal__platforms::-webkit-scrollbar {
+  width: 8px;
+}
+
+.manage-catalog-modal__platforms::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.manage-catalog-modal__platforms .manage-catalog-modal__item,
+.artist-admin-form label.manage-catalog-modal__platforms .manage-catalog-modal__item,
+.artist-admin-form label.manage-catalog-modal__item {
+  padding: 0.08rem 0.3rem;
+  min-height: 0;
+}
+
+.manage-catalog-modal__new-platform {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.manage-catalog-modal__new-platform-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent, #7dd3c7);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.15rem 0;
+}
+
+.manage-catalog-modal__new-platform-btn:hover {
+  text-decoration: underline;
+}
+
+.manage-catalog-modal__new-platform-input {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+}
+
+.manage-catalog-modal__suggest-scroll {
+  /* ~5 result rows visible; scroll for the rest */
+  max-height: 12.5rem;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+}
+
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+.manage-catalog-modal__form--details .manage-catalog-modal__suggest-scroll .add-similar-results,
+.manage-catalog-modal__form--search .manage-catalog-modal__suggest-scroll .add-similar-results {
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+}
+
+.games-platform-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.games-platform-filter__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 2.25rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.games-platform-filter__btn:hover,
+.games-platform-filter__btn[aria-expanded="true"] {
+  color: var(--accent, #7dd3c7);
+}
+
+.games-platform-filter__icon {
+  display: block;
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+}
+
+.games-platform-filter__menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 50;
+  min-width: 12rem;
+  max-width: min(18rem, 80vw);
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.35rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.games-platform-filter__option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.45rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.games-platform-filter__option:hover,
+.games-platform-filter__option.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent, #7dd3c7);
+}
+
+.games-platform-filter__option-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .manage-catalog-modal__selection > .muted {

@@ -18,6 +18,9 @@ import {
   fetchMoviesFranchiseLibrary,
   fetchMoviesFranchiseOverview,
   fetchMoviesFranchiseSeries,
+  fetchGamesFranchiseOverview,
+  fetchGamesFranchiseAudio,
+  refreshGamesFranchiseMetadata,
   refreshMoviesWorkMetadata,
   refreshBooksWorkMetadata,
   fetchSeriesFranchiseAudio,
@@ -49,6 +52,7 @@ import {
   writeSessionEntry,
 } from "../../sessionCache";
 import { pushBooksRoute } from "../../booksRoute";
+import { pushGamesRoute } from "../../gamesRoute";
 import { pushMoviesRoute } from "../../moviesRoute";
 import {
   pushSeriesRoute,
@@ -123,8 +127,8 @@ export type SeriesFranchiseShell = {
 
 type Props = {
   franchiseId: string;
-  /** series (default) or movies — same chrome, movies APIs + film strip. */
-  module?: "series" | "movies" | "books";
+  /** series (default), movies, books, or games — same chrome, module APIs. */
+  module?: "series" | "movies" | "books" | "games";
   subseriesId?: string;
   seasonId?: string;
   section?: SeriesSection;
@@ -241,6 +245,18 @@ const BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "quiz", label: "QUIZ", flag: null },
 ];
 
+/** Games-centered path: GAMES prioritized after Overview. */
+const GAMES_SECTIONS: FranchiseNavSection[] = [
+  { id: "overview", label: "OVERVIEW", mobileLabel: "INFO", flag: null },
+  { id: "games", label: "GAMES", flag: null },
+  { id: "series", label: "SERIES", flag: "has_series" },
+  { id: "movies", label: "MOVIES", flag: "has_movies" },
+  { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "library", label: "BOOKS", flag: "has_library" },
+  { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
+  { id: "quiz", label: "QUIZ", flag: null },
+];
+
 const EMPTY_SERIES_SHOWS: SeriesSubseriesCard[] = [];
 
 const OVERVIEW_TABS: { id: SeriesOverviewTab; label: string }[] = [
@@ -320,12 +336,15 @@ export default function SeriesFranchisePage({
   universeId,
 }: Props) {
   const isBooks = module === "books";
+  const isGames = module === "games";
   const isMoviesOnly = module === "movies";
-  const isMovies = isMoviesOnly || isBooks; // work-module UI (movies or books)
+  const isMovies = isMoviesOnly || isBooks || isGames; // work-module UI
   const layout = useDeviceLayout();
   const stacked = isStackedArtistLayout(layout);
   const mobilePortrait = isMobilePortraitLayout(layout);
-  const cacheKey = `${isBooks ? "books" : isMoviesOnly ? "movies" : "series"}:${franchiseId}`;
+  const cacheKey = `${
+    isGames ? "games" : isBooks ? "books" : isMoviesOnly ? "movies" : "series"
+  }:${franchiseId}`;
   const [data, setData] = useState<SeriesOverview | null>(
     () => readOverviewCache(cacheKey)
   );
@@ -352,12 +371,13 @@ export default function SeriesFranchisePage({
     return ref;
   }, [franchiseId]);
   const navSections = useMemo(() => {
+    if (isGames) return GAMES_SECTIONS;
     if (isBooks) return BOOKS_SECTIONS;
     if (isMoviesOnly) return MOVIES_SECTIONS;
     if (homeReferrer?.source === "movies") return MOVIES_SECTIONS;
     if (homeReferrer?.source === "books") return SERIES_FROM_BOOKS_SECTIONS;
     return SERIES_SECTIONS;
-  }, [isBooks, isMoviesOnly, homeReferrer]);
+  }, [isGames, isBooks, isMoviesOnly, homeReferrer]);
   const [loading, setLoading] = useState(() => !readOverviewCache(cacheKey));
   const [error, setError] = useState<string | null>(null);
   const artworkHomeRedirected = useRef(false);
@@ -490,7 +510,9 @@ export default function SeriesFranchisePage({
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
-    const cacheKey = `${isBooks ? "books" : isMoviesOnly ? "movies" : "series"}:${franchiseId}`;
+    const cacheKey = `${
+      isGames ? "games" : isBooks ? "books" : isMoviesOnly ? "movies" : "series"
+    }:${franchiseId}`;
     const cached = readOverviewCache(cacheKey);
     if (cached) {
       setData(cached);
@@ -500,11 +522,13 @@ export default function SeriesFranchisePage({
       setError(null);
     }
     try {
-      const overview = isBooks
-        ? await fetchBooksFranchiseOverview(franchiseId)
-        : isMoviesOnly
-          ? await fetchMoviesFranchiseOverview(franchiseId)
-          : await fetchSeriesOverview(franchiseId);
+      const overview = isGames
+        ? await fetchGamesFranchiseOverview(franchiseId)
+        : isBooks
+          ? await fetchBooksFranchiseOverview(franchiseId)
+          : isMoviesOnly
+            ? await fetchMoviesFranchiseOverview(franchiseId)
+            : await fetchSeriesOverview(franchiseId);
       if (gen !== loadGenRef.current) return;
       writeOverviewCache(cacheKey, overview);
       setData(overview);
@@ -523,7 +547,7 @@ export default function SeriesFranchisePage({
     } finally {
       if (gen === loadGenRef.current) setLoading(false);
     }
-  }, [franchiseId, isBooks, isMoviesOnly]);
+  }, [franchiseId, isBooks, isMoviesOnly, isGames]);
 
   useEffect(() => {
     void load();
@@ -579,6 +603,18 @@ export default function SeriesFranchisePage({
   ]);
 
   useEffect(() => {
+    if (isGames) {
+      pushGamesRoute(
+        {
+          franchiseId,
+          section: section as import("../../gamesRoute").GamesSection,
+          overviewTab: section === "overview" ? overviewTab : undefined,
+          universeId,
+        },
+        true
+      );
+      return;
+    }
     if (isBooks) {
       pushBooksRoute(
         {
@@ -622,6 +658,7 @@ export default function SeriesFranchisePage({
     overviewTab,
     isBooks,
     isMoviesOnly,
+    isGames,
     universeId,
   ]);
 
@@ -668,7 +705,9 @@ export default function SeriesFranchisePage({
     setRefreshing(true);
     setError(null);
     try {
-      if (isBooks) {
+      if (isGames) {
+        await refreshGamesFranchiseMetadata(franchiseId);
+      } else if (isBooks) {
         await refreshBooksWorkMetadata(franchiseId);
       } else if (isMoviesOnly) {
         await refreshMoviesWorkMetadata(franchiseId, refreshBio);
@@ -681,7 +720,7 @@ export default function SeriesFranchisePage({
     } finally {
       setRefreshing(false);
     }
-  }, [franchiseId, refreshBio, load, isBooks, isMoviesOnly]);
+  }, [franchiseId, refreshBio, load, isBooks, isMoviesOnly, isGames]);
 
   const handleRescanLibrary = useCallback(async () => {
     if (isMovies) {
@@ -706,11 +745,13 @@ export default function SeriesFranchisePage({
     setAudioLoading(true);
     const useSeriesAudio = !isMovies;
     const audioFranchiseId = useSeriesAudio ? seriesFranchiseId : franchiseId;
-    const fetchAudio = useSeriesAudio
-      ? fetchSeriesFranchiseAudio(audioFranchiseId)
-      : isBooks
-        ? fetchBooksFranchiseAudio(franchiseId)
-        : fetchMoviesFranchiseAudio(franchiseId);
+    const fetchAudio = isGames
+      ? fetchGamesFranchiseAudio(franchiseId)
+      : useSeriesAudio
+        ? fetchSeriesFranchiseAudio(audioFranchiseId)
+        : isBooks
+          ? fetchBooksFranchiseAudio(franchiseId)
+          : fetchMoviesFranchiseAudio(franchiseId);
     void fetchAudio
       .then((payload) => {
         if (cancelled) return;
@@ -773,7 +814,7 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [franchiseId, isMovies, isBooks, sharedSeries, seriesFranchiseId]);
+  }, [franchiseId, isMovies, isBooks, isGames, sharedSeries, seriesFranchiseId]);
 
   useEffect(() => {
     if (section !== "movies" && section !== "books") return;
@@ -1222,6 +1263,51 @@ export default function SeriesFranchisePage({
     if (section !== "games") return;
     let cancelled = false;
     setGameLoading(true);
+    if (isGames) {
+      const films =
+        (data as { games?: MoviesFilmCard[]; films?: MoviesFilmCard[] } | null)
+          ?.games ||
+        (data as { films?: MoviesFilmCard[] } | null)?.films ||
+        data?.subseries ||
+        [];
+      if (data) {
+        setGameCards(
+          films.map((f) => {
+            const game = f as MoviesFilmCard & {
+              portrait_url?: string | null;
+              landscape_url?: string | null;
+              banner_url?: string | null;
+              open_url?: string | null;
+              open_mode?: "tab" | "local" | null;
+              open_label?: string | null;
+              platform?: string | null;
+              has_rom?: boolean;
+            };
+            return {
+              id: game.id,
+              title: game.title,
+              cover_url: game.cover_url,
+              portrait_url: game.portrait_url || game.cover_url,
+              landscape_url: game.landscape_url || null,
+              banner_url: game.banner_url || game.landscape_url || null,
+              logo_url: game.logo_url ?? null,
+              date_label: game.display_date || game.date_iso,
+              path: game.folder_path,
+              open_url: game.open_url || null,
+              open_mode: game.open_mode || (game.open_url ? ("local" as const) : null),
+              open_label: game.has_rom || game.open_url ? "Play game" : null,
+              meta: game.platform || undefined,
+              platform: game.platform || undefined,
+              official: game.official,
+            };
+          })
+        );
+        setGameLoading(false);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
     const useSeriesGames = !isMovies || sharedSeries;
     const gameId = useSeriesGames ? seriesFranchiseId : franchiseId;
     const fetchGames = useSeriesGames
@@ -1275,9 +1361,21 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId, isMovies, sharedSeries, seriesFranchiseId]);
+  }, [
+    section,
+    franchiseId,
+    isMovies,
+    isBooks,
+    isGames,
+    sharedSeries,
+    seriesFranchiseId,
+    data,
+  ]);
 
-  const title = data?.name ?? shell?.name ?? (isMovies ? "Movies" : "Series");
+  const title =
+    data?.name ??
+    shell?.name ??
+    (isGames ? "Games" : isMovies ? "Movies" : "Series");
   // Match About carousel slides so left/right clicks advance the paired landscape bg
   const aboutSlides = useMemo(() => {
     const eras = data?.eras || [];
@@ -1725,6 +1823,15 @@ export default function SeriesFranchisePage({
     }
     if (item.navigate_band_id && item.navigate_release_id) {
       onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
+      return;
+    }
+    if (isGames && section === "games" && item.id) {
+      onNavigate({
+        franchiseId,
+        subseriesId: item.id,
+        section: "overview",
+        overviewTab: "about",
+      });
       return;
     }
     const diskPath = (item.path || "").replace(/\\/g, "/");
@@ -2891,7 +2998,15 @@ export default function SeriesFranchisePage({
 
       {aboutEditOpen && data ? (
         <FranchiseAboutEditModal
-          module={isBooks ? "books" : isMoviesOnly ? "movies" : "series"}
+          module={
+            isGames
+              ? "games"
+              : isBooks
+                ? "books"
+                : isMoviesOnly
+                  ? "movies"
+                  : "series"
+          }
           franchiseId={franchiseId}
           data={data}
           onClose={() => setAboutEditOpen(false)}

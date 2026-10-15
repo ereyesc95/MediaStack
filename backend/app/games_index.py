@@ -321,7 +321,7 @@ def _game_card_from_dir(
         "launch_path": launch_rel,
         "open_url": _file_url(launch, media_root) if launch else None,
         "open_mode": "local" if launch else None,
-        "open_label": "Play game" if launch else None,
+        "open_label": "Play game" if launch else None,  # never "Launch"
         "hub_title": hub_title,
         "official": not is_unofficial_folder(game_dir.name),
         "genre_names": genre_names,
