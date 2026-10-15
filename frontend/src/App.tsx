@@ -1395,6 +1395,51 @@ export default function App() {
                 universeId,
               });
             }}
+            onOpenGamesHome={(restore) => {
+              clearMediaTheme(profile?.user_id);
+              if (restore?.fromTab === "catalog") {
+                pushGamesCatalogRoute();
+              } else {
+                pushGamesRootRoute();
+              }
+              setView({
+                kind: "games",
+                franchiseId: undefined,
+                gameId: undefined,
+                section: undefined,
+                overviewTab: undefined,
+              });
+            }}
+            onOpenMoviesHome={(restore) => {
+              clearMediaTheme(profile?.user_id);
+              if (restore?.fromTab === "catalog") {
+                pushMoviesCatalogRoute();
+              } else {
+                pushMoviesRootRoute();
+              }
+              setView({
+                kind: "movies",
+                franchiseId: undefined,
+                filmId: undefined,
+                section: undefined,
+                overviewTab: undefined,
+              });
+            }}
+            onOpenBooksHome={(restore) => {
+              clearMediaTheme(profile?.user_id);
+              if (restore?.fromTab === "catalog") {
+                pushBooksCatalogRoute();
+              } else {
+                pushBooksRootRoute();
+              }
+              setView({
+                kind: "books",
+                franchiseId: undefined,
+                bookId: undefined,
+                section: undefined,
+                overviewTab: undefined,
+              });
+            }}
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "series", from, name)
             }

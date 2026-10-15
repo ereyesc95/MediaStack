@@ -210,7 +210,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   }
 
   async function addArtist() {
-    if (!pendingArtist || !estimate) return;
+    if (!pendingArtist || !estimate || importing || busy) return;
     setBusy(true);
     setImporting(true);
     setError(null);
@@ -712,28 +712,35 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         {notice && <p className="modal-notice">{notice}</p>}
         {error && <p className="error manage-artists-modal__error">{error}</p>}
 
-        {mode === "add" && canCreate && !importing && (
+        {mode === "add" && canCreate && (
           <div className="modal-panel-actions modal-panel-actions--end">
             <button
               type="button"
               className="btn manage-artists-modal__create"
               onClick={() => void addArtist()}
-              disabled={busy || estimating}
+              aria-busy={importing}
+              disabled={busy || estimating || importing}
             >
-              <svg
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-                className="manage-artists-modal__plus"
-              >
-                <path
-                  d="M8 2.5v11M2.5 8h11"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                />
-              </svg>
-              {updateExisting ? "Update folders" : "Create artist"}
+              {!importing ? (
+                <svg
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  className="manage-artists-modal__plus"
+                >
+                  <path
+                    d="M8 2.5v11M2.5 8h11"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : null}
+              {importing
+                ? "Creating…"
+                : updateExisting
+                  ? "Update folders"
+                  : "Create artist"}
             </button>
           </div>
         )}

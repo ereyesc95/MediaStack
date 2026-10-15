@@ -15,6 +15,8 @@ import {
 } from "../../artistEntry";
 import {
   artworkHomeModule,
+  clearFranchiseHomeReferrer,
+  getFranchiseHomeReferrer,
   isArtworkHomeElsewhere,
   preferredSectionForSource,
   saveFranchiseHomeReferrer,
@@ -123,6 +125,19 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  /** Return to Games/Movies/Books when franchise was opened from that stack. */
+  onOpenGamesHome?: (restore?: {
+    fromTab?: "home" | "catalog";
+    catalogLetter?: string;
+  }) => void;
+  onOpenMoviesHome?: (restore?: {
+    fromTab?: "home" | "catalog";
+    catalogLetter?: string;
+  }) => void;
+  onOpenBooksHome?: (restore?: {
+    fromTab?: "home" | "catalog";
+    catalogLetter?: string;
+  }) => void;
   onOpenUniversePage?: (
     universeId: number,
     from: "home" | "catalog",
@@ -155,6 +170,9 @@ export default function SeriesModule({
   onOpenArtist,
   onOpenMoviesFranchise,
   onOpenBooksFranchise,
+  onOpenGamesHome,
+  onOpenMoviesHome,
+  onOpenBooksHome,
   onOpenUniversePage,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
@@ -545,6 +563,28 @@ export default function SeriesModule({
   };
 
   const backFromDeepLink = () => {
+    const homeRef = getFranchiseHomeReferrer();
+    if (homeRef?.home === "series") {
+      const restore = {
+        fromTab: homeRef.fromTab,
+        catalogLetter: homeRef.catalogLetter,
+      };
+      if (homeRef.source === "games" && onOpenGamesHome) {
+        clearFranchiseHomeReferrer();
+        onOpenGamesHome(restore);
+        return;
+      }
+      if (homeRef.source === "movies" && onOpenMoviesHome) {
+        clearFranchiseHomeReferrer();
+        onOpenMoviesHome(restore);
+        return;
+      }
+      if (homeRef.source === "books" && onOpenBooksHome) {
+        clearFranchiseHomeReferrer();
+        onOpenBooksHome(restore);
+        return;
+      }
+    }
     const ref = getSeriesEntryReferrer();
     if (ref?.kind === "movies" && ref.franchiseId && onOpenMoviesFranchise) {
       clearSeriesEntryReferrer();
@@ -870,6 +910,25 @@ export default function SeriesModule({
             universeId != null
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
               : (() => {
+                  const homeRef = getFranchiseHomeReferrer();
+                  if (
+                    homeRef?.source === "games" &&
+                    homeRef.home === "series"
+                  ) {
+                    return homeRef.backLabel || "GAMES";
+                  }
+                  if (
+                    homeRef?.source === "movies" &&
+                    homeRef.home === "series"
+                  ) {
+                    return homeRef.backLabel || "MOVIES";
+                  }
+                  if (
+                    homeRef?.source === "books" &&
+                    homeRef.home === "series"
+                  ) {
+                    return homeRef.backLabel || "BOOKS";
+                  }
                   const ref = getSeriesEntryReferrer();
                   if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                     return (ref.title || "BOOKS").toLocaleUpperCase();

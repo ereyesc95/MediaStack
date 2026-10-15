@@ -130,15 +130,30 @@ def build_work_overview(
             eras = []
 
     about_disk: dict = {}
-    if primary_dir:
-        about_path = primary_dir / "[Artwork]" / "about.json"
-        if about_path.is_file():
-            try:
-                import json
+    if db is not None:
+        try:
+            from app.games_store import load_work_about
 
-                about_disk = json.loads(about_path.read_text(encoding="utf-8"))
-            except Exception:
-                about_disk = {}
+            about_disk = load_work_about(
+                primary_dir,
+                work_slug=work_id,
+                work_name=detail.get("name") or work_id,
+                db=db,
+            )
+        except Exception:
+            about_disk = {}
+    elif primary_dir:
+        # No DB session — one-time disk read only (migration path).
+        try:
+            from app.games_store import load_work_about
+
+            about_disk = load_work_about(
+                primary_dir,
+                work_slug=work_id,
+                work_name=detail.get("name") or work_id,
+            )
+        except Exception:
+            about_disk = {}
 
     universes: list = []
     universe = None
@@ -158,11 +173,29 @@ def build_work_overview(
             pass
 
     artwork_home = None
+    artwork_home_module = None
     try:
         artwork_home = find_artwork_home(detail.get("name") or work_id)
+        if artwork_home:
+            artwork_home_module = artwork_home[0]
     except Exception:
         pass
 
+    developers = list(about_disk.get("developers") or [])
+    publishers = list(
+        about_disk.get("publishers")
+        or ([about_disk["publisher"]] if about_disk.get("publisher") else [])
+    )
+    bio = (
+        about_disk.get("overview")
+        or about_disk.get("bio")
+        or about_disk.get("summary")
+        or None
+    )
+    has_movies = bool(related_disk.get("movies") or related_disk.get("movie"))
+    has_series = bool(related_disk.get("series"))
+    has_books = bool(related_disk.get("books"))
+    # SeriesAbout / franchise shell expect a SeriesOverview-shaped payload.
     return {
         "id": detail.get("id"),
         "name": detail.get("name"),
@@ -176,6 +209,23 @@ def build_work_overview(
         "logo_url": detail.get("logo_url"),
         "icon_url": detail.get("icon_url"),
         "badge_url": detail.get("badge_url"),
+        "bio": bio,
+        "writers": developers,
+        "aliases": [],
+        "activity_periods": [],
+        "genres": [],
+        "publishers": publishers,
+        "cast": {"characters": [], "staff": [], "people": []},
+        "links": {"categories": []},
+        "media": {
+            "has_audio": has_audio,
+            "has_series": has_series,
+            "has_movies": has_movies,
+            "has_books": has_books,
+            "has_library": False,
+            "has_games": len(games) > 0,
+            "has_gallery": has_gallery,
+        },
         "games": games,
         "films": games,
         "subseries": [
@@ -199,9 +249,9 @@ def build_work_overview(
         "primary_film_id": detail.get("primary_film_id"),
         "has_audio": has_audio,
         "has_gallery": has_gallery,
-        "has_movies": bool(related_disk.get("movies") or related_disk.get("movie")),
-        "has_series": bool(related_disk.get("series")),
-        "has_books": bool(related_disk.get("books")),
+        "has_movies": has_movies,
+        "has_series": has_series,
+        "has_books": has_books,
         "has_games": len(games) > 0,
         "has_library": False,
         "eras": eras,
@@ -209,8 +259,8 @@ def build_work_overview(
             "overview": about_disk.get("overview"),
             "studio": about_disk.get("studio"),
             "publisher": about_disk.get("publisher"),
-            "developers": about_disk.get("developers") or [],
-            "publishers": about_disk.get("publishers") or [],
+            "developers": developers,
+            "publishers": publishers,
             "platforms": detail.get("platforms") or about_disk.get("platforms") or [],
             "igdb_id": about_disk.get("igdb_id"),
         },
@@ -229,7 +279,7 @@ def build_work_overview(
         "universe_cards": universe_cards,
         "merged_universe_cards": merged_universe_cards,
         "universe_groups": universe_groups,
-        "artwork_home": artwork_home,
+        "artwork_home_module": artwork_home_module,
         "module": "games",
     }
 
@@ -260,15 +310,18 @@ def build_game_overview(
             eras = []
 
     about_disk: dict = {}
-    if game_dir:
-        about_path = game_dir / "[Artwork]" / "about.json"
-        if about_path.is_file():
-            try:
-                import json
+    try:
+        from app.games_store import load_game_about
 
-                about_disk = json.loads(about_path.read_text(encoding="utf-8"))
-            except Exception:
-                about_disk = {}
+        about_disk = load_game_about(
+            game_dir,
+            game_id=game_id or detail.get("id"),
+            folder_path=folder_path or None,
+            work_slug=(detail.get("work_id") or None),
+            db=db,
+        )
+    except Exception:
+        about_disk = {}
 
     work_id = detail.get("work_id") or (detail.get("franchise") or {}).get("id")
     siblings = detail.get("sibling_games") or []

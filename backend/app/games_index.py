@@ -250,52 +250,12 @@ def _game_card_from_dir(
     launch = _pick_launch_file(game_dir, title=title)
     logo_url, icon_url = find_logo_file(game_dir, media_root)
     launch_rel = safe_relative(launch, media_root) if launch else None
+    # Genres / developers / publishers come from game_leaves DB metadata
+    # (enriched in catalog routes) — never from local about.json sidecars.
     genre_names: list[str] = []
     developers: list[str] = []
     publishers: list[str] = []
     directors: list[str] = []
-    about_path = game_dir / "[Artwork]" / "about.json"
-    if about_path.is_file():
-        try:
-            import json
-
-            about = json.loads(about_path.read_text(encoding="utf-8"))
-            raw_genres = about.get("genres") or []
-            if isinstance(raw_genres, list):
-                for g in raw_genres:
-                    if isinstance(g, str) and g.strip():
-                        genre_names.append(g.strip())
-                    elif isinstance(g, dict):
-                        name = (g.get("name") or "").strip()
-                        if name:
-                            genre_names.append(name)
-
-            def _names(raw: object) -> list[str]:
-                out: list[str] = []
-                if isinstance(raw, str) and raw.strip():
-                    out.append(raw.strip())
-                elif isinstance(raw, list):
-                    for item in raw:
-                        if isinstance(item, str) and item.strip():
-                            out.append(item.strip())
-                        elif isinstance(item, dict):
-                            n = (item.get("name") or "").strip()
-                            if n:
-                                out.append(n)
-                return out
-
-            developers = _names(about.get("developers") or about.get("studio"))
-            publishers = _names(about.get("publishers") or about.get("publisher"))
-            directors = _names(
-                about.get("directors")
-                or about.get("director")
-                or about.get("writers")
-            )
-        except Exception:
-            genre_names = []
-            developers = []
-            publishers = []
-            directors = []
     return {
         "id": _game_id(rel),
         "title": title or parse_folder_bracket_tags(game_dir.name)[0],

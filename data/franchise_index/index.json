@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-09-30T15:13:07.475705+00:00",
+  "scanned_at": "2026-10-15T21:21:22.539515+00:00",
   "franchises": {
     "dracula untold": {
       "display_name": "Dracula Untold",
@@ -790,6 +790,53 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "The Shining"
+        }
+      ]
+    },
+    "super mario": {
+      "display_name": "Super Mario",
+      "slug": "super mario",
+      "letter": "S",
+      "entries": [
+        {
+          "kind": "game",
+          "path": "Games/Nintendo 64/S/Super Mario/1996.06.23. Super Mario 64",
+          "title": "Super Mario 64",
+          "date_iso": "1996-06-23",
+          "letter": "S",
+          "platform": "Nintendo 64",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Entertainment System/S/Super Mario/1988.10.23. Super Mario Bros. 3",
+          "title": "Super Mario Bros. 3",
+          "date_iso": "1988-10-23",
+          "letter": "S",
+          "platform": "Nintendo Entertainment System",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Wii/S/Super Mario/2007.11.01. Super Mario Galaxy",
+          "title": "Super Mario Galaxy",
+          "date_iso": "2007-11-01",
+          "letter": "S",
+          "platform": "Nintendo Wii",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Wii/S/Super Mario/2010.05.23. Super Mario Galaxy 2",
+          "title": "Super Mario Galaxy 2",
+          "date_iso": "2010-05-23",
+          "letter": "S",
+          "platform": "Nintendo Wii",
+          "subseries": null,
+          "franchise_display": "Super Mario"
         }
       ]
     }

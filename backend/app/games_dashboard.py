@@ -24,12 +24,18 @@ def build_games_dashboard(
     recent_game_ids: list[str] | None = None,
 ) -> dict:
     _ = user_id
+    from app.franchise_identity import enrich_catalog_with_artwork_home
+    from app.games_catalog_meta import enrich_games_catalog
+
     media_root = Path(settings.media_root) if settings.media_root else None
     catalog = (
         build_games_catalog(media_root)
         if media_root and media_root.is_dir()
         else {"franchises": [], "games": [], "platforms": []}
     )
+    catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
+    if db is not None:
+        catalog = enrich_games_catalog(db, catalog)
     franchises = filter_adult_cards(
         catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
     )

@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   createCatalogImport,
   previewCatalogImport,
@@ -340,7 +348,20 @@ export default function ManageCatalogModal({
   });
   const [newPlatformOpen, setNewPlatformOpen] = useState(false);
   const [newPlatformName, setNewPlatformName] = useState("");
-  const [platformDropdown, setPlatformDropdown] = useState("");
+  /** Franchise-level "Add platform…" menu. */
+  const [platformMenuOpen, setPlatformMenuOpen] = useState(false);
+  /** Per-title platform picker: item key currently open. */
+  const [itemPlatformMenuKey, setItemPlatformMenuKey] = useState<string | null>(
+    null
+  );
+  const [itemPlatformMenuStyle, setItemPlatformMenuStyle] =
+    useState<CSSProperties>({});
+  const platformMenuRef = useRef<HTMLDivElement>(null);
+  const itemPlatformMenuRef = useRef<HTMLDivElement>(null);
+  const itemPlatformTriggerRefs = useRef<Map<string, HTMLButtonElement>>(
+    new Map()
+  );
+  const creatingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -360,6 +381,65 @@ export default function ManageCatalogModal({
         Boolean(firstPick && franchiseName && franchiseName !== firstPick.title)
     );
   }, [franchiseName, module, firstPick]);
+
+  useEffect(() => {
+    if (!platformMenuOpen && !itemPlatformMenuKey) return;
+    const onPointer = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (
+        platformMenuOpen &&
+        platformMenuRef.current &&
+        !platformMenuRef.current.contains(t)
+      ) {
+        setPlatformMenuOpen(false);
+      }
+      if (itemPlatformMenuKey) {
+        const trigger = itemPlatformTriggerRefs.current.get(itemPlatformMenuKey);
+        const inMenu = itemPlatformMenuRef.current?.contains(t);
+        const inTrigger = trigger?.contains(t);
+        if (!inMenu && !inTrigger) setItemPlatformMenuKey(null);
+      }
+    };
+    document.addEventListener("pointerdown", onPointer, true);
+    return () => document.removeEventListener("pointerdown", onPointer, true);
+  }, [platformMenuOpen, itemPlatformMenuKey]);
+
+  const updateItemPlatformMenuPosition = () => {
+    if (!itemPlatformMenuKey) return;
+    const trigger = itemPlatformTriggerRefs.current.get(itemPlatformMenuKey);
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const menuWidth = Math.min(18 * 16, Math.max(12 * 16, rect.width), vw - 16);
+    let left = rect.left;
+    if (left + menuWidth > vw - 8) left = Math.max(8, vw - 8 - menuWidth);
+    const spaceBelow = vh - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const maxHeight = Math.min(12 * 16, Math.max(spaceBelow, spaceAbove, 8 * 16));
+    const openUp = spaceBelow < Math.min(maxHeight, 10 * 16) && spaceAbove > spaceBelow;
+    setItemPlatformMenuStyle({
+      position: "fixed",
+      left,
+      width: menuWidth,
+      maxHeight,
+      zIndex: 7000,
+      ...(openUp
+        ? { bottom: vh - rect.top + 4, top: "auto" }
+        : { top: rect.bottom + 4, bottom: "auto" }),
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!itemPlatformMenuKey) return;
+    updateItemPlatformMenuPosition();
+    window.addEventListener("resize", updateItemPlatformMenuPosition);
+    window.addEventListener("scroll", updateItemPlatformMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateItemPlatformMenuPosition);
+      window.removeEventListener("scroll", updateItemPlatformMenuPosition, true);
+    };
+  }, [itemPlatformMenuKey]);
 
   function stopLookup() {
     const controller = lookupControllerRef.current;
@@ -481,6 +561,39 @@ export default function ManageCatalogModal({
           (p) => p.toLowerCase() !== want
         ),
       }))
+    );
+  }
+
+  function assignItemPlatform(itemKey: string, platformName: string) {
+    const canonical =
+      canonicalizePlatform(platformName, platformOptions) || platformName;
+    if (!canonical) return;
+    setItems((current) =>
+      current.map((item) => {
+        if (item.key !== itemKey) return item;
+        const existing = item.platforms || [];
+        if (existing.some((p) => p.toLowerCase() === canonical.toLowerCase())) {
+          return item;
+        }
+        return { ...item, platforms: [...existing, canonical] };
+      })
+    );
+    addActivePlatform(canonical);
+    setItemPlatformMenuKey(null);
+  }
+
+  function removeItemPlatform(itemKey: string, platformName: string) {
+    const want = platformName.toLowerCase();
+    setItems((current) =>
+      current.map((item) => {
+        if (item.key !== itemKey) return item;
+        return {
+          ...item,
+          platforms: (item.platforms || []).filter(
+            (p) => p.toLowerCase() !== want
+          ),
+        };
+      })
     );
   }
 
@@ -672,17 +785,10 @@ export default function ManageCatalogModal({
     if (module !== "games") return chosenItems.length;
     let n = 0;
     for (const item of chosenItems) {
-      const plats = item.platforms?.length
-        ? item.platforms
-        : activePlatforms;
-      n += Math.max(1, plats.length);
+      n += Math.max(1, (item.platforms || []).length);
     }
-    // Empty platform folders still cost a little time.
-    for (const plat of activePlatforms) {
-      if (!(gamesForPlatform.get(plat) || []).length) n += 0.25;
-    }
-    return Math.max(1, Math.ceil(n));
-  }, [module, chosenItems, activePlatforms, gamesForPlatform]);
+    return Math.max(1, n);
+  }, [module, chosenItems]);
   const estimatedSeconds = Math.max(
     10,
     leafCreateCount * (module === "books" ? 5 : 12)
@@ -692,7 +798,7 @@ export default function ManageCatalogModal({
     [items]
   );
 
-  function commitNewPlatform() {
+  function commitNewPlatform(assignToItemKey?: string | null) {
     const name = titleCasePlatform(newPlatformName);
     if (!name) return;
     setPlatformOptions((current) => {
@@ -712,18 +818,44 @@ export default function ManageCatalogModal({
       }
       return next;
     });
-    addActivePlatform(name);
+    const targetKey = assignToItemKey ?? itemPlatformMenuKey;
+    if (targetKey) {
+      assignItemPlatform(targetKey, name);
+    } else {
+      addActivePlatform(name);
+    }
     setNewPlatformName("");
     setNewPlatformOpen(false);
   }
 
   async function create() {
-    if (!franchiseName.trim() || !chosenItems.length || saving) return;
+    if (
+      !franchiseName.trim() ||
+      !chosenItems.length ||
+      saving ||
+      creatingRef.current
+    ) {
+      return;
+    }
+    if (module === "games") {
+      const missing = chosenItems.filter(
+        (item) => !(item.platforms && item.platforms.length)
+      );
+      if (missing.length) {
+        setError(
+          `Pick at least one platform for: ${missing
+            .map((item) => item.title)
+            .join(", ")}`
+        );
+        return;
+      }
+    }
     const platforms =
       module === "games"
         ? [
             ...new Set(
-              activePlatforms
+              chosenItems
+                .flatMap((item) => item.platforms || [])
                 .map((p) => canonicalizePlatform(p, platformOptions) || p)
                 .filter(Boolean)
             ),
@@ -733,6 +865,8 @@ export default function ManageCatalogModal({
       setError("Choose at least one platform for Games (e.g. Nintendo Switch).");
       return;
     }
+    // Lock the Create control immediately so double-clicks cannot re-fire.
+    creatingRef.current = true;
     setSaving(true);
     setCloseWarning(false);
     setError(null);
@@ -747,10 +881,7 @@ export default function ManageCatalogModal({
           ...item,
           ...(module === "games"
             ? {
-                platforms: (item.platforms?.length
-                  ? item.platforms
-                  : platforms
-                ).map(
+                platforms: (item.platforms || []).map(
                   (p) => canonicalizePlatform(p, platformOptions) || p
                 ),
               }
@@ -769,6 +900,7 @@ export default function ManageCatalogModal({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      creatingRef.current = false;
       setSaving(false);
     }
   }
@@ -1120,133 +1252,6 @@ export default function ManageCatalogModal({
               />
             </label>
 
-            {module === "games" ? (
-              <div className="manage-catalog-modal__selection">
-                <small className="muted">Platforms</small>
-                <div className="manage-catalog-modal__platform-pills">
-                  {activePlatforms.map((p) => {
-                    const titles = gamesForPlatform.get(p) || [];
-                    const tip =
-                      titles.length > 0
-                        ? titles.join("\n")
-                        : "No games — empty franchise folder";
-                    return (
-                      <span
-                        key={p}
-                        className="manage-catalog-modal__platform-pill"
-                        title={tip}
-                      >
-                        <span className="manage-catalog-modal__platform-pill-name">
-                          {p}
-                        </span>
-                        <button
-                          type="button"
-                          className="manage-catalog-modal__platform-pill-remove"
-                          aria-label={`Remove ${p}`}
-                          disabled={saving}
-                          onClick={() => removeActivePlatform(p)}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    );
-                  })}
-                  {!newPlatformOpen ? (
-                    <>
-                      <select
-                        className="manage-catalog-modal__platform-select"
-                        value={platformDropdown}
-                        disabled={saving || dropdownPlatformOptions.length === 0}
-                        aria-label="Add platform"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setPlatformDropdown("");
-                          if (value) addActivePlatform(value);
-                        }}
-                      >
-                        <option value="">
-                          {dropdownPlatformOptions.length
-                            ? "Add platform…"
-                            : "All platforms added"}
-                        </option>
-                        {dropdownPlatformOptions.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="manage-catalog-modal__platform-add-btn"
-                        disabled={saving}
-                        onClick={() => setNewPlatformOpen(true)}
-                      >
-                        + Add
-                      </button>
-                    </>
-                  ) : (
-                    <span className="manage-catalog-modal__new-platform-inline">
-                      <input
-                        className="manage-catalog-modal__new-platform-input"
-                        value={newPlatformName}
-                        placeholder="Platform name"
-                        disabled={saving}
-                        autoFocus
-                        onChange={(e) => setNewPlatformName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            commitNewPlatform();
-                          } else if (e.key === "Escape") {
-                            setNewPlatformOpen(false);
-                            setNewPlatformName("");
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="manage-catalog-modal__platform-icon-btn"
-                        aria-label="Confirm new platform"
-                        disabled={saving || !newPlatformName.trim()}
-                        onClick={() => commitNewPlatform()}
-                      >
-                        <svg viewBox="0 0 16 16" aria-hidden="true">
-                          <path
-                            d="M3.5 8.5 6.5 11.5 12.5 4.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        className="manage-catalog-modal__platform-icon-btn"
-                        aria-label="Cancel new platform"
-                        disabled={saving}
-                        onClick={() => {
-                          setNewPlatformOpen(false);
-                          setNewPlatformName("");
-                        }}
-                      >
-                        <svg viewBox="0 0 16 16" aria-hidden="true">
-                          <path
-                            d="M4 4l8 8M12 4l-8 8"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
             {module === "series" ? (
               <Checkbox
                 className="manage-artists-modal__guide-option"
@@ -1266,36 +1271,106 @@ export default function ManageCatalogModal({
                     : "Selected titles"}
               </small>
               <div className="manage-catalog-modal__items">
-                {items.map((item) => (
-                  <Checkbox
-                    key={item.key}
-                    className="manage-catalog-modal__item"
-                    checked={selectedKeys.has(item.key)}
-                    disabled={saving}
-                    onChange={() => toggleItem(item.key)}
-                  >
-                    {item.title}
-                    {item.date ? (
-                      <span className="muted"> {item.date}</span>
-                    ) : null}
-                    {module === "series" && item.seasons?.length ? (
-                      <span className="muted">
-                        {" · "}
-                        {
-                          item.seasons.filter((season) => season.number > 0)
-                            .length
-                        }{" "}
-                        seasons
-                        {item.seasons.some((season) => season.number === 0)
-                          ? " + Specials"
-                          : ""}
-                      </span>
-                    ) : null}
-                    {!item.provider_id ? (
-                      <span className="muted"> · No registration</span>
-                    ) : null}
-                  </Checkbox>
-                ))}
+                {items.map((item) => {
+                  const itemPlats = item.platforms || [];
+                  return (
+                    <div
+                      key={item.key}
+                      className="manage-catalog-modal__title-row"
+                    >
+                      <Checkbox
+                        className="manage-catalog-modal__item"
+                        checked={selectedKeys.has(item.key)}
+                        disabled={saving}
+                        onChange={() => toggleItem(item.key)}
+                      >
+                        {item.title}
+                        {item.date ? (
+                          <span className="muted"> {item.date}</span>
+                        ) : null}
+                        {module === "series" && item.seasons?.length ? (
+                          <span className="muted">
+                            {" · "}
+                            {
+                              item.seasons.filter((season) => season.number > 0)
+                                .length
+                            }{" "}
+                            seasons
+                            {item.seasons.some((season) => season.number === 0)
+                              ? " + Specials"
+                              : ""}
+                          </span>
+                        ) : null}
+                        {!item.provider_id ? (
+                          <span className="muted"> · No registration</span>
+                        ) : null}
+                      </Checkbox>
+                      {module === "games" && selectedKeys.has(item.key) ? (
+                        <div className="manage-catalog-modal__item-platforms">
+                          {itemPlats.length ? (
+                            itemPlats.map((p) => (
+                              <span
+                                key={p}
+                                className="manage-catalog-modal__platform-pill manage-catalog-modal__platform-pill--sm"
+                                title={p}
+                              >
+                                <span className="manage-catalog-modal__platform-pill-name">
+                                  {p}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="manage-catalog-modal__platform-pill-remove"
+                                  aria-label={`Remove ${p} from ${item.title}`}
+                                  disabled={saving}
+                                  onClick={() =>
+                                    removeItemPlatform(item.key, p)
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="manage-catalog-modal__item-platforms-warn">
+                              No platform
+                            </span>
+                          )}
+                          <div className="manage-catalog-modal__platform-picker manage-catalog-modal__platform-picker--item">
+                            <button
+                              type="button"
+                              className="manage-catalog-modal__item-platform-add"
+                              disabled={saving}
+                              aria-haspopup="listbox"
+                              aria-expanded={itemPlatformMenuKey === item.key}
+                              ref={(el) => {
+                                if (el) {
+                                  itemPlatformTriggerRefs.current.set(
+                                    item.key,
+                                    el
+                                  );
+                                } else {
+                                  itemPlatformTriggerRefs.current.delete(
+                                    item.key
+                                  );
+                                }
+                              }}
+                              onClick={() => {
+                                setPlatformMenuOpen(false);
+                                setNewPlatformOpen(false);
+                                setNewPlatformName("");
+                                setItemPlatformMenuKey((cur) =>
+                                  cur === item.key ? null : item.key
+                                );
+                              }}
+                            >
+                              + Platform
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1373,20 +1448,128 @@ export default function ManageCatalogModal({
               <button
                 type="button"
                 className="btn btn--primary"
+                aria-busy={saving}
                 disabled={
                   saving ||
                   !franchiseName.trim() ||
                   chosenItems.length === 0 ||
-                  (module === "games" && activePlatforms.length === 0)
+                  (module === "games" &&
+                    chosenItems.some(
+                      (item) => !(item.platforms && item.platforms.length)
+                    ))
                 }
                 onClick={() => void create()}
               >
-                + Create
+                {saving ? "Creating…" : "+ Create"}
               </button>
             </div>
           </div>
         )}
       </div>
+      {itemPlatformMenuKey
+        ? (() => {
+            const openItem = items.find((i) => i.key === itemPlatformMenuKey);
+            if (!openItem) return null;
+            const itemPlats = openItem.platforms || [];
+            const opts = (
+              platformOptions.length
+                ? platformOptions
+                : GAMES_PLATFORM_OPTIONS
+            ).filter(
+              (p) =>
+                !itemPlats.some((x) => x.toLowerCase() === p.toLowerCase())
+            );
+            return createPortal(
+              <div
+                ref={itemPlatformMenuRef}
+                className="manage-catalog-modal__platform-menu manage-catalog-modal__platform-menu--portal ms-menu-pop is-open"
+                role="listbox"
+                style={itemPlatformMenuStyle}
+              >
+                {opts.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    role="option"
+                    className="manage-catalog-modal__platform-menu-item"
+                    onClick={() => assignItemPlatform(openItem.key, p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+                {newPlatformOpen ? (
+                  <div className="manage-catalog-modal__new-platform-inline manage-catalog-modal__new-platform-inline--portal">
+                    <input
+                      className="manage-catalog-modal__new-platform-input"
+                      value={newPlatformName}
+                      placeholder="Platform name"
+                      disabled={saving}
+                      autoFocus
+                      onChange={(e) => setNewPlatformName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitNewPlatform(openItem.key);
+                        } else if (e.key === "Escape") {
+                          setNewPlatformOpen(false);
+                          setNewPlatformName("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="manage-catalog-modal__platform-icon-btn"
+                      aria-label="Confirm new platform"
+                      disabled={saving || !newPlatformName.trim()}
+                      onClick={() => commitNewPlatform(openItem.key)}
+                    >
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path
+                          d="M3.5 8.5 6.5 11.5 12.5 4.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="manage-catalog-modal__platform-icon-btn"
+                      aria-label="Cancel new platform"
+                      disabled={saving}
+                      onClick={() => {
+                        setNewPlatformOpen(false);
+                        setNewPlatformName("");
+                      }}
+                    >
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path
+                          d="M4 4l8 8M12 4l-8 8"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="manage-catalog-modal__platform-menu-item manage-catalog-modal__platform-menu-item--new"
+                    disabled={saving}
+                    onClick={() => setNewPlatformOpen(true)}
+                  >
+                    + New platform…
+                  </button>
+                )}
+              </div>,
+              document.body
+            );
+          })()
+        : null}
     </ModalPortal>
   );
 }

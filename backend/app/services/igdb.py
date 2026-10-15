@@ -149,7 +149,7 @@ async def search_games(query: str, *, limit: int = 20) -> list[dict]:
                 "developers": developers,
                 "publishers": publishers,
                 "cover_url": (
-                    f"https://images.igdb.com/igdb/image/upload/t_cover_big/{cover_id}.jpg"
+                    f"https://images.igdb.com/igdb/image/upload/t_cover_big_2x/{cover_id}.jpg"
                     if cover_id
                     else None
                 ),
@@ -233,7 +233,7 @@ async def search_games_by_ids(ids: list[int]) -> list[dict]:
                 "developers": developers,
                 "publishers": publishers,
                 "cover_url": (
-                    f"https://images.igdb.com/igdb/image/upload/t_cover_big/{cover_id}.jpg"
+                    f"https://images.igdb.com/igdb/image/upload/t_cover_big_2x/{cover_id}.jpg"
                     if cover_id
                     else None
                 ),

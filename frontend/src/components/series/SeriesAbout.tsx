@@ -242,13 +242,14 @@ export default function SeriesAbout({
   const contentRef = useRef<HTMLDivElement>(null);
   const subseriesRowRef = useRef<HTMLDivElement>(null);
   const [officialOnly, setOfficialOnly] = useState(true);
-  const showEditionTabs = hasUnofficialItems(data.subseries);
+  const allSubseries = data.subseries || [];
+  const showEditionTabs = hasUnofficialItems(allSubseries);
   const visibleSubseries = useMemo(
     () =>
       showEditionTabs
-        ? filterByOfficial(data.subseries, officialOnly)
-        : data.subseries,
-    [data.subseries, showEditionTabs, officialOnly]
+        ? filterByOfficial(allSubseries, officialOnly)
+        : allSubseries,
+    [allSubseries, showEditionTabs, officialOnly]
   );
 
   useEffect(() => {
@@ -300,8 +301,10 @@ export default function SeriesAbout({
 
   const originText = originLabel(data.country?.name);
   const hasBio = Boolean(data.bio);
-  const writers =
-    data.writers.length > 0 ? data.writers : [];
+  const writers = data.writers || [];
+  const activityPeriods = data.activity_periods || [];
+  const genres = data.genres || [];
+  const publishers = data.publishers || [];
   const hasSubseriesCarousel = visibleSubseries.length > 6;
 
   const advanceSubseriesCarousel = () => {
@@ -509,11 +512,11 @@ export default function SeriesAbout({
                   </dd>
                 </div>
               )}
-              {data.activity_periods.length > 0 && (
+              {activityPeriods.length > 0 && (
                 <div className="artist-about__meta-row">
                   <dt>{datesLabel}</dt>
                   <dd>
-                    {data.activity_periods.map((p, i) => {
+                    {activityPeriods.map((p, i) => {
                       const parts = (p.label || "").split("–");
                       const startYear = parts[0] || p.label;
                       const endYear = parts.length > 1 ? parts.slice(1).join("–") : "";
@@ -551,11 +554,11 @@ export default function SeriesAbout({
                   </dd>
                 </div>
               )}
-              {data.genres.length > 0 && (
+              {genres.length > 0 && (
                 <div className="artist-about__meta-row">
                   <dt>Genres</dt>
                   <dd>
-                    {data.genres.map((g) => (
+                    {genres.map((g) => (
                       <MetaValue
                         key={String(g.id)}
                         onClick={onGenre ? () => onGenre(g.id) : undefined}
@@ -566,11 +569,11 @@ export default function SeriesAbout({
                   </dd>
                 </div>
               )}
-              {data.publishers.length > 0 && (
+              {publishers.length > 0 && (
                 <div className="artist-about__meta-row">
                   <dt>Publisher</dt>
                   <dd>
-                    {data.publishers.map((p) => (
+                    {publishers.map((p) => (
                       <MetaValue
                         key={p}
                         onClick={onPublisher ? () => onPublisher(p) : undefined}

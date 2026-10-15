@@ -42,11 +42,14 @@ def games_catalog(
             enrich_catalog_with_music_identity,
         )
 
+        from app.games_catalog_meta import enrich_games_catalog
+
         catalog = build_games_catalog()
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )
         catalog = enrich_catalog_with_artwork_home(catalog)
+        catalog = enrich_games_catalog(db, catalog)
         adult_subs = adult_subgenre_names_from_db(db)
         catalog["franchises"] = filter_adult_cards(
             catalog.get("franchises") or [],

@@ -208,6 +208,10 @@ export default function BooksModule({
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
 
   useEffect(() => {
+    clearMediaTheme(userId);
+  }, [userId]);
+
+  useEffect(() => {
     let cancelled = false;
     const cached = getCachedBooksDashboard();
     if (cached) {

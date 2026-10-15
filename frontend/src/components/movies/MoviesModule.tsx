@@ -214,6 +214,10 @@ export default function MoviesModule({
   const directFilmFromHomeRef = useRef(false);
 
   useEffect(() => {
+    clearMediaTheme(userId);
+  }, [userId]);
+
+  useEffect(() => {
     let cancelled = false;
     const cached = getCachedMoviesDashboard();
     if (cached) {

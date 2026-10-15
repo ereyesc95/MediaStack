@@ -24916,6 +24916,14 @@ button.lyrics-status-badge--icon-only {
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.2;
+  cursor: default;
+  user-select: none;
+}
+
+.manage-catalog-modal__platform-pill--sm {
+  font-size: 0.68rem;
+  padding: 0.12rem 0.28rem 0.12rem 0.45rem;
+  font-weight: 600;
 }
 
 .manage-catalog-modal__platform-pill-name {
@@ -24923,6 +24931,7 @@ button.lyrics-status-badge--icon-only {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 12rem;
+  cursor: default;
 }
 
 .manage-catalog-modal__platform-pill-remove {
@@ -24941,19 +24950,126 @@ button.lyrics-status-badge--icon-only {
   text-decoration: none;
 }
 
-.manage-catalog-modal__platform-select {
-  min-width: 8.5rem;
-  max-width: 12rem;
-  padding: 0.22rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+.manage-catalog-modal__platform-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.manage-catalog-modal__platform-picker {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.manage-catalog-modal__platform-picker--item {
+  flex: 0 0 auto;
+}
+
+.manage-catalog-modal__platform-picker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
   color: var(--text);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.manage-catalog-modal__platform-picker-btn:hover:not(:disabled),
+.manage-catalog-modal__platform-picker-btn[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent, #7dd3c7) 45%, var(--border));
+}
+
+.manage-catalog-modal__platform-picker-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manage-catalog-modal__platform-picker-btn svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.manage-catalog-modal__platform-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.3rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.98);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.manage-catalog-modal__platform-picker--item .manage-catalog-modal__platform-menu {
+  right: auto;
+  min-width: 12rem;
+  max-width: min(18rem, 70vw);
+}
+
+.manage-catalog-modal__platform-menu--portal {
+  left: auto;
+  right: auto;
+  top: auto;
+  min-width: 12rem;
+  max-width: min(18rem, 70vw);
+  overflow: auto;
+}
+
+.manage-catalog-modal__platform-menu-item--new {
+  margin-top: 0.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0 0 0.4rem 0.4rem;
+  color: color-mix(in srgb, var(--accent, #6af) 85%, white);
+  font-weight: 600;
+}
+
+.manage-catalog-modal__new-platform-inline--portal {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.3rem 0.2rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.manage-catalog-modal__platform-menu-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  padding: 0.42rem 0.55rem;
+  border-radius: 0.4rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.manage-catalog-modal__platform-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent, #7dd3c7);
 }
 
 .manage-catalog-modal__platform-add-btn {
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   color: var(--accent, #7dd3c7);
@@ -24961,8 +25077,9 @@ button.lyrics-status-badge--icon-only {
   font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 0.2rem 0.35rem;
+  padding: 0.2rem 0.15rem 0.2rem 0.35rem;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .manage-catalog-modal__platform-add-btn:hover,
@@ -24973,23 +25090,65 @@ button.lyrics-status-badge--icon-only {
 }
 
 .manage-catalog-modal__new-platform-inline {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.3rem;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .manage-catalog-modal__new-platform-input {
-  flex: 1 1 8rem;
-  min-width: 7rem;
-  max-width: 14rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.45rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.55rem;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+}
+
+.manage-catalog-modal__title-row {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.manage-catalog-modal__item-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.35rem;
+  padding-left: 1.45rem;
+}
+
+.manage-catalog-modal__item-platforms-warn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, #f0a060 85%, var(--text-muted));
+}
+
+.manage-catalog-modal__item-platform-add {
+  border: none;
+  background: transparent;
+  color: var(--accent, #7dd3c7);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.1rem 0.2rem;
+  text-decoration: none;
+}
+
+.manage-catalog-modal__item-platform-add:hover,
+.manage-catalog-modal__item-platform-add:focus-visible {
+  text-decoration: none;
+  opacity: 0.88;
+}
+
+.manage-catalog-modal__item-platform-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .manage-catalog-modal__platform-icon-btn {

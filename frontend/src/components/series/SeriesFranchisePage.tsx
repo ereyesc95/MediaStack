@@ -387,31 +387,35 @@ export default function SeriesFranchisePage({
     artworkHomeRedirected.current = false;
   }, [franchiseId, module]);
 
-  // Movies/Books franchise URL whose [Artwork] lives under Series → series URL
+  // Movies/Books/Games franchise URL whose [Artwork] lives under Series → series URL
   useEffect(() => {
     if (artworkHomeRedirected.current) return;
     if (!data || !onOpenSeriesFranchise) return;
-    if (!isMoviesOnly && !isBooks) return;
+    if (!isMoviesOnly && !isBooks && !isGames) return;
     const home = String(
       (data as SeriesOverview & { artwork_home_module?: string | null })
         .artwork_home_module || ""
     ).toLowerCase();
     if (home !== "series") return;
     artworkHomeRedirected.current = true;
-    const source = isBooks ? "books" : "movies";
+    const source = isGames ? "games" : isBooks ? "books" : "movies";
+    const prev = getFranchiseHomeReferrer();
     saveFranchiseHomeReferrer({
       source,
       home: "series",
+      fromTab: prev?.fromTab,
+      catalogLetter: prev?.catalogLetter,
       franchiseId,
       franchiseName: data.name,
       preferredSection: preferredSectionForSource(source),
-      backLabel: isBooks ? "BOOKS" : "MOVIES",
+      backLabel: isGames ? "GAMES" : isBooks ? "BOOKS" : "MOVIES",
     });
     onOpenSeriesFranchise(franchiseId);
   }, [
     data,
     franchiseId,
     isBooks,
+    isGames,
     isMoviesOnly,
     onOpenSeriesFranchise,
   ]);

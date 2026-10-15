@@ -435,6 +435,35 @@ class Game(Base):
     gam_studio: Mapped[str | None] = mapped_column("gamStudio", Text)
 
 
+class GameWork(Base):
+    """Disk franchise/work under Games/{Platform}/{Letter}/{Work}/ — about in DB."""
+
+    __tablename__ = "game_works"
+
+    gwk_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    gwk_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    gwk_name: Mapped[str | None] = mapped_column(Text)
+    gwk_folder_path: Mapped[str | None] = mapped_column(Text)
+    gwk_bio: Mapped[str | None] = mapped_column(Text)
+    gwk_metadata_json: Mapped[str | None] = mapped_column(Text)
+    gwk_refreshed_at: Mapped[str | None] = mapped_column(Text)
+
+
+class GameLeaf(Base):
+    """Disk game leaf (platform title folder) about / IGDB metadata in DB."""
+
+    __tablename__ = "game_leaves"
+
+    glk_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    glk_game_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    glk_work_slug: Mapped[str | None] = mapped_column(String(255), index=True)
+    glk_folder_path: Mapped[str | None] = mapped_column(Text)
+    glk_title: Mapped[str | None] = mapped_column(Text)
+    glk_platform: Mapped[str | None] = mapped_column(Text)
+    glk_metadata_json: Mapped[str | None] = mapped_column(Text)
+    glk_refreshed_at: Mapped[str | None] = mapped_column(Text)
+
+
 class Genre(Base):
     __tablename__ = "genres"
 

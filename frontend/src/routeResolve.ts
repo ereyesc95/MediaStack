@@ -375,9 +375,18 @@ export async function resolvePathToView(
     const refMatches =
       ref &&
       slugMatch(String(ref.franchiseId || ""), franchiseRoute.franchiseId);
+    // Games → series (or movies/books) artwork home: stay on the home module
+    // so About/Cast/Links match SeriesStack. GAMES tab order comes from the
+    // homeReferrer on SeriesFranchisePage, not from loading GamesModule.
     const module =
       refMatches && ref!.source === "games"
-        ? ("games" as FranchiseHomeModule)
+        ? ref!.home === "games"
+          ? ("games" as FranchiseHomeModule)
+          : ref!.home === "movies" ||
+              ref!.home === "books" ||
+              ref!.home === "series"
+            ? ref!.home
+            : await resolveFranchiseHomeModule(franchiseRoute.franchiseId)
         : refMatches && (ref!.source === "movies" || ref!.source === "books")
           ? ref!.source
           : await resolveFranchiseHomeModule(franchiseRoute.franchiseId);
@@ -591,10 +600,21 @@ function syncFranchiseModule(pathname: string): FranchiseHomeModule {
   if (pathname.startsWith("/movies")) return "movies";
   if (pathname.startsWith("/books")) return "books";
   if (pathname.startsWith("/games")) return "games";
-  // Shared /franchise/… — honor games referrer so GAMES stays after OVERVIEW.
+  // Shared /franchise/… — games entry keeps GAMES tab order via referrer, but
+  // content loads from artwork home (usually series), same as Movies→Series.
   if (pathname.startsWith("/franchise")) {
     const ref = getFranchiseHomeReferrer();
-    if (ref?.source === "games") return "games";
+    if (ref?.source === "games") {
+      if (ref.home === "games") return "games";
+      if (
+        ref.home === "series" ||
+        ref.home === "movies" ||
+        ref.home === "books"
+      ) {
+        return ref.home;
+      }
+      return "series";
+    }
     if (ref?.source === "movies") return "movies";
     if (ref?.source === "books") return "books";
   }

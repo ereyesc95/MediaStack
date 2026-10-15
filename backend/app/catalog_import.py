@@ -61,6 +61,7 @@ BOOK_VOLUME_RE = re.compile(
 )
 ARTWORK_HOSTS = {
     "image.tmdb.org",
+    "images.igdb.com",
     "books.google.com",
     "books.googleusercontent.com",
     "lh3.googleusercontent.com",
@@ -961,8 +962,19 @@ async def create_catalog_import(
                     )
 
             covers = leaf_dir / "Gallery" / "Covers"
-            await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
-            await _download_primary(raw.get("backdrop_url"), covers / "Cover - Banner")
+            poster_url = raw.get("poster_url")
+            backdrop_url = raw.get("backdrop_url")
+            # Games: ensure IGDB cover is resolved before download (items may
+            # omit poster_url if added without a full preview round-trip).
+            if module == "games" and provider_id and not poster_url:
+                try:
+                    game = await igdb_get_game(provider_id)
+                    if game:
+                        poster_url = game.get("cover_url")
+                except Exception:
+                    pass
+            await _download_primary(poster_url, covers / "Cover - Front")
+            await _download_primary(backdrop_url, covers / "Cover - Banner")
             created.append(_relative(leaf_dir, root))
 
             try:
@@ -990,18 +1002,54 @@ async def create_catalog_import(
                 elif module == "games" and provider_id:
                     from app.games_index import _game_id
                     from app.games_refresh import refresh_game_metadata
+                    from app.games_store import (
+                        ensure_game_leaf,
+                        ensure_game_work,
+                        work_slug_for_name,
+                    )
 
                     game_id = _game_id(_relative(leaf_dir, root))
-                    await refresh_game_metadata(
+                    work_slug = work_slug_for_name(franchise_name)
+                    ensure_game_work(
+                        db,
+                        work_slug=work_slug,
+                        name=franchise_name,
+                        folder_path=_relative(franchise_dir, root),
+                    )
+                    ensure_game_leaf(
+                        db,
+                        game_id=game_id,
+                        work_slug=work_slug,
+                        folder_path=_relative(leaf_dir, root),
+                        title=title,
+                        platform=platform_name or None,
+                    )
+                    db.flush()
+                    refreshed = await refresh_game_metadata(
                         db,
                         game_id,
                         {
                             "title": title,
                             "folder_path": _relative(leaf_dir, root),
                             "name": title,
+                            "work_name": franchise_name,
                             "platform": platform_name or None,
                         },
                     )
+                    # Cover download may have been skipped earlier; retry from
+                    # the IGDB match stored on the leaf about payload.
+                    about = (
+                        refreshed.get("about")
+                        if isinstance(refreshed, dict)
+                        else None
+                    )
+                    cover_from_meta = (
+                        about.get("cover_url") if isinstance(about, dict) else None
+                    )
+                    if cover_from_meta:
+                        await _download_primary(
+                            cover_from_meta, covers / "Cover - Front"
+                        )
                 elif module == "books" and provider_id:
                     from app.books_store import (
                         book_id_for_dir,

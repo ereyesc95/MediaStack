@@ -177,6 +177,35 @@ Book files may use:
 {COMMON_ART}
 
 {QUIZ_GUIDE}""",
+    "games": f"""MyStack Games media guide
+=========================
+
+This file is optional. You can delete it at any time; MyStack never reads it.
+
+GAMES LAYOUT
+------------
+Games/{{Letter}}/{{Franchise}}/{{Platform}}/{{YYYY.MM.DD}}. {{Game}}/
+Each platform gets its own folder under the franchise.
+Do not create Movies, Series, Books or Audio portal folders here.
+
+Each game leaf may contain:
+  Gallery/Covers/
+  Gallery/Branding/
+  Gallery/Extras/
+  Gallery/Exclusive/
+  ROM/ or Disc/ (optional local dumps)
+  Audio/ (shortcuts to Music releases when applicable)
+
+The franchise root contains [Artwork]/ only when Games is its franchise home.
+Do not create about.json sidecars — title metadata lives in the MyStack database.
+
+Game folders use a date prefix when known:
+  YYYY.MM.DD. Game title/
+  YYYY. Game title/
+
+{COMMON_ART}
+
+{QUIZ_GUIDE}""",
 }
 
 

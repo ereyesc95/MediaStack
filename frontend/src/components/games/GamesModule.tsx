@@ -16,7 +16,12 @@ import {
   type GamesSection,
 } from "../../gamesRoute";
 import { getRecentGameIds } from "../../gamesRecent";
-import { saveFranchiseHomeReferrer } from "../../franchiseHome";
+import {
+  artworkHomeModule,
+  isArtworkHomeElsewhere,
+  preferredSectionForSource,
+  saveFranchiseHomeReferrer,
+} from "../../franchiseHome";
 import type {
   CardOrientation,
   MoviesFilmCard,
@@ -222,7 +227,55 @@ export default function GamesModule({
   }, [franchiseId, gameId]);
 
   const openFranchise = useCallback(
-    (workId: string, nextGameId?: string, nextSection: GamesSection = "overview") => {
+    (
+      workId: string,
+      nextGameId?: string,
+      nextSection: GamesSection = "overview",
+      from: "home" | "catalog" = "catalog"
+    ) => {
+      const card = (
+        franchises.find((f) => f.id === workId) ||
+        dashboard?.top_franchises?.find((f) => f.id === workId)
+      ) as SeriesFranchiseCard | undefined;
+      // Franchise hub whose [Artwork] lives under Series/Movies/Books → home
+      // module (same pattern as MoviesModule). Leaf game pages stay in Games.
+      if (!nextGameId && card && isArtworkHomeElsewhere(card, "games")) {
+        const home = artworkHomeModule(card)!;
+        saveFranchiseHomeReferrer({
+          source: "games",
+          home,
+          fromTab: from,
+          catalogLetter: from === "catalog" ? letter || "A" : undefined,
+          franchiseId: workId,
+          franchiseName: card.name,
+          preferredSection: preferredSectionForSource("games"),
+          backLabel: "GAMES",
+        });
+        if (home === "series") {
+          onOpenSeriesFranchise?.(workId);
+          return;
+        }
+        if (home === "movies") {
+          onOpenMoviesFranchise?.(workId);
+          return;
+        }
+        if (home === "books") {
+          onOpenBooksFranchise?.(workId);
+          return;
+        }
+      }
+      if (!nextGameId) {
+        saveFranchiseHomeReferrer({
+          source: "games",
+          home: "games",
+          fromTab: from,
+          catalogLetter: from === "catalog" ? letter || "A" : undefined,
+          franchiseId: workId,
+          franchiseName: card?.name,
+          preferredSection: preferredSectionForSource("games"),
+          backLabel: "GAMES",
+        });
+      }
       pushGamesRoute({
         franchiseId: workId,
         gameId: nextGameId,
@@ -236,7 +289,15 @@ export default function GamesModule({
         overviewTab: "about",
       });
     },
-    [onNavigate]
+    [
+      dashboard?.top_franchises,
+      franchises,
+      letter,
+      onNavigate,
+      onOpenBooksFranchise,
+      onOpenMoviesFranchise,
+      onOpenSeriesFranchise,
+    ]
   );
 
   const openGame = useCallback(
@@ -467,18 +528,29 @@ export default function GamesModule({
             const nextSection = (patch.section === "library"
               ? "books"
               : patch.section) as GamesSection | undefined;
-            if (!nextGid) {
+            if (!nextGid && nextFid) {
               clearMediaTheme(userId);
-              // Prefer GAMES tab order on the shared /franchise hub (even if
-              // artwork home resolves to Series).
+              const home = artworkHomeModule(workCard) || "games";
               saveFranchiseHomeReferrer({
                 source: "games",
-                home: "series",
+                home,
                 franchiseId: nextFid,
                 franchiseName: workCard?.name || game?.work_name,
                 preferredSection: "games",
                 backLabel: "GAMES",
               });
+              if (home === "series") {
+                onOpenSeriesFranchise?.(nextFid);
+                return;
+              }
+              if (home === "movies") {
+                onOpenMoviesFranchise?.(nextFid);
+                return;
+              }
+              if (home === "books") {
+                onOpenBooksFranchise?.(nextFid);
+                return;
+              }
             }
             pushGamesRoute({
               franchiseId: nextFid,
@@ -531,6 +603,34 @@ export default function GamesModule({
           const nextGid = "gameId" in patch ? patch.gameId : undefined;
           const nextSec = patch.section ?? section;
           const nextTab = patch.overviewTab ?? overviewTab;
+          if (!nextGid && nextFid) {
+            const card = franchises.find((f) => f.id === nextFid) as
+              | SeriesFranchiseCard
+              | undefined;
+            if (card && isArtworkHomeElsewhere(card, "games")) {
+              const home = artworkHomeModule(card)!;
+              saveFranchiseHomeReferrer({
+                source: "games",
+                home,
+                franchiseId: nextFid,
+                franchiseName: card.name,
+                preferredSection: preferredSectionForSource("games"),
+                backLabel: "GAMES",
+              });
+              if (home === "series") {
+                onOpenSeriesFranchise?.(nextFid);
+                return;
+              }
+              if (home === "movies") {
+                onOpenMoviesFranchise?.(nextFid);
+                return;
+              }
+              if (home === "books") {
+                onOpenBooksFranchise?.(nextFid);
+                return;
+              }
+            }
+          }
           pushGamesRoute({
             franchiseId: nextFid,
             gameId: nextGid,
@@ -706,7 +806,7 @@ export default function GamesModule({
               setLetter("A");
               loadCatalog();
             }}
-            onFranchise={(workId) => openFranchise(workId)}
+            onFranchise={(workId) => openFranchise(workId, undefined, "overview", "home")}
             onGame={openGame}
             onOpenUniverse={onOpenUniverse}
             onGenre={(id) => {
