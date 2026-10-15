@@ -347,11 +347,14 @@ def list_universes(
         has_series = bool(series_members)
         has_movies = any(m.ume_module == "movies" for m in members)
         has_books = any(m.ume_module == "books" for m in members)
+        has_games = any(m.ume_module == "games" for m in members)
         if module == "series" and not has_series:
             continue
         if module == "movies" and not has_movies:
             continue
         if module == "books" and not has_books:
+            continue
+        if module == "games" and not has_games:
             continue
         # Home panes: prefer universe art, else any member franchise/film/show cover.
         data = _serialize_universe(db, u, include_members=False, expand_cover=True)
@@ -360,6 +363,7 @@ def list_universes(
         data["has_series"] = has_series
         data["has_movies"] = has_movies
         data["has_books"] = has_books
+        data["has_games"] = has_games
         data["member_count"] = len(members)
         out.append(data)
     return out

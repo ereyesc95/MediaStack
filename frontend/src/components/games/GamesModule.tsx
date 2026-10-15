@@ -3,6 +3,8 @@ import {
   fetchGamesCatalog,
   fetchGamesDashboard,
   fetchGamesFilterOptions,
+  resolveBooksPath,
+  resolveMoviesPath,
 } from "../../api";
 import { getCachedUniverses, prefetchUniverses } from "../../universesCache";
 import { clearMediaTheme } from "../../mediaTheme";
@@ -32,16 +34,22 @@ import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
   type SeriesCatalogScope,
 } from "../series/SeriesBrowse";
+import SeriesSubseriesPage, {
+  type SeriesCatalogBrowseTarget,
+} from "../series/SeriesSubseriesPage";
 import GamesHome from "./GamesHome";
 import GamesMediaPage from "./GamesMediaPage";
 
 type GamesTab = "home" | "catalog";
 
 const FILTER_MODES: { id: SeriesFilterMode; label: string }[] = [
-  { id: "name", label: "NAME" },
+  { id: "name", label: "TITLE" },
   { id: "platform", label: "PLATFORM" },
   { id: "genre", label: "GENRE" },
   { id: "start", label: "RELEASE DATE" },
+  { id: "developer", label: "DEVELOPER" },
+  { id: "publisher", label: "PUBLISHER" },
+  { id: "writer", label: "DIRECTOR" },
   { id: "most_played", label: "MOST PLAYED" },
 ];
 
@@ -107,13 +115,14 @@ export default function GamesModule({
   );
   const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
   const [catalogScope, setCatalogScope] =
-    useState<SeriesCatalogScope>("platforms");
+    useState<SeriesCatalogScope>("shows");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
   const [games, setGames] = useState<MoviesFilmCard[]>([]);
   const [platforms, setPlatforms] = useState<SeriesFranchiseCard[]>([]);
   const [universes, setUniverses] = useState<Universe[]>(
-    () => getCachedUniverses() || []
+    () => (getCachedUniverses("games") || []).filter((u) => u.has_games)
   );
+  const [developer, setDeveloper] = useState("");
   const [dashboard, setDashboard] = useState<SeriesDashboard | null>(null);
   const [dashLoading, setDashLoading] = useState(false);
   const [filterOptions, setFilterOptions] =
@@ -170,8 +179,8 @@ export default function GamesModule({
     void fetchGamesFilterOptions()
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
-    void prefetchUniverses().then((u) => {
-      if (u) setUniverses(u);
+    void prefetchUniverses("games", { force: true }).then((u) => {
+      if (u) setUniverses(u.filter((uni) => Boolean(uni.has_games)));
     });
   }, [loadCatalog, loadDashboard, syncTick]);
 
@@ -264,6 +273,14 @@ export default function GamesModule({
         })();
         const genreNames =
           (g as { genre_names?: string[] }).genre_names || [];
+        const developers =
+          (g as { developers?: string[] }).developers || [];
+        const publishers =
+          (g as { publishers?: string[] }).publishers || [];
+        const directors =
+          (g as { directors?: string[]; writers?: string[] }).directors ||
+          (g as { writers?: string[] }).writers ||
+          [];
         return {
           id: g.id,
           name: g.title,
@@ -278,9 +295,17 @@ export default function GamesModule({
           icon_url: g.icon_url ?? null,
           badge_url: null,
           genre_names: genreNames,
+          developers,
+          publishers,
+          writers: directors,
           platforms: (g as { platform?: string }).platform
             ? [(g as { platform?: string }).platform as string]
             : [],
+          open_url: (g as { open_url?: string | null }).open_url,
+          open_mode: (g as { open_mode?: string | null }).open_mode,
+          open_label:
+            (g as { open_label?: string | null }).open_label ||
+            ((g as { has_rom?: boolean }).has_rom ? "Play game" : null),
           subseries: [
             {
               id: g.id,
@@ -301,6 +326,124 @@ export default function GamesModule({
   }, [catalogScope, franchises, games, platformFilter]);
 
   if (franchiseId) {
+    if (gameId) {
+      const workCard = franchises.find((f) => f.id === franchiseId);
+      const game = games.find((item) => item.id === gameId);
+      return (
+        <SeriesSubseriesPage
+          variant="game"
+          franchiseId={franchiseId}
+          franchiseName={workCard?.name || game?.work_name}
+          franchiseLogoUrl={workCard?.logo_url}
+          franchiseIconUrl={workCard?.icon_url}
+          subseriesId={gameId}
+          section={section as import("../../types").SeriesSection}
+          overviewTab={overviewTab}
+          universeId={universeId}
+          busy={busy}
+          isAdmin={isAdmin}
+          cardOrientation={cardOrientation}
+          onSetOrientation={onSetOrientation}
+          onImport={onImport}
+          onSync={onSync}
+          onChooseSource={onChooseSource}
+          onSwitchProfile={onSwitchProfile}
+          onEditProfile={onEditProfile}
+          onBack={() => {
+            pushGamesCatalogRoute();
+            onNavigate({
+              franchiseId: undefined,
+              gameId: undefined,
+              section: undefined,
+              overviewTab: undefined,
+              universeId: undefined,
+            });
+            setTab("catalog");
+            setCatalogScope("shows");
+            setFilterMode("name");
+          }}
+          onBrowseCatalog={(target: SeriesCatalogBrowseTarget) => {
+            setTab("catalog");
+            setCatalogScope("shows");
+            setFilterMode(target.mode);
+            setSearch("");
+            setLetter(target.mode === "name" ? "A" : "");
+            setPlatformFilter(null);
+            let nextSubgenre: number | "" = target.subgenreId ?? "";
+            if (
+              nextSubgenre === "" &&
+              target.genreName &&
+              filterOptions?.subgenre_groups
+            ) {
+              const want = target.genreName.trim().toLowerCase();
+              for (const group of filterOptions.subgenre_groups) {
+                const hit = (group.items || []).find(
+                  (item) => (item.name || "").trim().toLowerCase() === want
+                );
+                if (hit?.id != null) {
+                  nextSubgenre = hit.id;
+                  break;
+                }
+              }
+            }
+            setSubgenreId(nextSubgenre);
+            setDeveloper(target.developer ?? "");
+            setPublisher(target.publisher ?? "");
+            setWriter(target.writer ?? "");
+            setContinentId("");
+            setCountryId("");
+            setStartDecade("");
+            setEndDecade("");
+            pushGamesCatalogRoute();
+            onNavigate({
+              franchiseId: undefined,
+              gameId: undefined,
+              section: undefined,
+              overviewTab: undefined,
+              universeId: undefined,
+            });
+          }}
+          onOpenFilm={(id) => openGame(id, franchiseId)}
+          onOpenMusicRelease={onOpenMusicRelease}
+          onOpenSeriesFranchise={onOpenSeriesFranchise}
+          onOpenMoviesPath={(path) => {
+            void resolveMoviesPath(path)
+              .then((hit) => {
+                onOpenMoviesFranchise?.(hit.work_id, hit.film_id ?? undefined);
+              })
+              .catch(() => undefined);
+          }}
+          onOpenBooksPath={(path) => {
+            void resolveBooksPath(path)
+              .then((hit) => {
+                onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              })
+              .catch(() => undefined);
+          }}
+          onNavigate={(patch) => {
+            const nextFid = patch.franchiseId ?? franchiseId;
+            const nextGid = patch.subseriesId ?? gameId;
+            const nextSection = (patch.section === "library"
+              ? "books"
+              : patch.section) as GamesSection | undefined;
+            pushGamesRoute({
+              franchiseId: nextFid,
+              gameId: nextGid,
+              section: nextSection ?? "overview",
+              overviewTab: patch.overviewTab as GamesOverviewTab | undefined,
+              universeId: patch.universeId,
+            });
+            onNavigate({
+              franchiseId: nextFid,
+              gameId: nextGid,
+              section: nextSection,
+              overviewTab: patch.overviewTab as GamesOverviewTab | undefined,
+              universeId: patch.universeId,
+            });
+          }}
+        />
+      );
+    }
     return (
       <GamesMediaPage
         franchiseId={franchiseId}
@@ -379,6 +522,9 @@ export default function GamesModule({
             active: tab === "catalog",
             onClick: () => {
               setTab("catalog");
+              setCatalogScope("shows");
+              setFilterMode("name");
+              setPlatformFilter(null);
               pushGamesCatalogRoute();
               loadCatalog();
             },
@@ -496,6 +642,7 @@ export default function GamesModule({
           subgenreId={subgenreId}
           publisher={publisher}
           writer={writer}
+          developer={developer}
           platformName={platformFilter || ""}
           unitNoun="game"
           filterModes={FILTER_MODES}
@@ -504,14 +651,16 @@ export default function GamesModule({
           onLetterChange={setLetter}
           onFilterModeChange={(next) => {
             setFilterMode(next);
-            if (next !== "platform") {
-              setPlatformFilter(null);
-              return;
-            }
-            setCatalogScope("shows");
-            if (!platformFilter) {
-              const first = platforms[0]?.name;
-              if (first) setPlatformFilter(first);
+            if (next !== "platform") setPlatformFilter(null);
+            else setCatalogScope("shows");
+            if (
+              next === "developer" ||
+              next === "publisher" ||
+              next === "writer" ||
+              next === "genre" ||
+              next === "start"
+            ) {
+              setCatalogScope("shows");
             }
           }}
           onContinentIdChange={setContinentId}
@@ -521,9 +670,13 @@ export default function GamesModule({
           onSubgenreIdChange={setSubgenreId}
           onPublisherChange={setPublisher}
           onWriterChange={setWriter}
+          onDeveloperChange={setDeveloper}
           onPlatformNameChange={(name) => {
             setPlatformFilter(name || null);
-            if (name) setCatalogScope("shows");
+            if (name) {
+              setCatalogScope("shows");
+              setFilterMode("platform");
+            }
           }}
           onOpen={(fid, subId) => {
             if (catalogScope === "platforms") {

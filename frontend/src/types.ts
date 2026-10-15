@@ -1596,6 +1596,10 @@ export type Universe = {
   members?: UniverseMember[] | null;
   parent_module?: string;
   parent_slug?: string;
+  has_series?: boolean;
+  has_movies?: boolean;
+  has_books?: boolean;
+  has_games?: boolean;
   /** Legacy movie-universe fields (compat). */
   poster_url?: string | null;
   backdrop_url?: string | null;
@@ -1821,6 +1825,7 @@ export type SeriesFranchiseCard = {
   parent_genre_names?: string[];
   publishers?: string[];
   writers?: string[];
+  developers?: string[];
   /** Games: platforms this franchise appears on. */
   platforms?: string[];
   /** Same-named Music artist folder exists — open Artist page instead of franchise. */
@@ -2016,6 +2021,7 @@ export type SeriesFilterMode =
   | "genre"
   | "publisher"
   | "writer"
+  | "developer"
   | "most_played"
   | "platform";
 
@@ -2046,6 +2052,8 @@ export type SeriesFilterOptions = {
   decades: number[];
   publishers: string[];
   writers: string[];
+  /** Games developers (companies). */
+  developers?: string[];
 };
 
 export type SeriesCastPerformance = {

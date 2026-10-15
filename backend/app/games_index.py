@@ -251,6 +251,9 @@ def _game_card_from_dir(
     logo_url, icon_url = find_logo_file(game_dir, media_root)
     launch_rel = safe_relative(launch, media_root) if launch else None
     genre_names: list[str] = []
+    developers: list[str] = []
+    publishers: list[str] = []
+    directors: list[str] = []
     about_path = game_dir / "[Artwork]" / "about.json"
     if about_path.is_file():
         try:
@@ -266,8 +269,33 @@ def _game_card_from_dir(
                         name = (g.get("name") or "").strip()
                         if name:
                             genre_names.append(name)
+
+            def _names(raw: object) -> list[str]:
+                out: list[str] = []
+                if isinstance(raw, str) and raw.strip():
+                    out.append(raw.strip())
+                elif isinstance(raw, list):
+                    for item in raw:
+                        if isinstance(item, str) and item.strip():
+                            out.append(item.strip())
+                        elif isinstance(item, dict):
+                            n = (item.get("name") or "").strip()
+                            if n:
+                                out.append(n)
+                return out
+
+            developers = _names(about.get("developers") or about.get("studio"))
+            publishers = _names(about.get("publishers") or about.get("publisher"))
+            directors = _names(
+                about.get("directors")
+                or about.get("director")
+                or about.get("writers")
+            )
         except Exception:
             genre_names = []
+            developers = []
+            publishers = []
+            directors = []
     return {
         "id": _game_id(rel),
         "title": title or parse_folder_bracket_tags(game_dir.name)[0],
@@ -293,10 +321,14 @@ def _game_card_from_dir(
         "launch_path": launch_rel,
         "open_url": _file_url(launch, media_root) if launch else None,
         "open_mode": "local" if launch else None,
-        "open_label": "Launch" if launch else None,
+        "open_label": "Play game" if launch else None,
         "hub_title": hub_title,
         "official": not is_unofficial_folder(game_dir.name),
         "genre_names": genre_names,
+        "developers": developers,
+        "publishers": publishers,
+        "writers": directors,
+        "directors": directors,
     }
 
 

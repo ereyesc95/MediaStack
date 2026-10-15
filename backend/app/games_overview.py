@@ -272,6 +272,22 @@ def build_game_overview(
 
     work_id = detail.get("work_id") or (detail.get("franchise") or {}).get("id")
     siblings = detail.get("sibling_games") or []
+    raw_genres = about_disk.get("genres") or detail.get("genre_names") or []
+    genres = [
+        item
+        if isinstance(item, dict)
+        else {"id": str(item).casefold(), "name": str(item)}
+        for item in raw_genres
+        if (isinstance(item, dict) and item.get("name")) or isinstance(item, str)
+    ]
+    developers = about_disk.get("developers") or detail.get("developers") or []
+    publishers = about_disk.get("publishers") or detail.get("publishers") or []
+    directors = about_disk.get("directors") or detail.get("directors") or []
+
+    bio = about_disk.get("overview") or about_disk.get("bio") or ""
+    has_movies = bool(related_disk.get("movies") or related_disk.get("movie"))
+    has_series = bool(related_disk.get("series"))
+    has_books = bool(related_disk.get("books"))
 
     return {
         "id": detail.get("id"),
@@ -297,20 +313,41 @@ def build_game_overview(
         "has_rom": detail.get("has_rom"),
         "has_audio": has_audio,
         "has_gallery": has_gallery,
-        "has_movies": bool(related_disk.get("movies") or related_disk.get("movie")),
-        "has_series": bool(related_disk.get("series")),
-        "has_books": bool(related_disk.get("books")),
+        "has_movies": has_movies,
+        "has_series": has_series,
+        "has_books": has_books,
         "has_games": len(siblings) > 0,
+        "bio": bio,
+        "genres": genres,
+        "writers": directors,
+        "developers": developers,
+        "publishers": publishers,
+        "directors": directors,
+        "cast": about_disk.get("cast") or {},
+        "links": about_disk.get("links") or {},
+        "photocards": about_disk.get("photocards") or None,
+        "work": {"id": work_id, "name": detail.get("work_name")},
         "games": siblings,
         "films": siblings,
         "sibling_games": siblings,
         "eras": eras,
+        "media": {
+            "has_audio": has_audio,
+            "has_series": has_series,
+            "has_movies": has_movies,
+            "has_library": has_books,
+            "has_books": has_books,
+            "has_games": len(siblings) > 0,
+            "has_gallery": has_gallery,
+        },
         "about": {
-            "overview": about_disk.get("overview"),
+            "overview": bio,
             "studio": about_disk.get("studio"),
             "publisher": about_disk.get("publisher"),
-            "developers": about_disk.get("developers") or [],
-            "publishers": about_disk.get("publishers") or [],
+            "developers": developers,
+            "publishers": publishers,
+            "directors": directors,
+            "genres": genres,
             "platform": detail.get("platform"),
             "platforms": about_disk.get("platforms") or [],
             "release_date": detail.get("display_date") or detail.get("date_iso"),

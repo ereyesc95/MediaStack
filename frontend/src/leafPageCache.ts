@@ -43,7 +43,7 @@ export function leafPageCacheKey(
   isFilm: boolean,
   franchiseId: string,
   id: string,
-  kind: "film" | "book" | "sub" = isFilm ? "film" : "sub"
+  kind: "film" | "book" | "game" | "sub" = isFilm ? "film" : "sub"
 ): string {
   return `${kind}:${franchiseId}:${id}`;
 }

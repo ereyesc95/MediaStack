@@ -9,7 +9,7 @@ import type { Universe } from "./types";
 
 const NAMESPACE = "universes";
 
-type ModuleKey = "movies" | "series" | "books" | "all";
+type ModuleKey = "movies" | "series" | "books" | "games" | "all";
 
 const memory = new Map<ModuleKey, Universe[]>();
 const inflight = new Map<ModuleKey, Promise<Universe[]>>();
@@ -37,16 +37,19 @@ export function getCachedUniverses(module: ModuleKey = "all"): Universe[] | null
 export function clearUniversesCache(): void {
   memory.clear();
   inflight.clear();
-  for (const mod of ["movies", "series", "books", "all"] as ModuleKey[]) {
+  for (const mod of ["movies", "series", "books", "games", "all"] as ModuleKey[]) {
     removeSessionEntry(cacheKey(mod));
   }
 }
 
 export function prefetchUniverses(
-  module: "movies" | "series" | "books" = "all"
+  module: "movies" | "series" | "books" | "games" | "all" = "all",
+  opts?: { force?: boolean }
 ): Promise<Universe[]> {
-  const cached = getCachedUniverses(module);
-  if (cached) return Promise.resolve(cached);
+  if (!opts?.force) {
+    const cached = getCachedUniverses(module);
+    if (cached) return Promise.resolve(cached);
+  }
 
   const pending = inflight.get(module);
   if (pending) return pending;

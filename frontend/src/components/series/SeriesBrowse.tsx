@@ -55,6 +55,7 @@ export type SeriesCatalogCard = {
   badge_url?: string | null;
   date_iso: string | null;
   meta: string;
+  open_label?: string | null;
 };
 
 function decadeLabel(d: number) {
@@ -68,7 +69,13 @@ function decadeFromIso(iso: string | null | undefined): number | null {
   return Math.floor(y / 10) * 10;
 }
 
-function showMeta(s: SeriesSubseriesCard): string {
+function showMeta(
+  s: SeriesSubseriesCard,
+  unitNoun: "season" | "film" | "book" | "game" = "season"
+): string {
+  if (unitNoun === "game") {
+    return s.display_date || "";
+  }
   const seasons = `${s.season_count} season${s.season_count === 1 ? "" : "s"}`;
   return s.display_date ? `${seasons} · ${s.display_date}` : seasons;
 }
@@ -100,6 +107,7 @@ type Props = {
   subgenreId: number | "";
   publisher: string;
   writer: string;
+  developer?: string;
   /** Games PLATFORM filter (selected platform display name). */
   platformName?: string;
   /** Movies catalog uses film counts; Books uses book counts; Games uses game counts. */
@@ -119,6 +127,7 @@ type Props = {
   onSubgenreIdChange: (v: number | "") => void;
   onPublisherChange: (v: string) => void;
   onWriterChange: (v: string) => void;
+  onDeveloperChange?: (v: string) => void;
   onPlatformNameChange?: (v: string) => void;
   onOpen: (
     franchiseId: string,
@@ -150,6 +159,7 @@ export default function SeriesBrowse({
   subgenreId,
   publisher,
   writer,
+  developer = "",
   platformName = "",
   unitNoun = "season",
   filterModes = FILTER_MODES,
@@ -165,11 +175,13 @@ export default function SeriesBrowse({
   onPlatformNameChange,
   onPublisherChange,
   onWriterChange,
+  onDeveloperChange,
   onOpen,
   onOpenUniverse,
 }: Props) {
   const isPhone = usePhoneLayout();
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [platformMenuOpen, setPlatformMenuOpen] = useState(false);
   const listMode = orientation === "list";
 
   useEffect(() => {
@@ -229,10 +241,14 @@ export default function SeriesBrowse({
   }, [filterOptions, catalogMetaPool]);
 
   const availableDecades = useMemo(() => {
-    if (!catalogMetaPool.decades.size) return [];
-    // Prefer decades that actually appear on disk; ignore padded API lists.
-    return [...catalogMetaPool.decades].sort((a, b) => a - b);
-  }, [catalogMetaPool]);
+    if (catalogMetaPool.decades.size) {
+      // Prefer decades that actually appear on disk; ignore padded API lists.
+      return [...catalogMetaPool.decades].sort((a, b) => a - b);
+    }
+    // Fall back to API decades so RELEASE DATE appears on first load
+    // before catalog cards finish hydrating dates.
+    return [...(filterOptions?.decades || [])].sort((a, b) => a - b);
+  }, [catalogMetaPool, filterOptions]);
 
   const availableLetters = useMemo(() => {
     const set = new Set<string>();
@@ -284,6 +300,11 @@ export default function SeriesBrowse({
           return (
             (filterOptions.writers?.length ?? 0) > 0 || Boolean(writer.trim())
           );
+        case "developer":
+          return (
+            (filterOptions.developers?.length ?? 0) > 0 ||
+            Boolean(developer.trim())
+          );
         case "platform":
           return (
             platforms.length > 0 ||
@@ -301,6 +322,7 @@ export default function SeriesBrowse({
     availableDecades,
     publisher,
     writer,
+    developer,
     platforms,
     platformName,
   ]);
@@ -397,6 +419,10 @@ export default function SeriesBrowse({
       const first = filterOptions.writers[0];
       if (first) onWriterChange(first);
     }
+    if (filterMode === "developer" && !developer.trim()) {
+      const first = filterOptions.developers?.[0];
+      if (first) onDeveloperChange?.(first);
+    }
   }, [
     filterMode,
     filterOptions,
@@ -411,6 +437,7 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
+    developer,
     platformName,
     platforms,
     onLetterChange,
@@ -421,6 +448,7 @@ export default function SeriesBrowse({
     onSubgenreIdChange,
     onPublisherChange,
     onWriterChange,
+    onDeveloperChange,
     onPlatformNameChange,
   ]);
 
@@ -443,6 +471,8 @@ export default function SeriesBrowse({
         return publisher.trim() !== "";
       case "writer":
         return writer.trim() !== "";
+      case "developer":
+        return developer.trim() !== "";
       case "platform":
         return platformName.trim() !== "";
       default:
@@ -457,6 +487,7 @@ export default function SeriesBrowse({
     subgenreId,
     publisher,
     writer,
+    developer,
     platformName,
   ]);
 
@@ -504,6 +535,13 @@ export default function SeriesBrowse({
       .filter(Boolean)
       .map((name) => ({ value: name, label: name }));
   }, [platforms, filterOptions]);
+
+  const developerOptions: DropdownOption[] = useMemo(() => {
+    return (filterOptions?.developers || []).map((d) => ({
+      value: d,
+      label: d,
+    }));
+  }, [filterOptions]);
 
   const matchesDate = useCallback(
     (dateIso: string | null | undefined) => {
@@ -574,6 +612,15 @@ export default function SeriesBrowse({
           (w) => w.toLowerCase() === writer.toLowerCase()
         );
       }
+      if (filterMode === "developer" && developer) {
+        return (f.developers || []).some(
+          (d) => d.toLowerCase() === developer.toLowerCase()
+        );
+      }
+      if (filterMode === "platform" && platformName.trim()) {
+        const want = platformName.trim().toLowerCase();
+        return (f.platforms || []).some((p) => p.toLowerCase() === want);
+      }
       return true;
     },
     [
@@ -583,6 +630,8 @@ export default function SeriesBrowse({
       subgenreId,
       publisher,
       writer,
+      developer,
+      platformName,
       selectedCountryOption,
       selectedGenreOption,
     ]
@@ -793,7 +842,12 @@ export default function SeriesBrowse({
             icon_url: s.icon_url || f.icon_url,
             badge_url: s.badge_url || f.badge_url,
             date_iso: s.date_iso,
-            meta: showMeta(s),
+            meta: showMeta(s, unitNoun),
+            open_label:
+              unitNoun === "game"
+                ? (f as SeriesFranchiseCard & { open_label?: string | null })
+                    .open_label || "Play game"
+                : null,
           });
         }
       }
@@ -945,7 +999,7 @@ export default function SeriesBrowse({
         );
       case "platform":
         return (
-          <div className="filter-subbar filter-subbar--spread filter-subbar--platform">
+          <div className="filter-subbar filter-subbar--spread">
             {availableLetters.map((l) => (
               <button
                 key={l}
@@ -956,13 +1010,6 @@ export default function SeriesBrowse({
                 {l}
               </button>
             ))}
-            <SearchableDropdown
-              options={platformOptions}
-              value={platformName}
-              onChange={(v) => onPlatformNameChange?.(v)}
-              placeholder="Platform"
-              visibleRows={7}
-            />
             <input
               className="filter-subbar-search"
               placeholder="Search"
@@ -1082,6 +1129,18 @@ export default function SeriesBrowse({
           </div>
         );
       }
+      case "developer":
+        return (
+          <div className="filter-subbar filter-subbar--single">
+            <SearchableDropdown
+              options={developerOptions}
+              value={developer}
+              onChange={(v) => onDeveloperChange?.(v)}
+              placeholder="Developer"
+              visibleRows={7}
+            />
+          </div>
+        );
       default:
         return null;
     }
@@ -1104,6 +1163,8 @@ export default function SeriesBrowse({
     genreOptions,
     publisherOptions,
     writerOptions,
+    developerOptions,
+    developer,
     platformOptions,
     platformName,
     filterModes,
@@ -1116,23 +1177,84 @@ export default function SeriesBrowse({
     onSubgenreIdChange,
     onPublisherChange,
     onWriterChange,
+    onDeveloperChange,
     onPlatformNameChange,
   ]);
+
+  useEffect(() => {
+    if (filterMode !== "platform") setPlatformMenuOpen(false);
+  }, [filterMode]);
 
   return (
     <div className="series-browse artist-browse">
       <div className="artist-browse-sticky">
         <nav className="sub-nav sub-nav--spread sub-nav--compact">
-          {visibleFilterModes.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={filterMode === f.id ? "active" : ""}
-              onClick={() => onFilterModeChange(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
+          {visibleFilterModes.map((f) => {
+            if (f.id === "platform") {
+              const label =
+                filterMode === "platform" && platformName.trim()
+                  ? platformName
+                  : f.label;
+              return (
+                <div
+                  key={f.id}
+                  className="sub-nav-item-wrap series-browse__platform-tab"
+                >
+                  <button
+                    type="button"
+                    className={filterMode === "platform" ? "active" : ""}
+                    aria-haspopup="listbox"
+                    aria-expanded={platformMenuOpen}
+                    title={label}
+                    onClick={() => {
+                      onFilterModeChange("platform");
+                      setPlatformMenuOpen((open) =>
+                        filterMode === "platform" ? !open : true
+                      );
+                    }}
+                  >
+                    {label}
+                  </button>
+                  {platformMenuOpen && filterMode === "platform" ? (
+                    <div
+                      className="series-browse__platform-menu"
+                      role="listbox"
+                    >
+                      {platformOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="option"
+                          aria-selected={platformName === opt.value}
+                          className={
+                            platformName === opt.value
+                              ? "series-browse__platform-option is-active"
+                              : "series-browse__platform-option"
+                          }
+                          onClick={() => {
+                            onPlatformNameChange?.(opt.value);
+                            setPlatformMenuOpen(false);
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+            return (
+              <button
+                key={f.id}
+                type="button"
+                className={filterMode === f.id ? "active" : ""}
+                onClick={() => onFilterModeChange(f.id)}
+              >
+                {f.label}
+              </button>
+            );
+          })}
         </nav>
         {subBar}
       </div>
@@ -1226,6 +1348,11 @@ export default function SeriesBrowse({
                     ) : (
                       <span className="artist-card-name">{card.name}</span>
                     )}
+                    {card.open_label ? (
+                      <span className="artist-card-play-label">
+                        {card.open_label}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );

@@ -69,7 +69,7 @@ def games_filter_options(
     db: Session = Depends(get_db),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    from app.adult_content import filter_subgenre_groups
+    from app.adult_content import filter_adult_cards, filter_subgenre_groups
 
     ensure_games_genres(db)
 
@@ -112,28 +112,90 @@ def games_filter_options(
     )
 
     catalog = build_games_catalog()
+    games = filter_adult_cards(
+        catalog.get("games") or [], nsfw_unlocked=nsfw_unlocked
+    )
     platforms = [
         {"id": p.get("id") or p.get("slug"), "name": p.get("name")}
         for p in (catalog.get("platforms") or [])
         if p.get("name")
     ]
 
+    # Only expose genres that appear on at least one game in the library.
+    used_genre_names = {
+        str(n).strip().casefold()
+        for g in games
+        for n in (g.get("genre_names") or [])
+        if str(n).strip()
+    }
+    if used_genre_names:
+        filtered_groups: list[dict] = []
+        for group in all_subgenre_groups:
+            items = [
+                item
+                for item in group.get("items") or []
+                if str(item.get("name") or "").strip().casefold() in used_genre_names
+            ]
+            if items:
+                filtered_groups.append({"genre": group["genre"], "items": items})
+        subgenre_groups = filtered_groups
+    else:
+        # No tagged games yet — keep taxonomy empty so Genre tab stays hidden
+        # until metadata exists (avoids empty-result genres).
+        subgenre_groups = []
+
+    publishers = sorted(
+        {
+            str(n).strip()
+            for g in games
+            for n in (g.get("publishers") or [])
+            if str(n).strip()
+        },
+        key=lambda s: s.casefold(),
+    )
+    developers = sorted(
+        {
+            str(n).strip()
+            for g in games
+            for n in (g.get("developers") or [])
+            if str(n).strip()
+        },
+        key=lambda s: s.casefold(),
+    )
+    directors = sorted(
+        {
+            str(n).strip()
+            for g in games
+            for n in (g.get("directors") or g.get("writers") or [])
+            if str(n).strip()
+        },
+        key=lambda s: s.casefold(),
+    )
+    decades: list[int] = []
+    decade_set: set[int] = set()
+    for g in games:
+        iso = str(g.get("date_iso") or "")
+        if len(iso) >= 4 and iso[:4].isdigit():
+            decade_set.add((int(iso[:4]) // 10) * 10)
+    decades = sorted(decade_set)
+
     return {
         "continents": [],
         "countries": [],
         "genres": [
             {"id": item["id"], "name": item["name"]}
-            for group in all_subgenre_groups
+            for group in subgenre_groups
             for item in group["items"]
         ],
         "platforms": platforms,
-        "publishers": [],
-        "writers": [],
-        "studios": [],
-        "decades": [],
+        "publishers": publishers,
+        "developers": developers,
+        "writers": directors,
+        "studios": developers,
+        "decades": decades,
         "country_groups": [],
         "all_country_groups": [],
-        "subgenre_groups": all_subgenre_groups,
+        "subgenre_groups": subgenre_groups,
         "all_subgenre_groups": all_subgenre_groups,
         "content_categories": [],
     }

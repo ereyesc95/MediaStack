@@ -1516,9 +1516,61 @@ input {
   opacity: 1;
 }
 
-.filter-subbar--platform .search-dropdown {
-  min-width: 10rem;
-  flex: 0 1 14rem;
+.series-browse__platform-tab {
+  position: relative;
+}
+
+.series-browse__platform-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  min-width: 12rem;
+  max-width: min(20rem, 80vw);
+  max-height: 14rem;
+  overflow: auto;
+  padding: 0.35rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 12, 18, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.series-browse__platform-option {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.45rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.series-browse__platform-option:hover,
+.series-browse__platform-option.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent, #7dd3c7);
+}
+
+.artist-card-play-label {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.artist-card:not(.artist-card--tap-reveal):hover .artist-card-play-label,
+.artist-card--tap-reveal.artist-card--revealed .artist-card-play-label {
+  opacity: 0.92;
+  transform: translateY(0);
 }
 
 .series-dashboard .dash-row--icons .dash-scroll,
