@@ -491,10 +491,10 @@ def resolve_source_image(folder: Path, root: Path | None = None) -> Path | None:
         "soundtracks",
         "singles",
     }:
-        hit = find_first_image(folder / "[Artwork]", ["Cover - Front"])
+        hit = find_first_image(folder / "[Artwork]", ["Cover - Portrait"])
         if hit:
             return hit
-        return find_first_image(folder / "[Artwork]", ["Cover - Portrait"])
+        return find_first_image(folder / "[Artwork]", ["Cover - Front"])
 
     # Format folder: Cover - Front in own [Artwork], else parent release
     if _looks_like_format_folder(name):

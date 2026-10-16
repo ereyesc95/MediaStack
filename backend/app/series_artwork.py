@@ -115,6 +115,23 @@ def _ext_from_url(url: str) -> str:
     return ".jpg"
 
 
+def _exact_stem_file(folder: Path, stem: str) -> Path | None:
+    want = stem.casefold()
+    if not folder.is_dir():
+        return None
+    try:
+        for child in folder.iterdir():
+            if (
+                child.is_file()
+                and child.suffix.lower() in IMAGE_EXTS
+                and child.stem.casefold() == want
+            ):
+                return child
+    except OSError:
+        return None
+    return None
+
+
 def ensure_artwork_cached(
     franchise_dir: Path,
     media_root: Path,
@@ -125,11 +142,12 @@ def ensure_artwork_cached(
     franchise_name: str | None = None,
 ) -> dict:
     """
-    If no local portrait/landscape files exist, download TMDb images.
+    Cache TMDb images locally.
 
-    Franchise/work → ``[Artwork]`` only when needed (never when Gallery already
-    has art, or when Music/another module already owns franchise ``[Artwork]``).
-    Individual film → ``Gallery/Covers``.
+    - Franchise home ``[Artwork]/`` only ``Cover - Portrait`` + ``Cover - Landscape``
+      (never Branding/Covers/Exclusive/Gallery children, never numbered extras).
+    - Leaf / standalone: ``Gallery/Covers`` gets those covers plus ``Portrait 01`` /
+      ``Landscape 01`` extras (no ``TMDb.`` prefix).
     """
     empty: dict = {"portraits": [], "landscapes": []}
 
@@ -152,40 +170,59 @@ def ensure_artwork_cached(
         except Exception:
             pass
 
-        has_p = bool(list_portrait_files(franchise_dir))
-        has_l = bool(list_landscape_files(franchise_dir))
-        if has_p and has_l:
-            return empty
-        # Prefer existing Gallery dirs; only create [Artwork] when nothing local exists
-        if has_p or has_l:
-            art = artwork_dir(franchise_dir, film=False, create=False)
-            if not art.is_dir():
-                return empty
-        else:
-            art = artwork_dir(franchise_dir, film=False, create=True)
+    artwork = franchise_dir / "[Artwork]"
+    covers = franchise_dir / "Gallery" / "Covers"
+    # Franchise home: [Artwork] already present → only primary covers there.
+    # Otherwise (standalone / film leaf) → Gallery/Covers for everything.
+    franchise_mode = (not film) and artwork.is_dir()
+    if franchise_mode:
+        primary_dest = artwork
+        extras_dest: Path | None = covers if covers.is_dir() else None
     else:
-        art = artwork_dir(franchise_dir, film=True, create=True)
+        covers.mkdir(parents=True, exist_ok=True)
+        primary_dest = covers
+        extras_dest = covers
 
     saved_portraits: list[str] = []
     saved_landscapes: list[str] = []
 
-    if not list_portrait_files(franchise_dir):
+    if posters and not _exact_stem_file(primary_dest, "Cover - Portrait"):
+        # Also accept legacy Cover - Front as already present
+        if not _exact_stem_file(primary_dest, "Cover - Front"):
+            url = posters[0]
+            if url:
+                dest = primary_dest / f"Cover - Portrait{_ext_from_url(url)}"
+                if dest.is_file() or _download(url, dest):
+                    saved_portraits.append(_media_url(dest, media_root) or "")
+
+    if backdrops and not _exact_stem_file(primary_dest, "Cover - Landscape"):
+        if not _exact_stem_file(primary_dest, "Cover - Banner"):
+            url = backdrops[0]
+            if url:
+                dest = primary_dest / f"Cover - Landscape{_ext_from_url(url)}"
+                if dest.is_file() or _download(url, dest):
+                    saved_landscapes.append(_media_url(dest, media_root) or "")
+
+    if extras_dest is not None:
         for i, url in enumerate(posters[:8]):
             if not url:
                 continue
-            name = f"TMDb. Portrait{'' if i == 0 else f' {i + 1}'}{_ext_from_url(url)}"
-            dest = art / name
+            name = f"Portrait {i + 1:02d}{_ext_from_url(url)}"
+            dest = extras_dest / name
             if dest.is_file() or _download(url, dest):
-                saved_portraits.append(_media_url(dest, media_root) or "")
+                u = _media_url(dest, media_root) or ""
+                if u and u not in saved_portraits:
+                    saved_portraits.append(u)
 
-    if not list_landscape_files(franchise_dir):
         for i, url in enumerate(backdrops[:8]):
             if not url:
                 continue
-            name = f"TMDb. Landscape{'' if i == 0 else f' {i + 1}'}{_ext_from_url(url)}"
-            dest = art / name
+            name = f"Landscape {i + 1:02d}{_ext_from_url(url)}"
+            dest = extras_dest / name
             if dest.is_file() or _download(url, dest):
-                saved_landscapes.append(_media_url(dest, media_root) or "")
+                u = _media_url(dest, media_root) or ""
+                if u and u not in saved_landscapes:
+                    saved_landscapes.append(u)
 
     return {
         "portraits": [u for u in saved_portraits if u],

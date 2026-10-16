@@ -387,18 +387,50 @@ async def refresh_series_metadata(
             row.ser_ending_date = last_air
     row.ser_images_json = json.dumps(images_blob, ensure_ascii=False)
 
-    # Cache TMDb images into [Artwork] when local portrait/landscape missing
+    # Cache covers: franchise [Artwork] (home) and/or leaf Gallery/Covers
     artwork_saved = {}
-    if found:
+    if found and cache_artwork and root:
         franchise_dir, _ = found
+        posters = images_blob["posters"] or (
+            [data.get("poster_url")] if data.get("poster_url") else []
+        )
+        backdrops = images_blob["backdrops"] or (
+            [data.get("backdrop_url")] if data.get("backdrop_url") else []
+        )
         artwork_saved = ensure_artwork_cached(
             franchise_dir,
             root,
-            posters=images_blob["posters"]
-            or ([data.get("poster_url")] if data.get("poster_url") else []),
-            backdrops=images_blob["backdrops"]
-            or ([data.get("backdrop_url")] if data.get("backdrop_url") else []),
+            posters=posters,
+            backdrops=backdrops,
+            franchise_name=franchise_name,
         )
+        # Nested subseries: also fill that leaf's Gallery/Covers extras
+        for title in subseries_titles or []:
+            if not title or title.casefold() == franchise_name.casefold():
+                continue
+            want = title.casefold()
+            try:
+                for child in franchise_dir.iterdir():
+                    if not child.is_dir():
+                        continue
+                    # "{date}. {Title}" or exact title
+                    name = child.name
+                    leaf_title = (
+                        name.split(". ", 1)[-1] if ". " in name else name
+                    )
+                    if leaf_title.casefold() != want:
+                        continue
+                    if (child / "Gallery").is_dir():
+                        ensure_artwork_cached(
+                            child,
+                            root,
+                            posters=posters,
+                            backdrops=backdrops,
+                            film=True,
+                        )
+                    break
+            except OSError:
+                pass
 
     row.ser_metadata_refreshed_at = _now()
     db.commit()

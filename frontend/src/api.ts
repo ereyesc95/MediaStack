@@ -3443,6 +3443,7 @@ export async function createCatalogImport(
   module: CatalogImportModule,
   payload: {
     franchise_name: string;
+    belongs_to_franchise?: boolean;
     franchise_home: boolean;
     franchise_home_module?: "series" | "movies" | null;
     include_guide: boolean;

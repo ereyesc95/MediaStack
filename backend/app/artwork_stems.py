@@ -57,8 +57,12 @@ def _media_file_in_artwork(
 
 
 def resolve_cover_front_file(artwork: Path | None) -> Path | None:
+    """Prefer Cover - Portrait, then Cover - Front / Cover - Album (legacy)."""
     if not artwork or not artwork.is_dir():
         return None
+    portrait = _artwork_file(artwork, COVER_PORTRAIT_STEM)
+    if portrait and not _is_small_derivative(portrait):
+        return portrait
     cover = _artwork_file(artwork, COVER_FRONT_STEM)
     if cover and not _is_small_derivative(cover):
         return cover
@@ -69,8 +73,12 @@ def resolve_cover_front_file(artwork: Path | None) -> Path | None:
 
 
 def resolve_cover_banner_file(artwork: Path | None) -> Path | None:
+    """Prefer Cover - Landscape, then Cover - Banner (legacy)."""
     if not artwork or not artwork.is_dir():
         return None
+    landscape = _artwork_file(artwork, COVER_LANDSCAPE_STEM)
+    if landscape and not _is_small_derivative(landscape):
+        return landscape
     found = _artwork_file(artwork, COVER_BANNER_STEM)
     if found and not _is_small_derivative(found):
         return found
@@ -78,20 +86,28 @@ def resolve_cover_banner_file(artwork: Path | None) -> Path | None:
 
 
 def resolve_cover_landscape_file(artwork: Path | None) -> Path | None:
+    """Prefer Cover - Landscape, then Cover - Banner (legacy)."""
     if not artwork or not artwork.is_dir():
         return None
     found = _artwork_file(artwork, COVER_LANDSCAPE_STEM)
     if found and not _is_small_derivative(found):
         return found
+    banner = _artwork_file(artwork, COVER_BANNER_STEM)
+    if banner and not _is_small_derivative(banner):
+        return banner
     return None
 
 
 def resolve_cover_portrait_file(artwork: Path | None) -> Path | None:
+    """Prefer Cover - Portrait, then Cover - Front (legacy)."""
     if not artwork or not artwork.is_dir():
         return None
     found = _artwork_file(artwork, COVER_PORTRAIT_STEM)
     if found and not _is_small_derivative(found):
         return found
+    front = _artwork_file(artwork, COVER_FRONT_STEM)
+    if front and not _is_small_derivative(front):
+        return front
     return None
 
 

@@ -8,14 +8,14 @@ from app.models import AppSetting
 
 COMMON_ART = """ARTWORK FILENAMES
 -----------------
-Gallery/Covers (or franchise [Artwork] when this module is the franchise home):
-  Cover - Front.jpg
+Gallery/Covers (leaf / standalone titles):
+  Cover - Portrait.jpg      Primary portrait card (legacy: Cover - Front.jpg)
+  Cover - Landscape.jpg     Wide / banner art (legacy: Cover - Banner.jpg)
   Cover - Back.jpg
-  Cover - Banner.jpg        Preferred 2000×500 (4:1); UI scales to this ratio.
-  Cover - Landscape.jpg
+  Portrait 01.jpg …        Extra posters from TMDb (no TMDb. prefix)
+  Landscape 01.jpg …
   Characters - Portrait.jpg
   Characters - Landscape.jpg
-  Cover - Portrait.jpg
   Photocard - Portrait Front.jpg
   Photocard - Portrait Back.jpg
   Photocard - Landscape Front.jpg
@@ -25,6 +25,11 @@ Gallery/Covers (or franchise [Artwork] when this module is the franchise home):
   Photo - Portrait.jpg
   Photo - Square.jpg
 
+Franchise home [Artwork] (only when this module is the franchise home):
+  Cover - Portrait.jpg
+  Cover - Landscape.jpg
+  (manual logos / icons / badges — no Branding/Covers/Exclusive/Gallery children)
+
 Gallery/Branding (legacy Gallery/Renders is also supported):
   Logo.png
   Icon.png
@@ -32,7 +37,6 @@ Gallery/Branding (legacy Gallery/Renders is also supported):
   Logo - Collapsed.png
 
 Gallery/Exclusive is NSFW-gated and supports optional subfolders.
-Franchise [Artwork] may also contain Branding/, Covers/, Gallery/ and Exclusive/.
 Supported images: .png, .jpg, .jpeg, .webp, .gif, .bmp
 Exclusive also supports .mp4, .webm, .mov, .m4v and supported audio.
 
@@ -105,7 +109,8 @@ Each film may contain:
   Gallery/Extras/
   Gallery/Exclusive/
 
-The franchise root contains [Artwork]/ only when Movies is its franchise home.
+The franchise root contains [Artwork]/ (Cover - Portrait / Landscape only)
+only when Movies is its franchise home. Standalone titles have no [Artwork].
 
 Movie files may use a date prefix, numeric prefix, or title:
   YYYY.MM.DD. Film title.mkv
@@ -135,7 +140,8 @@ Show/subseries folders may contain:
   Extras/
   Audio/Albums|Extended Plays|Compilations|Demos|Live Albums|Soundtracks|Singles/
 
-The franchise root contains [Artwork]/ only when Series is its franchise home.
+The franchise root contains [Artwork]/ (Cover - Portrait / Landscape only)
+only when Series is its franchise home. Standalone titles have no [Artwork].
 
 Episode and special files:
   01. Episode title.mkv
@@ -167,7 +173,8 @@ Each book may contain:
   Gallery/Extras/
   Gallery/Exclusive/
 
-The franchise root contains [Artwork]/ only when Books is its franchise home.
+The franchise root contains [Artwork]/ (Cover - Portrait / Landscape only)
+only when Books is its franchise home. Standalone titles have no [Artwork].
 
 Book files may use:
   Book title.pdf
@@ -196,7 +203,8 @@ Each game leaf may contain:
   ROM/ or Disc/ (optional local dumps)
   Audio/ (shortcuts to Music releases when applicable)
 
-The franchise root contains [Artwork]/ only when Games is its franchise home.
+The franchise root contains [Artwork]/ (Cover - Portrait / Landscape only)
+only when Games is its franchise home. Standalone titles have no [Artwork].
 Do not create about.json sidecars — title metadata lives in the MyStack database.
 
 Game folders use a date prefix when known:

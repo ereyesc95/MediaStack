@@ -330,6 +330,7 @@ export default function ManageCatalogModal({
   const [scope, setScope] = useState<"single" | "collection" | "series">(
     "single"
   );
+  const [belongsToFranchise, setBelongsToFranchise] = useState(false);
   const [franchiseHome, setFranchiseHome] = useState(false);
   const [franchiseHomeModule, setFranchiseHomeModule] = useState<
     "series" | "movies"
@@ -393,17 +394,23 @@ export default function ManageCatalogModal({
   const slowLookup = useSlowLookupHint(searching);
 
   useEffect(() => {
+    if (!belongsToFranchise) {
+      setNestedSeries(false);
+      setFranchiseHome(false);
+      return;
+    }
     setNestedSeries(
       module === "series" &&
         Boolean(firstPick && franchiseName && franchiseName !== firstPick.title)
     );
-  }, [franchiseName, module, firstPick]);
+  }, [franchiseName, module, firstPick, belongsToFranchise]);
 
   useEffect(() => {
     setFranchiseHomeModule(module === "movies" ? "movies" : "series");
   }, [module]);
 
-  const supportsCrossRelated = module === "series" || module === "movies";
+  const supportsCrossRelated =
+    belongsToFranchise && (module === "series" || module === "movies");
 
   useEffect(() => {
     if (!supportsCrossRelated || step !== "details") {
@@ -684,10 +691,12 @@ export default function ManageCatalogModal({
     if (item.source === "local") {
       if (item.kind === "franchise") {
         setExistingFranchise(item);
+        setBelongsToFranchise(true);
         setNotice(null);
       } else {
         addPicked([{ provider_id: "", title: item.title, date: null }]);
         setFranchiseName(item.title);
+        setBelongsToFranchise(false);
         setStep("details");
       }
       return;
@@ -703,6 +712,12 @@ export default function ManageCatalogModal({
         setFirstPick(item);
         setScope(data.scope);
         setNestedSeries(false);
+        const fran =
+          data.scope === "collection" ||
+          data.scope === "series" ||
+          (Boolean(data.franchise_name) &&
+            data.franchise_name !== item.title);
+        setBelongsToFranchise(fran);
       }
       setFranchiseName(
         (current) => current || data.franchise_name || item.title
@@ -914,8 +929,11 @@ export default function ManageCatalogModal({
   }
 
   async function create() {
+    const folderName = belongsToFranchise
+      ? franchiseName.trim()
+      : (chosenItems[0]?.title || franchiseName).trim();
     if (
-      !franchiseName.trim() ||
+      !folderName ||
       !chosenItems.length ||
       saving ||
       creatingRef.current
@@ -957,14 +975,17 @@ export default function ManageCatalogModal({
     setError(null);
     try {
       const relatedChosen =
-        includeRelated && crossOtherModule
+        belongsToFranchise && includeRelated && crossOtherModule
           ? crossRelated.filter((row) => relatedSelected.has(row.provider_id))
           : [];
       const result = await createCatalogImport(module, {
-        franchise_name: franchiseName.trim(),
-        franchise_home: franchiseHome,
+        franchise_name: folderName,
+        belongs_to_franchise: belongsToFranchise,
+        franchise_home: belongsToFranchise && franchiseHome,
         franchise_home_module:
-          franchiseHome && (module === "series" || module === "movies")
+          belongsToFranchise &&
+          franchiseHome &&
+          (module === "series" || module === "movies")
             ? relatedChosen.length
               ? franchiseHomeModule
               : module === "movies"
@@ -972,7 +993,7 @@ export default function ManageCatalogModal({
                 : "series"
             : null,
         include_guide: includeGuide,
-        nested_series: nestedSeries,
+        nested_series: belongsToFranchise && nestedSeries,
         ...(module === "games" ? { platforms } : {}),
         items: chosenItems.map(({ key: _key, ...item }) => ({
           ...item,
@@ -1345,19 +1366,44 @@ export default function ManageCatalogModal({
           </div>
         ) : (
           <div className="artist-admin-form manage-catalog-modal__form--details" key="details">
-            <label>
-              Franchise name
-              <input
-                value={franchiseName}
-                onChange={(e) => setFranchiseName(e.target.value)}
-              />
-            </label>
+            <Checkbox
+              className="manage-artists-modal__guide-option"
+              checked={belongsToFranchise}
+              disabled={saving}
+              onChange={(checked) => {
+                setBelongsToFranchise(checked);
+                if (!checked) {
+                  setNestedSeries(false);
+                  setFranchiseHome(false);
+                  setIncludeRelated(false);
+                } else {
+                  setIncludeRelated(true);
+                }
+              }}
+            >
+              {belongsToFranchise
+                ? "This belongs to a franchise"
+                : "This doesn't belong to a franchise"}
+            </Checkbox>
 
-            {module === "series" ||
-            (module === "movies" && crossOtherModule === "series") ? (
+            {belongsToFranchise ? (
+              <label>
+                Franchise name
+                <input
+                  value={franchiseName}
+                  onChange={(e) => setFranchiseName(e.target.value)}
+                  disabled={saving}
+                />
+              </label>
+            ) : null}
+
+            {belongsToFranchise &&
+            (module === "series" ||
+              (module === "movies" && crossOtherModule === "series")) ? (
               <Checkbox
                 className="manage-artists-modal__guide-option"
                 checked={nestedSeries}
+                disabled={saving}
                 onChange={setNestedSeries}
               >
                 {nestedSeries
@@ -1618,50 +1664,55 @@ export default function ManageCatalogModal({
               </div>
             ) : null}
 
-            <Checkbox
-              className="manage-artists-modal__guide-option"
-              checked={franchiseHome}
-              onChange={(checked) => {
-                setFranchiseHome(checked);
-                if (checked) {
-                  setFranchiseHomeModule(
-                    module === "movies" ? "movies" : "series"
-                  );
-                }
-              }}
-            >
-              {includeRelated &&
-              crossOtherModule &&
-              relatedSelected.size > 0
-                ? "Set franchise home"
-                : `Use ${labels.plural} as franchise home`}
-            </Checkbox>
-            {franchiseHome &&
-            includeRelated &&
-            crossOtherModule &&
-            relatedSelected.size > 0 ? (
-              <div className="manage-catalog-modal__home-pick">
-                <label className="manage-catalog-modal__home-option">
-                  <input
-                    type="radio"
-                    name="franchise-home-module"
-                    checked={franchiseHomeModule === "series"}
-                    disabled={saving}
-                    onChange={() => setFranchiseHomeModule("series")}
-                  />
-                  Series
-                </label>
-                <label className="manage-catalog-modal__home-option">
-                  <input
-                    type="radio"
-                    name="franchise-home-module"
-                    checked={franchiseHomeModule === "movies"}
-                    disabled={saving}
-                    onChange={() => setFranchiseHomeModule("movies")}
-                  />
-                  Movies
-                </label>
-              </div>
+            {belongsToFranchise ? (
+              <>
+                <Checkbox
+                  className="manage-artists-modal__guide-option"
+                  checked={franchiseHome}
+                  disabled={saving}
+                  onChange={(checked) => {
+                    setFranchiseHome(checked);
+                    if (checked) {
+                      setFranchiseHomeModule(
+                        module === "movies" ? "movies" : "series"
+                      );
+                    }
+                  }}
+                >
+                  {includeRelated &&
+                  crossOtherModule &&
+                  relatedSelected.size > 0
+                    ? "Set franchise home"
+                    : `Use ${labels.plural} as franchise home`}
+                </Checkbox>
+                {franchiseHome &&
+                includeRelated &&
+                crossOtherModule &&
+                relatedSelected.size > 0 ? (
+                  <div className="manage-catalog-modal__home-pick">
+                    <label className="manage-catalog-modal__home-option">
+                      <input
+                        type="radio"
+                        name="franchise-home-module"
+                        checked={franchiseHomeModule === "series"}
+                        disabled={saving}
+                        onChange={() => setFranchiseHomeModule("series")}
+                      />
+                      Series
+                    </label>
+                    <label className="manage-catalog-modal__home-option">
+                      <input
+                        type="radio"
+                        name="franchise-home-module"
+                        checked={franchiseHomeModule === "movies"}
+                        disabled={saving}
+                        onChange={() => setFranchiseHomeModule("movies")}
+                      />
+                      Movies
+                    </label>
+                  </div>
+                ) : null}
+              </>
             ) : null}
             <Checkbox
               className="manage-artists-modal__guide-option"
@@ -1718,7 +1769,9 @@ export default function ManageCatalogModal({
                 aria-busy={saving}
                 disabled={
                   saving ||
-                  !franchiseName.trim() ||
+                  (belongsToFranchise
+                    ? !franchiseName.trim()
+                    : !chosenItems[0]?.title?.trim()) ||
                   chosenItems.length === 0 ||
                   (module === "games" &&
                     chosenItems.some(

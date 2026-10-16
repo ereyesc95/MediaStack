@@ -860,11 +860,8 @@ def update_catalog_folders(
         raise HTTPException(404, "Local franchise folder not found")
 
     created = 0
-    artwork = franchise_dir / "[Artwork]"
-    if artwork.is_dir():
-        created += _mkdir_tree(
-            artwork, ("Branding", "Covers", "Gallery", "Exclusive")
-        )
+    # Franchise [Artwork] is covers-only (Cover - Portrait / Landscape); do not
+    # scaffold Branding/Covers/Exclusive/Gallery children there.
 
     leaf_dirs = [
         child
@@ -1053,17 +1050,21 @@ async def create_catalog_import(
     if module not in MODULE_DIRS:
         raise HTTPException(404, "Unsupported catalog module")
     root = _root()
+    items = body.get("items") or []
+    if not isinstance(items, list) or not items or len(items) > 200:
+        raise HTTPException(400, "Select at least one title")
+
+    belongs_to_franchise = bool(body.get("belongs_to_franchise", True))
+    first_item = items[0] if isinstance(items[0], dict) else {}
     franchise_name = _safe_name(
         str(body.get("franchise_name") or ""), fallback=""
     )
-    items = body.get("items") or []
-    if (
-        not franchise_name
-        or not isinstance(items, list)
-        or not items
-        or len(items) > 200
-    ):
-        raise HTTPException(400, "Select at least one title")
+    if not belongs_to_franchise:
+        # Standalone title: folder name is the work title; never a franchise home.
+        title0 = _safe_name(str(first_item.get("title") or "Untitled"))
+        franchise_name = title0
+    elif not franchise_name:
+        raise HTTPException(400, "Franchise name is required")
 
     platform_names: list[str] = []
     if module == "games":
@@ -1086,9 +1087,9 @@ async def create_catalog_import(
             root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
         ]
 
-    make_home = bool(body.get("franchise_home"))
+    make_home = bool(body.get("franchise_home")) and belongs_to_franchise
     include_guide = bool(body.get("include_guide", True))
-    nested_series = bool(body.get("nested_series", False))
+    nested_series = bool(body.get("nested_series", False)) and belongs_to_franchise
     home_module = str(body.get("franchise_home_module") or "").strip().casefold()
     if home_module not in {"series", "movies", "books", "games", "music"}:
         home_module = module if make_home else ""
@@ -1096,7 +1097,7 @@ async def create_catalog_import(
         set_explicit_franchise_home(db, franchise_name, home_module)
     db.commit()
 
-    include_related = body.get("include_related")
+    include_related = body.get("include_related") if belongs_to_franchise else None
     related_module = ""
     related_items: list = []
     if isinstance(include_related, dict):
@@ -1112,7 +1113,6 @@ async def create_catalog_import(
     created: list[str] = []
     skipped: list[str] = []
     metadata_errors: list[str] = []
-    first_item = items[0] if items else {}
     # Precompute per-item platforms so each game lands only on its platforms.
     item_platforms: list[list[str]] = []
     if module == "games":
@@ -1140,17 +1140,16 @@ async def create_catalog_import(
             decorate_folder(franchise_dir)
         else:
             decorate_folder(franchise_dir)
-        # Artwork for franchise home only when this module is the chosen home.
+        # Franchise home [Artwork]: covers only (no Branding/Covers/Exclusive/Gallery).
         home_here = make_home and (not home_module or home_module == module)
         if home_here and not franchise_existed:
-            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
-                ensure_relative_tree(franchise_dir, f"[Artwork]/{child}")
             artwork = franchise_dir / "[Artwork]"
+            artwork.mkdir(parents=True, exist_ok=True)
             await _download_primary(
-                first_item.get("poster_url"), artwork / "Cover - Front"
+                first_item.get("poster_url"), artwork / "Cover - Portrait"
             )
             await _download_primary(
-                first_item.get("backdrop_url"), artwork / "Cover - Banner"
+                first_item.get("backdrop_url"), artwork / "Cover - Landscape"
             )
         if include_guide and not franchise_existed:
             (franchise_dir / "User guide.txt").write_text(
@@ -1210,8 +1209,8 @@ async def create_catalog_import(
                         poster_url = game.get("cover_url")
                 except Exception:
                     pass
-            await _download_primary(poster_url, covers / "Cover - Front")
-            await _download_primary(backdrop_url, covers / "Cover - Banner")
+            await _download_primary(poster_url, covers / "Cover - Portrait")
+            await _download_primary(backdrop_url, covers / "Cover - Landscape")
             created.append(_relative(leaf_dir, root))
 
             try:
@@ -1224,7 +1223,7 @@ async def create_catalog_import(
                         db,
                         film_id,
                         tmdb_id=provider_id,
-                        cache_artwork=False,
+                        cache_artwork=True,
                     )
                 elif module == "series" and provider_id:
                     from app.series_refresh import refresh_series_metadata
@@ -1234,7 +1233,7 @@ async def create_catalog_import(
                         franchise_name,
                         tmdb_id=provider_id,
                         subseries_titles=[title] if nested_series else None,
-                        cache_artwork=False,
+                        cache_artwork=True,
                     )
                 elif module == "games" and provider_id:
                     from app.games_index import _game_id
@@ -1285,7 +1284,7 @@ async def create_catalog_import(
                     )
                     if cover_from_meta:
                         await _download_primary(
-                            cover_from_meta, covers / "Cover - Front"
+                            cover_from_meta, covers / "Cover - Portrait"
                         )
                 elif module == "books" and provider_id:
                     from app.books_store import (
@@ -1350,17 +1349,16 @@ async def create_catalog_import(
         decorate_folder(related_dir)
         home_on_related = make_home and home_module == related_module
         if home_on_related and not related_existed:
-            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
-                ensure_relative_tree(related_dir, f"[Artwork]/{child}")
             artwork = related_dir / "[Artwork]"
+            artwork.mkdir(parents=True, exist_ok=True)
             rel_first = related_items[0] if related_items else {}
             await _download_primary(
                 rel_first.get("poster_url") or first_item.get("poster_url"),
-                artwork / "Cover - Front",
+                artwork / "Cover - Portrait",
             )
             await _download_primary(
                 rel_first.get("backdrop_url") or first_item.get("backdrop_url"),
-                artwork / "Cover - Banner",
+                artwork / "Cover - Landscape",
             )
         if include_guide and not related_existed:
             (related_dir / "User guide.txt").write_text(
@@ -1426,9 +1424,11 @@ async def create_catalog_import(
             else:
                 _gallery_tree(leaf_dir)
             covers = leaf_dir / "Gallery" / "Covers"
-            await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
             await _download_primary(
-                raw.get("backdrop_url"), covers / "Cover - Banner"
+                raw.get("poster_url"), covers / "Cover - Portrait"
+            )
+            await _download_primary(
+                raw.get("backdrop_url"), covers / "Cover - Landscape"
             )
             created.append(_relative(leaf_dir, root))
             try:
