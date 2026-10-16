@@ -17,6 +17,7 @@ import {
   IconManageArtists,
   IconCamera,
   IconCards,
+  IconCardIcons,
   IconCheck,
   IconSquare,
   IconEditProfile,
@@ -1261,8 +1262,8 @@ export default function AppMenu({
                         setOpen(false);
                       }}
                     >
-                      <IconCards className="menu-item-icon" />
-                      Regenerate module icons
+                      <IconCardIcons className="menu-item-icon" />
+                      Refresh icons
                     </button>
                   )}
                 </div>

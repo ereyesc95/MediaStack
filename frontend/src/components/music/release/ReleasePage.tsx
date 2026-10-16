@@ -42,7 +42,10 @@ import {
   getCachedReleaseOverview,
   setCachedReleaseOverview,
 } from "../../../releaseOverviewCache";
-import { getCachedReleaseTracklist } from "../../../releaseTracklistCache";
+import {
+  getCachedReleaseTracklist,
+  prefetchReleaseTracklist,
+} from "../../../releaseTracklistCache";
 import {
   getCachedReleaseGallery,
   prefetchReleaseGallery,
@@ -58,7 +61,13 @@ import {
   useDeviceLayout,
   isTabletLayout,
 } from "../../../usePhoneLayout";
-import type { LineupMember, ReleaseNeighbor, ReleaseOverview, ReleaseTrackItem } from "../../../types";
+import type {
+  LineupMember,
+  ReleaseNeighbor,
+  ReleaseOverview,
+  ReleaseTrackItem,
+  ReleaseTracklist as ReleaseTracklistPayload,
+} from "../../../types";
 import { formatTrackDate } from "../../../formatDate";
 import { isVideoMediaUrl as isVideoMedia } from "../../../isVideoMediaUrl";
 import { isReleaseId, slugMatch } from "../../../routeSlug";
@@ -102,7 +111,6 @@ import ReleaseTracklist, {
   type ReleasePlaybackArt,
   type ReleaseTracklistHandle,
   clearReleaseTracklistCache,
-  prefetchReleaseTracklist,
 } from "./ReleaseTracklist";
 import {
   ChevronIcon,
@@ -124,6 +132,21 @@ const TABS: { id: ReleaseTab; label: string }[] = [
   { id: "tracklist", label: "TRACKLIST" },
   { id: "gallery", label: "GALLERY" },
 ];
+
+function releaseTracklistHasTracks(data: ReleaseTracklistPayload | null): boolean {
+  if (!data?.editions?.length) return false;
+  for (const edition of data.editions) {
+    for (const group of edition.groups || []) {
+      if ((group.tracks || []).length > 0) return true;
+    }
+    for (const version of edition.versions || []) {
+      for (const group of version.groups || []) {
+        if ((group.tracks || []).length > 0) return true;
+      }
+    }
+  }
+  return false;
+}
 
 function normalizePlaybackArt(art: ReleasePlaybackArt): ReleasePlaybackArt {
   return {
@@ -393,6 +416,12 @@ export default function ReleasePage({
           cached.extras.length > 0)
     );
   });
+  const [showTracklistTab, setShowTracklistTab] = useState(() =>
+    releaseTracklistHasTracks(getCachedReleaseTracklist(bandId, releaseId))
+  );
+  const [tracklistVisibilityReady, setTracklistVisibilityReady] = useState(() =>
+    getCachedReleaseTracklist(bandId, releaseId) != null
+  );
   const [repeatOne, setRepeatOne] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [videoSetOpen, setVideoSetOpen] = useState(false);
@@ -1227,6 +1256,15 @@ export default function ReleasePage({
     clearReleaseTracklistCache(bandId, releaseId);
     setTracklistKey((k) => k + 1);
     setBusy("Tracklist refreshed from disk");
+    void prefetchReleaseTracklist(bandId, releaseId, { force: true })
+      .then((payload) => {
+        setShowTracklistTab(releaseTracklistHasTracks(payload));
+        setTracklistVisibilityReady(true);
+      })
+      .catch(() => {
+        setShowTracklistTab(false);
+        setTracklistVisibilityReady(true);
+      });
     window.setTimeout(() => setBusy(""), 2500);
   }, [bandId, releaseId]);
 
@@ -1444,15 +1482,48 @@ export default function ReleasePage({
   }, [playingPath, bandId, releaseId, syncGalleryTabVisibility]);
 
   useEffect(() => {
+    let cancelled = false;
+    setTracklistVisibilityReady(
+      getCachedReleaseTracklist(bandId, releaseId) != null
+    );
+    void prefetchReleaseTracklist(bandId, releaseId)
+      .then((payload) => {
+        if (cancelled) return;
+        setShowTracklistTab(releaseTracklistHasTracks(payload));
+        setTracklistVisibilityReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShowTracklistTab(false);
+        setTracklistVisibilityReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bandId, releaseId]);
+
+  useEffect(() => {
     if (!showGalleryTab && tab === "gallery") {
       onTab("overview");
     }
   }, [showGalleryTab, tab, onTab]);
 
+  useEffect(() => {
+    if (tracklistVisibilityReady && !showTracklistTab && tab === "tracklist") {
+      onTab("overview");
+    }
+  }, [tracklistVisibilityReady, showTracklistTab, tab, onTab]);
+
   const pageTabs = useMemo(
-    () => TABS.filter((t) => t.id !== "gallery" || showGalleryTab),
-    [showGalleryTab]
+    () =>
+      TABS.filter((t) => {
+        if (t.id === "gallery") return showGalleryTab;
+        if (t.id === "tracklist") return showTracklistTab;
+        return true;
+      }),
+    [showGalleryTab, showTracklistTab]
   );
+  const showPageTabBar = pageTabs.length > 1;
 
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
@@ -2633,18 +2704,20 @@ export default function ReleasePage({
           </div>
         </header>
 
-        <nav className="release-page__tabs">
-          {pageTabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tab === t.id ? "active" : ""}
-              onClick={() => onTab(t.id)}
-            >
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </nav>
+        {showPageTabBar ? (
+          <nav className="release-page__tabs">
+            {pageTabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={tab === t.id ? "active" : ""}
+                onClick={() => onTab(t.id)}
+              >
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </nav>
+        ) : null}
 
         {stacked && tab === "tracklist" && !bannerLayout && (
           <nav className="release-page__subtabs" aria-label="Tracklist views">

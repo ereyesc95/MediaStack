@@ -9,11 +9,13 @@ import {
 import { createPortal } from "react-dom";
 import {
   createCatalogImport,
+  fetchCatalogCrossRelated,
   previewCatalogImport,
   removeCatalogRegistration,
   searchCatalogImport,
   searchCatalogRegistrations,
   updateCatalogFolders,
+  type CatalogCrossRelatedItem,
   type CatalogImportItem,
   type CatalogImportModule,
   type CatalogImportSearchItem,
@@ -329,8 +331,23 @@ export default function ManageCatalogModal({
     "single"
   );
   const [franchiseHome, setFranchiseHome] = useState(false);
+  const [franchiseHomeModule, setFranchiseHomeModule] = useState<
+    "series" | "movies"
+  >(module === "movies" ? "movies" : "series");
   const [includeGuide, setIncludeGuide] = useState(true);
   const [nestedSeries, setNestedSeries] = useState(false);
+  const [crossRelated, setCrossRelated] = useState<CatalogCrossRelatedItem[]>(
+    []
+  );
+  const [crossOtherModule, setCrossOtherModule] = useState<
+    "movies" | "series" | null
+  >(null);
+  const [includeRelated, setIncludeRelated] = useState(true);
+  const [relatedSelected, setRelatedSelected] = useState<Set<string>>(
+    new Set()
+  );
+  const [relatedExpanded, setRelatedExpanded] = useState(false);
+  const [crossLoading, setCrossLoading] = useState(false);
   /** Platforms shown as pills (game-derived + manually added empty ones). */
   const [activePlatforms, setActivePlatforms] = useState<string[]>([]);
   const [platformOptions, setPlatformOptions] = useState<string[]>(() => {
@@ -381,6 +398,72 @@ export default function ManageCatalogModal({
         Boolean(firstPick && franchiseName && franchiseName !== firstPick.title)
     );
   }, [franchiseName, module, firstPick]);
+
+  useEffect(() => {
+    setFranchiseHomeModule(module === "movies" ? "movies" : "series");
+  }, [module]);
+
+  const supportsCrossRelated = module === "series" || module === "movies";
+
+  useEffect(() => {
+    if (!supportsCrossRelated || step !== "details") {
+      setCrossRelated([]);
+      setCrossOtherModule(null);
+      return;
+    }
+    const name = franchiseName.trim();
+    if (!name || !items.length) {
+      setCrossRelated([]);
+      setCrossOtherModule(null);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setCrossLoading(true);
+    void fetchCatalogCrossRelated(
+      module,
+      {
+        franchise_name: name,
+        nested_series: nestedSeries,
+        items: items.map(({ key: _k, ...rest }) => rest),
+      },
+      controller.signal
+    )
+      .then((data) => {
+        if (cancelled) return;
+        if (data.local_exists || !data.other_module || !data.items?.length) {
+          setCrossRelated([]);
+          setCrossOtherModule(null);
+          setRelatedSelected(new Set());
+          return;
+        }
+        setCrossOtherModule(data.other_module);
+        setCrossRelated(data.items);
+        setRelatedSelected(
+          new Set(data.items.map((row) => row.provider_id).filter(Boolean))
+        );
+        setIncludeRelated(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCrossRelated([]);
+        setCrossOtherModule(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCrossLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    supportsCrossRelated,
+    step,
+    module,
+    franchiseName,
+    nestedSeries,
+    items,
+  ]);
 
   useEffect(() => {
     if (!platformMenuOpen && !itemPlatformMenuKey) return;
@@ -789,9 +872,11 @@ export default function ManageCatalogModal({
     }
     return Math.max(1, n);
   }, [module, chosenItems]);
+  const relatedCreateCount =
+    includeRelated && crossOtherModule ? relatedSelected.size : 0;
   const estimatedSeconds = Math.max(
     10,
-    leafCreateCount * (module === "books" ? 5 : 12)
+    (leafCreateCount + relatedCreateCount) * (module === "books" ? 5 : 12)
   );
   const queuedIdentities = useMemo(
     () => new Set(items.map(itemIdentity)),
@@ -871,9 +956,21 @@ export default function ManageCatalogModal({
     setCloseWarning(false);
     setError(null);
     try {
+      const relatedChosen =
+        includeRelated && crossOtherModule
+          ? crossRelated.filter((row) => relatedSelected.has(row.provider_id))
+          : [];
       const result = await createCatalogImport(module, {
         franchise_name: franchiseName.trim(),
         franchise_home: franchiseHome,
+        franchise_home_module:
+          franchiseHome && (module === "series" || module === "movies")
+            ? relatedChosen.length
+              ? franchiseHomeModule
+              : module === "movies"
+                ? "movies"
+                : "series"
+            : null,
         include_guide: includeGuide,
         nested_series: nestedSeries,
         ...(module === "games" ? { platforms } : {}),
@@ -887,6 +984,10 @@ export default function ManageCatalogModal({
               }
             : {}),
         })),
+        include_related:
+          relatedChosen.length && crossOtherModule
+            ? { module: crossOtherModule, items: relatedChosen }
+            : null,
       });
       if (result.metadata_errors.length) {
         setError(
@@ -1252,13 +1353,16 @@ export default function ManageCatalogModal({
               />
             </label>
 
-            {module === "series" ? (
+            {module === "series" ||
+            (module === "movies" && crossOtherModule === "series") ? (
               <Checkbox
                 className="manage-artists-modal__guide-option"
                 checked={nestedSeries}
                 onChange={setNestedSeries}
               >
-                Create as a show inside the franchise
+                {nestedSeries
+                  ? "This franchise has multiple series"
+                  : "This franchise has only 1 series"}
               </Checkbox>
             ) : null}
 
@@ -1381,6 +1485,19 @@ export default function ManageCatalogModal({
               <small className="muted">
                 {chosenItems.length} folder
                 {chosenItems.length === 1 ? "" : "s"} will be created
+                {includeRelated &&
+                crossOtherModule &&
+                relatedSelected.size > 0
+                  ? ` (+ ${relatedSelected.size} ${
+                      crossOtherModule === "movies"
+                        ? relatedSelected.size === 1
+                          ? "movie"
+                          : "movies"
+                        : relatedSelected.size === 1
+                          ? "series"
+                          : "series"
+                    })`
+                  : ""}
               </small>
               <small className="muted">
                 Approximate time:{" "}
@@ -1389,13 +1506,163 @@ export default function ManageCatalogModal({
                   : `${estimatedSeconds} seconds`}
               </small>
             </div>
+
+            {crossLoading ? (
+              <small className="muted">Checking related titles…</small>
+            ) : null}
+
+            {crossOtherModule && crossRelated.length > 0 ? (
+              <div className="manage-catalog-modal__cross">
+                <Checkbox
+                  className="manage-artists-modal__guide-option"
+                  checked={includeRelated}
+                  disabled={saving}
+                  onChange={setIncludeRelated}
+                >
+                  {includeRelated
+                    ? `Include ${relatedSelected.size || crossRelated.length} ${
+                        crossOtherModule === "movies"
+                          ? (relatedSelected.size || crossRelated.length) === 1
+                            ? "movie"
+                            : "movies"
+                          : (relatedSelected.size || crossRelated.length) === 1
+                            ? "series"
+                            : "series"
+                      }`
+                    : `Do not include ${crossRelated.length} ${
+                        crossOtherModule === "movies"
+                          ? crossRelated.length === 1
+                            ? "movie"
+                            : "movies"
+                          : crossRelated.length === 1
+                            ? "series"
+                            : "series"
+                      }`}
+                </Checkbox>
+                {includeRelated ? (
+                  <>
+                    <button
+                      type="button"
+                      className="manage-catalog-modal__see-more"
+                      onClick={() => setRelatedExpanded((v) => !v)}
+                    >
+                      {relatedExpanded ? "See less" : "See more"}
+                    </button>
+                    {relatedExpanded ? (
+                      <div className="manage-catalog-modal__related-list">
+                        {(() => {
+                          const groups = new Map<
+                            string,
+                            CatalogCrossRelatedItem[]
+                          >();
+                          for (const row of crossRelated) {
+                            const key =
+                              nestedSeries && row.subseries_title
+                                ? row.subseries_title
+                                : "";
+                            const list = groups.get(key) || [];
+                            list.push(row);
+                            groups.set(key, list);
+                          }
+                          const keys = [...groups.keys()].sort((a, b) =>
+                            a.localeCompare(b, undefined, {
+                              sensitivity: "base",
+                            })
+                          );
+                          return keys.map((groupKey) => (
+                            <div
+                              key={groupKey || "__flat"}
+                              className="manage-catalog-modal__related-group"
+                            >
+                              {groupKey ? (
+                                <small className="muted manage-catalog-modal__related-group-title">
+                                  {groupKey}
+                                </small>
+                              ) : null}
+                              {(groups.get(groupKey) || []).map((row) => {
+                                const year = (row.date || "").slice(0, 4);
+                                return (
+                                  <Checkbox
+                                    key={row.provider_id}
+                                    className="manage-catalog-modal__item"
+                                    checked={relatedSelected.has(
+                                      row.provider_id
+                                    )}
+                                    disabled={saving}
+                                    onChange={() => {
+                                      setRelatedSelected((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(row.provider_id)) {
+                                          next.delete(row.provider_id);
+                                        } else {
+                                          next.add(row.provider_id);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    {row.title}
+                                    {year ? (
+                                      <span className="muted"> {year}</span>
+                                    ) : null}
+                                  </Checkbox>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
             <Checkbox
               className="manage-artists-modal__guide-option"
               checked={franchiseHome}
-              onChange={setFranchiseHome}
+              onChange={(checked) => {
+                setFranchiseHome(checked);
+                if (checked) {
+                  setFranchiseHomeModule(
+                    module === "movies" ? "movies" : "series"
+                  );
+                }
+              }}
             >
-              Use {labels.plural} as franchise home
+              {includeRelated &&
+              crossOtherModule &&
+              relatedSelected.size > 0
+                ? "Set franchise home"
+                : `Use ${labels.plural} as franchise home`}
             </Checkbox>
+            {franchiseHome &&
+            includeRelated &&
+            crossOtherModule &&
+            relatedSelected.size > 0 ? (
+              <div className="manage-catalog-modal__home-pick">
+                <label className="manage-catalog-modal__home-option">
+                  <input
+                    type="radio"
+                    name="franchise-home-module"
+                    checked={franchiseHomeModule === "series"}
+                    disabled={saving}
+                    onChange={() => setFranchiseHomeModule("series")}
+                  />
+                  Series
+                </label>
+                <label className="manage-catalog-modal__home-option">
+                  <input
+                    type="radio"
+                    name="franchise-home-module"
+                    checked={franchiseHomeModule === "movies"}
+                    disabled={saving}
+                    onChange={() => setFranchiseHomeModule("movies")}
+                  />
+                  Movies
+                </label>
+              </div>
+            ) : null}
             <Checkbox
               className="manage-artists-modal__guide-option"
               checked={includeGuide}

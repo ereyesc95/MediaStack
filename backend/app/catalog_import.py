@@ -100,6 +100,127 @@ def _date_prefix(value: str | None) -> str:
     return f"{year}. "
 
 
+_CROSS_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "at",
+        "by",
+        "for",
+        "from",
+        "in",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+        "n",
+    }
+)
+
+
+def _significant_tokens(value: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", (value or "").casefold())
+    return {w for w in words if len(w) > 1 and w not in _CROSS_STOPWORDS}
+
+
+def _titles_related(franchise: str, title: str) -> bool:
+    """Best-effort TMDb cross-match: franchise name in title or strong token overlap."""
+    fran = (franchise or "").strip()
+    tit = (title or "").strip()
+    if not fran or not tit:
+        return False
+    fran_cf = fran.casefold()
+    tit_cf = tit.casefold()
+    if fran_cf in tit_cf:
+        return True
+    # Drop possessive / trailing "movie" noise for overlap
+    tit_norm = re.sub(r"\b(movie|film|the movie)\b", " ", tit_cf)
+    ft = _significant_tokens(fran)
+    tt = _significant_tokens(tit_norm)
+    if not ft:
+        return False
+    overlap = ft & tt
+    if len(overlap) >= max(1, (len(ft) + 1) // 2):
+        return True
+    return False
+
+
+def _franchise_module_dir(root: Path, module: str, franchise_name: str) -> Path:
+    return root / MODULE_DIRS[module] / _letter_folder(franchise_name) / franchise_name
+
+
+def _assign_subseries(
+    movie: dict, series_items: list[dict]
+) -> dict | None:
+    """Pick the best series leaf for a related movie (title, then date heuristics)."""
+    if not series_items:
+        return None
+    title = str(movie.get("title") or "")
+    title_cf = title.casefold()
+    best: dict | None = None
+    best_len = 0
+    for series in series_items:
+        st = str(series.get("title") or "").strip()
+        if st and st.casefold() in title_cf and len(st) > best_len:
+            best = series
+            best_len = len(st)
+    if best:
+        return best
+    movie_date = str(movie.get("date") or "")[:10]
+    dated: list[tuple[str, dict]] = []
+    for series in series_items:
+        sd = str(series.get("date") or "")[:10]
+        if sd and movie_date and sd <= movie_date:
+            dated.append((sd, series))
+    if dated:
+        dated.sort(key=lambda pair: pair[0], reverse=True)
+        return dated[0][1]
+    return sorted(
+        series_items,
+        key=lambda s: (str(s.get("date") or "9999"), str(s.get("title") or "")),
+    )[0]
+
+
+async def _tmdb_search_cross(
+    *,
+    endpoint: str,
+    query: str,
+    api_key: str,
+    limit: int = 40,
+) -> list[dict]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{TMDB_BASE}/search/{endpoint}",
+            params={"api_key": api_key, "query": query},
+        )
+        response.raise_for_status()
+        rows = response.json().get("results") or []
+    out: list[dict] = []
+    for item in rows[:limit]:
+        title = (
+            item.get("title")
+            or item.get("name")
+            or item.get("original_title")
+            or item.get("original_name")
+        )
+        if not title or not item.get("id"):
+            continue
+        date = item.get("release_date") or item.get("first_air_date")
+        out.append(
+            {
+                "provider_id": str(item["id"]),
+                "title": title,
+                "date": date,
+                "poster_url": image_url(item.get("poster_path"), "original"),
+                "backdrop_url": image_url(item.get("backdrop_path"), "original"),
+            }
+        )
+    return out
+
+
 def _relative(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -833,6 +954,95 @@ def _item_platform_names(raw: dict, fallback: list[str]) -> list[str]:
     return out or list(fallback)
 
 
+@router.post("/{module}/cross-related")
+async def catalog_cross_related(
+    module: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Best-effort TMDb movies↔series matches for the create modal Include line."""
+    if module not in {"series", "movies"}:
+        return {
+            "other_module": None,
+            "local_exists": False,
+            "items": [],
+        }
+    other = "movies" if module == "series" else "series"
+    franchise_name = _safe_name(
+        str(body.get("franchise_name") or ""), fallback=""
+    )
+    if not franchise_name:
+        raise HTTPException(400, "Franchise name is required")
+    primary_items = body.get("items") if isinstance(body.get("items"), list) else []
+    nested = bool(body.get("nested_series"))
+    root = _root()
+    other_dir = _franchise_module_dir(root, other, franchise_name)
+    if other_dir.is_dir():
+        return {
+            "other_module": other,
+            "local_exists": True,
+            "items": [],
+        }
+    api_key = get_tmdb_key(db)
+    if not api_key:
+        raise HTTPException(400, "TMDb API key is not configured")
+    endpoint = "movie" if other == "movies" else "tv"
+    raw_hits = await _tmdb_search_cross(
+        endpoint=endpoint, query=franchise_name, api_key=api_key
+    )
+    # Also try a shorter base name (drop trailing volume-like noise).
+    base = BOOK_VOLUME_RE.sub("", franchise_name).strip(" :-") or franchise_name
+    if base.casefold() != franchise_name.casefold():
+        raw_hits.extend(
+            await _tmdb_search_cross(
+                endpoint=endpoint, query=base, api_key=api_key
+            )
+        )
+    exclude_ids = {
+        str(row.get("provider_id") or "").strip()
+        for row in primary_items
+        if isinstance(row, dict)
+    }
+    matched: list[dict] = []
+    seen: set[str] = set()
+    for hit in raw_hits:
+        pid = str(hit.get("provider_id") or "").strip()
+        title = str(hit.get("title") or "").strip()
+        if not pid or pid in seen or pid in exclude_ids:
+            continue
+        if not _titles_related(franchise_name, title) and not _titles_related(
+            base, title
+        ):
+            continue
+        seen.add(pid)
+        matched.append(hit)
+    matched.sort(key=lambda item: (item.get("date") or "9999", item["title"]))
+    series_for_assign = [
+        row
+        for row in primary_items
+        if isinstance(row, dict) and str(row.get("title") or "").strip()
+    ]
+    if nested and module == "series" and other == "movies" and series_for_assign:
+        for hit in matched:
+            series = _assign_subseries(hit, series_for_assign)
+            if series:
+                hit["subseries_title"] = series.get("title")
+                hit["subseries_date"] = series.get("date")
+            else:
+                hit["subseries_title"] = None
+                hit["subseries_date"] = None
+    else:
+        for hit in matched:
+            hit["subseries_title"] = None
+            hit["subseries_date"] = None
+    return {
+        "other_module": other,
+        "local_exists": False,
+        "items": matched[:40],
+    }
+
+
 @router.post("/{module}/create")
 async def create_catalog_import(
     module: str,
@@ -879,9 +1089,25 @@ async def create_catalog_import(
     make_home = bool(body.get("franchise_home"))
     include_guide = bool(body.get("include_guide", True))
     nested_series = bool(body.get("nested_series", False))
-    if make_home:
-        set_explicit_franchise_home(db, franchise_name, module)
+    home_module = str(body.get("franchise_home_module") or "").strip().casefold()
+    if home_module not in {"series", "movies", "books", "games", "music"}:
+        home_module = module if make_home else ""
+    if make_home and home_module:
+        set_explicit_franchise_home(db, franchise_name, home_module)
     db.commit()
+
+    include_related = body.get("include_related")
+    related_module = ""
+    related_items: list = []
+    if isinstance(include_related, dict):
+        related_module = str(include_related.get("module") or "").strip().casefold()
+        raw_related = include_related.get("items") or []
+        if (
+            related_module in {"series", "movies"}
+            and related_module != module
+            and isinstance(raw_related, list)
+        ):
+            related_items = [row for row in raw_related if isinstance(row, dict)][:80]
 
     created: list[str] = []
     skipped: list[str] = []
@@ -914,7 +1140,9 @@ async def create_catalog_import(
             decorate_folder(franchise_dir)
         else:
             decorate_folder(franchise_dir)
-        if make_home and not franchise_existed:
+        # Artwork for franchise home only when this module is the chosen home.
+        home_here = make_home and (not home_module or home_module == module)
+        if home_here and not franchise_existed:
             for child in ("Branding", "Covers", "Gallery", "Exclusive"):
                 ensure_relative_tree(franchise_dir, f"[Artwork]/{child}")
             artwork = franchise_dir / "[Artwork]"
@@ -1110,6 +1338,121 @@ async def create_catalog_import(
                             timezone.utc
                         ).isoformat()
                         db.commit()
+            except Exception as exc:
+                db.rollback()
+                metadata_errors.append(f"{title}: {exc}")
+
+    # Cross-module Include: scaffold related Movies under Series (or reverse).
+    if related_module and related_items:
+        related_dir = _franchise_module_dir(root, related_module, franchise_name)
+        related_existed = related_dir.is_dir()
+        related_dir.mkdir(parents=True, exist_ok=True)
+        decorate_folder(related_dir)
+        home_on_related = make_home and home_module == related_module
+        if home_on_related and not related_existed:
+            for child in ("Branding", "Covers", "Gallery", "Exclusive"):
+                ensure_relative_tree(related_dir, f"[Artwork]/{child}")
+            artwork = related_dir / "[Artwork]"
+            rel_first = related_items[0] if related_items else {}
+            await _download_primary(
+                rel_first.get("poster_url") or first_item.get("poster_url"),
+                artwork / "Cover - Front",
+            )
+            await _download_primary(
+                rel_first.get("backdrop_url") or first_item.get("backdrop_url"),
+                artwork / "Cover - Banner",
+            )
+        if include_guide and not related_existed:
+            (related_dir / "User guide.txt").write_text(
+                get_catalog_user_guide(db, related_module), encoding="utf-8"
+            )
+        # Movies nested under subseries only when creating Series with nested shows.
+        nest_movies_under_subseries = (
+            module == "series"
+            and related_module == "movies"
+            and nested_series
+        )
+        nest_related_series = (
+            related_module == "series" and nested_series
+        )
+        for raw in related_items:
+            provider_id = str(raw.get("provider_id") or "").strip()
+            title = _safe_name(str(raw.get("title") or "Untitled"))
+            date = str(raw.get("date") or "").strip() or None
+            parent = related_dir
+            if nest_movies_under_subseries:
+                sub_title = _safe_name(
+                    str(raw.get("subseries_title") or "").strip(), fallback=""
+                )
+                if sub_title:
+                    sub_date = str(raw.get("subseries_date") or "").strip() or None
+                    parent = related_dir / f"{_date_prefix(sub_date)}{sub_title}"
+                    parent.mkdir(parents=True, exist_ok=True)
+                    decorate_folder(parent)
+            if related_module == "series" and not nest_related_series:
+                leaf_dir = related_dir
+            else:
+                leaf_dir = parent / f"{_date_prefix(date)}{title}"
+            if leaf_dir.exists() and leaf_dir != related_dir:
+                skipped.append(_relative(leaf_dir, root))
+                continue
+            if related_module == "series" and not nest_related_series and related_existed:
+                skipped.append(_relative(leaf_dir, root))
+                continue
+            if related_module == "series":
+                _series_tree(leaf_dir)
+                # Seasons: fetch from TMDb when creating related TV.
+                if provider_id:
+                    try:
+                        api_key = get_tmdb_key(db)
+                        if api_key:
+                            tv = await fetch_tv(provider_id, api_key)
+                            for season in tv.get("seasons") or []:
+                                number = season.get("season_number")
+                                if number == 0:
+                                    ensure_relative_tree(leaf_dir, "Specials")
+                                    continue
+                                if not isinstance(number, int) or number < 1:
+                                    continue
+                                season_name = (
+                                    f"{_date_prefix(season.get('air_date'))}"
+                                    f"Season {number}"
+                                )
+                                ensure_relative_tree(
+                                    leaf_dir, f"Episodes/{season_name}"
+                                )
+                    except Exception:
+                        pass
+            else:
+                _gallery_tree(leaf_dir)
+            covers = leaf_dir / "Gallery" / "Covers"
+            await _download_primary(raw.get("poster_url"), covers / "Cover - Front")
+            await _download_primary(
+                raw.get("backdrop_url"), covers / "Cover - Banner"
+            )
+            created.append(_relative(leaf_dir, root))
+            try:
+                if related_module == "movies" and provider_id:
+                    from app.movies_index import _film_id
+                    from app.movies_refresh import refresh_film_metadata
+
+                    film_id = _film_id(_relative(leaf_dir, root))
+                    await refresh_film_metadata(
+                        db,
+                        film_id,
+                        tmdb_id=provider_id,
+                        cache_artwork=False,
+                    )
+                elif related_module == "series" and provider_id:
+                    from app.series_refresh import refresh_series_metadata
+
+                    await refresh_series_metadata(
+                        db,
+                        franchise_name,
+                        tmdb_id=provider_id,
+                        subseries_titles=[title] if nest_related_series else None,
+                        cache_artwork=False,
+                    )
             except Exception as exc:
                 db.rollback()
                 metadata_errors.append(f"{title}: {exc}")

@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-10-16T19:59:15.434043+00:00",
+  "scanned_at": "2026-10-16T20:24:01.744405+00:00",
   "franchises": {
     "dracula untold": {
       "display_name": "Dracula Untold",
@@ -628,6 +628,23 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "HIM"
+        }
+      ]
+    },
+    "courage the cowardly dog": {
+      "display_name": "Courage the Cowardly Dog",
+      "slug": "courage the cowardly dog",
+      "letter": "C",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/C/Courage the Cowardly Dog",
+          "title": "Courage the Cowardly Dog",
+          "date_iso": "1999-11-12",
+          "letter": "C",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Courage the Cowardly Dog"
         }
       ]
     },

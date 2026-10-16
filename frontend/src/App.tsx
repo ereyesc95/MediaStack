@@ -669,9 +669,9 @@ export default function App() {
 
       {moduleIconsConfirmOpen && (
         <ConfirmDialog
-          title="Regenerate module icons?"
+          title="Refresh icons?"
           message="Overwrite desktop.ini and folder.ico for Music, Movies, Series, Books, Games, and Photos from assets/icons. Explorer may need a refresh (F5) afterward."
-          confirmLabel="Regenerate"
+          confirmLabel="Refresh icons"
           busy={moduleIconsBusy}
           onConfirm={() => void handleRegenerateModuleIcons()}
           onClose={() => !moduleIconsBusy && setModuleIconsConfirmOpen(false)}

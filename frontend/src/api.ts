@@ -3369,6 +3369,25 @@ export type CatalogImportItem = {
   seasons?: { number: number; name?: string | null; date?: string | null }[];
   /** Games: platforms this title should be created under. */
   platforms?: string[];
+  /** Cross-module movie nested under a series leaf. */
+  subseries_title?: string | null;
+  subseries_date?: string | null;
+};
+
+export type CatalogCrossRelatedItem = {
+  provider_id: string;
+  title: string;
+  date?: string | null;
+  poster_url?: string | null;
+  backdrop_url?: string | null;
+  subseries_title?: string | null;
+  subseries_date?: string | null;
+};
+
+export type CatalogCrossRelatedPayload = {
+  other_module: "movies" | "series" | null;
+  local_exists: boolean;
+  items: CatalogCrossRelatedItem[];
 };
 
 export async function searchCatalogImport(
@@ -3403,17 +3422,39 @@ export async function previewCatalogImport(
   });
 }
 
+export async function fetchCatalogCrossRelated(
+  module: CatalogImportModule,
+  payload: {
+    franchise_name: string;
+    nested_series: boolean;
+    items: CatalogImportItem[];
+  },
+  signal?: AbortSignal
+): Promise<CatalogCrossRelatedPayload> {
+  return request(`${API}/catalog-import/${module}/cross-related`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 export async function createCatalogImport(
   module: CatalogImportModule,
   payload: {
     franchise_name: string;
     franchise_home: boolean;
+    franchise_home_module?: "series" | "movies" | null;
     include_guide: boolean;
     nested_series: boolean;
     /** @deprecated Prefer `platforms` for Games multi-create. */
     platform?: string;
     platforms?: string[];
     items: CatalogImportItem[];
+    include_related?: {
+      module: "movies" | "series";
+      items: CatalogCrossRelatedItem[];
+    } | null;
   }
 ) {
   return request<{
@@ -3425,11 +3466,15 @@ export async function createCatalogImport(
     created: string[];
     skipped: string[];
     metadata_errors: string[];
-  }>(`${API}/catalog-import/${module}/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  }>(
+    `${API}/catalog-import/${module}/create`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
 }
 
 export async function updateCatalogFolders(
