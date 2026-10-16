@@ -10,6 +10,7 @@ from app.deps import require_admin
 from app.folder_icons import (
     count_existing_icos,
     ensure_ini_tree,
+    ensure_media_module_roots,
     generate_icons_tree,
     resolve_artist_folder,
     resolve_franchise_folder,
@@ -115,3 +116,17 @@ def franchise_generate_icons(
     if not folder:
         raise HTTPException(404, "Local franchise folder not found")
     return generate_icons_tree(folder, overwrite=body.overwrite)
+
+
+@router.post("/modules/regenerate")
+def regenerate_media_module_icons(
+    overwrite: bool = Query(
+        True,
+        description="Overwrite existing folder.ico and rewrite desktop.ini",
+    ),
+    _admin: User = Depends(require_admin),
+):
+    """Regenerate desktop.ini + folder.ico for Music/Movies/Series/Books/Games/Photos."""
+    return ensure_media_module_roots(
+        overwrite_ico=overwrite, force_ini=overwrite
+    )

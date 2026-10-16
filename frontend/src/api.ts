@@ -492,6 +492,29 @@ export async function generateFranchiseFolderIcons(body: {
   );
 }
 
+export type MediaModuleIconStats = {
+  ok: boolean;
+  error?: string;
+  modules?: {
+    name: string;
+    ini_written?: boolean;
+    ico?: string;
+    has_source?: boolean;
+    error?: string;
+  }[];
+};
+
+export async function regenerateMediaModuleIcons(
+  overwrite = true
+): Promise<MediaModuleIconStats> {
+  const q = overwrite ? "?overwrite=true" : "?overwrite=false";
+  return request(
+    `${API}/folder-icons/modules/regenerate${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function fetchBandGalleryIndex(
   id: number
 ): Promise<import("./types").GalleryIndexPayload> {

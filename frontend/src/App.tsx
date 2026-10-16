@@ -4,6 +4,7 @@ import {
   fetchAppSettings,
   fetchSession,
   importSql,
+  regenerateMediaModuleIcons,
   rescanSeriesLocalData,
   syncFolders,
 } from "./api";
@@ -36,6 +37,7 @@ import {
 } from "./auth";
 
 import AppMenu from "./components/AppMenu";
+import ConfirmDialog from "./components/ConfirmDialog";
 import HubBrand from "./components/HubBrand";
 import MediaSourceModal from "./components/MediaSourceModal";
 import ProfileEditModal from "./components/ProfileEditModal";
@@ -181,6 +183,8 @@ export default function App() {
     null
   );
   const [switchingProfile, setSwitchingProfile] = useState(false);
+  const [moduleIconsConfirmOpen, setModuleIconsConfirmOpen] = useState(false);
+  const [moduleIconsBusy, setModuleIconsBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,6 +384,28 @@ export default function App() {
 
 
 
+  async function handleRegenerateModuleIcons() {
+    setModuleIconsBusy(true);
+    setError(null);
+    try {
+      const stats = await regenerateMediaModuleIcons(true);
+      const modules = stats.modules || [];
+      const written = modules.filter((m) => m.ico === "written").length;
+      const missing = modules.filter((m) => m.ico === "skipped_no_source").length;
+      setBusy(
+        missing
+          ? `Module icons: ${written} written, ${missing} missing asset`
+          : `Module icons: ${written} written`
+      );
+      window.setTimeout(() => setBusy(""), 4000);
+      setModuleIconsConfirmOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setModuleIconsBusy(false);
+    }
+  }
+
   async function handleSync() {
 
     setBusy("Syncing…");
@@ -550,6 +576,9 @@ export default function App() {
       onImport={handleImport}
       onSync={handleSync}
       onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+      onRegenerateModuleIcons={
+        isAdmin ? () => setModuleIconsConfirmOpen(true) : undefined
+      }
       isAdmin={isAdmin}
       userId={profile?.user_id}
       onSwitchProfile={handleSwitchProfile}
@@ -635,6 +664,17 @@ export default function App() {
               : undefined
           }
           onSwitchProfile={handleSwitchProfile}
+        />
+      )}
+
+      {moduleIconsConfirmOpen && (
+        <ConfirmDialog
+          title="Regenerate module icons?"
+          message="Overwrite desktop.ini and folder.ico for Music, Movies, Series, Books, Games, and Photos from assets/icons. Explorer may need a refresh (F5) afterward."
+          confirmLabel="Regenerate"
+          busy={moduleIconsBusy}
+          onConfirm={() => void handleRegenerateModuleIcons()}
+          onClose={() => !moduleIconsBusy && setModuleIconsConfirmOpen(false)}
         />
       )}
 

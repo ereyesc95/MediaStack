@@ -62,6 +62,8 @@ type Props = {
   onImport?: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
+  /** Hub admin: rewrite Media/{Music…Photos} desktop.ini + folder.ico. */
+  onRegenerateModuleIcons?: () => void;
   onManageArtists?: () => void;
   showManageArtists?: boolean;
   onManageCatalog?: () => void;
@@ -156,6 +158,7 @@ const CUSTOM_FIELDS: { key: keyof CustomThemeColors; label: string }[] = [
 export default function AppMenu({
   onSync,
   onChooseSource,
+  onRegenerateModuleIcons,
   onManageArtists,
   showManageArtists,
   onManageCatalog,
@@ -1250,6 +1253,18 @@ export default function AppMenu({
                     <IconSync className="menu-item-icon" />
                     Sync folders
                   </button>
+                  {onRegenerateModuleIcons && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRegenerateModuleIcons();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconCards className="menu-item-icon" />
+                      Regenerate module icons
+                    </button>
+                  )}
                 </div>
               )}
             </>

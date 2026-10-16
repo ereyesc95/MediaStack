@@ -61,6 +61,17 @@ def _media_root() -> Path | None:
     return root if root.is_dir() else None
 
 
+def _set_file_attrs(path: Path, attrs: int) -> None:
+    if sys.platform != "win32" or not path.exists():
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.kernel32.SetFileAttributesW(str(path), attrs)
+    except Exception:
+        pass
+
+
 def _set_hidden_system(path: Path) -> None:
     """Mark file Hidden+System on Windows; no-op elsewhere."""
     if sys.platform != "win32" or not path.is_file():
@@ -70,8 +81,7 @@ def _set_hidden_system(path: Path) -> None:
 
         FILE_ATTRIBUTE_HIDDEN = 0x2
         FILE_ATTRIBUTE_SYSTEM = 0x4
-        attrs = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
-        ctypes.windll.kernel32.SetFileAttributesW(str(path), attrs)
+        _set_file_attrs(path, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)
     except Exception:
         try:
             import subprocess
@@ -85,24 +95,93 @@ def _set_hidden_system(path: Path) -> None:
             pass
 
 
+def mark_folder_customized(folder: Path) -> None:
+    """
+    Set the directory Read-only attribute so Explorer honors desktop.ini.
+
+    On Windows this bit on a *folder* is only a shell customization flag — it
+    does not block creating, moving, copying, or deleting files inside the
+    folder. Contents remain fully writable.
+    """
+    if sys.platform != "win32" or not folder.is_dir():
+        return
+    try:
+        import ctypes
+
+        FILE_ATTRIBUTE_READONLY = 0x1
+        GetFileAttributesW = ctypes.windll.kernel32.GetFileAttributesW
+        GetFileAttributesW.restype = ctypes.c_uint32
+        current = GetFileAttributesW(str(folder))
+        if current == 0xFFFFFFFF:
+            return
+        # Only OR Read-only — does not make the folder's *contents* read-only.
+        desired = current | FILE_ATTRIBUTE_READONLY
+        if desired != current:
+            _set_file_attrs(folder, desired)
+    except Exception:
+        try:
+            import subprocess
+
+            subprocess.run(
+                ["attrib", "+R", str(folder)],
+                check=False,
+                capture_output=True,
+            )
+        except Exception:
+            pass
+
+
+def notify_shell_folder(folder: Path) -> None:
+    """Ask Explorer to refresh this folder's icon / attributes."""
+    if sys.platform != "win32" or not folder.exists():
+        return
+    try:
+        import ctypes
+
+        SHCNE_ATTRIBUTES = 0x00000800
+        SHCNE_UPDATEDIR = 0x00001000
+        SHCNE_UPDATEITEM = 0x00002000
+        SHCNF_PATHW = 0x0005
+        path = str(folder.resolve())
+        ctypes.windll.shell32.SHChangeNotify(
+            SHCNE_ATTRIBUTES | SHCNE_UPDATEITEM | SHCNE_UPDATEDIR,
+            SHCNF_PATHW,
+            path,
+            None,
+        )
+    except Exception:
+        pass
+
+
+def notify_shell_assoc_changed() -> None:
+    """Broad icon-cache nudge (use sparingly after batch writes)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        SHCNE_ASSOCCHANGED = 0x08000000
+        SHCNF_IDLIST = 0x0000
+        ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
+    except Exception:
+        pass
+
+
 def write_desktop_ini(folder: Path, *, force: bool = False) -> bool:
     """Write desktop.ini into folder. Returns True if written/updated."""
     if not folder.is_dir():
         return False
     ini = folder / "desktop.ini"
     if ini.is_file() and not force:
+        mark_folder_customized(folder)
         return False
     try:
         # Clear attributes so we can overwrite if present
         if ini.is_file() and sys.platform == "win32":
-            try:
-                import ctypes
-
-                ctypes.windll.kernel32.SetFileAttributesW(str(ini), 0x80)  # NORMAL
-            except Exception:
-                pass
+            _set_file_attrs(ini, 0x80)  # NORMAL
         ini.write_text(DESKTOP_INI_TEXT, encoding="utf-8", newline="\r\n")
         _set_hidden_system(ini)
+        mark_folder_customized(folder)
         return True
     except OSError:
         return False
@@ -133,6 +212,7 @@ def decorate_folder(
     force_ini: bool = False,
     overwrite_ico: bool = False,
     root: Path | None = None,
+    notify: bool = True,
 ) -> None:
     """Write desktop.ini and best-effort folder.ico (skip letter tiers)."""
     root = root or _media_root()
@@ -142,6 +222,9 @@ def decorate_folder(
         return
     write_desktop_ini(folder, force=force_ini)
     ensure_folder_ico(folder, overwrite=overwrite_ico, root=root)
+    mark_folder_customized(folder)
+    if notify:
+        notify_shell_folder(folder)
 
 
 def ensure_dir_with_ini(folder: Path) -> Path:
@@ -211,25 +294,50 @@ def find_platform_icon(platform_name: str) -> Path | None:
     return find_first_image(d, [name])
 
 
+_ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+
+
+def _square_rgba(im):
+    """RGBA square; trim transparent margins so art fills the icon canvas."""
+    from PIL import Image
+
+    im = im.convert("RGBA")
+    bbox = im.getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    w, h = im.size
+    side = max(w, h, 1)
+    if w == side and h == side:
+        return im
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    canvas.paste(im, ((side - w) // 2, (side - h) // 2), im)
+    return canvas
+
+
 def image_to_ico(src: Path, dest: Path) -> bool:
-    """Convert image to multi-size ICO. Returns False on failure (never raises)."""
+    """Convert image to multi-size ICO (explicit LANCZOS layers). Never raises."""
     try:
         from PIL import Image
     except ImportError:
         return False
     try:
         if dest.is_file() and sys.platform == "win32":
-            try:
-                import ctypes
-
-                ctypes.windll.kernel32.SetFileAttributesW(str(dest), 0x80)
-            except Exception:
-                pass
-        im = Image.open(src)
-        im = im.convert("RGBA")
-        sizes = [(16, 16), (32, 32), (48, 48), (256, 256)]
+            _set_file_attrs(dest, 0x80)  # NORMAL
+        with Image.open(src) as raw:
+            base = _square_rgba(raw)
+        # Build each mip explicitly so Explorer Extra Large (256) is a real bitmap
+        layers = [
+            base.resize((side, side), Image.Resampling.LANCZOS)
+            for side in _ICO_SIZES
+        ]
         dest.parent.mkdir(parents=True, exist_ok=True)
-        im.save(dest, format="ICO", sizes=sizes)
+        # Provide 256px as the primary frame; other sizes via append_images
+        layers[-1].save(
+            dest,
+            format="ICO",
+            append_images=layers[:-1],
+            sizes=[(side, side) for side in _ICO_SIZES],
+        )
         _set_hidden_system(dest)
         return True
     except Exception:
@@ -438,6 +546,7 @@ def ensure_folder_ico(
         return "skipped_no_source"
     if image_to_ico(src, ico):
         write_desktop_ini(folder, force=False)
+        mark_folder_customized(folder)
         return "written"
     return "failed"
 
@@ -481,6 +590,10 @@ def ensure_ini_tree(root_folder: Path) -> dict:
     for d in dirs:
         if write_desktop_ini(d):
             written += 1
+        else:
+            mark_folder_customized(d)
+    notify_shell_folder(root_folder)
+    notify_shell_assoc_changed()
     return {"ok": True, "ini_written": written, "folders": len(dirs)}
 
 
@@ -503,20 +616,27 @@ def generate_icons_tree(
     for d in iter_dirs_for_icons(root_folder, root):
         if write_desktop_ini(d):
             stats["ini_written"] += 1
+        else:
+            mark_folder_customized(d)
         status = ensure_folder_ico(d, overwrite=overwrite, root=root)
         if status in stats:
             stats[status] += 1
+    notify_shell_folder(root_folder)
+    notify_shell_assoc_changed()
     return stats
 
 
-def ensure_media_module_roots() -> dict:
-    """Startup: Media/{Music,…,Photos} get desktop.ini + ico from assets (no overwrite)."""
+def ensure_media_module_roots(
+    *, overwrite_ico: bool = False, force_ini: bool = False
+) -> dict:
+    """Media/{Music,…,Photos} get desktop.ini + ico from assets."""
     root = _media_root()
     stats = {"ok": True, "modules": []}
     if not root:
         stats["ok"] = False
         stats["error"] = "media_root missing"
         return stats
+    rewrite_ini = force_ini or overwrite_ico
     for name in MEDIA_MODULE_ROOTS:
         folder = root / name
         try:
@@ -524,20 +644,24 @@ def ensure_media_module_roots() -> dict:
         except OSError as exc:
             stats["modules"].append({"name": name, "error": str(exc)})
             continue
-        ini = write_desktop_ini(folder)
+        ini = write_desktop_ini(folder, force=rewrite_ini)
         src = find_assets_icon(name)
         ico_status = "skipped_no_source"
         if src:
             ico_status = ensure_folder_ico(
-                folder, overwrite=False, root=root, source=src
+                folder, overwrite=overwrite_ico, root=root, source=src
             )
+        mark_folder_customized(folder)
+        notify_shell_folder(folder)
         stats["modules"].append(
             {
                 "name": name,
                 "ini_written": ini,
                 "ico": ico_status,
+                "has_source": bool(src),
             }
         )
+    notify_shell_assoc_changed()
     return stats
 
 
