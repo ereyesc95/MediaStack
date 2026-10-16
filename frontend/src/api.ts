@@ -408,6 +408,90 @@ export async function rescanBandLibrary(
   return request(`${API}/music/bands/${id}/rescan-library`, { method: "POST" });
 }
 
+export type FolderIconStats = {
+  ok: boolean;
+  written?: number;
+  skipped_exists?: number;
+  skipped_no_source?: number;
+  failed?: number;
+  ini_written?: number;
+  existing_icos?: number;
+  folders?: number;
+  path?: string;
+  error?: string;
+};
+
+export async function fetchArtistFolderIconStatus(
+  bandId: number
+): Promise<FolderIconStats> {
+  return request(`${API}/folder-icons/artist/${bandId}/status`);
+}
+
+export async function ensureArtistDesktopIni(
+  bandId: number
+): Promise<FolderIconStats> {
+  return request(`${API}/folder-icons/artist/${bandId}/ensure-ini`, {
+    method: "POST",
+  }, LONG_RUNNING_TIMEOUT_MS);
+}
+
+export async function generateArtistFolderIcons(
+  bandId: number,
+  overwrite = false
+): Promise<FolderIconStats> {
+  const q = overwrite ? "?overwrite=true" : "";
+  return request(
+    `${API}/folder-icons/artist/${bandId}/generate${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function fetchFranchiseFolderIconStatus(body: {
+  module: string;
+  franchise_id: string;
+  folder_path?: string | null;
+}): Promise<FolderIconStats> {
+  return request(`${API}/folder-icons/franchise/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function ensureFranchiseDesktopIni(body: {
+  module: string;
+  franchise_id: string;
+  folder_path?: string | null;
+}): Promise<FolderIconStats> {
+  return request(
+    `${API}/folder-icons/franchise/ensure-ini`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export async function generateFranchiseFolderIcons(body: {
+  module: string;
+  franchise_id: string;
+  folder_path?: string | null;
+  overwrite?: boolean;
+}): Promise<FolderIconStats> {
+  return request(
+    `${API}/folder-icons/franchise/generate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
 export async function fetchBandGalleryIndex(
   id: number
 ): Promise<import("./types").GalleryIndexPayload> {

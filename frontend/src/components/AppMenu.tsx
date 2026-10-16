@@ -107,6 +107,10 @@ type Props = {
   /** Label for onAddToUniverse (default: Add to Universe). */
   addToUniverseLabel?: string;
   onRescanLibrary?: () => void;
+  /** Admin: generate Explorer folder.ico from covers/assets. */
+  onGenerateFolderIcons?: () => void;
+  /** Admin: write missing desktop.ini under this artist/franchise. */
+  onEnsureDesktopIni?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
   onRefreshLinks?: () => void;
@@ -190,6 +194,8 @@ export default function AppMenu({
   onAddToUniverse,
   addToUniverseLabel = "Add to Universe",
   onRescanLibrary,
+  onGenerateFolderIcons,
+  onEnsureDesktopIni,
   onRefreshLineup,
   onRefreshPhotos,
   onRefreshLinks,
@@ -425,6 +431,8 @@ export default function AppMenu({
       (menuVariant === "release" && !editDataFlat && onAddMember) ||
       onRefreshMetadata ||
       onRescanLibrary ||
+      onGenerateFolderIcons ||
+      onEnsureDesktopIni ||
       onRefreshLineup ||
       onRefreshPhotos ||
       onRefreshLinks ||
@@ -532,6 +540,30 @@ export default function AppMenu({
               >
                 <IconSync className="menu-item-icon" />
                 Sync folders
+              </button>
+            )}
+            {onGenerateFolderIcons && (
+              <button
+                type="button"
+                onClick={() => {
+                  onGenerateFolderIcons();
+                  setOpen(false);
+                }}
+              >
+                <IconCards className="menu-item-icon" />
+                Generate icons
+              </button>
+            )}
+            {onEnsureDesktopIni && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEnsureDesktopIni();
+                  setOpen(false);
+                }}
+              >
+                <IconFolder className="menu-item-icon" />
+                Ensure desktop.ini
               </button>
             )}
             {onRefreshLineup && (

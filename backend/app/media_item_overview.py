@@ -110,6 +110,7 @@ _SKIP_DIRS = frozenset(
         "video",
         "music",
         "desktop.ini",
+        "folder.ico",
         "thumbs.db",
     }
 )
@@ -121,6 +122,7 @@ _SKIP_META_FILES = frozenset(
         "info.txt",
         "overview.txt",
         "desktop.ini",
+        "folder.ico",
         "thumbs.db",
     }
 )

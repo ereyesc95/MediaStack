@@ -21,6 +21,9 @@ import {
   refreshBandRelatedParticipations,
   refreshBandRelatedSimilar,
   rescanBandLibrary,
+  fetchArtistFolderIconStatus,
+  ensureArtistDesktopIni,
+  generateArtistFolderIcons,
 } from "../../../api";
 import { getStoredProfile } from "../../../auth";
 import { setCachedOverview } from "../../../overviewCache";
@@ -359,6 +362,8 @@ export default function ArtistPage({
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
   const [removeArtistOpen, setRemoveArtistOpen] = useState(false);
   const [removeArtistBusy, setRemoveArtistBusy] = useState(false);
+  const [iconOverwriteOpen, setIconOverwriteOpen] = useState(false);
+  const [iconOverwriteCount, setIconOverwriteCount] = useState(0);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addSupportOpen, setAddSupportOpen] = useState(false);
   const [vaContributorSort, setVaContributorSort] = useState<
@@ -1026,6 +1031,50 @@ export default function ArtistPage({
     }
   };
 
+  const runGenerateFolderIcons = async (overwrite: boolean) => {
+    setIconOverwriteOpen(false);
+    setBusy(overwrite ? "Overwriting folder icons…" : "Generating folder icons…");
+    try {
+      const stats = await generateArtistFolderIcons(bandId, overwrite);
+      setTopStatus(
+        `Icons: ${stats.written ?? 0} written, ${stats.skipped_exists ?? 0} kept, ${stats.skipped_no_source ?? 0} no source`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleGenerateFolderIcons = async () => {
+    setBusy("Checking folder icons…");
+    try {
+      const status = await fetchArtistFolderIconStatus(bandId);
+      if ((status.existing_icos ?? 0) > 0) {
+        setIconOverwriteCount(status.existing_icos ?? 0);
+        setIconOverwriteOpen(true);
+        setBusy("");
+        return;
+      }
+      await runGenerateFolderIcons(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy("");
+    }
+  };
+
+  const handleEnsureDesktopIni = async () => {
+    setBusy("Writing desktop.ini…");
+    try {
+      const stats = await ensureArtistDesktopIni(bandId);
+      setTopStatus(`desktop.ini: ${stats.ini_written ?? 0} written`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const handleRefreshLineup = async () => {
     setBusy("Refreshing lineup (may take a minute)…");
     try {
@@ -1384,6 +1433,12 @@ export default function ArtistPage({
                 isAdmin && overviewTab === "about"
                   ? () => void handleRescanLibrary()
                   : undefined
+              }
+              onGenerateFolderIcons={
+                isAdmin ? () => void handleGenerateFolderIcons() : undefined
+              }
+              onEnsureDesktopIni={
+                isAdmin ? () => void handleEnsureDesktopIni() : undefined
               }
               onRefreshLineup={
                 isAdmin &&
@@ -1776,6 +1831,17 @@ export default function ArtistPage({
               })();
             }}
             onClose={() => !removeArtistBusy && setRemoveArtistOpen(false)}
+          />
+        )}
+
+        {iconOverwriteOpen && (
+          <ConfirmDialog
+            title="Overwrite folder icons?"
+            message={`${iconOverwriteCount} folder.ico file${iconOverwriteCount === 1 ? "" : "s"} already exist under this artist. Overwrite them all, or only fill missing ones?`}
+            confirmLabel="Overwrite all"
+            cancelLabel="Fill missing only"
+            onConfirm={() => void runGenerateFolderIcons(true)}
+            onClose={() => void runGenerateFolderIcons(false)}
           />
         )}
 

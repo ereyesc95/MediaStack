@@ -14,6 +14,7 @@ from app.routers import (
     assets,
     auth,
     books,
+    folder_icons,
     franchise_quiz,
     games,
     photos,
@@ -46,6 +47,12 @@ RECORDSTACK_PORTS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    try:
+        from app.folder_icons import ensure_media_module_roots
+
+        ensure_media_module_roots()
+    except Exception:
+        pass
     yield
 
 
@@ -76,6 +83,7 @@ app.include_router(photos.router)
 app.include_router(import_router.router)
 app.include_router(sync.router)
 app.include_router(media.router)
+app.include_router(folder_icons.router)
 app.include_router(settings_router.router)
 
 

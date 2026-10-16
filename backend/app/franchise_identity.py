@@ -374,6 +374,7 @@ def has_module_franchise_content(
         "extras",
         "[extras]",
         "desktop.ini",
+        "folder.ico",
         "thumbs.db",
     }
     try:

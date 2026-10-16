@@ -105,12 +105,15 @@ def _relative(path: Path, root: Path) -> str:
 
 
 def _mkdir_tree(folder: Path, relatives: tuple[str, ...]) -> int:
+    from app.folder_icons import ensure_relative_tree, write_desktop_ini
+
     created = 0
+    write_desktop_ini(folder)
     for rel in relatives:
         target = folder / rel
         if not target.is_dir():
             created += 1
-        target.mkdir(parents=True, exist_ok=True)
+        ensure_relative_tree(folder, rel)
     return created
 
 
@@ -895,17 +898,25 @@ async def create_catalog_import(
             else:
                 item_platforms.append(list(platform_names))
 
+    from app.folder_icons import decorate_folder, ensure_relative_tree
+
     for platform_idx, franchise_dir in enumerate(franchise_dirs):
         franchise_existed = franchise_dir.exists()
         franchise_dir.mkdir(parents=True, exist_ok=True)
         platform_name = (
             platform_names[platform_idx] if module == "games" else ""
         )
+        if module == "games":
+            # Games/{Platform}/{Letter}/{Franchise} — decorate platform + franchise, skip letter
+            letter_dir = franchise_dir.parent
+            platform_dir = letter_dir.parent
+            decorate_folder(platform_dir)
+            decorate_folder(franchise_dir)
+        else:
+            decorate_folder(franchise_dir)
         if make_home and not franchise_existed:
             for child in ("Branding", "Covers", "Gallery", "Exclusive"):
-                (franchise_dir / "[Artwork]" / child).mkdir(
-                    parents=True, exist_ok=True
-                )
+                ensure_relative_tree(franchise_dir, f"[Artwork]/{child}")
             artwork = franchise_dir / "[Artwork]"
             await _download_primary(
                 first_item.get("poster_url"), artwork / "Cover - Front"
@@ -945,14 +956,12 @@ async def create_catalog_import(
                 for season in raw.get("seasons") or []:
                     number = season.get("number")
                     if number == 0:
-                        (leaf_dir / "Specials").mkdir(parents=True, exist_ok=True)
+                        ensure_relative_tree(leaf_dir, "Specials")
                         continue
                     if not isinstance(number, int) or number < 1:
                         continue
                     season_name = f"{_date_prefix(season.get('date'))}Season {number}"
-                    (leaf_dir / "Episodes" / season_name).mkdir(
-                        parents=True, exist_ok=True
-                    )
+                    ensure_relative_tree(leaf_dir, f"Episodes/{season_name}")
             else:
                 _gallery_tree(leaf_dir)
                 if module == "games":

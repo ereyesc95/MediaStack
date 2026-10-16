@@ -32,9 +32,13 @@ import {
   fetchSeriesOverview,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
+  fetchFranchiseFolderIconStatus,
+  ensureFranchiseDesktopIni,
+  generateFranchiseFolderIcons,
   type FranchiseQuizAvailability,
   type FranchiseQuizCatalogItem,
 } from "../../api";
+import ConfirmDialog from "../ConfirmDialog";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -432,6 +436,9 @@ export default function SeriesFranchisePage({
   const [refreshBio, setRefreshBio] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
+  const [iconOverwriteOpen, setIconOverwriteOpen] = useState(false);
+  const [iconOverwriteCount, setIconOverwriteCount] = useState(0);
+  const [iconStatus, setIconStatus] = useState("");
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addRelatedOpen, setAddRelatedOpen] = useState(false);
@@ -742,6 +749,79 @@ export default function SeriesFranchisePage({
       setRefreshing(false);
     }
   }, [load, isMovies]);
+
+  const folderIconModule = isGames
+    ? "games"
+    : isBooks
+      ? "books"
+      : isMoviesOnly
+        ? "movies"
+        : "series";
+
+  const runGenerateFolderIcons = useCallback(
+    async (overwrite: boolean) => {
+      setIconOverwriteOpen(false);
+      setRefreshing(true);
+      try {
+        const stats = await generateFranchiseFolderIcons({
+          module: folderIconModule,
+          franchise_id: franchiseId,
+          folder_path: data?.folder_path || undefined,
+          overwrite,
+        });
+        setIconStatus(
+          `Icons: ${stats.written ?? 0} written, ${stats.skipped_exists ?? 0} kept, ${stats.skipped_no_source ?? 0} no source`
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [folderIconModule, franchiseId, data?.folder_path]
+  );
+
+  const handleGenerateFolderIcons = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const status = await fetchFranchiseFolderIconStatus({
+        module: folderIconModule,
+        franchise_id: franchiseId,
+        folder_path: data?.folder_path || undefined,
+      });
+      if ((status.existing_icos ?? 0) > 0) {
+        setIconOverwriteCount(status.existing_icos ?? 0);
+        setIconOverwriteOpen(true);
+        setRefreshing(false);
+        return;
+      }
+      await runGenerateFolderIcons(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setRefreshing(false);
+    }
+  }, [
+    folderIconModule,
+    franchiseId,
+    data?.folder_path,
+    runGenerateFolderIcons,
+  ]);
+
+  const handleEnsureDesktopIni = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const stats = await ensureFranchiseDesktopIni({
+        module: folderIconModule,
+        franchise_id: franchiseId,
+        folder_path: data?.folder_path || undefined,
+      });
+      setIconStatus(`desktop.ini: ${stats.ini_written ?? 0} written`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [folderIconModule, franchiseId, data?.folder_path]);
 
   // Always probe audio so the AUDIO tab can appear without a false-positive
   // media.has_audio (music-band name match) flashing then vanishing.
@@ -2002,11 +2082,11 @@ export default function SeriesFranchisePage({
             ) : null}
           </div>
           <div className="artist-page__top-right">
-            {(busy || refreshing) && (
+            {(busy || refreshing || iconStatus) && (
               <span className="muted">
                 {refreshing
                   ? "Fetching data, please wait…"
-                  : busy}
+                  : busy || iconStatus}
               </span>
             )}
             {!mobilePortrait &&
@@ -2166,6 +2246,12 @@ export default function SeriesFranchisePage({
               }
               onRescanLibrary={
                 isAdmin ? () => void handleRescanLibrary() : undefined
+              }
+              onGenerateFolderIcons={
+                isAdmin ? () => void handleGenerateFolderIcons() : undefined
+              }
+              onEnsureDesktopIni={
+                isAdmin ? () => void handleEnsureDesktopIni() : undefined
               }
               refreshIncludeBio={refreshBio}
               onRefreshIncludeBioChange={
@@ -3016,6 +3102,17 @@ export default function SeriesFranchisePage({
           data={data}
           onClose={() => setAboutEditOpen(false)}
           onSaved={() => void load()}
+        />
+      ) : null}
+
+      {iconOverwriteOpen ? (
+        <ConfirmDialog
+          title="Overwrite folder icons?"
+          message={`${iconOverwriteCount} folder.ico file${iconOverwriteCount === 1 ? "" : "s"} already exist under this franchise. Overwrite them all, or only fill missing ones?`}
+          confirmLabel="Overwrite all"
+          cancelLabel="Fill missing only"
+          onConfirm={() => void runGenerateFolderIcons(true)}
+          onClose={() => void runGenerateFolderIcons(false)}
         />
       ) : null}
     </div>

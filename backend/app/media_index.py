@@ -566,7 +566,7 @@ def _build_release_card(
 def _iter_category_release_entries(cat_dir: Path) -> list[Path]:
     entries: list[Path] = []
     for child in sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold()):
-        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+        if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
             continue
         suffix = child.suffix.casefold()
         try:
@@ -668,7 +668,7 @@ def _dir_has_entries(path: Path) -> bool:
     if not path.is_dir():
         return False
     for child in path.iterdir():
-        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+        if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
             continue
         if child.is_dir() or child.suffix.casefold() == ".lnk":
             return True
@@ -679,7 +679,7 @@ def _dir_has_gallery_entries(path: Path) -> bool:
     if not path.is_dir():
         return False
     for child in path.iterdir():
-        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+        if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
             continue
         if child.name.casefold() == "exclusive":
             continue
@@ -696,7 +696,7 @@ def _dir_has_brand_gallery_entries(path: Path) -> bool:
     for child in path.iterdir():
         if child.is_file() and child.stem.casefold().startswith("signature - "):
             continue
-        if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+        if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
             continue
         if child.is_dir() or child.suffix.casefold() == ".lnk":
             return True
@@ -710,7 +710,7 @@ def _dir_has_direct_gallery_files(path: Path) -> bool:
         return False
     return any(
         child.is_file()
-        and child.name.casefold() not in ("desktop.ini", "thumbs.db")
+        and child.name.casefold() not in ("desktop.ini", "folder.ico", "thumbs.db")
         and (child.suffix.lower() in IMAGE_EXTS or child.suffix.casefold() == ".lnk")
         for child in path.iterdir()
     )
@@ -837,7 +837,7 @@ def _audio_mtime(artist_dir: Path) -> float:
             continue
         try:
             for child in cat.iterdir():
-                if child.name.casefold() in ("desktop.ini", "thumbs.db"):
+                if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
                     continue
                 try:
                     latest = max(latest, child.stat().st_mtime)

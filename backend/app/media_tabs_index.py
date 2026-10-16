@@ -37,7 +37,7 @@ _KIND_MODULE = {
     "books": "books",
 }
 
-_SKIP_NAMES = frozenset({"desktop.ini", "thumbs.db", ".ds_store"})
+_SKIP_NAMES = frozenset({"desktop.ini", "folder.ico", "thumbs.db", ".ds_store"})
 _SKIP_ITEM_NAMES = frozenset({"[artwork]", "artwork"})
 
 

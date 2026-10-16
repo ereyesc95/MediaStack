@@ -29,6 +29,7 @@ ARTIST_FOLDERS = (
     "Albums",
     "Extended Plays",
     "Compilations",
+    "Demos",
     "Live Albums",
     "Soundtracks",
     "Singles",
@@ -43,6 +44,7 @@ CATEGORY_ORDER = (
     "Albums",
     "Extended Plays",
     "Compilations",
+    "Demos",
     "Live Albums",
     "Soundtracks",
     "Singles",
@@ -341,8 +343,11 @@ def _create_artist_tree(
         / _letter_folder(artist_name)
         / _safe_folder_component(artist_name)
     )
+    from app.folder_icons import ensure_relative_tree, write_desktop_ini
+
+    write_desktop_ini(artist_dir)
     for relative in ARTIST_FOLDERS:
-        (artist_dir / Path(relative)).mkdir(parents=True, exist_ok=True)
+        ensure_relative_tree(artist_dir, relative)
 
     used_paths: dict[str, str] = {}
     releases_created = 0
@@ -365,13 +370,16 @@ def _create_artist_tree(
         used_paths[collision_key] = group_id
 
         release_existed = release_dir.is_dir()
-        (release_dir / "[Artwork]").mkdir(parents=True, exist_ok=True)
+        ensure_relative_tree(release_dir, "[Artwork]")
+        write_desktop_ini(release_dir)
         medium_count = int(group.get("_medium_count") or 0)
         if medium_count > 1:
             width = max(2, len(str(medium_count)))
             for position in range(1, medium_count + 1):
                 label = str(position).zfill(width)
-                (release_dir / f"{label}. Disc {label}").mkdir(exist_ok=True)
+                disc = release_dir / f"{label}. Disc {label}"
+                disc.mkdir(exist_ok=True)
+                write_desktop_ini(disc)
         if not release_existed:
             releases_created += 1
 
