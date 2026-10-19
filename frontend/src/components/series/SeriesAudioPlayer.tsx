@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchSeriesPlayerTracks, fetchMoviesFilmPlayerTracks } from "../../api";
+import {
+  fetchSeriesPlayerTracks,
+  fetchMoviesFilmPlayerTracks,
+  fetchGamesGamePlayerTracks,
+} from "../../api";
 import { IconMediaMusic } from "../MenuIcons";
 import {
   MiniAudioPlayerControls,
@@ -20,6 +24,8 @@ type Props = {
   franchiseId: string;
   /** When set, load tracks from the film Audio/ folder instead of series. */
   filmId?: string;
+  /** When set, load tracks from the game Audio/ folder. */
+  gameId?: string;
   enabled?: boolean;
   onPlayingChange?: (playing: boolean) => void;
   /** When set, dock open state is controlled by the parent. */
@@ -55,6 +61,7 @@ function displayTrackArtist(
 export default function SeriesAudioPlayer({
   franchiseId,
   filmId,
+  gameId,
   enabled = true,
   onPlayingChange,
   open: openProp,
@@ -117,11 +124,17 @@ export default function SeriesAudioPlayer({
 
   const loadTracks = useCallback(async () => {
     setLoading(true);
-    const cacheKey = filmId ? `film:${filmId}` : `series:${franchiseId}`;
+    const cacheKey = gameId
+      ? `game:${gameId}`
+      : filmId
+        ? `film:${filmId}`
+        : `series:${franchiseId}`;
     try {
-      const data = filmId
-        ? await fetchMoviesFilmPlayerTracks(filmId)
-        : await fetchSeriesPlayerTracks(franchiseId);
+      const data = gameId
+        ? await fetchGamesGamePlayerTracks(gameId)
+        : filmId
+          ? await fetchMoviesFilmPlayerTracks(filmId)
+          : await fetchSeriesPlayerTracks(franchiseId);
       const shuffled = shuffle(data.tracks || []);
       setTracks(shuffled);
       queueRef.current = shuffled;
@@ -133,7 +146,7 @@ export default function SeriesAudioPlayer({
     } finally {
       setLoading(false);
     }
-  }, [franchiseId, filmId, playAt]);
+  }, [franchiseId, filmId, gameId, playAt]);
 
   const playNext = useCallback(() => {
     const q = queueRef.current;
@@ -149,7 +162,11 @@ export default function SeriesAudioPlayer({
     playAt(prev, q);
   }, [playAt]);
 
-  const scopeKey = filmId ? `film:${filmId}` : `series:${franchiseId}`;
+  const scopeKey = gameId
+    ? `game:${gameId}`
+    : filmId
+      ? `film:${filmId}`
+      : `series:${franchiseId}`;
 
   useEffect(() => {
     if (open && loadedForRef.current !== scopeKey) {

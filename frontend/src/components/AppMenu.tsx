@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  setAppMenuOpen,
+  subscribeCloseAppMenu,
+} from "../appMenuChrome";
 import { useMenuPresence } from "../useMenuPresence";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme, isMediaPageThemeSessionActive } from "../mediaTheme";
 import {
@@ -10,7 +14,6 @@ import {
   type CustomThemeColors,
   type ThemeId,
 } from "../themes";
-import { useMediaSwitch, type MediaSwitchKind } from "../mediaSwitchContext";
 import {
   IconAbout,
   IconAddArtist,
@@ -38,26 +41,9 @@ import {
   IconTrash,
   IconUniverse,
   IconVideo,
-  IconMediaMusic,
-  IconMediaSeries,
-  IconMediaMovies,
-  IconMediaBooks,
-  IconMediaGames,
   IconCollection,
   IconImport,
 } from "./MenuIcons";
-
-const MEDIA_SWITCH_OPTIONS: {
-  kind: MediaSwitchKind;
-  label: string;
-  Icon: typeof IconMediaMusic;
-}[] = [
-  { kind: "music", label: "Music", Icon: IconMediaMusic },
-  { kind: "series", label: "Series", Icon: IconMediaSeries },
-  { kind: "movies", label: "Movies", Icon: IconMediaMovies },
-  { kind: "books", label: "Books", Icon: IconMediaBooks },
-  { kind: "games", label: "Games", Icon: IconMediaGames },
-];
 
 type Props = {
   onImport?: () => void;
@@ -112,7 +98,7 @@ type Props = {
   onRescanLibrary?: () => void;
   /** Admin: generate Explorer folder.ico from covers/assets. */
   onGenerateFolderIcons?: () => void;
-  /** Admin: write missing desktop.ini under this artist/franchise. */
+  /** Admin: write/sync desktop.ini under this artist/franchise. */
   onEnsureDesktopIni?: () => void;
   onRefreshLineup?: () => void;
   onRefreshPhotos?: () => void;
@@ -231,19 +217,23 @@ export default function AppMenu({
     adaptiveThemeActive ?? artistThemeActive;
   const [open, setOpen] = useState(false);
   const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
+  useEffect(() => {
+    setAppMenuOpen(open);
+    return () => {
+      if (open) setAppMenuOpen(false);
+    };
+  }, [open]);
+  useEffect(() => subscribeCloseAppMenu(() => setOpen(false)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
   const [editDataOpen, setEditDataOpen] = useState(false);
   const [trackDataOpen, setTrackDataOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [mediaSwitchOpen, setMediaSwitchOpen] = useState(false);
   const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
   const [manageEventOpen, setManageEventOpen] = useState(false);
   useEffect(() => {
     if (collectionClearMode) setManageCollectionOpen(true);
   }, [collectionClearMode]);
-  const mediaSwitch = useMediaSwitch();
-  const showSwitchMedia = Boolean(mediaSwitch?.showSwitchMedia);
   const [customOpen, setCustomOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
@@ -275,7 +265,6 @@ export default function AppMenu({
         setEditDataOpen(false);
         setTrackDataOpen(false);
         setThemeOpen(false);
-        setMediaSwitchOpen(false);
         setCustomOpen(false);
       }
     }
@@ -342,7 +331,6 @@ export default function AppMenu({
         setEditDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
-        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -356,7 +344,6 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
-        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -370,7 +357,6 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
-        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -384,7 +370,6 @@ export default function AppMenu({
         setEditDataOpen(false);
         setTrackDataOpen(false);
         setSettingsOpen(false);
-        setMediaSwitchOpen(false);
       }
       return next;
     });
@@ -398,22 +383,6 @@ export default function AppMenu({
         setEditDataOpen(false);
         setTrackDataOpen(false);
         setThemeOpen(false);
-        setMediaSwitchOpen(false);
-      }
-      return next;
-    });
-  }
-
-  function toggleMediaSwitch() {
-    setMediaSwitchOpen((o) => {
-      const next = !o;
-      if (next) {
-        setSettingsOpen(false);
-        setArtistDataOpen(false);
-        setEditDataOpen(false);
-        setTrackDataOpen(false);
-        setThemeOpen(false);
-        setCustomOpen(false);
       }
       return next;
     });
@@ -567,7 +536,7 @@ export default function AppMenu({
                 }}
               >
                 <IconFolder className="menu-item-icon" />
-                Ensure desktop.ini
+                Sync desktop.ini
               </button>
             )}
             {onRefreshLineup && (
@@ -1282,42 +1251,6 @@ export default function AppMenu({
               Edit profile
             </button>
           )}
-          {showSwitchMedia && mediaSwitch ? (
-            <>
-              <button
-                type="button"
-                className="menu-item-with-sub"
-                onClick={toggleMediaSwitch}
-              >
-                <IconCards className="menu-item-icon" />
-                Switch media
-                <span className="menu-chevron">
-                  {mediaSwitchOpen ? "▴" : "▾"}
-                </span>
-              </button>
-              {mediaSwitchOpen && (
-                <div className="app-menu-submenu">
-                  {MEDIA_SWITCH_OPTIONS.map(({ kind, label, Icon }) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className={
-                        mediaSwitch.currentKind === kind ? "active" : undefined
-                      }
-                      onClick={() => {
-                        mediaSwitch.selectMedia(kind);
-                        setOpen(false);
-                        setMediaSwitchOpen(false);
-                      }}
-                    >
-                      <Icon className="menu-item-icon" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : null}
           {onSwitchProfile && (
             <button
               type="button"

@@ -162,6 +162,7 @@ import RemoteBookVolumesModal from "./RemoteBookVolumesModal";
 import RemoteMovieLinksModal from "./RemoteMovieLinksModal";
 import RemoteSeriesEpisodesModal from "./RemoteSeriesEpisodesModal";
 import SeriesAboutEditModal from "./SeriesAboutEditModal";
+import { saveReleaseReferrer } from "../../musicRoute";
 import SeriesAudioPlayer from "./SeriesAudioPlayer";
 import SeriesCast, { languageHasCharacterCast } from "./SeriesCast";
 import SeriesEpisodeList from "./SeriesEpisodeList";
@@ -170,6 +171,8 @@ import SeriesMediaGrid, {
   type SeriesMediaCard,
   useSeriesAudioCategories,
 } from "./SeriesMediaGrid";
+import EmbeddedLeafRelease from "./EmbeddedLeafRelease";
+import { resolveLeafAudioEmbed } from "./leafAudioEmbed";
 import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
 import SeriesRelatedPanel, {
   type SeriesRelatedTab,
@@ -3246,6 +3249,31 @@ export default function SeriesSubseriesPage({
     filtered: filteredAudio,
   } = useSeriesAudioCategories(audioCards);
 
+  const audioEmbed = useMemo(
+    () => resolveLeafAudioEmbed(audioCards),
+    [audioCards]
+  );
+
+  const goToEmbeddedReleasePage = (bandId: number, releaseId: string) => {
+    const source = isGame
+      ? "games"
+      : isBook
+        ? "books"
+        : isFilm
+          ? "movies"
+          : "series";
+    saveReleaseReferrer({
+      bandId,
+      section: "audio",
+      source,
+      franchiseId,
+      subseriesId,
+      franchiseName: overview?.name || franchiseName,
+      franchiseIconUrl: franchiseIconUrl ?? undefined,
+    });
+    onOpenMusicRelease?.(bandId, releaseId);
+  };
+
   const episodeMovies: SeriesEpisodeItem[] = useMemo(() => {
     // Prefer Movies-tab cards (franchise Movies/ paths with real open_url + duration).
     const source =
@@ -4173,27 +4201,13 @@ export default function SeriesSubseriesPage({
                 onChange={onSetOrientation}
               />
             ) : null}
-            {isGame && hasAudio ? (
-              <button
-                type="button"
-                className="ghost-btn artist-page__audio-toggle"
-                title="Audio"
-                aria-label="Open audio"
-                onClick={() =>
-                  onNavigate({
-                    section: "audio",
-                    overviewTab,
-                  })
-                }
-              >
-                <IconMediaMusic />
-              </button>
-            ) : !isGame && (!isFilm || hasAudio) ? (
+            {(!isFilm && !isGame) || hasAudio ? (
               !stacked ? (
                 <SeriesAudioPlayer
                   franchiseId={franchiseId}
                   filmId={isFilm ? subseriesId : undefined}
-                  enabled={!isFilm || hasAudio}
+                  gameId={isGame ? subseriesId : undefined}
+                  enabled={(!isFilm && !isGame) || hasAudio}
                   onPlayingChange={setSeriesPlaying}
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
@@ -4202,7 +4216,8 @@ export default function SeriesSubseriesPage({
                 <SeriesAudioPlayer
                   franchiseId={franchiseId}
                   filmId={isFilm ? subseriesId : undefined}
-                  enabled={!isFilm || hasAudio}
+                  gameId={isGame ? subseriesId : undefined}
+                  enabled={(!isFilm && !isGame) || hasAudio}
                   onPlayingChange={setSeriesPlaying}
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
@@ -4246,7 +4261,8 @@ export default function SeriesSubseriesPage({
               menuChrome={
                 stacked &&
                 (showMediaLayoutPicker ||
-                  (isGame ? hasAudio : !isFilm || hasAudio)) ? (
+                  (!isFilm && !isGame) ||
+                  hasAudio) ? (
                   <>
                     {showMediaLayoutPicker ? (
                       <button
@@ -4267,20 +4283,7 @@ export default function SeriesSubseriesPage({
                           : "Banner view"}
                       </button>
                     ) : null}
-                    {isGame && hasAudio ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onNavigate({
-                            section: "audio",
-                            overviewTab,
-                          })
-                        }
-                      >
-                        <IconMediaMusic className="menu-item-icon" />
-                        Open audio
-                      </button>
-                    ) : !isGame && (!isFilm || hasAudio) ? (
+                    {(!isFilm && !isGame) || hasAudio ? (
                       <button
                         type="button"
                         className={
@@ -4571,7 +4574,9 @@ export default function SeriesSubseriesPage({
           </nav>
         ) : null}
 
-        {tab === "audio" && audioCategories.length > 1 ? (
+        {tab === "audio" &&
+        audioEmbed.mode === "grid" &&
+        audioCategories.length > 1 ? (
           <div
             className="series-section-subbar"
             role="tablist"
@@ -6214,19 +6219,54 @@ export default function SeriesSubseriesPage({
           ) : null}
 
           {!error && (card || detail) && tab === "audio" ? (
-            <SeriesMediaGrid
-              items={filteredAudio}
-              loading={mediaLoading && filteredAudio.length === 0}
-              emptyMessage={
-                isFilm
-                  ? "No audio for this movie."
-                  : "No audio for this series."
-              }
-              cardLayout={cardLayout}
-              squareCovers={cardLayout === "cover"}
-              coverAspect="square"
-              onOpen={openMediaCard}
-            />
+            audioEmbed.mode === "release" ? (
+              <EmbeddedLeafRelease
+                bandId={audioEmbed.bandId}
+                releaseId={audioEmbed.releaseId}
+                isAdmin={isAdmin}
+                userId={userId}
+                onImport={onImport}
+                onSync={onSync}
+                onChooseSource={onChooseSource}
+                onSwitchProfile={onSwitchProfile}
+                onEditProfile={onEditProfile}
+                onOpenArtist={onOpenArtist}
+                onGoToReleasePage={goToEmbeddedReleasePage}
+              />
+            ) : audioEmbed.mode === "oped" ? (
+              <SeriesOpeningsEndingsPage
+                franchiseId={franchiseId}
+                franchiseName={overview?.name || franchiseName}
+                onBack={() =>
+                  onNavigate({ section: "overview", overviewTab })
+                }
+                onImport={onImport}
+                onSync={onSync}
+                onChooseSource={onChooseSource}
+                onSwitchProfile={onSwitchProfile}
+                onEditProfile={onEditProfile}
+                isAdmin={isAdmin}
+                userId={userId}
+                onOpenMusicRelease={onOpenMusicRelease}
+                onOpenArtist={onOpenArtist}
+              />
+            ) : (
+              <SeriesMediaGrid
+                items={filteredAudio}
+                loading={mediaLoading && filteredAudio.length === 0}
+                emptyMessage={
+                  isGame
+                    ? "No audio for this game."
+                    : isFilm
+                      ? "No audio for this movie."
+                      : "No audio for this series."
+                }
+                cardLayout={cardLayout}
+                squareCovers={cardLayout === "cover"}
+                coverAspect="square"
+                onOpen={openMediaCard}
+              />
+            )
           ) : null}
 
           {!error && (card || detail) && tab === "library" ? (

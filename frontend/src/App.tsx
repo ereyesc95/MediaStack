@@ -994,14 +994,14 @@ export default function App() {
               pushSeriesRoute({
                 franchiseId,
                 subseriesId,
-                section: "overview",
+                section: "audio",
                 overviewTab: "about",
               });
               setView({
                 kind: "series",
                 franchiseId,
                 subseriesId,
-                section: "overview",
+                section: "audio",
                 overviewTab: "about",
               });
             }}
@@ -1011,14 +1011,14 @@ export default function App() {
                   franchiseId,
                   filmId,
                   filmTitle,
-                  section: "overview",
+                  section: "audio",
                   overviewTab: "about",
                 });
                 setView({
                   kind: "movies",
                   franchiseId,
                   filmId,
-                  section: "overview",
+                  section: "audio",
                   overviewTab: "about",
                 });
                 return;
@@ -1067,14 +1067,14 @@ export default function App() {
                 pushBooksRoute({
                   franchiseId,
                   bookId,
-                  section: "overview",
+                  section: "audio",
                   overviewTab: "about",
                 });
                 setView({
                   kind: "books",
                   franchiseId,
                   bookId,
-                  section: "overview",
+                  section: "audio",
                   overviewTab: "about",
                 });
                 return;
@@ -1108,13 +1108,13 @@ export default function App() {
               }
               pushBooksRoute({
                 franchiseId,
-                section: "overview",
+                section: "audio",
                 overviewTab: "about",
               });
               setView({
                 kind: "books",
                 franchiseId,
-                section: "overview",
+                section: "audio",
                 overviewTab: "about",
               });
             }}
@@ -1800,6 +1800,15 @@ export default function App() {
               });
             }}
             onOpenMusicRelease={(bandId, releaseId) => {
+              if (view.franchiseId) {
+                saveReleaseReferrer({
+                  bandId,
+                  section: "audio",
+                  source: "games",
+                  franchiseId: view.franchiseId,
+                  subseriesId: view.gameId,
+                });
+              }
               pushArtistRoute({
                 bandId,
                 section: "audio",

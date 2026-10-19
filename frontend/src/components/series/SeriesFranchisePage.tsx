@@ -32,9 +32,11 @@ import {
   fetchSeriesOverview,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
+  updateCatalogFolders,
   fetchFranchiseFolderIconStatus,
   ensureFranchiseDesktopIni,
   generateFranchiseFolderIcons,
+  type CatalogImportModule,
   type FranchiseQuizAvailability,
   type FranchiseQuizCatalogItem,
 } from "../../api";
@@ -110,7 +112,10 @@ import SeriesGalleryPanel from "./SeriesGalleryPanel";
 import FranchiseQuiz from "./FranchiseQuiz";
 import SeriesLinks from "./SeriesLinks";
 import SeriesMediaGrid, { type SeriesMediaCard } from "./SeriesMediaGrid";
+import EmbeddedLeafRelease from "./EmbeddedLeafRelease";
+import { resolveLeafAudioEmbed } from "./leafAudioEmbed";
 import SeriesOpeningsEndingsPage from "./SeriesOpeningsEndingsPage";
+import { saveReleaseReferrer } from "../../musicRoute";
 import SeriesRelatedPanel, {
   type SeriesRelatedTab,
 } from "./SeriesRelatedPanel";
@@ -439,6 +444,11 @@ export default function SeriesFranchisePage({
   const [iconOverwriteOpen, setIconOverwriteOpen] = useState(false);
   const [iconOverwriteCount, setIconOverwriteCount] = useState(0);
   const [iconStatus, setIconStatus] = useState("");
+  useEffect(() => {
+    if (!iconStatus) return;
+    const t = window.setTimeout(() => setIconStatus(""), 3200);
+    return () => window.clearTimeout(t);
+  }, [iconStatus]);
   const [addCastOpen, setAddCastOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addRelatedOpen, setAddRelatedOpen] = useState(false);
@@ -734,22 +744,6 @@ export default function SeriesFranchisePage({
     }
   }, [franchiseId, refreshBio, load, isBooks, isMoviesOnly, isGames]);
 
-  const handleRescanLibrary = useCallback(async () => {
-    if (isMovies) {
-      await load();
-      return;
-    }
-    setRefreshing(true);
-    try {
-      await rescanSeriesLocalData(true);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [load, isMovies]);
-
   const folderIconModule = isGames
     ? "games"
     : isBooks
@@ -757,6 +751,32 @@ export default function SeriesFranchisePage({
       : isMoviesOnly
         ? "movies"
         : "series";
+
+  const handleRescanLibrary = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const franchiseName = (data?.name || "").trim();
+      const scaffoldModule = folderIconModule as CatalogImportModule;
+      const canScaffold =
+        scaffoldModule === "movies" ||
+        scaffoldModule === "series" ||
+        scaffoldModule === "books";
+      if (!franchiseName || !canScaffold) {
+        setError("No folders were affected");
+        return;
+      }
+      // Scaffold missing Gallery/Audio/Extras (etc.) under this franchise's leaves.
+      await updateCatalogFolders(scaffoldModule, franchiseName);
+      await rescanSeriesLocalData(true);
+      await load();
+      setIconStatus("Folders synced");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, data?.name, folderIconModule]);
 
   const runGenerateFolderIcons = useCallback(
     async (overwrite: boolean) => {
@@ -1901,6 +1921,31 @@ export default function SeriesFranchisePage({
     ? filterByOfficial(scopedLibCards, officialOnly)
     : scopedLibCards;
 
+  const scopedAudioCards = filterBySubseries(audioCards);
+  const audioEmbed = useMemo(
+    () => resolveLeafAudioEmbed(scopedAudioCards),
+    [scopedAudioCards]
+  );
+
+  const goToEmbeddedReleasePage = (bandId: number, releaseId: string) => {
+    const source = isGames
+      ? "games"
+      : isBooks
+        ? "books"
+        : isMoviesOnly
+          ? "movies"
+          : "series";
+    saveReleaseReferrer({
+      bandId,
+      section: "audio",
+      source,
+      franchiseId,
+      franchiseName: data?.name || shell?.name,
+      franchiseIconUrl: data?.icon_url || shell?.icon_url || undefined,
+    });
+    onOpenMusicRelease?.(bandId, releaseId);
+  };
+
   const openMediaCard = (item: SeriesMediaCard) => {
     if (item.path?.startsWith("playlist:")) {
       setOpedOpen(true);
@@ -1987,12 +2032,18 @@ export default function SeriesFranchisePage({
     .filter(Boolean)
     .join(" ");
 
-  if (opedOpen) {
+  const embedOpEdOnly = section === "audio" && audioEmbed.mode === "oped";
+  if (opedOpen || embedOpEdOnly) {
     return (
       <SeriesOpeningsEndingsPage
         franchiseId={franchiseId}
         franchiseName={data?.name || shell?.name}
-        onBack={() => setOpedOpen(false)}
+        onBack={() => {
+          setOpedOpen(false);
+          if (embedOpEdOnly) {
+            onNavigate({ section: "overview", overviewTab: "about" });
+          }
+        }}
         onImport={onImport}
         onSync={onSync}
         onChooseSource={onChooseSource}
@@ -2892,19 +2943,35 @@ export default function SeriesFranchisePage({
         ) : null}
 
         {section === "audio" ? (
-          <SeriesMediaGrid
-            items={filterBySubseries(audioCards)}
-            loading={loading || (audioLoading && audioCards.length === 0)}
-            emptyMessage={
-              isMovies
-                ? "No audio for this franchise yet."
-                : "No audio for this series."
-            }
-            cardLayout={releaseCardLayout}
-            squareCovers={releaseCardLayout === "cover"}
-            coverAspect="square"
-            onOpen={openMediaCard}
-          />
+          audioEmbed.mode === "release" ? (
+            <EmbeddedLeafRelease
+              bandId={audioEmbed.bandId}
+              releaseId={audioEmbed.releaseId}
+              isAdmin={isAdmin}
+              userId={userId}
+              onImport={onImport}
+              onSync={onSync}
+              onChooseSource={onChooseSource}
+              onSwitchProfile={onSwitchProfile}
+              onEditProfile={onEditProfile}
+              onOpenArtist={onOpenArtist}
+              onGoToReleasePage={goToEmbeddedReleasePage}
+            />
+          ) : (
+            <SeriesMediaGrid
+              items={scopedAudioCards}
+              loading={loading || (audioLoading && audioCards.length === 0)}
+              emptyMessage={
+                isMovies
+                  ? "No audio for this franchise yet."
+                  : "No audio for this series."
+              }
+              cardLayout={releaseCardLayout}
+              squareCovers={releaseCardLayout === "cover"}
+              coverAspect="square"
+              onOpen={openMediaCard}
+            />
+          )
         ) : null}
 
         {section === "movies" || section === "books" ? (

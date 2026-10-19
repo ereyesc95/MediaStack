@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { CardOrientation } from "../types";
-import { useMenuPresence } from "../useMenuPresence";
-import { usePhoneLayout } from "../usePhoneLayout";
+import { useTopBarHoverPicker } from "../useTopBarHoverPicker";
 import {
   IconCardBadge,
   IconCardBanner,
@@ -34,19 +33,22 @@ type Props = {
   includeBadge?: boolean;
 };
 
-const CLOSE_DELAY_MS = 280;
-
 export default function CardOrientationPicker({
   value,
   onChange,
   className = "",
   includeBadge = false,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const leaveTimer = useRef<number | null>(null);
-  const isPhone = usePhoneLayout();
+  const {
+    open,
+    setOpen,
+    menuPresent,
+    menuVisible,
+    rootRef,
+    onMouseEnter,
+    onMouseLeave,
+    onToggleClick,
+  } = useTopBarHoverPicker();
   const options = includeBadge
     ? OPTIONS
     : OPTIONS.filter((o) => o.id !== "badge");
@@ -55,48 +57,12 @@ export default function CardOrientationPicker({
   const current = options.find((o) => o.id === safeValue) ?? options[0];
   const CurrentIcon = current.Icon;
 
-  const clearLeaveTimer = () => {
-    if (leaveTimer.current != null) {
-      window.clearTimeout(leaveTimer.current);
-      leaveTimer.current = null;
-    }
-  };
-
-  useEffect(() => () => clearLeaveTimer(), []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
     <div
       ref={rootRef}
       className={`card-orientation-picker${open ? " is-open" : ""} ${className}`.trim()}
-      onMouseEnter={() => {
-        if (isPhone) return;
-        clearLeaveTimer();
-        setOpen(true);
-      }}
-      onMouseLeave={() => {
-        if (isPhone) return;
-        clearLeaveTimer();
-        leaveTimer.current = window.setTimeout(() => {
-          setOpen(false);
-          leaveTimer.current = null;
-        }, CLOSE_DELAY_MS);
-      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <button
         type="button"
@@ -104,10 +70,7 @@ export default function CardOrientationPicker({
         aria-label={`Cards: ${current.label}. Choose layout.`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => {
-          clearLeaveTimer();
-          setOpen((v) => !v);
-        }}
+        onClick={onToggleClick}
       >
         <CurrentIcon />
       </button>

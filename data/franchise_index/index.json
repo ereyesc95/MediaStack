@@ -1,7 +1,24 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-10-16T20:24:01.744405+00:00",
+  "scanned_at": "2026-10-19T19:24:31.353566+00:00",
   "franchises": {
+    "courage test film": {
+      "display_name": "Courage Test Film",
+      "slug": "courage test film",
+      "letter": "C",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/C/Courage Test Film/1999.11.12. Courage Test Film",
+          "title": "Courage Test Film",
+          "date_iso": "1999-11-12",
+          "letter": "C",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Courage Test Film"
+        }
+      ]
+    },
     "dracula untold": {
       "display_name": "Dracula Untold",
       "slug": "dracula untold",
@@ -203,6 +220,53 @@
           "platform": "PlayStation 2",
           "subseries": null,
           "franchise_display": "Dragon Ball"
+        }
+      ]
+    },
+    "dumb and dumber": {
+      "display_name": "Dumb and Dumber",
+      "slug": "dumb and dumber",
+      "letter": "D",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dumb and Dumber/1994.12.16. Dumb and Dumber",
+          "title": "Dumb and Dumber",
+          "date_iso": "1994-12-16",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dumb and Dumber"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dumb and Dumber/2003.04.14. Dumb and Dumberer- When Harry Met Lloyd",
+          "title": "Dumb and Dumberer- When Harry Met Lloyd",
+          "date_iso": "2003-04-14",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dumb and Dumber"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/D/Dumb and Dumber/2014.11.12. Dumb and Dumber To",
+          "title": "Dumb and Dumber To",
+          "date_iso": "2014-11-12",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dumb and Dumber"
+        },
+        {
+          "kind": "series",
+          "path": "Series/D/Dumb and Dumber",
+          "title": "Dumb and Dumber",
+          "date_iso": "1995-10-28",
+          "letter": "D",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Dumb and Dumber"
         }
       ]
     },
@@ -628,6 +692,40 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "HIM"
+        }
+      ]
+    },
+    "inception probe": {
+      "display_name": "Inception Probe",
+      "slug": "inception probe",
+      "letter": "I",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/I/Inception Probe/2010.07.15. Inception Probe",
+          "title": "Inception Probe",
+          "date_iso": "2010-07-15",
+          "letter": "I",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Inception Probe"
+        }
+      ]
+    },
+    "courage create probe": {
+      "display_name": "Courage Create Probe",
+      "slug": "courage create probe",
+      "letter": "C",
+      "entries": [
+        {
+          "kind": "series",
+          "path": "Series/C/Courage Create Probe",
+          "title": "Courage Create Probe",
+          "date_iso": null,
+          "letter": "C",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Courage Create Probe"
         }
       ]
     },

@@ -111,58 +111,31 @@ def _has_exclusive_gallery(folder: Path) -> bool:
 
 
 def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
-    """Cover - Portrait (then Cover - Front) from Gallery/Covers or [Artwork].
+    """Portrait card art from Gallery/Covers or [Artwork].
 
-    Fallback: any image whose filename contains ``portrait`` (case-insensitive).
+    Priority across all search dirs (not per-folder):
+    Cover - Portrait → Front → Album → Landscape → Banner → any *portrait*
+    → any image in covers dirs → legacy ``_folder_cover``.
     """
     from app.series_paths import cover_search_dirs
-    from app.artwork_stems import resolve_cover_portrait_file
+    from app.artwork_stems import resolve_catalog_cover_file
 
     def _url(path: Path) -> str:
-        url = _media_url(path, media_root)
-        try:
-            return f"{url}&v={int(path.stat().st_mtime)}"
-        except OSError:
-            return url
+        # _media_url already appends &v=mtime
+        return _media_url(path, media_root) or ""
 
-    for d in cover_search_dirs(folder):
-        exact = resolve_cover_portrait_file(d)
-        if exact:
-            return _url(exact)
-        preferred = (
-            "Cover - Portrait*",
-            "Cover - Front*",
-            "Cover - Album*",
-            "Poster*",
-            "cover*",
-        )
-        for pattern in preferred:
-            try:
-                matches = sorted(d.glob(pattern), key=lambda p: p.name.casefold())
-            except OSError:
-                continue
-            exact_front = [
-                p
-                for p in matches
-                if p.is_file()
-                and p.suffix.lower() in IMAGE_EXTS
-                and p.stem.casefold().strip()
-                in {"cover - portrait", "cover - front", "cover - album"}
-            ]
-            pick = exact_front[0] if exact_front else None
-            if not pick:
-                for p in matches:
-                    if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
-                        pick = p
-                        break
-            if pick:
-                return _url(pick)
+    dirs = cover_search_dirs(folder)
+    exact = resolve_catalog_cover_file(*dirs)
+    if exact:
+        return _url(exact)
 
-        # Fallback: any image with "portrait" in the filename
+    # Prefer numbered / loose portrait-named art (Portrait 01, TMDb. Portrait, …)
+    # over a random non-portrait image in the same folder.
+    for d in dirs:
         try:
             files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
         except OSError:
-            files = []
+            continue
         for p in files:
             if (
                 p.is_file()
@@ -170,21 +143,20 @@ def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
                 and "portrait" in p.stem.casefold()
             ):
                 return _url(p)
-        # Artist books / loose galleries: any image in Covers/Gallery/Artwork
+
+    for d in dirs:
+        try:
+            files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            continue
         for p in files:
             if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
                 return _url(p)
-
-    # Portrait layouts can use landscape art when no dedicated portrait exists.
-    landscape = _series_folder_landscape(folder, media_root)
-    if landscape:
-        return landscape
 
     cover = _folder_cover(folder, media_root)
     if cover:
         return cover
 
-    # Last resort: portrait-named image anywhere under folder (non-recursive shallow)
     try:
         for p in sorted(folder.iterdir(), key=lambda x: x.name.casefold()):
             if (
@@ -201,19 +173,16 @@ def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
 def _series_folder_landscape(folder: Path, media_root: Path) -> str | None:
     """Cover - Landscape (then Banner / landscape-named) from Gallery or [Artwork]."""
     from app.series_paths import cover_search_dirs
-    from app.artwork_stems import resolve_cover_landscape_file
+    from app.artwork_stems import resolve_catalog_wide_file
 
     def _url(path: Path) -> str:
-        url = _media_url(path, media_root)
-        try:
-            return f"{url}&v={int(path.stat().st_mtime)}"
-        except OSError:
-            return url
+        return _media_url(path, media_root) or ""
 
-    for d in cover_search_dirs(folder):
-        exact = resolve_cover_landscape_file(d)
-        if exact:
-            return _url(exact)
+    dirs = cover_search_dirs(folder)
+    exact = resolve_catalog_wide_file(*dirs)
+    if exact:
+        return _url(exact)
+    for d in dirs:
         try:
             files = sorted(d.iterdir(), key=lambda p: p.name.casefold())
         except OSError:
@@ -229,30 +198,24 @@ def _series_folder_landscape(folder: Path, media_root: Path) -> str | None:
 
 
 def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
-    """Cover - Landscape, then banner-named art, then landscape fallback."""
+    """Cover - Landscape, then Cover - Banner, then banner-named / landscape."""
     from app.series_paths import cover_search_dirs
-    from app.artwork_stems import resolve_cover_landscape_file, resolve_cover_banner_file
+    from app.artwork_stems import resolve_catalog_wide_file
     from app.series_artwork import list_banner_files
 
     def _url(p: Path) -> str | None:
-        url = _media_url(p, media_root)
-        if not url:
-            return None
-        try:
-            return f"{url}&v={int(p.stat().st_mtime)}"
-        except OSError:
-            return url
+        return _media_url(p, media_root)
 
-    for d in cover_search_dirs(folder):
-        exact = resolve_cover_landscape_file(d) or resolve_cover_banner_file(d)
-        if exact:
-            return _url(exact)
+    dirs = cover_search_dirs(folder)
+    exact = resolve_catalog_wide_file(*dirs)
+    if exact:
+        return _url(exact)
 
     banners = list_banner_files(folder)
     if banners:
         return _url(banners[0])
 
-    for d in cover_search_dirs(folder):
+    for d in dirs:
         try:
             matches = sorted(
                 d.glob("Cover - Banner*"), key=lambda p: p.name.casefold()
@@ -263,7 +226,6 @@ def _series_folder_banner(folder: Path, media_root: Path) -> str | None:
             if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
                 return _url(p)
 
-    # Wide art is the banner fallback; never use a logo as a card image.
     return _series_folder_landscape(folder, media_root)
 
 

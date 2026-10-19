@@ -1006,20 +1006,21 @@ input {
   flex-direction: column;
 }
 
-.music-dashboard--player-active .dash-genre-ring,
-.music-dashboard--player-active .dash-placeholder--circle,
-.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-genre-ring,
-.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-placeholder--circle,
+.music-dashboard--player-active .dash-scroll--genres .dash-genre-ring,
+.music-dashboard--player-active .dash-scroll--genres .dash-placeholder--circle,
+.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-scroll--genres .dash-genre-ring,
+.music-dashboard--player-active.music-dashboard--mobile-landscape .dash-scroll--genres .dash-placeholder--circle,
 .music-dashboard--player-active.music-dashboard--tablet-landscape .dash-row--genres .dash-genre-ring,
 .music-dashboard--player-active.music-dashboard--tablet-landscape .dash-row--genres .dash-placeholder--circle,
-.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-genre-ring,
-.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-placeholder--circle {
-  width: auto;
-  height: min(100%, 7.5rem);
-  max-width: 100%;
-  max-height: 100%;
+.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-scroll--genres .dash-genre-ring,
+.music-dashboard--player-active.music-dashboard--mobile-portrait .dash-scroll--genres .dash-placeholder--circle {
+  width: 100%;
+  max-width: min(100%, 7.5rem);
+  height: auto;
+  max-height: none;
   min-width: 0;
   min-height: 0;
+  aspect-ratio: 1;
 }
 
 .music-module__player-bar {
@@ -2165,7 +2166,8 @@ input {
   overflow: hidden;
 }
 
-/* Music HOME "ICONS / Your top artists" — 1:1 circles like Round catalog */
+/* Music HOME "ICONS / Your top artists" — 1:1 circles sized from width
+   (never height:min(100%) — that collapses when the mobile row height is auto). */
 .music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
   .dash-scroll--icons
   .dash-icon-item-cover,
@@ -2174,11 +2176,12 @@ input {
   .dash-placeholder--circle {
   border-radius: 50%;
   aspect-ratio: 1;
-  width: auto;
-  height: min(100%, 7.5rem);
-  max-width: 100%;
+  width: 100%;
+  max-width: min(100%, 7.5rem);
+  height: auto;
   margin: 0 auto;
   justify-self: center;
+  flex-shrink: 0;
 }
 
 .music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
@@ -2187,19 +2190,12 @@ input {
 .music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
   .dash-scroll--icons
   .dash-placeholder-item {
-  display: grid;
-  place-items: center;
-}
-
-.music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
-  .dash-scroll--icons
-  .dash-placeholder-item
-  .dash-genre-ring,
-.music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
-  .dash-scroll--icons
-  .dash-placeholder--circle {
-  width: min(100%, 7.5rem);
-  height: min(100%, 7.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: 0;
 }
 
 /* Series / Movies / Books Best panes: portrait rectangles (not Music circles) */
@@ -4230,6 +4226,18 @@ input {
   cursor: pointer;
 }
 
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn--primary:disabled {
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  color: color-mix(in srgb, #fff 55%, var(--text-muted));
+}
+
 .error {
   color: #f07178;
   padding: 0.75rem;
@@ -4951,6 +4959,46 @@ input {
     height: auto;
   }
 
+  /* Music ICONS pane: same width-based sizing as track tiles (beats later
+     genre-ring height:min(100%) rules that re-collapse artist circles). */
+  .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
+      .books-dashboard
+    )
+    .dash-scroll--icons
+    .dash-icon-item,
+  .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
+      .books-dashboard
+    )
+    .dash-scroll--icons
+    .dash-placeholder-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+  }
+
+  .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
+      .books-dashboard
+    )
+    .dash-scroll--icons
+    .dash-icon-item-cover,
+  .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
+      .books-dashboard
+    )
+    .dash-scroll--icons
+    .dash-placeholder--circle {
+    border-radius: 50%;
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: min(22vw, 74px);
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    margin: 0 auto;
+    flex-shrink: 0;
+  }
+
   .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
   .movies-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
   .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-placeholder--landscape,
@@ -4996,15 +5044,18 @@ input {
     line-height: 1.2;
   }
 
-  .music-dashboard--mobile-portrait .dash-genre-ring,
-  .music-dashboard--mobile-portrait .dash-placeholder--circle {
-    width: auto;
-    height: min(100%, 4.25rem);
-    max-width: 100%;
+  /* Genres / vibes only — do not target Music ICONS artist circles. */
+  .music-dashboard--mobile-portrait .dash-scroll--genres .dash-genre-ring,
+  .music-dashboard--mobile-portrait .dash-scroll--genres .dash-placeholder--circle {
+    width: 100%;
+    max-width: min(22vw, 74px);
+    height: auto;
+    max-height: none;
     min-width: 0;
     min-height: 0;
     aspect-ratio: 1;
     margin: 0 auto;
+    flex-shrink: 0;
   }
 
   .music-dashboard--mobile-portrait .dash-country-flag,
@@ -5041,12 +5092,10 @@ input {
     aspect-ratio: 16 / 10;
   }
 
-  .music-dashboard--mobile-portrait .dash-genre-ring,
-  .music-dashboard--mobile-portrait .dash-placeholder--circle {
-    max-width: min(100%, 64px);
-    max-height: 100%;
-    min-width: 0;
-    min-height: 0;
+  .music-dashboard--mobile-portrait .dash-scroll--genres .dash-genre-ring,
+  .music-dashboard--mobile-portrait .dash-scroll--genres .dash-placeholder--circle {
+    max-width: min(22vw, 74px);
+    max-height: none;
   }
 
 }
@@ -10636,6 +10685,33 @@ button.media-release-card--banner {
   isolation: isolate;
 }
 
+/* Single-soundtrack embed inside leaf/franchise Audio tab */
+.release-page--embedded {
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+  isolation: auto;
+}
+
+.release-page--embedded .release-page__chrome {
+  position: relative;
+  z-index: 1;
+}
+
+.release-page--embedded .release-page__top-left:empty {
+  min-width: 0;
+}
+
+.release-page__embed-escape {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.release-page__go-to-release {
+  font-size: 0.85rem;
+}
+
 .release-page--stacked {
   height: auto;
   min-height: 100vh;
@@ -16032,6 +16108,78 @@ button.lyrics-status-badge--icon-only {
 }
 
 .ms-checkbox__label {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.ms-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+.ms-radio--disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.ms-radio input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ms-radio__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ms-radio__dot::after {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--accent-fg);
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+.ms-radio input:checked + .ms-radio__dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.ms-radio input:checked + .ms-radio__dot::after {
+  transform: scale(1);
+}
+
+.ms-radio input:focus-visible + .ms-radio__dot {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.ms-radio:hover:not(.ms-radio--disabled) .ms-radio__dot {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.ms-radio__label {
   font-size: 0.72rem;
   line-height: 1.2;
 }
@@ -24874,17 +25022,37 @@ button.lyrics-status-badge--icon-only {
   gap: 0.35rem;
 }
 
+.manage-catalog-modal__cross-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+}
+
+.manage-catalog-modal__cross-row .manage-artists-modal__guide-option {
+  margin: 0;
+}
+
 .manage-catalog-modal__see-more {
-  justify-self: start;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  /* Match the checkbox control height so label + link share one baseline band. */
+  height: 0.95rem;
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   color: var(--accent);
-  font: inherit;
-  font-size: 0.9rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: inherit;
+  line-height: 1.2;
+  letter-spacing: inherit;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .manage-catalog-modal__see-more:hover {
@@ -24912,19 +25080,41 @@ button.lyrics-status-badge--icon-only {
   font-weight: 600;
 }
 
-.manage-catalog-modal__home-pick {
+.manage-catalog-modal__home-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem 1.1rem;
-  padding-left: 0.15rem;
+  align-items: center;
+  gap: 0.55rem 1rem;
 }
 
+.manage-catalog-modal__home-row .manage-catalog-modal__home-check {
+  margin: 0;
+}
+
+.manage-catalog-modal__home-pick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0;
+  margin: 0;
+}
+
+/* Beat `.artist-admin-form label`, which stacks children in a column. */
+.artist-admin-form label.manage-catalog-modal__home-option,
 .manage-catalog-modal__home-option {
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   cursor: pointer;
-  font-size: 0.92rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.manage-catalog-modal__home-option .ms-radio__label {
+  font-size: 0.8rem;
+  color: var(--text);
 }
 
 .manage-catalog-modal__items {
@@ -25248,14 +25438,12 @@ button.lyrics-status-badge--icon-only {
   height: 8px;
 }
 
-.manage-catalog-modal__items::-webkit-scrollbar-track,
-.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-track {
+.manage-catalog-modal__items::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
 }
 
-.manage-catalog-modal__items::-webkit-scrollbar-thumb,
-.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb {
+.manage-catalog-modal__items::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.42) !important;
   border-radius: 4px;
 }
@@ -25266,21 +25454,28 @@ button.lyrics-status-badge--icon-only {
   overflow-y: scroll !important;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35))
-    var(--scrollbar-track, rgba(255, 255, 255, 0.06));
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 0.75rem;
-  padding: 0.25rem;
+  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35)) transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0.25rem 0.25rem 0;
 }
 
 .manage-catalog-modal__suggest-scroll::-webkit-scrollbar {
   width: 8px;
-  background: var(--scrollbar-track, rgba(255, 255, 255, 0.06));
+  background: transparent;
+}
+
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.35));
   border-radius: 4px;
+}
+
+.manage-catalog-modal__suggest-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.55));
 }
 
 .manage-catalog-modal__form--details .manage-catalog-modal__suggest-scroll .add-similar-results,

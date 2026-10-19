@@ -654,3 +654,17 @@ def collect_film_audio_tracks(db: Session, film_id: str) -> list[dict]:
         return []
     film_dir, _work_dir, _letter = found
     return collect_audio_tracks_from_folders(db, [film_dir], root)
+
+
+def collect_game_audio_tracks(db: Session, game_id: str) -> list[dict]:
+    """Playable tracks from a game folder's Audio/ bucket."""
+    from app.games_index import find_game_dir
+
+    root = Path(settings.media_root) if settings.media_root else None
+    if not root or not root.is_dir():
+        return []
+    found = find_game_dir(game_id, root)
+    if not found:
+        return []
+    game_dir, _work_dir, _platform, _letter = found
+    return collect_audio_tracks_from_folders(db, [game_dir], root)

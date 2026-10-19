@@ -26,6 +26,7 @@ from app.franchise_index import (
     save_franchise_index,
 )
 from app.gallery import _letter_folder
+from app.http_ssl import aget
 from app.models import BookLeaf, BookWork, Game, MovieWork, Series, User
 from app.services.google_books import get_google_book, search_google_books
 from app.services.igdb import IgdbNotConfigured, get_game as igdb_get_game, igdb_configured, search_games as igdb_search_games
@@ -83,7 +84,10 @@ def _root() -> Path:
 
 def _safe_name(value: str, fallback: str = "Untitled") -> str:
     text = (value or "").replace("█", "'").replace("■", ",").strip()
-    text = INVALID_PATH_CHARS.sub("-", text).rstrip(" .")
+    # Colons usually split title / subtitle — keep readable " - " spacing.
+    text = re.sub(r"\s*:\s*", " - ", text)
+    text = INVALID_PATH_CHARS.sub("-", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" .")
     return text or fallback
 
 
@@ -191,13 +195,13 @@ async def _tmdb_search_cross(
     api_key: str,
     limit: int = 40,
 ) -> list[dict]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            f"{TMDB_BASE}/search/{endpoint}",
-            params={"api_key": api_key, "query": query},
-        )
-        response.raise_for_status()
-        rows = response.json().get("results") or []
+    response = await aget(
+        f"{TMDB_BASE}/search/{endpoint}",
+        params={"api_key": api_key, "query": query},
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    rows = response.json().get("results") or []
     out: list[dict] = []
     for item in rows[:limit]:
         title = (
@@ -246,6 +250,17 @@ def _gallery_tree(folder: Path) -> int:
         "Gallery/Branding",
         "Gallery/Extras/Characters",
         "Gallery/Exclusive",
+        ),
+    )
+
+
+def _movie_tree(folder: Path) -> int:
+    """Film leaf: Gallery plus Extras + Audio shortcut buckets (same as legacy fixtures)."""
+    return _gallery_tree(folder) + _mkdir_tree(
+        folder,
+        (
+            "Extras",
+            *(f"Audio/{category}" for category in AUDIO_CATEGORIES),
         ),
     )
 
@@ -449,44 +464,42 @@ def _sort_catalog_search_items(items: list[dict], *, limit: int = 10) -> list[di
 async def _tmdb_search(kind: str, query: str, api_key: str) -> list[dict]:
     endpoints = ("movie", "collection") if kind == "movies" else ("tv",)
     out: list[dict] = []
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for endpoint in endpoints:
-            response = await client.get(
-                f"{TMDB_BASE}/search/{endpoint}",
-                params={"api_key": api_key, "query": query},
+    for endpoint in endpoints:
+        response = await aget(
+            f"{TMDB_BASE}/search/{endpoint}",
+            params={"api_key": api_key, "query": query},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        for item in (response.json().get("results") or [])[:20]:
+            title = (
+                item.get("title")
+                or item.get("name")
+                or item.get("original_title")
+                or item.get("original_name")
             )
-            response.raise_for_status()
-            for item in (response.json().get("results") or [])[:20]:
-                title = (
-                    item.get("title")
-                    or item.get("name")
-                    or item.get("original_title")
-                    or item.get("original_name")
-                )
-                if not title or not item.get("id"):
-                    continue
-                date = item.get("release_date") or item.get("first_air_date")
-                out.append(
-                    {
-                        "source": "tmdb",
-                        "kind": endpoint,
-                        "provider_id": str(item["id"]),
-                        "title": title,
-                        "date": date,
-                        "subtitle": " · ".join(
-                            part
-                            for part in (
-                                endpoint.title(),
-                                (date or "")[:4],
-                                item.get("original_language"),
-                            )
-                            if part
-                        ),
-                        "cover_url": image_url(
-                            item.get("poster_path"), "w342"
-                        ),
-                    }
-                )
+            if not title or not item.get("id"):
+                continue
+            date = item.get("release_date") or item.get("first_air_date")
+            out.append(
+                {
+                    "source": "tmdb",
+                    "kind": endpoint,
+                    "provider_id": str(item["id"]),
+                    "title": title,
+                    "date": date,
+                    "subtitle": " · ".join(
+                        part
+                        for part in (
+                            endpoint.title(),
+                            (date or "")[:4],
+                            item.get("original_language"),
+                        )
+                        if part
+                    ),
+                    "cover_url": image_url(item.get("poster_path"), "w342"),
+                }
+            )
     return _sort_catalog_search_items(out)
 
 
@@ -668,8 +681,13 @@ async def search_catalog_import(
         api_key = get_tmdb_key(db)
         if not api_key:
             raise HTTPException(400, "TMDb API key is not configured")
-        direct = await _tmdb_direct_lookup(module, q, api_key)
-        remote = [direct] if direct else await _tmdb_search(module, q, api_key)
+        try:
+            direct = await _tmdb_direct_lookup(module, q, api_key)
+            remote = [direct] if direct else await _tmdb_search(module, q, api_key)
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                502, f"TMDb search failed: {exc}"
+            ) from exc
     return {"local_franchises": local, "items": remote}
 
 
@@ -815,9 +833,12 @@ async def _download_primary(url: str | None, destination: Path) -> bool:
     try:
         if (urlparse(url).hostname or "").casefold() not in ARTWORK_HOSTS:
             return False
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            response = await client.get(url.replace("http://", "https://", 1))
-            response.raise_for_status()
+        response = await aget(
+            url.replace("http://", "https://", 1),
+            timeout=60.0,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
         suffix = Path(urlparse(url).path).suffix.lower()
         if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
             suffix = ".jpg"
@@ -873,16 +894,32 @@ def update_catalog_folders(
             or re.match(r"^\d{4}(?:\.\d{2})?(?:\.\d{2})?\.\s", child.name)
         )
     ]
+    from app.folder_icons import decorate_folder
+
     if module == "series":
         targets = leaf_dirs or [franchise_dir]
         for target in targets:
             created += _series_tree(target)
+            decorate_folder(target)
+    elif module == "movies":
+        targets = leaf_dirs or (
+            [franchise_dir] if (franchise_dir / "Gallery").is_dir() else []
+        )
+        for target in targets:
+            created += _movie_tree(target)
+            decorate_folder(target)
     else:
         targets = leaf_dirs or (
             [franchise_dir] if (franchise_dir / "Gallery").is_dir() else []
         )
         for target in targets:
             created += _gallery_tree(target)
+            decorate_folder(target)
+
+    artwork = franchise_dir / "[Artwork]"
+    if artwork.is_dir():
+        decorate_folder(artwork)
+    decorate_folder(franchise_dir)
 
     _rebuild_franchise_index(root)
     return {
@@ -1151,6 +1188,9 @@ async def create_catalog_import(
             await _download_primary(
                 first_item.get("backdrop_url"), artwork / "Cover - Landscape"
             )
+            # Structural Artwork ico + ini; then refresh franchise root ico from covers.
+            decorate_folder(artwork)
+            decorate_folder(franchise_dir)
         if include_guide and not franchise_existed:
             (franchise_dir / "User guide.txt").write_text(
                 get_catalog_user_guide(db, module), encoding="utf-8"
@@ -1189,6 +1229,8 @@ async def create_catalog_import(
                         continue
                     season_name = f"{_date_prefix(season.get('date'))}Season {number}"
                     ensure_relative_tree(leaf_dir, f"Episodes/{season_name}")
+            elif module == "movies":
+                _movie_tree(leaf_dir)
             else:
                 _gallery_tree(leaf_dir)
                 if module == "games":
@@ -1211,6 +1253,8 @@ async def create_catalog_import(
                     pass
             await _download_primary(poster_url, covers / "Cover - Portrait")
             await _download_primary(backdrop_url, covers / "Cover - Landscape")
+            # Covers land after tree mkdir — write leaf (and flat-show root) ico now.
+            decorate_folder(leaf_dir)
             created.append(_relative(leaf_dir, root))
 
             try:
@@ -1341,6 +1385,9 @@ async def create_catalog_import(
                 db.rollback()
                 metadata_errors.append(f"{title}: {exc}")
 
+        # Refresh franchise-root ico after leaves / [Artwork] covers exist.
+        decorate_folder(franchise_dir)
+
     # Cross-module Include: scaffold related Movies under Series (or reverse).
     if related_module and related_items:
         related_dir = _franchise_module_dir(root, related_module, franchise_name)
@@ -1360,6 +1407,8 @@ async def create_catalog_import(
                 rel_first.get("backdrop_url") or first_item.get("backdrop_url"),
                 artwork / "Cover - Landscape",
             )
+            decorate_folder(artwork)
+            decorate_folder(related_dir)
         if include_guide and not related_existed:
             (related_dir / "User guide.txt").write_text(
                 get_catalog_user_guide(db, related_module), encoding="utf-8"
@@ -1421,6 +1470,8 @@ async def create_catalog_import(
                                 )
                     except Exception:
                         pass
+            elif related_module == "movies":
+                _movie_tree(leaf_dir)
             else:
                 _gallery_tree(leaf_dir)
             covers = leaf_dir / "Gallery" / "Covers"
@@ -1430,6 +1481,7 @@ async def create_catalog_import(
             await _download_primary(
                 raw.get("backdrop_url"), covers / "Cover - Landscape"
             )
+            decorate_folder(leaf_dir)
             created.append(_relative(leaf_dir, root))
             try:
                 if related_module == "movies" and provider_id:
@@ -1456,6 +1508,8 @@ async def create_catalog_import(
             except Exception as exc:
                 db.rollback()
                 metadata_errors.append(f"{title}: {exc}")
+
+        decorate_folder(related_dir)
 
     db.commit()
     _rebuild_franchise_index(root)

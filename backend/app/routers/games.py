@@ -368,6 +368,15 @@ def games_game_audio(game_id: str, db: Session = Depends(get_db)):
     return scan_folder_audio(db, detail.get("folder_path") or "")
 
 
+@router.get("/games/{game_id}/player-tracks")
+def games_game_player_tracks(game_id: str, db: Session = Depends(get_db)):
+    """Playable audio tracks from a game folder's Audio/ shortcuts."""
+    from app.series_extras import collect_game_audio_tracks
+
+    tracks = collect_game_audio_tracks(db, game_id)
+    return {"tracks": tracks, "count": len(tracks)}
+
+
 @router.post("/franchises/{work_id}/refresh-metadata")
 async def games_franchise_refresh_metadata(
     work_id: str,

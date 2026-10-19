@@ -7,6 +7,11 @@ import {
 } from "../usePhoneLayout";
 import {
   IconCollection,
+  IconMediaBooks,
+  IconMediaGames,
+  IconMediaMovies,
+  IconMediaSeries,
+  IconTabArtists,
   IconTabCatalog,
   IconTabEvents,
   IconTabHome,
@@ -35,15 +40,30 @@ type Props = {
   menu: React.ReactNode;
 };
 
-function defaultTabIcon(id: string, label: string): ReactNode {
+function defaultTabIcon(id: string, label: string, mediaKind?: string): ReactNode {
   const key = id.toLowerCase();
   const text = label.toLowerCase();
+  const kind = (mediaKind ?? "").toLowerCase();
   if (key === "home" || text === "home") return <IconTabHome />;
-  if (key === "artists" || key === "catalog" || text === "catalog")
-    return <IconTabCatalog />;
+  if (key === "artists" || text === "artists") return <IconTabArtists />;
   if (key === "collection" || text === "collection") return <IconCollection />;
   if (key === "events" || text === "events") return <IconTabEvents />;
   if (key === "playlists" || text === "playlists") return <IconTabPlaylists />;
+  /* Catalog tabs use the module name as label (SERIES / MOVIES / …). */
+  if (
+    key === "catalog" ||
+    text === "catalog" ||
+    text === "series" ||
+    text === "movies" ||
+    text === "books" ||
+    text === "games"
+  ) {
+    if (text === "series" || kind === "series") return <IconMediaSeries />;
+    if (text === "movies" || kind === "movies") return <IconMediaMovies />;
+    if (text === "books" || kind === "books") return <IconMediaBooks />;
+    if (text === "games" || kind === "games") return <IconMediaGames />;
+    return <IconTabCatalog />;
+  }
   return <IconTabCatalog />;
 }
 
@@ -141,7 +161,7 @@ export default function ModuleTopBar({
           >
             {iconTabs ? (
               <span className="module-top-bar__tab-icon" aria-hidden>
-                {t.icon ?? defaultTabIcon(t.id, t.label)}
+                {t.icon ?? defaultTabIcon(t.id, t.label, media.kind)}
               </span>
             ) : (
               t.label

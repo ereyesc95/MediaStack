@@ -133,6 +133,13 @@ const TABS: { id: ReleaseTab; label: string }[] = [
   { id: "gallery", label: "GALLERY" },
 ];
 
+/** Leaf Audio embed: Tracklist first so the soundtrack plays immediately. */
+const EMBEDDED_TABS: { id: ReleaseTab; label: string }[] = [
+  { id: "tracklist", label: "TRACKLIST" },
+  { id: "overview", label: "OVERVIEW" },
+  { id: "gallery", label: "GALLERY" },
+];
+
 function releaseTracklistHasTracks(data: ReleaseTracklistPayload | null): boolean {
   if (!data?.editions?.length) return false;
   for (const edition of data.editions) {
@@ -197,6 +204,10 @@ type Props = {
   onBackToHome?: () => void;
   onBackToCatalog?: () => void;
   onBackToCollection?: () => void;
+  /** Render inside a leaf/franchise Audio tab (no page chrome / bg stack). */
+  embedded?: boolean;
+  /** Escape hatch on Overview → full Music release route. */
+  onGoToReleasePage?: () => void;
 };
 
 function ReleaseNeighborLink({
@@ -384,6 +395,8 @@ export default function ReleasePage({
   onBackToHome,
   onBackToCatalog,
   onBackToCollection,
+  embedded = false,
+  onGoToReleasePage,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -1516,12 +1529,12 @@ export default function ReleasePage({
 
   const pageTabs = useMemo(
     () =>
-      TABS.filter((t) => {
+      (embedded ? EMBEDDED_TABS : TABS).filter((t) => {
         if (t.id === "gallery") return showGalleryTab;
         if (t.id === "tracklist") return showTracklistTab;
         return true;
       }),
-    [showGalleryTab, showTracklistTab]
+    [embedded, showGalleryTab, showTracklistTab]
   );
   const showPageTabBar = pageTabs.length > 1;
 
@@ -1746,6 +1759,7 @@ export default function ReleasePage({
 
   const pageClass = [
     "release-page",
+    embedded ? "release-page--embedded" : "",
     stacked ? "release-page--stacked" : "",
     bannerLayout ? "release-page--banner-layout" : "",
     mobileLandscape ? "release-page--mobile-landscape" : "",
@@ -2575,74 +2589,78 @@ export default function ReleasePage({
 
   return (
     <div className={pageClass}>
-      <div className="release-page__bg-stack" aria-hidden>
-        {bgLayers.outgoing && (
-          <div
-            className="release-page__bg release-page__bg--visible release-page__bg--out"
-            style={{ backgroundImage: `url("${bgLayers.outgoing}")` }}
-          />
-        )}
-        {bgLayers.current && (
-          <div
-            className={`release-page__bg release-page__bg--visible${bgLayers.outgoing ? " release-page__bg--in" : ""}`}
-            style={{ backgroundImage: `url("${bgLayers.current}")` }}
-          />
-        )}
-        {pageCanvasActive && displayCanvas ? (
-          <div className="release-page__bg-canvas" aria-hidden>
-            <video
-              key={displayCanvas}
-              ref={canvasVideoRef}
-              className="release-page__bg-canvas-video"
-              src={displayCanvas}
-              autoPlay
-              loop
-              muted
-              playsInline
+      {!embedded ? (
+        <div className="release-page__bg-stack" aria-hidden>
+          {bgLayers.outgoing && (
+            <div
+              className="release-page__bg release-page__bg--visible release-page__bg--out"
+              style={{ backgroundImage: `url("${bgLayers.outgoing}")` }}
             />
-            <div className="release-page__bg-canvas-shade" />
-          </div>
-        ) : null}
-        <MediaBeatFx />
-      </div>
+          )}
+          {bgLayers.current && (
+            <div
+              className={`release-page__bg release-page__bg--visible${bgLayers.outgoing ? " release-page__bg--in" : ""}`}
+              style={{ backgroundImage: `url("${bgLayers.current}")` }}
+            />
+          )}
+          {pageCanvasActive && displayCanvas ? (
+            <div className="release-page__bg-canvas" aria-hidden>
+              <video
+                key={displayCanvas}
+                ref={canvasVideoRef}
+                className="release-page__bg-canvas-video"
+                src={displayCanvas}
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+              <div className="release-page__bg-canvas-shade" />
+            </div>
+          ) : null}
+          <MediaBeatFx />
+        </div>
+      ) : null}
 
       <div className="release-page__chrome">
         <header className="release-page__top">
           <div className="release-page__top-left">
-            <button
-              type="button"
-              className="release-page__back"
-              onClick={handleBack}
-              aria-label={backAriaLabel}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M15 6l-6 6 6 6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {seriesBackUsesIcon ? (
-                <img
-                  src={franchiseReferrer!.franchiseIconUrl!}
-                  alt=""
-                  className="series-subseries-page__back-icon"
-                />
-              ) : backLabel ? (
-                <span
-                  className={
-                    backLabel === "Back"
-                      ? "series-subseries-page__back-label series-subseries-page__back-label--short"
-                      : undefined
-                  }
-                >
-                  {backLabel}
-                </span>
-              ) : null}
-            </button>
+            {!embedded ? (
+              <button
+                type="button"
+                className="release-page__back"
+                onClick={handleBack}
+                aria-label={backAriaLabel}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M15 6l-6 6 6 6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {seriesBackUsesIcon ? (
+                  <img
+                    src={franchiseReferrer!.franchiseIconUrl!}
+                    alt=""
+                    className="series-subseries-page__back-icon"
+                  />
+                ) : backLabel ? (
+                  <span
+                    className={
+                      backLabel === "Back"
+                        ? "series-subseries-page__back-label series-subseries-page__back-label--short"
+                        : undefined
+                    }
+                  >
+                    {backLabel}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
           </div>
           <div className="release-page__top-center">
             {topLogo}
@@ -2654,15 +2672,17 @@ export default function ReleasePage({
             )}
           </div>
           <div className="release-page__top-right">
-            <MediaInlineSearch
-              mode="artist-releases"
-              bandId={bandId}
-              onSelectRelease={(rid) => onOpenRelease(bandId, rid)}
-              onSelectTrack={(path, title) => {
-                onTab("tracklist");
-                void handlePlayTrack(path, title);
-              }}
-            />
+            {!embedded ? (
+              <MediaInlineSearch
+                mode="artist-releases"
+                bandId={bandId}
+                onSelectRelease={(rid) => onOpenRelease(bandId, rid)}
+                onSelectTrack={(path, title) => {
+                  onTab("tracklist");
+                  void handlePlayTrack(path, title);
+                }}
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -2783,6 +2803,17 @@ export default function ReleasePage({
                   .filter(Boolean)
                   .join(" ")}
               >
+                {embedded && onGoToReleasePage ? (
+                  <div className="release-page__embed-escape">
+                    <button
+                      type="button"
+                      className="ghost-btn release-page__go-to-release"
+                      onClick={onGoToReleasePage}
+                    >
+                      Go to release page
+                    </button>
+                  </div>
+                ) : null}
                 <div className="release-page__overview-top" ref={overviewTopRef}>
                   {(data.description ||
                     data.needs_metadata_fetch ||

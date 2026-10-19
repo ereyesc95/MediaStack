@@ -300,6 +300,38 @@ function Checkbox({
   );
 }
 
+function Radio({
+  name,
+  checked,
+  disabled,
+  onChange,
+  children,
+}: {
+  name: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      className={`ms-radio manage-catalog-modal__home-option${
+        disabled ? " ms-radio--disabled" : ""
+      }`}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+      />
+      <span className="ms-radio__dot" aria-hidden="true" />
+      <span className="ms-radio__label">{children}</span>
+    </label>
+  );
+}
+
 function itemIdentity(item: CatalogImportItem) {
   return item.provider_id || item.title.trim().toLowerCase();
 }
@@ -692,11 +724,14 @@ export default function ManageCatalogModal({
       if (item.kind === "franchise") {
         setExistingFranchise(item);
         setBelongsToFranchise(true);
+        setFranchiseHome(true);
+        setFranchiseHomeModule(module === "movies" ? "movies" : "series");
         setNotice(null);
       } else {
         addPicked([{ provider_id: "", title: item.title, date: null }]);
         setFranchiseName(item.title);
         setBelongsToFranchise(false);
+        setFranchiseHome(false);
         setStep("details");
       }
       return;
@@ -718,6 +753,12 @@ export default function ManageCatalogModal({
           (Boolean(data.franchise_name) &&
             data.franchise_name !== item.title);
         setBelongsToFranchise(fran);
+        if (fran) {
+          setFranchiseHome(true);
+          setFranchiseHomeModule(module === "movies" ? "movies" : "series");
+        } else {
+          setFranchiseHome(false);
+        }
       }
       setFranchiseName(
         (current) => current || data.franchise_name || item.title
@@ -1378,12 +1419,16 @@ export default function ManageCatalogModal({
                   setIncludeRelated(false);
                 } else {
                   setIncludeRelated(true);
+                  setFranchiseHome(true);
+                  setFranchiseHomeModule(
+                    module === "movies" ? "movies" : "series"
+                  );
                 }
               }}
             >
               {belongsToFranchise
-                ? "This belongs to a franchise"
-                : "This doesn't belong to a franchise"}
+                ? `This ${labels.singular} belongs to a franchise`
+                : `This ${labels.singular} doesn't belong to a franchise`}
             </Checkbox>
 
             {belongsToFranchise ? (
@@ -1559,34 +1604,34 @@ export default function ManageCatalogModal({
 
             {crossOtherModule && crossRelated.length > 0 ? (
               <div className="manage-catalog-modal__cross">
-                <Checkbox
-                  className="manage-artists-modal__guide-option"
-                  checked={includeRelated}
-                  disabled={saving}
-                  onChange={setIncludeRelated}
-                >
-                  {includeRelated
-                    ? `Include ${relatedSelected.size || crossRelated.length} ${
-                        crossOtherModule === "movies"
-                          ? (relatedSelected.size || crossRelated.length) === 1
-                            ? "movie"
-                            : "movies"
-                          : (relatedSelected.size || crossRelated.length) === 1
-                            ? "series"
-                            : "series"
-                      }`
-                    : `Do not include ${crossRelated.length} ${
-                        crossOtherModule === "movies"
-                          ? crossRelated.length === 1
-                            ? "movie"
-                            : "movies"
-                          : crossRelated.length === 1
-                            ? "series"
-                            : "series"
-                      }`}
-                </Checkbox>
-                {includeRelated ? (
-                  <>
+                <div className="manage-catalog-modal__cross-row">
+                  <Checkbox
+                    className="manage-artists-modal__guide-option"
+                    checked={includeRelated}
+                    disabled={saving}
+                    onChange={setIncludeRelated}
+                  >
+                    {includeRelated
+                      ? `Include ${relatedSelected.size || crossRelated.length} ${
+                          crossOtherModule === "movies"
+                            ? (relatedSelected.size || crossRelated.length) === 1
+                              ? "movie"
+                              : "movies"
+                            : (relatedSelected.size || crossRelated.length) === 1
+                              ? "series"
+                              : "series"
+                        }`
+                      : `Do not include ${crossRelated.length} ${
+                          crossOtherModule === "movies"
+                            ? crossRelated.length === 1
+                              ? "movie"
+                              : "movies"
+                            : crossRelated.length === 1
+                              ? "series"
+                              : "series"
+                        }`}
+                  </Checkbox>
+                  {includeRelated ? (
                     <button
                       type="button"
                       className="manage-catalog-modal__see-more"
@@ -1594,80 +1639,78 @@ export default function ManageCatalogModal({
                     >
                       {relatedExpanded ? "See less" : "See more"}
                     </button>
-                    {relatedExpanded ? (
-                      <div className="manage-catalog-modal__related-list">
-                        {(() => {
-                          const groups = new Map<
-                            string,
-                            CatalogCrossRelatedItem[]
-                          >();
-                          for (const row of crossRelated) {
-                            const key =
-                              nestedSeries && row.subseries_title
-                                ? row.subseries_title
-                                : "";
-                            const list = groups.get(key) || [];
-                            list.push(row);
-                            groups.set(key, list);
-                          }
-                          const keys = [...groups.keys()].sort((a, b) =>
-                            a.localeCompare(b, undefined, {
-                              sensitivity: "base",
-                            })
-                          );
-                          return keys.map((groupKey) => (
-                            <div
-                              key={groupKey || "__flat"}
-                              className="manage-catalog-modal__related-group"
-                            >
-                              {groupKey ? (
-                                <small className="muted manage-catalog-modal__related-group-title">
-                                  {groupKey}
-                                </small>
-                              ) : null}
-                              {(groups.get(groupKey) || []).map((row) => {
-                                const year = (row.date || "").slice(0, 4);
-                                return (
-                                  <Checkbox
-                                    key={row.provider_id}
-                                    className="manage-catalog-modal__item"
-                                    checked={relatedSelected.has(
-                                      row.provider_id
-                                    )}
-                                    disabled={saving}
-                                    onChange={() => {
-                                      setRelatedSelected((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(row.provider_id)) {
-                                          next.delete(row.provider_id);
-                                        } else {
-                                          next.add(row.provider_id);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                  >
-                                    {row.title}
-                                    {year ? (
-                                      <span className="muted"> {year}</span>
-                                    ) : null}
-                                  </Checkbox>
-                                );
-                              })}
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    ) : null}
-                  </>
+                  ) : null}
+                </div>
+                {includeRelated && relatedExpanded ? (
+                  <div className="manage-catalog-modal__related-list">
+                    {(() => {
+                      const groups = new Map<
+                        string,
+                        CatalogCrossRelatedItem[]
+                      >();
+                      for (const row of crossRelated) {
+                        const key =
+                          nestedSeries && row.subseries_title
+                            ? row.subseries_title
+                            : "";
+                        const list = groups.get(key) || [];
+                        list.push(row);
+                        groups.set(key, list);
+                      }
+                      const keys = [...groups.keys()].sort((a, b) =>
+                        a.localeCompare(b, undefined, {
+                          sensitivity: "base",
+                        })
+                      );
+                      return keys.map((groupKey) => (
+                        <div
+                          key={groupKey || "__flat"}
+                          className="manage-catalog-modal__related-group"
+                        >
+                          {groupKey ? (
+                            <small className="muted manage-catalog-modal__related-group-title">
+                              {groupKey}
+                            </small>
+                          ) : null}
+                          {(groups.get(groupKey) || []).map((row) => {
+                            const year = (row.date || "").slice(0, 4);
+                            return (
+                              <Checkbox
+                                key={row.provider_id}
+                                className="manage-catalog-modal__item"
+                                checked={relatedSelected.has(row.provider_id)}
+                                disabled={saving}
+                                onChange={() => {
+                                  setRelatedSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(row.provider_id)) {
+                                      next.delete(row.provider_id);
+                                    } else {
+                                      next.add(row.provider_id);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {row.title}
+                                {year ? (
+                                  <span className="muted"> {year}</span>
+                                ) : null}
+                              </Checkbox>
+                            );
+                          })}
+                        </div>
+                      ));
+                    })()}
+                  </div>
                 ) : null}
               </div>
             ) : null}
 
             {belongsToFranchise ? (
-              <>
+              <div className="manage-catalog-modal__home-row">
                 <Checkbox
-                  className="manage-artists-modal__guide-option"
+                  className="manage-artists-modal__guide-option manage-catalog-modal__home-check"
                   checked={franchiseHome}
                   disabled={saving}
                   onChange={(checked) => {
@@ -1689,30 +1732,30 @@ export default function ManageCatalogModal({
                 includeRelated &&
                 crossOtherModule &&
                 relatedSelected.size > 0 ? (
-                  <div className="manage-catalog-modal__home-pick">
-                    <label className="manage-catalog-modal__home-option">
-                      <input
-                        type="radio"
-                        name="franchise-home-module"
-                        checked={franchiseHomeModule === "series"}
-                        disabled={saving}
-                        onChange={() => setFranchiseHomeModule("series")}
-                      />
+                  <div
+                    className="manage-catalog-modal__home-pick"
+                    role="radiogroup"
+                    aria-label="Franchise home module"
+                  >
+                    <Radio
+                      name="franchise-home-module"
+                      checked={franchiseHomeModule === "series"}
+                      disabled={saving}
+                      onChange={() => setFranchiseHomeModule("series")}
+                    >
                       Series
-                    </label>
-                    <label className="manage-catalog-modal__home-option">
-                      <input
-                        type="radio"
-                        name="franchise-home-module"
-                        checked={franchiseHomeModule === "movies"}
-                        disabled={saving}
-                        onChange={() => setFranchiseHomeModule("movies")}
-                      />
+                    </Radio>
+                    <Radio
+                      name="franchise-home-module"
+                      checked={franchiseHomeModule === "movies"}
+                      disabled={saving}
+                      onChange={() => setFranchiseHomeModule("movies")}
+                    >
                       Movies
-                    </label>
+                    </Radio>
                   </div>
                 ) : null}
-              </>
+              </div>
             ) : null}
             <Checkbox
               className="manage-artists-modal__guide-option"

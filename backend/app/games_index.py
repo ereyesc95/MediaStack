@@ -625,6 +625,9 @@ def build_game_detail(game_id: str, media_root: Path | None = None) -> dict | No
         "name": work_dir.name,
         "platforms": build_work_detail(franchise_id, root).get("platforms") or [platform],
     }
+    from app.series_artwork import resolve_series_photocards
+
+    card["photocards"] = resolve_series_photocards(game_dir, root)
     return card
 
 

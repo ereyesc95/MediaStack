@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+from app.http_ssl import aget
 
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p"
@@ -11,13 +11,13 @@ TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p"
 
 async def search_tv_id(name: str, api_key: str) -> tuple[int | None, str | None]:
     folder_name = name.replace("■", ",").replace("█", "'")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/search/tv",
-            params={"api_key": api_key, "query": folder_name},
-        )
-        r.raise_for_status()
-        data = r.json()
+    r = await aget(
+        f"{TMDB_BASE}/search/tv",
+        params={"api_key": api_key, "query": folder_name},
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    data = r.json()
     results = data.get("results") or []
     if not results:
         return None, None
@@ -32,29 +32,29 @@ async def fetch_tv(
     append: str = "credits,external_ids,content_ratings,images,keywords,alternative_titles,recommendations,similar",
 ) -> dict[str, Any]:
     """Fetch TV series details with optional appended resources."""
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/tv/{tv_id}",
-            params={
-                "api_key": api_key,
-                "append_to_response": append,
-                "include_image_language": "en,null",
-            },
-        )
-        r.raise_for_status()
-        return r.json()
+    r = await aget(
+        f"{TMDB_BASE}/tv/{tv_id}",
+        params={
+            "api_key": api_key,
+            "append_to_response": append,
+            "include_image_language": "en,null",
+        },
+        timeout=45.0,
+    )
+    r.raise_for_status()
+    return r.json()
 
 
 async def fetch_person_tv_credits(
     person_id: int, api_key: str
 ) -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/person/{person_id}/tv_credits",
-            params={"api_key": api_key},
-        )
-        r.raise_for_status()
-        data = r.json()
+    r = await aget(
+        f"{TMDB_BASE}/person/{person_id}/tv_credits",
+        params={"api_key": api_key},
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    data = r.json()
     return list(data.get("cast") or []) + list(data.get("crew") or [])
 
 
@@ -413,13 +413,13 @@ def normalize_tv_payload(data: dict[str, Any]) -> dict[str, Any]:
 async def fetch_person_movie_credits(
     person_id: int, api_key: str
 ) -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/person/{person_id}/movie_credits",
-            params={"api_key": api_key},
-        )
-        r.raise_for_status()
-        data = r.json()
+    r = await aget(
+        f"{TMDB_BASE}/person/{person_id}/movie_credits",
+        params={"api_key": api_key},
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    data = r.json()
     return list(data.get("cast") or []) + list(data.get("crew") or [])
 
 
@@ -805,10 +805,9 @@ async def search_movie_id(
     params: dict[str, Any] = {"api_key": api_key, "query": folder_name}
     if year:
         params["year"] = year
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(f"{TMDB_BASE}/search/movie", params=params)
-        r.raise_for_status()
-        data = r.json()
+    r = await aget(f"{TMDB_BASE}/search/movie", params=params, timeout=30.0)
+    r.raise_for_status()
+    data = r.json()
     results = data.get("results") or []
     if not results:
         return None, None
@@ -822,40 +821,40 @@ async def fetch_movie(
     *,
     append: str = "credits,external_ids,images,keywords,alternative_titles,recommendations,similar,belongs_to_collection",
 ) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/movie/{movie_id}",
-            params={
-                "api_key": api_key,
-                "append_to_response": append,
-                "include_image_language": "en,null",
-            },
-        )
-        r.raise_for_status()
-        return r.json()
+    r = await aget(
+        f"{TMDB_BASE}/movie/{movie_id}",
+        params={
+            "api_key": api_key,
+            "append_to_response": append,
+            "include_image_language": "en,null",
+        },
+        timeout=45.0,
+    )
+    r.raise_for_status()
+    return r.json()
 
 
 async def fetch_collection(collection_id: int | str, api_key: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/collection/{collection_id}",
-            params={"api_key": api_key},
-        )
-        r.raise_for_status()
-        return r.json()
+    r = await aget(
+        f"{TMDB_BASE}/collection/{collection_id}",
+        params={"api_key": api_key},
+        timeout=45.0,
+    )
+    r.raise_for_status()
+    return r.json()
 
 
 async def search_collection_id(
     name: str, api_key: str
 ) -> tuple[int | None, str | None]:
     folder_name = name.replace("■", ",").replace("█", "'")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{TMDB_BASE}/search/collection",
-            params={"api_key": api_key, "query": folder_name},
-        )
-        r.raise_for_status()
-        data = r.json()
+    r = await aget(
+        f"{TMDB_BASE}/search/collection",
+        params={"api_key": api_key, "query": folder_name},
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    data = r.json()
     results = data.get("results") or []
     if not results:
         return None, None

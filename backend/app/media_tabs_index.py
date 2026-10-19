@@ -80,8 +80,8 @@ def _known_categories(kind: str) -> set[str]:
 
 
 def _folder_cover(folder: Path, media_root: Path) -> str | None:
-    """Prefer exact ``Cover - Front`` / ``Cover - Album``, then any Gallery image."""
-    from app.artwork_stems import resolve_cover_front_file
+    """Prefer Cover - Portrait → Front → Album → Landscape → Banner, then any image."""
+    from app.artwork_stems import resolve_catalog_cover_file
     from app.band_library import _find_artwork_subdir
     from app.series_paths import cover_search_dirs
 
@@ -93,18 +93,16 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
             return url
 
     art = _find_artwork_subdir(folder)
-    if art:
-        exact = resolve_cover_front_file(art)
-        if exact:
-            return _with_mtime(exact)
-
     search_dirs: list[Path] = []
     seen: set[str] = set()
 
     def _add(d: Path | None) -> None:
         if not d or not d.is_dir():
             return
-        key = str(d.resolve()) if d.exists() else str(d)
+        try:
+            key = str(d.resolve())
+        except OSError:
+            key = str(d)
         if key in seen:
             return
         seen.add(key)
@@ -115,29 +113,53 @@ def _folder_cover(folder: Path, media_root: Path) -> str | None:
     _add(art)
     _add(folder)
 
+    exact = resolve_catalog_cover_file(*search_dirs)
+    if exact:
+        return _with_mtime(exact)
+
     preferred = (
+        "Cover - Portrait*",
         "Cover - Front*",
         "Cover - Album*",
+        "Cover - Landscape*",
+        "Cover - Banner*",
         "Poster*",
         "cover*",
         "folder*",
         "front*",
     )
+    exact_stems = {
+        "cover - portrait",
+        "cover - front",
+        "cover - album",
+        "cover - landscape",
+        "cover - banner",
+    }
     for directory in search_dirs:
         for pattern in preferred:
             try:
                 matches = sorted(directory.glob(pattern), key=lambda p: p.name.casefold())
             except OSError:
                 continue
-            exact_front = [
+            exact_hits = [
                 p
                 for p in matches
                 if p.is_file()
                 and p.suffix.lower() in IMAGE_EXTS
-                and p.stem.casefold().strip() in {"cover - front", "cover - album"}
+                and p.stem.casefold().strip() in exact_stems
             ]
-            if exact_front:
-                return _with_mtime(exact_front[0])
+            if exact_hits:
+                # Prefer Portrait over Front when both matched the same glob pass
+                exact_hits.sort(
+                    key=lambda p: (
+                        0
+                        if p.stem.casefold().strip() == "cover - portrait"
+                        else 1
+                        if p.stem.casefold().strip() == "cover - front"
+                        else 2
+                    )
+                )
+                return _with_mtime(exact_hits[0])
             for p in matches:
                 if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
                     return _with_mtime(p)

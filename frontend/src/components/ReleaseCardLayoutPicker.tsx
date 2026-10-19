@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { ReleaseCardLayout } from "../types";
-import { useMenuPresence } from "../useMenuPresence";
-import { usePhoneLayout } from "../usePhoneLayout";
+import { useTopBarHoverPicker } from "../useTopBarHoverPicker";
 import { IconCardBanner, IconCardCover, IconList } from "./MenuIcons";
 
 const OPTIONS: {
@@ -22,19 +21,22 @@ type Props = {
   includeList?: boolean;
 };
 
-const CLOSE_DELAY_MS = 280;
-
 export default function ReleaseCardLayoutPicker({
   value,
   onChange,
   className = "",
   includeList = false,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const leaveTimer = useRef<number | null>(null);
-  const isPhone = usePhoneLayout();
+  const {
+    open,
+    setOpen,
+    menuPresent,
+    menuVisible,
+    rootRef,
+    onMouseEnter,
+    onMouseLeave,
+    onToggleClick,
+  } = useTopBarHoverPicker();
   const options = includeList
     ? OPTIONS
     : OPTIONS.filter((o) => o.id !== "list");
@@ -42,50 +44,14 @@ export default function ReleaseCardLayoutPicker({
   const current = options.find((o) => o.id === safeValue) ?? options[0];
   const CurrentIcon = current.Icon;
 
-  const clearLeaveTimer = () => {
-    if (leaveTimer.current != null) {
-      window.clearTimeout(leaveTimer.current);
-      leaveTimer.current = null;
-    }
-  };
-
-  useEffect(() => () => clearLeaveTimer(), []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
     <div
       ref={rootRef}
       className={`card-orientation-picker release-card-layout-picker${
         open ? " is-open" : ""
       } ${className}`.trim()}
-      onMouseEnter={() => {
-        if (isPhone) return;
-        clearLeaveTimer();
-        setOpen(true);
-      }}
-      onMouseLeave={() => {
-        if (isPhone) return;
-        clearLeaveTimer();
-        leaveTimer.current = window.setTimeout(() => {
-          setOpen(false);
-          leaveTimer.current = null;
-        }, CLOSE_DELAY_MS);
-      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <button
         type="button"
@@ -94,10 +60,7 @@ export default function ReleaseCardLayoutPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         title={`Cards: ${current.label}`}
-        onClick={() => {
-          clearLeaveTimer();
-          setOpen((v) => !v);
-        }}
+        onClick={onToggleClick}
       >
         <CurrentIcon />
       </button>
@@ -111,7 +74,7 @@ export default function ReleaseCardLayoutPicker({
           inert={menuVisible ? undefined : true}
         >
           <div className="card-orientation-picker__menu-panel">
-            {OPTIONS.map(({ id, label, Icon }) => (
+            {options.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"

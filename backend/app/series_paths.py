@@ -94,7 +94,7 @@ def find_episodes_root(folder: Path) -> Path:
 
 
 def cover_search_dirs(folder: Path) -> list[Path]:
-    """Ordered dirs to resolve Cover - Front / season art / photocards."""
+    """Dirs to resolve Cover - Portrait / Front / Landscape / Banner art."""
     out: list[Path] = []
     covers = find_covers_dir(folder)
     if covers:

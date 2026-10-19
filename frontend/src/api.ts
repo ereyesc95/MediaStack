@@ -3960,6 +3960,19 @@ export async function fetchGamesGameAudio(gameId: string) {
   }>(`${API}/games/games/${encodeURIComponent(gameId)}/media/audio`);
 }
 
+export async function fetchGamesGamePlayerTracks(gameId: string) {
+  return request<{
+    tracks: Array<{
+      id: string;
+      title: string;
+      play_url: string;
+      cover_url?: string | null;
+      artist?: string | null;
+    }>;
+    count: number;
+  }>(`${API}/games/games/${encodeURIComponent(gameId)}/player-tracks`);
+}
+
 export async function refreshGamesFranchiseMetadata(workId: string) {
   return request<{ ok: boolean; about?: Record<string, unknown>; error?: string }>(
     `${API}/games/franchises/${encodeURIComponent(workId)}/refresh-metadata`,

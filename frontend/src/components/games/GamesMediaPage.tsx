@@ -24,6 +24,8 @@ import SeriesGalleryPanel from "../series/SeriesGalleryPanel";
 import SeriesMediaGrid, {
   type SeriesMediaCard,
 } from "../series/SeriesMediaGrid";
+import EmbeddedLeafRelease from "../series/EmbeddedLeafRelease";
+import { resolveLeafAudioEmbed } from "../series/leafAudioEmbed";
 
 type Props = {
   franchiseId: string;
@@ -35,6 +37,7 @@ type Props = {
   onBack: () => void;
   backLabel?: string;
   isAdmin?: boolean;
+  userId?: number;
   onImport?: () => void;
   onSync?: () => void;
   onChooseSource?: () => void;
@@ -50,6 +53,7 @@ type Props = {
   onOpenMoviesFranchise?: (franchiseId: string, filmId?: string) => void;
   onOpenBooksFranchise?: (franchiseId: string, bookId?: string) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number) => void;
 };
 
 type Ov = Awaited<ReturnType<typeof fetchGamesGameOverview>>;
@@ -71,6 +75,7 @@ export default function GamesMediaPage({
   onBack,
   backLabel = "GAMES",
   isAdmin,
+  userId,
   onImport,
   onSync,
   onChooseSource,
@@ -81,6 +86,7 @@ export default function GamesMediaPage({
   onOpenMoviesFranchise,
   onOpenBooksFranchise,
   onOpenMusicRelease,
+  onOpenArtist,
 }: Props) {
   const isLeaf = Boolean(gameId);
   const [data, setData] = useState<Ov | null>(null);
@@ -93,7 +99,6 @@ export default function GamesMediaPage({
   const [audioLoading, setAudioLoading] = useState(false);
   const [universeOpen, setUniverseOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const autoOpenedAudioRef = useRef<string | null>(null);
   const refreshedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -182,35 +187,6 @@ export default function GamesMediaPage({
           category: r.category || undefined,
         }));
         setAudioCards(cards);
-
-        // Single .lnk → open release tracklist view (left panel) instead of one card.
-        if (
-          section === "audio" &&
-          cards.length === 1 &&
-          cards[0].navigate_band_id &&
-          cards[0].navigate_release_id &&
-          onOpenMusicRelease
-        ) {
-          const openKey = `${cards[0].navigate_band_id}:${cards[0].navigate_release_id}`;
-          if (autoOpenedAudioRef.current !== openKey) {
-            autoOpenedAudioRef.current = openKey;
-            saveReleaseReferrer({
-              bandId: cards[0].navigate_band_id,
-              section: "audio",
-              source: "games",
-              franchiseId,
-              subseriesId: gameId,
-              franchiseName:
-                (data as { title?: string; name?: string } | null)?.title ||
-                (data as { name?: string } | null)?.name ||
-                franchiseId,
-            });
-            onOpenMusicRelease(
-              cards[0].navigate_band_id,
-              cards[0].navigate_release_id
-            );
-          }
-        }
       })
       .catch(() => {
         if (!cancelled) setAudioCards([]);
@@ -221,15 +197,7 @@ export default function GamesMediaPage({
     return () => {
       cancelled = true;
     };
-  }, [
-    section,
-    data?.has_audio,
-    franchiseId,
-    gameId,
-    isLeaf,
-    onOpenMusicRelease,
-    data,
-  ]);
+  }, [section, data?.has_audio, franchiseId, gameId, isLeaf]);
 
   const title =
     (data as { title?: string; name?: string } | null)?.title ||
@@ -254,69 +222,76 @@ export default function GamesMediaPage({
   }, [data, platformFilter]);
 
   const platforms = useMemo(() => {
-    const set = new Set<string>();
     const raw =
       ((data as { sibling_games?: MoviesFilmCard[] })?.sibling_games as
         | MoviesFilmCard[]
         | undefined) ||
       ((data as { games?: MoviesFilmCard[] })?.games as MoviesFilmCard[] | undefined) ||
       [];
+    const set = new Set<string>();
     for (const g of raw) {
       const p = (g as { platform?: string }).platform;
       if (p) set.add(p);
     }
-    const fromOv = (data as { platforms?: string[] })?.platforms || [];
-    for (const p of fromOv) if (p) set.add(p);
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return Array.from(set).sort();
   }, [data]);
 
-  const related = data?.related;
-  const hasSeries = Boolean((related?.series || []).length || data?.has_series);
-  const hasMovies = Boolean((related?.movies || []).length || data?.has_movies);
-  const hasBooks = Boolean((related?.books || []).length || data?.has_books);
+  const related = (data as { related?: Record<string, RelatedItem[]> } | null)
+    ?.related;
+  const folderPath =
+    (data as { folder_path?: string } | null)?.folder_path || "";
+  const launchPath =
+    (data as { open_url?: string; rom_path?: string } | null)?.open_url ||
+    (data as { rom_path?: string } | null)?.rom_path ||
+    null;
+
   const hasAudio = Boolean(data?.has_audio || audioCards.length > 0);
-  const hasGallery = Boolean(data?.has_gallery);
-  const hasGamesTab = games.length > 0 || !isLeaf;
-  const folderPath = (data as { folder_path?: string } | null)?.folder_path || "";
+  const audioEmbed = useMemo(
+    () => resolveLeafAudioEmbed(audioCards),
+    [audioCards]
+  );
 
   const tabs: { id: GamesSection; label: string; show: boolean }[] = [
     { id: "overview", label: "OVERVIEW", show: true },
-    { id: "games", label: "GAMES", show: hasGamesTab },
+    { id: "games", label: "GAMES", show: !isLeaf && games.length > 0 },
+    {
+      id: "series",
+      label: "SERIES",
+      show: Boolean(related?.series?.length),
+    },
+    {
+      id: "movies",
+      label: "MOVIES",
+      show: Boolean(related?.movies?.length),
+    },
+    {
+      id: "books",
+      label: "BOOKS",
+      show: Boolean(related?.books?.length),
+    },
     { id: "audio", label: "AUDIO", show: hasAudio },
-    { id: "series", label: "SERIES", show: hasSeries },
-    { id: "movies", label: "MOVIES", show: hasMovies },
-    { id: "books", label: "BOOKS", show: hasBooks },
-    { id: "gallery", label: "GALLERY", show: hasGallery },
+    { id: "gallery", label: "GALLERY", show: Boolean(folderPath) },
     { id: "quiz", label: "QUIZ", show: !isLeaf },
   ];
 
-  const launchPath = (data as { launch_path?: string })?.launch_path;
-
   async function onLaunch() {
-    if (!gameId || !launchPath) return;
+    if (!launchPath || !gameId) return;
     setLaunching(true);
     try {
       await launchGame(gameId);
-      pushRecentGameId(gameId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLaunching(false);
     }
   }
 
   async function handleRefreshMetadata() {
-    if (refreshing) return;
     setRefreshing(true);
-    setError(null);
     try {
-      const res = isLeaf
-        ? await refreshGamesGameMetadata(gameId!)
-        : await refreshGamesFranchiseMetadata(franchiseId);
-      if (!res.ok && res.error) setError(res.error);
-      else setReloadKey((k) => k + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const refresh = isLeaf
+        ? refreshGamesGameMetadata(gameId!)
+        : refreshGamesFranchiseMetadata(franchiseId);
+      const res = await refresh;
+      if (res.ok) setReloadKey((k) => k + 1);
     } finally {
       setRefreshing(false);
     }
@@ -334,6 +309,18 @@ export default function GamesMediaPage({
       });
       onOpenMusicRelease(item.navigate_band_id, item.navigate_release_id);
     }
+  }
+
+  function goToEmbeddedReleasePage(bandId: number, releaseId: string) {
+    saveReleaseReferrer({
+      bandId,
+      section: "audio",
+      source: "games",
+      franchiseId,
+      subseriesId: gameId,
+      franchiseName: String(title),
+    });
+    onOpenMusicRelease?.(bandId, releaseId);
   }
 
   function openRelatedMovies(item: RelatedItem) {
@@ -373,7 +360,6 @@ export default function GamesMediaPage({
   function openRelatedSeries(item: RelatedItem) {
     const fid = item.navigate_franchise_id || item.path;
     if (!fid) return;
-    // Path-shaped: Series/Letter/Franchise[/Show]
     const path = (item.path || "").replace(/\\/g, "/");
     if (path.toLowerCase().startsWith("series/")) {
       const parts = path.split("/").filter(Boolean);
@@ -635,10 +621,20 @@ export default function GamesMediaPage({
       ) : null}
 
       {!loading && section === "audio" ? (
-        audioCards.length === 1 &&
-        audioCards[0].navigate_band_id &&
-        audioCards[0].navigate_release_id ? (
-          <p className="muted">Opening soundtrack…</p>
+        audioEmbed.mode === "release" && onImport && onSync ? (
+          <EmbeddedLeafRelease
+            bandId={audioEmbed.bandId}
+            releaseId={audioEmbed.releaseId}
+            isAdmin={isAdmin}
+            userId={userId}
+            onImport={onImport}
+            onSync={onSync}
+            onChooseSource={onChooseSource}
+            onSwitchProfile={onSwitchProfile}
+            onEditProfile={onEditProfile}
+            onOpenArtist={onOpenArtist}
+            onGoToReleasePage={goToEmbeddedReleasePage}
+          />
         ) : (
           <SeriesMediaGrid
             items={audioCards}

@@ -248,23 +248,29 @@ def ensure_relative_tree(base: Path, relative: str) -> None:
 
 
 def find_first_image(folder: Path, stems: list[str]) -> Path | None:
-    """Case-insensitive first match for any stem + any image extension."""
+    """Case-insensitive match; ``stems`` order is priority (Portrait before Front)."""
     if not folder.is_dir() or not stems:
         return None
-    want = {s.casefold() for s in stems if s}
+    ordered = [s.casefold() for s in stems if s]
+    if not ordered:
+        return None
     try:
         children = list(folder.iterdir())
     except OSError:
         return None
+    by_stem: dict[str, Path] = {}
     for child in children:
         if not child.is_file():
             continue
-        stem = child.stem.casefold()
         suf = child.suffix.casefold()
         if suf not in IMAGE_EXTS:
             continue
-        if stem in want:
-            return child
+        stem = child.stem.casefold()
+        by_stem.setdefault(stem, child)
+    for want in ordered:
+        hit = by_stem.get(want)
+        if hit:
+            return hit
     return None
 
 
@@ -461,25 +467,49 @@ def resolve_source_image(folder: Path, root: Path | None = None) -> Path | None:
                 return find_first_image(main_show / "Promo", ["Poster"])
         return None
 
-    # Generic Gallery/Covers for leaf (movie/book/game/show)
-    covers = folder / "Gallery" / "Covers"
-    if covers.is_dir():
-        hit = find_first_image(covers, ["Cover - Portrait"])
-        if hit:
-            return hit
-        hit = find_first_image(covers, ["Cover - Front"])
-        if hit:
-            return hit
+    # Leaf Gallery/Covers + franchise [Artwork]: Portrait across dirs before Front
+    from app.artwork_stems import resolve_catalog_cover_file
 
-    # Franchise with [Artwork]/Covers (music artist / series-home franchise)
-    art_covers = folder / "[Artwork]" / "Covers"
-    if art_covers.is_dir():
-        hit = find_first_image(art_covers, ["Cover - Portrait"])
-        if hit:
-            return hit
-        hit = find_first_image(art_covers, ["Cover - Front"])
-        if hit:
-            return hit
+    catalog_hit = resolve_catalog_cover_file(
+        folder / "Gallery" / "Covers",
+        folder / "[Artwork]",
+        folder / "[Artwork]" / "Covers",
+        folder / "Artwork",
+    )
+    if catalog_hit:
+        return catalog_hit
+
+    # Numbered / loose portraits (Portrait 01, TMDb. Portrait, …)
+    loose = _loose_portrait_cover(folder / "Gallery" / "Covers")
+    if loose:
+        return loose
+
+    # Franchise work root with no local cover: use cross-module franchise home art
+    if _is_catalog_franchise_root(module, parts):
+        fran_name = parts[-1]
+        try:
+            from app.franchise_identity import find_artwork_home
+
+            home = find_artwork_home(fran_name, root)
+        except Exception:
+            home = None
+        if home:
+            _home_mod, home_dir = home
+            try:
+                same = home_dir.resolve() == folder.resolve()
+            except OSError:
+                same = False
+            if not same:
+                home_hit = resolve_catalog_cover_file(
+                    home_dir / "[Artwork]",
+                    home_dir / "[Artwork]" / "Covers",
+                    home_dir / "Gallery" / "Covers",
+                )
+                if home_hit:
+                    return home_hit
+                home_loose = _loose_portrait_cover(home_dir / "Gallery" / "Covers")
+                if home_loose:
+                    return home_loose
 
     # Release audio leaf: …/Albums/{date}. Title — cover in [Artwork]
     if parent.name.casefold() in {
@@ -518,6 +548,36 @@ _FORMAT_HINTS = re.compile(
     r"dvd|blu-?ray|vhs|disc\s*\d+|side\s*[a-d])(?:\b|$)",
     re.I,
 )
+
+
+def _loose_portrait_cover(covers: Path) -> Path | None:
+    """Any image whose stem contains 'portrait' (e.g. Portrait 01.jpg)."""
+    if not covers.is_dir():
+        return None
+    try:
+        files = sorted(covers.iterdir(), key=lambda p: p.name.casefold())
+    except OSError:
+        return None
+    for path in files:
+        if not path.is_file():
+            continue
+        if path.suffix.casefold() not in IMAGE_EXTS:
+            continue
+        stem = path.stem.casefold()
+        if "_small" in stem or stem.endswith(".jpg_small"):
+            continue
+        if "portrait" in stem:
+            return path
+    return None
+
+
+def _is_catalog_franchise_root(module: str, parts: list[str]) -> bool:
+    """True for ``Movies|Series|Books/{L}/{Name}``, ``Games/{Plat}/{L}/{Name}``, ``Music/{L}/{Artist}``."""
+    if module in {"Movies", "Series", "Books", "Music"} and len(parts) == 3:
+        return True
+    if module == "Games" and len(parts) == 4:
+        return True
+    return False
 
 
 def _looks_like_format_folder(name: str) -> bool:

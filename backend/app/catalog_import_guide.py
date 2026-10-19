@@ -16,14 +16,31 @@ Gallery/Covers (leaf / standalone titles):
   Landscape 01.jpg …
   Characters - Portrait.jpg
   Characters - Landscape.jpg
-  Photocard - Portrait Front.jpg
-  Photocard - Portrait Back.jpg
-  Photocard - Landscape Front.jpg
-  Photocard - Landscape Back.jpg
   Photo - Banner.jpg
   Photo - Landscape.jpg
   Photo - Portrait.jpg
   Photo - Square.jpg
+
+PHOTOCARDS (leaf overview flip cards — Series / Movies / Books / Games)
+-----------------------------------------------------------------------
+Place these in Gallery/Covers (exact stems; .jpg / .png / .webp / .gif / .bmp):
+  Photocard - Portrait Front.jpg
+  Photocard - Portrait Back.jpg
+  Photocard - Landscape Front.jpg
+  Photocard - Landscape Back.jpg
+Aliases with an extra dash also match:
+  Photocard - Portrait - Front.jpg
+  Photocard - Landscape - Back.jpg
+
+Fallback order when dedicated Photocard files are missing:
+  1. Characters - Portrait / Characters - Landscape (fronts)
+  2. Cover - Portrait → Cover - Front → Cover - Landscape → Cover - Banner
+  3. Loose Portrait 01 / Landscape 01 extras
+Missing backs use:
+  Wallpaper - Portrait / Wallpaper - Landscape
+  then the catalog cover above, then the same image as the front.
+When only covers are used, both cards show as cover-only (square corners).
+Franchise hub pages do not show photocards — only leaf show/film/book/game pages.
 
 Franchise home [Artwork] (only when this module is the franchise home):
   Cover - Portrait.jpg
@@ -241,12 +258,14 @@ def ensure_catalog_user_guide_templates(db: Session) -> None:
             continue
         default = DEFAULT_GUIDES[module]
         value = row.aps_value or ""
-        # Refresh scaffolds that still teach Photos/Wallpaper or miss Photo stems.
+        # Refresh scaffolds that still teach Photos/Wallpaper, miss Photo stems,
+        # or lack the Photocards fallback section.
         if (
             "Photo - Banner" not in value
             or "Photos/" in value
-            or "Wallpaper - " in value
             or "Gallery/Renders/" in value
+            or "PHOTOCARDS (leaf overview flip cards" not in value
+            or "Cover - Portrait.jpg" not in value
         ):
             row.aps_value = default
             continue

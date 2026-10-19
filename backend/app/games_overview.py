@@ -378,7 +378,9 @@ def build_game_overview(
         "directors": directors,
         "cast": about_disk.get("cast") or {},
         "links": about_disk.get("links") or {},
-        "photocards": about_disk.get("photocards") or None,
+        "photocards": detail.get("photocards")
+        or about_disk.get("photocards")
+        or None,
         "work": {"id": work_id, "name": detail.get("work_name")},
         "games": siblings,
         "films": siblings,

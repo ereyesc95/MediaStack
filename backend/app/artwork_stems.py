@@ -56,59 +56,84 @@ def _media_file_in_artwork(
     return None
 
 
-def resolve_cover_front_file(artwork: Path | None) -> Path | None:
-    """Prefer Cover - Portrait, then Cover - Front / Cover - Album (legacy)."""
-    if not artwork or not artwork.is_dir():
-        return None
-    portrait = _artwork_file(artwork, COVER_PORTRAIT_STEM)
-    if portrait and not _is_small_derivative(portrait):
-        return portrait
-    cover = _artwork_file(artwork, COVER_FRONT_STEM)
-    if cover and not _is_small_derivative(cover):
-        return cover
-    album = _artwork_file(artwork, COVER_ALBUM_STEM)
-    if album and not _is_small_derivative(album):
-        return album
+# Catalog / franchise card covers (portrait layouts): try each stem across all
+# search dirs before falling through — so Gallery Cover - Front never beats
+# [Artwork] Cover - Portrait.
+CATALOG_PORTRAIT_STEMS = (
+    COVER_PORTRAIT_STEM,
+    COVER_FRONT_STEM,
+    COVER_ALBUM_STEM,
+    COVER_LANDSCAPE_STEM,
+    COVER_BANNER_STEM,
+)
+
+CATALOG_WIDE_STEMS = (
+    COVER_LANDSCAPE_STEM,
+    COVER_BANNER_STEM,
+)
+
+
+def _dirs(*folders: Path | None) -> list[Path]:
+    out: list[Path] = []
+    seen: set[str] = set()
+    for folder in folders:
+        if not folder or not folder.is_dir():
+            continue
+        try:
+            key = str(folder.resolve())
+        except OSError:
+            key = str(folder)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(folder)
+    return out
+
+
+def _first_stem_in_dirs(dirs: list[Path], stems: tuple[str, ...]) -> Path | None:
+    for stem in stems:
+        for directory in dirs:
+            found = _artwork_file(directory, stem)
+            if found and not _is_small_derivative(found):
+                return found
     return None
+
+
+def resolve_catalog_cover_file(*folders: Path | None) -> Path | None:
+    """Portrait card art: Cover - Portrait → Front → Album → Landscape → Banner."""
+    return _first_stem_in_dirs(_dirs(*folders), CATALOG_PORTRAIT_STEMS)
+
+
+def resolve_catalog_wide_file(*folders: Path | None) -> Path | None:
+    """Wide / banner art: Cover - Landscape → Cover - Banner."""
+    return _first_stem_in_dirs(_dirs(*folders), CATALOG_WIDE_STEMS)
+
+
+def resolve_cover_front_file(artwork: Path | None) -> Path | None:
+    """Prefer Cover - Portrait, then Cover - Front / Cover - Album (legacy).
+
+    Does not fall through to landscape/banner — those are separate art roles
+    (music releases, photocard backs, etc.).
+    """
+    return _first_stem_in_dirs(
+        _dirs(artwork),
+        (COVER_PORTRAIT_STEM, COVER_FRONT_STEM, COVER_ALBUM_STEM),
+    )
 
 
 def resolve_cover_banner_file(artwork: Path | None) -> Path | None:
     """Prefer Cover - Landscape, then Cover - Banner (legacy)."""
-    if not artwork or not artwork.is_dir():
-        return None
-    landscape = _artwork_file(artwork, COVER_LANDSCAPE_STEM)
-    if landscape and not _is_small_derivative(landscape):
-        return landscape
-    found = _artwork_file(artwork, COVER_BANNER_STEM)
-    if found and not _is_small_derivative(found):
-        return found
-    return None
+    return resolve_catalog_wide_file(artwork)
 
 
 def resolve_cover_landscape_file(artwork: Path | None) -> Path | None:
     """Prefer Cover - Landscape, then Cover - Banner (legacy)."""
-    if not artwork or not artwork.is_dir():
-        return None
-    found = _artwork_file(artwork, COVER_LANDSCAPE_STEM)
-    if found and not _is_small_derivative(found):
-        return found
-    banner = _artwork_file(artwork, COVER_BANNER_STEM)
-    if banner and not _is_small_derivative(banner):
-        return banner
-    return None
+    return resolve_catalog_wide_file(artwork)
 
 
 def resolve_cover_portrait_file(artwork: Path | None) -> Path | None:
-    """Prefer Cover - Portrait, then Cover - Front (legacy)."""
-    if not artwork or not artwork.is_dir():
-        return None
-    found = _artwork_file(artwork, COVER_PORTRAIT_STEM)
-    if found and not _is_small_derivative(found):
-        return found
-    front = _artwork_file(artwork, COVER_FRONT_STEM)
-    if front and not _is_small_derivative(front):
-        return front
-    return None
+    """Catalog portrait card: Portrait → Front → Album → Landscape → Banner."""
+    return resolve_catalog_cover_file(artwork)
 
 
 def resolve_animation_album_file(artwork: Path | None) -> Path | None:

@@ -150,11 +150,11 @@ def _apply_cover_front_backs(
 ) -> None:
     """Fill missing flip backs from cover artwork.
 
-    Landscape back preference: Cover - Landscape → Cover - Banner → Cover - Front.
+    Landscape back preference: Cover - Landscape → Cover - Banner → Cover - Portrait/Front.
     """
     from app.artwork_stems import (
+        resolve_catalog_cover_file,
         resolve_cover_banner_file,
-        resolve_cover_front_file,
         resolve_cover_landscape_file,
     )
 
@@ -163,7 +163,7 @@ def _apply_cover_front_backs(
             return None
         return _media_url(path, media_root)
 
-    cover_front = cover_url or _url(resolve_cover_front_file(artwork))
+    cover_front = cover_url or _url(resolve_catalog_cover_file(artwork))
     cover_banner = _url(resolve_cover_banner_file(artwork))
     cover_landscape = _url(resolve_cover_landscape_file(artwork))
 

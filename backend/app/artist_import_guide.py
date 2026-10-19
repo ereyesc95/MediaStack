@@ -209,14 +209,27 @@ Disc and branding:
   Logo - Collapsed
 
 Other supported extras:
-  Photocard - Portrait Front
-  Photocard - Portrait Back
-  Photocard - Landscape Front
-  Photocard - Landscape Back
   Photo - Portrait
   Photo - Landscape
   Photo - Square
   Photo - Banner
+
+PHOTOCARDS (release overview flip cards)
+----------------------------------------
+Exact stems in the release/edition [Artwork] folder:
+  Photocard - Portrait Front
+  Photocard - Portrait Back
+  Photocard - Landscape Front
+  Photocard - Landscape Back
+(Aliases with an extra dash also match: Photocard - Portrait - Front.)
+
+Fallback order when dedicated Photocard files are missing:
+  1. Photo - Portrait / Photo - Landscape (fronts); Wallpaper - Portrait /
+     Wallpaper - Landscape for backs when Photo stems exist
+  2. Artist Gallery era Photos closest to the release year (not Various Artists)
+  3. Cover - Front / Cover - Back as both orientations (cover-only / square)
+Singles may also inherit photocards from the parent album [Artwork].
+Wallpaper stems (optional backs / era fill):
   Wallpaper - Portrait
   Wallpaper - Landscape
 
@@ -313,6 +326,7 @@ def ensure_artist_user_guide_template(db: Session) -> AppSetting:
             )
             or "EVENTS (Music home tab)" not in value
             or "Promo/Thumbnail" not in value
+            or "PHOTOCARDS (release overview flip cards)" not in value
         )
         if needs_upgrade:
             row.aps_value = DEFAULT_ARTIST_USER_GUIDE

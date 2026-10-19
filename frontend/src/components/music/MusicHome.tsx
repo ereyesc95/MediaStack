@@ -115,7 +115,12 @@ type Props = {
   onCountry: (country: { id?: number; name: string }) => void;
 };
 
-type PlaceholderVariant = "square" | "landscape" | "circle" | "flag";
+type PlaceholderVariant =
+  | "square"
+  | "landscape"
+  | "circle"
+  | "icon-circle"
+  | "flag";
 
 function DashPlaceholder({ variant }: { variant: PlaceholderVariant }) {
   if (variant === "landscape") {
@@ -129,6 +134,14 @@ function DashPlaceholder({ variant }: { variant: PlaceholderVariant }) {
     return (
       <div className="dash-track dash-placeholder-item" aria-hidden>
         <span className="dash-track-art dash-placeholder dash-placeholder--square" />
+      </div>
+    );
+  }
+  /* Artist ICONS pane — same shell as DashIconCard so mobile sizing matches. */
+  if (variant === "icon-circle") {
+    return (
+      <div className="dash-icon-item dash-placeholder-item" aria-hidden>
+        <span className="dash-icon-item-cover dash-placeholder dash-placeholder--circle" />
       </div>
     );
   }
@@ -313,7 +326,7 @@ export default function MusicHome({
           ))}
           <PlaceholderTiles
             count={topArtists.length ? artistPlaceholders : paneLimit}
-            variant="circle"
+            variant="icon-circle"
           />
         </div>
       </section>

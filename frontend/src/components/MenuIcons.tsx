@@ -547,12 +547,13 @@ export function IconSeriesScope({ className }: IconProps) {
   );
 }
 
+/** MoviesStack — video / play glyph (same mark as IconVideo). */
 export function IconMediaMovies({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
       <path
         fill="currentColor"
-        d="M18 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM8 18H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V8h2v2zm10 8h-8v-2h8v2zm0-4h-8v-2h8v2zm0-4h-8V8h8v2z"
+        d="M21 6.5a1.5 1.5 0 0 0-1.45-1.1C17.9 5 12 5 12 5s-5.9 0-7.55.4A1.5 1.5 0 0 0 3 6.5 26 26 0 0 0 2.5 12 26 26 0 0 0 3 17.5 1.5 1.5 0 0 0 4.45 18.6C6.1 19 12 19 12 19s5.9 0 7.55-.4a1.5 1.5 0 0 0 1.45-1.1A26 26 0 0 0 21.5 12 26 26 0 0 0 21 6.5zM10 15.5v-7l6 3.5-6 3.5z"
       />
     </svg>
   );
@@ -818,6 +819,18 @@ export function IconTabCatalog({ className }: IconProps) {
       <path
         fill="currentColor"
         d="M5 4h6.2v7.2H5V4zm7.8 0H19v4.8h-6.2V4zM5 12.8h6.2V20H5v-7.2zm7.8 2.4H19V20h-6.2v-4.8z"
+      />
+    </svg>
+  );
+}
+
+/** MusicStack ARTISTS tab — people, not the catalog grid. */
+export function IconTabArtists({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm6.5 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 13c-3.34 0-7 1.67-7 4.5V20h14v-2.5C16 14.67 12.34 13 9 13zm7.5 0c-.4 0-.8.03-1.18.08A5.4 5.4 0 0 1 17.5 17v3H22v-2.5c0-2.5-2.67-4.5-5.5-4.5z"
       />
     </svg>
   );

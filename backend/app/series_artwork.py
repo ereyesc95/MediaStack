@@ -5,8 +5,6 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
-
 from app.gallery import IMAGE_EXTS, _media_url
 from app.paths import people_dir
 
@@ -83,25 +81,45 @@ def _list_named(
     return out
 
 
+def _prefer_exact_cover_stem(files: list[Path], stem: str) -> list[Path]:
+    """Move exact ``Cover - {stem}`` to the front of a named-art list."""
+    want = f"cover - {stem}".casefold()
+    exact: list[Path] = []
+    rest: list[Path] = []
+    for path in files:
+        if path.stem.casefold().strip() == want:
+            exact.append(path)
+        else:
+            rest.append(path)
+    return exact + rest
+
+
 def list_portrait_files(franchise_dir: Path) -> list[Path]:
-    return _list_named(franchise_dir, want="portrait")
+    return _prefer_exact_cover_stem(
+        _list_named(franchise_dir, want="portrait"), "portrait"
+    )
 
 
 def list_landscape_files(franchise_dir: Path) -> list[Path]:
-    return _list_named(franchise_dir, want="landscape")
+    return _prefer_exact_cover_stem(
+        _list_named(franchise_dir, want="landscape"), "landscape"
+    )
 
 
 def list_banner_files(franchise_dir: Path) -> list[Path]:
-    return _list_named(franchise_dir, want="banner")
+    return _prefer_exact_cover_stem(
+        _list_named(franchise_dir, want="banner"), "banner"
+    )
 
 
 def _download(url: str, dest: Path) -> bool:
     try:
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            r = client.get(url)
-            r.raise_for_status()
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(r.content)
+        from app.http_ssl import sget
+
+        r = sget(url, timeout=60.0, follow_redirects=True)
+        r.raise_for_status()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(r.content)
         return True
     except Exception:
         return False
@@ -375,10 +393,10 @@ def resolve_series_photocards(
     Order:
       1. Dedicated ``photocard - …`` stems
       2. ``Characters - Portrait/Landscape`` fronts + ``Wallpaper - …`` backs
-      3. Any other portrait/landscape-named images (excluding cover/logo/season/…)
-      4. Backs fall back to ``Cover - Front``, then the front image itself
+      3. ``Cover - Portrait`` → Front → Landscape → Banner (catalog covers)
+      4. Loose portrait/landscape-named extras (Portrait 01, …)
+      5. Backs fall back to catalog cover, then the front image itself
     """
-    from app.media_index import _artwork_file
     from app.release_overview import PHOTOCARD_STEMS
     from app.release_photocards import (
         scan_photocards,
@@ -386,9 +404,25 @@ def resolve_series_photocards(
         _photocards_empty,
         _ensure_flip_backs,
     )
-    from app.band_library import COVER_FRONT_STEM
+    from app.artwork_stems import (
+        resolve_catalog_cover_file,
+        resolve_catalog_wide_file,
+    )
+    from app.series_paths import cover_search_dirs
 
     artwork = _artwork_subdir(folder)
+    search_dirs = cover_search_dirs(folder)
+    if artwork and artwork not in search_dirs:
+        search_dirs = [artwork, *search_dirs]
+
+    def _primary_cover_url() -> str | None:
+        cover = resolve_catalog_cover_file(*search_dirs)
+        return _media_url(cover, media_root) if cover else None
+
+    def _wide_cover_url() -> str | None:
+        wide = resolve_catalog_wide_file(*search_dirs)
+        return _media_url(wide, media_root) if wide else None
+
     cards = scan_photocards(artwork, media_root)
     if not _photocards_empty(cards):
         from app.release_photocards import _apply_cover_front_backs
@@ -398,8 +432,7 @@ def resolve_series_photocards(
             cards["portrait_back"] = wp.get("portrait_back")
         if cards.get("landscape_front") and not cards.get("landscape_back"):
             cards["landscape_back"] = wp.get("landscape_back")
-        cover = _artwork_file(artwork, COVER_FRONT_STEM) if artwork else None
-        cover_url = _media_url(cover, media_root) if cover else None
+        cover_url = _primary_cover_url()
         _apply_cover_front_backs(
             cards, artwork, media_root, cover_url=cover_url
         )
@@ -410,13 +443,19 @@ def resolve_series_photocards(
     char_p = _stem_file(artwork, "characters - portrait")
     char_l = _stem_file(artwork, "characters - landscape")
     wp = scan_wallpapers(artwork, media_root)
-    cover = _artwork_file(artwork, COVER_FRONT_STEM) if artwork else None
-    cover_url = _media_url(cover, media_root) if cover else None
+    cover_url = _primary_cover_url()
+    wide_url = _wide_cover_url()
 
     if char_p:
         cards["portrait_front"] = _media_url(char_p, media_root)
     if char_l:
         cards["landscape_front"] = _media_url(char_l, media_root)
+
+    # Prefer formal Cover - Portrait / Landscape before numbered extras
+    if not cards.get("portrait_front") and cover_url:
+        cards["portrait_front"] = cover_url
+    if not cards.get("landscape_front") and wide_url:
+        cards["landscape_front"] = wide_url
 
     if _photocards_empty(cards):
         for f in _stem_contains(artwork, "portrait"):
@@ -430,11 +469,24 @@ def resolve_series_photocards(
             cards["landscape_front"] = _media_url(f, media_root)
             break
 
+    if (
+        cards.get("portrait_front") == cover_url
+        and cards.get("landscape_front") in {cover_url, wide_url, None}
+        and cover_url
+        and not char_p
+        and not char_l
+    ):
+        cards["landscape_front"] = cards.get("landscape_front") or cover_url
+        cards["portrait_back"] = cover_url
+        cards["landscape_back"] = cards.get("landscape_front") or cover_url
+        cards["cover_only"] = True
+        return cards
+
     if _photocards_empty(cards) and cover_url:
         cards["portrait_front"] = cover_url
-        cards["landscape_front"] = cover_url
+        cards["landscape_front"] = wide_url or cover_url
         cards["portrait_back"] = cover_url
-        cards["landscape_back"] = cover_url
+        cards["landscape_back"] = wide_url or cover_url
         cards["cover_only"] = True
         return cards
 
@@ -728,49 +780,54 @@ def enrich_cast_character_photos_from_jikan(
     char_map: dict[str, str] = {}
     if need_remote:
         try:
-            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-                r = client.get(
-                    "https://api.jikan.moe/v4/anime",
-                    params={"q": franchise_name, "limit": 5},
+            from app.http_ssl import sget
+
+            r = sget(
+                "https://api.jikan.moe/v4/anime",
+                params={"q": franchise_name, "limit": 5},
+                timeout=30.0,
+                follow_redirects=True,
+            )
+            r.raise_for_status()
+            results = (r.json() or {}).get("data") or []
+            anime_id = None
+            want = _norm_key(franchise_name)
+            for a in results:
+                title = a.get("title") or ""
+                titles = [title] + [
+                    t.get("title") or ""
+                    for t in (a.get("titles") or [])
+                    if isinstance(t, dict)
+                ]
+                if any(
+                    want in _norm_key(t) or _norm_key(t) in want
+                    for t in titles
+                    if t
+                ):
+                    anime_id = a.get("mal_id")
+                    break
+            if anime_id is None and results:
+                anime_id = results[0].get("mal_id")
+            if anime_id:
+                r2 = sget(
+                    f"https://api.jikan.moe/v4/anime/{anime_id}/characters",
+                    timeout=30.0,
+                    follow_redirects=True,
                 )
-                r.raise_for_status()
-                results = (r.json() or {}).get("data") or []
-                anime_id = None
-                want = _norm_key(franchise_name)
-                for a in results:
-                    title = a.get("title") or ""
-                    titles = [title] + [
-                        t.get("title") or ""
-                        for t in (a.get("titles") or [])
-                        if isinstance(t, dict)
-                    ]
-                    if any(
-                        want in _norm_key(t) or _norm_key(t) in want
-                        for t in titles
-                        if t
-                    ):
-                        anime_id = a.get("mal_id")
-                        break
-                if anime_id is None and results:
-                    anime_id = results[0].get("mal_id")
-                if anime_id:
-                    r2 = client.get(
-                        f"https://api.jikan.moe/v4/anime/{anime_id}/characters"
-                    )
-                    r2.raise_for_status()
-                    for row in (r2.json() or {}).get("data") or []:
-                        ch = row.get("character") or {}
-                        cname = ch.get("name") or ""
-                        imgs = (ch.get("images") or {}).get("jpg") or {}
-                        url = imgs.get("image_url") or imgs.get("small_image_url")
-                        if cname and url:
-                            char_map[_norm_key(cname)] = url
-                            if "," in cname:
-                                parts = [p.strip() for p in cname.split(",", 1)]
-                                if len(parts) == 2:
-                                    char_map[
-                                        _norm_key(f"{parts[1]} {parts[0]}")
-                                    ] = url
+                r2.raise_for_status()
+                for row in (r2.json() or {}).get("data") or []:
+                    ch = row.get("character") or {}
+                    cname = ch.get("name") or ""
+                    imgs = (ch.get("images") or {}).get("jpg") or {}
+                    url = imgs.get("image_url") or imgs.get("small_image_url")
+                    if cname and url:
+                        char_map[_norm_key(cname)] = url
+                        if "," in cname:
+                            parts = [p.strip() for p in cname.split(",", 1)]
+                            if len(parts) == 2:
+                                char_map[
+                                    _norm_key(f"{parts[1]} {parts[0]}")
+                                ] = url
         except Exception:
             char_map = {}
 
