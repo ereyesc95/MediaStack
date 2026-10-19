@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { ReleaseTab } from "../../musicRoute";
-import ReleasePage from "../music/release/ReleasePage";
+import ReleasePage, {
+  type EmbeddedReleaseChrome,
+} from "../music/release/ReleasePage";
 
 type Props = {
   bandId: number;
@@ -14,11 +16,13 @@ type Props = {
   onEditProfile?: () => void;
   onOpenArtist?: (bandId: number) => void;
   onGoToReleasePage: (bandId: number, releaseId: string) => void;
+  onEmbedChromeChange?: (chrome: EmbeddedReleaseChrome | null) => void;
 };
 
 /**
  * Single-soundtrack embed for leaf/franchise Audio tabs.
- * Tab order: Tracklist → Overview → Gallery. Escape hatch on Overview.
+ * Tab order: Tracklist → Overview → Gallery. Escape hatch under cover.
+ * Parent leaf chrome owns top bar, tabs, and AppMenu.
  */
 export default function EmbeddedLeafRelease({
   bandId,
@@ -32,6 +36,7 @@ export default function EmbeddedLeafRelease({
   onEditProfile,
   onOpenArtist,
   onGoToReleasePage,
+  onEmbedChromeChange,
 }: Props) {
   const [tab, setTab] = useState<ReleaseTab>("tracklist");
 
@@ -56,6 +61,7 @@ export default function EmbeddedLeafRelease({
       onSwitchProfile={onSwitchProfile}
       onEditProfile={onEditProfile}
       onGoToReleasePage={() => onGoToReleasePage(bandId, releaseId)}
+      onEmbedChromeChange={onEmbedChromeChange}
     />
   );
 }

@@ -89,6 +89,7 @@ type Props = {
   onOpenMoviesFranchise?: (franchiseId: string, filmId?: string) => void;
   onOpenBooksFranchise?: (franchiseId: string, bookId?: string) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenArtist?: (bandId: number, artistSection?: string) => void;
   onOpenUniverse?: (universeId: number) => void;
 };
 
@@ -116,6 +117,7 @@ export default function GamesModule({
   onOpenMoviesFranchise,
   onOpenBooksFranchise,
   onOpenMusicRelease,
+  onOpenArtist,
   onOpenUniverse,
 }: Props) {
   const [tab, setTab] = useState<GamesTab>(
@@ -506,6 +508,7 @@ export default function GamesModule({
           }}
           onOpenFilm={(id) => openGame(id, franchiseId)}
           onOpenMusicRelease={onOpenMusicRelease}
+          onOpenArtist={onOpenArtist}
           onOpenSeriesFranchise={onOpenSeriesFranchise}
           onOpenMoviesPath={(path) => {
             void resolveMoviesPath(path)

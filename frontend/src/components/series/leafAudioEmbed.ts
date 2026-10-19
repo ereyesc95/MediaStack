@@ -30,10 +30,13 @@ export function resolveLeafAudioEmbed(
   const dead = music.filter((c) => !isResolvableRelease(c));
 
   if (resolvable.length === 1 && dead.length === 0 && playlists.length === 0) {
+    const card = resolvable[0];
+    // Always open the resolved Music release id — never the .lnk path hash (`id`).
+    const releaseId = String(card.navigate_release_id || "");
     return {
       mode: "release",
-      bandId: resolvable[0].navigate_band_id as number,
-      releaseId: resolvable[0].navigate_release_id as string,
+      bandId: card.navigate_band_id as number,
+      releaseId,
     };
   }
 

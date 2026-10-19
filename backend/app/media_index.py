@@ -490,6 +490,10 @@ def _build_release_card(
     if content is None or not content.is_dir():
         return None
 
+    # .lnk targets often land on an edition/version folder; navigate to the
+    # album release root so URLs match the Music library release page.
+    release_root = _release_dir_from_content_folder(content)
+
     source_band_id: int | None = None
     navigate_band_id = owner_band_id
     artwork_root = content
@@ -503,7 +507,7 @@ def _build_release_card(
     )
 
     if resolved_outside_owner:
-        content_band_id = _band_id_from_content_path(db, media_root, content)
+        content_band_id = _band_id_from_content_path(db, media_root, release_root)
         if content_band_id:
             navigate_band_id = content_band_id
             source_band_id = content_band_id
@@ -521,6 +525,7 @@ def _build_release_card(
             )
             if mirrored:
                 artwork_root = mirrored
+                release_root = _release_dir_from_content_folder(mirrored)
                 navigate_band_id = source_band_id or navigate_band_id
 
     rel_path = safe_relative(display_entry, media_root)
@@ -529,7 +534,7 @@ def _build_release_card(
 
     cover_path, logo_path, logo_collapsed_path = _find_release_artwork(artwork_root)
     cover_path = _prefer_small_derivative(cover_path)
-    navigate_rel_path = safe_relative(artwork_root, media_root) or rel_path
+    navigate_rel_path = safe_relative(release_root, media_root) or rel_path
     release_id = release_id_from_path(rel_path)
     navigate_release_id = release_id_from_path(navigate_rel_path)
 

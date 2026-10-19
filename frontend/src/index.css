@@ -10693,23 +10693,111 @@ button.media-release-card--banner {
   isolation: auto;
 }
 
-.release-page--embedded .release-page__chrome {
-  position: relative;
-  z-index: 1;
+/* Leaf Audio embed: release page owns the body grid (panel | main). */
+.series-subseries-page--audio-embed > .release-page__bg-stack {
+  display: none;
 }
 
-.release-page--embedded .release-page__top-left:empty {
-  min-width: 0;
-}
-
-.release-page__embed-escape {
+.series-subseries-page--audio-embed > .release-page__body {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 0.75rem;
+  flex-direction: column;
+  grid-template-columns: unset;
+  padding: 0;
+  gap: 0;
+  min-height: 0;
 }
 
-.release-page__go-to-release {
-  font-size: 0.85rem;
+.series-subseries-page--audio-embed .release-page--embedded {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.series-subseries-page--audio-embed .release-page--embedded .release-page__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Audio embed: use Cover - Front at its natural ratio (not series 2:3 crop). */
+.series-subseries-page--audio-embed
+  .release-page--embedded
+  .release-page__art-stage--cover-only {
+  aspect-ratio: unset;
+  --release-cover-size: clamp(12rem, 78%, 15.5rem);
+}
+
+.remote-media-modal__section-label--with-add {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.remote-media-modal__section-add {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0 0.15rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.remote-media-modal__section-add:hover,
+.remote-media-modal__section-add:focus-visible {
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.release-page__embed-under-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  margin: 0.05rem 0 0;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.release-page__embed-under-cover .release-page__brand-logo--embed {
+  max-height: 2.55rem;
+  width: auto;
+  max-width: 82%;
+  object-fit: contain;
+}
+
+.release-page__embed-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.series-subseries-page--audio-embed
+  .release-page--embedded
+  .release-page__panel-content {
+  gap: 0.12rem;
+}
+
+.series-subseries-page--audio-embed
+  .release-page--embedded
+  .release-page__brand-row {
+  margin-top: 0;
+}
+
+.series-subseries-page--audio-embed
+  .release-page--embedded
+  .release-page__subgenres {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  font-weight: 400;
 }
 
 .release-page--stacked {
@@ -18345,6 +18433,25 @@ button.lyrics-status-badge--icon-only {
   line-height: 0;
 }
 
+/* Beat series portrait crop so Cover - Front keeps its natural ratio. */
+.series-subseries-page.series-subseries-page--audio-embed:not(.release-page--stacked)
+  .release-page--embedded
+  .release-page__cover-wrap {
+  aspect-ratio: auto;
+  max-height: min(34vh, 16.5rem);
+  height: auto;
+}
+
+.series-subseries-page.series-subseries-page--audio-embed:not(.release-page--stacked)
+  .release-page--embedded
+  .release-page__cover {
+  width: 100%;
+  height: auto;
+  max-height: min(34vh, 16.5rem);
+  object-fit: contain;
+  object-position: center center;
+}
+
 .series-subseries-page:not(.release-page--stacked) .release-page__cover {
   width: 100%;
   height: 100%;
@@ -18539,6 +18646,41 @@ button.lyrics-status-badge--icon-only {
   max-width: 96vw;
 }
 
+.remote-media-modal--videos.artist-word-cloud-modal__panel,
+.remote-media-modal--videos.release-video-set-modal {
+  /* Narrower than the full release-video modal, but wide enough for title+date+URL. */
+  width: min(780px, 94vw);
+  max-width: 94vw;
+}
+
+/* Games Set videos: 3 fields + remove (music release modal uses a 5-col grid). */
+.remote-media-modal--videos .release-video-set-modal__video-row {
+  grid-template-columns:
+    minmax(7.5rem, 1fr)
+    minmax(10.5rem, 11.5rem)
+    minmax(14rem, 2.2fr)
+    1.35rem;
+}
+
+.remote-media-modal--videos .remote-media-modal__title {
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.remote-media-modal--videos .remote-media-modal__date,
+.remote-media-modal--videos .release-video-set-modal__meta-input--date {
+  max-width: none;
+  min-width: 10.5rem;
+  width: 100%;
+  flex: none;
+}
+
+.remote-media-modal--videos .release-video-set-modal__input {
+  min-width: 0;
+  width: 100%;
+}
+
 .remote-media-modal__season-head {
   flex-wrap: nowrap;
   gap: 0.4rem;
@@ -18605,6 +18747,10 @@ button.lyrics-status-badge--icon-only {
 
 .remote-media-modal__actions {
   justify-content: space-between;
+}
+
+.remote-media-modal__actions:not(:has(.btn.ghost)) {
+  justify-content: flex-end;
 }
 
 .series-media-grid--square .media-release-card--portrait {
@@ -19077,6 +19223,31 @@ button.lyrics-status-badge--icon-only {
 
 .series-cast-card__photo-layer--hover.is-visible {
   opacity: 1;
+}
+
+/* Beat `.artist-admin-form label` column stack — check + label on one left-aligned row. */
+.artist-admin-form label.series-cast-edit__actor-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  align-self: flex-start;
+  gap: 0.45rem;
+  margin: 0.1rem 0 0.2rem;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.artist-admin-form label.series-cast-edit__actor-toggle input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent, var(--ms-accent, #c9a227));
+  cursor: pointer;
 }
 
 .series-cast-edit__actors {

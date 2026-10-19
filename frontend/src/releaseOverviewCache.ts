@@ -7,8 +7,8 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 32;
-/* v15: photocard stem aliases (Photocard - Portrait - Front) + Photo fallback */
-const NAMESPACE = "release-overview-v15";
+/* v16: Cover - Front preferred over Cover - Portrait for audio covers */
+const NAMESPACE = "release-overview-v16";
 
 type CacheKey = string;
 

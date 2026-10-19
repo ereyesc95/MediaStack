@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   addBooksBookCastMember,
+  addGamesGameCastMember,
   addMoviesFilmCastMember,
   addSeriesCastMember,
   fetchStaffRoles,
+  patchBooksBookCastMember,
+  patchGamesGameCastMember,
   patchMoviesFilmCastMember,
   patchSeriesCastMember,
   removeSeriesCastMember,
@@ -273,8 +276,8 @@ type Props = {
   /** Open Update cast when empty-state CTA is clicked. */
   onAddEmptyClick?: () => void;
   onDataChanged: () => void;
-  /** Use movies/books leaf cast endpoints when set. */
-  castApi?: "series" | "movies" | "books";
+  /** Use movies/books/games leaf cast endpoints when set. */
+  castApi?: "series" | "movies" | "books" | "games";
   filmId?: string;
   /** Books: character-only form (no actors). */
   characterOnly?: boolean;
@@ -772,7 +775,7 @@ function CastMemberModal({
   languageOptions: SeriesLanguageOption[];
   subseries: SeriesSubseriesCard[];
   castSubFilter?: string;
-  castApi?: "series" | "movies" | "books";
+  castApi?: "series" | "movies" | "books" | "games";
   filmId?: string;
   roleOptions?: StaffRoleOpt[];
   onClose: () => void;
@@ -933,6 +936,42 @@ function CastMemberModal({
               ? staffLang
               : undefined,
         });
+      } else if (castApi === "games") {
+        if (!filmId) throw new Error("Missing game id");
+        await patchGamesGameCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          name: charName,
+          character: characterCentered ? charName : undefined,
+          photo_url: photoUrl.trim() || null,
+          actor_photo_url: characterCentered
+            ? actors[0]?.photo_url || null
+            : undefined,
+          actors: characterCentered ? actors : undefined,
+          roles: characterCentered
+            ? actors.map((a) => a.name)
+            : staffRoles,
+          language: characterCentered
+            ? editLang
+            : showStaffLang
+              ? staffLang
+              : undefined,
+        });
+      } else if (castApi === "books") {
+        if (!filmId) throw new Error("Missing book id");
+        await patchBooksBookCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          name: charName,
+          character: characterCentered ? charName : undefined,
+          photo_url: photoUrl.trim() || null,
+          roles: characterCentered ? undefined : staffRoles,
+          language: characterCentered
+            ? editLang
+            : showStaffLang
+              ? staffLang
+              : undefined,
+        });
       } else {
         await patchSeriesCastMember(franchiseId, member.id, {
           bucket,
@@ -972,6 +1011,20 @@ function CastMemberModal({
       if (castApi === "movies") {
         if (!filmId) throw new Error("Missing film id");
         await patchMoviesFilmCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          delete: true,
+        });
+      } else if (castApi === "games") {
+        if (!filmId) throw new Error("Missing game id");
+        await patchGamesGameCastMember(filmId, member.id, {
+          kind: bucket,
+          bucket,
+          delete: true,
+        });
+      } else if (castApi === "books") {
+        if (!filmId) throw new Error("Missing book id");
+        await patchBooksBookCastMember(filmId, member.id, {
           kind: bucket,
           bucket,
           delete: true,
@@ -1394,7 +1447,7 @@ export function AddCastModal({
   defaultLanguage: string | null;
   subseries: SeriesSubseriesCard[];
   defaultSubseriesIds?: string[];
-  castApi?: "series" | "movies" | "books";
+  castApi?: "series" | "movies" | "books" | "games";
   filmId?: string;
   characterOnly?: boolean;
   roleOptions?: StaffRoleOpt[];
@@ -1409,11 +1462,18 @@ export function AddCastModal({
   const [actorEntries, setActorEntries] = useState<
     { name: string; photo_url: string }[]
   >([{ name: "", photo_url: "" }]);
+  /** Games: characters often have no voice actor — off until the user opts in. */
+  const [includeActor, setIncludeActor] = useState(false);
   const [rolesText, setRolesText] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [lang, setLang] = useState(
     defaultLanguage || languageOptions[0]?.code || "en"
   );
+  const showActorFields =
+    characterCentered &&
+    !characterOnly &&
+    castApi !== "books" &&
+    (castApi !== "games" || includeActor);
   const [selectedSubs, setSelectedSubs] = useState<string[]>(
     () => defaultSubseriesIds || []
   );
@@ -1496,12 +1556,15 @@ export function AddCastModal({
     setSaving(true);
     setError(null);
     try {
-      const actors = actorEntries
-        .map((a) => ({
-          name: a.name.trim(),
-          photo_url: a.photo_url.trim() || null,
-        }))
-        .filter((a) => a.name);
+      const actors =
+        castApi === "games" && characterCentered && !includeActor
+          ? []
+          : actorEntries
+              .map((a) => ({
+                name: a.name.trim(),
+                photo_url: a.photo_url.trim() || null,
+              }))
+              .filter((a) => a.name);
       const staffRoles = rolesText
         .split(/[;·,]/)
         .map((s) => s.trim())
@@ -1536,6 +1599,45 @@ export function AddCastModal({
         });
         if (characterCentered && created?.id != null && actors.length > 0) {
           await patchMoviesFilmCastMember(filmId, created.id, {
+            kind: activeBucket,
+            bucket: activeBucket,
+            character: charName.trim(),
+            photo_url: photoUrl.trim() || null,
+            actor_photo_url: actors[0]?.photo_url || null,
+            actors,
+            language: lang,
+          });
+        }
+      } else if (castApi === "games") {
+        if (!filmId) throw new Error("Missing game id");
+        const created = await addGamesGameCastMember(filmId, {
+          kind: activeBucket,
+          bucket: activeBucket,
+          name: characterCentered ? charName.trim() : charName.trim(),
+          character: characterCentered ? charName.trim() : undefined,
+          photo_url: characterCentered
+            ? photoUrl.trim() || undefined
+            : photoUrl.trim() || undefined,
+          character_photo_url: characterCentered
+            ? photoUrl.trim() || undefined
+            : undefined,
+          roles: characterCentered
+            ? actors.length
+              ? actors.map((a) => a.name)
+              : undefined
+            : staffRoles.length
+              ? staffRoles
+              : undefined,
+          language:
+            characterCentered && includeActor
+              ? lang
+              : !characterCentered && showStaffLang
+                ? staffLang
+                : undefined,
+          actors: characterCentered && actors.length ? actors : undefined,
+        });
+        if (characterCentered && created?.id != null && actors.length > 0) {
+          await patchGamesGameCastMember(filmId, created.id, {
             kind: activeBucket,
             bucket: activeBucket,
             character: charName.trim(),
@@ -1694,7 +1796,19 @@ export function AddCastModal({
           </div>
           {characterCentered ? (
             <>
-              {castApi !== "books" ? (
+              {castApi === "games" ? (
+                <label className="series-cast-edit__actor-toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeActor}
+                    onChange={(e) => setIncludeActor(e.target.checked)}
+                  />
+                  {includeActor
+                    ? "Has voice actor"
+                    : "Does not have actor"}
+                </label>
+              ) : null}
+              {showActorFields ? (
                 <label>
                   Language
                   <select value={lang} onChange={(e) => setLang(e.target.value)}>
@@ -1709,7 +1823,7 @@ export function AddCastModal({
                   </select>
                 </label>
               ) : null}
-              {!characterOnly && castApi !== "books" ? (
+              {showActorFields ? (
                 <div className="series-cast-edit__actors">
                   <span className="series-cast-edit__actors-label">Actors</span>
                   {actorEntries.map((entry, idx) => (

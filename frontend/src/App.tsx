@@ -1826,6 +1826,20 @@ export default function App() {
                 releaseTab: "overview",
               });
             }}
+            onOpenArtist={(bandId, artistSection = "overview") => {
+              pushArtistRoute({
+                bandId,
+                section: artistSection,
+                overviewTab: "about",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection,
+                artistOverviewTab: "about",
+              });
+            }}
             onOpenUniverse={(id) => openUniversePage(id, "games", "home")}
           />
         )}

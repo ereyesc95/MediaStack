@@ -3263,6 +3263,8 @@ export type RemoteMovieLinkPayload = {
   title: string;
   url: string;
   sort_order?: number;
+  number?: number | null;
+  date_iso?: string | null;
 };
 
 export type RemoteBookVolumePayload = {
@@ -3971,6 +3973,56 @@ export async function fetchGamesGamePlayerTracks(gameId: string) {
     }>;
     count: number;
   }>(`${API}/games/games/${encodeURIComponent(gameId)}/player-tracks`);
+}
+
+export async function addGamesGameCastMember(
+  gameId: string,
+  body: {
+    kind?: string;
+    bucket?: string;
+    name: string;
+    character?: string;
+    photo_url?: string;
+    character_photo_url?: string;
+    roles?: string[];
+    language?: string;
+    actors?: { name: string; photo_url?: string | null }[];
+  }
+) {
+  return request<SeriesCastMember>(
+    `${API}/games/games/${encodeURIComponent(gameId)}/cast`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function patchGamesGameCastMember(
+  gameId: string,
+  memberId: string | number,
+  body: {
+    kind?: string;
+    bucket?: string;
+    name?: string;
+    character?: string;
+    photo_url?: string | null;
+    actor_photo_url?: string | null;
+    actors?: (string | { name: string; photo_url?: string | null })[];
+    roles?: string[];
+    language?: string;
+    delete?: boolean;
+  }
+) {
+  return request<SeriesCastMember | { ok: boolean; deleted?: boolean }>(
+    `${API}/games/games/${encodeURIComponent(gameId)}/cast/${encodeURIComponent(String(memberId))}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
 }
 
 export async function refreshGamesFranchiseMetadata(workId: string) {

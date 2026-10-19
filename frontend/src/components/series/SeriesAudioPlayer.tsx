@@ -6,18 +6,24 @@ import {
   fetchGamesGamePlayerTracks,
 } from "../../api";
 import { IconMediaMusic } from "../MenuIcons";
+import { MiniAudioPlayerControls } from "../music/artist/MiniAudioPlayer";
 import {
-  MiniAudioPlayerControls,
-  useMiniAudio,
-} from "../music/artist/MiniAudioPlayer";
+  getSharedPlaybackMeta,
+  setSharedPlaybackMeta,
+  useSharedMiniAudio,
+  useSharedPlaybackMeta,
+} from "../../sharedMiniAudio";
 import { useBeatPulse } from "../../useBeatPulse";
 
 type Track = {
   id: string;
   title: string;
   play_url: string;
+  play_path?: string | null;
   cover_url?: string | null;
   artist?: string | null;
+  navigate_band_id?: number | null;
+  navigate_release_id?: string | null;
 };
 
 type Props = {
@@ -68,7 +74,8 @@ export default function SeriesAudioPlayer({
   onOpenChange,
   hideToggle = false,
 }: Props) {
-  const audio = useMiniAudio();
+  const audio = useSharedMiniAudio();
+  const sharedMeta = useSharedPlaybackMeta();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp ?? openInternal;
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
@@ -117,6 +124,15 @@ export default function SeriesAudioPlayer({
       const t = list[i];
       if (!t?.play_url) return;
       setIndex(i);
+      setSharedPlaybackMeta({
+        path: t.play_path || null,
+        title: t.title || null,
+        bandId: t.navigate_band_id ?? null,
+        releaseId: t.navigate_release_id ?? null,
+        coverUrl: t.cover_url ?? null,
+        artist: t.artist ?? null,
+        source: "series-player",
+      });
       audio.loadSrc(t.play_url, true);
     },
     [audio]
@@ -139,7 +155,19 @@ export default function SeriesAudioPlayer({
       setTracks(shuffled);
       queueRef.current = shuffled;
       loadedForRef.current = cacheKey;
-      if (shuffled.length) playAt(0, shuffled);
+      if (!shuffled.length) return;
+      const meta = getSharedPlaybackMeta();
+      const alreadyPlaying = Boolean(audio.src || audio.playing);
+      if (alreadyPlaying) {
+        const idx = shuffled.findIndex(
+          (t) =>
+            (meta.path && t.play_path === meta.path) ||
+            (audio.src && t.play_url === audio.src)
+        );
+        setIndex(idx >= 0 ? idx : 0);
+      } else {
+        playAt(0, shuffled);
+      }
     } catch {
       setTracks([]);
       loadedForRef.current = null;
@@ -148,19 +176,31 @@ export default function SeriesAudioPlayer({
     }
   }, [franchiseId, filmId, gameId, playAt]);
 
+  const indexForSharedPath = useCallback(() => {
+    const path = sharedMeta.path;
+    const q = queueRef.current;
+    if (!path || !q.length) return indexRef.current;
+    const found = q.findIndex(
+      (t) => t.play_path === path || t.play_url === audio.src
+    );
+    return found >= 0 ? found : indexRef.current;
+  }, [sharedMeta.path, audio.src]);
+
   const playNext = useCallback(() => {
     const q = queueRef.current;
     if (!q.length) return;
-    const next = (indexRef.current + 1) % q.length;
+    const cur = indexForSharedPath();
+    const next = (cur + 1) % q.length;
     playAt(next, q);
-  }, [playAt]);
+  }, [playAt, indexForSharedPath]);
 
   const playPrev = useCallback(() => {
     const q = queueRef.current;
     if (!q.length) return;
-    const prev = (indexRef.current - 1 + q.length) % q.length;
+    const cur = indexForSharedPath();
+    const prev = (cur - 1 + q.length) % q.length;
     playAt(prev, q);
-  }, [playAt]);
+  }, [playAt, indexForSharedPath]);
 
   const scopeKey = gameId
     ? `game:${gameId}`
@@ -195,7 +235,12 @@ export default function SeriesAudioPlayer({
   if (!enabled) return null;
 
   const now = tracks[index];
-  const nowArtist = displayTrackArtist(now?.artist, now?.title);
+  const displayTitle = sharedMeta.title || now?.title;
+  const displayCover = sharedMeta.coverUrl || now?.cover_url;
+  const nowArtist = displayTrackArtist(
+    sharedMeta.artist || now?.artist,
+    displayTitle
+  );
 
   const dockBody =
     loading ? (
@@ -205,9 +250,9 @@ export default function SeriesAudioPlayer({
     ) : (
       <>
         <div className="series-audio-player__now">
-          {now?.cover_url ? <img src={now.cover_url} alt="" /> : null}
+          {displayCover ? <img src={displayCover} alt="" /> : null}
           <div>
-            <strong>{now?.title}</strong>
+            <strong>{displayTitle}</strong>
             {nowArtist ? <span className="muted">{nowArtist}</span> : null}
           </div>
         </div>
@@ -256,11 +301,6 @@ export default function SeriesAudioPlayer({
           </button>
         ) : null}
         {open && !hideToggle ? dock : null}
-        <audio
-          ref={audio.audioRef}
-          src={audio.src ?? undefined}
-          preload="metadata"
-        />
       </div>
       {open && hideToggle
         ? createPortal(

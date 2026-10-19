@@ -93,6 +93,12 @@ import {
   MiniAudioPlayerControls,
   useMiniAudio,
 } from "../artist/MiniAudioPlayer";
+import {
+  getSharedPlaybackMeta,
+  setSharedPlaybackMeta,
+  useSharedMiniAudio,
+  useSharedPlaybackMeta,
+} from "../../../sharedMiniAudio";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { useBeatPulse } from "../../../useBeatPulse";
@@ -204,10 +210,33 @@ type Props = {
   onBackToHome?: () => void;
   onBackToCatalog?: () => void;
   onBackToCollection?: () => void;
-  /** Render inside a leaf/franchise Audio tab (no page chrome / bg stack). */
+  /** Render inside a leaf/franchise Audio tab (parent owns top chrome / tabs / menu). */
   embedded?: boolean;
-  /** Escape hatch on Overview → full Music release route. */
+  /** Escape hatch → full Music release route. */
   onGoToReleasePage?: () => void;
+  /** Report tabs + admin actions so the leaf AppMenu / subbar can host them. */
+  onEmbedChromeChange?: (chrome: EmbeddedReleaseChrome | null) => void;
+};
+
+export type EmbeddedReleaseChrome = {
+  tabs: { id: ReleaseTab; label: string }[];
+  tab: ReleaseTab;
+  onTab: (tab: ReleaseTab) => void;
+  admin: EmbeddedReleaseAdmin | null;
+};
+
+export type EmbeddedReleaseAdmin = {
+  onEditAbout: () => void;
+  onAddMember: () => void;
+  onRefreshMetadata: () => void;
+  onFetchLyrics: () => void;
+  onSetLyrics: () => void;
+  onFetchVideos: () => void;
+  onSetVideo: () => void;
+  onWriteFileTags?: () => void;
+  onRefreshTracklist: () => void;
+  refreshIncludeBio: boolean;
+  onRefreshIncludeBioChange: (v: boolean) => void;
 };
 
 function ReleaseNeighborLink({
@@ -397,6 +426,7 @@ export default function ReleasePage({
   onBackToCollection,
   embedded = false,
   onGoToReleasePage,
+  onEmbedChromeChange,
 }: Props) {
   const layout = useDeviceLayout();
   const mobilePortrait = isMobilePortraitLayout(layout);
@@ -512,8 +542,11 @@ export default function ReleasePage({
   const panelLabelRef = useRef<HTMLDivElement>(null);
   const panelBottomRef = useRef<HTMLDivElement>(null);
   const [tracklistKey, setTracklistKey] = useState(0);
-  const miniAudio = useMiniAudio();
-  const clearMiniAudio = miniAudio.clear;
+  const localMiniAudio = useMiniAudio();
+  const sharedMiniAudio = useSharedMiniAudio();
+  const sharedMeta = useSharedPlaybackMeta();
+  const miniAudio = embedded ? sharedMiniAudio : localMiniAudio;
+  const clearMiniAudio = localMiniAudio.clear;
   const isPlaying = Boolean(playingPath && miniAudio.playing);
   const displayPhotocards =
     isPlaying && trackPhotocards
@@ -740,20 +773,30 @@ export default function ReleasePage({
   );
 
   useLayoutEffect(() => {
-    miniAudio.audioRef.current?.pause();
-    clearMiniAudio();
-    setPlayingPath(null);
-    setNowPlayingTitle(null);
-    setPlaybackArt(null);
+    /* Embedded leaf Audio shares the series player — don't kill playback on remount. */
+    if (!embedded) {
+      localMiniAudio.audioRef.current?.pause();
+      clearMiniAudio();
+    }
+    const keepShared =
+      embedded &&
+      Boolean(getSharedPlaybackMeta().path) &&
+      (getSharedPlaybackMeta().bandId == null ||
+        getSharedPlaybackMeta().bandId === bandId);
+    if (!keepShared) {
+      setPlayingPath(null);
+      setNowPlayingTitle(null);
+      setPlaybackArt(null);
+      setTrackPhotocards(null);
+      setVersionSource(null);
+      setPanelDateIso(null);
+      setPanelActionTrack(null);
+      setActiveTrack(null);
+      setTrackWriters([]);
+    }
     setCoverFailed(false);
     setCoverFlipped(false);
     setBannerFlipped(false);
-    setTrackPhotocards(null);
-    setVersionSource(null);
-    setPanelDateIso(null);
-    setPanelActionTrack(null);
-    setActiveTrack(null);
-    setTrackWriters([]);
     sourceArtCacheRef.current.clear();
 
     const cached = isReleaseId(resolvedReleaseId)
@@ -769,7 +812,30 @@ export default function ReleasePage({
       void prefetchReleaseTracklist(bandId, resolvedReleaseId);
       load({ silent: Boolean(cached) });
     }
-  }, [bandId, resolvedReleaseId, load, clearMiniAudio, miniAudio.audioRef]);
+  }, [
+    bandId,
+    resolvedReleaseId,
+    load,
+    clearMiniAudio,
+    embedded,
+    localMiniAudio.audioRef,
+  ]);
+
+  /* Keep tracklist/visuals in sync with the shared leaf player. */
+  useEffect(() => {
+    if (!embedded) return;
+    const meta = sharedMeta;
+    if (!meta.path) return;
+    if (meta.bandId != null && meta.bandId !== bandId) return;
+    setPlayingPath(meta.path);
+    if (meta.title) setNowPlayingTitle(meta.title);
+  }, [
+    embedded,
+    sharedMeta.path,
+    sharedMeta.title,
+    sharedMeta.bandId,
+    bandId,
+  ]);
 
   useEffect(() => {
     if (!data?.needs_metadata_fetch) return;
@@ -853,7 +919,7 @@ export default function ReleasePage({
   ]);
 
   useLayoutEffect(() => {
-    if (stacked || mobileLandscape) return;
+    if (stacked || mobileLandscape || embedded) return;
     const meta = panelMetaRef.current;
     const fit = panelFitRef.current;
     const inner = panelFitInnerRef.current;
@@ -910,6 +976,7 @@ export default function ReleasePage({
     trackWriters.length,
     playingPath,
     isPlaying,
+    embedded,
   ]);
 
   useEffect(() => {
@@ -937,6 +1004,9 @@ export default function ReleasePage({
   }, [userId]);
 
   useEffect(() => {
+    // Leaf Audio embeds must not rewrite the URL to /music/… — that steals
+    // navigation from the game/film/show page and can load the wrong release id.
+    if (embedded) return;
     pushArtistRoute(
       {
         bandId,
@@ -949,7 +1019,7 @@ export default function ReleasePage({
       },
       true
     );
-  }, [bandId, releaseId, tab, data?.artist_name, data?.title]);
+  }, [embedded, bandId, releaseId, tab, data?.artist_name, data?.title]);
 
   const resolveTrackSource = useCallback(
     async (
@@ -1042,15 +1112,19 @@ export default function ReleasePage({
   const panelCoverIsVideo = Boolean(
     effectivePanelCover && isVideoMedia(effectivePanelCover) && showPlaybackMotion
   );
+  /* Prefer Cover - Inner, then Cover - Back (encoded in background_layers). */
   const bgUrl =
     playingPath
       ? (playbackArt?.background_layers?.[0] ??
-        data?.background_layers[0] ??
+        data?.background_layers?.[0] ??
+        playbackArt?.cover_back_url ??
+        data?.cover_back_url ??
         playbackArt?.cover_url ??
         displayCover ??
         undefined)
       : (playbackArt?.background_layers?.[0] ??
-        data?.background_layers[0] ??
+        data?.background_layers?.[0] ??
+        data?.cover_back_url ??
         displayCover ??
         undefined);
 
@@ -1536,7 +1610,8 @@ export default function ReleasePage({
       }),
     [embedded, showGalleryTab, showTracklistTab]
   );
-  const showPageTabBar = pageTabs.length > 1;
+  /* Parent leaf page hosts the tab bar when embedded. */
+  const showPageTabBar = !embedded && pageTabs.length > 1;
 
   const handleRefreshMetadata = async () => {
     setBusy("Refreshing metadata…");
@@ -1557,6 +1632,55 @@ export default function ReleasePage({
       setBusy("");
     }
   };
+
+  useEffect(() => {
+    if (!embedded || !onEmbedChromeChange) return;
+    const admin: EmbeddedReleaseAdmin | null = isAdmin
+      ? {
+          onEditAbout: () => setAboutEditOpen(true),
+          onAddMember: () => {
+            setEditingStaff(null);
+            setStaffName("");
+            setStaffPhoto("");
+            setStaffRolesText("");
+            setStaffRoleMenuOpen(false);
+            setAddStaffOpen(true);
+          },
+          onRefreshMetadata: () => void handleRefreshMetadata(),
+          onFetchLyrics: () => void handleFetchLyrics(),
+          onSetLyrics: () => setLyricsSetOpen(true),
+          onFetchVideos: () => void handleFetchVideos(),
+          onSetVideo: () => setVideoSetOpen(true),
+          onWriteFileTags: !isPhone
+            ? () => setFileTagsOpen(true)
+            : undefined,
+          onRefreshTracklist: () => handleRefreshTracklist(),
+          refreshIncludeBio: refreshWiki,
+          onRefreshIncludeBioChange: setRefreshWiki,
+        }
+      : null;
+    onEmbedChromeChange({
+      tabs: pageTabs,
+      tab,
+      onTab,
+      admin,
+    });
+  }, [
+    embedded,
+    onEmbedChromeChange,
+    pageTabs,
+    tab,
+    onTab,
+    isAdmin,
+    isPhone,
+    refreshWiki,
+    handleRefreshTracklist,
+  ]);
+
+  useEffect(() => {
+    if (!embedded || !onEmbedChromeChange) return;
+    return () => onEmbedChromeChange(null);
+  }, [embedded, onEmbedChromeChange]);
 
   const handlePlayTrack = useCallback(
     async (
@@ -1602,6 +1726,17 @@ export default function ReleasePage({
         setTrackWriters(res.writers ?? []);
       });
       try {
+        if (embedded) {
+          setSharedPlaybackMeta({
+            path,
+            title,
+            bandId,
+            releaseId: data?.navigate_release_id ?? releaseId,
+            coverUrl: data?.cover_url ?? null,
+            artist: data?.artist_name ?? null,
+            source: "release",
+          });
+        }
         const res = await playTrack({
           path,
           artist_id: bandId,
@@ -1613,7 +1748,15 @@ export default function ReleasePage({
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [bandId, data, miniAudio, playingPath, releaseId, resolveTrackSource]
+    [
+      bandId,
+      data,
+      embedded,
+      miniAudio,
+      playingPath,
+      releaseId,
+      resolveTrackSource,
+    ]
   );
 
   const playAdjacentTrack = useCallback(
@@ -1746,6 +1889,11 @@ export default function ReleasePage({
   const labelLogoSrc = data?.label_logo_url || DEFAULT_LABEL_URL;
   const showMobilePlayerMeta = false;
   const showPanelReleaseMeta = !showTrackPanel;
+  /* Label logo / Distributed by / Spotify codes: Overview + Gallery only when embedded. */
+  const showPanelLabelAndCodes =
+    showPanelReleaseMeta &&
+    (!embedded || tab === "overview" || tab === "gallery");
+  const showEmbeddedReleaseHead = embedded;
   /** Banner: info body is toggleable; player + neighbors stay mounted separately. */
   const pageCanvasActive = bannerLayout && showPanelCanvas;
   const scenicBannerUrl =
@@ -2019,6 +2167,23 @@ export default function ReleasePage({
         )}
       </div>
 
+      {embedded ? (
+        <div className="release-page__embed-under-cover">
+          {topLogoUrl ? (
+            <MediaBeatFrame variant="logo">
+              <img
+                src={topLogoUrl}
+                alt=""
+                className="release-page__brand-logo release-page__brand-logo--embed"
+                draggable={false}
+              />
+            </MediaBeatFrame>
+          ) : (
+            <h2 className="release-page__embed-title">{data.title}</h2>
+          )}
+        </div>
+      ) : null}
+
       {bannerLayout ? (
         <button
           type="button"
@@ -2263,37 +2428,41 @@ export default function ReleasePage({
           ) : (
             <>
               <div className="release-page__panel-head">
-                <h1 className="release-page__album-title">{data.title}</h1>
+                {!showEmbeddedReleaseHead ? (
+                  <h1 className="release-page__album-title">{data.title}</h1>
+                ) : null}
                 {data.display_date && (
                   <p className="release-page__date">{data.display_date}</p>
                 )}
-                <p className="release-page__type-line">
-                  {data.category ? (
+                {!showEmbeddedReleaseHead ? (
+                  <p className="release-page__type-line">
+                    {data.category ? (
+                      <button
+                        type="button"
+                        className="release-page__type-link"
+                        onClick={() =>
+                          onBrowseArtistAudio(bandId, data.category, {
+                            compilationBoxSetsOnly:
+                              data.category === "compilations" &&
+                              data.release_type === "Box set",
+                          })
+                        }
+                      >
+                        {data.release_type}
+                      </button>
+                    ) : (
+                      data.release_type
+                    )}{" "}
+                    by{" "}
                     <button
                       type="button"
-                      className="release-page__type-link"
-                      onClick={() =>
-                        onBrowseArtistAudio(bandId, data.category, {
-                          compilationBoxSetsOnly:
-                            data.category === "compilations" &&
-                            data.release_type === "Box set",
-                        })
-                      }
+                      className="release-page__artist-link release-page__artist-link--inline"
+                      onClick={() => onOpenArtist(bandId)}
                     >
-                      {data.release_type}
+                      {data.artist_name}
                     </button>
-                  ) : (
-                    data.release_type
-                  )}{" "}
-                  by{" "}
-                  <button
-                    type="button"
-                    className="release-page__artist-link release-page__artist-link--inline"
-                    onClick={() => onOpenArtist(bandId)}
-                  >
-                    {data.artist_name}
-                  </button>
-                </p>
+                  </p>
+                ) : null}
                 {data.source_artist && (
                   <p className="release-page__source">Source: {data.source_artist}</p>
                 )}
@@ -2367,7 +2536,7 @@ export default function ReleasePage({
 
           {!bannerLayout ? (
           <div className="release-page__panel-bottom" ref={panelBottomRef}>
-          {showPanelReleaseMeta && data.label && (
+          {showPanelLabelAndCodes && data.label && (
             <div className="release-page__label" ref={panelLabelRef}>
               <button
                 type="button"
@@ -2394,7 +2563,7 @@ export default function ReleasePage({
             </div>
           )}
 
-          {showPanelReleaseMeta && (data.spotify_url || data.qr_url) && (
+          {showPanelLabelAndCodes && (data.spotify_url || data.qr_url) && (
             <div className="release-page__extras">
               {data.spotify_url && (
                 <img src={data.spotify_url} alt="Spotify" className="release-page__spotify" />
@@ -2492,7 +2661,7 @@ export default function ReleasePage({
           ) : null}
         </div>
         </div>
-          ) : showPanelReleaseMeta ? (
+          ) : showPanelLabelAndCodes ? (
             <>
               {data.label && (
                 <div className="release-page__label" ref={panelLabelRef}>
@@ -2589,43 +2758,41 @@ export default function ReleasePage({
 
   return (
     <div className={pageClass}>
-      {!embedded ? (
-        <div className="release-page__bg-stack" aria-hidden>
-          {bgLayers.outgoing && (
-            <div
-              className="release-page__bg release-page__bg--visible release-page__bg--out"
-              style={{ backgroundImage: `url("${bgLayers.outgoing}")` }}
+      <div className="release-page__bg-stack" aria-hidden>
+        {bgLayers.outgoing && (
+          <div
+            className="release-page__bg release-page__bg--visible release-page__bg--out"
+            style={{ backgroundImage: `url("${bgLayers.outgoing}")` }}
+          />
+        )}
+        {bgLayers.current && (
+          <div
+            className={`release-page__bg release-page__bg--visible${bgLayers.outgoing ? " release-page__bg--in" : ""}`}
+            style={{ backgroundImage: `url("${bgLayers.current}")` }}
+          />
+        )}
+        {pageCanvasActive && displayCanvas ? (
+          <div className="release-page__bg-canvas" aria-hidden>
+            <video
+              key={displayCanvas}
+              ref={canvasVideoRef}
+              className="release-page__bg-canvas-video"
+              src={displayCanvas}
+              autoPlay
+              loop
+              muted
+              playsInline
             />
-          )}
-          {bgLayers.current && (
-            <div
-              className={`release-page__bg release-page__bg--visible${bgLayers.outgoing ? " release-page__bg--in" : ""}`}
-              style={{ backgroundImage: `url("${bgLayers.current}")` }}
-            />
-          )}
-          {pageCanvasActive && displayCanvas ? (
-            <div className="release-page__bg-canvas" aria-hidden>
-              <video
-                key={displayCanvas}
-                ref={canvasVideoRef}
-                className="release-page__bg-canvas-video"
-                src={displayCanvas}
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-              <div className="release-page__bg-canvas-shade" />
-            </div>
-          ) : null}
-          <MediaBeatFx />
-        </div>
-      ) : null}
+            <div className="release-page__bg-canvas-shade" />
+          </div>
+        ) : null}
+        <MediaBeatFx />
+      </div>
 
-      <div className="release-page__chrome">
-        <header className="release-page__top">
-          <div className="release-page__top-left">
-            {!embedded ? (
+      {!embedded ? (
+        <div className="release-page__chrome">
+          <header className="release-page__top">
+            <div className="release-page__top-left">
               <button
                 type="button"
                 className="release-page__back"
@@ -2660,19 +2827,17 @@ export default function ReleasePage({
                   </span>
                 ) : null}
               </button>
-            ) : null}
-          </div>
-          <div className="release-page__top-center">
-            {topLogo}
-            {!topLogo && data && (
-              <TopBarTitle
-                text={data.title}
-                className="release-page__title-center"
-              />
-            )}
-          </div>
-          <div className="release-page__top-right">
-            {!embedded ? (
+            </div>
+            <div className="release-page__top-center">
+              {topLogo}
+              {!topLogo && data && (
+                <TopBarTitle
+                  text={data.title}
+                  className="release-page__title-center"
+                />
+              )}
+            </div>
+            <div className="release-page__top-right">
               <MediaInlineSearch
                 mode="artist-releases"
                 bandId={bandId}
@@ -2682,97 +2847,104 @@ export default function ReleasePage({
                   void handlePlayTrack(path, title);
                 }}
               />
-            ) : null}
-            <AppMenu
-              onImport={onImport}
-              onSync={onSync}
-              onChooseSource={onChooseSource}
-              isAdmin={isAdmin}
-              userId={userId}
-              adaptiveThemeActive
-              onSwitchProfile={onSwitchProfile}
-              onEditProfile={onEditProfile}
-              menuVariant="release"
-              onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
-              onAddMember={
-                isAdmin
-                  ? () => {
-                      setEditingStaff(null);
-                      setStaffName("");
-                      setStaffPhoto("");
-                      setStaffRolesText("");
-                      setStaffRoleMenuOpen(false);
-                      setAddStaffOpen(true);
-                    }
-                  : undefined
-              }
-              onRefreshMetadata={
-                isAdmin ? () => void handleRefreshMetadata() : undefined
-              }
-              onFetchLyrics={isAdmin ? () => void handleFetchLyrics() : undefined}
-              onSetLyrics={isAdmin ? () => setLyricsSetOpen(true) : undefined}
-              onFetchVideos={isAdmin ? () => void handleFetchVideos() : undefined}
-              onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
-              onWriteFileTags={
-                isAdmin && !isPhone ? () => setFileTagsOpen(true) : undefined
-              }
-              onRefreshTracklist={() => handleRefreshTracklist()}
-              refreshIncludeBio={refreshWiki}
-              onRefreshIncludeBioChange={setRefreshWiki}
-              refreshIncludeLabel="Include description"
-            />
-          </div>
-        </header>
+              <AppMenu
+                onImport={onImport}
+                onSync={onSync}
+                onChooseSource={onChooseSource}
+                isAdmin={isAdmin}
+                userId={userId}
+                adaptiveThemeActive
+                onSwitchProfile={onSwitchProfile}
+                onEditProfile={onEditProfile}
+                menuVariant="release"
+                onEditAbout={isAdmin ? () => setAboutEditOpen(true) : undefined}
+                onAddMember={
+                  isAdmin
+                    ? () => {
+                        setEditingStaff(null);
+                        setStaffName("");
+                        setStaffPhoto("");
+                        setStaffRolesText("");
+                        setStaffRoleMenuOpen(false);
+                        setAddStaffOpen(true);
+                      }
+                    : undefined
+                }
+                onRefreshMetadata={
+                  isAdmin ? () => void handleRefreshMetadata() : undefined
+                }
+                onFetchLyrics={
+                  isAdmin ? () => void handleFetchLyrics() : undefined
+                }
+                onSetLyrics={isAdmin ? () => setLyricsSetOpen(true) : undefined}
+                onFetchVideos={
+                  isAdmin ? () => void handleFetchVideos() : undefined
+                }
+                onSetVideo={isAdmin ? () => setVideoSetOpen(true) : undefined}
+                onWriteFileTags={
+                  isAdmin && !isPhone ? () => setFileTagsOpen(true) : undefined
+                }
+                onRefreshTracklist={() => handleRefreshTracklist()}
+                refreshIncludeBio={refreshWiki}
+                onRefreshIncludeBioChange={setRefreshWiki}
+                refreshIncludeLabel="Include description"
+              />
+            </div>
+          </header>
 
-        {showPageTabBar ? (
-          <nav className="release-page__tabs">
-            {pageTabs.map((t) => (
+          {showPageTabBar ? (
+            <nav className="release-page__tabs">
+              {pageTabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={tab === t.id ? "active" : ""}
+                  onClick={() => onTab(t.id)}
+                >
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </nav>
+          ) : null}
+
+          {stacked && tab === "tracklist" && !bannerLayout && (
+            <nav className="release-page__subtabs" aria-label="Tracklist views">
               <button
-                key={t.id}
                 type="button"
-                className={tab === t.id ? "active" : ""}
-                onClick={() => onTab(t.id)}
+                className={mobileTrackView === "player" ? "active" : ""}
+                onClick={() => setMobileTrackView("player")}
               >
-                <span>{t.label}</span>
+                <span>PLAYER</span>
               </button>
-            ))}
-          </nav>
-        ) : null}
-
-        {stacked && tab === "tracklist" && !bannerLayout && (
-          <nav className="release-page__subtabs" aria-label="Tracklist views">
-            <button
-              type="button"
-              className={mobileTrackView === "player" ? "active" : ""}
-              onClick={() => setMobileTrackView("player")}
-            >
-              <span>PLAYER</span>
-            </button>
-            <button
-              type="button"
-              className={mobileTrackView === "tracks" ? "active" : ""}
-              onClick={() => setMobileTrackView("tracks")}
-            >
-              <span>TRACKS</span>
-            </button>
-          </nav>
-        )}
-
-        {(tab === "gallery" && galleryTabsMeta.length > 1) && (
-          <nav className="release-page__subtabs release-page__subtabs--gallery" aria-label="Gallery sections">
-            {galleryTabsMeta.map((t) => (
               <button
-                key={t.id}
                 type="button"
-                className={galleryTab === t.id ? "active" : ""}
-                onClick={() => setGalleryTab(t.id)}
+                className={mobileTrackView === "tracks" ? "active" : ""}
+                onClick={() => setMobileTrackView("tracks")}
               >
-                <span>{t.label}</span>
+                <span>TRACKS</span>
               </button>
-            ))}
-          </nav>
-        )}
-      </div>
+            </nav>
+          )}
+
+          {tab === "gallery" && galleryTabsMeta.length > 1 && (
+            <nav
+              className="release-page__subtabs release-page__subtabs--gallery"
+              aria-label="Gallery sections"
+            >
+              {galleryTabsMeta.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={galleryTab === t.id ? "active" : ""}
+                  onClick={() => setGalleryTab(t.id)}
+                >
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+        </div>
+      ) : null}
 
       {busy && (
         <p className="release-page__status release-page__status--loading" role="status">
@@ -2803,17 +2975,6 @@ export default function ReleasePage({
                   .filter(Boolean)
                   .join(" ")}
               >
-                {embedded && onGoToReleasePage ? (
-                  <div className="release-page__embed-escape">
-                    <button
-                      type="button"
-                      className="ghost-btn release-page__go-to-release"
-                      onClick={onGoToReleasePage}
-                    >
-                      Go to release page
-                    </button>
-                  </div>
-                ) : null}
                 <div className="release-page__overview-top" ref={overviewTopRef}>
                   {(data.description ||
                     data.needs_metadata_fetch ||
@@ -3483,7 +3644,13 @@ export default function ReleasePage({
         />
       )}
 
-      <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+      {!embedded ? (
+        <audio
+          ref={localMiniAudio.audioRef}
+          src={localMiniAudio.src ?? undefined}
+          preload="auto"
+        />
+      ) : null}
     </div>
   );
 }

@@ -32,6 +32,9 @@ export type LeafPageCacheEntry = {
   filmVersions?: MoviesFilmDetail["versions"];
   filmHasVideo?: boolean;
   trailerUrl?: string | null;
+  /** Game remote trailers (for instant Play trailer / extras with cache). */
+  trailerItems?: import("./types").SeriesEpisodeItem[];
+  extraVideos?: import("./types").SeriesEpisodeItem[];
   filmOpenUrl?: string | null;
   workName?: string | null;
 };

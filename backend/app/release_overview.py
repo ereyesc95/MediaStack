@@ -1023,7 +1023,12 @@ def build_release_overview(
         "label_logo_url": None,
         "release_code": None,
         "reviews": [],
-        "cover_url": urls.get("cover_front_url") or card.get("cover_url"),
+        # Audio: Cover - Front / Album first; Portrait only if Front is absent.
+        "cover_url": (
+            urls.get("cover_front_url")
+            or urls.get("cover_portrait_url")
+            or card.get("cover_url")
+        ),
         "cover_back_url": urls.get("cover_back_url"),
         "cover_banner_url": urls.get("cover_banner_url"),
         "cover_landscape_url": urls.get("cover_landscape_url"),

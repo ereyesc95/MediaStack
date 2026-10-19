@@ -377,6 +377,57 @@ def games_game_player_tracks(game_id: str, db: Session = Depends(get_db)):
     return {"tracks": tracks, "count": len(tracks)}
 
 
+@router.post("/games/{game_id}/cast")
+def games_game_add_cast(
+    game_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import add_game_cast_member
+
+    try:
+        return add_game_cast_member(
+            game_id,
+            kind=body.get("kind") or body.get("bucket") or "characters",
+            name=body.get("name") or body.get("character") or "",
+            character=body.get("character"),
+            photo_url=body.get("photo_url"),
+            character_photo_url=body.get("character_photo_url"),
+            roles=body.get("roles"),
+            language=body.get("language"),
+            actors=body.get("actors"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.patch("/games/{game_id}/cast/{member_id}")
+def games_game_patch_cast(
+    game_id: str,
+    member_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import patch_game_cast_member
+
+    try:
+        return patch_game_cast_member(
+            game_id,
+            member_id,
+            kind=body.get("kind") or body.get("bucket") or "characters",
+            name=body.get("name"),
+            character=body.get("character"),
+            photo_url=body.get("photo_url"),
+            actor_photo_url=body.get("actor_photo_url"),
+            actors=body.get("actors"),
+            roles=body.get("roles"),
+            language=body.get("language"),
+            delete=bool(body.get("delete")),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.post("/franchises/{work_id}/refresh-metadata")
 async def games_franchise_refresh_metadata(
     work_id: str,

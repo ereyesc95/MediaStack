@@ -114,6 +114,23 @@ type Props = {
   /** Leaf admin: Set episodes / Set links / Set volumes (remote URL media). */
   onSetRemoteMedia?: () => void;
   setRemoteMediaLabel?: string;
+  /**
+   * Leaf Audio embed: Track data + Edit Release (between Edit data and Theme).
+   * Handlers come from the embedded ReleasePage.
+   */
+  embeddedReleaseMenu?: {
+    onEditAbout: () => void;
+    onAddMember?: () => void;
+    onRefreshMetadata?: () => void;
+    onFetchLyrics?: () => void;
+    onSetLyrics?: () => void;
+    onFetchVideos?: () => void;
+    onSetVideo?: () => void;
+    onWriteFileTags?: () => void;
+    onRefreshTracklist?: () => void;
+    refreshIncludeBio?: boolean;
+    onRefreshIncludeBioChange?: (v: boolean) => void;
+  } | null;
   onRefreshRelatedSimilar?: () => void;
   onRefreshRelatedParticipations?: () => void;
   refreshIncludeBio?: boolean;
@@ -199,6 +216,7 @@ export default function AppMenu({
   addSimilarLabel = "Add similar artist",
   onSetRemoteMedia,
   setRemoteMediaLabel = "Set links",
+  embeddedReleaseMenu = null,
   onRefreshRelatedSimilar,
   onRefreshRelatedParticipations,
   refreshIncludeBio = false,
@@ -228,6 +246,7 @@ export default function AppMenu({
   const [artistDataOpen, setArtistDataOpen] = useState(false);
   const [editDataOpen, setEditDataOpen] = useState(false);
   const [trackDataOpen, setTrackDataOpen] = useState(false);
+  const [embeddedEditReleaseOpen, setEmbeddedEditReleaseOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
   const [manageEventOpen, setManageEventOpen] = useState(false);
@@ -329,6 +348,7 @@ export default function AppMenu({
       if (next) {
         setArtistDataOpen(false);
         setEditDataOpen(false);
+        setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
       }
@@ -342,6 +362,7 @@ export default function AppMenu({
       if (next) {
         setEditDataOpen(false);
         setTrackDataOpen(false);
+        setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
       }
@@ -355,6 +376,7 @@ export default function AppMenu({
       if (next) {
         setArtistDataOpen(false);
         setTrackDataOpen(false);
+        setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
         setSettingsOpen(false);
       }
@@ -369,6 +391,7 @@ export default function AppMenu({
         setArtistDataOpen(false);
         setEditDataOpen(false);
         setTrackDataOpen(false);
+        setEmbeddedEditReleaseOpen(false);
         setSettingsOpen(false);
       }
       return next;
@@ -382,6 +405,7 @@ export default function AppMenu({
         setArtistDataOpen(false);
         setEditDataOpen(false);
         setTrackDataOpen(false);
+        setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
       }
       return next;
@@ -740,6 +764,180 @@ export default function AppMenu({
             <>
               {refreshDataBlock}
               {editDataBlock}
+            </>
+          ) : null}
+          {editDataFlat && embeddedReleaseMenu ? (
+            <>
+              {(embeddedReleaseMenu.onFetchLyrics ||
+                embeddedReleaseMenu.onSetLyrics ||
+                embeddedReleaseMenu.onFetchVideos ||
+                embeddedReleaseMenu.onSetVideo ||
+                embeddedReleaseMenu.onRefreshTracklist ||
+                embeddedReleaseMenu.onWriteFileTags) && (
+                <>
+                  <button
+                    type="button"
+                    className="menu-item-with-sub"
+                    onClick={toggleTrackData}
+                  >
+                    <IconTrackData className="menu-item-icon" />
+                    Track data
+                    <span className="menu-chevron">
+                      {trackDataOpen ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  {trackDataOpen && (
+                    <div className="app-menu-submenu">
+                      {embeddedReleaseMenu.onFetchLyrics && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onFetchLyrics?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconLyrics className="menu-item-icon" />
+                          Fetch lyrics
+                        </button>
+                      )}
+                      {embeddedReleaseMenu.onSetLyrics && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onSetLyrics?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconLyrics className="menu-item-icon" />
+                          Set lyrics
+                        </button>
+                      )}
+                      {embeddedReleaseMenu.onFetchVideos && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onFetchVideos?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconVideo className="menu-item-icon" />
+                          Fetch videos
+                        </button>
+                      )}
+                      {embeddedReleaseMenu.onSetVideo && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onSetVideo?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconVideo className="menu-item-icon" />
+                          Set videos
+                        </button>
+                      )}
+                      {embeddedReleaseMenu.onRefreshTracklist && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onRefreshTracklist?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconSync className="menu-item-icon" />
+                          Refresh tracklist
+                        </button>
+                      )}
+                      {embeddedReleaseMenu.onWriteFileTags && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            embeddedReleaseMenu.onWriteFileTags?.();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconFileTags className="menu-item-icon" />
+                          Write file tags
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => {
+                  setEmbeddedEditReleaseOpen((o) => {
+                    const next = !o;
+                    if (next) {
+                      setArtistDataOpen(false);
+                      setEditDataOpen(false);
+                      setTrackDataOpen(false);
+                      setThemeOpen(false);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <IconEditRelease className="menu-item-icon" />
+                Edit Release
+                <span className="menu-chevron">
+                  {embeddedEditReleaseOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              {embeddedEditReleaseOpen && (
+                <div className="app-menu-submenu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      embeddedReleaseMenu.onEditAbout();
+                      setOpen(false);
+                    }}
+                  >
+                    <IconAbout className="menu-item-icon" />
+                    About
+                  </button>
+                  {embeddedReleaseMenu.onAddMember && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        embeddedReleaseMenu.onAddMember?.();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconLineup className="menu-item-icon" />
+                      Staff
+                    </button>
+                  )}
+                  {embeddedReleaseMenu.onRefreshMetadata && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        embeddedReleaseMenu.onRefreshMetadata?.();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconDownload className="menu-item-icon" />
+                      Metadata
+                    </button>
+                  )}
+                  {embeddedReleaseMenu.onRefreshIncludeBioChange && (
+                    <label className="app-menu-checkbox app-menu-checkbox--sub">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(embeddedReleaseMenu.refreshIncludeBio)}
+                        onChange={(e) =>
+                          embeddedReleaseMenu.onRefreshIncludeBioChange?.(
+                            e.target.checked
+                          )
+                        }
+                      />
+                      Include description
+                    </label>
+                  )}
+                </div>
+              )}
             </>
           ) : null}
           {menuChrome ? (

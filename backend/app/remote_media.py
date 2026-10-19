@@ -179,6 +179,8 @@ def list_remote_movie_links(db: Session, folder_path: str) -> list[dict]:
                 "url": url,
                 "open_url": url or None,
                 "open_mode": "tab",
+                "number": row.rml_number,
+                "date_iso": row.rml_date_iso,
                 "sort_order": row.rml_sort_order or 0,
                 "source": "remote",
             }
@@ -545,7 +547,6 @@ def save_movie_remote_links(
     db.flush()
 
     saved: list[dict] = []
-    trailer_count = 0
     for idx, link in enumerate(links_payload or []):
         role = (link.get("role") or ROLE_EXTRA).casefold()
         if role not in {ROLE_MOVIE, ROLE_TRAILER, ROLE_EXTRA}:
@@ -555,9 +556,6 @@ def save_movie_remote_links(
         if not url:
             continue
         if role == ROLE_TRAILER:
-            trailer_count += 1
-            if trailer_count > 1:
-                continue
             title = title or "Trailer"
         if role == ROLE_MOVIE:
             title = title or "Movie"
@@ -566,14 +564,20 @@ def save_movie_remote_links(
         sort_order = link.get("sort_order")
         if sort_order is None:
             sort_order = idx
+        number = link.get("number")
+        try:
+            number_i = int(number) if number is not None and str(number).strip() != "" else None
+        except (TypeError, ValueError):
+            number_i = None
+        date_iso = _normalize_date_iso(link.get("date_iso"))
         row = RemoteMediaLink(
             rml_module=MODULE_MOVIES,
             rml_folder_path=path,
             rml_role=role,
             rml_title=title,
             rml_url=url,
-            rml_number=None,
-            rml_date_iso=None,
+            rml_number=number_i,
+            rml_date_iso=date_iso,
             rml_sort_order=int(sort_order),
             rml_updated_at=_now(),
         )
@@ -585,6 +589,8 @@ def save_movie_remote_links(
                 "role": role,
                 "title": title,
                 "url": url,
+                "number": number_i,
+                "date_iso": date_iso,
             }
         )
 
@@ -693,6 +699,8 @@ def get_movie_remote_payload(db: Session, folder_path: str) -> dict:
                 "role": l.get("role"),
                 "title": l.get("title"),
                 "url": l.get("url"),
+                "number": l.get("number"),
+                "date_iso": l.get("date_iso"),
                 "sort_order": l.get("sort_order"),
             }
             for l in links

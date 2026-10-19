@@ -110,14 +110,14 @@ def resolve_catalog_wide_file(*folders: Path | None) -> Path | None:
 
 
 def resolve_cover_front_file(artwork: Path | None) -> Path | None:
-    """Prefer Cover - Portrait, then Cover - Front / Cover - Album (legacy).
+    """Prefer Cover - Front / Cover - Album (legacy).
 
-    Does not fall through to landscape/banner — those are separate art roles
-    (music releases, photocard backs, etc.).
+    Portrait is a separate catalog-card role via resolve_cover_portrait_file.
+    Does not fall through to landscape/banner.
     """
     return _first_stem_in_dirs(
         _dirs(artwork),
-        (COVER_PORTRAIT_STEM, COVER_FRONT_STEM, COVER_ALBUM_STEM),
+        (COVER_FRONT_STEM, COVER_ALBUM_STEM),
     )
 
 
