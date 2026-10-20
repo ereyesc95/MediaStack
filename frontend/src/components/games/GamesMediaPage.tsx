@@ -244,6 +244,8 @@ export default function GamesMediaPage({
     (data as { open_url?: string; rom_path?: string } | null)?.open_url ||
     (data as { rom_path?: string } | null)?.rom_path ||
     null;
+  const openMode =
+    (data as { open_mode?: string | null } | null)?.open_mode || null;
 
   const hasAudio = Boolean(data?.has_audio || audioCards.length > 0);
   const audioEmbed = useMemo(
@@ -278,7 +280,23 @@ export default function GamesMediaPage({
     if (!launchPath || !gameId) return;
     setLaunching(true);
     try {
-      await launchGame(gameId);
+      if (openMode === "web") {
+        window.open(launchPath, "_blank", "noopener,noreferrer");
+        return;
+      }
+      const res = await launchGame(gameId);
+      if (
+        res &&
+        typeof res === "object" &&
+        (res as { open_mode?: string }).open_mode === "web" &&
+        (res as { url?: string }).url
+      ) {
+        window.open(
+          (res as { url: string }).url,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }
     } finally {
       setLaunching(false);
     }
@@ -422,7 +440,8 @@ export default function GamesMediaPage({
         </button>
         <span className="header-title">{title}</span>
         <span className="spacer" />
-        {onSetOrientation ? (
+        {onSetOrientation &&
+        !(section === "audio" && audioEmbed.mode === "release") ? (
           <CardOrientationPicker
             value={cardOrientation}
             onChange={onSetOrientation}
@@ -512,14 +531,25 @@ export default function GamesMediaPage({
                 <p className="games-overview__about">{about.overview}</p>
               ) : null}
               {isLeaf && launchPath ? (
-                <button
-                  type="button"
-                  className="primary-btn"
-                  disabled={launching}
-                  onClick={() => void onLaunch()}
-                >
-                  {launching ? "Launching…" : "Launch"}
-                </button>
+                openMode === "web" ? (
+                  <a
+                    className="primary-btn"
+                    href={launchPath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Launch
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={launching}
+                    onClick={() => void onLaunch()}
+                  >
+                    {launching ? "Launching…" : "Launch"}
+                  </button>
+                )
               ) : null}
               {!isLeaf && (data as { primary_game_id?: string })?.primary_game_id ? (
                 <button

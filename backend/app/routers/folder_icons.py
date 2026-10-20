@@ -9,6 +9,7 @@ from app.database import get_db
 from app.deps import require_admin
 from app.folder_icons import (
     count_existing_icos,
+    ensure_games_platform_icons,
     ensure_ini_tree,
     ensure_media_module_roots,
     generate_icons_tree,
@@ -129,4 +130,18 @@ def regenerate_media_module_icons(
     """Regenerate desktop.ini + folder.ico for Music/Movies/Series/Books/Games/Photos."""
     return ensure_media_module_roots(
         overwrite_ico=overwrite, force_ini=overwrite
+    )
+
+
+@router.post("/games/platforms")
+def regenerate_games_platform_icons(
+    overwrite: bool = Query(
+        False,
+        description="Overwrite existing platform folder.ico files",
+    ),
+    _admin: User = Depends(require_admin),
+):
+    """Create missing desktop.ini + folder.ico on Games/{Platform} folders."""
+    return ensure_games_platform_icons(
+        overwrite_ico=overwrite, force_ini=True
     )

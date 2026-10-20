@@ -576,11 +576,289 @@ input {
   margin: 0;
 }
 
+.photos-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.photos-tile-grid--home {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .photos-tile-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .photos-tile-grid--home {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .photos-tile-grid--home {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .photos-tile-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .photos-tile-grid--home {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .photos-tile-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .photos-tile-grid--home {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Gallery / Exclusive subbars — match Movies/Series catalog sticky bars */
+.photos-module .photos-subbars {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  background: rgba(8, 10, 16, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.photos-module .photos-subbars .filter-subbar,
+.photos-module .photos-subbars .filter-subbar--single,
+.photos-module .photos-subbars .filter-subbar--spread {
+  background: rgba(8, 10, 16, 0.28);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.photos-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 0;
+  overflow: hidden;
+  background: #222;
+  display: block;
+  width: 100%;
+}
+
+.photos-tile__cover {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: transform 0.28s ease;
+  z-index: 0;
+}
+
+.photos-tile__cover--fade {
+  transition: opacity 0.9s ease, transform 0.28s ease;
+}
+
+.photos-tile__cover--fade.is-lit {
+  opacity: 1;
+  z-index: 1;
+}
+
+.photos-tile__cover--fade.is-dim {
+  opacity: 0;
+  z-index: 0;
+}
+
+.photos-tile:hover .photos-tile__cover {
+  transform: scale(1.08);
+}
+
+.photos-tile__shade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0.28) 42%,
+    transparent 72%
+  );
+}
+
+.photos-tile:hover .photos-tile__shade {
+  opacity: 1;
+}
+
+.photos-tile__meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 0.45rem 0.35rem 0.4rem;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+
+.photos-tile:hover .photos-tile__meta {
+  opacity: 1;
+}
+
+.photos-tile__title {
+  display: block;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.photos-tile__subtitle {
+  display: block;
+  margin-top: 0.12rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.58rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.photos-tile--link {
+  display: block;
+}
+
+.photos-tile--link .photos-tile__main {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: #1a1d26;
+  color: inherit;
+  text-align: inherit;
+  text-decoration: none;
+}
+
+.photos-tile--link .photos-tile__cover {
+  background: linear-gradient(
+    145deg,
+    rgba(40, 48, 64, 0.95) 0%,
+    rgba(18, 22, 30, 0.98) 100%
+  );
+}
+
+.photos-tile__link-icon {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.photos-tile__link-icon svg {
+  width: 2rem;
+  height: 2rem;
+  opacity: 0.92;
+}
+
+.photos-tile__actions {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.15rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.photos-tile--link:hover .photos-tile__actions,
+.photos-tile--link.is-revealed .photos-tile__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.photos-tile__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.photos-tile__action:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.photos-tile__action svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.photos-tile__action--delete {
+  font-weight: 700;
+}
+
+.artist-gallery__photo-card--link {
+  background: #1a1d26;
+  text-decoration: none;
+  color: inherit;
+}
+
+.artist-gallery__link-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  background: linear-gradient(
+    145deg,
+    rgba(40, 48, 64, 0.95) 0%,
+    rgba(18, 22, 30, 0.98) 100%
+  );
+}
+
+.artist-gallery__link-card svg {
+  width: 2rem;
+  height: 2rem;
+  opacity: 0.92;
+}
+
+/* Legacy class aliases (safe if referenced elsewhere) */
 .photos-year-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 1rem;
-  padding: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0;
+  padding: 0;
 }
 
 .photos-year-card {
@@ -589,26 +867,40 @@ input {
   border: none;
   padding: 0;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
   background: #222;
 }
 
-.photos-year-card__cover {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
+.photos-exclusive-filter {
+  width: 100%;
 }
 
-.photos-year-card__label {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 0.5rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
-  color: #fff;
-  font-weight: 600;
-  text-align: center;
+.gallery-viewer__caption-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent, #c9a227);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.gallery-viewer__caption-link:hover {
+  opacity: 0.9;
+}
+
+.gallery-viewer__caption-sep {
+  color: var(--text-muted);
+  font-weight: 500;
+  user-select: none;
+}
+
+.gallery-viewer__subcaption {
+  color: var(--text);
+  font-weight: 500;
 }
 
 .photos-type-switch {
@@ -2166,8 +2458,8 @@ input {
   overflow: hidden;
 }
 
-/* Music HOME "ICONS / Your top artists" — 1:1 circles sized from width
-   (never height:min(100%) — that collapses when the mobile row height is auto). */
+/* Music HOME "ICONS / Your top artists" — true circles sized by row height
+   so wide columns never squash into ovals or crop top/bottom. */
 .music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
   .dash-scroll--icons
   .dash-icon-item-cover,
@@ -2175,13 +2467,19 @@ input {
   .dash-scroll--icons
   .dash-placeholder--circle {
   border-radius: 50%;
-  aspect-ratio: 1;
-  width: 100%;
-  max-width: min(100%, 7.5rem);
-  height: auto;
+  aspect-ratio: 1 / 1 !important;
+  width: auto !important;
+  height: min(100%, 7.5rem) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  min-width: 0;
+  min-height: 0 !important;
   margin: 0 auto;
   justify-self: center;
+  align-self: center;
   flex-shrink: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .music-dashboard:not(.series-dashboard):not(.movies-dashboard):not(.books-dashboard)
@@ -2194,8 +2492,9 @@ input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: auto;
+  height: 100%;
   min-height: 0;
+  overflow: visible;
 }
 
 /* Series / Movies / Books Best panes: portrait rectangles (not Music circles) */
@@ -3335,9 +3634,10 @@ input {
   max-height: 100%;
   min-width: 0;
   min-height: 0;
-  aspect-ratio: 1;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   margin: 0 auto;
+  overflow: hidden;
 }
 
 .dash-placeholder--flag {
@@ -4631,7 +4931,10 @@ input {
   margin: 0 auto 0.08rem;
 }
 
-.music-dashboard--mobile-landscape .dash-icon-item-cover,
+/* Landscape covers for Series/Movies/Books Best panes only — not Music ICONS circles */
+.series-dashboard.music-dashboard--mobile-landscape .dash-scroll--icons .dash-icon-item-cover,
+.movies-dashboard.music-dashboard--mobile-landscape .dash-scroll--icons .dash-icon-item-cover,
+.books-dashboard.music-dashboard--mobile-landscape .dash-scroll--icons .dash-icon-item-cover,
 .music-dashboard--mobile-landscape .dash-placeholder-item .dash-placeholder--landscape {
   width: 100%;
   aspect-ratio: 16 / 10;
@@ -4639,6 +4942,25 @@ input {
   min-height: 0;
   max-height: none;
   flex-shrink: 0;
+}
+
+.music-dashboard--mobile-landscape:not(.series-dashboard):not(.movies-dashboard):not(
+    .books-dashboard
+  )
+  .dash-scroll--icons
+  .dash-icon-item-cover,
+.music-dashboard--mobile-landscape:not(.series-dashboard):not(.movies-dashboard):not(
+    .books-dashboard
+  )
+  .dash-scroll--icons
+  .dash-placeholder--circle {
+  border-radius: 50%;
+  aspect-ratio: 1 / 1 !important;
+  width: auto !important;
+  height: min(100%, 4.5rem) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
 }
 
 /* —— Mobile / narrow screens —— */
@@ -4921,6 +5243,7 @@ input {
 
   .music-dashboard--mobile-portrait .dash-track,
   .music-dashboard--mobile-portrait .dash-icon-item,
+  .music-dashboard--mobile-portrait .dash-placeholder-item,
   .music-dashboard--mobile-portrait .dash-genre,
   .music-dashboard--mobile-portrait .dash-country,
   .music-dashboard--mobile-portrait .dash-placeholder-slot {
@@ -4959,8 +5282,8 @@ input {
     height: auto;
   }
 
-  /* Music ICONS pane: same width-based sizing as track tiles (beats later
-     genre-ring height:min(100%) rules that re-collapse artist circles). */
+  /* Music ICONS: width-based circles — row height is auto on mobile portrait,
+     so height:min(100%) collapses placeholders to zero. */
   .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
       .books-dashboard
     )
@@ -4976,6 +5299,8 @@ input {
     align-items: center;
     justify-content: center;
     height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   .music-dashboard--mobile-portrait:not(.series-dashboard):not(.movies-dashboard):not(
@@ -4989,14 +5314,15 @@ input {
     .dash-scroll--icons
     .dash-placeholder--circle {
     border-radius: 50%;
-    aspect-ratio: 1;
-    width: 100%;
-    max-width: min(22vw, 74px);
-    height: auto;
-    max-height: none;
-    min-height: 0;
+    aspect-ratio: 1 / 1 !important;
+    width: min(22vw, 74px) !important;
+    max-width: min(22vw, 74px) !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
     margin: 0 auto;
     flex-shrink: 0;
+    overflow: hidden;
   }
 
   .series-dashboard.music-dashboard--mobile-portrait .dash-scroll--icons .dash-icon-item-cover,
@@ -7913,6 +8239,86 @@ input {
   animation: manage-artist-spin 0.8s linear infinite;
 }
 
+.organize-roms-modal {
+  width: min(42rem, 96vw);
+  max-height: min(88vh, 52rem);
+}
+
+.organize-roms-modal__platform {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.organize-roms-modal__platform .search-dropdown {
+  max-width: 22rem;
+}
+
+.organize-roms-modal__platform-locked {
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  max-width: 22rem;
+}
+
+.organize-roms-modal__plat-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.organize-roms-modal__plat-empty {
+  font-size: 0.72em;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.organize-roms-modal__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.organize-roms-modal__list {
+  max-height: min(48vh, 22rem);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-radius: var(--radius);
+  padding: 0.35rem 0;
+  margin-bottom: 0.85rem;
+}
+
+.organize-roms-modal__row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.organize-roms-modal__row.is-conflict {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.organize-roms-modal__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.organize-roms-modal__path {
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
 .manage-artists-modal__spinner--sm {
   width: 0.95rem;
   height: 0.95rem;
@@ -10251,6 +10657,34 @@ button.media-release-card--banner {
 .app-menu-checkbox--sub {
   padding: 0.4rem 1rem 0.4rem 1.1rem;
   font-size: 0.8rem;
+}
+
+.app-menu-meta-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0.15rem;
+}
+
+.app-menu-meta-row > button {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.app-menu-checkbox--inline {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem 0.35rem 0.15rem;
+  font-size: 0.68rem;
+  gap: 0.28rem;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.app-menu-checkbox--inline input {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
 }
 
 /* Stacked artist About: phone + tablet portrait */
@@ -13086,7 +13520,15 @@ button.media-release-card--banner {
   border: none;
   padding: 0;
   cursor: pointer;
+  position: relative;
+  z-index: 0;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  /* Match tour ticket flip: clip mid-flip 3D bounds so height doesn't pulse */
   perspective: 900px;
+  overflow: hidden;
+  contain: paint;
 }
 
 .release-photocard:disabled {
@@ -13371,6 +13813,8 @@ button.media-release-card--banner {
   position: relative;
   width: fit-content;
   max-width: 100%;
+  height: auto;
+  max-height: var(--photocard-max-height, none);
   transform-style: preserve-3d;
   transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
 }
@@ -13387,11 +13831,18 @@ button.media-release-card--banner {
 
 .release-photocard__face--front {
   position: relative;
+  width: fit-content;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--photocard-max-height, none);
 }
 
 .release-photocard__face--back {
   position: absolute;
   inset: 0;
+  width: auto;
+  height: auto;
+  max-height: none;
   transform: rotateY(180deg);
 }
 
@@ -13405,13 +13856,21 @@ button.media-release-card--banner {
 }
 
 .release-photocard__face--front .release-photocard__clip {
+  position: relative;
   width: fit-content;
   max-width: 100%;
+  height: auto;
+  max-height: var(--photocard-max-height, none);
+  overflow: hidden;
 }
 
 .release-photocard__face--back .release-photocard__clip {
   position: absolute;
   inset: 0;
+  width: auto;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
 }
 
 .release-photocard__face--front .release-photocard__clip img {
@@ -13419,6 +13878,8 @@ button.media-release-card--banner {
   max-width: 100%;
   height: auto;
   max-height: var(--photocard-max-height, none);
+  object-fit: contain;
+  object-position: center top;
   display: block;
   vertical-align: top;
 }
@@ -13426,9 +13887,11 @@ button.media-release-card--banner {
 .release-photocard__face--back .release-photocard__clip img {
   width: 100%;
   height: 100%;
+  max-width: none;
+  max-height: none;
   display: block;
   object-fit: contain;
-  object-position: center;
+  object-position: center center;
 }
 
 .release-photocard__face--cover .release-photocard__clip img {
@@ -18949,6 +19412,7 @@ button.lyrics-status-badge--icon-only {
   border-radius: 0;
   background: transparent;
   color: color-mix(in srgb, var(--text) 82%, rgba(180, 150, 120, 0.55));
+  text-decoration: none;
   font: inherit;
   font-size: 0.82rem;
   letter-spacing: 0.02em;
@@ -25384,6 +25848,26 @@ button.lyrics-status-badge--icon-only {
 
 .manage-catalog-modal__platform-picker--item {
   flex: 0 0 auto;
+}
+
+.manage-catalog-modal__web-url {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.manage-catalog-modal__web-url input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
 }
 
 .manage-catalog-modal__platform-picker-btn {

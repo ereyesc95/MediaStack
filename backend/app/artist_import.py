@@ -281,16 +281,35 @@ def _dated_title(date: str | None, title: str | None) -> str:
     return f"{clean_date}. {safe_title}" if clean_date else safe_title
 
 
+# MusicBrainz release-group ↔ release-group "single from" link.
+# API type string is "single from"; older docs/code sometimes said "single".
+_SINGLE_FROM_TYPES = frozenset({"single from", "single"})
+
+
+def _relation_release_group(relation: dict) -> dict:
+    """MB JSON uses hyphen keys; tolerate underscore variants."""
+    linked = relation.get("release-group") or relation.get("release_group")
+    return linked if isinstance(linked, dict) else {}
+
+
 def _single_parent(group: dict) -> dict | None:
+    """Parent album RG for a single, if MusicBrainz has a forward 'single from'.
+
+    Missing / empty relations mean a standalone single — caller must still
+    create it under Singles/ (flat), never omit it.
+    """
     for relation in group.get("relations") or []:
-        if (relation.get("type") or "").casefold() != "single":
+        if not isinstance(relation, dict):
             continue
-        if (relation.get("direction") or "").casefold() != "forward":
+        rel_type = (relation.get("type") or "").strip().casefold()
+        if rel_type not in _SINGLE_FROM_TYPES:
             continue
-        linked = relation.get("release-group") or {}
+        if (relation.get("direction") or "").strip().casefold() != "forward":
+            continue
+        linked = _relation_release_group(relation)
         # Nested relationship targets do not always repeat primary-type, but
-        # the forward "single" relation specifically points from a single/EP
-        # to the album it was taken from.
+        # the forward "single from" relation points from a single/EP to the
+        # album (or soundtrack) it was taken from.
         if linked.get("id") and linked.get("title"):
             return linked
     return None
@@ -349,8 +368,19 @@ def _create_artist_tree(
     for relative in ARTIST_FOLDERS:
         ensure_relative_tree(artist_dir, relative)
 
+    # Prefer dates/titles from our prepared album-side groups when the nested
+    # relation payload omits first-release-date (common on relation targets).
+    parent_meta_by_id = {
+        str(g.get("id")): g
+        for g in groups
+        if g.get("id")
+        and g.get("_category")
+        in {"Albums", "Extended Plays", "Soundtracks", "Live Albums", "Compilations"}
+    }
+
     used_paths: dict[str, str] = {}
     releases_created = 0
+    singles_root = artist_dir / "Singles"
     for group in groups:
         category = group["_category"]
         release_name = _dated_title(group.get("first-release-date"), group.get("title"))
@@ -358,9 +388,14 @@ def _create_artist_tree(
         if category == "Singles":
             parent = _single_parent(group)
             if parent:
+                pid = str(parent.get("id") or "")
+                prepared = parent_meta_by_id.get(pid) or {}
                 release_parent /= _dated_title(
-                    parent.get("first-release-date"), parent.get("title")
+                    parent.get("first-release-date")
+                    or prepared.get("first-release-date"),
+                    parent.get("title") or prepared.get("title"),
                 )
+            # else: standalone / unlinked single → flat under Singles/
         release_dir = release_parent / release_name
         collision_key = str(release_dir).casefold()
         group_id = group.get("id") or ""
@@ -368,6 +403,33 @@ def _create_artist_tree(
             release_dir = release_parent / f"{release_name} [MBID {group_id[:8]}]"
             collision_key = str(release_dir).casefold()
         used_paths[collision_key] = group_id
+
+        # Pull-missing / re-import: if the single already sits flat under
+        # Singles/ but MB now has a parent album, move it into the nested path.
+        if (
+            category == "Singles"
+            and release_parent != singles_root
+            and not release_dir.exists()
+        ):
+            flat_dir = singles_root / release_name
+            flat_alt = (
+                singles_root / f"{release_name} [MBID {group_id[:8]}]"
+                if group_id
+                else None
+            )
+            source = (
+                flat_dir
+                if flat_dir.is_dir()
+                else flat_alt
+                if flat_alt is not None and flat_alt.is_dir()
+                else None
+            )
+            if source is not None:
+                try:
+                    release_parent.mkdir(parents=True, exist_ok=True)
+                    source.rename(release_dir)
+                except OSError:
+                    pass
 
         release_existed = release_dir.is_dir()
         ensure_relative_tree(release_dir, "[Artwork]")

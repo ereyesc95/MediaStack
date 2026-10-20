@@ -95,6 +95,137 @@ def _set_hidden_system(path: Path) -> None:
             pass
 
 
+def mark_folder_hidden(folder: Path) -> None:
+    """Mark a directory Hidden on Windows (Exclusive galleries, etc.)."""
+    if sys.platform != "win32" or not folder.is_dir():
+        return
+    try:
+        import ctypes
+
+        FILE_ATTRIBUTE_HIDDEN = 0x2
+        GetFileAttributesW = ctypes.windll.kernel32.GetFileAttributesW
+        GetFileAttributesW.restype = ctypes.c_uint32
+        current = GetFileAttributesW(str(folder))
+        if current == 0xFFFFFFFF:
+            return
+        desired = int(current) | FILE_ATTRIBUTE_HIDDEN
+        if desired != current:
+            _set_file_attrs(folder, desired)
+    except Exception:
+        try:
+            import subprocess
+
+            subprocess.run(
+                ["attrib", "+H", str(folder)],
+                check=False,
+                capture_output=True,
+            )
+        except Exception:
+            pass
+
+
+def ensure_exclusive_folder(folder: Path) -> Path:
+    """Create Exclusive dir if missing and always apply the Hidden attribute."""
+    folder.mkdir(parents=True, exist_ok=True)
+    mark_folder_hidden(folder)
+    try:
+        decorate_folder(folder)
+    except Exception:
+        pass
+    return folder
+
+
+# Franchise-home [Artwork] is covers-only — these belong under leaf Gallery/.
+_FRANCHISE_ARTWORK_FORBIDDEN = frozenset(
+    {
+        "branding",
+        "covers",
+        "exclusive",
+        "gallery",
+        "miscellaneous",
+        "renders",
+        "extras",
+        "characters",
+    }
+)
+
+
+def _dir_is_media_empty(folder: Path) -> bool:
+    """True when folder has no files (only empty dirs or nothing)."""
+    try:
+        for path in folder.rglob("*"):
+            if path.is_file():
+                return False
+    except OSError:
+        return False
+    return True
+
+
+def cleanup_franchise_artwork_dir(artwork: Path) -> int:
+    """Remove empty leaf-style children wrongly nested under franchise [Artwork].
+
+    Returns count of directories removed.
+    """
+    import shutil
+
+    if not artwork.is_dir():
+        return 0
+    removed = 0
+    try:
+        children = list(artwork.iterdir())
+    except OSError:
+        return 0
+    for child in children:
+        if not child.is_dir():
+            continue
+        if child.name.casefold() not in _FRANCHISE_ARTWORK_FORBIDDEN:
+            continue
+        if not _dir_is_media_empty(child):
+            continue
+        try:
+            shutil.rmtree(child, ignore_errors=False)
+            removed += 1
+        except OSError:
+            try:
+                shutil.rmtree(child, ignore_errors=True)
+                if not child.exists():
+                    removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+def cleanup_all_franchise_artwork(*, modules: tuple[str, ...] | None = None) -> dict:
+    """Scan Media roots and clean franchise-home [Artwork] mistrees."""
+    root = _media_root()
+    stats = {"ok": True, "removed": 0, "artwork_dirs": 0, "modules": []}
+    if not root:
+        stats["ok"] = False
+        stats["error"] = "media_root missing"
+        return stats
+    scan_modules = modules or ("Movies", "Series", "Books", "Games")
+    for mod in scan_modules:
+        mod_root = root / mod
+        if not mod_root.is_dir():
+            continue
+        mod_removed = 0
+        try:
+            # Literal [Artwork] — brackets are glob char-classes, so escape "[".
+            for artwork in mod_root.rglob("[[]Artwork]"):
+                if not artwork.is_dir():
+                    continue
+                # Franchise-home (and any) [Artwork]: strip empty leaf-style mistrees.
+                stats["artwork_dirs"] += 1
+                n = cleanup_franchise_artwork_dir(artwork)
+                mod_removed += n
+                stats["removed"] += n
+        except OSError as exc:
+            stats["modules"].append({"name": mod, "error": str(exc)})
+            continue
+        stats["modules"].append({"name": mod, "removed": mod_removed})
+    return stats
+
+
 def mark_folder_customized(folder: Path) -> None:
     """
     Set the directory Read-only attribute so Explorer honors desktop.ini.
@@ -243,8 +374,11 @@ def ensure_relative_tree(base: Path, relative: str) -> None:
         if part in (".", ""):
             continue
         cur = cur / part
-        cur.mkdir(parents=True, exist_ok=True)
-        decorate_folder(cur)
+        if part.casefold() == "exclusive":
+            ensure_exclusive_folder(cur)
+        else:
+            cur.mkdir(parents=True, exist_ok=True)
+            decorate_folder(cur)
 
 
 def find_first_image(folder: Path, stems: list[str]) -> Path | None:
@@ -682,6 +816,69 @@ def generate_icons_tree(
         if status in stats:
             stats[status] += 1
     notify_shell_folder(root_folder)
+    notify_shell_assoc_changed()
+    return stats
+
+
+def ensure_games_platform_icons(
+    *, overwrite_ico: bool = False, force_ini: bool = True
+) -> dict:
+    """Write missing desktop.ini + folder.ico on Games/{Platform} folders."""
+    root = _media_root()
+    stats: dict = {
+        "ok": True,
+        "platforms": [],
+        "ini_written": 0,
+        "ico_written": 0,
+        "skipped_exists": 0,
+        "skipped_no_source": 0,
+        "failed": 0,
+    }
+    if not root:
+        stats["ok"] = False
+        stats["error"] = "media_root missing"
+        return stats
+    games = root / "Games"
+    if not games.is_dir():
+        stats["ok"] = False
+        stats["error"] = "Games folder missing"
+        return stats
+    try:
+        platform_dirs = sorted(
+            (p for p in games.iterdir() if p.is_dir() and not p.name.startswith(".")),
+            key=lambda p: p.name.casefold(),
+        )
+    except OSError as exc:
+        stats["ok"] = False
+        stats["error"] = str(exc)
+        return stats
+    for folder in platform_dirs:
+        ini_ok = write_desktop_ini(folder, force=force_ini)
+        if ini_ok:
+            stats["ini_written"] += 1
+        src = find_platform_icon(folder.name)
+        if src:
+            status = ensure_folder_ico(
+                folder, overwrite=overwrite_ico, root=root, source=src
+            )
+        else:
+            status = ensure_folder_ico(
+                folder, overwrite=overwrite_ico, root=root
+            )
+        if status == "written":
+            stats["ico_written"] += 1
+        elif status in stats:
+            stats[status] += 1
+        mark_folder_customized(folder)
+        notify_shell_folder(folder)
+        stats["platforms"].append(
+            {
+                "name": folder.name,
+                "ini_written": ini_ok,
+                "ico": status,
+                "has_source": bool(src),
+            }
+        )
     notify_shell_assoc_changed()
     return stats
 

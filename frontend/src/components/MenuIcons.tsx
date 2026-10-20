@@ -33,6 +33,18 @@ export function IconCards({ className }: IconProps) {
   );
 }
 
+/** “All” media types — select-all / everything glyph. */
+export function IconAll({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M3 5h2V3H3v2zm4 16h14v-2H7v2zM3 9h2V7H3v2zm0 4h2v-2H3v2zm0 4h2v-2H3v2zm0 4h2v-2H3v2zM7 5h14V3H7v2zm0 4h14V7H7v2zm0 4h14v-2H7v2zm0 4h14v-2H7v2z"
+      />
+    </svg>
+  );
+}
+
 export function IconList({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
@@ -380,6 +392,41 @@ export function IconLinks({ className }: IconProps) {
   );
 }
 
+/** External / Exclusive link — chain with outbound arrow. */
+export function IconExternalLink({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"
+      />
+    </svg>
+  );
+}
+
+/** Add Exclusive link menu glyph. */
+export function IconAddLink({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M3.9 12a5 5 0 0 1 5-5h2.1v2H8.9a3 3 0 1 0 0 6H11v2H8.9a5 5 0 0 1-5-5zm7.1 0h2v2h-2v-2zm3.5-5H17v2.1h2.1V11H21V8.9h2.1V7H21V4.9h-2.1V7h-2.1V4.9h-2.1V7zM13 13h3v2h-3a3 3 0 0 1 0-6h1.5v2H13a1 1 0 0 0 0 2z"
+      />
+    </svg>
+  );
+}
+
+export function IconPencil({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+      />
+    </svg>
+  );
+}
+
 export function IconFileTags({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
@@ -411,7 +458,7 @@ export function IconDownload({ className }: IconProps) {
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
       <path
         fill="currentColor"
-        d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v6h5.66V9h3.84L12 2z"
+        d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"
       />
     </svg>
   );

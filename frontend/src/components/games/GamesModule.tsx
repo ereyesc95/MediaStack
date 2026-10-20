@@ -3,11 +3,17 @@ import {
   fetchGamesCatalog,
   fetchGamesDashboard,
   fetchGamesFilterOptions,
+  regenerateGamesPlatformIcons,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
 import { getCachedUniverses, prefetchUniverses } from "../../universesCache";
 import { clearMediaTheme } from "../../mediaTheme";
+import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
+import {
+  defaultSectionForSource,
+  saveArtistEntryReferrer,
+} from "../../artistEntry";
 import {
   pushGamesCatalogRoute,
   pushGamesRootRoute,
@@ -34,6 +40,7 @@ import type {
 import AppMenu from "../AppMenu";
 import CardOrientationPicker from "../CardOrientationPicker";
 import ManageCatalogModal from "../ManageCatalogModal";
+import OrganizeLooseRomsModal from "./OrganizeLooseRomsModal";
 import { IconMediaGames } from "../MenuIcons";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "../series/CatalogScopeToggle";
@@ -91,6 +98,7 @@ type Props = {
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number, artistSection?: string) => void;
   onOpenUniverse?: (universeId: number) => void;
+  onBackToPhotos?: () => void;
 };
 
 export default function GamesModule({
@@ -119,11 +127,13 @@ export default function GamesModule({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenUniverse,
+  onBackToPhotos,
 }: Props) {
   const [tab, setTab] = useState<GamesTab>(
     franchiseId || gameId ? "catalog" : "home"
   );
   const [manageCatalogOpen, setManageCatalogOpen] = useState(false);
+  const [organizeRomsOpen, setOrganizeRomsOpen] = useState(false);
   const [catalogScope, setCatalogScope] =
     useState<SeriesCatalogScope>("shows");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
@@ -402,11 +412,20 @@ export default function GamesModule({
             ? [(g as { platform?: string }).platform as string]
             : [],
           open_url: (g as { open_url?: string | null }).open_url,
-          open_mode: (g as { open_mode?: string | null }).open_mode,
+          open_mode:
+            (g as { open_mode?: string | null }).open_mode ||
+            ((g as { open_url?: string | null }).open_url &&
+            /^https?:\/\//i.test(
+              String((g as { open_url?: string | null }).open_url || "")
+            )
+              ? "web"
+              : null),
           has_rom: Boolean((g as { has_rom?: boolean }).has_rom),
-          open_label: (g as { has_rom?: boolean }).has_rom
-            ? "Play game"
-            : null,
+          open_label:
+            (g as { has_rom?: boolean }).has_rom ||
+            (g as { open_url?: string | null }).open_url
+              ? "Play game"
+              : null,
           subseries: [
             {
               id: g.id,
@@ -451,7 +470,14 @@ export default function GamesModule({
           onChooseSource={onChooseSource}
           onSwitchProfile={onSwitchProfile}
           onEditProfile={onEditProfile}
+          backLabelOverride={
+            shouldReturnToPhotosExclusive() ? "EXCLUSIVE" : undefined
+          }
           onBack={() => {
+            if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+              onBackToPhotos();
+              return;
+            }
             clearMediaTheme(userId);
             pushGamesCatalogRoute();
             onNavigate({
@@ -508,7 +534,23 @@ export default function GamesModule({
           }}
           onOpenFilm={(id) => openGame(id, franchiseId)}
           onOpenMusicRelease={onOpenMusicRelease}
-          onOpenArtist={onOpenArtist}
+          onOpenArtist={
+            onOpenArtist
+              ? (bandId) => {
+                  saveArtistEntryReferrer({
+                    source: "games",
+                    section: defaultSectionForSource("games"),
+                    fromTab: "catalog",
+                    franchiseId,
+                    gameId,
+                    franchiseName: workCard?.name || game?.work_name,
+                    backLabel:
+                      (workCard?.name || game?.title || "GAMES").toLocaleUpperCase(),
+                  });
+                  onOpenArtist(bandId);
+                }
+              : undefined
+          }
           onOpenSeriesFranchise={onOpenSeriesFranchise}
           onOpenMoviesPath={(path) => {
             void resolveMoviesPath(path)
@@ -589,8 +631,14 @@ export default function GamesModule({
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
-        backLabel="GAMES"
+        backLabel={
+          shouldReturnToPhotosExclusive() ? "EXCLUSIVE" : "GAMES"
+        }
         onBack={() => {
+          if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+            onBackToPhotos();
+            return;
+          }
           clearMediaTheme(userId);
           pushGamesRootRoute();
           onNavigate({
@@ -751,6 +799,10 @@ export default function GamesModule({
                     setCatalogScope(next);
                     if (next === "platforms") {
                       setFilterMode("name");
+                      // Default to first platform — not ALL (which dumps every game).
+                      const first = platforms[0]?.name || platforms[0]?.id || null;
+                      setPlatformFilter(first);
+                      setLetter("A");
                     } else {
                       setPlatformFilter(null);
                     }
@@ -785,6 +837,23 @@ export default function GamesModule({
                   : undefined
               }
               manageCatalogLabel="My games"
+              onOrganizeLooseRoms={
+                isAdmin && tab === "catalog"
+                  ? () => setOrganizeRomsOpen(true)
+                  : undefined
+              }
+              onLocalPlatformIcons={
+                isAdmin
+                  ? () => {
+                      void regenerateGamesPlatformIcons(false)
+                        .then(() => {
+                          loadCatalog();
+                          loadDashboard();
+                        })
+                        .catch(() => undefined);
+                    }
+                  : undefined
+              }
             />
           </>
         }
@@ -866,17 +935,11 @@ export default function GamesModule({
           onLetterChange={setLetter}
           onFilterModeChange={(next) => {
             setFilterMode(next);
-            // Keep Platforms scope when a platform is selected (game cards + ALL filter).
+            // Stay on Franchises / Platforms when filtering — only force GAMES
+            // from Universes (or Platforms with no selection).
+            if (catalogScope === "franchises") return;
             if (catalogScope === "platforms" && platformFilter) return;
-            if (
-              next === "developer" ||
-              next === "publisher" ||
-              next === "writer" ||
-              next === "genre" ||
-              next === "start" ||
-              next === "name" ||
-              next === "most_played"
-            ) {
+            if (catalogScope === "universes") {
               setCatalogScope("shows");
             }
           }}
@@ -922,6 +985,15 @@ export default function GamesModule({
           module="games"
           onClose={() => setManageCatalogOpen(false)}
           onChanged={() => {
+            loadCatalog();
+            loadDashboard();
+          }}
+        />
+      ) : null}
+      {organizeRomsOpen && isAdmin ? (
+        <OrganizeLooseRomsModal
+          onClose={() => setOrganizeRomsOpen(false)}
+          onDone={() => {
             loadCatalog();
             loadDashboard();
           }}

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchBooksFilterOptions,
+  fetchGamesFilterOptions,
   fetchMoviesFilterOptions,
   fetchMoviesPublishers,
   fetchSeriesFilterOptions,
   patchBooksBookAbout,
+  patchGamesGameAbout,
   patchMoviesFilmAbout,
   patchSeriesAbout,
 } from "../../api";
@@ -31,6 +33,9 @@ export type AboutEditSavePayload = {
   activity_end: string;
   languages: string[];
   genres: { id: number | string; name: string }[];
+  platform?: string | null;
+  web_url?: string | null;
+  developers?: string;
 };
 
 type Props = {
@@ -40,15 +45,30 @@ type Props = {
   subseriesId?: string;
   /** Film id when variant is film (defaults to subseriesId). */
   filmId?: string;
-  variant?: "series" | "film" | "book";
+  variant?: "series" | "film" | "book" | "game";
   title?: string;
   isAdmin?: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (result?: { game_id?: string; moved?: boolean }) => void;
   onCastChanged?: () => void;
   /** Persist through a custom API (artist video items share the movie editor). */
   onSaveAbout?: (payload: AboutEditSavePayload) => Promise<void>;
 };
+
+/** Normalize stored dates into YYYY-MM-DD for `<input type="date">`. */
+function toDateInputValue(raw: string): string {
+  const s = (raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dotted = s.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (dotted) return `${dotted[1]}-${dotted[2]}-${dotted[3]}`;
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymd) {
+    return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+  }
+  if (/^\d{4}$/.test(s)) return `${s}-01-01`;
+  return "";
+}
 
 const FALLBACK_LANGS = [
   { code: "ja", label: "Japanese" },
@@ -108,22 +128,31 @@ export default function SeriesAboutEditModal({
 }: Props) {
   const isFilm = variant === "film";
   const isBook = variant === "book";
-  const aboutFilmId = filmId || subseriesId || "";
+  const isGame = variant === "game";
+  const aboutFilmId =
+    filmId ||
+    subseriesId ||
+    (isGame && data.id ? String(data.id) : "") ||
+    "";
   const scoped =
-    !isFilm && !isBook && subseriesId
+    !isFilm && !isBook && !isGame && subseriesId
       ? data.subseries_meta?.[subseriesId] ?? null
       : null;
   const writersSeed =
-    isFilm || isBook
+    isFilm || isBook || isGame
       ? asWriterList(
-          isBook
-            ? (data as SeriesOverview & { authors?: string[] }).authors?.length
-              ? (data as SeriesOverview & { authors?: string[] }).authors
+          isGame
+            ? data.developers?.length
+              ? data.developers
               : data.writers
-            : (data as SeriesOverview & { directors?: string[] }).directors
-                  ?.length
-              ? (data as SeriesOverview & { directors?: string[] }).directors
-              : data.writers
+            : isBook
+              ? (data as SeriesOverview & { authors?: string[] }).authors?.length
+                ? (data as SeriesOverview & { authors?: string[] }).authors
+                : data.writers
+              : (data as SeriesOverview & { directors?: string[] }).directors
+                    ?.length
+                ? (data as SeriesOverview & { directors?: string[] }).directors
+                : data.writers
         )
       : asWriterList(scoped?.writers ?? data.writers);
 
@@ -134,6 +163,16 @@ export default function SeriesAboutEditModal({
   const [publishers, setPublishers] = useState(
     asWriterList(scoped?.publishers ?? data.publishers).join("; ")
   );
+  const [platform, setPlatform] = useState(
+    () => String(data.platform || "").trim()
+  );
+  const [webUrl, setWebUrl] = useState(
+    () => String(data.web_url || "").trim()
+  );
+  const [platformOptions, setPlatformOptions] = useState<string[]>([]);
+  const showGameUrl =
+    isGame &&
+    ["browser", "web", "flash"].includes(platform.trim().toLowerCase());
   const [countryId, setCountryId] = useState(
     (scoped?.country ?? data.country)?.id != null
       ? String((scoped?.country ?? data.country)!.id)
@@ -183,13 +222,15 @@ export default function SeriesAboutEditModal({
 
   const modalTitle =
     title ||
-    (isBook
-      ? "Edit book"
-      : isFilm
-        ? "Edit movie"
-        : subseriesId
-          ? "Edit series"
-          : "Edit about");
+    (isGame
+      ? "Edit game"
+      : isBook
+        ? "Edit book"
+        : isFilm
+          ? "Edit movie"
+          : subseriesId
+            ? "Edit series"
+            : "Edit about");
 
   const languageCatalog = useMemo(() => {
     const opts = data.language_options?.length
@@ -241,11 +282,13 @@ export default function SeriesAboutEditModal({
   );
 
   useEffect(() => {
-    const load = isBook
-      ? fetchBooksFilterOptions
-      : isFilm
-        ? fetchMoviesFilterOptions
-        : fetchSeriesFilterOptions;
+    const load = isGame
+      ? fetchGamesFilterOptions
+      : isBook
+        ? fetchBooksFilterOptions
+        : isFilm
+          ? fetchMoviesFilterOptions
+          : fetchSeriesFilterOptions;
     load()
       .then((opts) => {
         const countries =
@@ -291,26 +334,34 @@ export default function SeriesAboutEditModal({
         if (Array.isArray(cats) && cats.length) {
           setCategoryOptions(cats.filter(Boolean));
         }
-        const writersList =
-          (opts as { writers?: string[]; authors?: string[] }).writers ||
-          (opts as { authors?: string[] }).authors ||
-          [];
+        const writersList = isGame
+          ? (opts as { developers?: string[] }).developers || []
+          : (opts as { writers?: string[]; authors?: string[] }).writers ||
+            (opts as { authors?: string[] }).authors ||
+            [];
         if (writersList.length) {
           setWriterOptions(writersList.filter(Boolean));
         }
-        if (isBook) {
+        if (isBook || isGame) {
           const pubs = (opts as { publishers?: string[] }).publishers || [];
           if (pubs.length) setPublisherOptions(pubs.filter(Boolean));
         }
+        if (isGame) {
+          const plats =
+            (opts as { platform_options?: string[] }).platform_options ||
+            (opts.platforms || []).map((p) => p.name).filter(Boolean);
+          if (plats.length) setPlatformOptions(plats);
+        }
       })
       .catch(() => {});
-  }, [isBook, isFilm]);
+  }, [isBook, isFilm, isGame]);
 
   useEffect(() => {
+    if (isGame) return;
     fetchMoviesPublishers()
       .then((payload) => setPublisherOptions(payload.publishers || []))
       .catch(() => {});
-  }, []);
+  }, [isGame]);
 
   const selectedCountry = useMemo(
     () => countryOptions.find((o) => o.value === countryId) ?? null,
@@ -424,10 +475,10 @@ export default function SeriesAboutEditModal({
     setSaving(true);
     setError(null);
     try {
-      const starts = isFilm || isBook
+      const starts = isFilm || isBook || isGame
         ? (activityRows[0]?.start ?? "").trim()
         : activityRows.map((r) => r.start.trim()).join(";");
-      const ends = isFilm || isBook
+      const ends = isFilm || isBook || isGame
         ? starts
         : activityRows.map((r) => r.end.trim()).join(";");
       const genrePayload = selectedGenres.map((g) => ({
@@ -449,7 +500,28 @@ export default function SeriesAboutEditModal({
           activity_end: ends,
           languages: selectedLangs,
           genres: genrePayload,
+          platform: isGame ? platform || null : undefined,
+          web_url: isGame ? (showGameUrl ? webUrl.trim() || null : null) : undefined,
+          developers: isGame ? writers : undefined,
         });
+      } else if (isGame) {
+        if (!aboutFilmId) throw new Error("Missing game id");
+        const saved = await patchGamesGameAbout(aboutFilmId, {
+          bio,
+          developers: writers,
+          publishers,
+          platform: platform || null,
+          activity_start: starts,
+          languages: selectedLangs,
+          genres: genrePayload,
+          web_url: showGameUrl ? webUrl.trim() || null : null,
+        });
+        onSaved({
+          game_id: saved.game_id || aboutFilmId,
+          moved: Boolean(saved.moved),
+        });
+        onClose();
+        return;
       } else if (isBook) {
         if (!aboutFilmId) throw new Error("Missing book id");
         await patchBooksBookAbout(aboutFilmId, {
@@ -538,8 +610,93 @@ export default function SeriesAboutEditModal({
               onChange={(e) => setBio(e.target.value)}
             />
           </label>
-          {isFilm ? null : (
-          <label className={isBook ? "series-about-edit__publishers" : undefined}>
+          {isGame ? (
+            <>
+              <label>
+                Platform
+                <select
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">Select platform…</option>
+                  {(platformOptions.includes(platform) || !platform
+                    ? platformOptions
+                    : [platform, ...platformOptions]
+                  ).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {showGameUrl ? (
+                <label>
+                  URL
+                  <input
+                    type="url"
+                    value={webUrl}
+                    onChange={(e) => setWebUrl(e.target.value)}
+                    placeholder="https://…"
+                    autoComplete="off"
+                    disabled={saving}
+                  />
+                </label>
+              ) : null}
+              <label className="series-about-edit__publishers">
+                Developer (semicolon-separated)
+                <input
+                  value={writers}
+                  onChange={(e) => setWriters(e.target.value)}
+                  onFocus={() => setWritersFocused(true)}
+                  onBlur={() => setWritersFocused(false)}
+                  autoComplete="off"
+                />
+                {writersFocused && writerSuggestions.length > 0 ? (
+                  <span className="series-about-edit__publisher-suggestions">
+                    {writerSuggestions.map((writer) => (
+                      <button
+                        key={writer}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectWriter(writer)}
+                      >
+                        {writer}
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+              </label>
+              <label className="series-about-edit__publishers">
+                Publisher
+                <input
+                  value={publishers}
+                  onChange={(e) => setPublishers(e.target.value)}
+                  onFocus={() => setPublishersFocused(true)}
+                  onBlur={() => setPublishersFocused(false)}
+                  autoComplete="off"
+                />
+                {publishersFocused && publisherSuggestions.length > 0 ? (
+                  <span className="series-about-edit__publisher-suggestions">
+                    {publisherSuggestions.map((publisher) => (
+                      <button
+                        key={publisher}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectPublisher(publisher)}
+                      >
+                        {publisher}
+                      </button>
+                    ))}
+                  </span>
+                ) : null}
+              </label>
+            </>
+          ) : null}
+          {isFilm || isGame ? null : (
+          <label
+            className={isBook ? "series-about-edit__publishers" : undefined}
+          >
             {isBook
               ? "Authors (semicolon-separated)"
               : "Writers (semicolon-separated)"}
@@ -566,6 +723,7 @@ export default function SeriesAboutEditModal({
             ) : null}
           </label>
           )}
+          {isGame ? null : (
           <label>
             Country
             <SearchableDropdown
@@ -577,6 +735,7 @@ export default function SeriesAboutEditModal({
               }
             />
           </label>
+          )}
 
           <div className="series-about-edit__block">
             <span className="series-about-edit__label">Languages</span>
@@ -682,6 +841,7 @@ export default function SeriesAboutEditModal({
             />
           </div>
 
+          {isGame ? null : (
           <label className="series-about-edit__publishers">
             Distributing Studio
             <input
@@ -706,13 +866,19 @@ export default function SeriesAboutEditModal({
               </span>
             ) : null}
           </label>
+          )}
 
           <div className="artist-about-edit__periods">
-            {isFilm || isBook ? (
+            {isFilm || isBook || isGame ? (
               <label className="series-about-edit__release-date-row">
                 <span className="series-about-edit__label">Release date</span>
                 <input
-                  value={activityRows[0]?.start || ""}
+                  type={isGame ? "date" : "text"}
+                  value={
+                    isGame
+                      ? toDateInputValue(activityRows[0]?.start || "")
+                      : activityRows[0]?.start || ""
+                  }
                   onChange={(e) =>
                     updateActivityRow(0, "start", e.target.value)
                   }
@@ -770,7 +936,7 @@ export default function SeriesAboutEditModal({
                 className="btn btn--small series-about-edit__cast-btn"
                 onClick={() => setAddCastOpen(true)}
               >
-                + Add cast member
+                {isGame ? "+ Add personnel" : "+ Add cast member"}
               </button>
             </div>
           ) : null}
@@ -789,9 +955,9 @@ export default function SeriesAboutEditModal({
       {addCastOpen && !isFilm ? (
         <AddCastModal
           franchiseId={franchiseId}
-          bucket="characters"
-          castApi={isBook ? "books" : "series"}
-          filmId={isBook ? aboutFilmId : undefined}
+          bucket={isGame ? "staff" : "characters"}
+          castApi={isGame ? "games" : isBook ? "books" : "series"}
+          filmId={isGame || isBook ? aboutFilmId : undefined}
           languageOptions={languageCatalog.map((o) => ({
             code: o.code,
             label: o.label,

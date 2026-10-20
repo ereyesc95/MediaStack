@@ -336,6 +336,26 @@ async def series_refresh_metadata(
     return result
 
 
+@router.post("/franchises/{franchise_id}/update-folders")
+async def series_update_folders_from_tmdb(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+    subseries_id: str | None = Query(None),
+):
+    """Admin: create missing Season N / Specials folders from TMDb (additive)."""
+    from app.series_folder_update import update_series_seasons_from_tmdb
+
+    result = await update_series_seasons_from_tmdb(
+        db,
+        franchise_id,
+        subseries_id=(subseries_id or "").strip() or None,
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error") or "Update folders failed")
+    return result
+
+
 @router.patch("/franchises/{franchise_id}/about")
 def series_patch_about(
     franchise_id: str,
@@ -819,11 +839,19 @@ def series_folder(path: str = Query(..., min_length=1)):
 def series_gallery(
     path: str = Query(..., min_length=1),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    db: Session = Depends(get_db),
 ):
     """Gallery images for a Series franchise / subseries folder (sectioned)."""
     from app.series_index import build_series_gallery
 
-    return build_series_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    payload = build_series_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_sections_gallery
+
+        merge_exclusive_links_into_sections_gallery(
+            payload, db, media_type="series"
+        )
+    return payload
 
 
 @router.get("/franchises/{franchise_id}/playlist/openings-endings")

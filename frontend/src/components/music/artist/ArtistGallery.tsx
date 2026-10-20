@@ -12,6 +12,7 @@ import type {
 } from "../../../types";
 import { withMediaAccess } from "../../../mediaFileUrl";
 import PlaylistBoot from "../../PlaylistBoot";
+import { IconExternalLink } from "../../MenuIcons";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "./GalleryViewerModal";
@@ -137,6 +138,10 @@ function pickInitialExclusiveSubtab(index: GalleryIndexPayload | null): string {
   if (!sec) return "";
   if (sec.subsections?.length) return sec.subsections[0].key;
   return "";
+}
+
+function isGalleryLinkItem(item: SeriesGalleryItem): boolean {
+  return item.media_kind === "link" || Boolean(item.is_external_link);
 }
 
 function viewerKind(
@@ -298,12 +303,14 @@ export function useArtistGallery(
       }));
     }
     if (tab === "exclusive") {
-      return exclusiveItems.map((item) => ({
-        id: item.id,
-        url: withMediaAccess(item.url),
-        caption: item.title,
-        mediaType: viewerKind(item),
-      }));
+      return exclusiveItems
+        .filter((item) => !isGalleryLinkItem(item))
+        .map((item) => ({
+          id: item.id,
+          url: withMediaAccess(item.url),
+          caption: item.title,
+          mediaType: viewerKind(item),
+        }));
     }
     const motion =
       animationSubtab === "covers" ? animationCovers : animationCanvas;
@@ -327,6 +334,11 @@ export function useArtistGallery(
   ]);
 
   const openViewer = (id: string) => {
+    const exclusiveHit = exclusiveItems.find((item) => item.id === id);
+    if (exclusiveHit && isGalleryLinkItem(exclusiveHit)) {
+      window.open(exclusiveHit.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     const i = viewerItems.findIndex((item) => item.id === id);
     if (i >= 0) setViewerIndex(i);
   };
@@ -619,6 +631,23 @@ export default function ArtistGallery({ state }: Props) {
           <div className="artist-gallery__photo-grid">
             {exclusiveItems.map((item) => {
               const url = withMediaAccess(item.url);
+              if (isGalleryLinkItem(item)) {
+                return (
+                  <a
+                    key={item.id}
+                    className="artist-gallery__photo-card artist-gallery__photo-card--link"
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={item.title}
+                  >
+                    <span className="artist-gallery__link-card" aria-hidden>
+                      <IconExternalLink />
+                    </span>
+                    <span className="artist-gallery__card-label">{item.title}</span>
+                  </a>
+                );
+              }
               const kind = viewerKind(item);
               return (
                 <button

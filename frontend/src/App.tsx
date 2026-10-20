@@ -1144,6 +1144,10 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
+            onBackToPhotos={() => {
+              pushPhotosRootRoute();
+              setView({ kind: "photos" });
+            }}
 
           />
 
@@ -1483,6 +1487,10 @@ export default function App() {
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "series", from, name)
             }
+            onBackToPhotos={() => {
+              pushPhotosRootRoute();
+              setView({ kind: "photos" });
+            }}
           />
         )}
 
@@ -1597,6 +1605,10 @@ export default function App() {
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "movies", from, name)
             }
+            onBackToPhotos={() => {
+              pushPhotosRootRoute();
+              setView({ kind: "photos" });
+            }}
             onOpenArtist={(bandId, artistSection = "overview") => {
               pushArtistRoute({
                 bandId,
@@ -1699,6 +1711,10 @@ export default function App() {
             onOpenUniversePage={(id, from, name) =>
               openUniversePage(id, "books", from, name)
             }
+            onBackToPhotos={() => {
+              pushPhotosRootRoute();
+              setView({ kind: "photos" });
+            }}
             onOpenArtist={(bandId, artistSection = "overview") => {
               pushArtistRoute({
                 bandId,
@@ -1841,6 +1857,10 @@ export default function App() {
               });
             }}
             onOpenUniverse={(id) => openUniversePage(id, "games", "home")}
+            onBackToPhotos={() => {
+              pushPhotosRootRoute();
+              setView({ kind: "photos" });
+            }}
           />
         )}
 
@@ -1849,6 +1869,7 @@ export default function App() {
             key={`photos-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
             busy={busy}
+            syncTick={syncTick}
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
@@ -1858,6 +1879,80 @@ export default function App() {
             onEditProfile={
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
             }
+            onOpenArtist={(bandId) => {
+              pushArtistRoute({
+                bandId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "overview",
+                artistOverviewTab: "about",
+              });
+            }}
+            onOpenMovies={(franchiseId, filmId) => {
+              pushMoviesRoute({
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "movies",
+                franchiseId,
+                filmId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenSeries={(franchiseId, subseriesId) => {
+              pushSeriesRoute({
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "series",
+                franchiseId,
+                subseriesId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenBooks={(franchiseId, bookId) => {
+              pushBooksRoute({
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+            onOpenGames={(franchiseId, gameId) => {
+              pushGamesRoute({
+                franchiseId,
+                gameId,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
           />
         )}
 

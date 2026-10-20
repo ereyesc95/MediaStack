@@ -858,7 +858,24 @@ export default function SeriesBrowse({
                     .open_url
               )
                 ? "Play game"
-                : null,
+                : unitNoun === "film" &&
+                    Boolean(
+                      (f as SeriesFranchiseCard & { open_url?: string | null })
+                        .open_url ||
+                        (
+                          s as {
+                            open_url?: string | null;
+                            open_label?: string | null;
+                          }
+                        ).open_url ||
+                        (
+                          s as {
+                            open_label?: string | null;
+                          }
+                        ).open_label
+                    )
+                  ? "Play movie"
+                  : null,
             launch_game_id:
               unitNoun === "game"
                 ? f.subseries.length > 0
@@ -1334,7 +1351,10 @@ export default function SeriesBrowse({
               const playLabel =
                 card.open_label === "Play game" || card.open_label === "Launch"
                   ? "Play game"
-                  : card.open_label || null;
+                  : card.open_label === "Play movie" ||
+                      card.open_label === "Play video"
+                    ? "Play movie"
+                    : card.open_label || null;
               return (
                 <button
                   key={card.key}

@@ -47,6 +47,7 @@ import {
   launchGame,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
+  updateSeriesFoldersFromTmdb,
   saveMoviesFilmTrailer,
   fetchMoviesRemote,
   fetchBandOverview,
@@ -135,6 +136,7 @@ import {
   IconCardBanner,
   IconCardCover,
   IconCheck,
+  IconMediaGames,
   IconMediaMusic,
   IconVideo,
   IconZoom,
@@ -948,6 +950,13 @@ export default function SeriesSubseriesPage({
   const [volumeDateLabel, setVolumeDateLabel] = useState<string | null>(null);
   const [refreshBio, setRefreshBio] = useState(true);
   const [metadataFetching, setMetadataFetching] = useState(false);
+  const [pullMissingBusy, setPullMissingBusy] = useState(false);
+  const [pullMissingStatus, setPullMissingStatus] = useState("");
+  useEffect(() => {
+    if (!pullMissingStatus) return;
+    const t = window.setTimeout(() => setPullMissingStatus(""), 3200);
+    return () => window.clearTimeout(t);
+  }, [pullMissingStatus]);
   useEffect(() => {
     setOverviewDescExpanded(false);
     setVolumeDateLabel(null);
@@ -2537,12 +2546,29 @@ export default function SeriesSubseriesPage({
             toMediaCards(
               games
                 .filter((game) => game.id !== subseriesId)
-                .map((game) => ({
-                  ...game,
-                  path: game.folder_path,
-                  open_label: game.open_label || "Play game",
-                  open_mode: game.open_mode || "local",
-                }))
+                .map((game) => {
+                  const openUrl =
+                    (game as { open_url?: string | null }).open_url || null;
+                  const hasRom = Boolean(
+                    (game as { has_rom?: boolean }).has_rom || openUrl
+                  );
+                  const mode =
+                    (game as { open_mode?: string | null }).open_mode ||
+                    (openUrl && /^https?:\/\//i.test(openUrl)
+                      ? "web"
+                      : openUrl
+                        ? "local"
+                        : null);
+                  return {
+                    ...game,
+                    path: game.folder_path,
+                    open_url: openUrl,
+                    open_mode: mode,
+                    open_label: hasRom
+                      ? game.open_label || "Play game"
+                      : null,
+                  };
+                })
             )
           );
 
@@ -3332,20 +3358,35 @@ export default function SeriesSubseriesPage({
     if (gameCards.length > 0) return gameCards;
     return siblings
       .filter((s) => s.id !== subseriesId)
-      .map((s) => ({
-        id: s.id,
-        title: s.title,
-        cover_url: s.cover_url,
-        portrait_url: s.cover_url,
-        logo_url: s.logo_url,
-        date_iso: s.date_iso,
-        display_date: s.display_date,
-        path: s.folder_path,
-        platform: (s as { platform?: string | null }).platform ?? null,
-        official: s.official,
-        open_label: "Play game",
-        open_mode: "local" as const,
-      }));
+      .map((s) => {
+        const openUrl =
+          (s as { open_url?: string | null }).open_url || null;
+        const hasRom = Boolean(
+          (s as { has_rom?: boolean }).has_rom || openUrl
+        );
+        const mode =
+          (s as { open_mode?: "tab" | "local" | "web" | null }).open_mode ||
+          (openUrl && /^https?:\/\//i.test(openUrl)
+            ? ("web" as const)
+            : openUrl
+              ? ("local" as const)
+              : null);
+        return {
+          id: s.id,
+          title: s.title,
+          cover_url: s.cover_url,
+          portrait_url: s.cover_url,
+          logo_url: s.logo_url,
+          date_iso: s.date_iso,
+          display_date: s.display_date,
+          path: s.folder_path,
+          platform: (s as { platform?: string | null }).platform ?? null,
+          official: s.official,
+          open_url: openUrl,
+          open_mode: mode,
+          open_label: hasRom ? "Play game" : null,
+        };
+      });
   }, [isGame, gameCards, siblings, subseriesId]);
 
   const gamePlatforms = useMemo(() => {
@@ -3440,11 +3481,13 @@ export default function SeriesSubseriesPage({
   ]);
 
   const showMediaLayoutPicker =
-    tab === "series" ||
-    tab === "movies" ||
-    tab === "audio" ||
-    tab === "library" ||
-    tab === "games";
+    (tab === "series" ||
+      tab === "movies" ||
+      tab === "audio" ||
+      tab === "library" ||
+      tab === "games") &&
+    // Single embedded soundtrack has no card grid — hide cover/banner switch.
+    !(tab === "audio" && audioEmbed.mode === "release");
 
   const hasEpisodes =
     !isLeafMedia &&
@@ -3492,6 +3535,8 @@ export default function SeriesSubseriesPage({
           (detail as { has_audio?: boolean } | null)?.has_audio ||
           (overview as { has_audio?: boolean } | null)?.has_audio
       ));
+  /** Top-bar player: only when we have real release cards (not empty Audio/ stubs). */
+  const showAudioPlayer = audioCards.length > 0;
   const hasLibrary = isFilm
     ? libraryCards.length > 0
     : isBook
@@ -3885,9 +3930,18 @@ export default function SeriesSubseriesPage({
   };
 
   const playGame = () => {
-    void launchGame(subseriesId).catch((e) =>
-      setError(e instanceof Error ? e.message : String(e))
-    );
+    const url = filmOpenUrl?.trim();
+    if (url && /^https?:\/\//i.test(url)) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    void launchGame(subseriesId)
+      .then((res) => {
+        if (res?.open_mode === "web" && res.url) {
+          window.open(res.url, "_blank", "noopener,noreferrer");
+        }
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   };
 
   const openTrailerEditor = () => {
@@ -4353,7 +4407,13 @@ export default function SeriesSubseriesPage({
             ) : null}
           </div>
           <div className="release-page__top-right">
-            {busy ? <span className="muted">{busy}</span> : null}
+            {pullMissingBusy ? (
+              <span className="muted">Fetching data, please wait...</span>
+            ) : pullMissingStatus ? (
+              <span className="muted">{pullMissingStatus}</span>
+            ) : busy ? (
+              <span className="muted">{busy}</span>
+            ) : null}
             {!stacked && showMediaLayoutPicker ? (
               <ReleaseCardLayoutPicker
                 value={cardLayout}
@@ -4369,13 +4429,13 @@ export default function SeriesSubseriesPage({
                 onChange={onSetOrientation}
               />
             ) : null}
-            {(!isFilm && !isGame) || hasAudio ? (
+            {showAudioPlayer ? (
               !stacked ? (
                 <SeriesAudioPlayer
                   franchiseId={franchiseId}
                   filmId={isFilm ? subseriesId : undefined}
                   gameId={isGame ? subseriesId : undefined}
-                  enabled={(!isFilm && !isGame) || hasAudio}
+                  enabled={showAudioPlayer}
                   onPlayingChange={setSeriesPlaying}
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
@@ -4385,7 +4445,7 @@ export default function SeriesSubseriesPage({
                   franchiseId={franchiseId}
                   filmId={isFilm ? subseriesId : undefined}
                   gameId={isGame ? subseriesId : undefined}
-                  enabled={(!isFilm && !isGame) || hasAudio}
+                  enabled={showAudioPlayer}
                   onPlayingChange={setSeriesPlaying}
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
@@ -4427,10 +4487,7 @@ export default function SeriesSubseriesPage({
                 isAdmin ? () => setAddUniverseOpen(true) : undefined
               }
               menuChrome={
-                stacked &&
-                (showMediaLayoutPicker ||
-                  (!isFilm && !isGame) ||
-                  hasAudio) ? (
+                stacked && (showMediaLayoutPicker || showAudioPlayer) ? (
                   <>
                     {showMediaLayoutPicker ? (
                       <button
@@ -4451,7 +4508,7 @@ export default function SeriesSubseriesPage({
                           : "Banner view"}
                       </button>
                     ) : null}
-                    {(!isFilm && !isGame) || hasAudio ? (
+                    {showAudioPlayer ? (
                       <button
                         type="button"
                         className={
@@ -4539,6 +4596,37 @@ export default function SeriesSubseriesPage({
               onRefreshIncludeBioChange={
                 isAdmin && !isLeafMedia ? setRefreshBio : undefined
               }
+              onUpdateProviderFolders={
+                isAdmin && !isFilm && !isBook && !isGame
+                  ? () => {
+                      setPullMissingBusy(true);
+                      setPullMissingStatus("");
+                      void updateSeriesFoldersFromTmdb(
+                        franchiseId,
+                        subseriesId
+                      )
+                        .then((result) => {
+                          // Clear chrome wait as soon as the pull returns.
+                          setPullMissingBusy(false);
+                          if (result.errors?.length && !result.created?.length) {
+                            setError(result.errors[0]);
+                          } else {
+                            setPullMissingStatus("Fetching finished");
+                          }
+                          setMediaReady(false);
+                          setRescanTick((t) => t + 1);
+                          return loadCard();
+                        })
+                        .catch((e) => {
+                          setPullMissingBusy(false);
+                          setError(
+                            e instanceof Error ? e.message : String(e)
+                          );
+                        });
+                    }
+                  : undefined
+              }
+              updateProviderFoldersLabel="Pull missing"
               onRescanLibrary={
                 isAdmin
                   ? () => {
@@ -5432,13 +5520,27 @@ export default function SeriesSubseriesPage({
                   <div className="series-film-play-actions">
                     {canPlayGame ? (
                       <div className="series-film-play-actions__primary">
-                        <button
-                          type="button"
-                          className="series-film-play-actions__btn series-film-play-actions__btn--primary"
-                          onClick={playGame}
-                        >
-                          Play game
-                        </button>
+                        {filmOpenUrl &&
+                        /^https?:\/\//i.test(filmOpenUrl.trim()) ? (
+                          <a
+                            className="series-film-play-actions__btn series-film-play-actions__btn--primary"
+                            href={filmOpenUrl.trim()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <IconMediaGames className="series-film-play-actions__btn-icon" />
+                            Play game
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            className="series-film-play-actions__btn series-film-play-actions__btn--primary"
+                            onClick={playGame}
+                          >
+                            <IconMediaGames className="series-film-play-actions__btn-icon" />
+                            Play game
+                          </button>
+                        )}
                       </div>
                     ) : null}
                     {filmExtraItems.length > 0 ||
@@ -6608,14 +6710,24 @@ export default function SeriesSubseriesPage({
           franchiseId={franchiseId}
           data={overview}
           subseriesId={subseriesId}
-          filmId={isFilm || isBook ? subseriesId : undefined}
-          variant={isBook ? "book" : isFilm ? "film" : "series"}
+          filmId={isFilm || isBook || isGame ? subseriesId : undefined}
+          variant={
+            isGame ? "game" : isBook ? "book" : isFilm ? "film" : "series"
+          }
           onClose={() => setAboutEditOpen(false)}
-          onSaved={() => {
+          onSaved={(result) => {
             setAboutEditOpen(false);
             deleteCachedLeafPage(
               cacheKey(isFilm, franchiseId, subseriesId, isBook, isGame)
             );
+            const nextGameId =
+              isGame && result?.game_id && result.game_id !== subseriesId
+                ? result.game_id
+                : null;
+            if (nextGameId) {
+              onNavigate?.({ subseriesId: nextGameId });
+              return;
+            }
             void loadCard();
           }}
           onCastChanged={() => void loadCard()}

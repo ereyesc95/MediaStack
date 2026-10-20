@@ -6,11 +6,13 @@ import {
   useDeviceLayout,
 } from "../usePhoneLayout";
 import {
+  IconCamera,
   IconCollection,
   IconMediaBooks,
   IconMediaGames,
   IconMediaMovies,
   IconMediaSeries,
+  IconStar,
   IconTabArtists,
   IconTabCatalog,
   IconTabEvents,
@@ -45,6 +47,8 @@ function defaultTabIcon(id: string, label: string, mediaKind?: string): ReactNod
   const text = label.toLowerCase();
   const kind = (mediaKind ?? "").toLowerCase();
   if (key === "home" || text === "home") return <IconTabHome />;
+  if (key === "gallery" || text === "gallery") return <IconCamera />;
+  if (key === "exclusive" || text === "exclusive") return <IconStar />;
   if (key === "artists" || text === "artists") return <IconTabArtists />;
   if (key === "collection" || text === "collection") return <IconCollection />;
   if (key === "events" || text === "events") return <IconTabEvents />;

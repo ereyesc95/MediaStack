@@ -17,6 +17,7 @@ import {
 import {
   IconAbout,
   IconAddArtist,
+  IconAddLink,
   IconManageArtists,
   IconCamera,
   IconCards,
@@ -43,6 +44,7 @@ import {
   IconVideo,
   IconCollection,
   IconImport,
+  IconMediaGames,
 } from "./MenuIcons";
 
 type Props = {
@@ -51,10 +53,14 @@ type Props = {
   onChooseSource?: () => void;
   /** Hub admin: rewrite Media/{Music…Photos} desktop.ini + folder.ico. */
   onRegenerateModuleIcons?: () => void;
+  /** Games admin: write missing desktop.ini + folder.ico on Games/{Platform}. */
+  onLocalPlatformIcons?: () => void;
   onManageArtists?: () => void;
   showManageArtists?: boolean;
   onManageCatalog?: () => void;
   manageCatalogLabel?: string;
+  /** Games admin: organize loose ROMs at a platform root. */
+  onOrganizeLooseRoms?: () => void;
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
   showManageCollection?: boolean;
@@ -76,6 +82,15 @@ type Props = {
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   onRefreshMetadata?: () => void;
+  /** Label for onRefreshMetadata (default: Metadata). Artist page uses "Artist". */
+  refreshMetadataLabel?: string;
+  /**
+   * Additive provider folder pull (Series seasons from TMDb, artist releases
+   * from MusicBrainz). Distinct from Sync folders (local structure/rescan).
+   * Menu label defaults to "Pull missing" with a download icon. Admin only.
+   */
+  onUpdateProviderFolders?: () => void;
+  updateProviderFoldersLabel?: string;
   onFetchLyrics?: () => void;
   onSetLyrics?: () => void;
   onFetchVideos?: () => void;
@@ -163,10 +178,12 @@ export default function AppMenu({
   onSync,
   onChooseSource,
   onRegenerateModuleIcons,
+  onLocalPlatformIcons,
   onManageArtists,
   showManageArtists,
   onManageCatalog,
   manageCatalogLabel = "Manage Catalog",
+  onOrganizeLooseRoms,
   onAddPlaylist,
   showAddPlaylist,
   showManageCollection,
@@ -188,6 +205,9 @@ export default function AppMenu({
   onSwitchProfile,
   onEditProfile,
   onRefreshMetadata,
+  refreshMetadataLabel = "Metadata",
+  onUpdateProviderFolders,
+  updateProviderFoldersLabel = "Pull missing",
   onFetchLyrics,
   onSetLyrics,
   onFetchVideos,
@@ -221,7 +241,7 @@ export default function AppMenu({
   onRefreshRelatedParticipations,
   refreshIncludeBio = false,
   onRefreshIncludeBioChange,
-  refreshIncludeLabel = "Include bio",
+  refreshIncludeLabel = "+ bio",
   adaptiveThemeActive,
   artistThemeActive = false,
   menuChrome,
@@ -427,9 +447,8 @@ export default function AppMenu({
     ((!editDataFlat && onEditAbout) ||
       (menuVariant === "release" && !editDataFlat && onAddMember) ||
       onRefreshMetadata ||
+      onUpdateProviderFolders ||
       onRescanLibrary ||
-      onGenerateFolderIcons ||
-      onEnsureDesktopIni ||
       onRefreshLineup ||
       onRefreshPhotos ||
       onRefreshLinks ||
@@ -437,6 +456,10 @@ export default function AppMenu({
       onRefreshRelatedParticipations ||
       onRefreshIncludeBioChange ||
       (editDataFlat && onEditAbout));
+  const MetadataActionIcon =
+    refreshMetadataLabel.trim().toLowerCase() === "artist"
+      ? IconMetadata
+      : IconDownload;
 
   const showEditDataGroup =
     editDataFlat &&
@@ -503,19 +526,32 @@ export default function AppMenu({
                   Staff
                 </button>
               )}
-            {onRefreshMetadata && (
-              <button
-                type="button"
-                onClick={() => {
-                  onRefreshMetadata();
-                  setOpen(false);
-                }}
-              >
-                <IconDownload className="menu-item-icon" />
-                Metadata
-              </button>
-            )}
-            {onRefreshIncludeBioChange && (
+            {onRefreshMetadata ? (
+              <div className="app-menu-meta-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRefreshMetadata();
+                    setOpen(false);
+                  }}
+                >
+                  <MetadataActionIcon className="menu-item-icon" />
+                  {refreshMetadataLabel}
+                </button>
+                {onRefreshIncludeBioChange ? (
+                  <label className="app-menu-checkbox app-menu-checkbox--inline">
+                    <input
+                      type="checkbox"
+                      checked={refreshIncludeBio}
+                      onChange={(e) =>
+                        onRefreshIncludeBioChange(e.target.checked)
+                      }
+                    />
+                    {refreshIncludeLabel}
+                  </label>
+                ) : null}
+              </div>
+            ) : onRefreshIncludeBioChange ? (
               <label className="app-menu-checkbox app-menu-checkbox--sub">
                 <input
                   type="checkbox"
@@ -526,6 +562,18 @@ export default function AppMenu({
                 />
                 {refreshIncludeLabel}
               </label>
+            ) : null}
+            {isAdmin && onUpdateProviderFolders && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateProviderFolders();
+                  setOpen(false);
+                }}
+              >
+                <IconDownload className="menu-item-icon" />
+                {updateProviderFoldersLabel}
+              </button>
             )}
             {onRescanLibrary && (
               <button
@@ -537,30 +585,6 @@ export default function AppMenu({
               >
                 <IconSync className="menu-item-icon" />
                 Sync folders
-              </button>
-            )}
-            {onGenerateFolderIcons && (
-              <button
-                type="button"
-                onClick={() => {
-                  onGenerateFolderIcons();
-                  setOpen(false);
-                }}
-              >
-                <IconCards className="menu-item-icon" />
-                Generate icons
-              </button>
-            )}
-            {onEnsureDesktopIni && (
-              <button
-                type="button"
-                onClick={() => {
-                  onEnsureDesktopIni();
-                  setOpen(false);
-                }}
-              >
-                <IconFolder className="menu-item-icon" />
-                Sync desktop.ini
               </button>
             )}
             {onRefreshLineup && (
@@ -709,7 +733,7 @@ export default function AppMenu({
                 setOpen(false);
               }}
             >
-              <IconLinks className="menu-item-icon" />
+              <IconAddLink className="menu-item-icon" />
               Add link
             </button>
           )}
@@ -968,7 +992,7 @@ export default function AppMenu({
                 setOpen(false);
               }}
             >
-              <IconLinks className="menu-item-icon" />
+              <IconAddLink className="menu-item-icon" />
               Add link
             </button>
           )}
@@ -1132,6 +1156,18 @@ export default function AppMenu({
             >
               <IconManageArtists className="menu-item-icon" />
               {manageCatalogLabel}
+            </button>
+          )}
+          {isAdmin && onOrganizeLooseRoms && (
+            <button
+              type="button"
+              onClick={() => {
+                onOrganizeLooseRoms();
+                setOpen(false);
+              }}
+            >
+              <IconFolder className="menu-item-icon" />
+              Organize ROMs
             </button>
           )}
           {isAdmin &&
@@ -1421,6 +1457,30 @@ export default function AppMenu({
                     <IconSync className="menu-item-icon" />
                     Sync folders
                   </button>
+                  {onGenerateFolderIcons && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onGenerateFolderIcons();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconCards className="menu-item-icon" />
+                      Generate icons
+                    </button>
+                  )}
+                  {onEnsureDesktopIni && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onEnsureDesktopIni();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconFolder className="menu-item-icon" />
+                      Sync desktop.ini
+                    </button>
+                  )}
                   {onRegenerateModuleIcons && (
                     <button
                       type="button"
@@ -1431,6 +1491,18 @@ export default function AppMenu({
                     >
                       <IconCardIcons className="menu-item-icon" />
                       Refresh icons
+                    </button>
+                  )}
+                  {onLocalPlatformIcons && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onLocalPlatformIcons();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconMediaGames className="menu-item-icon" />
+                      Local platform icons
                     </button>
                   )}
                 </div>

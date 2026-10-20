@@ -66,6 +66,20 @@ def enrich_games_catalog(db: Session, catalog: dict) -> dict:
         if directors:
             card["directors"] = directors
             card["writers"] = directors
+        web_url = str(about.get("web_url") or "").strip()
+        if web_url:
+            if "://" not in web_url:
+                web_url = f"https://{web_url.lstrip('/')}"
+            card["web_url"] = web_url
+            platform = str(card.get("platform") or "").casefold()
+            prefer_web = platform in {"browser", "web", "flash"} or not card.get(
+                "has_rom"
+            )
+            if prefer_web:
+                card["open_url"] = web_url
+                card["open_mode"] = "web"
+                card["open_label"] = "Play game"
+                card["has_rom"] = True
 
     for card in catalog.get("games") or catalog.get("films") or []:
         if not isinstance(card, dict):

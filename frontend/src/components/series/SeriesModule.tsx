@@ -22,6 +22,7 @@ import {
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
 import { getDirectSeriesFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectSeriesFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
   getCachedSeriesDashboard,
   prefetchSeriesDashboard,
@@ -143,6 +144,7 @@ type Props = {
     from: "home" | "catalog",
     universeName?: string
   ) => void;
+  onBackToPhotos?: () => void;
 };
 
 export default function SeriesModule({
@@ -174,6 +176,7 @@ export default function SeriesModule({
   onOpenMoviesHome,
   onOpenBooksHome,
   onOpenUniversePage,
+  onBackToPhotos,
 }: Props) {
   const [tab, setTab] = useState<SeriesTab>(() => {
     if (franchiseId) return "catalog";
@@ -563,6 +566,10 @@ export default function SeriesModule({
   };
 
   const backFromDeepLink = () => {
+    if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+      onBackToPhotos();
+      return;
+    }
     const homeRef = getFranchiseHomeReferrer();
     if (homeRef?.home === "series") {
       const restore = {
@@ -605,6 +612,10 @@ export default function SeriesModule({
   };
 
   const backFromSubseries = () => {
+    if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+      onBackToPhotos();
+      return;
+    }
     const ref = getSeriesEntryReferrer();
     if (ref?.kind === "music" && ref.bandId != null && onOpenArtist) {
       clearSeriesEntryReferrer();
@@ -775,7 +786,9 @@ export default function SeriesModule({
           backLabelOverride={
             universeId != null
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
-              : (() => {
+              : shouldReturnToPhotosExclusive()
+                ? "EXCLUSIVE"
+                : (() => {
                   const ref = getSeriesEntryReferrer();
                   if (ref?.kind === "music" && (ref.title || ref.bandId)) {
                     return (ref.title || "ARTIST").toLocaleUpperCase();
@@ -799,7 +812,25 @@ export default function SeriesModule({
           }
           onBrowseCatalog={browseCatalog}
           onOpenMusicRelease={openMusicRelease}
-          onOpenArtist={onOpenArtist}
+          onOpenArtist={
+            onOpenArtist
+              ? (bandId) => {
+                  saveArtistEntryReferrer({
+                    source: "series",
+                    section: defaultSectionForSource("series"),
+                    fromTab: entrySource,
+                    franchiseId,
+                    franchiseName:
+                      franchises.find((f) => f.id === franchiseId)?.name,
+                    backLabel: (
+                      franchises.find((f) => f.id === franchiseId)?.name ||
+                      "SERIES"
+                    ).toLocaleUpperCase(),
+                  });
+                  onOpenArtist(bandId);
+                }
+              : undefined
+          }
           onOpenMoviesPath={(path) => {
             void resolveMoviesPath(path)
               .then((hit) => {
@@ -909,7 +940,9 @@ export default function SeriesModule({
           backLabel={
             universeId != null
               ? getUniverseReturnTarget().universeName || "UNIVERSE"
-              : (() => {
+              : shouldReturnToPhotosExclusive()
+                ? "EXCLUSIVE"
+                : (() => {
                   const homeRef = getFranchiseHomeReferrer();
                   if (
                     homeRef?.source === "games" &&

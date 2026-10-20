@@ -30,6 +30,63 @@ from app.universes import universe_for_franchise
 router = APIRouter(prefix="/api/games", tags=["games"])
 
 
+@router.get("/roms/platforms")
+def games_rom_platforms(_admin: User = Depends(require_admin)):
+    """List platforms for Organize loose ROMs."""
+    from app.games_rom_organize import list_rom_platforms
+
+    try:
+        return {"platforms": list_rom_platforms()}
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/roms/scan")
+def games_rom_scan(
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    """Preview loose ROMs at Games/{Platform}/ root (max 500)."""
+    from app.games_rom_organize import scan_platform_roms
+
+    platform = str((body or {}).get("platform") or "").strip()
+    if not platform:
+        raise HTTPException(400, "platform is required")
+    try:
+        return scan_platform_roms(platform)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/roms/organize")
+async def games_rom_organize(
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Move loose ROMs into normal game folders; optional IGDB enrich after."""
+    from app.games_rom_organize import organize_and_enrich
+
+    platform = str((body or {}).get("platform") or "").strip()
+    if not platform:
+        raise HTTPException(400, "platform is required")
+    raw_keys = (body or {}).get("keys")
+    keys = None
+    if isinstance(raw_keys, list):
+        keys = [str(k) for k in raw_keys if str(k).strip()]
+    enrich = bool((body or {}).get("enrich", True))
+    try:
+        return await organize_and_enrich(
+            db, platform, keys=keys, enrich=enrich
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/catalog")
 def games_catalog(
     db: Session = Depends(get_db),
@@ -114,7 +171,9 @@ def games_filter_options(
         all_subgenre_groups, nsfw_unlocked=nsfw_unlocked
     )
 
-    catalog = build_games_catalog()
+    from app.games_catalog_meta import enrich_games_catalog
+
+    catalog = enrich_games_catalog(db, build_games_catalog())
     games = filter_adult_cards(
         catalog.get("games") or [], nsfw_unlocked=nsfw_unlocked
     )
@@ -125,22 +184,43 @@ def games_filter_options(
     ]
 
     # Only expose genres that appear on at least one game in the library.
-    used_genre_names = {
-        str(n).strip().casefold()
-        for g in games
-        for n in (g.get("genre_names") or [])
-        if str(n).strip()
-    }
+    used_genre_by_key: dict[str, str] = {}
+    for g in games:
+        for n in g.get("genre_names") or []:
+            label = str(n).strip()
+            if label:
+                used_genre_by_key.setdefault(label.casefold(), label)
+    used_genre_names = set(used_genre_by_key)
     if used_genre_names:
         filtered_groups: list[dict] = []
+        matched_names: set[str] = set()
         for group in all_subgenre_groups:
             items = [
                 item
                 for item in group.get("items") or []
                 if str(item.get("name") or "").strip().casefold() in used_genre_names
             ]
+            for item in items:
+                matched_names.add(str(item.get("name") or "").strip().casefold())
             if items:
                 filtered_groups.append({"genre": group["genre"], "items": items})
+        # Card genres not present in the seeded taxonomy still need filter chips.
+        orphans = sorted(
+            (
+                used_genre_by_key[k]
+                for k in used_genre_names - matched_names
+            ),
+            key=lambda s: s.casefold(),
+        )
+        if orphans:
+            orphan_items = [
+                {
+                    "id": -(abs(hash(name.casefold())) % 900000 + 100000),
+                    "name": name,
+                }
+                for name in orphans
+            ]
+            filtered_groups.append({"genre": "Other", "items": orphan_items})
         subgenre_groups = filtered_groups
     else:
         # No tagged games yet — keep taxonomy empty so Genre tab stays hidden
@@ -182,6 +262,8 @@ def games_filter_options(
             decade_set.add((int(iso[:4]) // 10) * 10)
     decades = sorted(decade_set)
 
+    from app.franchise_index import GAME_PLATFORMS
+
     return {
         "continents": [],
         "countries": [],
@@ -191,6 +273,7 @@ def games_filter_options(
             for item in group["items"]
         ],
         "platforms": platforms,
+        "platform_options": list(GAME_PLATFORMS),
         "publishers": publishers,
         "developers": developers,
         "writers": directors,
@@ -198,9 +281,10 @@ def games_filter_options(
         "decades": decades,
         "country_groups": [],
         "all_country_groups": [],
-        # Do not expose the full seeded taxonomy to the catalog Genre filter.
+        # Catalog Genre filter: only genres used by games in the library.
+        # Edit-game modal uses all_subgenre_groups (full taxonomy by parent).
         "subgenre_groups": subgenre_groups,
-        "all_subgenre_groups": subgenre_groups,
+        "all_subgenre_groups": all_subgenre_groups,
         "content_categories": [],
     }
 
@@ -377,6 +461,32 @@ def games_game_player_tracks(game_id: str, db: Session = Depends(get_db)):
     return {"tracks": tracks, "count": len(tracks)}
 
 
+@router.patch("/games/{game_id}/about")
+def games_game_patch_about(
+    game_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import patch_game_about
+
+    try:
+        return patch_game_about(
+            game_id,
+            bio=body.get("bio"),
+            developers=body.get("developers") or body.get("writers"),
+            publishers=body.get("publishers"),
+            platform=body.get("platform"),
+            activity_start=body.get("activity_start") or body.get("release_date"),
+            languages=body.get("languages"),
+            genres=body.get("genres"),
+            web_url=body.get("web_url"),
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.casefold() else 400
+        raise HTTPException(status, msg) from exc
+
+
 @router.post("/games/{game_id}/cast")
 def games_game_add_cast(
     game_id: str,
@@ -499,32 +609,56 @@ def games_game_overview(
 def games_game_gallery(
     game_id: str,
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    db: Session = Depends(get_db),
 ):
     detail = build_game_detail(game_id)
     if not detail:
         raise HTTPException(404, "Game not found")
     path = detail.get("folder_path") or ""
-    return build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    payload = build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_sections_gallery
+
+        title = (detail.get("title") or detail.get("name") or "").strip()
+        merge_exclusive_links_into_sections_gallery(
+            payload, db, media_type="games", entity_name=title or None
+        )
+    return payload
 
 
 @router.get("/franchises/{work_id}/gallery")
 def games_franchise_gallery(
     work_id: str,
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    db: Session = Depends(get_db),
 ):
     detail = build_work_detail(work_id)
     if not detail:
         raise HTTPException(404, "Games franchise not found")
     path = detail.get("folder_path") or ""
-    return build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    payload = build_games_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_sections_gallery
+
+        title = (detail.get("title") or detail.get("name") or "").strip()
+        merge_exclusive_links_into_sections_gallery(
+            payload, db, media_type="games", entity_name=title or None
+        )
+    return payload
 
 
 @router.post("/games/{game_id}/launch")
 def games_launch(game_id: str):
-    """Open the primary ROM/ISO with the OS default application."""
+    """Open the primary ROM/ISO, or return a Web game URL for the client."""
     detail = build_game_detail(game_id)
     if not detail:
         raise HTTPException(404, "Game not found")
+    if detail.get("open_mode") == "web" and detail.get("open_url"):
+        return {
+            "ok": True,
+            "open_mode": "web",
+            "url": detail["open_url"],
+        }
     launch_path = detail.get("launch_path")
     if not launch_path:
         raise HTTPException(404, "No launchable game file found")

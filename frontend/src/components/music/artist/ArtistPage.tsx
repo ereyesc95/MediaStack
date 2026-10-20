@@ -20,7 +20,7 @@ import {
   refreshBandPhotos,
   refreshBandRelatedParticipations,
   refreshBandRelatedSimilar,
-  rescanBandLibrary,
+  updateBandFoldersFromMb,
   fetchArtistFolderIconStatus,
   ensureArtistDesktopIni,
   generateArtistFolderIcons,
@@ -1009,24 +1009,28 @@ export default function ArtistPage({
     }
   };
 
-  const handleRescanLibrary = async () => {
-    setBusy("Syncing folders…");
+  const handleUpdateProviderFolders = async () => {
+    setBusy("Fetching data, please wait...");
     try {
-      await rescanBandLibrary(bandId);
+      const result = await updateBandFoldersFromMb(bandId);
+      // Drop the wait message when the provider pull returns; cache refresh
+      // continues in the background without leaving chrome stuck.
+      setBusy("");
       clearArtistMediaTabCache(bandId);
       clearArtistGalleryCache(bandId);
       setAudioRefreshKey((k) => k + 1);
       setMediaRefreshKey((k) => k + 1);
       await Promise.all([
+        prefetchArtistAudio(bandId, { force: true }),
         prefetchArtistMediaTab(bandId, "series", { force: true }),
         prefetchArtistMediaTab(bandId, "video", { force: true }),
         prefetchArtistMediaTab(bandId, "library", { force: true }),
         prefetchArtistGallery(bandId, { force: true }),
       ]);
       load();
+      setTopStatus("Fetching finished");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy("");
     }
   };
@@ -1429,11 +1433,13 @@ export default function ArtistPage({
                   ? () => void handleRefreshMetadata()
                   : undefined
               }
-              onRescanLibrary={
+              refreshMetadataLabel="Artist"
+              onUpdateProviderFolders={
                 isAdmin && overviewTab === "about"
-                  ? () => void handleRescanLibrary()
+                  ? () => void handleUpdateProviderFolders()
                   : undefined
               }
+              updateProviderFoldersLabel="Pull missing"
               onGenerateFolderIcons={
                 isAdmin ? () => void handleGenerateFolderIcons() : undefined
               }
@@ -1460,6 +1466,7 @@ export default function ArtistPage({
                   : undefined
               }
               refreshIncludeBio={refreshBio}
+              refreshIncludeLabel="+ bio"
               onRefreshIncludeBioChange={
                 isAdmin && overviewTab === "about"
                   ? setRefreshBio

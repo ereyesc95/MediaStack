@@ -342,14 +342,48 @@ def build_game_overview(
     has_series = bool(related_disk.get("series"))
     has_books = bool(related_disk.get("books"))
 
+    web_url = str(about_disk.get("web_url") or detail.get("web_url") or "").strip()
+    if web_url and "://" not in web_url:
+        web_url = f"https://{web_url.lstrip('/')}"
+    platform = (
+        about_disk.get("platform")
+        or detail.get("platform")
+        or (about_disk.get("platforms") or [None])[0]
+    )
+    platform_cf = str(platform or "").casefold()
+    prefer_web = bool(web_url) and (
+        platform_cf in {"browser", "web", "flash"} or not detail.get("has_rom")
+    )
+    open_url = web_url if prefer_web else detail.get("open_url")
+    open_mode = "web" if prefer_web else detail.get("open_mode")
+    has_rom = bool(detail.get("has_rom") or prefer_web)
+    open_label = (
+        "Play game"
+        if has_rom
+        else detail.get("open_label")
+    )
+    release = (
+        about_disk.get("release_date")
+        or about_disk.get("date_iso")
+        or detail.get("date_iso")
+        or detail.get("display_date")
+        or ""
+    )
+    release_s = str(release).strip()
+    languages = [
+        str(x).strip()
+        for x in (about_disk.get("languages") or [])
+        if str(x).strip()
+    ]
+
     return {
         "id": detail.get("id"),
         "title": detail.get("title"),
         "name": detail.get("title"),
-        "date_iso": detail.get("date_iso"),
-        "display_date": detail.get("display_date"),
+        "date_iso": detail.get("date_iso") or release_s or None,
+        "display_date": detail.get("display_date") or release_s or None,
         "folder_path": folder_path,
-        "platform": detail.get("platform"),
+        "platform": platform,
         "work_id": work_id,
         "work_name": detail.get("work_name"),
         "cover_url": detail.get("cover_url"),
@@ -360,10 +394,11 @@ def build_game_overview(
         "icon_url": detail.get("icon_url"),
         "badge_url": detail.get("badge_url"),
         "launch_path": detail.get("launch_path"),
-        "open_url": detail.get("open_url"),
-        "open_mode": detail.get("open_mode"),
-        "open_label": detail.get("open_label"),
-        "has_rom": detail.get("has_rom"),
+        "web_url": web_url or None,
+        "open_url": open_url,
+        "open_mode": open_mode,
+        "open_label": open_label,
+        "has_rom": has_rom,
         "has_audio": has_audio,
         "has_gallery": has_gallery,
         "has_movies": has_movies,
@@ -372,6 +407,12 @@ def build_game_overview(
         "has_games": len(siblings) > 0,
         "bio": bio,
         "genres": genres,
+        "languages": languages,
+        "activity_periods": (
+            [{"label": release_s, "start": release_s, "end": release_s}]
+            if release_s
+            else []
+        ),
         "writers": directors,
         "developers": developers,
         "publishers": publishers,
@@ -403,9 +444,10 @@ def build_game_overview(
             "publishers": publishers,
             "directors": directors,
             "genres": genres,
-            "platform": detail.get("platform"),
-            "platforms": about_disk.get("platforms") or [],
-            "release_date": detail.get("display_date") or detail.get("date_iso"),
+            "platform": platform,
+            "platforms": about_disk.get("platforms") or ([platform] if platform else []),
+            "release_date": release_s or detail.get("display_date") or detail.get("date_iso"),
+            "web_url": web_url or None,
             "igdb_id": about_disk.get("igdb_id"),
         },
         "related": {

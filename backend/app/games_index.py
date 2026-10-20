@@ -153,6 +153,31 @@ def _list_candidate_files(folder: Path) -> list[Path]:
     return found
 
 
+_WEB_URL_FILES = ("game.url", "web.url", "url.txt")
+_WEB_PLATFORMS = frozenset({"web", "browser", "flash"})
+
+
+def _read_web_url(game_dir: Path) -> str | None:
+    """First non-empty http(s) URL from game.url / web.url / url.txt."""
+    for name in _WEB_URL_FILES:
+        path = game_dir / name
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            url = line.strip()
+            if not url or url.startswith("#"):
+                continue
+            if "://" not in url:
+                url = f"https://{url.lstrip('/')}"
+            if url.lower().startswith(("http://", "https://")):
+                return url
+    return None
+
+
 def _pick_launch_file(game_dir: Path, title: str | None = None) -> Path | None:
     """Prefer first match by GAME_LAUNCH_EXTS order; else stem match folder title."""
     files = _list_candidate_files(game_dir)
@@ -247,7 +272,14 @@ def _game_card_from_dir(
     from app.series_paths import find_badge_file, find_logo_file
 
     rel = game_dir.relative_to(media_root).as_posix()
-    launch = _pick_launch_file(game_dir, title=title)
+    web_url = _read_web_url(game_dir)
+    is_web_platform = (platform or "").casefold() in _WEB_PLATFORMS
+    launch = None if (web_url and is_web_platform) else _pick_launch_file(
+        game_dir, title=title
+    )
+    prefer_web = bool(web_url) and (is_web_platform or launch is None)
+    if prefer_web:
+        launch = None
     logo_url, icon_url = find_logo_file(game_dir, media_root)
     launch_rel = safe_relative(launch, media_root) if launch else None
     # Genres / developers / publishers come from game_leaves DB metadata
@@ -256,6 +288,21 @@ def _game_card_from_dir(
     developers: list[str] = []
     publishers: list[str] = []
     directors: list[str] = []
+    if prefer_web and web_url:
+        open_mode = "web"
+        open_url = web_url
+        open_label = "Play game"
+        has_rom = True
+    elif launch:
+        open_mode = "local"
+        open_url = _file_url(launch, media_root)
+        open_label = "Play game"
+        has_rom = True
+    else:
+        open_mode = None
+        open_url = None
+        open_label = None
+        has_rom = False
     return {
         "id": _game_id(rel),
         "title": title or parse_folder_bracket_tags(game_dir.name)[0],
@@ -277,11 +324,12 @@ def _game_card_from_dir(
         "logo_url": logo_url,
         "icon_url": icon_url,
         "badge_url": find_badge_file(game_dir, media_root),
-        "has_rom": launch is not None,
+        "has_rom": has_rom,
         "launch_path": launch_rel,
-        "open_url": _file_url(launch, media_root) if launch else None,
-        "open_mode": "local" if launch else None,
-        "open_label": "Play game" if launch else None,  # never "Launch"
+        "web_url": web_url,
+        "open_url": open_url,
+        "open_mode": open_mode,
+        "open_label": open_label,  # never "Launch"
         "hub_title": hub_title,
         "official": not is_unofficial_folder(game_dir.name),
         "genre_names": genre_names,

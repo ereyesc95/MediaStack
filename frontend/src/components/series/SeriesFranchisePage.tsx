@@ -33,6 +33,7 @@ import {
   refreshSeriesMetadata,
   rescanSeriesLocalData,
   updateCatalogFolders,
+  updateSeriesFoldersFromTmdb,
   fetchFranchiseFolderIconStatus,
   ensureFranchiseDesktopIni,
   generateFranchiseFolderIcons,
@@ -777,6 +778,24 @@ export default function SeriesFranchisePage({
       setRefreshing(false);
     }
   }, [load, data?.name, folderIconModule]);
+
+  const handleUpdateProviderFolders = useCallback(async () => {
+    if (isMovies || isBooks || isGames) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const result = await updateSeriesFoldersFromTmdb(franchiseId);
+      // Clear the top-right wait message as soon as TMDb pull finishes;
+      // rescan/reload can continue without blocking the chrome status.
+      setRefreshing(false);
+      await rescanSeriesLocalData(true);
+      await load();
+      setIconStatus("Fetching finished");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setRefreshing(false);
+    }
+  }, [franchiseId, load, isMovies, isBooks, isGames]);
 
   const runGenerateFolderIcons = useCallback(
     async (overwrite: boolean) => {
@@ -1922,6 +1941,10 @@ export default function SeriesFranchisePage({
     : scopedLibCards;
 
   const scopedAudioCards = filterBySubseries(audioCards);
+  // Same chrome as before (series, or work hubs that share a series), but only
+  // when Audio/ actually has release cards — avoid a dead "No audio found" control.
+  const showAudioPlayer =
+    audioCards.length > 0 && (!isMovies || sharedSeries);
   const audioEmbed = useMemo(
     () => resolveLeafAudioEmbed(scopedAudioCards),
     [scopedAudioCards]
@@ -2136,7 +2159,7 @@ export default function SeriesFranchisePage({
             {(busy || refreshing || iconStatus) && (
               <span className="muted">
                 {refreshing
-                  ? "Fetching data, please wait…"
+                  ? "Fetching data, please wait..."
                   : busy || iconStatus}
               </span>
             )}
@@ -2181,9 +2204,10 @@ export default function SeriesFranchisePage({
                 onChange={onSetOrientation}
               />
             ) : null}
-            {!isMovies || sharedSeries ? (
+            {showAudioPlayer ? (
               <SeriesAudioPlayer
                 franchiseId={seriesFranchiseId}
+                enabled={showAudioPlayer}
                 onPlayingChange={setSeriesPlaying}
                 open={playerOpen}
                 onOpenChange={setPlayerOpen}
@@ -2265,7 +2289,7 @@ export default function SeriesFranchisePage({
                               : cardOrientation}
                           </button>
                         )}
-                      {!isMovies || sharedSeries ? (
+                      {showAudioPlayer ? (
                         <button
                           type="button"
                           className={
@@ -2295,6 +2319,12 @@ export default function SeriesFranchisePage({
                   ? () => void handleRefreshMetadata()
                   : undefined
               }
+              onUpdateProviderFolders={
+                isAdmin && !isMovies && !isBooks && !isGames
+                  ? () => void handleUpdateProviderFolders()
+                  : undefined
+              }
+              updateProviderFoldersLabel="Pull missing"
               onRescanLibrary={
                 isAdmin ? () => void handleRescanLibrary() : undefined
               }

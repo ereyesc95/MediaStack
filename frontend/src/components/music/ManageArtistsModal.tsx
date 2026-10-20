@@ -98,6 +98,8 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
     setWriteUserGuide(false);
     setCloseWarning(null);
     onChanged();
+    // Let the success line paint, then close My artists.
+    window.setTimeout(() => onClose(), 2200);
   }
 
   async function cancelAndClose() {
@@ -365,7 +367,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>Manage Artists</h3>
+          <h3>My artists</h3>
           <button
             type="button"
             className="modal-close-x"

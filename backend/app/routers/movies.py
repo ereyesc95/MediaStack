@@ -379,8 +379,16 @@ def movies_franchise_movies(
 def movies_gallery(
     path: str = Query(..., min_length=1),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    db: Session = Depends(get_db),
 ):
-    return build_movies_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    payload = build_movies_gallery(path, nsfw_unlocked=nsfw_unlocked)
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_sections_gallery
+
+        merge_exclusive_links_into_sections_gallery(
+            payload, db, media_type="movies"
+        )
+    return payload
 
 
 @router.get("/films/{film_id}")

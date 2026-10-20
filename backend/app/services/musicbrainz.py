@@ -114,9 +114,14 @@ async def browse_official_release_groups(
         offset += len(page)
 
     # Search results enforce Official status but omit release-group relations.
-    # Browse the much smaller website-default set and merge those relations so
-    # linked singles can still be nested under their parent albums.
+    # Browse the artist's release groups with relations and merge onto the
+    # Official set so "single from" links can nest Singles under parent albums.
+    # Also index reverse links (album → associated singles) — browse payloads
+    # sometimes only carry the relation on the album side.
+    # (Unlinked / standalone singles keep empty relations and stay flat.)
     relations_by_id: dict[str, list[dict]] = {}
+    browse_meta_by_id: dict[str, dict] = {}
+    parent_by_single_id: dict[str, dict] = {}
     offset = 0
     browse_total: int | None = None
     while browse_total is None or offset < browse_total:
@@ -124,7 +129,6 @@ async def browse_official_release_groups(
             "release-group",
             params={
                 "artist": artist_mbid,
-                "release-group-status": "website-default",
                 "inc": "release-group-rels",
                 "limit": MB_PAGE_SIZE,
                 "offset": offset,
@@ -133,15 +137,77 @@ async def browse_official_release_groups(
         )
         page = data.get("release-groups") or []
         for group in page:
-            if group.get("id") and group.get("relations"):
-                relations_by_id[group["id"]] = group["relations"]
+            gid = group.get("id")
+            if not gid:
+                continue
+            browse_meta_by_id[gid] = group
+            rels = group.get("relations") or []
+            if rels:
+                relations_by_id[gid] = rels
+            for rel in rels:
+                if not isinstance(rel, dict):
+                    continue
+                rel_type = (rel.get("type") or "").strip().casefold()
+                if rel_type not in {"single from", "single"}:
+                    continue
+                linked = rel.get("release-group") or rel.get("release_group")
+                if not isinstance(linked, dict) or not linked.get("id"):
+                    continue
+                direction = (rel.get("direction") or "").strip().casefold()
+                if direction == "forward":
+                    # group is the single; linked is the parent album
+                    parent_by_single_id.setdefault(
+                        gid,
+                        {
+                            "id": linked.get("id"),
+                            "title": linked.get("title"),
+                            "first-release-date": linked.get("first-release-date"),
+                        },
+                    )
+                elif direction == "backward":
+                    # group is the album; linked is the single
+                    parent_by_single_id.setdefault(
+                        linked["id"],
+                        {
+                            "id": gid,
+                            "title": group.get("title"),
+                            "first-release-date": group.get("first-release-date"),
+                        },
+                    )
         browse_total = int(data.get("release-group-count") or offset + len(page))
         if not page:
             break
         offset += len(page)
 
     for group in official:
-        group["relations"] = relations_by_id.get(group.get("id") or "", [])
+        gid = group.get("id") or ""
+        rels = list(relations_by_id.get(gid) or [])
+        # Synthesize a forward "single from" when only the reverse album link
+        # (or a forward index entry) is available.
+        has_forward = any(
+            isinstance(r, dict)
+            and (r.get("type") or "").strip().casefold() in {"single from", "single"}
+            and (r.get("direction") or "").strip().casefold() == "forward"
+            for r in rels
+        )
+        if not has_forward:
+            parent = parent_by_single_id.get(gid)
+            if parent and parent.get("id") and parent.get("title"):
+                # Prefer richer album metadata from the browse payload.
+                album = browse_meta_by_id.get(parent["id"]) or {}
+                rels.append(
+                    {
+                        "type": "single from",
+                        "direction": "forward",
+                        "release-group": {
+                            "id": parent["id"],
+                            "title": album.get("title") or parent.get("title"),
+                            "first-release-date": album.get("first-release-date")
+                            or parent.get("first-release-date"),
+                        },
+                    }
+                )
+        group["relations"] = rels
     return official
 
 

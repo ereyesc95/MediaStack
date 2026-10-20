@@ -408,6 +408,15 @@ export async function rescanBandLibrary(
   return request(`${API}/music/bands/${id}/rescan-library`, { method: "POST" });
 }
 
+/** Create missing release folders from MusicBrainz (additive). */
+export async function updateBandFoldersFromMb(bandId: number) {
+  return request<ArtistImportResult>(
+    `${API}/music/bands/${bandId}/update-folders`,
+    { method: "POST" },
+    15 * 60_000
+  );
+}
+
 export type FolderIconStats = {
   ok: boolean;
   written?: number;
@@ -513,6 +522,190 @@ export async function regenerateMediaModuleIcons(
     { method: "POST" },
     LONG_RUNNING_TIMEOUT_MS
   );
+}
+
+export type GamesPlatformIconStats = {
+  ok: boolean;
+  error?: string;
+  ini_written?: number;
+  ico_written?: number;
+  skipped_exists?: number;
+  skipped_no_source?: number;
+  failed?: number;
+  platforms?: {
+    name: string;
+    ini_written?: boolean;
+    ico?: string;
+    has_source?: boolean;
+  }[];
+};
+
+export async function regenerateGamesPlatformIcons(
+  overwrite = false
+): Promise<GamesPlatformIconStats> {
+  const q = overwrite ? "?overwrite=true" : "?overwrite=false";
+  return request(
+    `${API}/folder-icons/games/platforms${q}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+export type PhotosYearBucket = {
+  year: string;
+  items: {
+    id: string;
+    url: string;
+    thumb_url?: string | null;
+    title?: string;
+    kind?: string;
+    subfolder?: string;
+  }[];
+  subfolders?: string[];
+  has_images?: boolean;
+  has_videos?: boolean;
+  is_exclusive?: boolean;
+};
+
+export async function fetchPhotoYears(): Promise<{
+  years: PhotosYearBucket[];
+  exclusive_available?: boolean;
+}> {
+  return request(`${API}/photos/years`);
+}
+
+export type ExclusiveHubLink = {
+  type: "photos_person" | "artist" | "movie" | "series" | "book" | "game";
+  name?: string;
+  path?: string;
+  title?: string;
+  franchise?: string;
+  platform?: string;
+};
+
+export type ExclusiveHubItem = {
+  id: string;
+  url: string;
+  thumb_url?: string | null;
+  title: string;
+  kind: string;
+  module: string;
+  source_id: string;
+  source_title: string;
+  franchise_title?: string | null;
+  folder_path: string;
+  link: ExclusiveHubLink;
+};
+
+export type ExclusiveHubSource = {
+  id: string;
+  module: string;
+  title: string;
+  franchise_title?: string | null;
+  folder_path: string;
+  link: ExclusiveHubLink;
+  has_images?: boolean;
+  has_videos?: boolean;
+  has_links?: boolean;
+  items: ExclusiveHubItem[];
+};
+
+export async function fetchExclusiveHub(): Promise<{
+  modules: string[];
+  sources: ExclusiveHubSource[];
+  available: boolean;
+}> {
+  return request(`${API}/photos/exclusive-hub`);
+}
+
+export type ExclusiveLinkRecord = {
+  id: number;
+  media_type: string;
+  content_type: "photo" | "video" | string;
+  title: string;
+  url: string;
+  entity_key: string;
+  entity_name: string;
+  entity_id?: string | null;
+  franchise_key?: string | null;
+  franchise_name?: string | null;
+};
+
+export type ExclusiveLinkEntityOption = {
+  name: string;
+  id?: string | null;
+  key: string;
+  franchise?: string | null;
+};
+
+export async function fetchExclusiveLinks(params?: {
+  media_type?: string;
+  entity_key?: string;
+  entity_name?: string;
+}): Promise<{ items: ExclusiveLinkRecord[] }> {
+  const q = new URLSearchParams();
+  if (params?.media_type) q.set("media_type", params.media_type);
+  if (params?.entity_key) q.set("entity_key", params.entity_key);
+  if (params?.entity_name) q.set("entity_name", params.entity_name);
+  const qs = q.toString();
+  return request(`${API}/photos/exclusive-links${qs ? `?${qs}` : ""}`);
+}
+
+export async function suggestExclusiveLinkTitle(
+  mediaType: string,
+  contentType: string
+): Promise<{ title: string }> {
+  const q = new URLSearchParams({
+    media_type: mediaType,
+    content_type: contentType,
+  });
+  return request(`${API}/photos/exclusive-links/suggest-title?${q}`);
+}
+
+export async function fetchExclusiveLinkEntities(
+  mediaType: string
+): Promise<{ items: ExclusiveLinkEntityOption[] }> {
+  const q = new URLSearchParams({ media_type: mediaType });
+  return request(`${API}/photos/exclusive-links/entities?${q}`);
+}
+
+export async function createExclusiveLink(body: {
+  media_type: string;
+  content_type: string;
+  title?: string;
+  url: string;
+  entity_name: string;
+  entity_id?: string | null;
+  franchise_name?: string | null;
+}): Promise<ExclusiveLinkRecord> {
+  return request(`${API}/photos/exclusive-links`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchExclusiveLink(
+  id: number,
+  body: Partial<{
+    media_type: string;
+    content_type: string;
+    title: string;
+    url: string;
+    entity_name: string;
+    entity_id: string | null;
+    franchise_name: string | null;
+  }>
+): Promise<ExclusiveLinkRecord> {
+  return request(`${API}/photos/exclusive-links/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteExclusiveLink(id: number): Promise<{ ok: boolean }> {
+  return request(`${API}/photos/exclusive-links/${id}`, { method: "DELETE" });
 }
 
 export async function fetchBandGalleryIndex(
@@ -2435,6 +2628,32 @@ export async function patchBooksBookAbout(
   );
 }
 
+export async function patchGamesGameAbout(
+  gameId: string,
+  body: {
+    bio?: string;
+    developers?: string;
+    publishers?: string;
+    platform?: string | null;
+    activity_start?: string;
+    languages?: string[];
+    genres?: { id?: number | string | null; name: string }[];
+    web_url?: string | null;
+  }
+) {
+  return request<{
+    ok: boolean;
+    game_id?: string;
+    platform?: string | null;
+    folder_path?: string;
+    moved?: boolean;
+  }>(`${API}/games/games/${encodeURIComponent(gameId)}/about`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function addBooksBookCastMember(
   bookId: string,
   body: {
@@ -2791,6 +3010,29 @@ export async function refreshSeriesMetadata(
 ) {
   return request<{ ok: boolean; refreshed_at?: string; tmdb_id?: string }>(
     `${API}/series/franchises/${encodeURIComponent(franchiseId)}/refresh-metadata?include_bio=${includeBio ? "true" : "false"}`,
+    { method: "POST" },
+    LONG_RUNNING_TIMEOUT_MS
+  );
+}
+
+/** Create missing Season N / Specials folders from TMDb (additive). */
+export async function updateSeriesFoldersFromTmdb(
+  franchiseId: string,
+  subseriesId?: string
+) {
+  const q = subseriesId
+    ? `?subseries_id=${encodeURIComponent(subseriesId)}`
+    : "";
+  return request<{
+    ok: boolean;
+    franchise?: string;
+    created?: string[];
+    skipped?: string[];
+    errors?: string[];
+    created_count?: number;
+    skipped_count?: number;
+  }>(
+    `${API}/series/franchises/${encodeURIComponent(franchiseId)}/update-folders${q}`,
     { method: "POST" },
     LONG_RUNNING_TIMEOUT_MS
   );
@@ -3371,6 +3613,8 @@ export type CatalogImportItem = {
   seasons?: { number: number; name?: string | null; date?: string | null }[];
   /** Games: platforms this title should be created under. */
   platforms?: string[];
+  /** Games Browser platform: URL opened in the browser instead of a local ROM. */
+  web_url?: string | null;
   /** Cross-module movie nested under a series leaf. */
   subseries_title?: string | null;
   subseries_date?: string | null;
@@ -3942,10 +4186,14 @@ export async function fetchGamesGameOverview(
 }
 
 export async function launchGame(gameId: string) {
-  return request<{ ok: boolean; path?: string }>(
-    `${API}/games/games/${encodeURIComponent(gameId)}/launch`,
-    { method: "POST" }
-  );
+  return request<{
+    ok: boolean;
+    path?: string;
+    open_mode?: string;
+    url?: string;
+  }>(`${API}/games/games/${encodeURIComponent(gameId)}/launch`, {
+    method: "POST",
+  });
 }
 
 export async function fetchGamesFranchiseAudio(workId: string) {
@@ -4037,4 +4285,63 @@ export async function refreshGamesGameMetadata(gameId: string) {
     `${API}/games/games/${encodeURIComponent(gameId)}/refresh-metadata`,
     { method: "POST" }
   );
+}
+
+export async function fetchGamesRomPlatforms() {
+  return request<{ platforms: { name: string; exists: boolean }[] }>(
+    `${API}/games/roms/platforms`
+  );
+}
+
+export type GamesRomScanItem = {
+  key: string;
+  title: string;
+  franchise: string | null;
+  standalone: boolean;
+  letter: string;
+  dest_rel: string;
+  conflict: boolean;
+  action: string;
+  files: { name: string; stem: string; ext: string; size: number }[];
+};
+
+export async function scanGamesPlatformRoms(platform: string) {
+  return request<{
+    platform: string;
+    count: number;
+    file_count: number;
+    truncated: boolean;
+    max_batch: number;
+    items: GamesRomScanItem[];
+  }>(`${API}/games/roms/scan`, {
+    method: "POST",
+    body: JSON.stringify({ platform }),
+  });
+}
+
+export async function organizeGamesPlatformRoms(
+  platform: string,
+  opts?: { keys?: string[]; enrich?: boolean }
+) {
+  return request<{
+    platform: string;
+    organized_count: number;
+    skipped_count: number;
+    organized: Array<Record<string, unknown>>;
+    skipped: Array<Record<string, unknown>>;
+    errors: string[];
+    enrich?: {
+      enriched_count: number;
+      skipped_count: number;
+      enriched: Array<Record<string, unknown>>;
+      skipped: Array<Record<string, unknown>>;
+    } | null;
+  }>(`${API}/games/roms/organize`, {
+    method: "POST",
+    body: JSON.stringify({
+      platform,
+      keys: opts?.keys,
+      enrich: opts?.enrich ?? true,
+    }),
+  });
 }

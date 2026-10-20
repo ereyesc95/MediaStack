@@ -149,6 +149,10 @@ const PLATFORM_ALIASES: Record<string, string> = {
   pc: "PC",
   macos: "Mac",
   "mac os": "Mac",
+  web: "Browser",
+  "web game": "Browser",
+  "web games": "Browser",
+  browser: "Browser",
   "xbox series x": "Xbox Series",
   "xbox series s": "Xbox Series",
   "xbox series x|s": "Xbox Series",
@@ -367,7 +371,7 @@ export default function ManageCatalogModal({
   const [franchiseHomeModule, setFranchiseHomeModule] = useState<
     "series" | "movies"
   >(module === "movies" ? "movies" : "series");
-  const [includeGuide, setIncludeGuide] = useState(true);
+  const [includeGuide, setIncludeGuide] = useState(false);
   const [nestedSeries, setNestedSeries] = useState(false);
   const [crossRelated, setCrossRelated] = useState<CatalogCrossRelatedItem[]>(
     []
@@ -1561,6 +1565,29 @@ export default function ManageCatalogModal({
                               + Platform
                             </button>
                           </div>
+                          {itemPlats.some(
+                            (p) => p.trim().toLowerCase() === "browser"
+                          ) ? (
+                            <label className="manage-catalog-modal__web-url">
+                              <span className="muted">Game URL</span>
+                              <input
+                                type="url"
+                                value={item.web_url || ""}
+                                disabled={saving}
+                                placeholder="https://… or example.com/game"
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  setItems((prev) =>
+                                    prev.map((row) =>
+                                      row.key === item.key
+                                        ? { ...row, web_url: next }
+                                        : row
+                                    )
+                                  );
+                                }}
+                              />
+                            </label>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -1766,11 +1793,21 @@ export default function ManageCatalogModal({
             </Checkbox>
 
             {saving ? (
-              <small className="muted manage-modal__wait">
-                Creating folders, please wait...
-              </small>
-            ) : null}
-            {closeWarning ? (
+              <div className="manage-artists-modal__progress" role="status">
+                <span className="manage-artists-modal__spinner" />
+                <div>
+                  <small className="muted manage-modal__wait">
+                    Creating folders, please wait...
+                  </small>
+                  {closeWarning ? (
+                    <small className="muted">
+                      Closing now may interrupt the process and result in
+                      incomplete data.
+                    </small>
+                  ) : null}
+                </div>
+              </div>
+            ) : closeWarning ? (
               <small className="muted">
                 Closing now may interrupt the process and result in incomplete
                 data.

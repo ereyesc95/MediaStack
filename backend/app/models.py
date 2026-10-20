@@ -815,3 +815,25 @@ class TourShowSetlist(Base):
     tss_setlistfm_id: Mapped[str | None] = mapped_column("tssSetlistfmId", String(64))
     tss_tracks_json: Mapped[str | None] = mapped_column("tssTracksJson", Text)
     tss_fetched_at: Mapped[str | None] = mapped_column("tssFetchedAt", Text)
+
+
+class ExclusiveLink(Base):
+    """External Exclusive links (Photos hub + entity Gallery Exclusive grids)."""
+
+    __tablename__ = "exclusive_links"
+
+    exl_id: Mapped[int] = mapped_column("exlID", Integer, primary_key=True)
+    # photos | music | movies | series | books | games
+    exl_media_type: Mapped[str] = mapped_column("exlMediaType", String(16), index=True)
+    # photo | video
+    exl_content_type: Mapped[str] = mapped_column("exlContentType", String(16), index=True)
+    exl_title: Mapped[str] = mapped_column("exlTitle", Text)
+    exl_url: Mapped[str] = mapped_column("exlUrl", Text)
+    # Soft identity: normalized name key; optional concrete id when known
+    exl_entity_key: Mapped[str] = mapped_column("exlEntityKey", Text, index=True)
+    exl_entity_name: Mapped[str] = mapped_column("exlEntityName", Text)
+    exl_entity_id: Mapped[str | None] = mapped_column("exlEntityId", String(64), index=True)
+    exl_franchise_key: Mapped[str | None] = mapped_column("exlFranchiseKey", Text)
+    exl_franchise_name: Mapped[str | None] = mapped_column("exlFranchiseName", Text)
+    exl_created_at: Mapped[str | None] = mapped_column("exlCreatedAt", Text)
+    exl_updated_at: Mapped[str | None] = mapped_column("exlUpdatedAt", Text)

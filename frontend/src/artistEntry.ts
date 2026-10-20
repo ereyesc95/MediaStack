@@ -1,14 +1,20 @@
-/** Cross-module entry context when opening an Artist page from Movies/Series/Books. */
+/** Cross-module entry context when opening an Artist page from Movies/Series/Books/Games. */
 
 import type { ArtistSection } from "./types";
 
-export type ArtistEntrySource = "music" | "series" | "movies" | "books";
+export type ArtistEntrySource =
+  | "music"
+  | "photos"
+  | "series"
+  | "movies"
+  | "books"
+  | "games";
 
 export type ArtistEntryReferrer = {
   source: ArtistEntrySource;
   /**
    * Preferred media tab that should appear next to Overview for this entry
-   * (series / movies / books). Navigation itself should open Overview.
+   * (series / movies / books / games). Navigation itself should open Overview.
    */
   section: ArtistSection;
   /** Module tab the user came from (Home vs Catalog). */
@@ -19,6 +25,7 @@ export type ArtistEntryReferrer = {
   franchiseName?: string;
   filmId?: string;
   bookId?: string;
+  gameId?: string;
   backLabel?: string;
 };
 
@@ -70,6 +77,10 @@ export function defaultSectionForSource(
       return "series";
     case "books":
       return "library";
+    case "games":
+      return "audio";
+    case "photos":
+      return "audio";
     case "music":
     default:
       return "audio";

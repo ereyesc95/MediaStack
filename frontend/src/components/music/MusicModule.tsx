@@ -34,6 +34,7 @@ import {
   saveArtistEntryReferrer,
   type ArtistBackRestore,
 } from "../../artistEntry";
+import { getPhotosExclusiveReturn } from "../../photosExclusiveReturn";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
 import { moviesLeafFromFolderPath } from "../../openMediaFromPath";
 import { saveSeriesEntryReferrer } from "../../seriesRoute";
@@ -169,6 +170,7 @@ type Props = {
     restore?: ArtistBackRestore,
     gameId?: string
   ) => void;
+  onBackToPhotos?: () => void;
   /** Open Series module from an artist SERIES folder path. */
   onOpenSeriesFolder?: (folderPath: string) => void;
   onOpenMoviesLeaf?: (
@@ -221,6 +223,7 @@ export default function MusicModule({
   onBackToMovies,
   onBackToBooks,
   onBackToGames,
+  onBackToPhotos,
   onOpenSeriesFolder,
   onOpenMoviesLeaf,
 }: Props) {
@@ -1751,6 +1754,7 @@ export default function MusicModule({
           backLabel={tourEntryRef.current === "events" ? "EVENTS" : "TOURS"}
           onBack={() => {
             if (tourEntryRef.current === "events") {
+              clearMediaTheme(userId);
               onTourNavigate?.({
                 tourSlug: undefined,
                 showSlug: undefined,
@@ -2004,6 +2008,12 @@ export default function MusicModule({
             clearMediaTheme(userId);
             if (restorePlaylistReturn()) return;
             const ref = getArtistEntryReferrer();
+            if (ref?.source === "photos" || getPhotosExclusiveReturn()) {
+              clearArtistEntryReferrer();
+              // Keep photosExclusiveReturn so PhotosModule can restore Exclusive filter.
+              onBackToPhotos?.();
+              return;
+            }
             const restore: ArtistBackRestore = {
               tab: ref?.fromTab || "catalog",
               letter: ref?.catalogLetter,
@@ -2028,6 +2038,15 @@ export default function MusicModule({
               onBackToBooks?.(ref.franchiseId || "", restore, ref.bookId);
               return;
             }
+            if (ref?.source === "games") {
+              clearArtistEntryReferrer();
+              onBackToGames?.(
+                ref.franchiseId || "",
+                restore,
+                ref.gameId
+              );
+              return;
+            }
             clearArtistEntryReferrer();
             window.history.pushState(null, "", "/");
             onBand(undefined);
@@ -2042,17 +2061,21 @@ export default function MusicModule({
           backLabel={
             getPlaylistReturn()?.backLabel ||
             getArtistEntryReferrer()?.backLabel ||
-            (getArtistEntryReferrer()?.source === "series"
+            (getArtistEntryReferrer()?.source === "photos"
+              ? "EXCLUSIVE"
+              : getArtistEntryReferrer()?.source === "series"
               ? "SERIES"
               : getArtistEntryReferrer()?.source === "movies"
                 ? "MOVIES"
                 : getArtistEntryReferrer()?.source === "books"
                   ? "BOOKS"
-                  : entrySource === "home"
-                    ? "HOME"
-                    : entrySource === "collection"
-                      ? "COLLECTION"
-                      : "CATALOG")
+                  : getArtistEntryReferrer()?.source === "games"
+                    ? "GAMES"
+                    : entrySource === "home"
+                      ? "HOME"
+                      : entrySource === "collection"
+                        ? "COLLECTION"
+                        : "CATALOG")
           }
           onNavigate={(section, overviewTab) =>
             onArtistNavigate(section, overviewTab ?? artistOverviewTab)

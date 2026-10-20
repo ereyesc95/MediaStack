@@ -515,9 +515,20 @@ def band_gallery_index(
             "icons": [],
             "has_exclusive_gallery": False,
         }
-    return build_gallery_index(
+    payload = build_gallery_index(
         row.bnd_name, root, include_exclusive=nsfw_unlocked
     )
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_gallery
+
+        merge_exclusive_links_into_gallery(
+            payload,
+            db,
+            media_type="music",
+            entity_name=row.bnd_name,
+            entity_id=str(band_id),
+        )
+    return payload
 
 
 @router.get("/bands/{band_id}/media/audio")
@@ -2396,6 +2407,37 @@ def band_rescan_library(
     if not row:
         raise HTTPException(404, "Band not found")
     return rescan_band_library(db, row)
+
+
+@router.post("/bands/{band_id}/update-folders")
+async def band_update_folders_from_mb(
+    band_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Admin: create missing release folders from MusicBrainz (additive)."""
+    from app.artist_import import import_artist
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    mbid = (row.bnd_code or "").strip()
+    if not mbid or mbid.startswith("local-"):
+        raise HTTPException(
+            400,
+            "This artist has no MusicBrainz ID — register or import from MusicBrainz first",
+        )
+    try:
+        return await import_artist(
+            db,
+            mbid,
+            write_user_guide=False,
+            update_existing=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"MusicBrainz update error: {exc}") from exc
 
 
 @router.delete("/bands/{band_id}")

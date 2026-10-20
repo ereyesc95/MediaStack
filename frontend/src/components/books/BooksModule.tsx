@@ -20,6 +20,7 @@ import {
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
 import { getDirectBookFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectBookFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
   getCachedBooksDashboard,
   prefetchBooksDashboard,
@@ -136,6 +137,7 @@ type Props = {
     from: "home" | "catalog",
     universeName?: string
   ) => void;
+  onBackToPhotos?: () => void;
 };
 
 export default function BooksModule({
@@ -163,6 +165,7 @@ export default function BooksModule({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenUniversePage,
+  onBackToPhotos,
 }: Props) {
   const deviceLayout = useDeviceLayout();
   const portraitMenuChrome =
@@ -637,7 +640,27 @@ export default function BooksModule({
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
+        onOpenArtist={
+          onOpenArtist
+            ? (bandId) => {
+                saveArtistEntryReferrer({
+                  source: "books",
+                  section: defaultSectionForSource("books"),
+                  fromTab: entrySource,
+                  franchiseId,
+                  bookId,
+                  franchiseName: workName,
+                  backLabel: (workName || "BOOKS").toLocaleUpperCase(),
+                });
+                onOpenArtist(bandId);
+              }
+            : undefined
+        }
         onBack={() => {
+          if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+            onBackToPhotos();
+            return;
+          }
           const from = getMediaEntrySource() || entrySource;
           if (universeId != null) {
             onOpenUniversePage?.(
@@ -673,16 +696,18 @@ export default function BooksModule({
         backLabelOverride={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : getDirectBookFromHome() ||
-                Boolean(
-                  (franchises.find((f) => f.id === franchiseId) as
-                    | { is_standalone?: boolean }
-                    | undefined)?.is_standalone
-                )
-              ? (getMediaEntrySource() || entrySource) === "home"
-                ? "HOME"
-                : "CATALOG"
-              : undefined
+            : shouldReturnToPhotosExclusive()
+              ? "EXCLUSIVE"
+              : getDirectBookFromHome() ||
+                  Boolean(
+                    (franchises.find((f) => f.id === franchiseId) as
+                      | { is_standalone?: boolean }
+                      | undefined)?.is_standalone
+                  )
+                ? (getMediaEntrySource() || entrySource) === "home"
+                  ? "HOME"
+                  : "CATALOG"
+                : undefined
         }
         onBrowseCatalog={(target) => {
           clearMediaTheme(userId);
@@ -849,6 +874,10 @@ export default function BooksModule({
         cardOrientation={cardOrientation}
         onSetOrientation={onSetOrientation}
         onBack={() => {
+          if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+            onBackToPhotos();
+            return;
+          }
           const from = getMediaEntrySource() || entrySource;
           if (entrySource !== from) setEntrySource(from);
           if (universeId != null) {
@@ -865,9 +894,11 @@ export default function BooksModule({
         backLabel={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : (getMediaEntrySource() || entrySource) === "home"
-              ? "HOME"
-              : "CATALOG"
+            : shouldReturnToPhotosExclusive()
+              ? "EXCLUSIVE"
+              : (getMediaEntrySource() || entrySource) === "home"
+                ? "HOME"
+                : "CATALOG"
         }
         onNavigate={(patch) => {
           const next: {

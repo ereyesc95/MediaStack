@@ -7,6 +7,8 @@ export type GalleryViewerItem = {
   caption: string;
   subcaption?: string;
   mediaType?: "image" | "video" | "audio";
+  /** When set, caption renders as a link that calls onCaptionClick. */
+  captionClickable?: boolean;
 };
 
 type Props = {
@@ -14,6 +16,7 @@ type Props = {
   index: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
+  onCaptionClick?: (item: GalleryViewerItem) => void;
 };
 
 type LoopThumb = {
@@ -28,6 +31,7 @@ export default function GalleryViewerModal({
   index,
   onIndexChange,
   onClose,
+  onCaptionClick,
 }: Props) {
   const item = items[index];
   const hasMany = items.length > 1;
@@ -223,16 +227,29 @@ export default function GalleryViewerModal({
         </div>
         <div className="gallery-viewer__footer">
           <p className="gallery-viewer__caption">
-            {item.caption}
+            {item.captionClickable && onCaptionClick ? (
+              <button
+                type="button"
+                className="gallery-viewer__caption-link"
+                onClick={() => onCaptionClick(item)}
+              >
+                {item.caption}
+              </button>
+            ) : (
+              <span className="gallery-viewer__caption-text">{item.caption}</span>
+            )}
             {item.subcaption ? (
-              <span className="gallery-viewer__subcaption">
-                {" "}
-                {item.subcaption}
-              </span>
+              <>
+                <span className="gallery-viewer__caption-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="gallery-viewer__subcaption">
+                  {item.subcaption}
+                </span>
+              </>
             ) : null}
             {hasMany ? (
               <span className="gallery-viewer__count">
-                {" "}
                 {index + 1} / {items.length}
               </span>
             ) : null}

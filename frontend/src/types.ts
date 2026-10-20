@@ -1889,7 +1889,8 @@ export type SeriesGalleryItem = {
   folder_path: string;
   section: string;
   subsection?: string | null;
-  media_kind?: "image" | "video" | "audio";
+  media_kind?: "image" | "video" | "audio" | "link";
+  is_external_link?: boolean;
 };
 
 export type SeriesGallerySubsection = {
@@ -2049,6 +2050,8 @@ export type SeriesFilterOptions = {
   genres?: { id: number | string; name: string }[];
   /** Games platform filter options. */
   platforms?: { id?: string; name: string }[];
+  /** Full Games platform vocabulary for Edit game. */
+  platform_options?: string[];
   decades: number[];
   publishers: string[];
   writers: string[];
@@ -2159,6 +2162,12 @@ export type SeriesOverview = {
   parent_genre_names?: string[];
   kind_label?: string | null;
   publishers: string[];
+  /** Games leaf: developer companies. */
+  developers?: string[];
+  /** Games leaf platform (e.g. Browser, PC). */
+  platform?: string | null;
+  /** Games Browser play URL (DB-backed). */
+  web_url?: string | null;
   status?: string | null;
   type?: string | null;
   is_animated?: boolean;

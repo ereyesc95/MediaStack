@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.franchise_index import normalize_franchise_slug
+from app.games_igdb import pick_best_igdb_hit, resolve_igdb_game_for_platform
 from app.games_store import (
+    load_game_about,
     save_game_about,
     save_work_about,
     work_slug_for_name,
@@ -29,22 +30,25 @@ async def refresh_game_metadata(
     title = (detail.get("title") or detail.get("name") or "").strip()
     if not title:
         return {"ok": False, "error": "No title to search"}
+    platform = detail.get("platform")
+    platform_s = platform.strip() if isinstance(platform, str) else None
     try:
-        hits = await search_games(title, limit=5)
+        best = await resolve_igdb_game_for_platform(
+            title=title,
+            platform=platform_s,
+            provider_id=str(detail.get("igdb_id") or detail.get("provider_id") or "")
+            or None,
+            limit=12,
+        )
+        if not best:
+            hits = await search_games(title, limit=8)
+            best = pick_best_igdb_hit(hits, title=title, platform=platform_s)
     except IgdbNotConfigured as exc:
         return {"ok": False, "error": str(exc)}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    if not hits:
+    if not best:
         return {"ok": False, "error": "No IGDB match"}
-    # Prefer exact-ish title match
-    want = normalize_franchise_slug(title) or title.casefold()
-    best = hits[0]
-    for h in hits:
-        name = normalize_franchise_slug(h.get("name") or "") or ""
-        if name == want:
-            best = h
-            break
     about = {
         "igdb_id": best.get("provider_id"),
         "overview": best.get("overview"),
@@ -59,13 +63,27 @@ async def refresh_game_metadata(
         "refreshed_at": _now(),
     }
     folder_path = (detail.get("folder_path") or "").replace("\\", "/").strip("/")
-    platform = detail.get("platform")
     work_name = (
         detail.get("work_name")
         or (detail.get("franchise") or {}).get("name")
         or ""
     )
     work_slug = work_slug_for_name(work_name) if work_name else None
+    # Keep manually set fields (e.g. Browser game URL) across IGDB refresh.
+    try:
+        prior = load_game_about(
+            None,
+            game_id=game_id,
+            folder_path=folder_path or None,
+            work_slug=work_slug,
+            db=db,
+        )
+        if isinstance(prior, dict):
+            for key in ("web_url", "cast"):
+                if prior.get(key) and not about.get(key):
+                    about[key] = prior[key]
+    except Exception:
+        pass
     try:
         save_game_about(
             about,
@@ -100,13 +118,19 @@ async def refresh_franchise_metadata(
         return {"ok": False, "error": str(exc)}
     if not hits:
         return {"ok": False, "error": "No IGDB match"}
-    want = normalize_franchise_slug(name) or name.casefold()
-    best = hits[0]
-    for h in hits:
-        hit_name = normalize_franchise_slug(h.get("name") or "") or ""
-        if hit_name == want:
-            best = h
-            break
+    platforms = detail.get("platforms") or []
+    prefer_platform = (
+        platforms[0]
+        if isinstance(platforms, list) and platforms
+        else detail.get("platform")
+    )
+    best = pick_best_igdb_hit(
+        hits,
+        title=name,
+        platform=str(prefer_platform).strip() if prefer_platform else None,
+    )
+    if not best:
+        return {"ok": False, "error": "No IGDB match"}
     about = {
         "igdb_id": best.get("provider_id"),
         "overview": best.get("overview"),

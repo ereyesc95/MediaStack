@@ -20,7 +20,7 @@ export type SeriesMediaCard = {
   path?: string;
   platform?: string | null;
   open_url?: string | null;
-  open_mode?: "tab" | "local" | null;
+  open_mode?: "tab" | "local" | "web" | null;
   open_label?: string | null;
   navigate_band_id?: number | null;
   navigate_release_id?: string | null;

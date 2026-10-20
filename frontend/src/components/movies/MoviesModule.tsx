@@ -20,6 +20,7 @@ import {
   saveFranchiseHomeReferrer,
 } from "../../franchiseHome";
 import { getDirectFilmFromHome, getMediaEntrySource, getUniverseReturnTarget, setDirectFilmFromHome, setMediaEntrySource, takePendingCatalogBrowse } from "../../mediaEntry";
+import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
   getCachedMoviesDashboard,
   prefetchMoviesDashboard,
@@ -140,6 +141,7 @@ type Props = {
     from: "home" | "catalog",
     universeName?: string
   ) => void;
+  onBackToPhotos?: () => void;
 };
 
 export default function MoviesModule({
@@ -167,6 +169,7 @@ export default function MoviesModule({
   onOpenMusicRelease,
   onOpenArtist,
   onOpenUniversePage,
+  onBackToPhotos,
 }: Props) {
   const deviceLayout = useDeviceLayout();
   const portraitMenuChrome =
@@ -420,11 +423,14 @@ export default function MoviesModule({
         genre_names?: string[];
         publishers?: string[];
         writers?: string[];
+        open_url?: string | null;
+        open_label?: string | null;
       };
       const titleLetter = (() => {
         const ch = (film.title || "").trim().charAt(0).toUpperCase();
         return ch && ch >= "A" && ch <= "Z" ? ch : "#";
       })();
+      const openUrl = enriched.open_url ?? null;
       return {
         id: film.id,
         name: film.title,
@@ -442,6 +448,8 @@ export default function MoviesModule({
         genre_names: enriched.genre_names ?? [],
         publishers: enriched.publishers ?? [],
         writers: enriched.writers ?? [],
+        open_url: openUrl,
+        open_label: openUrl ? "Play movie" : enriched.open_label || null,
         subseries: [
           {
             id: film.id,
@@ -451,6 +459,8 @@ export default function MoviesModule({
             folder_path: film.folder_path,
             cover_url: film.cover_url,
             season_count: 1,
+            open_url: openUrl,
+            open_label: openUrl ? "Play movie" : null,
           },
         ],
         season_count: 1,
@@ -647,8 +657,27 @@ export default function MoviesModule({
         onChooseSource={onChooseSource}
         onSwitchProfile={onSwitchProfile}
         onEditProfile={onEditProfile}
-        onOpenArtist={onOpenArtist}
+        onOpenArtist={
+          onOpenArtist
+            ? (bandId) => {
+                saveArtistEntryReferrer({
+                  source: "movies",
+                  section: defaultSectionForSource("movies"),
+                  fromTab: entrySource,
+                  franchiseId,
+                  filmId,
+                  franchiseName: workName,
+                  backLabel: (workName || "MOVIES").toLocaleUpperCase(),
+                });
+                onOpenArtist(bandId);
+              }
+            : undefined
+        }
         onBack={() => {
+          if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+            onBackToPhotos();
+            return;
+          }
           const ref = getSeriesEntryReferrer();
           if (ref?.kind === "music" && ref.bandId != null && onOpenArtist) {
             clearSeriesEntryReferrer();
@@ -696,7 +725,8 @@ export default function MoviesModule({
           const isStandalone =
             Boolean(work?.is_standalone) ||
             (filmCount > 0 && filmCount <= 1);
-          if (isStandalone) {
+          // Catalog entry always returns to catalog (not the franchise hub).
+          if (from === "catalog" || isStandalone) {
             if (from === "home") backToMoviesHome();
             else backToMoviesCatalog();
             return;
@@ -710,7 +740,9 @@ export default function MoviesModule({
         backLabelOverride={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : (() => {
+            : shouldReturnToPhotosExclusive()
+              ? "EXCLUSIVE"
+              : (() => {
                 const ref = getSeriesEntryReferrer();
                 if (ref?.kind === "music" && (ref.title || ref.bandId)) {
                   return (ref.title || "ARTIST").toLocaleUpperCase();
@@ -718,10 +750,10 @@ export default function MoviesModule({
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();
                 }
+                const from = getMediaEntrySource() || entrySource;
+                if (from === "catalog") return "CATALOG";
                 if (directFilmFromHomeRef.current || getDirectFilmFromHome()) {
-                  return (getMediaEntrySource() || entrySource) === "home"
-                    ? "HOME"
-                    : "CATALOG";
+                  return from === "home" ? "HOME" : "CATALOG";
                 }
                 const standalone =
                   Boolean(
@@ -732,7 +764,7 @@ export default function MoviesModule({
                   (films.filter((f) => f.work_id === franchiseId).length > 0 &&
                     films.filter((f) => f.work_id === franchiseId).length <= 1);
                 return standalone
-                  ? (getMediaEntrySource() || entrySource) === "home"
+                  ? from === "home"
                     ? "HOME"
                     : "CATALOG"
                   : undefined;
@@ -911,6 +943,10 @@ export default function MoviesModule({
         cardOrientation={cardOrientation}
         onSetOrientation={onSetOrientation}
         onBack={() => {
+          if (shouldReturnToPhotosExclusive() && onBackToPhotos) {
+            onBackToPhotos();
+            return;
+          }
           const ref = getSeriesEntryReferrer();
           if (ref?.kind === "books" && ref.franchiseId && onOpenBooksFranchise) {
             clearSeriesEntryReferrer();
@@ -938,7 +974,9 @@ export default function MoviesModule({
         backLabel={
           universeId != null
             ? getUniverseReturnTarget().universeName || "UNIVERSE"
-            : (() => {
+            : shouldReturnToPhotosExclusive()
+              ? "EXCLUSIVE"
+              : (() => {
                 const ref = getSeriesEntryReferrer();
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();

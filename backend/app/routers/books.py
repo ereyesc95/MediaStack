@@ -303,11 +303,22 @@ def books_franchise_media(work_id: str, kind: str, db: Session = Depends(get_db)
 
 
 @router.get("/gallery")
-def books_gallery(path: str = Query(..., min_length=1)):
+def books_gallery(
+    path: str = Query(..., min_length=1),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    db: Session = Depends(get_db),
+):
     try:
-        return build_books_gallery(path)
+        payload = build_books_gallery(path)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
+    if nsfw_unlocked:
+        from app.exclusive_links import merge_exclusive_links_into_sections_gallery
+
+        merge_exclusive_links_into_sections_gallery(
+            payload, db, media_type="books"
+        )
+    return payload
 
 
 @router.get("/books/{book_id}")

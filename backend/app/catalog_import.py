@@ -827,8 +827,28 @@ async def preview_catalog_import(
     return {"franchise_name": base, "items": items, "scope": "series" if len(items) > 1 else "single"}
 
 
+def _primary_cover_exists(destination: Path) -> bool:
+    """True if destination or destination.{jpg,jpeg,png,webp} already exists."""
+    if destination.exists():
+        return True
+    parent = destination.parent
+    stem = destination.name
+    if not parent.is_dir():
+        return False
+    try:
+        for child in parent.iterdir():
+            if not child.is_file():
+                continue
+            if child.stem.casefold() == stem.casefold():
+                return True
+    except OSError:
+        return False
+    return False
+
+
 async def _download_primary(url: str | None, destination: Path) -> bool:
-    if not url or destination.exists():
+    """Download cover art once — never replace an existing Cover - Portrait.* file."""
+    if not url or _primary_cover_exists(destination):
         return False
     try:
         if (urlparse(url).hostname or "").casefold() not in ARTWORK_HOSTS:
@@ -1125,7 +1145,7 @@ async def create_catalog_import(
         ]
 
     make_home = bool(body.get("franchise_home")) and belongs_to_franchise
-    include_guide = bool(body.get("include_guide", True))
+    include_guide = bool(body.get("include_guide", False))
     nested_series = bool(body.get("nested_series", False)) and belongs_to_franchise
     home_module = str(body.get("franchise_home_module") or "").strip().casefold()
     if home_module not in {"series", "movies", "books", "games", "music"}:
@@ -1180,8 +1200,11 @@ async def create_catalog_import(
         # Franchise home [Artwork]: covers only (no Branding/Covers/Exclusive/Gallery).
         home_here = make_home and (not home_module or home_module == module)
         if home_here and not franchise_existed:
+            from app.folder_icons import cleanup_franchise_artwork_dir
+
             artwork = franchise_dir / "[Artwork]"
             artwork.mkdir(parents=True, exist_ok=True)
+            cleanup_franchise_artwork_dir(artwork)
             await _download_primary(
                 first_item.get("poster_url"), artwork / "Cover - Portrait"
             )
@@ -1190,7 +1213,13 @@ async def create_catalog_import(
             )
             # Structural Artwork ico + ini; then refresh franchise root ico from covers.
             decorate_folder(artwork)
+            cleanup_franchise_artwork_dir(artwork)
             decorate_folder(franchise_dir)
+        elif home_here:
+            # Existing franchise home — strip any empty mistrees under [Artwork].
+            from app.folder_icons import cleanup_franchise_artwork_dir
+
+            cleanup_franchise_artwork_dir(franchise_dir / "[Artwork]")
         if include_guide and not franchise_existed:
             (franchise_dir / "User guide.txt").write_text(
                 get_catalog_user_guide(db, module), encoding="utf-8"
@@ -1242,19 +1271,38 @@ async def create_catalog_import(
             covers = leaf_dir / "Gallery" / "Covers"
             poster_url = raw.get("poster_url")
             backdrop_url = raw.get("backdrop_url")
-            # Games: ensure IGDB cover is resolved before download (items may
-            # omit poster_url if added without a full preview round-trip).
-            if module == "games" and provider_id and not poster_url:
+            # Games: prefer a cover from an IGDB entry that lists this platform;
+            # fall back to the selected/default cover when none matches.
+            if module == "games":
                 try:
-                    game = await igdb_get_game(provider_id)
-                    if game:
-                        poster_url = game.get("cover_url")
+                    from app.games_igdb import resolve_cover_for_platform
+
+                    poster_url = await resolve_cover_for_platform(
+                        title=title,
+                        platform=platform_name,
+                        provider_id=provider_id or None,
+                        fallback_url=poster_url,
+                    )
                 except Exception:
-                    pass
+                    if provider_id and not poster_url:
+                        try:
+                            game = await igdb_get_game(provider_id)
+                            if game:
+                                poster_url = game.get("cover_url")
+                        except Exception:
+                            pass
             await _download_primary(poster_url, covers / "Cover - Portrait")
             await _download_primary(backdrop_url, covers / "Cover - Landscape")
-            # Covers land after tree mkdir — write leaf (and flat-show root) ico now.
-            decorate_folder(leaf_dir)
+            # Browser games: persist launch URL in DB metadata (optional).
+            pending_web_url = ""
+            if (
+                module == "games"
+                and platform_name
+                and platform_name.casefold() in {"browser", "web", "flash"}
+            ):
+                pending_web_url = str(raw.get("web_url") or "").strip()
+                if pending_web_url and "://" not in pending_web_url:
+                    pending_web_url = f"https://{pending_web_url.lstrip('/')}"
             created.append(_relative(leaf_dir, root))
 
             try:
@@ -1279,12 +1327,13 @@ async def create_catalog_import(
                         subseries_titles=[title] if nested_series else None,
                         cache_artwork=True,
                     )
-                elif module == "games" and provider_id:
+                elif module == "games":
                     from app.games_index import _game_id
-                    from app.games_refresh import refresh_game_metadata
                     from app.games_store import (
                         ensure_game_leaf,
                         ensure_game_work,
+                        load_game_about,
+                        save_game_about,
                         work_slug_for_name,
                     )
 
@@ -1305,31 +1354,70 @@ async def create_catalog_import(
                         platform=platform_name or None,
                     )
                     db.flush()
-                    refreshed = await refresh_game_metadata(
-                        db,
-                        game_id,
-                        {
-                            "title": title,
-                            "folder_path": _relative(leaf_dir, root),
-                            "name": title,
-                            "work_name": franchise_name,
-                            "platform": platform_name or None,
-                        },
-                    )
-                    # Cover download may have been skipped earlier; retry from
-                    # the IGDB match stored on the leaf about payload.
-                    about = (
-                        refreshed.get("about")
-                        if isinstance(refreshed, dict)
-                        else None
-                    )
-                    cover_from_meta = (
-                        about.get("cover_url") if isinstance(about, dict) else None
-                    )
-                    if cover_from_meta:
-                        await _download_primary(
-                            cover_from_meta, covers / "Cover - Portrait"
+                    if pending_web_url:
+                        existing_about = load_game_about(
+                            leaf_dir,
+                            game_id=game_id,
+                            folder_path=_relative(leaf_dir, root),
+                            work_slug=work_slug,
+                            db=db,
                         )
+                        existing_about["web_url"] = pending_web_url
+                        save_game_about(
+                            existing_about,
+                            game_id=game_id,
+                            title=title,
+                            folder_path=_relative(leaf_dir, root),
+                            work_slug=work_slug,
+                            platform=platform_name or None,
+                            db=db,
+                        )
+                    if provider_id:
+                        from app.games_refresh import refresh_game_metadata
+
+                        refreshed = await refresh_game_metadata(
+                            db,
+                            game_id,
+                            {
+                                "title": title,
+                                "folder_path": _relative(leaf_dir, root),
+                                "name": title,
+                                "work_name": franchise_name,
+                                "platform": platform_name or None,
+                            },
+                        )
+                        about = (
+                            refreshed.get("about")
+                            if isinstance(refreshed, dict)
+                            else None
+                        )
+                        # Preserve create-time web_url across metadata refresh merge.
+                        if pending_web_url:
+                            merged = load_game_about(
+                                leaf_dir,
+                                game_id=game_id,
+                                folder_path=_relative(leaf_dir, root),
+                                work_slug=work_slug,
+                                db=db,
+                            )
+                            if not (merged.get("web_url") or "").strip():
+                                merged["web_url"] = pending_web_url
+                                save_game_about(
+                                    merged,
+                                    game_id=game_id,
+                                    title=title,
+                                    folder_path=_relative(leaf_dir, root),
+                                    work_slug=work_slug,
+                                    platform=platform_name or None,
+                                    db=db,
+                                )
+                        cover_from_meta = (
+                            about.get("cover_url") if isinstance(about, dict) else None
+                        )
+                        if cover_from_meta:
+                            await _download_primary(
+                                cover_from_meta, covers / "Cover - Portrait"
+                            )
                 elif module == "books" and provider_id:
                     from app.books_store import (
                         book_id_for_dir,
@@ -1385,6 +1473,9 @@ async def create_catalog_import(
                 db.rollback()
                 metadata_errors.append(f"{title}: {exc}")
 
+            # Leaf ico after final cover (refresh may replace Cover - Portrait).
+            decorate_folder(leaf_dir, overwrite_ico=True)
+
         # Refresh franchise-root ico after leaves / [Artwork] covers exist.
         decorate_folder(franchise_dir)
 
@@ -1396,8 +1487,11 @@ async def create_catalog_import(
         decorate_folder(related_dir)
         home_on_related = make_home and home_module == related_module
         if home_on_related and not related_existed:
+            from app.folder_icons import cleanup_franchise_artwork_dir
+
             artwork = related_dir / "[Artwork]"
             artwork.mkdir(parents=True, exist_ok=True)
+            cleanup_franchise_artwork_dir(artwork)
             rel_first = related_items[0] if related_items else {}
             await _download_primary(
                 rel_first.get("poster_url") or first_item.get("poster_url"),
@@ -1408,6 +1502,7 @@ async def create_catalog_import(
                 artwork / "Cover - Landscape",
             )
             decorate_folder(artwork)
+            cleanup_franchise_artwork_dir(artwork)
             decorate_folder(related_dir)
         if include_guide and not related_existed:
             (related_dir / "User guide.txt").write_text(

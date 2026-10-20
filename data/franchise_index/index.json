@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-10-19T23:02:27.777664+00:00",
+  "scanned_at": "2026-10-20T21:25:52.248092+00:00",
   "franchises": {
     "courage test film": {
       "display_name": "Courage Test Film",
@@ -712,23 +712,6 @@
         }
       ]
     },
-    "courage create probe": {
-      "display_name": "Courage Create Probe",
-      "slug": "courage create probe",
-      "letter": "C",
-      "entries": [
-        {
-          "kind": "series",
-          "path": "Series/C/Courage Create Probe",
-          "title": "Courage Create Probe",
-          "date_iso": null,
-          "letter": "C",
-          "platform": null,
-          "subseries": null,
-          "franchise_display": "Courage Create Probe"
-        }
-      ]
-    },
     "courage the cowardly dog": {
       "display_name": "Courage the Cowardly Dog",
       "slug": "courage the cowardly dog",
@@ -905,6 +888,23 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "The Shining"
+        }
+      ]
+    },
+    "bloxorz": {
+      "display_name": "Bloxorz",
+      "slug": "bloxorz",
+      "letter": "B",
+      "entries": [
+        {
+          "kind": "game",
+          "path": "Games/Browser/B/Bloxorz/2007.06.21. Bloxorz",
+          "title": "Bloxorz",
+          "date_iso": "2007-06-21",
+          "letter": "B",
+          "platform": "Browser",
+          "subseries": null,
+          "franchise_display": "Bloxorz"
         }
       ]
     },

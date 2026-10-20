@@ -7,6 +7,7 @@ import type {
   SeriesGallerySubsection,
 } from "../../types";
 import PlaylistBoot from "../PlaylistBoot";
+import { IconExternalLink } from "../MenuIcons";
 import GalleryViewerModal, {
   type GalleryViewerItem,
 } from "../music/artist/GalleryViewerModal";
@@ -76,6 +77,10 @@ function mergeSections(
     }
   }
   return { sections: [...byKey.values()], items };
+}
+
+function isGalleryLinkItem(item: SeriesGalleryItem): boolean {
+  return item.media_kind === "link" || Boolean(item.is_external_link);
 }
 
 function mediaKind(item: SeriesGalleryItem): "image" | "video" | "audio" {
@@ -255,12 +260,14 @@ export default function SeriesGalleryPanel({
 
   const viewerItems: GalleryViewerItem[] = useMemo(
     () =>
-      visible.map((it) => ({
-        id: it.id,
-        url: withMediaAccess(it.url),
-        caption: it.title,
-        mediaType: mediaKind(it),
-      })),
+      visible
+        .filter((it) => !isGalleryLinkItem(it))
+        .map((it) => ({
+          id: it.id,
+          url: withMediaAccess(it.url),
+          caption: it.title,
+          mediaType: mediaKind(it),
+        })),
     [visible]
   );
 
@@ -314,15 +321,35 @@ export default function SeriesGalleryPanel({
         </nav>
       ) : null}
       <div className="artist-gallery__photo-grid series-gallery__grid">
-        {visible.map((it, i) => {
+        {visible.map((it) => {
           const url = withMediaAccess(it.url);
+          if (isGalleryLinkItem(it)) {
+            return (
+              <a
+                key={it.id}
+                className="artist-gallery__photo-card artist-gallery__photo-card--link"
+                href={it.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={it.title}
+              >
+                <span className="artist-gallery__link-card" aria-hidden>
+                  <IconExternalLink />
+                </span>
+                <span className="artist-gallery__card-label">{it.title}</span>
+              </a>
+            );
+          }
           const kind = mediaKind(it);
+          const viewerIdx = viewerItems.findIndex((v) => v.id === it.id);
           return (
             <button
               key={it.id}
               type="button"
               className="artist-gallery__photo-card"
-              onClick={() => setViewerIndex(i)}
+              onClick={() => {
+                if (viewerIdx >= 0) setViewerIndex(viewerIdx);
+              }}
               title={it.title}
             >
               {kind === "video" ? (

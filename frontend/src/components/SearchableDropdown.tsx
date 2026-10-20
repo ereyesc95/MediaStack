@@ -37,6 +37,11 @@ type Props = {
    * clipped by scrollable modal panels.
    */
   portal?: boolean;
+  /**
+   * Portal list placement. `below` always opens downward (clipped if needed);
+   * `auto` flips upward when there isn't enough room under the field.
+   */
+  placement?: "auto" | "below";
 };
 
 export default function SearchableDropdown({
@@ -51,6 +56,7 @@ export default function SearchableDropdown({
   renderSelectedLabel,
   renderOptionLabel,
   portal = false,
+  placement = "auto",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -139,8 +145,14 @@ export default function SearchableDropdown({
       );
       const spaceBelow = window.innerHeight - rect.bottom - 8;
       const spaceAbove = rect.top - 8;
-      const openUp = spaceBelow < listH && spaceAbove > spaceBelow;
-      const maxH = Math.min(listH, openUp ? spaceAbove : spaceBelow);
+      const openUp =
+        placement !== "below" &&
+        spaceBelow < listH &&
+        spaceAbove > spaceBelow;
+      const maxH = Math.min(
+        listH,
+        Math.max(120, openUp ? spaceAbove : spaceBelow)
+      );
       setPortalStyle({
         position: "fixed",
         left: rect.left,
@@ -159,7 +171,7 @@ export default function SearchableDropdown({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [open, portal, visibleRows, filtered.length, query]);
+  }, [open, portal, placement, visibleRows, filtered.length, query]);
 
   function pick(opt: DropdownOption) {
     setPickedLabel(opt.label);
