@@ -3354,3 +3354,94 @@ def collection_delete_batch(
         raise HTTPException(400, "No items selected")
     removed = delete_items(db, user.usr_id, ids)
     return {"ok": True, "removed": removed}
+
+
+# --- MERCH (Souvenirs across all shows; profile-independent) ---
+
+
+class MerchCategoryBody(BaseModel):
+    label: str
+    orientation: str = "square"
+    sort: int | None = None
+
+
+class MerchCategoryUpdateBody(BaseModel):
+    label: str | None = None
+    orientation: str | None = None
+    sort: int | None = None
+
+
+@router.get("/merch")
+def merch_list(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.merch_index import list_merch_items
+
+    return list_merch_items(db)
+
+
+@router.get("/merch/categories")
+def merch_categories_list(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.merch_index import list_merch_categories
+
+    return {"categories": list_merch_categories(db)}
+
+
+@router.post("/merch/categories")
+def merch_categories_create(
+    body: MerchCategoryBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.merch_index import create_merch_category
+
+    try:
+        return create_merch_category(
+            db,
+            label=body.label,
+            orientation=body.orientation,
+            sort=body.sort,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.put("/merch/categories/{category_id}")
+def merch_categories_update(
+    category_id: int,
+    body: MerchCategoryUpdateBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.merch_index import update_merch_category
+
+    try:
+        result = update_merch_category(
+            db,
+            category_id,
+            label=body.label,
+            orientation=body.orientation,
+            sort=body.sort,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if not result:
+        raise HTTPException(404, "Category not found")
+    return result
+
+
+@router.delete("/merch/categories/{category_id}")
+def merch_categories_delete(
+    category_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    from app.merch_index import delete_merch_category
+
+    if not delete_merch_category(db, category_id):
+        raise HTTPException(404, "Category not found")
+    return {"ok": True}

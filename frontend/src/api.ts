@@ -4106,6 +4106,348 @@ export async function fetchCollectionMatches(artist: string, title = "") {
   }>(`${API}/music/collection/matches?${q}`);
 }
 
+/* ---- MERCH ---- */
+
+export type MerchOrientation = "landscape" | "portrait" | "square";
+
+export type MerchCategory = {
+  id: number;
+  prefix: string;
+  label: string;
+  orientation: MerchOrientation | string;
+  sort: number;
+  count?: number;
+};
+
+export type MerchItem = {
+  id: string;
+  label: string;
+  url: string;
+  back_url?: string | null;
+  has_back: boolean;
+  category_id: number;
+  category_prefix: string;
+  category_label: string;
+  orientation?: MerchOrientation | string;
+  band_id: number;
+  band_name: string;
+  logo_url?: string | null;
+  tour_id: number;
+  tour_slug: string;
+  tour_title?: string | null;
+  show_id: number;
+  show_slug: string;
+  date_iso?: string | null;
+  venue?: string | null;
+  city?: string | null;
+  event_label: string;
+};
+
+export async function fetchMerch() {
+  return request<{ categories: MerchCategory[]; items: MerchItem[] }>(
+    `${API}/music/merch`
+  );
+}
+
+export async function fetchMerchCategories() {
+  return request<{ categories: MerchCategory[] }>(
+    `${API}/music/merch/categories`
+  );
+}
+
+export async function createMerchCategory(body: {
+  label: string;
+  orientation?: MerchOrientation | string;
+  sort?: number;
+}) {
+  return request<MerchCategory>(`${API}/music/merch/categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateMerchCategory(
+  id: number,
+  body: {
+    label?: string;
+    orientation?: MerchOrientation | string;
+    sort?: number;
+  }
+) {
+  return request<MerchCategory>(`${API}/music/merch/categories/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteMerchCategory(id: number) {
+  return request<{ ok: boolean }>(`${API}/music/merch/categories/${id}`, {
+    method: "DELETE",
+  });
+}
+
+/* ---- Hobbies ---- */
+
+export type HobbyPreset = {
+  id: string;
+  label: string;
+  fields: string[];
+};
+
+export type HobbyCollection = {
+  id: number;
+  name: string;
+  preset: string;
+  preset_label: string;
+  fields: string[];
+  icon_url: string;
+  item_count: number;
+};
+
+export type HobbyItem = {
+  id: number;
+  collection_id: number;
+  title?: string | null;
+  brand?: string | null;
+  theme?: string | null;
+  type?: string | null;
+  category?: string | null;
+  size?: string | null;
+  style?: string | null;
+  quantity: number;
+  total_slots?: number | null;
+  items_collected?: number | null;
+  missing_count?: number | null;
+  completion_pct?: number | null;
+  box_size?: string | null;
+  missing: string[];
+  duplicates: string[];
+  image?: string | null;
+  image_path?: string | null;
+  image_url?: string | null;
+  shop_url?: string | null;
+  tutorial_url?: string | null;
+  notes?: string | null;
+  preset?: string;
+  deleted?: boolean;
+};
+
+export async function fetchHobbyPresets() {
+  return request<{ presets: HobbyPreset[] }>(`${API}/hobbies/presets`);
+}
+
+export async function fetchHobbyCollections() {
+  return request<{ collections: HobbyCollection[] }>(
+    `${API}/hobbies/collections`
+  );
+}
+
+export async function createHobbyCollection(body: {
+  name: string;
+  preset: string;
+}) {
+  return request<HobbyCollection>(`${API}/hobbies/collections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateHobbyCollection(
+  id: number,
+  body: { name?: string; clear_icon?: boolean }
+) {
+  return request<HobbyCollection>(`${API}/hobbies/collections/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteHobbyCollection(id: number) {
+  return request<{ ok: boolean }>(`${API}/hobbies/collections/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function uploadHobbyCollectionIcon(id: number, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return request<HobbyCollection>(`${API}/hobbies/collections/${id}/icon`, {
+    method: "POST",
+    body: fd,
+  });
+}
+
+export async function fetchHobbyItems(
+  collectionId: number,
+  params: Record<string, string | undefined> = {}
+) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v) q.set(k, v);
+  }
+  const qs = q.toString();
+  return request<{ items: HobbyItem[] }>(
+    `${API}/hobbies/collections/${collectionId}/items${qs ? `?${qs}` : ""}`
+  );
+}
+
+export async function createHobbyItem(
+  collectionId: number,
+  body: Record<string, unknown>
+) {
+  return request<HobbyItem>(
+    `${API}/hobbies/collections/${collectionId}/items`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function updateHobbyItem(
+  collectionId: number,
+  itemId: number,
+  body: Record<string, unknown>
+) {
+  return request<HobbyItem>(
+    `${API}/hobbies/collections/${collectionId}/items/${itemId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function adjustHobbyItemQuantity(
+  collectionId: number,
+  itemId: number,
+  body: { delta?: number; quantity?: number }
+) {
+  return request<HobbyItem>(
+    `${API}/hobbies/collections/${collectionId}/items/${itemId}/quantity`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function deleteHobbyItem(collectionId: number, itemId: number) {
+  return request<{ ok: boolean }>(
+    `${API}/hobbies/collections/${collectionId}/items/${itemId}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function deleteHobbyItemsBatch(
+  collectionId: number,
+  ids: number[]
+) {
+  return request<{ ok: boolean; deleted: number }>(
+    `${API}/hobbies/collections/${collectionId}/items/delete-batch`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }
+  );
+}
+
+export async function uploadHobbyItemImage(
+  collectionId: number,
+  itemId: number,
+  file: File
+) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return request<HobbyItem>(
+    `${API}/hobbies/collections/${collectionId}/items/${itemId}/image`,
+    { method: "POST", body: fd }
+  );
+}
+
+export async function fetchHobbyFieldOptions(
+  collectionId: number,
+  field: string
+) {
+  return request<{ options: string[] }>(
+    `${API}/hobbies/collections/${collectionId}/options/${field}`
+  );
+}
+
+export async function addHobbyFieldOption(
+  collectionId: number,
+  field: string,
+  value: string
+) {
+  return request<{ options: string[] }>(
+    `${API}/hobbies/collections/${collectionId}/options/${field}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    }
+  );
+}
+
+export async function exportHobbyXlsx(collectionId: number): Promise<Blob> {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(
+    `${API}/hobbies/collections/${collectionId}/export.xlsx`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+}
+
+export async function downloadHobbyTemplateXlsx(): Promise<Blob> {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(`${API}/hobbies/template.xlsx`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+}
+
+export async function previewHobbyImport(collectionId: number, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(
+    `${API}/hobbies/collections/${collectionId}/import/preview`,
+    { method: "POST", headers, body: fd }
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{
+    ok: boolean;
+    rows: Record<string, unknown>[];
+    count?: number;
+    error?: string;
+  }>;
+}
+
+export async function commitHobbyImport(
+  collectionId: number,
+  rows: Record<string, unknown>[]
+) {
+  return request<{ ok: boolean; created: number; updated: number; total: number }>(
+    `${API}/hobbies/collections/${collectionId}/import/commit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    }
+  );
+}
+
 /* ---- Games ---- */
 
 export async function fetchGamesCatalog() {
@@ -4343,5 +4685,136 @@ export async function organizeGamesPlatformRoms(
       keys: opts?.keys,
       enrich: opts?.enrich ?? true,
     }),
+  });
+}
+
+/* ---- FileStack ---- */
+
+export type FilesNestedFolder = {
+  id: string;
+  name: string;
+  label: string;
+  file_count: number;
+};
+
+export type FilesTab = {
+  id: string;
+  name: string;
+  label: string;
+  file_count: number;
+  nested_folders: FilesNestedFolder[];
+};
+
+export type FilesItem = {
+  id: string;
+  name: string;
+  ext: string;
+  nested_folder: string | null;
+  url: string;
+  open_url: string;
+  previewable: boolean;
+  size: number;
+};
+
+export async function fetchFilesTabs() {
+  return request<{ tabs: FilesTab[] }>(`${API}/files/tabs`);
+}
+
+export async function fetchFilesTabFiles(tab: string) {
+  return request<{
+    tab: string;
+    files: FilesItem[];
+    nested_folders: FilesNestedFolder[];
+  }>(`${API}/files/tabs/${encodeURIComponent(tab)}/files`);
+}
+
+export async function createFilesTab(name: string) {
+  return request<FilesTab>(`${API}/files/tabs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function renameFilesTab(tab: string, name: string) {
+  return request<FilesTab>(`${API}/files/tabs/${encodeURIComponent(tab)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteFilesTab(tab: string) {
+  return request<{ ok: boolean }>(
+    `${API}/files/tabs/${encodeURIComponent(tab)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function createFilesFolder(tab: string, name: string) {
+  return request<FilesNestedFolder>(`${API}/files/folders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tab, name }),
+  });
+}
+
+export async function renameFilesFolder(
+  tab: string,
+  folder: string,
+  name: string
+) {
+  return request<FilesNestedFolder>(`${API}/files/folders`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tab, folder, name }),
+  });
+}
+
+export async function deleteFilesFolder(tab: string, folder: string) {
+  return request<{ ok: boolean }>(`${API}/files/folders/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tab, folder }),
+  });
+}
+
+export async function renameFilesFile(path: string, name: string) {
+  return request<FilesItem>(`${API}/files/rename`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, name }),
+  });
+}
+
+export async function moveFilesFiles(
+  paths: string[],
+  tab: string,
+  folder?: string | null
+) {
+  return request<{ files: FilesItem[] }>(`${API}/files/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths, tab, folder: folder || null }),
+  });
+}
+
+export async function copyFilesFiles(
+  paths: string[],
+  tab: string,
+  folder?: string | null
+) {
+  return request<{ files: FilesItem[] }>(`${API}/files/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths, tab, folder: folder || null }),
+  });
+}
+
+export async function deleteFilesFiles(paths: string[]) {
+  return request<{ ok: boolean; deleted: number }>(`${API}/files/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
   });
 }

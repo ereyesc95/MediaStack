@@ -251,7 +251,13 @@ export type CardOrientation =
 /** Cover / banner / text list for Audio / Video / Library release cards on artist pages. */
 export type ReleaseCardLayout = "cover" | "banner" | "list";
 
-export type MusicTab = "home" | "artists" | "collection" | "events" | "playlists";
+export type MusicTab =
+  | "home"
+  | "artists"
+  | "collection"
+  | "events"
+  | "playlists"
+  | "merch";
 
 /** Events tab card layouts (Portrait default). Cover = square Playlist art. */
 export type EventsCardLayout =
@@ -1546,7 +1552,9 @@ export type View =
       overviewTab?: import("./gamesRoute").GamesOverviewTab;
       universeId?: number;
     }
-  | { kind: "photos" };
+  | { kind: "photos" }
+  | { kind: "files"; tabId?: string }
+  | { kind: "hobbies"; collectionId?: number };
 
 export type MoviesFilmCard = {
   id: string;

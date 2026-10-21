@@ -39,6 +39,8 @@ type Props = {
   mediaOptions: MediaOption[];
   onSelectMedia: (opt: MediaOption) => void;
   tabs: Tab[];
+  /** When set, replaces the default tab buttons (e.g. overflow select). */
+  center?: ReactNode;
   menu: React.ReactNode;
 };
 
@@ -53,6 +55,7 @@ function defaultTabIcon(id: string, label: string, mediaKind?: string): ReactNod
   if (key === "collection" || text === "collection") return <IconCollection />;
   if (key === "events" || text === "events") return <IconTabEvents />;
   if (key === "playlists" || text === "playlists") return <IconTabPlaylists />;
+  if (key === "merch" || text === "merch") return <IconCollection />;
   /* Catalog tabs use the module name as label (SERIES / MOVIES / …). */
   if (
     key === "catalog" ||
@@ -76,6 +79,7 @@ export default function ModuleTopBar({
   mediaOptions,
   onSelectMedia,
   tabs,
+  center,
   menu,
 }: Props) {
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -148,31 +152,35 @@ export default function ModuleTopBar({
         ) : null}
       </div>
 
-      <nav
-        className={`module-top-bar__tabs${
-          iconTabs ? " module-top-bar__tabs--icons" : ""
-        }`}
-        aria-label="Module sections"
-      >
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={t.active ? "active" : ""}
-            onClick={t.onClick}
-            aria-label={t.label}
-            title={t.label}
-          >
-            {iconTabs ? (
-              <span className="module-top-bar__tab-icon" aria-hidden>
-                {t.icon ?? defaultTabIcon(t.id, t.label, media.kind)}
-              </span>
-            ) : (
-              t.label
-            )}
-          </button>
-        ))}
-      </nav>
+      {center != null ? (
+        <div className="module-top-bar__center">{center}</div>
+      ) : (
+        <nav
+          className={`module-top-bar__tabs${
+            iconTabs ? " module-top-bar__tabs--icons" : ""
+          }`}
+          aria-label="Module sections"
+        >
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={t.active ? "active" : ""}
+              onClick={t.onClick}
+              aria-label={t.label}
+              title={t.label}
+            >
+              {iconTabs ? (
+                <span className="module-top-bar__tab-icon" aria-hidden>
+                  {t.icon ?? defaultTabIcon(t.id, t.label, media.kind)}
+                </span>
+              ) : (
+                t.label
+              )}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div className="module-top-bar__menu">{menu}</div>
     </header>

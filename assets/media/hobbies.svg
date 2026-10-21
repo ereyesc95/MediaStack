@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="HobbyStack">
+  <defs>
+    <linearGradient id="hb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3d5a80"/>
+      <stop offset="100%" stop-color="#1b2838"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#hb)"/>
+  <!-- marble -->
+  <circle cx="92" cy="118" r="38" fill="#98c1d9"/>
+  <circle cx="78" cy="104" r="10" fill="#e0fbfc" opacity="0.7"/>
+  <!-- cube -->
+  <path d="M150 78l46 26v52l-46 26-46-26V104z" fill="#ee6c4d" opacity="0.95"/>
+  <path d="M150 78l46 26-46 26-46-26z" fill="#f4a261"/>
+  <path d="M150 130l46-26v52l-46 26z" fill="#e76f51"/>
+  <!-- small pin -->
+  <circle cx="188" cy="188" r="14" fill="#e0fbfc"/>
+  <circle cx="188" cy="188" r="5" fill="#293241"/>
+</svg>

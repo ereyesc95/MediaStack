@@ -17,6 +17,8 @@ from app.routers import (
     folder_icons,
     franchise_quiz,
     games,
+    files,
+    hobbies,
     photos,
     import_router,
     media,
@@ -80,6 +82,8 @@ app.include_router(franchise_quiz.router)
 app.include_router(catalog_import.router)
 app.include_router(games.router)
 app.include_router(photos.router)
+app.include_router(files.router)
+app.include_router(hobbies.router)
 app.include_router(import_router.router)
 app.include_router(sync.router)
 app.include_router(media.router)

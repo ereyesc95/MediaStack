@@ -5,6 +5,8 @@ const PANES = [
   { id: 500, slug: "books", label: "Books" },
   { id: 600, slug: "games", label: "Games" },
   { id: 700, slug: "photos", label: "Photos" },
+  { id: 750, slug: "files", label: "Files" },
+  { id: 800, slug: "hobbies", label: "Hobbies" },
 ] as const;
 
 type Props = {

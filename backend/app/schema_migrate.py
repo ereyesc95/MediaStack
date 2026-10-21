@@ -599,6 +599,132 @@ def migrate_schema(eng: Engine) -> None:
                 )
             )
 
+        if "merch_categories" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE merch_categories (
+                        "mrcID" INTEGER NOT NULL PRIMARY KEY,
+                        "mrcPrefix" VARCHAR(64) NOT NULL UNIQUE,
+                        "mrcLabel" TEXT NOT NULL,
+                        "mrcOrientation" VARCHAR(16) DEFAULT 'square',
+                        "mrcSort" INTEGER DEFAULT 0,
+                        "mrcCreatedAt" TEXT
+                    )
+                    """
+                )
+            )
+        else:
+            cols = {c["name"] for c in inspect(eng).get_columns("merch_categories")}
+            if "mrcOrientation" not in cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE merch_categories '
+                        'ADD COLUMN "mrcOrientation" VARCHAR(16) DEFAULT \'square\''
+                    )
+                )
+
+        if "hobby_collections" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE hobby_collections (
+                        "hbcID" INTEGER NOT NULL PRIMARY KEY,
+                        "hbcUserID" INTEGER NOT NULL,
+                        "hbcName" TEXT NOT NULL,
+                        "hbcPreset" VARCHAR(32) NOT NULL DEFAULT 'generic',
+                        "hbcIconPath" TEXT,
+                        "hbcCreatedAt" TEXT,
+                        "hbcUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_collections_user" '
+                    'ON hobby_collections ("hbcUserID")'
+                )
+            )
+
+        if "hobby_items" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE hobby_items (
+                        "hbiID" INTEGER NOT NULL PRIMARY KEY,
+                        "hbiCollectionID" INTEGER NOT NULL,
+                        "hbiUserID" INTEGER NOT NULL,
+                        "hbiTitle" TEXT,
+                        "hbiBrand" TEXT,
+                        "hbiTheme" TEXT,
+                        "hbiType" TEXT,
+                        "hbiCategory" TEXT,
+                        "hbiSize" TEXT,
+                        "hbiStyle" TEXT,
+                        "hbiQuantity" INTEGER DEFAULT 1,
+                        "hbiTotalSlots" INTEGER,
+                        "hbiBoxSize" TEXT,
+                        "hbiMissingJson" TEXT,
+                        "hbiDuplicatesJson" TEXT,
+                        "hbiImagePath" TEXT,
+                        "hbiImageUrl" TEXT,
+                        "hbiShopUrl" TEXT,
+                        "hbiTutorialUrl" TEXT,
+                        "hbiNotes" TEXT,
+                        "hbiCreatedAt" TEXT,
+                        "hbiUpdatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_items_collection" '
+                    'ON hobby_items ("hbiCollectionID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_items_user" '
+                    'ON hobby_items ("hbiUserID")'
+                )
+            )
+
+        if "hobby_field_options" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE hobby_field_options (
+                        "hfoID" INTEGER NOT NULL PRIMARY KEY,
+                        "hfoUserID" INTEGER NOT NULL,
+                        "hfoCollectionID" INTEGER,
+                        "hfoField" VARCHAR(32) NOT NULL,
+                        "hfoValue" TEXT NOT NULL,
+                        "hfoCreatedAt" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_field_options_user" '
+                    'ON hobby_field_options ("hfoUserID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_field_options_collection" '
+                    'ON hobby_field_options ("hfoCollectionID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_hobby_field_options_field" '
+                    'ON hobby_field_options ("hfoField")'
+                )
+            )
+
         if "subgenres" in tables:
             # Hentai belongs under Anime (not Adult); still NSFW via adult_content.py.
             conn.execute(

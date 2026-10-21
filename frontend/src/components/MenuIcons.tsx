@@ -381,6 +381,43 @@ export function IconCamera({ className }: IconProps) {
   );
 }
 
+/** FileStack module mark — stacked documents. */
+export function IconMediaFiles({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M6 4h7l4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm7 1.5V9h3.5L13 5.5zM8 12h8v1.5H8V12zm0 3h6v1.5H8V15z"
+        opacity="0.55"
+      />
+      <path
+        fill="currentColor"
+        d="M8 2h7l4 4v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V7h3.5L15 3.5zM10 10h8v1.5h-8V10zm0 3h6v1.5h-6V13z"
+      />
+    </svg>
+  );
+}
+
+/** HobbyStack module mark — marbles / cube, distinct from PhotoStack camera. */
+export function IconMediaHobbies({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <circle
+        cx="8.2"
+        cy="11"
+        r="4.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        fill="currentColor"
+        d="M14.2 6.4 19 9.1v5.6l-4.8 2.7-4.8-2.7V9.1l4.8-2.7zm0 1.85L11.1 9.9v3.9l3.1 1.75 3.1-1.75V9.9l-3.1-1.65z"
+      />
+    </svg>
+  );
+}
+
 export function IconLinks({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

@@ -47,9 +47,18 @@ STRUCTURAL_ICON_STEMS: dict[str, str] = {
     "books": "Books",
     "games": "Games",
     "photos": "Photos",
+    "files": "Files",
 }
 
-MEDIA_MODULE_ROOTS = ("Music", "Movies", "Series", "Books", "Games", "Photos")
+MEDIA_MODULE_ROOTS = (
+    "Music",
+    "Movies",
+    "Series",
+    "Books",
+    "Games",
+    "Photos",
+    "Files",
+)
 
 _DATE_PREFIX_RE = re.compile(
     r"^\d{4}(?:\.\d{2}(?:\.\d{2})?)?\.\s+",
@@ -417,7 +426,11 @@ def assets_platforms_dir() -> Path:
 
 
 def find_assets_icon(stem: str) -> Path | None:
-    return find_first_image(assets_icons_dir(), [stem])
+    hit = find_first_image(assets_icons_dir(), [stem])
+    if hit:
+        return hit
+    # Hub tiles (e.g. Files / Hobbies) may live under assets/media as PNG/JPG.
+    return find_first_image(ASSETS_DIR / "media", [stem])
 
 
 def find_platform_icon(platform_name: str) -> Path | None:
@@ -886,7 +899,7 @@ def ensure_games_platform_icons(
 def ensure_media_module_roots(
     *, overwrite_ico: bool = False, force_ini: bool = False
 ) -> dict:
-    """Media/{Music,…,Photos} get desktop.ini + ico from assets."""
+    """Media/{Music,…,Photos,Files} get desktop.ini + ico from assets."""
     root = _media_root()
     stats = {"ok": True, "modules": []}
     if not root:

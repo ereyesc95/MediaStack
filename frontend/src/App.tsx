@@ -52,6 +52,8 @@ import MoviesModule from "./components/movies/MoviesModule";
 import BooksModule from "./components/books/BooksModule";
 import GamesModule from "./components/games/GamesModule";
 import PhotosModule from "./components/photos/PhotosModule";
+import FilesModule from "./components/files/FilesModule";
+import HobbiesModule from "./components/hobbies/HobbiesModule";
 import SeriesModule from "./components/series/SeriesModule";
 
 import { applyProfilePreferences, getStoredOrientation, saveOrientation } from "./themes";
@@ -69,6 +71,14 @@ import {
 } from "./booksRoute";
 import { pushGamesCatalogRoute, pushGamesRootRoute, pushGamesRoute } from "./gamesRoute";
 import { pushPhotosRootRoute } from "./photosRoute";
+import {
+  parseFilesTabPath,
+  pushFilesRootRoute,
+} from "./filesRoute";
+import {
+  parseHobbiesCollectionPath,
+  pushHobbiesRootRoute,
+} from "./hobbiesRoute";
 import {
   pushSeriesCatalogRoute,
   pushSeriesRootRoute,
@@ -129,6 +139,10 @@ const MEDIA_OPTIONS: MediaOption[] = [
 
   { id: 700, kind: "photos", label: "Photos" },
 
+  { id: 750, kind: "files", label: "Files" },
+
+  { id: 800, kind: "hobbies", label: "Hobbies" },
+
 ];
 
 function viewFromLocationPath(pathname: string): View {
@@ -140,6 +154,20 @@ function viewFromLocationPath(pathname: string): View {
   if (path.startsWith("/books")) return { kind: "books" };
   if (path.startsWith("/games")) return { kind: "games" };
   if (path.startsWith("/photos")) return { kind: "photos" };
+  if (path.startsWith("/files")) {
+    const tabId = parseFilesTabPath(path);
+    return {
+      kind: "files",
+      ...(tabId != null ? { tabId } : {}),
+    };
+  }
+  if (path.startsWith("/hobbies")) {
+    const collectionId = parseHobbiesCollectionPath(path);
+    return {
+      kind: "hobbies",
+      ...(collectionId != null ? { collectionId } : {}),
+    };
+  }
   if (path.startsWith("/universe")) return { kind: "universe", universeId: 0 };
   return { kind: "hub" };
 }
@@ -502,6 +530,18 @@ export default function App() {
     if (opt.kind === "photos") {
       pushPhotosRootRoute();
       setView({ kind: "photos" });
+      return;
+    }
+
+    if (opt.kind === "files") {
+      pushFilesRootRoute();
+      setView({ kind: "files" });
+      return;
+    }
+
+    if (opt.kind === "hobbies") {
+      pushHobbiesRootRoute();
+      setView({ kind: "hobbies" });
     }
   }
 
@@ -670,7 +710,7 @@ export default function App() {
       {moduleIconsConfirmOpen && (
         <ConfirmDialog
           title="Refresh icons?"
-          message="Overwrite desktop.ini and folder.ico for Music, Movies, Series, Books, Games, and Photos from assets/icons. Explorer may need a refresh (F5) afterward."
+          message="Overwrite desktop.ini and folder.ico for all media modules?"
           confirmLabel="Refresh icons"
           busy={moduleIconsBusy}
           onConfirm={() => void handleRegenerateModuleIcons()}
@@ -1953,6 +1993,42 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
+          />
+        )}
+
+        {showApp && view.kind === "files" && (
+          <FilesModule
+            key={`files-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            tabId={view.tabId}
+            busy={busy}
+            onSelectMedia={selectMedia}
+            onImport={handleImport}
+            onSync={handleSync}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
+          />
+        )}
+
+        {showApp && view.kind === "hobbies" && (
+          <HobbiesModule
+            key={`hobbies-${profile.user_id}`}
+            mediaOptions={MEDIA_OPTIONS}
+            collectionId={view.collectionId}
+            busy={busy}
+            onSelectMedia={selectMedia}
+            onImport={handleImport}
+            onSync={handleSync}
+            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            isAdmin={isAdmin}
+            onSwitchProfile={handleSwitchProfile}
+            onEditProfile={
+              profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
+            }
           />
         )}
 

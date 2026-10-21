@@ -127,7 +127,7 @@ def regenerate_media_module_icons(
     ),
     _admin: User = Depends(require_admin),
 ):
-    """Regenerate desktop.ini + folder.ico for Music/Movies/Series/Books/Games/Photos."""
+    """Regenerate desktop.ini + folder.ico for all media-root modules (incl. Files)."""
     return ensure_media_module_roots(
         overwrite_ico=overwrite, force_ini=overwrite
     )

@@ -569,6 +569,32 @@ export async function resolvePathToView(
     return { view: { kind: "photos" } };
   }
 
+  {
+    const { parseFilesRootPath, parseFilesTabPath } = await import(
+      "./filesRoute"
+    );
+    if (parseFilesRootPath(pathname)) {
+      return { view: { kind: "files" } };
+    }
+    const filesTab = parseFilesTabPath(pathname);
+    if (filesTab != null) {
+      return { view: { kind: "files", tabId: filesTab } };
+    }
+  }
+
+  {
+    const { parseHobbiesCollectionPath, parseHobbiesRootPath } = await import(
+      "./hobbiesRoute"
+    );
+    if (parseHobbiesRootPath(pathname)) {
+      return { view: { kind: "hobbies" } };
+    }
+    const hobbyId = parseHobbiesCollectionPath(pathname);
+    if (hobbyId != null) {
+      return { view: { kind: "hobbies", collectionId: hobbyId } };
+    }
+  }
+
   const artistParsed = parseArtistPath(pathname);
   if (artistParsed) {
     const artistRoute = await resolveArtistRouteDeep(artistParsed);
@@ -770,6 +796,34 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
 
   if (pathname.match(/^\/photos\/?$/)) {
     return { kind: "photos" };
+  }
+
+  {
+    if (pathname === "/files" || pathname === "/files/") {
+      return { kind: "files" };
+    }
+    const filesMatch = pathname.match(/^\/files\/([^/]+)\/?$/i);
+    if (filesMatch) {
+      try {
+        return { kind: "files", tabId: decodeURIComponent(filesMatch[1]) };
+      } catch {
+        return { kind: "files", tabId: filesMatch[1] };
+      }
+    }
+  }
+
+  {
+    // Sync path parse — dynamic import not available; inline match
+    if (pathname === "/hobbies" || pathname === "/hobbies/") {
+      return { kind: "hobbies" };
+    }
+    const hobbyMatch = pathname.match(/^\/hobbies\/(\d+)\/?$/i);
+    if (hobbyMatch) {
+      const collectionId = Number(hobbyMatch[1]);
+      if (Number.isFinite(collectionId)) {
+        return { kind: "hobbies", collectionId };
+      }
+    }
   }
 
   const artistParsed = parseArtistPath(pathname);

@@ -82,6 +82,7 @@ import EventsBrowse, {
   type EventsFilters,
 } from "./EventsBrowse";
 import EventsLayoutPicker from "./EventsLayoutPicker";
+import MerchBrowse, { type MerchBrowseApi } from "./MerchBrowse";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
 import PlaylistsView from "./PlaylistsView";
@@ -92,7 +93,7 @@ import {
 } from "./artist/MiniAudioPlayer";
 import TourShowPage from "./artist/TourShowPage";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconDisc, IconHeadphones, IconLineup, IconStar, IconUniverse } from "../MenuIcons";
+import { IconAddArtist, IconDisc, IconHeadphones, IconLineup, IconPencil, IconStar, IconUniverse } from "../MenuIcons";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import type { EventsCardLayout } from "../../types";
 
@@ -238,7 +239,8 @@ export default function MusicModule({
   );
   const [eventsCardLayout, setEventsCardLayout] =
     useState<EventsCardLayout>("portrait");
-  const tourEntryRef = useRef<"events" | "artist">("artist");
+  const tourEntryRef = useRef<"events" | "artist" | "merch">("artist");
+  const merchManageRef = useRef<MerchBrowseApi | null>(null);
   const [spotifyOAuthReturn, setSpotifyOAuthReturn] = useState(false);
   const [addPlaylistInitialMode, setAddPlaylistInitialMode] = useState<"local" | "spotify">("local");
   const [playlistToast, setPlaylistToast] = useState<string | null>(null);
@@ -295,7 +297,7 @@ export default function MusicModule({
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
   const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
   const [entrySource, setEntrySource] = useState<
-    "home" | "catalog" | "collection"
+    "home" | "catalog" | "collection" | "merch"
   >("catalog");
   const homeAudio = useMiniAudio();
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
@@ -335,9 +337,15 @@ export default function MusicModule({
     (
       id: number,
       shellHint?: ArtistCard | null,
-      from: "home" | "catalog" | "collection" = "catalog"
+      from: "home" | "catalog" | "collection" | "merch" = "catalog"
     ) => {
-      setEntrySource(from === "collection" ? "collection" : from);
+      setEntrySource(
+        from === "collection"
+          ? "collection"
+          : from === "merch"
+            ? "merch"
+            : from
+      );
       clearPendingAudioCategory(id);
       saveArtistEntryReferrer({
         source: "music",
@@ -347,7 +355,9 @@ export default function MusicModule({
             ? "HOME"
             : from === "collection"
               ? "COLLECTION"
-              : "CATALOG",
+              : from === "merch"
+                ? "MERCH"
+                : "CATALOG",
       });
       primeArtistShell(id, shellHint);
       onArtistNavigate("overview", "about");
@@ -616,7 +626,8 @@ export default function MusicModule({
       tab === "artists" ||
       tab === "collection" ||
       tab === "events" ||
-      tab === "playlists");
+      tab === "playlists" ||
+      tab === "merch");
   const showHomePlayerRestore =
     !bandId && homeAudio.src && homePlayerBarHidden;
 
@@ -1283,6 +1294,12 @@ export default function MusicModule({
               onClick: () => onTab("artists"),
             },
             {
+              id: "playlists",
+              label: "PLAYLISTS",
+              active: tab === "playlists",
+              onClick: () => onTab("playlists"),
+            },
+            {
               id: "collection",
               label: "COLLECTION",
               active: tab === "collection",
@@ -1295,10 +1312,10 @@ export default function MusicModule({
               onClick: () => onTab("events"),
             },
             {
-              id: "playlists",
-              label: "PLAYLISTS",
-              active: tab === "playlists",
-              onClick: () => onTab("playlists"),
+              id: "merch",
+              label: "MERCH",
+              active: tab === "merch",
+              onClick: () => onTab("merch"),
             },
           ]}
           menu={
@@ -1383,6 +1400,17 @@ export default function MusicModule({
                   value={eventsCardLayout}
                   onChange={setEventsCardLayout}
                 />
+              ) : null}
+              {tab === "merch" && isAdmin ? (
+                <button
+                  type="button"
+                  className="icon-btn merch-browse__edit-btn"
+                  title="MERCH categories"
+                  aria-label="Edit MERCH categories"
+                  onClick={() => merchManageRef.current?.openCategories()}
+                >
+                  <IconPencil />
+                </button>
               ) : null}
               <AppMenu
                 onImport={onImport}
@@ -1505,7 +1533,7 @@ export default function MusicModule({
           </div>
         </div>
       )}
-      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "events" || tab === "playlists") && (
+      {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "events" || tab === "playlists" || tab === "merch") && (
         <audio
           ref={homeAudio.audioRef}
           src={homeAudio.src ?? undefined}
@@ -1751,9 +1779,15 @@ export default function MusicModule({
           artistName={artistShell?.name ?? undefined}
           isAdmin={isAdmin}
           standalone
-          backLabel={tourEntryRef.current === "events" ? "EVENTS" : "TOURS"}
+          backLabel={
+            tourEntryRef.current === "events"
+              ? "EVENTS"
+              : tourEntryRef.current === "merch"
+                ? "MERCH"
+                : "TOURS"
+          }
           onBack={() => {
-            if (tourEntryRef.current === "events") {
+            if (tourEntryRef.current === "events" || tourEntryRef.current === "merch") {
               clearMediaTheme(userId);
               onTourNavigate?.({
                 tourSlug: undefined,
@@ -1761,7 +1795,7 @@ export default function MusicModule({
                 showTab: undefined,
               });
               onBand(undefined);
-              onTab("events");
+              onTab(tourEntryRef.current === "merch" ? "merch" : "events");
               window.history.pushState(null, "", "/music");
               return;
             }
@@ -2055,7 +2089,9 @@ export default function MusicModule({
                 ? "home"
                 : entrySource === "collection"
                   ? "collection"
-                  : "artists"
+                  : entrySource === "merch"
+                    ? "merch"
+                    : "artists"
             );
           }}
           backLabel={
@@ -2281,6 +2317,61 @@ export default function MusicModule({
             onTourNavigate?.({
               tourSlug: ev.tour_slug,
               showSlug: ev.slug,
+              showTab: "overview",
+            });
+          }}
+        />
+      ) : tab === "merch" ? (
+        <MerchBrowse
+          isAdmin={isAdmin}
+          manageApiRef={merchManageRef}
+          onOpenArtist={(id, name) =>
+            openArtist(
+              id,
+              {
+                id,
+                name: name || "Artist",
+                photo_url: null,
+                logo_url: null,
+                logo_collapsed_url: null,
+                icon_url: null,
+                era_year: null,
+                show_name_on_hover: true,
+              },
+              "merch"
+            )
+          }
+          onOpenShow={(item) => {
+            tourEntryRef.current = "merch";
+            setEntrySource("merch");
+            saveArtistEntryReferrer({
+              source: "music",
+              section: "tours",
+              backLabel: "MERCH",
+            });
+            primeArtistShell(item.band_id, {
+              id: item.band_id,
+              name: item.band_name,
+              photo_url: null,
+              logo_url: item.logo_url ?? null,
+              logo_collapsed_url: null,
+              icon_url: null,
+              era_year: null,
+              show_name_on_hover: true,
+            });
+            onBand(item.band_id, "tours");
+            onTourNavigate?.({
+              tourSlug: item.tour_slug,
+              showSlug: item.show_slug,
+              showTab: "overview",
+            });
+            pushArtistRoute({
+              bandId: item.band_id,
+              artistName: item.band_name,
+              section: "tours",
+              overviewTab: "about",
+              tourSlug: item.tour_slug,
+              showSlug: item.show_slug,
               showTab: "overview",
             });
           }}

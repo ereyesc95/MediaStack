@@ -837,3 +837,77 @@ class ExclusiveLink(Base):
     exl_franchise_name: Mapped[str | None] = mapped_column("exlFranchiseName", Text)
     exl_created_at: Mapped[str | None] = mapped_column("exlCreatedAt", Text)
     exl_updated_at: Mapped[str | None] = mapped_column("exlUpdatedAt", Text)
+
+
+class MerchCategory(Base):
+    """MERCH category: plural label; prefix = singular (label without trailing s)."""
+
+    __tablename__ = "merch_categories"
+
+    mrc_id: Mapped[int] = mapped_column("mrcID", Integer, primary_key=True)
+    mrc_prefix: Mapped[str] = mapped_column("mrcPrefix", String(64), unique=True)
+    mrc_label: Mapped[str] = mapped_column("mrcLabel", Text)
+    # landscape | portrait | square
+    mrc_orientation: Mapped[str] = mapped_column(
+        "mrcOrientation", String(16), default="square"
+    )
+    mrc_sort: Mapped[int] = mapped_column("mrcSort", Integer, default=0)
+    mrc_created_at: Mapped[str | None] = mapped_column("mrcCreatedAt", Text)
+
+
+class HobbyCollection(Base):
+    """Per-profile hobby collection (Marbles, Uno, Fillable album, …)."""
+
+    __tablename__ = "hobby_collections"
+
+    hbc_id: Mapped[int] = mapped_column("hbcID", Integer, primary_key=True)
+    hbc_user_id: Mapped[int] = mapped_column("hbcUserID", Integer, index=True)
+    hbc_name: Mapped[str] = mapped_column("hbcName", Text)
+    hbc_preset: Mapped[str] = mapped_column("hbcPreset", String(32), default="generic")
+    hbc_icon_path: Mapped[str | None] = mapped_column("hbcIconPath", Text)
+    hbc_created_at: Mapped[str | None] = mapped_column("hbcCreatedAt", Text)
+    hbc_updated_at: Mapped[str | None] = mapped_column("hbcUpdatedAt", Text)
+
+
+class HobbyItem(Base):
+    """Shared field-bag row inside a hobby collection."""
+
+    __tablename__ = "hobby_items"
+
+    hbi_id: Mapped[int] = mapped_column("hbiID", Integer, primary_key=True)
+    hbi_collection_id: Mapped[int] = mapped_column("hbiCollectionID", Integer, index=True)
+    hbi_user_id: Mapped[int] = mapped_column("hbiUserID", Integer, index=True)
+    hbi_title: Mapped[str | None] = mapped_column("hbiTitle", Text)
+    hbi_brand: Mapped[str | None] = mapped_column("hbiBrand", Text)
+    hbi_theme: Mapped[str | None] = mapped_column("hbiTheme", Text)
+    hbi_type: Mapped[str | None] = mapped_column("hbiType", Text)
+    hbi_category: Mapped[str | None] = mapped_column("hbiCategory", Text)
+    hbi_size: Mapped[str | None] = mapped_column("hbiSize", Text)
+    hbi_style: Mapped[str | None] = mapped_column("hbiStyle", Text)
+    hbi_quantity: Mapped[int] = mapped_column("hbiQuantity", Integer, default=1)
+    hbi_total_slots: Mapped[int | None] = mapped_column("hbiTotalSlots", Integer)
+    hbi_box_size: Mapped[str | None] = mapped_column("hbiBoxSize", Text)
+    hbi_missing_json: Mapped[str | None] = mapped_column("hbiMissingJson", Text)
+    hbi_duplicates_json: Mapped[str | None] = mapped_column("hbiDuplicatesJson", Text)
+    hbi_image_path: Mapped[str | None] = mapped_column("hbiImagePath", Text)
+    hbi_image_url: Mapped[str | None] = mapped_column("hbiImageUrl", Text)
+    hbi_shop_url: Mapped[str | None] = mapped_column("hbiShopUrl", Text)
+    hbi_tutorial_url: Mapped[str | None] = mapped_column("hbiTutorialUrl", Text)
+    hbi_notes: Mapped[str | None] = mapped_column("hbiNotes", Text)
+    hbi_created_at: Mapped[str | None] = mapped_column("hbiCreatedAt", Text)
+    hbi_updated_at: Mapped[str | None] = mapped_column("hbiUpdatedAt", Text)
+
+
+class HobbyFieldOption(Base):
+    """Typable-dropdown values (style/theme/type/size/…) per collection or global seed."""
+
+    __tablename__ = "hobby_field_options"
+
+    hfo_id: Mapped[int] = mapped_column("hfoID", Integer, primary_key=True)
+    hfo_user_id: Mapped[int] = mapped_column("hfoUserID", Integer, index=True)
+    hfo_collection_id: Mapped[int | None] = mapped_column(
+        "hfoCollectionID", Integer, index=True
+    )
+    hfo_field: Mapped[str] = mapped_column("hfoField", String(32), index=True)
+    hfo_value: Mapped[str] = mapped_column("hfoValue", Text)
+    hfo_created_at: Mapped[str | None] = mapped_column("hfoCreatedAt", Text)
