@@ -9,6 +9,18 @@ from pathlib import Path
 from app.config import settings
 
 FILES_ROOT_NAME = "Files"
+EXCLUSIVE_TAB_NAME = "Exclusive"
+
+
+def tab_is_exclusive(tab: str) -> bool:
+    """True when a Files tab name is the NSFW Exclusive folder."""
+    return (tab or "").strip().casefold() == EXCLUSIVE_TAB_NAME.casefold()
+
+
+def path_is_exclusive_files(rel_path: str) -> bool:
+    """True when a Files-relative path is under the Exclusive tab."""
+    parts = [p for p in (rel_path or "").replace("\\", "/").split("/") if p]
+    return bool(parts) and tab_is_exclusive(parts[0])
 
 _SYSTEM_NAMES = frozenset(
     {
@@ -195,7 +207,7 @@ def unique_dest(dest: Path) -> Path:
         n += 1
 
 
-def list_tabs() -> list[dict]:
+def list_tabs(*, nsfw_unlocked: bool = False) -> list[dict]:
     root = files_root()
     tabs: list[dict] = []
     try:
@@ -206,6 +218,8 @@ def list_tabs() -> list[dict]:
     except OSError:
         return []
     for folder in entries:
+        if tab_is_exclusive(folder.name) and not nsfw_unlocked:
+            continue
         files = list_files_in_tab(folder.name)
         nested = list_nested_folders(folder.name)
         tabs.append(

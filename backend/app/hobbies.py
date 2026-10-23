@@ -139,6 +139,10 @@ def item_image_url(local_path: str | None, remote_url: str | None) -> str | None
     return (remote_url or "").strip() or None
 
 
+def collection_is_private(row: HobbyCollection) -> bool:
+    return bool(getattr(row, "hbc_private", False))
+
+
 def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
     return {
         "id": row.hbc_id,
@@ -149,6 +153,7 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
         "icon_url": icon_url(row.hbc_icon_path)
         or "/api/assets/media/hobbies",
         "icon_path": row.hbc_icon_path,
+        "private": collection_is_private(row),
         "item_count": item_count,
         "created_at": row.hbc_created_at,
         "updated_at": row.hbc_updated_at,
@@ -209,21 +214,28 @@ def list_presets() -> list[dict]:
     ]
 
 
-def list_collections(db: Session, user_id: int) -> list[dict]:
+def list_collections(
+    db: Session, user_id: int, *, nsfw_unlocked: bool = False
+) -> tuple[list[dict], list[str]]:
+    """Return (visible collections, presets hidden because private + locked)."""
     rows = db.scalars(
         select(HobbyCollection)
         .where(HobbyCollection.hbc_user_id == user_id)
         .order_by(HobbyCollection.hbc_name.asc())
     ).all()
     out: list[dict] = []
+    hidden_private_presets: list[str] = []
     for row in rows:
+        if collection_is_private(row) and not nsfw_unlocked:
+            hidden_private_presets.append(row.hbc_preset)
+            continue
         n = len(
             db.scalars(
                 select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)
             ).all()
         )
         out.append(serialize_collection(row, item_count=n))
-    return out
+    return out, hidden_private_presets
 
 
 def get_collection(db: Session, user_id: int, collection_id: int) -> HobbyCollection | None:
@@ -231,6 +243,30 @@ def get_collection(db: Session, user_id: int, collection_id: int) -> HobbyCollec
     if not row or row.hbc_user_id != user_id:
         return None
     return row
+
+
+def require_collection_access(
+    row: HobbyCollection | None, *, nsfw_unlocked: bool
+) -> HobbyCollection:
+    if not row:
+        raise LookupError("Collection not found")
+    if collection_is_private(row) and not nsfw_unlocked:
+        raise PermissionError("Private collection")
+    return row
+
+
+def get_collection_by_preset(
+    db: Session, user_id: int, preset: str
+) -> HobbyCollection | None:
+    preset_key = (preset or "").strip().casefold()
+    if preset_key not in PRESETS:
+        return None
+    return db.scalars(
+        select(HobbyCollection).where(
+            HobbyCollection.hbc_user_id == user_id,
+            HobbyCollection.hbc_preset == preset_key,
+        )
+    ).first()
 
 
 def create_collection(
@@ -247,6 +283,8 @@ def create_collection(
     preset_key = (preset or "generic").strip().casefold()
     if preset_key not in PRESETS:
         raise ValueError("Unknown preset")
+    if get_collection_by_preset(db, user_id, preset_key):
+        raise ValueError("A collection for this preset already exists")
     now = _now_iso()
     row = HobbyCollection(
         hbc_user_id=user_id,
@@ -265,6 +303,41 @@ def create_collection(
     return serialize_collection(row, item_count=0)
 
 
+def ensure_collection_for_preset(
+    db: Session,
+    user_id: int,
+    preset: str,
+    *,
+    nsfw_unlocked: bool = False,
+) -> dict:
+    """Return the user's collection for ``preset``, creating it if missing.
+
+    One collection per preset per profile — name defaults to the preset label.
+    Private collections are inaccessible until NSFW is unlocked.
+    """
+    preset_key = (preset or "generic").strip().casefold()
+    if preset_key not in PRESETS:
+        raise ValueError("Unknown preset")
+    existing = get_collection_by_preset(db, user_id, preset_key)
+    if existing:
+        if collection_is_private(existing) and not nsfw_unlocked:
+            raise PermissionError("Private collection")
+        n = len(
+            db.scalars(
+                select(HobbyItem).where(
+                    HobbyItem.hbi_collection_id == existing.hbc_id
+                )
+            ).all()
+        )
+        return serialize_collection(existing, item_count=n)
+    return create_collection(
+        db,
+        user_id,
+        name=PRESET_LABELS.get(preset_key, preset_key),
+        preset=preset_key,
+    )
+
+
 def update_collection(
     db: Session,
     user_id: int,
@@ -273,6 +346,7 @@ def update_collection(
     name: str | None = None,
     icon_path: str | None = None,
     clear_icon: bool = False,
+    private: bool | None = None,
 ) -> dict | None:
     row = get_collection(db, user_id, collection_id)
     if not row:
@@ -286,6 +360,8 @@ def update_collection(
         row.hbc_icon_path = None
     elif icon_path is not None:
         row.hbc_icon_path = icon_path
+    if private is not None:
+        row.hbc_private = 1 if private else 0
     row.hbc_updated_at = _now_iso()
     db.commit()
     db.refresh(row)

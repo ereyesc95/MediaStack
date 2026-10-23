@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, get_nsfw_unlocked, require_admin
 from app import files_index as fi
 from app.models import User
 
@@ -56,16 +56,37 @@ def _http_from_exc(exc: Exception) -> HTTPException:
     return HTTPException(500, str(exc))
 
 
+def _require_tab_access(tab: str, *, nsfw_unlocked: bool) -> None:
+    if fi.tab_is_exclusive(tab) and not nsfw_unlocked:
+        raise HTTPException(404, "Tab not found")
+
+
+def _require_paths_access(paths: list[str], *, nsfw_unlocked: bool) -> None:
+    if nsfw_unlocked:
+        return
+    for path in paths:
+        if fi.path_is_exclusive_files(path):
+            raise HTTPException(404, "Not found")
+
+
 @router.get("/tabs")
-def get_tabs(_user: User = Depends(get_current_user)):
+def get_tabs(
+    _user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     try:
-        return {"tabs": fi.list_tabs()}
+        return {"tabs": fi.list_tabs(nsfw_unlocked=nsfw_unlocked)}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/tabs/{tab}/files")
-def get_tab_files(tab: str, _user: User = Depends(get_current_user)):
+def get_tab_files(
+    tab: str,
+    _user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    _require_tab_access(tab, nsfw_unlocked=nsfw_unlocked)
     try:
         return {
             "tab": tab,
@@ -127,7 +148,12 @@ def delete_folder(body: NestedDeleteBody, _admin: User = Depends(require_admin))
 
 
 @router.post("/rename")
-def rename_file(body: RenameFileBody, _admin: User = Depends(require_admin)):
+def rename_file(
+    body: RenameFileBody,
+    _admin: User = Depends(require_admin),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    _require_paths_access([body.path], nsfw_unlocked=nsfw_unlocked)
     try:
         return fi.rename_file(body.path, body.name)
     except Exception as exc:
@@ -135,9 +161,15 @@ def rename_file(body: RenameFileBody, _admin: User = Depends(require_admin)):
 
 
 @router.post("/move")
-def move_files(body: TransferBody, _admin: User = Depends(require_admin)):
+def move_files(
+    body: TransferBody,
+    _admin: User = Depends(require_admin),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     if not body.paths:
         raise HTTPException(400, "No paths")
+    _require_tab_access(body.tab, nsfw_unlocked=nsfw_unlocked)
+    _require_paths_access(body.paths, nsfw_unlocked=nsfw_unlocked)
     try:
         return {
             "files": fi.move_files(body.paths, body.tab, body.folder or None)
@@ -147,9 +179,15 @@ def move_files(body: TransferBody, _admin: User = Depends(require_admin)):
 
 
 @router.post("/copy")
-def copy_files(body: TransferBody, _admin: User = Depends(require_admin)):
+def copy_files(
+    body: TransferBody,
+    _admin: User = Depends(require_admin),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     if not body.paths:
         raise HTTPException(400, "No paths")
+    _require_tab_access(body.tab, nsfw_unlocked=nsfw_unlocked)
+    _require_paths_access(body.paths, nsfw_unlocked=nsfw_unlocked)
     try:
         return {
             "files": fi.copy_files(body.paths, body.tab, body.folder or None)
@@ -159,9 +197,14 @@ def copy_files(body: TransferBody, _admin: User = Depends(require_admin)):
 
 
 @router.post("/delete")
-def delete_files(body: DeleteFilesBody, _admin: User = Depends(require_admin)):
+def delete_files(
+    body: DeleteFilesBody,
+    _admin: User = Depends(require_admin),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     if not body.paths:
         raise HTTPException(400, "No paths")
+    _require_paths_access(body.paths, nsfw_unlocked=nsfw_unlocked)
     try:
         n = fi.delete_files(body.paths)
         return {"ok": True, "deleted": n}

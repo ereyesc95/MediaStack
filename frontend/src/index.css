@@ -30399,37 +30399,15 @@ button.lyrics-status-badge--icon-only {
   min-height: 0;
   flex: 1;
 }
-/* Keep module switcher usable while the forced create modal is open.
-   ModalPortal mounts on body (z-index 500); fixed chrome escapes the
-   in-tree stacking context so the media menu stays above the backdrop. */
-.hobbies-module--force-create > .module-top-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 520;
-}
-.hobbies-module--force-create {
-  padding-top: var(--header-height);
-}
-.hobbies-module--force-create > .module-top-bar .module-top-bar__media-menu {
-  z-index: 530;
-}
 .hobbies-module__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 1rem;
 }
-.hobbies-hub__add-btn {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  color: var(--text-muted);
-  padding: 0.2rem;
-}
-.hobbies-hub__add-btn:hover {
-  color: var(--text);
+.hobbies-hub__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
 }
 .hobbies-hub__grid {
   display: grid;
@@ -30450,13 +30428,39 @@ button.lyrics-status-badge--icon-only {
   cursor: pointer;
   text-align: center;
 }
+.hobbies-hub__card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent, #8cf) 45%, transparent);
+}
+.hobbies-hub__card:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.hobbies-hub__card--empty {
+  border-style: dashed;
+  opacity: 0.88;
+}
 .hobbies-hub__card-icon {
   width: 64px;
   height: 64px;
   object-fit: contain;
 }
+.hobbies-hub__card-glyph {
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 1.55rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
 .hobbies-hub__card-name {
   font-weight: 600;
+}
+.hobbies-hub__card-meta {
+  font-size: 0.78rem;
 }
 .hobbies-collection__toolbar {
   display: flex;
@@ -30493,6 +30497,15 @@ button.lyrics-status-badge--icon-only {
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
+}
+.hobbies-collection__private {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
 .hobbies-collection__table-wrap {
   overflow-x: auto;
@@ -30542,38 +30555,6 @@ button.lyrics-status-badge--icon-only {
 .hobbies-form__field textarea {
   width: 100%;
 }
-.hobbies-create-modal {
-  width: min(420px, 94vw);
-  overflow: visible;
-}
-.hobbies-create-modal.modal-panel.artist-admin-modal {
-  overflow: visible;
-}
-.hobbies-create-modal > .artist-admin-form {
-  overflow: visible !important;
-  padding-top: 0.45rem;
-}
-.hobbies-create-modal .artist-admin-form label.hobbies-form__field,
-.hobbies-create-modal .hobbies-form__field {
-  display: grid !important;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  flex-direction: row !important;
-  align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 0.55rem;
-  overflow: visible;
-}
-.hobbies-create-modal .hobbies-form__field > span {
-  justify-self: start;
-  text-align: left;
-}
-.hobbies-create-modal .hobbies-form__field > input,
-.hobbies-create-modal .hobbies-form__field > select {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
 /* ---- FileStack ---- */
 .files-module {
   display: flex;

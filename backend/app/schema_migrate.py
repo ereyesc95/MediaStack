@@ -634,6 +634,7 @@ def migrate_schema(eng: Engine) -> None:
                         "hbcName" TEXT NOT NULL,
                         "hbcPreset" VARCHAR(32) NOT NULL DEFAULT 'generic',
                         "hbcIconPath" TEXT,
+                        "hbcPrivate" INTEGER NOT NULL DEFAULT 0,
                         "hbcCreatedAt" TEXT,
                         "hbcUpdatedAt" TEXT
                     )
@@ -646,6 +647,17 @@ def migrate_schema(eng: Engine) -> None:
                     'ON hobby_collections ("hbcUserID")'
                 )
             )
+        else:
+            hbc_cols = {
+                c["name"] for c in inspect(eng).get_columns("hobby_collections")
+            }
+            if "hbcPrivate" not in hbc_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_collections '
+                        'ADD COLUMN "hbcPrivate" INTEGER NOT NULL DEFAULT 0'
+                    )
+                )
 
         if "hobby_items" not in tables:
             conn.execute(

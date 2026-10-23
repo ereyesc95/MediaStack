@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_nsfw_unlocked
 from app.hobbies import (
     add_field_option,
     adjust_quantity,
@@ -15,17 +15,20 @@ from app.hobbies import (
     delete_collection,
     delete_item,
     delete_items,
+    ensure_collection_for_preset,
     get_collection,
     list_collections,
     list_field_options,
     list_items,
     list_presets,
+    require_collection_access,
     save_uploaded_image,
     serialize_collection,
     store_icon_file,
     update_collection,
     upsert_item,
 )
+from app.profiles import is_admin_role
 from app.hobbies_excel import (
     commit_import,
     export_hobbies_xlsx,
@@ -42,9 +45,30 @@ class CollectionCreateBody(BaseModel):
     preset: str = "generic"
 
 
+class CollectionEnsureBody(BaseModel):
+    preset: str
+
+
 class CollectionUpdateBody(BaseModel):
     name: str | None = None
     clear_icon: bool = False
+    private: bool | None = None
+
+
+def _accessible_collection(
+    db: Session,
+    user: User,
+    collection_id: int,
+    *,
+    nsfw_unlocked: bool,
+):
+    try:
+        return require_collection_access(
+            get_collection(db, user.usr_id, collection_id),
+            nsfw_unlocked=nsfw_unlocked,
+        )
+    except (LookupError, PermissionError) as exc:
+        raise HTTPException(404, "Collection not found") from exc
 
 
 class ItemBody(BaseModel):
@@ -93,8 +117,15 @@ def hobbies_presets(_user: User = Depends(get_current_user)):
 def hobbies_collections(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    return {"collections": list_collections(db, user.usr_id)}
+    collections, hidden = list_collections(
+        db, user.usr_id, nsfw_unlocked=nsfw_unlocked
+    )
+    return {
+        "collections": collections,
+        "hidden_private_presets": hidden,
+    }
 
 
 @router.post("/collections")
@@ -111,15 +142,34 @@ def hobbies_create_collection(
         raise HTTPException(400, str(e)) from e
 
 
+@router.post("/collections/ensure")
+def hobbies_ensure_collection(
+    body: CollectionEnsureBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Open-or-create the single collection for a preset (one per profile)."""
+    try:
+        return ensure_collection_for_preset(
+            db, user.usr_id, body.preset, nsfw_unlocked=nsfw_unlocked
+        )
+    except PermissionError as e:
+        raise HTTPException(404, "Collection not found") from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @router.get("/collections/{collection_id}")
 def hobbies_get_collection(
     collection_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    row = get_collection(db, user.usr_id, collection_id)
-    if not row:
-        raise HTTPException(404, "Collection not found")
+    row = _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     items = list_items(db, user.usr_id, collection_id)
     return serialize_collection(row, item_count=len(items))
 
@@ -130,7 +180,16 @@ def hobbies_update_collection(
     body: CollectionUpdateBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
+    if body.private is not None:
+        if not is_admin_role(user.usr_role_id):
+            raise HTTPException(403, "Admin profile required")
+        if not nsfw_unlocked:
+            raise HTTPException(403, "NSFW unlock required")
     try:
         result = update_collection(
             db,
@@ -138,6 +197,7 @@ def hobbies_update_collection(
             collection_id,
             name=body.name,
             clear_icon=body.clear_icon,
+            private=body.private,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -151,7 +211,11 @@ def hobbies_delete_collection(
     collection_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     if not delete_collection(db, user.usr_id, collection_id):
         raise HTTPException(404, "Collection not found")
     return {"ok": True}
@@ -163,10 +227,11 @@ async def hobbies_upload_icon(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    row = get_collection(db, user.usr_id, collection_id)
-    if not row:
-        raise HTTPException(404, "Collection not found")
+    row = _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     data = await file.read()
     if not data:
         raise HTTPException(400, "Empty file")
@@ -192,9 +257,11 @@ def hobbies_list_items(
     order: str = "asc",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    if not get_collection(db, user.usr_id, collection_id):
-        raise HTTPException(404, "Collection not found")
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     return {
         "items": list_items(
             db,
@@ -218,7 +285,11 @@ def hobbies_create_item(
     body: ItemBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     try:
         return upsert_item(
             db, user.usr_id, collection_id, body.model_dump(exclude_unset=True)
@@ -234,7 +305,11 @@ def hobbies_update_item(
     body: ItemBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     try:
         return upsert_item(
             db,
@@ -254,7 +329,11 @@ def hobbies_adjust_qty(
     body: QtyBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     try:
         if body.quantity is not None:
             return upsert_item(
@@ -277,7 +356,11 @@ def hobbies_delete_item(
     item_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     if not delete_item(db, user.usr_id, collection_id, item_id):
         raise HTTPException(404, "Item not found")
     return {"ok": True}
@@ -289,7 +372,11 @@ def hobbies_delete_batch(
     body: BatchDeleteBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     n = delete_items(db, user.usr_id, collection_id, body.ids)
     return {"ok": True, "deleted": n}
 
@@ -301,10 +388,11 @@ async def hobbies_upload_item_image(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    coll = get_collection(db, user.usr_id, collection_id)
-    if not coll:
-        raise HTTPException(404, "Collection not found")
+    coll = _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     row = db.get(HobbyItem, item_id)
     if not row or row.hbi_user_id != user.usr_id or row.hbi_collection_id != collection_id:
         raise HTTPException(404, "Item not found")
@@ -337,9 +425,11 @@ def hobbies_field_options(
     field: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    if not get_collection(db, user.usr_id, collection_id):
-        raise HTTPException(404, "Collection not found")
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     return {"options": list_field_options(db, user.usr_id, collection_id, field)}
 
 
@@ -350,7 +440,11 @@ def hobbies_add_field_option(
     body: FieldOptionBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     try:
         opts = add_field_option(
             db, user.usr_id, collection_id, field, body.value
@@ -365,9 +459,11 @@ def hobbies_export(
     collection_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    if not get_collection(db, user.usr_id, collection_id):
-        raise HTTPException(404, "Collection not found")
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     data = export_hobbies_xlsx(db, user.usr_id, collection_id)
     return Response(
         content=data,
@@ -394,9 +490,11 @@ async def hobbies_import_preview(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    if not get_collection(db, user.usr_id, collection_id):
-        raise HTTPException(404, "Collection not found")
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     raw = await file.read()
     return preview_import(io_bytes(raw))
 
@@ -407,7 +505,11 @@ def hobbies_import_commit(
     body: ImportCommitBody,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    _accessible_collection(
+        db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     try:
         return commit_import(db, user.usr_id, collection_id, body.rows)
     except ValueError as e:

@@ -12,6 +12,7 @@ import {
   type FilesNestedFolder,
   type FilesTab,
 } from "../../api";
+import { getStoredProfile } from "../../auth";
 import {
   pushFilesRootRoute,
   pushFilesTabRoute,
@@ -87,6 +88,7 @@ export default function FilesModule({
   const [sort, setSort] = useState<SortMode>("title");
   const searchRef = useRef<HTMLInputElement>(null);
   const searchRootRef = useRef<HTMLDivElement>(null);
+  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
 
   const reloadTabs = useCallback(async () => {
     const data = await fetchFilesTabs();
@@ -136,7 +138,7 @@ export default function FilesModule({
     return () => {
       cancelled = true;
     };
-  }, [reloadTabs, reloadFiles, routeTabId]);
+  }, [reloadTabs, reloadFiles, routeTabId, nsfwUnlocked]);
 
   useEffect(() => {
     setNestedFilter("all");

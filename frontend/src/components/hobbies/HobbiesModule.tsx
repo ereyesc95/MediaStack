@@ -10,18 +10,19 @@ import {
   adjustHobbyItemQuantity,
   addHobbyFieldOption,
   commitHobbyImport,
-  createHobbyCollection,
   createHobbyItem,
   deleteHobbyCollection,
   deleteHobbyItem,
   deleteHobbyItemsBatch,
   downloadHobbyTemplateXlsx,
+  ensureHobbyCollection,
   exportHobbyXlsx,
   fetchHobbyCollections,
   fetchHobbyFieldOptions,
   fetchHobbyItems,
   fetchHobbyPresets,
   previewHobbyImport,
+  updateHobbyCollection,
   updateHobbyItem,
   uploadHobbyCollectionIcon,
   uploadHobbyItemImage,
@@ -29,6 +30,7 @@ import {
   type HobbyItem,
   type HobbyPreset,
 } from "../../api";
+import { getStoredProfile } from "../../auth";
 import {
   pushHobbiesCollectionRoute,
   pushHobbiesRootRoute,
@@ -93,10 +95,15 @@ export default function HobbiesModule({
   onChooseSource,
 }: Props) {
   const [collections, setCollections] = useState<HobbyCollection[]>([]);
+  const [hiddenPrivatePresets, setHiddenPrivatePresets] = useState<string[]>(
+    []
+  );
   const [presets, setPresets] = useState<HobbyPreset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [openingPreset, setOpeningPreset] = useState<string | null>(null);
+  const [hubError, setHubError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<number | undefined>(collectionId);
+  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
 
   useEffect(() => {
     setActiveId(collectionId);
@@ -106,6 +113,23 @@ export default function HobbiesModule({
     () => collections.find((c) => c.id === activeId) ?? null,
     [collections, activeId]
   );
+
+  const byPreset = useMemo(() => {
+    const map = new Map<string, HobbyCollection>();
+    for (const c of collections) map.set(c.preset, c);
+    return map;
+  }, [collections]);
+
+  const hubTiles = useMemo(() => {
+    const hidden = new Set(hiddenPrivatePresets);
+    const list = presets.filter((p) => !hidden.has(p.id));
+    list.sort((a, b) => {
+      if (a.id === "generic") return 1;
+      if (b.id === "generic") return -1;
+      return a.label.localeCompare(b.label);
+    });
+    return list;
+  }, [presets, hiddenPrivatePresets]);
 
   function goHome() {
     pushHobbiesRootRoute();
@@ -120,9 +144,27 @@ export default function HobbiesModule({
   const reloadCollections = useCallback(async () => {
     const data = await fetchHobbyCollections();
     setCollections(data.collections || []);
+    setHiddenPrivatePresets(data.hidden_private_presets || []);
   }, []);
 
-  const forceCreate = !loading && collections.length === 0 && activeId == null;
+  async function openPreset(presetId: string) {
+    const existing = byPreset.get(presetId);
+    if (existing) {
+      openCollection(existing.id);
+      return;
+    }
+    setOpeningPreset(presetId);
+    setHubError(null);
+    try {
+      const created = await ensureHobbyCollection(presetId);
+      await reloadCollections();
+      openCollection(created.id);
+    } catch (e) {
+      setHubError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOpeningPreset(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -131,10 +173,8 @@ export default function HobbiesModule({
       .then(([cols, pr]) => {
         if (cancelled) return;
         setCollections(cols.collections || []);
+        setHiddenPrivatePresets(cols.hidden_private_presets || []);
         setPresets(pr.presets || []);
-        if ((cols.collections || []).length === 0) {
-          setCreateOpen(true);
-        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -142,16 +182,10 @@ export default function HobbiesModule({
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    if (forceCreate) setCreateOpen(true);
-  }, [forceCreate]);
+  }, [nsfwUnlocked]);
 
   return (
-    <div
-      className={`hobbies-module${forceCreate ? " hobbies-module--force-create" : ""}`}
-    >
+    <div className="hobbies-module">
       <ModuleTopBar
         media={
           mediaOptions.find((m) => m.kind === "hobbies") ?? {
@@ -191,17 +225,6 @@ export default function HobbiesModule({
               onSync={onSync ?? (() => {})}
               onChooseSource={onChooseSource}
             />
-            {activeId == null ? (
-              <button
-                type="button"
-                className="icon-btn hobbies-hub__add-btn"
-                title="New collection"
-                aria-label="New collection"
-                onClick={() => setCreateOpen(true)}
-              >
-                <IconPlus />
-              </button>
-            ) : null}
           </>
         }
       />
@@ -210,31 +233,57 @@ export default function HobbiesModule({
         {activeId == null ? (
           <div className="hobbies-hub">
             {loading ? <p className="muted">Loading…</p> : null}
+            {hubError ? <p className="error">{hubError}</p> : null}
+            {!loading ? (
+              <p className="muted hobbies-hub__hint">
+                Open a hobby to start — each type is one collection.
+              </p>
+            ) : null}
             <div className="hobbies-hub__grid">
-              {collections.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className="hobbies-hub__card"
-                  onClick={() => openCollection(c.id)}
-                >
-                  <img
-                    src={withMediaAccess(c.icon_url)}
-                    alt=""
-                    className="hobbies-hub__card-icon"
-                  />
-                  <span className="hobbies-hub__card-name">{c.name}</span>
-                  <span className="muted hobbies-hub__card-meta">
-                    {c.preset_label} · {c.item_count} item
-                    {c.item_count === 1 ? "" : "s"}
-                  </span>
-                </button>
-              ))}
+              {hubTiles.map((p) => {
+                const col = byPreset.get(p.id);
+                const busyTile = openingPreset === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`hobbies-hub__card${
+                      col ? "" : " hobbies-hub__card--empty"
+                    }`}
+                    disabled={busyTile || openingPreset != null}
+                    onClick={() => void openPreset(p.id)}
+                  >
+                    {col?.icon_url ? (
+                      <img
+                        src={withMediaAccess(col.icon_url)}
+                        alt=""
+                        className="hobbies-hub__card-icon"
+                      />
+                    ) : (
+                      <span className="hobbies-hub__card-glyph" aria-hidden>
+                        {p.label.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="hobbies-hub__card-name">{p.label}</span>
+                    <span className="muted hobbies-hub__card-meta">
+                      {busyTile
+                        ? "Opening…"
+                        : col
+                          ? `${col.item_count} item${
+                              col.item_count === 1 ? "" : "s"
+                            }`
+                          : "Not started"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ) : active ? (
           <HobbyCollectionView
             collection={active}
+            isAdmin={isAdmin}
+            nsfwUnlocked={nsfwUnlocked}
             onChanged={() => void reloadCollections()}
             onDeleted={() => {
               void reloadCollections().then(() => goHome());
@@ -244,118 +293,20 @@ export default function HobbiesModule({
           <p className="muted">Collection not found.</p>
         )}
       </div>
-
-      {createOpen ? (
-        <CreateCollectionModal
-          presets={presets}
-          forced={forceCreate}
-          onClose={() => {
-            if (!forceCreate) setCreateOpen(false);
-          }}
-          onCreated={(c) => {
-            setCreateOpen(false);
-            void reloadCollections().then(() => openCollection(c.id));
-          }}
-        />
-      ) : null}
     </div>
-  );
-}
-
-function CreateCollectionModal({
-  presets,
-  forced = false,
-  onClose,
-  onCreated,
-}: {
-  presets: HobbyPreset[];
-  forced?: boolean;
-  onClose: () => void;
-  onCreated: (c: HobbyCollection) => void;
-}) {
-  const [name, setName] = useState("");
-  const [preset, setPreset] = useState("generic");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const orderedPresets = useMemo(() => {
-    const list = [...presets];
-    list.sort((a, b) => {
-      if (a.id === "generic") return -1;
-      if (b.id === "generic") return 1;
-      return a.label.localeCompare(b.label);
-    });
-    return list;
-  }, [presets]);
-
-  return (
-    <ModalPortal onClose={forced ? () => {} : onClose}>
-      <div
-        className="modal-panel artist-admin-modal hobbies-create-modal"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="modal-panel-header">
-          <h3>New collection</h3>
-          {!forced ? (
-            <button type="button" className="modal-close-x" onClick={onClose}>
-              ×
-            </button>
-          ) : (
-            <span />
-          )}
-        </div>
-        {error ? <p className="error">{error}</p> : null}
-        <div className="artist-admin-form">
-          <label className="hobbies-form__field">
-            <span>Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              placeholder="Collection name"
-            />
-          </label>
-          <label className="hobbies-form__field">
-            <span>Preset</span>
-            <select value={preset} onChange={(e) => setPreset(e.target.value)}>
-              {orderedPresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="modal-panel-actions modal-panel-actions--end">
-            <button
-              type="button"
-              className="btn"
-              disabled={busy || !name.trim()}
-              onClick={() => {
-                setBusy(true);
-                setError(null);
-                void createHobbyCollection({ name: name.trim(), preset })
-                  .then(onCreated)
-                  .catch((e) =>
-                    setError(e instanceof Error ? e.message : String(e))
-                  )
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Create
-            </button>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
   );
 }
 
 function HobbyCollectionView({
   collection,
+  isAdmin,
+  nsfwUnlocked,
   onChanged,
   onDeleted,
 }: {
   collection: HobbyCollection;
+  isAdmin: boolean;
+  nsfwUnlocked: boolean;
   onChanged: () => void;
   onDeleted: () => void;
 }) {
@@ -364,9 +315,11 @@ function HobbyCollectionView({
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<HobbyItem | null | "new">(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [privateBusy, setPrivateBusy] = useState(false);
   const filters: Record<string, string> = {};
   const fileRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
+  const showPrivateToggle = isAdmin && nsfwUnlocked;
 
   const fields = collection.fields;
 
@@ -434,10 +387,37 @@ function HobbyCollectionView({
           />
           <div>
             <h2>{collection.name}</h2>
-            <p className="muted">{collection.preset_label}</p>
+            <p className="muted">
+              {collection.preset_label}
+              {collection.private ? " · Private" : ""}
+            </p>
           </div>
         </div>
         <div className="hobbies-collection__actions">
+          {showPrivateToggle ? (
+            <label className="hobbies-collection__private">
+              <input
+                type="checkbox"
+                checked={Boolean(collection.private)}
+                disabled={privateBusy}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setPrivateBusy(true);
+                  void updateHobbyCollection(collection.id, {
+                    private: next,
+                  })
+                    .then(() => onChanged())
+                    .catch((err) => {
+                      window.alert(
+                        err instanceof Error ? err.message : String(err)
+                      );
+                    })
+                    .finally(() => setPrivateBusy(false));
+                }}
+              />
+              Private
+            </label>
+          ) : null}
           <div className="media-inline-search">
             <IconSearch />
             <input

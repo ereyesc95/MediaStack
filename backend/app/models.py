@@ -865,6 +865,7 @@ class HobbyCollection(Base):
     hbc_name: Mapped[str] = mapped_column("hbcName", Text)
     hbc_preset: Mapped[str] = mapped_column("hbcPreset", String(32), default="generic")
     hbc_icon_path: Mapped[str | None] = mapped_column("hbcIconPath", Text)
+    hbc_private: Mapped[bool] = mapped_column("hbcPrivate", Integer, default=0)
     hbc_created_at: Mapped[str | None] = mapped_column("hbcCreatedAt", Text)
     hbc_updated_at: Mapped[str | None] = mapped_column("hbcUpdatedAt", Text)
 

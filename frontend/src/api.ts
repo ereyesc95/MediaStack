@@ -4204,6 +4204,8 @@ export type HobbyCollection = {
   fields: string[];
   icon_url: string;
   item_count: number;
+  /** Whole collection hidden unless NSFW is unlocked. */
+  private?: boolean;
 };
 
 export type HobbyItem = {
@@ -4239,9 +4241,10 @@ export async function fetchHobbyPresets() {
 }
 
 export async function fetchHobbyCollections() {
-  return request<{ collections: HobbyCollection[] }>(
-    `${API}/hobbies/collections`
-  );
+  return request<{
+    collections: HobbyCollection[];
+    hidden_private_presets?: string[];
+  }>(`${API}/hobbies/collections`);
 }
 
 export async function createHobbyCollection(body: {
@@ -4255,9 +4258,18 @@ export async function createHobbyCollection(body: {
   });
 }
 
+/** Open-or-create the one collection for a preset (name = preset label). */
+export async function ensureHobbyCollection(preset: string) {
+  return request<HobbyCollection>(`${API}/hobbies/collections/ensure`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preset }),
+  });
+}
+
 export async function updateHobbyCollection(
   id: number,
-  body: { name?: string; clear_icon?: boolean }
+  body: { name?: string; clear_icon?: boolean; private?: boolean }
 ) {
   return request<HobbyCollection>(`${API}/hobbies/collections/${id}`, {
     method: "PUT",
