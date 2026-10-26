@@ -64,10 +64,19 @@ type Props = {
   onAddPlaylist?: () => void;
   showAddPlaylist?: boolean;
   showManageCollection?: boolean;
+  /** Override submenu title (default: My collection). */
+  manageCollectionLabel?: string;
   collectionClearMode?: boolean;
   onCollectionAddManual?: () => void;
+  collectionAddLabel?: string;
   onCollectionImport?: () => void;
   onCollectionExport?: () => void;
+  onCollectionTemplate?: () => void;
+  onCollectionDelete?: () => void;
+  /** When set, show a Private toggle in My collection (admin + NSFW unlock). */
+  collectionPrivate?: boolean | null;
+  collectionPrivateBusy?: boolean;
+  onCollectionPrivateChange?: (next: boolean) => void;
   onCollectionClear?: () => void;
   onCollectionCancelClear?: () => void;
   showEditPlaylist?: boolean;
@@ -187,10 +196,17 @@ export default function AppMenu({
   onAddPlaylist,
   showAddPlaylist,
   showManageCollection,
+  manageCollectionLabel = "My collection",
   collectionClearMode = false,
   onCollectionAddManual,
+  collectionAddLabel = "Add manually",
   onCollectionImport,
   onCollectionExport,
+  onCollectionTemplate,
+  onCollectionDelete,
+  collectionPrivate = null,
+  collectionPrivateBusy = false,
+  onCollectionPrivateChange,
   onCollectionClear,
   onCollectionCancelClear,
   showEditPlaylist,
@@ -1245,7 +1261,7 @@ export default function AppMenu({
                 onClick={() => setManageCollectionOpen((o) => !o)}
               >
                 <IconCollection className="menu-item-icon" />
-                My collection
+                {manageCollectionLabel}
                 <span className="menu-chevron">
                   {manageCollectionOpen ? "▴" : "▾"}
                 </span>
@@ -1265,36 +1281,82 @@ export default function AppMenu({
                     </button>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCollectionAddManual?.();
-                          setOpen(false);
-                        }}
-                      >
-                        <IconPlus className="menu-item-icon" />
-                        Add manually
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCollectionImport?.();
-                          setOpen(false);
-                        }}
-                      >
-                        <IconImport className="menu-item-icon" />
-                        Import Excel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCollectionExport?.();
-                          setOpen(false);
-                        }}
-                      >
-                        <IconDownload className="menu-item-icon" />
-                        Export Excel
-                      </button>
+                      {onCollectionAddManual ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionAddManual();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconPlus className="menu-item-icon" />
+                          {collectionAddLabel}
+                        </button>
+                      ) : null}
+                      {onCollectionImport ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionImport();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconImport className="menu-item-icon" />
+                          Import Excel
+                        </button>
+                      ) : null}
+                      {onCollectionExport ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionExport();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconDownload className="menu-item-icon" />
+                          Export Excel
+                        </button>
+                      ) : null}
+                      {onCollectionTemplate ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionTemplate();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconFileTags className="menu-item-icon" />
+                          Template
+                        </button>
+                      ) : null}
+                      {collectionPrivate != null && onCollectionPrivateChange ? (
+                        <button
+                          type="button"
+                          disabled={collectionPrivateBusy}
+                          onClick={() => {
+                            onCollectionPrivateChange(!collectionPrivate);
+                          }}
+                        >
+                          {collectionPrivate ? (
+                            <IconCheck className="menu-item-icon" />
+                          ) : (
+                            <IconSquare className="menu-item-icon" />
+                          )}
+                          Private
+                        </button>
+                      ) : null}
+                      {onCollectionDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionDelete();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconTrash className="menu-item-icon" />
+                          Delete collection
+                        </button>
+                      ) : null}
                       {isAdmin && onCollectionClear ? (
                         <button
                           type="button"

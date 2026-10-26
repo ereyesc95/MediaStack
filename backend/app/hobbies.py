@@ -25,11 +25,17 @@ PRESETS = (
 PRESET_LABELS = {
     "marbles": "Marbles",
     "puzzle": "Puzzle",
-    "cube": "Rubik / Cube",
+    "cube": "Cubes",
     "uno": "Uno",
     "poker": "Poker",
-    "fillable_album": "Fillable album",
+    "fillable_album": "Albums",
     "generic": "General",
+}
+
+# Older hub labels → current (so existing rows pick up renames).
+_LEGACY_PRESET_NAMES: dict[str, frozenset[str]] = {
+    "fillable_album": frozenset({"fillable album", "fillable_album"}),
+    "cube": frozenset({"rubik / cube", "rubik/cube", "rubik", "cube"}),
 }
 
 # Columns shown per preset (shared bag; unused stay null)
@@ -143,10 +149,24 @@ def collection_is_private(row: HobbyCollection) -> bool:
     return bool(getattr(row, "hbc_private", False))
 
 
+def _display_collection_name(row: HobbyCollection) -> str:
+    """Prefer current preset label when the stored name is a known legacy default."""
+    label = PRESET_LABELS.get(row.hbc_preset)
+    if not label:
+        return row.hbc_name
+    stored = (row.hbc_name or "").strip()
+    if not stored:
+        return label
+    legacy = _LEGACY_PRESET_NAMES.get(row.hbc_preset, frozenset())
+    if stored.casefold() == label.casefold() or stored.casefold() in legacy:
+        return label
+    return stored
+
+
 def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
     return {
         "id": row.hbc_id,
-        "name": row.hbc_name,
+        "name": _display_collection_name(row),
         "preset": row.hbc_preset,
         "preset_label": PRESET_LABELS.get(row.hbc_preset, row.hbc_preset),
         "fields": list(PRESET_FIELDS.get(row.hbc_preset, PRESET_FIELDS["generic"])),
@@ -204,14 +224,22 @@ def serialize_item(row: HobbyItem, preset: str) -> dict:
 
 
 def list_presets() -> list[dict]:
-    return [
-        {
-            "id": p,
-            "label": PRESET_LABELS[p],
-            "fields": list(PRESET_FIELDS[p]),
-        }
-        for p in PRESETS
-    ]
+    from app.hobby_assets import hobby_preset_urls
+
+    out: list[dict] = []
+    for p in PRESETS:
+        arts = hobby_preset_urls(p)
+        out.append(
+            {
+                "id": p,
+                "label": PRESET_LABELS[p],
+                "fields": list(PRESET_FIELDS[p]),
+                "cover_url": arts["cover_url"],
+                "logo_url": arts["logo_url"],
+                "icon_url": arts["icon_url"],
+            }
+        )
+    return out
 
 
 def list_collections(

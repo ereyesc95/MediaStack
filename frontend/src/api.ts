@@ -4194,6 +4194,9 @@ export type HobbyPreset = {
   id: string;
   label: string;
   fields: string[];
+  cover_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
 };
 
 export type HobbyCollection = {

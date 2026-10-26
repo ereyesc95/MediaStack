@@ -40,12 +40,18 @@ import type { MediaOption } from "../ModuleTopBar";
 import ModuleTopBar from "../ModuleTopBar";
 import AppMenu from "../AppMenu";
 import ModalPortal from "../ModalPortal";
-import {
-  IconImport,
-  IconPlus,
-  IconSearch,
-  IconPencil,
-} from "../MenuIcons";
+import { IconPencil } from "../MenuIcons";
+
+type HobbyCollectionMenu = {
+  onAdd: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  onTemplate: () => void;
+  onDelete: () => void;
+  privateChecked: boolean | null;
+  privateBusy: boolean;
+  onPrivateChange: (next: boolean) => void;
+};
 
 type Props = {
   mediaOptions: MediaOption[];
@@ -103,6 +109,8 @@ export default function HobbiesModule({
   const [openingPreset, setOpeningPreset] = useState<string | null>(null);
   const [hubError, setHubError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<number | undefined>(collectionId);
+  const [collectionMenu, setCollectionMenu] =
+    useState<HobbyCollectionMenu | null>(null);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
 
   useEffect(() => {
@@ -134,6 +142,7 @@ export default function HobbiesModule({
   function goHome() {
     pushHobbiesRootRoute();
     setActiveId(undefined);
+    setCollectionMenu(null);
   }
 
   function openCollection(id: number) {
@@ -224,6 +233,17 @@ export default function HobbiesModule({
               onImport={onImport}
               onSync={onSync ?? (() => {})}
               onChooseSource={onChooseSource}
+              showManageCollection={Boolean(collectionMenu)}
+              manageCollectionLabel="My Collections"
+              collectionAddLabel="Add"
+              onCollectionAddManual={collectionMenu?.onAdd}
+              onCollectionImport={collectionMenu?.onImport}
+              onCollectionExport={collectionMenu?.onExport}
+              onCollectionTemplate={collectionMenu?.onTemplate}
+              onCollectionDelete={collectionMenu?.onDelete}
+              collectionPrivate={collectionMenu?.privateChecked ?? null}
+              collectionPrivateBusy={collectionMenu?.privateBusy}
+              onCollectionPrivateChange={collectionMenu?.onPrivateChange}
             />
           </>
         }
@@ -232,47 +252,57 @@ export default function HobbiesModule({
       <div className="hobbies-module__body">
         {activeId == null ? (
           <div className="hobbies-hub">
-            {loading ? <p className="muted">Loading…</p> : null}
-            {hubError ? <p className="error">{hubError}</p> : null}
-            {!loading ? (
-              <p className="muted hobbies-hub__hint">
-                Open a hobby to start — each type is one collection.
-              </p>
-            ) : null}
+            {loading ? <p className="muted hobbies-hub__status">Loading…</p> : null}
+            {hubError ? <p className="error hobbies-hub__status">{hubError}</p> : null}
             <div className="hobbies-hub__grid">
               {hubTiles.map((p) => {
                 const col = byPreset.get(p.id);
                 const busyTile = openingPreset === p.id;
+                const coverUrl = p.cover_url || null;
+                const hoverLogo =
+                  col?.icon_url || p.logo_url || p.icon_url || null;
+                const status = busyTile
+                  ? "Opening…"
+                  : !col
+                    ? "Not started"
+                    : col.item_count === 0
+                      ? "Empty"
+                      : `${col.item_count} item${
+                          col.item_count === 1 ? "" : "s"
+                        }`;
                 return (
                   <button
                     key={p.id}
                     type="button"
-                    className={`hobbies-hub__card${
-                      col ? "" : " hobbies-hub__card--empty"
-                    }`}
+                    className="hobbies-hub__card"
                     disabled={busyTile || openingPreset != null}
                     onClick={() => void openPreset(p.id)}
+                    aria-label={`${p.label}, ${status}`}
                   >
-                    {col?.icon_url ? (
-                      <img
-                        src={withMediaAccess(col.icon_url)}
-                        alt=""
-                        className="hobbies-hub__card-icon"
-                      />
-                    ) : (
-                      <span className="hobbies-hub__card-glyph" aria-hidden>
-                        {p.label.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                    <span className="hobbies-hub__card-name">{p.label}</span>
-                    <span className="muted hobbies-hub__card-meta">
-                      {busyTile
-                        ? "Opening…"
-                        : col
-                          ? `${col.item_count} item${
-                              col.item_count === 1 ? "" : "s"
-                            }`
-                          : "Not started"}
+                    <span
+                      className="hobbies-hub__card-bg card-bg-layer"
+                      style={
+                        coverUrl
+                          ? {
+                              backgroundImage: `url("${withMediaAccess(
+                                coverUrl
+                              )}")`,
+                            }
+                          : undefined
+                      }
+                    />
+                    <span className="hobbies-hub__card-dim" />
+                    <span className="hobbies-hub__card-footer">
+                      {hoverLogo ? (
+                        <img
+                          src={withMediaAccess(hoverLogo)}
+                          alt=""
+                          className="hobbies-hub__card-logo"
+                        />
+                      ) : (
+                        <span className="hobbies-hub__card-name">{p.label}</span>
+                      )}
+                      <span className="hobbies-hub__card-meta">{status}</span>
                     </span>
                   </button>
                 );
@@ -284,6 +314,7 @@ export default function HobbiesModule({
             collection={active}
             isAdmin={isAdmin}
             nsfwUnlocked={nsfwUnlocked}
+            onRegisterMenu={setCollectionMenu}
             onChanged={() => void reloadCollections()}
             onDeleted={() => {
               void reloadCollections().then(() => goHome());
@@ -301,22 +332,22 @@ function HobbyCollectionView({
   collection,
   isAdmin,
   nsfwUnlocked,
+  onRegisterMenu,
   onChanged,
   onDeleted,
 }: {
   collection: HobbyCollection;
   isAdmin: boolean;
   nsfwUnlocked: boolean;
+  onRegisterMenu: (menu: HobbyCollectionMenu | null) => void;
   onChanged: () => void;
   onDeleted: () => void;
 }) {
   const [items, setItems] = useState<HobbyItem[]>([]);
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<HobbyItem | null | "new">(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [privateBusy, setPrivateBusy] = useState(false);
-  const filters: Record<string, string> = {};
   const fileRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
   const showPrivateToggle = isAdmin && nsfwUnlocked;
@@ -324,25 +355,93 @@ function HobbyCollectionView({
   const fields = collection.fields;
 
   const reload = useCallback(async () => {
-    setLoading(true);
     try {
-      const data = await fetchHobbyItems(collection.id, {
-        q: q || undefined,
-        type: filters.type || undefined,
-        size: filters.size || undefined,
-        style: filters.style || undefined,
-        theme: filters.theme || undefined,
-        category: filters.category || undefined,
-      });
+      const data = await fetchHobbyItems(collection.id);
       setItems(data.items || []);
     } finally {
       setLoading(false);
     }
-  }, [collection.id, q, filters]);
+  }, [collection.id]);
 
   useEffect(() => {
+    setLoading(true);
+    setSelected(new Set());
     void reload();
   }, [reload]);
+
+  const runImport = useCallback(() => {
+    fileRef.current?.click();
+  }, []);
+
+  const runExport = useCallback(() => {
+    void exportHobbyXlsx(collection.id).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${collection.name}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }, [collection.id, collection.name]);
+
+  const runTemplate = useCallback(() => {
+    void downloadHobbyTemplateXlsx().then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hobby-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }, []);
+
+  const runDeleteCollection = useCallback(() => {
+    if (
+      !window.confirm(
+        `Delete collection “${collection.name}” and all items?`
+      )
+    ) {
+      return;
+    }
+    void deleteHobbyCollection(collection.id).then(onDeleted);
+  }, [collection.id, collection.name, onDeleted]);
+
+  const runPrivateChange = useCallback(
+    (next: boolean) => {
+      setPrivateBusy(true);
+      void updateHobbyCollection(collection.id, { private: next })
+        .then(() => onChanged())
+        .catch((err) => {
+          window.alert(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => setPrivateBusy(false));
+    },
+    [collection.id, onChanged]
+  );
+
+  useEffect(() => {
+    onRegisterMenu({
+      onAdd: () => setEditItem("new"),
+      onImport: runImport,
+      onExport: runExport,
+      onTemplate: runTemplate,
+      onDelete: runDeleteCollection,
+      privateChecked: showPrivateToggle ? Boolean(collection.private) : null,
+      privateBusy,
+      onPrivateChange: runPrivateChange,
+    });
+    return () => onRegisterMenu(null);
+  }, [
+    onRegisterMenu,
+    runImport,
+    runExport,
+    runTemplate,
+    runDeleteCollection,
+    runPrivateChange,
+    showPrivateToggle,
+    collection.private,
+    privateBusy,
+  ]);
 
   const tableCols = useMemo(() => {
     const cols = fields.filter((f) => f !== "image" && f !== "notes");
@@ -369,7 +468,9 @@ function HobbyCollectionView({
               alt=""
               className="hobbies-collection__icon"
             />
-            <IconPencil />
+            <span className="hobbies-collection__icon-edit" aria-hidden>
+              <IconPencil />
+            </span>
           </button>
           <input
             ref={iconRef}
@@ -385,64 +486,6 @@ function HobbyCollectionView({
               e.target.value = "";
             }}
           />
-          <div>
-            <h2>{collection.name}</h2>
-            <p className="muted">
-              {collection.preset_label}
-              {collection.private ? " · Private" : ""}
-            </p>
-          </div>
-        </div>
-        <div className="hobbies-collection__actions">
-          {showPrivateToggle ? (
-            <label className="hobbies-collection__private">
-              <input
-                type="checkbox"
-                checked={Boolean(collection.private)}
-                disabled={privateBusy}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setPrivateBusy(true);
-                  void updateHobbyCollection(collection.id, {
-                    private: next,
-                  })
-                    .then(() => onChanged())
-                    .catch((err) => {
-                      window.alert(
-                        err instanceof Error ? err.message : String(err)
-                      );
-                    })
-                    .finally(() => setPrivateBusy(false));
-                }}
-              />
-              Private
-            </label>
-          ) : null}
-          <div className="media-inline-search">
-            <IconSearch />
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search…"
-              aria-label="Search items"
-            />
-          </div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setEditItem("new")}
-          >
-            <IconPlus /> Add
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => fileRef.current?.click()}
-            title="Import Excel"
-          >
-            <IconImport /> Import
-          </button>
           <input
             ref={fileRef}
             type="file"
@@ -471,74 +514,31 @@ function HobbyCollectionView({
               e.target.value = "";
             }}
           />
+          <h2 className="hobbies-collection__title">
+            {collection.name}
+            {collection.private ? (
+              <span className="hobbies-collection__private-badge">Private</span>
+            ) : null}
+          </h2>
+        </div>
+        {selected.size > 0 ? (
           <button
             type="button"
             className="btn btn--ghost"
             onClick={() => {
-              void exportHobbyXlsx(collection.id).then((blob) => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${collection.name}.xlsx`;
-                a.click();
-                URL.revokeObjectURL(url);
-              });
-            }}
-          >
-            Export
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => {
-              void downloadHobbyTemplateXlsx().then((blob) => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "hobby-template.xlsx";
-                a.click();
-                URL.revokeObjectURL(url);
-              });
-            }}
-          >
-            Template
-          </button>
-          {selected.size > 0 ? (
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => {
-                if (!window.confirm(`Delete ${selected.size} item(s)?`)) return;
-                void deleteHobbyItemsBatch(
-                  collection.id,
-                  [...selected]
-                ).then(() => {
+              if (!window.confirm(`Delete ${selected.size} item(s)?`)) return;
+              void deleteHobbyItemsBatch(collection.id, [...selected]).then(
+                () => {
                   setSelected(new Set());
                   void reload();
                   onChanged();
-                });
-              }}
-            >
-              Delete selected
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => {
-              if (
-                !window.confirm(
-                  `Delete collection “${collection.name}” and all items?`
-                )
-              ) {
-                return;
-              }
-              void deleteHobbyCollection(collection.id).then(onDeleted);
+                }
+              );
             }}
           >
-            Delete collection
+            Delete selected ({selected.size})
           </button>
-        </div>
+        ) : null}
       </div>
 
       <div className="hobbies-collection__table-wrap">

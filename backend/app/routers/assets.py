@@ -36,6 +36,7 @@ NESTED_PREFIXES = (
     "universe",
     "platforms",
     "collectibles",
+    "hobbies",
 )
 DATA_FILE_PREFIXES = ("people", "links")
 
@@ -133,6 +134,11 @@ def _resolve_under(root: Path, slug: str) -> Path | None:
             if nested.is_file():
                 return nested
             return _first_existing(root / "platforms", stem)
+        if folder == "hobbies":
+            nested = root / "hobbies" / name
+            if nested.is_file():
+                return nested
+            return _first_existing(root / "hobbies", stem)
         if folder == "companies":
             return _first_existing(root / "companies", stem)
         if folder == "links":
