@@ -3658,14 +3658,9 @@ export default function SeriesSubseriesPage({
     siblingMovieCount > 0 ||
     libraryCards.length > 0 ||
     relatedBookCount > 0;
-  const hasAudio =
-    audioCards.length > 0 ||
-    ((isBook || isGame) &&
-      Boolean(
-        overview?.media?.has_audio ||
-          (detail as { has_audio?: boolean } | null)?.has_audio ||
-          (overview as { has_audio?: boolean } | null)?.has_audio
-      ));
+  // Leaf Audio tab: only real leaf/filtered cards — not franchise has_audio
+  // (that flag is true when a Music band shares the name).
+  const hasAudio = audioCards.length > 0;
   /** Top-bar player: only when we have real release cards (not empty Audio/ stubs). */
   const showAudioPlayer = audioCards.length > 0;
   const hasLibrary = isFilm
@@ -3898,16 +3893,8 @@ export default function SeriesSubseriesPage({
       if (t.id === "library")
         return isBook ? hasMoreBooks || hasLibrary : hasLibrary;
       if (t.id === "games") return hasGames;
-      // Prefer overview flags so Audio appears with the page (not after scan).
-      if (t.id === "audio") {
-        const flagged =
-          Boolean(
-            overview?.media?.has_audio ||
-              (detail as { has_audio?: boolean } | null)?.has_audio ||
-              (overview as { has_audio?: boolean } | null)?.has_audio
-          ) || audioCards.length > 0;
-        return flagged && (mediaReady || isBook || isGame || isFilm || hasAudio);
-      }
+      // Match franchise page: Audio only when there are real release cards.
+      if (t.id === "audio") return hasAudio;
       return true;
     });
   }, [
@@ -3920,7 +3907,6 @@ export default function SeriesSubseriesPage({
     episodesTabLabel,
     hasEpisodes,
     hasGallery,
-    mediaReady,
     hasMovies,
     hasSeries,
     hasMoreBooks,
@@ -3931,12 +3917,8 @@ export default function SeriesSubseriesPage({
     filmVersions.length,
     showFilmVideosTab,
     quizAvailability,
-    overview?.media?.has_audio,
     overview?.media?.has_games,
     overview?.media?.has_gallery,
-    (overview as { has_audio?: boolean } | null)?.has_audio,
-    (detail as { has_audio?: boolean } | null)?.has_audio,
-    audioCards.length,
   ]);
 
   /** Leaf pages get Related when there is anything to show (universes / talent / similar). */
@@ -4002,6 +3984,8 @@ export default function SeriesSubseriesPage({
   useEffect(() => {
     if (loading) return;
     if (tab === "quiz" && !quizAvailabilityReady) return;
+    // Wait for media scan before bouncing off Audio (cards decide visibility).
+    if (tab === "audio" && !mediaReady) return;
     if (!tabs.some((t) => t.id === tab)) {
       onNavigate({
         subseriesId,
@@ -4018,6 +4002,7 @@ export default function SeriesSubseriesPage({
     seasonId,
     loading,
     quizAvailabilityReady,
+    mediaReady,
   ]);
 
   const setTab = (next: SubseriesTab) => {
