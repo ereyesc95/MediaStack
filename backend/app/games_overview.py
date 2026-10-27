@@ -19,6 +19,7 @@ from app.games_index import (
     find_franchise_dirs,
     find_game_dir,
 )
+from app.related_cards import visible_related
 from app.series_artwork import build_local_eras
 from app.series_overview import _enrich_related_cards
 from app.universes import franchise_universe_bundle
@@ -195,6 +196,8 @@ def build_work_overview(
     has_movies = bool(related_disk.get("movies") or related_disk.get("movie"))
     has_series = bool(related_disk.get("series"))
     has_books = bool(related_disk.get("books"))
+    creator = visible_related(about_disk, "creator")
+    similar = visible_related(about_disk, "similar")
     # SeriesAbout / franchise shell expect a SeriesOverview-shaped payload.
     return {
         "id": detail.get("id"),
@@ -273,6 +276,10 @@ def build_work_overview(
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": games,
             "music": _enrich_related_cards(related_disk.get("music") or [], root),
+            "creator": creator,
+            "similar": similar,
+            "creator_count": len(creator),
+            "similar_count": len(similar),
         },
         "universes": universes,
         "universe": universe,
@@ -341,6 +348,8 @@ def build_game_overview(
     has_movies = bool(related_disk.get("movies") or related_disk.get("movie"))
     has_series = bool(related_disk.get("series"))
     has_books = bool(related_disk.get("books"))
+    leaf_creator = visible_related(about_disk, "creator")
+    leaf_similar = visible_related(about_disk, "similar")
 
     web_url = str(about_disk.get("web_url") or detail.get("web_url") or "").strip()
     if web_url and "://" not in web_url:
@@ -459,6 +468,10 @@ def build_game_overview(
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": siblings,
             "music": _enrich_related_cards(related_disk.get("music") or [], root),
+            "creator": leaf_creator,
+            "similar": leaf_similar,
+            "creator_count": len(leaf_creator),
+            "similar_count": len(leaf_similar),
         },
         "franchise": detail.get("franchise"),
         "module": "games",

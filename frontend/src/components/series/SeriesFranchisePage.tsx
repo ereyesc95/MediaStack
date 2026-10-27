@@ -2367,14 +2367,18 @@ export default function SeriesFranchisePage({
                 relatedTab === "creator"
                   ? isBooks
                     ? "Add same author book"
-                    : isMoviesOnly
-                      ? "Add same crew film"
-                      : "Add same author series"
+                    : isGames
+                      ? "Add same author games"
+                      : isMoviesOnly
+                        ? "Add same crew film"
+                        : "Add same author series"
                   : isBooks
                     ? "Add similar book"
-                    : isMoviesOnly
-                      ? "Add similar film"
-                      : "Add similar series"
+                    : isGames
+                      ? "Add similar games"
+                      : isMoviesOnly
+                        ? "Add similar film"
+                        : "Add similar series"
               }
               onRefreshLineup={
                 isAdmin &&
@@ -2592,9 +2596,11 @@ export default function SeriesFranchisePage({
                   "similar",
                   isBooks
                     ? "SIMILAR BOOKS"
-                    : isMoviesOnly
-                      ? "SIMILAR MOVIES"
-                      : "SIMILAR SERIES",
+                    : isGames
+                      ? "SIMILAR GAMES"
+                      : isMoviesOnly
+                        ? "SIMILAR MOVIES"
+                        : "SIMILAR SERIES",
                   data?.related?.similar_count ??
                     data?.related?.similar?.length ??
                     0,
@@ -2926,14 +2932,35 @@ export default function SeriesFranchisePage({
                 cardOrientation === "badge" ? "banner" : cardOrientation
               }
               tmdbKind={isMoviesOnly && !sharedSeries ? "movie" : "tv"}
-              fallbackViaMembers={data.writers || []}
-              talentOptions={data.writers || []}
+              showTmdbId={!isGames}
+              fallbackViaMembers={
+                isGames
+                  ? data.about?.developers || data.writers || []
+                  : data.writers || []
+              }
+              talentOptions={
+                isGames
+                  ? data.about?.developers || data.writers || []
+                  : data.writers || []
+              }
               talentLabel={
-                isBooks ? "Author" : isMoviesOnly ? "Director / writer" : "Creator"
+                isBooks
+                  ? "Author"
+                  : isGames
+                    ? "Developer"
+                    : isMoviesOnly
+                      ? "Director / writer"
+                      : "Creator"
               }
               isAdmin={isAdmin}
               relatedApi={
-                isBooks ? "books" : isMoviesOnly && !sharedSeries ? "movies" : "series"
+                isBooks
+                  ? "books"
+                  : isGames
+                    ? "games"
+                    : isMoviesOnly && !sharedSeries
+                      ? "movies"
+                      : "series"
               }
               addOpen={addRelatedOpen}
               onAddClose={() => setAddRelatedOpen(false)}

@@ -71,6 +71,124 @@ def _resolve_game(game_id: str) -> tuple[Path, Path, dict, str, str]:
     return game_dir, work_dir, about, want, platform
 
 
+def _resolve_work_about(work_id: str) -> tuple[Path, dict]:
+    from app.games_index import find_work_dir
+    from app.games_store import load_work_about
+
+    root = _media_root()
+    found = find_work_dir(work_id, root)
+    if not found:
+        raise ValueError(f"Games franchise not found: {work_id}")
+    work_dir, _platform, _letter = found
+    about = load_work_about(
+        work_dir,
+        work_slug=work_id,
+        work_name=work_dir.name,
+    )
+    return work_dir, about
+
+
+def _save_work_about(work_dir: Path, about: dict, *, work_id: str) -> None:
+    from app.games_store import save_work_about
+
+    root = _media_root()
+    folder_path = None
+    try:
+        folder_path = work_dir.relative_to(root).as_posix()
+    except ValueError:
+        folder_path = None
+    save_work_about(
+        about,
+        work_slug=work_id,
+        work_name=work_dir.name,
+        folder_path=folder_path,
+    )
+
+
+def add_game_work_related(
+    work_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    work_dir, about = _resolve_work_about(work_id)
+    item = add_related_card(
+        about,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    _save_work_about(work_dir, about, work_id=work_id)
+    return item
+
+
+def remove_game_work_related(
+    work_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    work_dir, about = _resolve_work_about(work_id)
+    ok = remove_related_card(about, bucket=bucket, item_id=item_id)
+    if ok:
+        _save_work_about(work_dir, about, work_id=work_id)
+    return ok
+
+
+def add_game_related(
+    game_id: str,
+    *,
+    bucket: str,
+    title: str,
+    tmdb_id: int | str | None = None,
+    date_iso: str | None = None,
+    poster_url: str | None = None,
+    overview: str | None = None,
+    via_members: list[str] | None = None,
+) -> dict:
+    from app.related_cards import add_related_card
+
+    game_dir, work_dir, about, gid, platform = _resolve_game(game_id)
+    item = add_related_card(
+        about,
+        bucket=bucket,
+        title=title,
+        tmdb_id=tmdb_id,
+        date_iso=date_iso,
+        poster_url=poster_url,
+        overview=overview,
+        via_members=via_members,
+    )
+    _save_game_about(
+        game_dir, about, game_id=gid, work_dir=work_dir, platform=platform
+    )
+    return item
+
+
+def remove_game_related(
+    game_id: str, *, bucket: str, item_id: str | int
+) -> bool:
+    from app.related_cards import remove_related_card
+
+    game_dir, work_dir, about, gid, platform = _resolve_game(game_id)
+    ok = remove_related_card(about, bucket=bucket, item_id=item_id)
+    if ok:
+        _save_game_about(
+            game_dir, about, game_id=gid, work_dir=work_dir, platform=platform
+        )
+    return ok
+
+
 def _save_game_about(
     game_dir: Path,
     about: dict,

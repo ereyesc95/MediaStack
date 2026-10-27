@@ -3201,7 +3201,7 @@ export async function removeSeriesRelated(
   );
 }
 
-export type RelatedMediaApi = "series" | "movies" | "books";
+export type RelatedMediaApi = "series" | "movies" | "books" | "games";
 
 function relatedBase(
   api: RelatedMediaApi,
@@ -3217,6 +3217,11 @@ function relatedBase(
     return leafId
       ? `${API}/books/books/${encodeURIComponent(leafId)}`
       : `${API}/books/franchises/${encodeURIComponent(franchiseId)}`;
+  }
+  if (api === "games") {
+    return leafId
+      ? `${API}/games/games/${encodeURIComponent(leafId)}`
+      : `${API}/games/franchises/${encodeURIComponent(franchiseId)}`;
   }
   return `${API}/series/franchises/${encodeURIComponent(franchiseId)}`;
 }

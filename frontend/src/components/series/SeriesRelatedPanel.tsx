@@ -28,6 +28,8 @@ type Props = {
   orientation?: CardOrientation;
   /** TMDb deep-link kind for related cards. */
   tmdbKind?: "tv" | "movie";
+  /** Hide TMDb ID field in the add modal (e.g. games). Default true. */
+  showTmdbId?: boolean;
   /** Fallback via names when stored related cards lack via_members. */
   fallbackViaMembers?: string[];
   /** Page talent names for the same-talent via dropdown (authors/directors/etc). */
@@ -77,6 +79,7 @@ function AddRelatedModal({
   leafId,
   talentOptions,
   talentLabel,
+  showTmdbId = true,
   onClose,
   onSaved,
 }: {
@@ -86,6 +89,7 @@ function AddRelatedModal({
   leafId?: string | null;
   talentOptions: string[];
   talentLabel: string;
+  showTmdbId?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -116,7 +120,7 @@ function AddRelatedModal({
         {
           bucket: activeBucket,
           title: title.trim(),
-          tmdb_id: tmdbId.trim() || null,
+          tmdb_id: showTmdbId ? tmdbId.trim() || null : null,
           date_iso: year.trim() ? `${year.trim().slice(0, 4)}-01-01` : null,
           poster_url: posterUrl.trim() || null,
           via_members:
@@ -201,14 +205,16 @@ function AddRelatedModal({
               autoFocus={activeBucket !== "creator"}
             />
           </label>
-          <label>
-            TMDb ID (optional)
-            <input
-              value={tmdbId}
-              onChange={(e) => setTmdbId(e.target.value)}
-              placeholder="e.g. 46298"
-            />
-          </label>
+          {showTmdbId ? (
+            <label>
+              TMDb ID (optional)
+              <input
+                value={tmdbId}
+                onChange={(e) => setTmdbId(e.target.value)}
+                placeholder="e.g. 46298"
+              />
+            </label>
+          ) : null}
           <label>
             Year (optional)
             <input
@@ -251,6 +257,7 @@ export default function SeriesRelatedPanel({
   tab,
   orientation = "portrait",
   tmdbKind = "tv",
+  showTmdbId = true,
   fallbackViaMembers,
   talentOptions,
   talentLabel = "Creator",
@@ -322,6 +329,7 @@ export default function SeriesRelatedPanel({
         leafId={leafId}
         talentOptions={talentList}
         talentLabel={talentLabel}
+        showTmdbId={showTmdbId}
         onClose={onAddClose}
         onSaved={onDataChanged}
       />

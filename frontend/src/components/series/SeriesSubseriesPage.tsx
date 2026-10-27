@@ -4689,14 +4689,18 @@ export default function SeriesSubseriesPage({
                 relatedTab === "creator"
                   ? isBook
                     ? "Add same author book"
-                    : isFilm
-                      ? "Add same crew film"
-                      : "Add same author series"
+                    : isGame
+                      ? "Add same author games"
+                      : isFilm
+                        ? "Add same crew film"
+                        : "Add same author series"
                   : isBook
                     ? "Add similar book"
-                    : isFilm
-                      ? "Add similar film"
-                      : "Add similar series"
+                    : isGame
+                      ? "Add similar games"
+                      : isFilm
+                        ? "Add similar film"
+                        : "Add similar series"
               }
               onRefreshMetadata={
                 isAdmin
@@ -4916,9 +4920,11 @@ export default function SeriesSubseriesPage({
                   "similar",
                   isBook
                     ? "SIMILAR BOOKS"
-                    : isFilm
-                      ? "SIMILAR MOVIES"
-                      : "SIMILAR SERIES",
+                    : isGame
+                      ? "SIMILAR GAMES"
+                      : isFilm
+                        ? "SIMILAR MOVIES"
+                        : "SIMILAR SERIES",
                   overview?.related?.similar_count ??
                     overview?.related?.similar?.length ??
                     0,
@@ -6386,14 +6392,29 @@ export default function SeriesSubseriesPage({
                   cardOrientation === "badge" ? "banner" : cardOrientation
                 }
                 tmdbKind={isFilm ? "movie" : "tv"}
+                showTmdbId={!isGame}
                 fallbackViaMembers={creators}
                 talentOptions={creators}
                 talentLabel={
-                  isBook ? "Author" : isFilm ? "Director / writer" : "Creator"
+                  isBook
+                    ? "Author"
+                    : isGame
+                      ? "Developer"
+                      : isFilm
+                        ? "Director / writer"
+                        : "Creator"
                 }
                 isAdmin={isAdmin}
-                relatedApi={isBook ? "books" : isFilm ? "movies" : "series"}
-                leafId={isFilm || isBook ? subseriesId : null}
+                relatedApi={
+                  isBook
+                    ? "books"
+                    : isGame
+                      ? "games"
+                      : isFilm
+                        ? "movies"
+                        : "series"
+                }
+                leafId={isFilm || isBook || isGame ? subseriesId : null}
                 addOpen={addRelatedOpen}
                 onAddClose={() => setAddRelatedOpen(false)}
                 onDataChanged={() => void loadCard()}

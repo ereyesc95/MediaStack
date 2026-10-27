@@ -538,6 +538,96 @@ def games_game_patch_cast(
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.post("/franchises/{work_id}/related")
+def games_work_add_related(
+    work_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import add_game_work_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_game_work_related(
+            work_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/franchises/{work_id}/related/{item_id}")
+def games_work_remove_related(
+    work_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import remove_game_work_related
+
+    try:
+        ok = remove_game_work_related(work_id, bucket=bucket, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
+@router.post("/games/{game_id}/related")
+def games_game_add_related(
+    game_id: str,
+    body: dict,
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import add_game_related
+
+    title = (body.get("title") or body.get("name") or "").strip()
+    if not title:
+        raise HTTPException(400, "title required")
+    try:
+        item = add_game_related(
+            game_id,
+            bucket=body.get("bucket") or "similar",
+            title=title,
+            tmdb_id=body.get("tmdb_id"),
+            date_iso=body.get("date_iso"),
+            poster_url=body.get("poster_url") or body.get("cover_url"),
+            overview=body.get("overview"),
+            via_members=body.get("via_members"),
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.delete("/games/{game_id}/related/{item_id}")
+def games_game_remove_related(
+    game_id: str,
+    item_id: str,
+    bucket: str = "similar",
+    _admin: User = Depends(require_admin),
+):
+    from app.games_admin import remove_game_related
+
+    try:
+        ok = remove_game_related(game_id, bucket=bucket, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not ok:
+        raise HTTPException(404, "Related entry not found")
+    return {"ok": True}
+
+
 @router.post("/franchises/{work_id}/refresh-metadata")
 async def games_franchise_refresh_metadata(
     work_id: str,
