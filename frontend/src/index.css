@@ -19020,8 +19020,31 @@ button.lyrics-status-badge--icon-only {
 
 .series-episode-list__row {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.28rem 0.35rem;
+  border-radius: 0;
+  transition: background-color 0.18s ease, padding-left 0.18s ease, color 0.18s ease;
+}
+
+.series-episode-list__main-line {
+  width: 100%;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.series-episode-list__main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
   gap: 0.55rem;
   align-items: center;
   border: none;
@@ -19029,10 +19052,8 @@ button.lyrics-status-badge--icon-only {
   color: inherit;
   font: inherit;
   text-align: left;
-  padding: 0.28rem 0.35rem;
+  padding: 0;
   cursor: pointer;
-  border-radius: 0;
-  transition: background-color 0.18s ease, padding-left 0.18s ease, color 0.18s ease;
 }
 
 .series-episode-list__row:hover {
@@ -19050,7 +19071,7 @@ button.lyrics-status-badge--icon-only {
   color: rgba(255, 255, 255, 0.72);
 }
 
-.series-episode-list__row--unavailable {
+.series-episode-list__row--unavailable .series-episode-list__main {
   opacity: 0.55;
   cursor: default;
 }
@@ -19058,6 +19079,127 @@ button.lyrics-status-badge--icon-only {
 .series-episode-list__row--unavailable:hover {
   background: transparent;
   padding-left: 0.35rem;
+}
+
+.series-episode-list__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 0;
+  max-width: 18rem;
+}
+
+.series-episode-list__tag {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  cursor: default;
+  line-height: 1.25;
+}
+
+.series-episode-list__tag--editable {
+  cursor: pointer;
+}
+
+.series-episode-list__tag--editable:hover {
+  border-color: color-mix(in srgb, var(--accent, #8cf) 45%, transparent);
+  color: var(--text);
+}
+
+.series-episode-list__tag-add {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--text) 28%, transparent);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border-radius: 3px;
+  flex-shrink: 0;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.series-episode-list__row:hover .series-episode-list__tag-add,
+.series-episode-list__row:focus-within .series-episode-list__tag-add {
+  opacity: 1;
+}
+
+.series-episode-list__tag-add:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 48%, transparent);
+}
+
+.series-episode-list__tag-add-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.series-episode-list__tag-input {
+  width: 6.5rem;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.12rem 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg, #0a0c10) 88%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.series-episode-list__tag-input:focus {
+  border-color: color-mix(in srgb, var(--accent, #8cf) 55%, transparent);
+}
+
+.series-episode-tag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0 0.35rem 0.55rem;
+}
+
+.series-episode-tag-bar__chip {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.15rem;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+
+.series-episode-tag-bar__chip:hover {
+  color: var(--text);
+}
+
+.series-episode-tag-bar__chip.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent, #c9a227);
+}
+
+.series-episode-tag-bar__count {
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.68rem;
 }
 
 .series-episode-list__num {
@@ -30638,25 +30780,28 @@ button.lyrics-status-badge--icon-only {
   display: flex;
   gap: 0.25rem;
 }
-.hobbies-form {
-  display: grid;
-  gap: 0.65rem;
-  max-height: 60vh;
-  overflow: auto;
+.hobbies-item-modal.modal-panel.artist-admin-modal {
+  max-width: 28rem;
 }
-.hobbies-form__field {
-  display: grid;
-  grid-template-columns: 6rem 1fr;
-  gap: 0.65rem;
+.hobbies-item-modal__image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.hobbies-item-modal__image-row {
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
 }
-.hobbies-form__field span {
-  font-size: 0.85rem;
+.hobbies-item-modal__image-or {
+  flex-shrink: 0;
+  font-size: 0.82rem;
 }
-.hobbies-form__field input,
-.hobbies-form__field select,
-.hobbies-form__field textarea {
-  width: 100%;
+.hobbies-item-modal__image-url {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 /* ---- FileStack ---- */
 .files-module {

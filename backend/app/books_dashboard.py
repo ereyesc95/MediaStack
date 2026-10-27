@@ -31,17 +31,25 @@ def build_books_dashboard(
         if media_root
         else {"franchises": [], "books": []}
     )
+    adult_subs = set()
     if db is not None:
+        from app.adult_content import adult_subgenre_names_from_db
+
         catalog = enrich_books_catalog(db, catalog)
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait", media_root=media_root
         )
         catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
+        adult_subs = adult_subgenre_names_from_db(db)
     franchises = filter_adult_cards(
-        catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+        catalog.get("franchises") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
     books = filter_adult_cards(
-        catalog.get("books") or [], nsfw_unlocked=nsfw_unlocked
+        catalog.get("books") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
 
     def is_saga(card: dict | None) -> bool:

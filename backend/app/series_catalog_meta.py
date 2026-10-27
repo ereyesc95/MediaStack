@@ -313,6 +313,10 @@ def apply_nsfw_filter_to_series_overview(
         data["genres"] = _strip_adult_genre_dicts(
             data["genres"], extra_adult_subgenres=extra
         )
+    if isinstance(data.get("base_genres"), list):
+        data["base_genres"] = _strip_adult_genre_dicts(
+            data["base_genres"], extra_adult_subgenres=extra
+        )
     parents = data.get("parent_genre_names")
     if isinstance(parents, list):
         data["parent_genre_names"] = [

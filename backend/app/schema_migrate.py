@@ -737,6 +737,39 @@ def migrate_schema(eng: Engine) -> None:
                 )
             )
 
+        if "series_episode_tags" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE series_episode_tags (
+                        "setID" INTEGER NOT NULL PRIMARY KEY,
+                        "setLeafPath" TEXT NOT NULL,
+                        "setEpisodeID" TEXT NOT NULL,
+                        "setTagsJson" TEXT
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_series_episode_tags_leaf" '
+                    'ON series_episode_tags ("setLeafPath")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_series_episode_tags_episode" '
+                    'ON series_episode_tags ("setEpisodeID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE UNIQUE INDEX IF NOT EXISTS '
+                    '"ux_series_episode_tags_leaf_episode" '
+                    'ON series_episode_tags ("setLeafPath", "setEpisodeID")'
+                )
+            )
+
         if "subgenres" in tables:
             # Hentai belongs under Anime (not Adult); still NSFW via adult_content.py.
             conn.execute(

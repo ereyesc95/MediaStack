@@ -787,7 +787,7 @@ export default function SeriesBrowse({
       const cards: SeriesCatalogCard[] = [];
       for (const f of filterAdultCards(franchises, nsfwUnlocked)) {
         if (!matchesFranchiseMeta(f)) continue;
-        const shows =
+        const shows = filterAdultCards(
           f.subseries.length > 0
             ? f.subseries
             : ([
@@ -799,8 +799,12 @@ export default function SeriesBrowse({
                   folder_path: f.folder_path,
                   cover_url: f.cover_url,
                   season_count: f.season_count,
+                  genre_names: f.genre_names,
+                  parent_genre_names: f.parent_genre_names,
                 } satisfies SeriesSubseriesCard,
-              ] as SeriesSubseriesCard[]);
+              ] as SeriesSubseriesCard[]),
+          nsfwUnlocked
+        );
 
         for (const s of shows) {
           if (q && !s.title.toLowerCase().includes(q) && !f.name.toLowerCase().includes(q)) {

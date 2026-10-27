@@ -143,6 +143,71 @@ def sfw_series_franchise_ids(db) -> set[str]:
     return {x for x in out if x}
 
 
+def series_leaf_is_adult(
+    db,
+    franchise_id: str,
+    leaf_id: str | None = None,
+    *,
+    folder_path: str | None = None,
+) -> bool:
+    """True when a series subseries/leaf has adult genres (NSFW lock should 404)."""
+    from app.series_catalog_meta import enrich_catalog_metadata
+    from app.series_index import build_series_catalog
+
+    fid = (franchise_id or "").strip()
+    lid = (leaf_id or "").strip()
+    if not lid and folder_path:
+        parts = [p for p in str(folder_path).replace("\\", "/").split("/") if p]
+        # Series/{Letter}/{Franchise}/{Leaf}/...
+        if len(parts) >= 4 and parts[0].casefold() == "series":
+            if not fid:
+                fid = parts[2]
+            lid = parts[3]
+    if not fid or not lid:
+        return False
+
+    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    extra = adult_subgenre_names_from_db(db)
+    lid_cf = lid.casefold()
+    fid_cf = fid.casefold()
+    for card in catalog.get("franchises") or []:
+        if not isinstance(card, dict):
+            continue
+        cid = str(card.get("id") or "").casefold()
+        cname = str(card.get("name") or "").casefold()
+        if cid != fid_cf and cname != fid_cf:
+            continue
+        # Franchise-level adult → every leaf is adult
+        if card_has_adult_genres(
+            genre_names=card.get("genre_names")
+            if isinstance(card.get("genre_names"), list)
+            else None,
+            parent_genre_names=card.get("parent_genre_names")
+            if isinstance(card.get("parent_genre_names"), list)
+            else None,
+            extra_adult_subgenres=extra,
+        ):
+            return True
+        for sub in card.get("subseries") or []:
+            if not isinstance(sub, dict):
+                continue
+            sid = str(sub.get("id") or "").casefold()
+            stitle = str(sub.get("title") or sub.get("name") or "").casefold()
+            if sid != lid_cf and stitle != lid_cf:
+                continue
+            return card_has_adult_genres(
+                genre_names=sub.get("genre_names")
+                if isinstance(sub.get("genre_names"), list)
+                else None,
+                parent_genre_names=sub.get("parent_genre_names")
+                if isinstance(sub.get("parent_genre_names"), list)
+                else None,
+                extra_adult_subgenres=extra,
+            )
+        return False
+    return False
+
+
 def series_franchise_is_sfw(db, franchise_slug: str, *, sfw_ids: set[str] | None = None) -> bool:
     """True when the franchise may appear under SFW profiles."""
     from app.franchise_index import normalize_franchise_slug

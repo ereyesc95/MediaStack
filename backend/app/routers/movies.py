@@ -409,10 +409,39 @@ def movies_film_overview(
     film_id: str,
     orientation: str = Query("portrait"),
     db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     overview = build_film_overview(db, film_id, orientation=orientation)
     if not overview:
         raise HTTPException(404, "Film not found")
+    if not nsfw_unlocked:
+        from app.adult_content import (
+            adult_subgenre_names_from_db,
+            card_has_adult_genres,
+            filter_adult_movie_leaf_cards,
+        )
+
+        kept = filter_adult_movie_leaf_cards(
+            db,
+            [{"id": film_id, "title": overview.get("name") or overview.get("title")}],
+            nsfw_unlocked=False,
+        )
+        if not kept:
+            raise HTTPException(404, "Film not found")
+        # Also strip adult genre chips from the About payload.
+        extra = adult_subgenre_names_from_db(db)
+        genres = overview.get("genres")
+        if isinstance(genres, list):
+            overview = dict(overview)
+            overview["genres"] = [
+                g
+                for g in genres
+                if isinstance(g, dict)
+                and not card_has_adult_genres(
+                    genre_names=[str(g.get("name") or "")],
+                    extra_adult_subgenres=extra,
+                )
+            ]
     return overview
 
 

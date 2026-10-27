@@ -54,10 +54,9 @@ import {
 } from "../../languageLogos";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
 import {
-  readSessionEntry,
-  sessionCacheKey,
-  writeSessionEntry,
-} from "../../sessionCache";
+  readFranchiseOverviewCache as readOverviewCache,
+  writeFranchiseOverviewCache as writeOverviewCache,
+} from "../../franchiseOverviewCache";
 import { pushBooksRoute } from "../../booksRoute";
 import { pushGamesRoute } from "../../gamesRoute";
 import { pushMoviesRoute } from "../../moviesRoute";
@@ -291,24 +290,6 @@ const MEDIA_SUBBAR_SECTIONS: SeriesSection[] = [
   "games",
   "gallery",
 ];
-
-/** Keep last overview per franchise so remount (subseries → franchise) isn't a blank boot. */
-const overviewCache = new Map<string, SeriesOverview>();
-
-function readOverviewCache(key: string): SeriesOverview | null {
-  const mem = overviewCache.get(key);
-  if (mem) return mem;
-  const stored = readSessionEntry<SeriesOverview>(
-    sessionCacheKey("franchise-overview-v7", key)
-  );
-  if (stored) overviewCache.set(key, stored);
-  return stored;
-}
-
-function writeOverviewCache(key: string, data: SeriesOverview) {
-  overviewCache.set(key, data);
-  writeSessionEntry(sessionCacheKey("franchise-overview-v7", key), data);
-}
 
 export default function SeriesFranchisePage({
   franchiseId,

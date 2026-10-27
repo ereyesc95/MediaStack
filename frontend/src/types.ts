@@ -1759,6 +1759,8 @@ export type SeriesSubseriesCard = {
   /** False when on-disk folder has [Unofficial]. */
   official?: boolean;
   hub_title?: string | null;
+  genre_names?: string[];
+  parent_genre_names?: string[];
 };
 
 export type SeriesSeasonCard = {
@@ -2167,6 +2169,8 @@ export type SeriesOverview = {
     end_title?: string | null;
   }[];
   genres: { id: number | string; name: string }[];
+  /** Franchise row genres before leaf rollup (safe leaf About fallback). */
+  base_genres?: { id: number | string; name: string }[];
   parent_genre_names?: string[];
   kind_label?: string | null;
   publishers: string[];

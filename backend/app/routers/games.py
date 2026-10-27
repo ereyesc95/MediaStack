@@ -575,10 +575,36 @@ def games_game_detail(
     db: Session = Depends(get_db),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    _ = db, nsfw_unlocked
+    from app.adult_content import adult_subgenre_names_from_db, card_has_adult_genres
+    from app.games_catalog_meta import enrich_games_catalog
+    from app.games_index import build_games_catalog
+
     detail = build_game_detail(game_id)
     if not detail:
         raise HTTPException(404, "Game not found")
+    if not nsfw_unlocked:
+        catalog = enrich_games_catalog(db, build_games_catalog())
+        extra = adult_subgenre_names_from_db(db)
+        hit = None
+        gid = game_id.casefold()
+        for g in catalog.get("games") or []:
+            if not isinstance(g, dict):
+                continue
+            if str(g.get("id") or "").casefold() == gid or str(
+                g.get("title") or g.get("name") or ""
+            ).casefold() == gid:
+                hit = g
+                break
+        if hit and card_has_adult_genres(
+            genre_names=hit.get("genre_names")
+            if isinstance(hit.get("genre_names"), list)
+            else None,
+            parent_genre_names=hit.get("parent_genre_names")
+            if isinstance(hit.get("parent_genre_names"), list)
+            else None,
+            extra_adult_subgenres=extra,
+        ):
+            raise HTTPException(404, "Game not found")
     return detail
 
 
@@ -589,12 +615,40 @@ def games_game_overview(
     orientation: str = Query("portrait"),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
-    from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
+    from app.adult_content import (
+        adult_subgenre_names_from_db,
+        card_has_adult_genres,
+        filter_adult_cards,
+    )
+    from app.games_catalog_meta import enrich_games_catalog
+    from app.games_index import build_games_catalog
 
     ov = build_game_overview(game_id, db, orientation=orientation)
     if not ov:
         raise HTTPException(404, "Game not found")
     adult_subs = adult_subgenre_names_from_db(db)
+    if not nsfw_unlocked:
+        catalog = enrich_games_catalog(db, build_games_catalog())
+        hit = None
+        gid = game_id.casefold()
+        for g in catalog.get("games") or []:
+            if not isinstance(g, dict):
+                continue
+            if str(g.get("id") or "").casefold() == gid or str(
+                g.get("title") or g.get("name") or ""
+            ).casefold() == gid:
+                hit = g
+                break
+        if hit and card_has_adult_genres(
+            genre_names=hit.get("genre_names")
+            if isinstance(hit.get("genre_names"), list)
+            else None,
+            parent_genre_names=hit.get("parent_genre_names")
+            if isinstance(hit.get("parent_genre_names"), list)
+            else None,
+            extra_adult_subgenres=adult_subs,
+        ):
+            raise HTTPException(404, "Game not found")
     for key in ("games", "sibling_games", "films"):
         if key in ov:
             ov[key] = filter_adult_cards(

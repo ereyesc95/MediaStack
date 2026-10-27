@@ -3428,6 +3428,32 @@ export async function fetchSeriesFolder(path: string) {
   );
 }
 
+export type SeriesEpisodeTagInfo = { label: string; count: number };
+
+export type SeriesEpisodeTagsPayload = {
+  path: string;
+  tags: SeriesEpisodeTagInfo[];
+  by_episode: Record<string, string[]>;
+};
+
+export async function fetchSeriesEpisodeTags(path: string) {
+  return request<SeriesEpisodeTagsPayload>(
+    `${API}/series/episode-tags?path=${encodeURIComponent(path)}`
+  );
+}
+
+export async function putSeriesEpisodeTags(body: {
+  path: string;
+  episode_id: string;
+  tags: string[];
+}) {
+  return request<SeriesEpisodeTagsPayload>(`${API}/series/episode-tags`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchSeriesGallery(path: string) {
   return request<SeriesGalleryPayload>(
     `${API}/series/gallery?path=${encodeURIComponent(path)}`

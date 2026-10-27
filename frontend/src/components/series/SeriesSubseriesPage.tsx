@@ -30,6 +30,9 @@ import {
   fetchSeriesFolder,
   fetchSeriesFolderCounterparts,
   fetchSeriesFolderExtras,
+  fetchSeriesEpisodeTags,
+  putSeriesEpisodeTags,
+  type SeriesEpisodeTagsPayload,
   fetchSeriesFranchiseAudio,
   fetchSeriesFranchiseGames,
   fetchSeriesFranchiseLibrary,
@@ -54,6 +57,7 @@ import {
   type FranchiseQuizAvailability,
 } from "../../api";
 import { getStoredProfile } from "../../auth";
+import { isAdultGenreName } from "../../adultContent";
 import OfficialUnofficialBar from "../OfficialUnofficialBar";
 import {
   filterByOfficial,
@@ -798,6 +802,9 @@ export default function SeriesSubseriesPage({
   const [seasonEpisodes, setSeasonEpisodes] = useState<
     Record<string, SeriesEpisodeItem[]>
   >({});
+  const [episodeTags, setEpisodeTags] =
+    useState<SeriesEpisodeTagsPayload | null>(null);
+  const [episodeTagFilter, setEpisodeTagFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !getCachedLeafPage(pageCacheKey));
   const [error, setError] = useState<string | null>(null);
   const [aboutEditOpen, setAboutEditOpen] = useState(false);
@@ -1515,6 +1522,65 @@ export default function SeriesSubseriesPage({
 
   const isVideoCollection = detail?.content_kind === "video_collection";
 
+  const leafFolderPath = detail?.folder_path || "";
+
+  useEffect(() => {
+    if (!leafFolderPath || isBook || isFilm) {
+      setEpisodeTags(null);
+      setEpisodeTagFilter(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchSeriesEpisodeTags(leafFolderPath)
+      .then((data) => {
+        if (!cancelled) setEpisodeTags(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEpisodeTags(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leafFolderPath, isBook, isFilm]);
+
+  useEffect(() => {
+    setEpisodeTagFilter(null);
+  }, [leafFolderPath]);
+
+  const tagsByEpisode = episodeTags?.by_episode || {};
+  const leafTagSuggestions = useMemo(
+    () => (episodeTags?.tags || []).map((t) => t.label),
+    [episodeTags]
+  );
+
+  const handleEpisodeTagsChange = useCallback(
+    (episodeId: string, tags: string[]) => {
+      if (!leafFolderPath || !isAdmin) return;
+      void putSeriesEpisodeTags({
+        path: leafFolderPath,
+        episode_id: episodeId,
+        tags,
+      })
+        .then((data) => {
+          setEpisodeTags(data);
+          if (
+            episodeTagFilter &&
+            !data.tags.some(
+              (t) =>
+                t.label.toLowerCase() === episodeTagFilter.toLowerCase()
+            )
+          ) {
+            setEpisodeTagFilter(null);
+          }
+        })
+        .catch((e) => {
+          window.alert(e instanceof Error ? e.message : String(e));
+        });
+    },
+    [leafFolderPath, isAdmin, episodeTagFilter]
+  );
+
+
   // Default expand season 1 (first); collapse others. URL seasonId wins once.
   useEffect(() => {
     if (!seasons.length) {
@@ -2105,7 +2171,19 @@ export default function SeriesSubseriesPage({
         ? uniqueDirectors
         : writers
       : writers;
-  const genres = scopedMeta?.genres ?? overview?.genres ?? [];
+  // Series leaf About: prefer this leaf's genres, else franchise base — never
+  // the multi-leaf rollup (sibling Adult Parody must not appear here).
+  const genresRaw =
+    scopedMeta?.genres != null
+      ? scopedMeta.genres
+      : isFilm || isBook || isGame
+        ? overview?.genres ?? []
+        : overview?.base_genres ?? [];
+  const genres = nsfwUnlocked
+    ? genresRaw
+    : genresRaw.filter(
+        (g) => !isAdultGenreName(typeof g === "string" ? g : g?.name)
+      );
   const publishers = scopedMeta?.publishers ?? overview?.publishers ?? [];
   const publisherFallback = publishers[0] || "";
   const country = scopedMeta?.country ?? overview?.country;
@@ -3479,6 +3557,59 @@ export default function SeriesSubseriesPage({
     detail?.folder_path,
     card?.folder_path,
   ]);
+
+  const allLeafEpisodesFlat = useMemo(() => {
+    const out: SeriesEpisodeItem[] = [];
+    const seen = new Set<string>();
+    const push = (eps: SeriesEpisodeItem[]) => {
+      for (const ep of eps) {
+        if (seen.has(ep.id)) continue;
+        seen.add(ep.id);
+        out.push(ep);
+      }
+    };
+    push(rootEpisodes);
+    for (const s of seasons) {
+      push(seasonEpisodes[s.id] || s.episodes || []);
+    }
+    push(episodeMovies);
+    return out;
+  }, [rootEpisodes, seasons, seasonEpisodes, episodeMovies]);
+
+  const taggedFlatEpisodes = useMemo(() => {
+    if (!episodeTagFilter) return [];
+    const want = episodeTagFilter.toLowerCase();
+    const matched = allLeafEpisodesFlat.filter((ep) =>
+      (tagsByEpisode[ep.id] || []).some((t) => t.toLowerCase() === want)
+    );
+    matched.sort((a, b) => {
+      const da = a.date_iso || "";
+      const db = b.date_iso || "";
+      if (da && db && da !== db) return da.localeCompare(db);
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      const na = a.number ?? 1e9;
+      const nb = b.number ?? 1e9;
+      if (na !== nb) return na - nb;
+      return (a.title || "").localeCompare(b.title || "", undefined, {
+        sensitivity: "base",
+      });
+    });
+    return matched;
+  }, [episodeTagFilter, allLeafEpisodesFlat, tagsByEpisode]);
+
+  const showEpisodeTagBar =
+    !isBook &&
+    !isFilm &&
+    tab === "episodes" &&
+    (episodeTags?.tags.length || 0) > 0;
+
+  const episodeListTagProps = {
+    tagsByEpisode,
+    suggestedTags: leafTagSuggestions,
+    isAdmin,
+    onTagsChange: isAdmin ? handleEpisodeTagsChange : undefined,
+  };
 
   const showMediaLayoutPicker =
     (tab === "series" ||
@@ -6399,10 +6530,62 @@ export default function SeriesSubseriesPage({
           {!error && (card || detail) && tab === "episodes" && !isBook ? (
             <div className="release-tracklist series-subseries-episodes">
               <div className="release-tracklist__body">
+                {showEpisodeTagBar ? (
+                  <div
+                    className="series-episode-tag-bar"
+                    role="tablist"
+                    aria-label="Episode tags"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={!episodeTagFilter}
+                      className={`series-episode-tag-bar__chip${
+                        !episodeTagFilter ? " is-active" : ""
+                      }`}
+                      onClick={() => setEpisodeTagFilter(null)}
+                    >
+                      All
+                    </button>
+                    {(episodeTags?.tags || []).map((t) => (
+                      <button
+                        key={t.label.toLowerCase()}
+                        type="button"
+                        role="tab"
+                        aria-selected={
+                          episodeTagFilter?.toLowerCase() ===
+                          t.label.toLowerCase()
+                        }
+                        className={`series-episode-tag-bar__chip${
+                          episodeTagFilter?.toLowerCase() ===
+                          t.label.toLowerCase()
+                            ? " is-active"
+                            : ""
+                        }`}
+                        onClick={() => setEpisodeTagFilter(t.label)}
+                      >
+                        {t.label}
+                        <span className="series-episode-tag-bar__count">
+                          {t.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {seasons.length === 0 && episodeMovies.length === 0 && rootEpisodes.length === 0 ? (
                   <p className="muted artist-section-empty">
                     No seasons or movies found under this subseries.
                   </p>
+                ) : episodeTagFilter ? (
+                  <div className="release-tracklist__content">
+                    <SeriesEpisodeList
+                      episodes={taggedFlatEpisodes}
+                      activeId={activeEpisodeId}
+                      emptyLabel={`No episodes tagged “${episodeTagFilter}”.`}
+                      onSelect={(ep) => setActiveEpisodeId(ep.id)}
+                      {...episodeListTagProps}
+                    />
+                  </div>
                 ) : (
                   <div className="release-tracklist__content">
                     {isVideoCollection && rootEpisodes.length > 0 ? (
@@ -6417,6 +6600,7 @@ export default function SeriesSubseriesPage({
                           setFocusCoverUrl(url);
                           setFocusBgUrl(url);
                         }}
+                        {...episodeListTagProps}
                       />
                     ) : null}
 
@@ -6459,6 +6643,7 @@ export default function SeriesSubseriesPage({
                                 setActiveEpisodeId(ep.id);
                                 selectSeasonCover(s);
                               }}
+                              {...episodeListTagProps}
                             />
                           </MsDisclosure>
                         </div>
@@ -6504,6 +6689,7 @@ export default function SeriesSubseriesPage({
                               setFocusCoverUrl(url);
                               setFocusBgUrl(url);
                             }}
+                            {...episodeListTagProps}
                           />
                         </MsDisclosure>
                       </div>
@@ -6537,6 +6723,7 @@ export default function SeriesSubseriesPage({
                               activeId={activeEpisodeId}
                               emptyLabel="No extras found."
                               onSelect={(ep) => setActiveEpisodeId(ep.id)}
+                              {...episodeListTagProps}
                             />
                           </MsDisclosure>
                         </div>

@@ -825,12 +825,21 @@ def series_franchise_games(franchise_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/folder")
-def series_folder(path: str = Query(..., min_length=1)):
+def series_folder(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Subseries or season folder detail (seasons or episodes)."""
+    from app.adult_content import series_leaf_is_adult
     from app.series_index import build_folder_detail
 
     detail = build_folder_detail(path)
     if not detail:
+        raise HTTPException(404, "Series folder not found")
+    if not nsfw_unlocked and series_leaf_is_adult(
+        db, "", folder_path=path
+    ):
         raise HTTPException(404, "Series folder not found")
     return detail
 
@@ -971,5 +980,42 @@ def series_remote_put(
         raise HTTPException(400, "folder_path required")
     try:
         return save_series_remote(db, path, seasons or [])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/episode-tags")
+def series_episode_tags_get(
+    path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Tags for all episodes under a Series leaf folder."""
+    from app.episode_tags import get_leaf_tag_payload
+
+    return get_leaf_tag_payload(db, path)
+
+
+@router.put("/episode-tags")
+def series_episode_tags_put(
+    body: dict,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Set tags (max 3) for one episode id under a Series leaf. Admin only."""
+    from app.episode_tags import set_episode_tags
+
+    path = (body.get("path") or body.get("folder_path") or "").strip()
+    episode_id = (body.get("episode_id") or "").strip()
+    tags = body.get("tags")
+    if not isinstance(tags, list):
+        tags = []
+    try:
+        return set_episode_tags(
+            db,
+            leaf_path=path,
+            episode_id=episode_id,
+            tags=[str(t) for t in tags],
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -53,6 +53,21 @@ export function removeSessionEntry(fullKey: string): void {
   }
 }
 
+/** Remove every sessionStorage entry for a namespace prefix. */
+export function clearSessionNamespace(namespace: string): void {
+  try {
+    const prefix = sessionCacheKey(namespace, "");
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(prefix)) keys.push(k);
+    }
+    for (const k of keys) sessionStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+}
+
 function trimOldSessionEntries(): void {
   try {
     const entries: { key: string; t: number }[] = [];

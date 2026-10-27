@@ -34,13 +34,21 @@ def build_games_dashboard(
         else {"franchises": [], "games": [], "platforms": []}
     )
     catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
+    adult_subs = set()
     if db is not None:
+        from app.adult_content import adult_subgenre_names_from_db
+
         catalog = enrich_games_catalog(db, catalog)
+        adult_subs = adult_subgenre_names_from_db(db)
     franchises = filter_adult_cards(
-        catalog.get("franchises") or [], nsfw_unlocked=nsfw_unlocked
+        catalog.get("franchises") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
     games = filter_adult_cards(
-        catalog.get("games") or [], nsfw_unlocked=nsfw_unlocked
+        catalog.get("games") or [],
+        nsfw_unlocked=nsfw_unlocked,
+        extra_adult_subgenres=adult_subs,
     )
     platforms = list(catalog.get("platforms") or [])
     for p in platforms:

@@ -912,3 +912,14 @@ class HobbyFieldOption(Base):
     hfo_field: Mapped[str] = mapped_column("hfoField", String(32), index=True)
     hfo_value: Mapped[str] = mapped_column("hfoValue", Text)
     hfo_created_at: Mapped[str | None] = mapped_column("hfoCreatedAt", Text)
+
+
+class SeriesEpisodeTags(Base):
+    """Admin tags on Series leaf episodes (disk + remote ids), up to 3 per episode."""
+
+    __tablename__ = "series_episode_tags"
+
+    set_id: Mapped[int] = mapped_column("setID", Integer, primary_key=True)
+    set_leaf_path: Mapped[str] = mapped_column("setLeafPath", Text, index=True)
+    set_episode_id: Mapped[str] = mapped_column("setEpisodeID", Text, index=True)
+    set_tags_json: Mapped[str | None] = mapped_column("setTagsJson", Text)

@@ -40,6 +40,7 @@ import type { MediaOption } from "../ModuleTopBar";
 import ModuleTopBar from "../ModuleTopBar";
 import AppMenu from "../AppMenu";
 import ModalPortal from "../ModalPortal";
+import ConfirmDialog from "../ConfirmDialog";
 import { IconPencil } from "../MenuIcons";
 
 type HobbyCollectionMenu = {
@@ -348,6 +349,8 @@ function HobbyCollectionView({
   const [editItem, setEditItem] = useState<HobbyItem | null | "new">(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [privateBusy, setPrivateBusy] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
   const showPrivateToggle = isAdmin && nsfwUnlocked;
@@ -396,15 +399,21 @@ function HobbyCollectionView({
   }, []);
 
   const runDeleteCollection = useCallback(() => {
-    if (
-      !window.confirm(
-        `Delete collection “${collection.name}” and all items?`
-      )
-    ) {
-      return;
-    }
-    void deleteHobbyCollection(collection.id).then(onDeleted);
-  }, [collection.id, collection.name, onDeleted]);
+    setDeleteConfirmOpen(true);
+  }, []);
+
+  const confirmDeleteCollection = useCallback(() => {
+    setDeleteBusy(true);
+    void deleteHobbyCollection(collection.id)
+      .then(onDeleted)
+      .catch((err) => {
+        window.alert(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        setDeleteBusy(false);
+        setDeleteConfirmOpen(false);
+      });
+  }, [collection.id, onDeleted]);
 
   const runPrivateChange = useCallback(
     (next: boolean) => {
@@ -690,6 +699,20 @@ function HobbyCollectionView({
           }}
         />
       ) : null}
+      {deleteConfirmOpen ? (
+        <ConfirmDialog
+          title="Delete collection"
+          message={`Delete collection “${collection.name}” and all items?`}
+          confirmLabel="Delete"
+          destructive
+          hideCancel
+          busy={deleteBusy}
+          onConfirm={confirmDeleteCollection}
+          onClose={() => {
+            if (!deleteBusy) setDeleteConfirmOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -830,40 +853,57 @@ function HobbyItemModal({
 
   return (
     <ModalPortal onClose={onClose}>
-      <div className="modal hobbies-item-modal">
-        <header className="modal__header">
-          <h2>{item ? "Edit item" : "Add item"}</h2>
-          <button type="button" className="modal__close" onClick={onClose}>
+      <div
+        className="modal-panel artist-admin-modal hobbies-item-modal"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-panel-header">
+          <h3>{item ? "Edit item" : "Add item"}</h3>
+          <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
-        </header>
+        </div>
         {error ? <p className="error">{error}</p> : null}
-        <div className="hobbies-form">
+        <div className="artist-admin-form">
           {fields.map((f) => {
             if (f === "image") {
               return (
-                <label key={f} className="hobbies-form__field">
-                  <span>Image (local wins over URL)</span>
-                  <input
-                    ref={imageRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      setPendingImage(e.target.files?.[0] ?? null)
-                    }
-                  />
-                  <input
-                    value={String(form.image_url ?? "")}
-                    onChange={(e) => setField("image_url", e.target.value)}
-                    placeholder="Or image URL"
-                  />
+                <label key={f} className="hobbies-item-modal__image-field">
+                  Image
+                  <div className="hobbies-item-modal__image-row">
+                    <input
+                      ref={imageRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) =>
+                        setPendingImage(e.target.files?.[0] ?? null)
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      onClick={() => imageRef.current?.click()}
+                    >
+                      {pendingImage ? pendingImage.name : "Choose file…"}
+                    </button>
+                    <span className="muted hobbies-item-modal__image-or">
+                      or
+                    </span>
+                    <input
+                      className="hobbies-item-modal__image-url"
+                      value={String(form.image_url ?? "")}
+                      onChange={(e) => setField("image_url", e.target.value)}
+                      placeholder="Add image URL"
+                    />
+                  </div>
                 </label>
               );
             }
             if (f === "missing" || f === "duplicates" || f === "notes") {
               return (
-                <label key={f} className="hobbies-form__field">
-                  <span>{FIELD_LABELS[f] || f}</span>
+                <label key={f}>
+                  {FIELD_LABELS[f] || f}
                   <textarea
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
@@ -888,8 +928,8 @@ function HobbyItemModal({
             if (isDropdown) {
               const list = options[f] || [];
               return (
-                <label key={f} className="hobbies-form__field">
-                  <span>{FIELD_LABELS[f] || f}</span>
+                <label key={f}>
+                  {FIELD_LABELS[f] || f}
                   <input
                     list={`hobby-opts-${f}`}
                     value={String(form[f] ?? "")}
@@ -903,15 +943,20 @@ function HobbyItemModal({
                 </label>
               );
             }
+            const placeholder =
+              f === "shop_url" || f === "tutorial_url"
+                ? "https://…"
+                : undefined;
             return (
-              <label key={f} className="hobbies-form__field">
-                <span>{FIELD_LABELS[f] || f}</span>
+              <label key={f}>
+                {FIELD_LABELS[f] || f}
                 <input
                   type={
                     f === "quantity" || f === "total_slots" ? "number" : "text"
                   }
                   value={String(form[f] ?? "")}
                   onChange={(e) => setField(f, e.target.value)}
+                  placeholder={placeholder}
                 />
               </label>
             );
@@ -922,17 +967,15 @@ function HobbyItemModal({
             </p>
           ) : null}
         </div>
-        <div className="modal__actions">
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
-            Cancel
-          </button>
+        <div className="modal-actions-row">
+          <span className="modal-actions__spacer" />
           <button
             type="button"
             className="btn"
             disabled={busy}
             onClick={() => void save()}
           >
-            Save
+            {busy ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

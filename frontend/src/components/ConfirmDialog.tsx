@@ -42,7 +42,9 @@ export default function ConfirmDialog({
             <button type="button" className="btn" onClick={onClose} disabled={busy}>
               {cancelLabel}
             </button>
-          ) : null}
+          ) : (
+            <span className="modal-actions__spacer" />
+          )}
           <button
             type="button"
             className={`btn${destructive ? " btn--danger" : ""}`}

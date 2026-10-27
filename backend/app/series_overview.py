@@ -1049,6 +1049,10 @@ def build_series_overview(
             None,
         )
 
+    # Franchise row genres (before leaf rollup) — leaf About falls back here
+    # so a sibling's Adult tag never appears on an unrelated show page.
+    franchise_base_genres = list(genres)
+
     # Franchise About fields roll up from per-subseries overrides when present
     if subseries_meta and subseries_cards:
         base_genres = list(genres)
@@ -1263,6 +1267,7 @@ def build_series_overview(
         "cast_languages": cast_languages,
         "activity_periods": activity_periods,
         "genres": genres,
+        "base_genres": franchise_base_genres,
         "parent_genre_names": parent_genre_names,
         "kind_label": kind_label,
         "publishers": publishers,
