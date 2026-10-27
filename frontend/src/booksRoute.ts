@@ -2,8 +2,10 @@ import { franchisePath, type FranchiseRoute } from "./franchiseRoute";
 import {
   dec,
   enc,
+  franchiseUrlSegment,
   isBookId,
   isReservedSegment,
+  leafUrlSegment,
   normalizeSlug,
   parseUniverseId,
   withUniverseQuery,
@@ -148,9 +150,14 @@ export function booksPath(route: BooksRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg = route.franchiseId;
+  const franchiseSeg = franchiseUrlSegment(
+    route.franchiseId,
+    route.franchiseName
+  );
   let path = `/books/${enc(franchiseSeg)}`;
-  path += `/${enc(route.bookId!)}`;
+  path += `/${enc(
+    leafUrlSegment({ id: route.bookId!, title: route.bookTitle })
+  )}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {

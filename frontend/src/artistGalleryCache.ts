@@ -56,6 +56,17 @@ export function clearArtistGalleryCache(bandId?: number): void {
   }
   store.clear();
   inflight.clear();
+  try {
+    const prefix = sessionCacheKey(NAMESPACE, "");
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(prefix)) keys.push(k);
+    }
+    for (const k of keys) sessionStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function prefetchArtistGallery(

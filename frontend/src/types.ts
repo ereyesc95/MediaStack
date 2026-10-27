@@ -1932,6 +1932,11 @@ export type FranchiseMediaEntry = {
   subseries?: string | null;
   franchise_display?: string | null;
   cover_url?: string | null;
+  portrait_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  logo_url?: string | null;
+  open_url?: string | null;
   display_date?: string | null;
 };
 

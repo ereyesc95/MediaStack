@@ -37,6 +37,46 @@ def _ensure_index():
     return index
 
 
+def _enrich_buckets(
+    related: dict[str, list],
+    *,
+    media_root: Path | None = None,
+) -> dict[str, list]:
+    """Attach cover/banner/logo URLs onto related entry cards."""
+    root = media_root
+    if root is None:
+        raw = settings.media_root
+        if not raw:
+            return related
+        root = Path(raw)
+    if not root.is_dir():
+        return related
+    from app.series_overview import _enrich_related_cards
+
+    out: dict[str, list] = {}
+    for bucket, entries in related.items():
+        if not isinstance(entries, list) or not entries:
+            out[bucket] = list(entries or [])
+            continue
+        # Ensure kind is present for enricher (bucket name → singular).
+        kind = {
+            "movies": "movie",
+            "series": "series",
+            "books": "book",
+            "games": "game",
+            "music": "music",
+        }.get(bucket, bucket.rstrip("s"))
+        stamped = []
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            row = dict(e)
+            row.setdefault("kind", kind)
+            stamped.append(row)
+        out[bucket] = _enrich_related_cards(stamped, root)
+    return out
+
+
 @router.post("/open-local")
 def open_local_media(path: str = Query(..., min_length=1)):
     """Open a media file with the OS default application (e.g. ROM emulator)."""
@@ -77,10 +117,17 @@ def open_local_media(path: str = Query(..., min_length=1)):
 
 
 @router.get("/related")
-def media_related(path: str = Query(..., min_length=1)):
+def media_related(
+    path: str = Query(..., min_length=1),
+    subseries: str | None = Query(
+        None,
+        description="Optional subseries title filter (e.g. Dragon Ball Z)",
+    ),
+):
     index = _ensure_index()
     slug = franchise_slug_for_path(index, path)
-    related = related_for_path(index, path)
+    related = related_for_path(index, path, subseries=subseries)
+    related = _enrich_buckets(related)
     group = index.franchises.get(slug) if slug else None
     return {
         "franchise": (
@@ -98,19 +145,30 @@ def media_related(path: str = Query(..., min_length=1)):
 
 
 @router.get("/franchise/{slug}/related")
-def franchise_related(slug: str):
+def franchise_related(
+    slug: str,
+    subseries: str | None = Query(
+        None,
+        description="Optional subseries title filter (e.g. Dragon Ball Z)",
+    ),
+):
     index = _ensure_index()
     group = index.franchises.get(normalize_franchise_slug(slug))
     if not group:
         raise HTTPException(404, "Franchise not found")
-    entries = {
+    entries: dict[str, list] = {
         "movies": [],
         "series": [],
         "books": [],
         "games": [],
         "music": [],
     }
+    want_sub = (subseries or "").strip().casefold() or None
     for entry in group.entries:
+        if want_sub:
+            entry_sub = (entry.subseries or "").strip().casefold()
+            if entry_sub and entry_sub != want_sub:
+                continue
         bucket = f"{entry.kind}s"
         if entry.kind == "series":
             bucket = "series"
@@ -134,6 +192,7 @@ def franchise_related(slug: str):
                 "franchise_display": entry.franchise_display,
             }
         )
+    entries = _enrich_buckets(entries)
     return {
         "franchise": {"slug": group.slug, "display_name": group.display_name},
         **entries,

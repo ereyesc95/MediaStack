@@ -2255,15 +2255,36 @@ export async function syncFolders(module = "all", mediaRoot?: string) {
   });
 }
 
-/** Rebuild franchise index so new Movies/Books/Games folders appear in Series. */
+/** Rebuild franchise index so new Movies/Books/Games folders appear in Related. */
 export async function rescanSeriesLocalData(force = true) {
   return request<{
     status: string;
     franchise_count: number;
     scanned_at?: string | null;
+    path?: string;
   }>(`${API}/sync/franchise-index?force=${force ? "true" : "false"}`, {
     method: "POST",
   });
+}
+
+/** Cached franchise-index status (admin). */
+export async function fetchFranchiseIndexStatus() {
+  return request<{
+    status: string;
+    franchise_count: number;
+    scanned_at?: string | null;
+    path?: string;
+    index_version?: number;
+  }>(`${API}/sync/franchise-index`);
+}
+
+export async function fetchMediaRelated(
+  path: string,
+  opts?: { subseries?: string | null }
+) {
+  const q = new URLSearchParams({ path });
+  if (opts?.subseries?.trim()) q.set("subseries", opts.subseries.trim());
+  return request<MediaRelatedPayload>(`${API}/media/related?${q.toString()}`);
 }
 
 export type AppSettings = {
@@ -3600,12 +3621,6 @@ export async function saveBooksRemote(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder_path, volumes }),
     }
-  );
-}
-
-export async function fetchMediaRelated(path: string) {
-  return request<MediaRelatedPayload>(
-    `${API}/media/related?path=${encodeURIComponent(path)}`
   );
 }
 

@@ -275,13 +275,64 @@ def series_dashboard(
 
 
 @router.get("/franchises/{franchise_id}")
-def series_franchise(franchise_id: str):
+def series_franchise(
+    franchise_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     """Franchise detail: subseries and/or direct seasons."""
-    from app.series_index import build_franchise_detail
+    from app.adult_content import (
+        adult_subgenre_names_from_db,
+        series_franchise_is_sfw,
+    )
+    from app.series_catalog_meta import (
+        enrich_catalog_metadata,
+        filter_franchise_subseries_lists,
+    )
+    from app.series_index import build_franchise_detail, build_series_catalog
 
     detail = build_franchise_detail(franchise_id)
     if not detail:
         raise HTTPException(404, "Series franchise not found")
+    if not nsfw_unlocked:
+        if not series_franchise_is_sfw(db, franchise_id):
+            raise HTTPException(404, "Series franchise not found")
+        # Drop adult leaves from nested subseries lists (same as catalog).
+        adult_subs = adult_subgenre_names_from_db(db)
+        catalog = enrich_catalog_metadata(db, build_series_catalog())
+        enriched = next(
+            (
+                f
+                for f in (catalog.get("franchises") or [])
+                if isinstance(f, dict)
+                and (
+                    str(f.get("id") or "").casefold() == franchise_id.casefold()
+                    or str(f.get("name") or "").casefold()
+                    == franchise_id.casefold()
+                )
+            ),
+            None,
+        )
+        if enriched:
+            wrapped = filter_franchise_subseries_lists(
+                [dict(enriched)],
+                nsfw_unlocked=False,
+                extra_adult_subgenres=adult_subs,
+            )
+            kept_ids = {
+                str(s.get("id") or "").casefold()
+                for s in (wrapped[0].get("subseries") or [])
+                if isinstance(s, dict)
+            }
+            raw_subs = detail.get("subseries")
+            if isinstance(raw_subs, list):
+                detail = dict(detail)
+                detail["subseries"] = [
+                    s
+                    for s in raw_subs
+                    if isinstance(s, dict)
+                    and str(s.get("id") or "").casefold() in kept_ids
+                ]
     return detail
 
 
@@ -293,9 +344,12 @@ def series_franchise_overview(
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
     """Artist-parity overview: bio/cast/links + disk subseries + related media."""
+    from app.adult_content import series_franchise_is_sfw
     from app.series_catalog_meta import apply_nsfw_filter_to_series_overview
     from app.series_overview import build_series_overview
 
+    if not nsfw_unlocked and not series_franchise_is_sfw(db, franchise_id):
+        raise HTTPException(404, "Series franchise not found")
     data = build_series_overview(db, franchise_id, orientation=orientation)
     if not data:
         raise HTTPException(404, "Series franchise not found")

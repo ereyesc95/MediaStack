@@ -6,6 +6,8 @@ import { clearRouteEntityCache } from "./routeEntityCache";
 import { clearUniversesCache } from "./universesCache";
 import { clearAllLeafPageCaches } from "./leafPageCache";
 import { clearFranchiseOverviewCache } from "./franchiseOverviewCache";
+import { clearArtistMediaTabCache } from "./artistMediaTabCache";
+import { clearArtistGalleryCache } from "./artistGalleryCache";
 
 /** Drop home-pane caches so the next load (new session / profile) can pick fresh art. */
 export function clearAllDashboardCaches(): void {
@@ -15,8 +17,10 @@ export function clearAllDashboardCaches(): void {
   clearBooksDashboardCache();
   clearUniversesCache();
   clearRouteEntityCache();
-  // Leaf / franchise About payloads include NSFW-stripped genres — must not
-  // survive a mystack ↔ mystacknsfw profile switch.
+  // Leaf / franchise About + exclusive galleries include NSFW-gated payloads —
+  // must not survive a mystack ↔ mystacknsfw profile switch.
   clearAllLeafPageCaches();
   clearFranchiseOverviewCache();
+  clearArtistMediaTabCache();
+  clearArtistGalleryCache();
 }

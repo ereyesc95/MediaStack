@@ -106,15 +106,13 @@ def _letter_folder(name: str | None) -> str:
 
 
 def _resolve_child_dir(parent: Path, name: str) -> Path:
-    direct = parent / name
-    if direct.is_dir():
-        return direct
-    if parent.is_dir():
-        fold = name.casefold()
-        for child in parent.iterdir():
-            if child.is_dir() and child.name.casefold() == fold:
-                return child
-    return direct
+    """Prefer a real child folder; also follow ``.path`` / ``.lnk`` / symlinks."""
+    from app.media_paths_util import resolve_named_child
+
+    hit = resolve_named_child(parent, name)
+    if hit is not None:
+        return hit
+    return parent / name
 
 
 def _artist_dir(media_root: Path, artist_name: str | None) -> Path | None:

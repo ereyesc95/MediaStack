@@ -14,8 +14,11 @@ Media/
 ├── Movies/{Letter}/{Work}/        ← film franchises & standalone films
 ├── Series/{Letter}/{Franchise}/   ← TV / franchise hub (optional subseries)
 ├── Books/{Letter}/{Work}/         ← publications (manga volumes, editions)
-└── Games/{Platform}/{Letter}/{Franchise}/   ← platform-first, then franchise
+├── Games/{Platform}/{Letter}/{Franchise}/   ← platform-first, then franchise
+└── Files/{Tab}/[Nested]/…        ← misc documents (FileStack; not franchises)
 ```
+
+Hobbies are **profile DB collections** (not under `Media/`); presets use `assets/hobbies/`.
 
 | Tier | Rule |
 |------|------|
@@ -404,10 +407,12 @@ Windows **`.lnk`** is supported; prefer `.path` for cross-module links on NAS.
 | Area | Scanner / UI status |
 |------|---------------------|
 | Music Audio | Implemented |
-| Music Video / Library tabs | Category grid; `.lnk` / `.path` resolved for items |
-| Franchise index | Phase 1–2 — scan/save/load + related API; UI panel pending |
-| Movies / Series / Books / Games modules | Series module in progress; others API stubs |
-| Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` |
+| Music Video / Library tabs | Category grid; `.lnk` / `.path` / symlink portals |
+| Franchise index | Phase 1–5 (aliases/overrides); Related UI on Series/Movies/Books/Games |
+| Movies / Series / Books / Games modules | Done (shared franchise/leaf chrome) |
+| Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` (+ portals) |
+| Files (`Files/{Tab}/`) | Done — browse + admin Manage Files |
+| Hobbies | Done — presets, items, Excel import/export, private |
 
 ---
 

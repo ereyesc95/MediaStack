@@ -26,6 +26,7 @@ import {
   IconList,
   IconSearch,
 } from "../MenuIcons";
+import ManageFilesModal from "./ManageFilesModal";
 
 type SortMode = "title" | "format";
 
@@ -86,6 +87,7 @@ export default function FilesModule({
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sort, setSort] = useState<SortMode>("title");
+  const [manageOpen, setManageOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchRootRef = useRef<HTMLDivElement>(null);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
@@ -318,6 +320,10 @@ export default function FilesModule({
               onImport={onImport}
               onSync={onSync ?? (() => {})}
               onChooseSource={onChooseSource}
+              onManageCatalog={
+                isAdmin ? () => setManageOpen(true) : undefined
+              }
+              manageCatalogLabel="Manage Files"
             />
           </>
         }
@@ -381,6 +387,45 @@ export default function FilesModule({
           </ul>
         ) : null}
       </div>
+
+      {manageOpen && isAdmin ? (
+        <ManageFilesModal
+          tabs={tabs}
+          activeTab={activeTab}
+          nested={nested}
+          nestedFilter={nestedFilter}
+          onClose={() => setManageOpen(false)}
+          onChanged={(nextTabId) => {
+            void (async () => {
+              const list = await reloadTabs();
+              let next: string | undefined;
+              if (nextTabId === null) {
+                next = list[0]?.id;
+              } else if (nextTabId !== undefined) {
+                next = list.some((t) => t.id === nextTabId)
+                  ? nextTabId
+                  : list[0]?.id;
+              } else if (activeTab && list.some((t) => t.id === activeTab)) {
+                next = activeTab;
+              } else {
+                next = list[0]?.id;
+              }
+              setActiveTab(next);
+              setNestedFilter("all");
+              if (next) {
+                pushFilesTabRoute(next, true);
+                await reloadFiles(next);
+              } else {
+                pushFilesRootRoute(true);
+                setFiles([]);
+                setNested([]);
+              }
+            })().catch((e) =>
+              setError(e instanceof Error ? e.message : String(e))
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -94,8 +94,11 @@ type Props = {
   universeId?: number;
   onNavigate: (patch: {
     franchiseId?: string;
+    franchiseName?: string;
     subseriesId?: string;
+    subseriesTitle?: string;
     seasonId?: string;
+    seasonTitle?: string;
     section?: SeriesSection;
     overviewTab?: SeriesOverviewTab;
     universeId?: number;
@@ -442,9 +445,16 @@ export default function SeriesModule({
       preferredSection: preferredSectionForSource("series"),
       backLabel: "SERIES",
     });
+    const subTitle =
+      standaloneId && card
+        ? (card.subseries || []).find((s) => s.id === standaloneId)?.title ||
+          (card.is_standalone ? card.name : undefined)
+        : undefined;
     onNavigate({
       franchiseId: id,
+      franchiseName: card?.name || shellHint?.name,
       subseriesId: standaloneId,
+      subseriesTitle: subTitle,
       seasonId: undefined,
       section: "overview",
     });

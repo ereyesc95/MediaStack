@@ -70,15 +70,45 @@ def sync_folders_background(
     return {"status": "started", "module": body.module}
 
 
+@router.get("/franchise-index")
+def franchise_index_status(_admin: User = Depends(require_admin)):
+    """Cached franchise-index metadata (Related media discovery)."""
+    from app.franchise_index import (
+        FRANCHISE_INDEX_VERSION,
+        franchise_index_cache_path,
+        load_franchise_index,
+    )
+
+    cached = load_franchise_index()
+    path = franchise_index_cache_path()
+    if not cached:
+        return {
+            "status": "missing",
+            "path": str(path),
+            "franchise_count": 0,
+            "scanned_at": None,
+            "index_version": FRANCHISE_INDEX_VERSION,
+        }
+    return {
+        "status": "ok",
+        "path": str(path),
+        "franchise_count": len(cached.franchises),
+        "scanned_at": cached.scanned_at,
+        "index_version": getattr(cached, "index_version", FRANCHISE_INDEX_VERSION),
+    }
+
+
 @router.post("/franchise-index")
 def sync_franchise_index(
     force: bool = Query(False),
     _admin: User = Depends(require_admin),
 ):
+    """Rebuild the Related-media franchise index from disk."""
     from pathlib import Path
 
     from app.franchise_index import build_franchise_index, save_franchise_index
 
+    _ = force  # Always rebuild when explicitly requested.
     root = settings.media_root
     if not root:
         raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")

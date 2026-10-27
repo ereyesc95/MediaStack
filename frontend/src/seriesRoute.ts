@@ -3,7 +3,9 @@ import { franchisePath, type FranchiseRoute } from "./franchiseRoute";
 import {
   dec,
   enc,
+  franchiseUrlSegment,
   isReservedSegment,
+  leafUrlSegment,
   normalizeSlug,
   stripDatedFolderTitle,
   parseUniverseId,
@@ -154,13 +156,26 @@ export function seriesPath(route: SeriesRoute): string {
     return franchisePath(fr);
   }
 
-  const franchiseSeg = route.franchiseId;
+  const franchiseSeg = franchiseUrlSegment(
+    route.franchiseId,
+    route.franchiseName
+  );
   let path = `/series/${enc(franchiseSeg)}`;
   if (route.subseriesId) {
-    path += `/${enc(route.subseriesId)}`;
+    path += `/${enc(
+      leafUrlSegment({
+        id: route.subseriesId,
+        title: route.subseriesTitle,
+      })
+    )}`;
   }
   if (route.seasonId) {
-    path += `/season/${enc(route.seasonId)}`;
+    path += `/season/${enc(
+      leafUrlSegment({
+        id: route.seasonId,
+        title: route.seasonTitle,
+      })
+    )}`;
   }
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {

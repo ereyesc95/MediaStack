@@ -30933,6 +30933,31 @@ button.lyrics-status-badge--icon-only {
   margin: 1.5rem 0;
   text-align: center;
 }
+.manage-files-modal__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+}
+.manage-files-modal__section {
+  margin-bottom: 1rem;
+}
+.manage-files-modal__section h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+}
+.manage-files-modal__prompt {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+}
+.manage-files-modal__prompt label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+.manage-files-modal__prompt input {
+  padding: 0.4rem 0.55rem;
+}
 .files-module__list {
   list-style: none;
   margin: 0;

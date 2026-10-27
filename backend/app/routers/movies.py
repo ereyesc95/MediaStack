@@ -205,13 +205,31 @@ def movies_dashboard(
 
 
 @router.get("/franchises/{work_id}")
-def movies_franchise(work_id: str, db: Session = Depends(get_db)):
+def movies_franchise(
+    work_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     try:
         detail = build_work_detail(work_id)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     if not detail:
         raise HTTPException(404, "Franchise not found")
+    if not nsfw_unlocked:
+        from app.adult_content import (
+            filter_adult_movie_leaf_cards,
+            movie_work_is_sfw,
+        )
+
+        if not movie_work_is_sfw(db, work_id):
+            raise HTTPException(404, "Franchise not found")
+        films = list(detail.get("films") or [])
+        if films:
+            detail = dict(detail)
+            detail["films"] = filter_adult_movie_leaf_cards(
+                db, films, nsfw_unlocked=False
+            )
     universe = universe_for_franchise(db, "movies", detail.get("slug") or work_id)
     detail["universe"] = universe
     if universe:
@@ -230,8 +248,15 @@ def movies_franchise_overview(
     if not overview:
         raise HTTPException(404, "Franchise not found")
     if not nsfw_unlocked:
-        from app.adult_content import filter_adult_movie_leaf_cards
+        from app.adult_content import (
+            adult_subgenre_names_from_db,
+            card_has_adult_genres,
+            filter_adult_movie_leaf_cards,
+            movie_work_is_sfw,
+        )
 
+        if not movie_work_is_sfw(db, work_id):
+            raise HTTPException(404, "Franchise not found")
         films = list(overview.get("films") or [])
         filtered = filter_adult_movie_leaf_cards(
             db, films, nsfw_unlocked=False
@@ -248,6 +273,19 @@ def movies_franchise_overview(
             or str(s.get("id") or "") in want
             or not str(s.get("id") or "").startswith("film_")
         ]
+        # Strip adult genre chips from work About (leaf genres may roll up).
+        extra = adult_subgenre_names_from_db(db)
+        genres = overview.get("genres")
+        if isinstance(genres, list):
+            overview["genres"] = [
+                g
+                for g in genres
+                if isinstance(g, dict)
+                and not card_has_adult_genres(
+                    genre_names=[str(g.get("name") or "")],
+                    extra_adult_subgenres=extra,
+                )
+            ]
     return overview
 
 
@@ -392,13 +430,32 @@ def movies_gallery(
 
 
 @router.get("/films/{film_id}")
-def movies_film(film_id: str, db: Session = Depends(get_db)):
+def movies_film(
+    film_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     try:
         detail = build_film_detail(film_id)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     if not detail:
         raise HTTPException(404, "Film not found")
+    if not nsfw_unlocked:
+        from app.adult_content import filter_adult_movie_leaf_cards
+
+        kept = filter_adult_movie_leaf_cards(
+            db,
+            [
+                {
+                    "id": film_id,
+                    "title": detail.get("title") or detail.get("name"),
+                }
+            ],
+            nsfw_unlocked=False,
+        )
+        if not kept:
+            raise HTTPException(404, "Film not found")
     work = detail.get("work") or {}
     detail["universe"] = universe_for_franchise(db, "movies", work.get("id") or "")
     return detail

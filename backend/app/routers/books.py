@@ -322,10 +322,30 @@ def books_gallery(
 
 
 @router.get("/books/{book_id}")
-def book_detail(book_id: str):
+def book_detail(
+    book_id: str,
+    db: Session = Depends(get_db),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
     detail = build_book_detail(book_id)
     if not detail:
         raise HTTPException(404, "Book not found")
+    if not nsfw_unlocked:
+        from app.adult_content import card_has_adult_genres
+        from app.books_catalog_meta import enrich_books_catalog
+
+        tmp = {"books": [{"id": book_id}], "franchises": []}
+        enrich_books_catalog(db, tmp)
+        leaf = (tmp.get("books") or [{}])[0]
+        if card_has_adult_genres(
+            genre_names=leaf.get("genre_names")
+            if isinstance(leaf.get("genre_names"), list)
+            else None,
+            parent_genre_names=leaf.get("parent_genre_names")
+            if isinstance(leaf.get("parent_genre_names"), list)
+            else None,
+        ):
+            raise HTTPException(404, "Book not found")
     return detail
 
 

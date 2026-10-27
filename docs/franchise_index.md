@@ -172,7 +172,9 @@ When viewing a **movie**, show sibling films in same `Movies/{L}/{Franchise}/` p
 
 ## Overrides and aliases
 
-### Aliases (`data/franchise_aliases.json` — future)
+### Aliases (`data/franchise_aliases.json`)
+
+Loaded at index build time. Flat string values merge alias folders into a canonical slug:
 
 ```json
 {
@@ -181,15 +183,11 @@ When viewing a **movie**, show sibling films in same `Movies/{L}/{Franchise}/` p
 }
 ```
 
-Optional **parent** link for sub-franchise film lines:
+Object values (parent links) are reserved for a later pass and ignored by the loader today.
 
-```json
-{
-  "dragon ball z": { "slug": "dragon ball z", "parent": "dragon ball" }
-}
-```
+### Overrides (`data/franchise_overrides.json`)
 
-### Overrides (`data/franchise_overrides.json` — future)
+Applied after the disk scan:
 
 ```json
 [
@@ -207,6 +205,9 @@ Optional **parent** link for sub-franchise film lines:
   }
 ]
 ```
+
+- **`exclude`**: hide the `to` path from Related when viewing the franchise that owns `from`
+- **`link`**: attach the `to` entry under the franchise inferred from `from` (biopic / subject bridges)
 
 Manual **`.path`** files remain valid; scanner resolves target and registers an override edge if slug differs.
 
@@ -234,33 +235,34 @@ Manual **`.path`** files remain valid; scanner resolves target and registers an 
 - [x] Parse paths for Movies, Series, Books, Games per layout doc
 - [x] Write cache `data/franchise_index/index.json` (`save_franchise_index` / `load_franchise_index`)
 - [x] `related_for_path()` + `franchise_slug_for_path()` helpers
-- [ ] CLI or `POST /api/sync/franchise-index?force=true`
-- [ ] Unit tests with fixture paths
+- [x] CLI or `POST /api/sync/franchise-index?force=true` (+ `GET` status)
+- [x] Unit tests with fixture paths (`backend/tests/test_franchise_index.py`)
 
 ### Phase 2 — API + cache invalidation
 
-- [x] `GET /api/media/related?path=…`
-- [x] `GET /api/media/franchise/{slug}/related`
-- [x] `POST /api/sync/franchise-index` (manual rebuild)
-- [ ] Hook rebuild into folder sync / media scan pipeline
+- [x] `GET /api/media/related?path=…` (cover enrichment + optional `subseries` filter)
+- [x] `GET /api/media/franchise/{slug}/related` (same)
+- [x] `POST /api/sync/franchise-index` (manual rebuild) + admin **Rebuild related index**
+- [x] Hook rebuild into folder sync / media scan pipeline (incl. games)
 - [ ] Expose slug on series/movie/book/game overview payloads
 
 ### Phase 3 — UI
 
-- [ ] **Related media** panel on Series, Movie, Book, Game pages (when modules exist)
+- [x] **Related media** panel on Series, Movie, Book, Game pages (when modules exist)
 - [ ] Optional panel on Music artist when franchise/subject links exist
-- [ ] Subseries filter rules (tags / overrides)
+- [x] Subseries filter query param on related API (`?subseries=…`)
 
 ### Phase 4 — Scanner alignment
 
-- [ ] Video/Library tabs: resolve `.path`/symlinks via `resolve_media_entry()`
-- [ ] Series folder sync: support `Series/{Letter}/{Franchise}/`
-- [ ] Music Video/Library category names: Documentaries, Interviews, Live, Movies, Music Videos, Promo Material, Series / Articles, Books, Interviews, Magazines, Reviews, Scans
+- [x] Video/Library tabs: resolve `.path`/symlinks via `resolve_media_entry()` (+ category portals)
+- [x] Series folder sync: support `Series/{Letter}/{Franchise}/` (incl. `.path`/`.lnk` portals)
+- [x] Music Video/Library category names: Documentaries, Interviews, Live, Movies, Music Videos, Promo Material, Series / Articles, Books, Interviews, Magazines, Reviews, Scans
 
 ### Phase 5 — Aliases & overrides
 
-- [ ] `franchise_aliases.json` loader
-- [ ] `franchise_overrides.json` + admin UI (optional)
+- [x] `franchise_aliases.json` loader (flat alias → canonical)
+- [x] `franchise_overrides.json` (`link` / `exclude` edges)
+- [ ] Admin UI for aliases/overrides (optional)
 - [ ] Biopic / subject relations in DB
 
 ---

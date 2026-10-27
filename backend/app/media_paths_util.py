@@ -192,6 +192,39 @@ def entry_display_name(entry: Path) -> str:
     return name
 
 
+def resolve_named_child(
+    parent: Path,
+    name: str,
+    *,
+    media_root: Path | None = None,
+) -> Path | None:
+    """Find a child directory by name, following symlinks / ``.path`` / ``.lnk``.
+
+    Matches real folders first, then portal files whose display stem equals
+    ``name`` (case-insensitive). Returns ``None`` when nothing resolves.
+    """
+    want = (name or "").strip().casefold()
+    if not want or not parent.is_dir():
+        return None
+    direct = parent / name
+    if direct.is_dir():
+        return direct
+    try:
+        children = list(parent.iterdir())
+    except OSError:
+        return None
+    for child in children:
+        if child.is_dir() and child.name.casefold() == want:
+            return child
+    for child in children:
+        if entry_display_name(child).casefold() != want:
+            continue
+        resolved = resolve_media_entry(child, media_root=media_root)
+        if resolved and resolved.is_dir():
+            return resolved
+    return None
+
+
 def _folder_has_direct_artwork(folder: Path) -> bool:
     try:
         for child in folder.iterdir():

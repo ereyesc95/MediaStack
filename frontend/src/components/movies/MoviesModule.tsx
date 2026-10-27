@@ -5,6 +5,8 @@ import {
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import { filterAdultCards } from "../../adultContent";
+import { getStoredProfile } from "../../auth";
 import {
   getCachedUniverses,
   prefetchUniverses,
@@ -359,13 +361,30 @@ export default function MoviesModule({
     Boolean(backgroundUrl || backgroundIso);
 
   const browseFranchises = useMemo((): SeriesFranchiseCard[] => {
+    const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
     if (catalogScope === "franchises") {
-      return franchises
-        .filter((f) => !(f as SeriesFranchiseCard & { is_standalone?: boolean }).is_standalone)
-        .map((f) => {
-        const workFilms =
-          (f as SeriesFranchiseCard & { films?: MoviesFilmCard[] }).films ||
-          films.filter((film) => film.work_id === f.id);
+      return filterAdultCards(
+        franchises.filter(
+          (f) =>
+            !(f as SeriesFranchiseCard & { is_standalone?: boolean }).is_standalone
+        ),
+        nsfwUnlocked
+      ).map((f) => {
+        const workFilms = filterAdultCards(
+          (
+            (f as SeriesFranchiseCard & { films?: MoviesFilmCard[] }).films ||
+            films.filter((film) => film.work_id === f.id)
+          ).map((film) => ({
+            ...film,
+            genre_names:
+              (film as MoviesFilmCard & { genre_names?: string[] }).genre_names ??
+              [],
+            parent_genre_names:
+              (film as MoviesFilmCard & { parent_genre_names?: string[] })
+                .parent_genre_names ?? [],
+          })),
+          nsfwUnlocked
+        );
         return {
           ...f,
           subseries: workFilms.map((film) => ({
@@ -414,59 +433,64 @@ export default function MoviesModule({
         } as SeriesFranchiseCard;
       });
     }
-    return films.map((film) => {
-      const enriched = film as MoviesFilmCard & {
-        country_iso?: string | null;
-        country_id?: number | null;
-        continent_id?: number | null;
-        genre_ids?: (number | string)[];
-        genre_names?: string[];
-        publishers?: string[];
-        writers?: string[];
-        open_url?: string | null;
-        open_label?: string | null;
-      };
-      const titleLetter = (() => {
-        const ch = (film.title || "").trim().charAt(0).toUpperCase();
-        return ch && ch >= "A" && ch <= "Z" ? ch : "#";
-      })();
-      const openUrl = enriched.open_url ?? null;
-      return {
-        id: film.id,
-        name: film.title,
-        letter: titleLetter,
-        slug: film.work_id || film.id,
-        folder_path: film.folder_path,
-        cover_url: film.cover_url,
-        logo_url: film.logo_url ?? null,
-        icon_url: film.icon_url ?? null,
-        badge_url: film.badge_url ?? null,
-        country_iso: enriched.country_iso ?? null,
-        country_id: enriched.country_id ?? null,
-        continent_id: enriched.continent_id ?? null,
-        genre_ids: enriched.genre_ids ?? [],
-        genre_names: enriched.genre_names ?? [],
-        publishers: enriched.publishers ?? [],
-        writers: enriched.writers ?? [],
-        open_url: openUrl,
-        open_label: openUrl ? "Play movie" : enriched.open_label || null,
-        subseries: [
-          {
-            id: film.id,
-            title: film.title,
-            date_iso: film.date_iso,
-            display_date: film.display_date ?? null,
-            folder_path: film.folder_path,
-            cover_url: film.cover_url,
-            season_count: 1,
-            open_url: openUrl,
-            open_label: openUrl ? "Play movie" : null,
-          },
-        ],
-        season_count: 1,
-        subseries_count: 1,
-      } as SeriesFranchiseCard;
-    });
+    return filterAdultCards(
+      films.map((film) => {
+        const enriched = film as MoviesFilmCard & {
+          country_iso?: string | null;
+          country_id?: number | null;
+          continent_id?: number | null;
+          genre_ids?: (number | string)[];
+          genre_names?: string[];
+          parent_genre_names?: string[];
+          publishers?: string[];
+          writers?: string[];
+          open_url?: string | null;
+          open_label?: string | null;
+        };
+        const titleLetter = (() => {
+          const ch = (film.title || "").trim().charAt(0).toUpperCase();
+          return ch && ch >= "A" && ch <= "Z" ? ch : "#";
+        })();
+        const openUrl = enriched.open_url ?? null;
+        return {
+          id: film.id,
+          name: film.title,
+          letter: titleLetter,
+          slug: film.work_id || film.id,
+          folder_path: film.folder_path,
+          cover_url: film.cover_url,
+          logo_url: film.logo_url ?? null,
+          icon_url: film.icon_url ?? null,
+          badge_url: film.badge_url ?? null,
+          country_iso: enriched.country_iso ?? null,
+          country_id: enriched.country_id ?? null,
+          continent_id: enriched.continent_id ?? null,
+          genre_ids: enriched.genre_ids ?? [],
+          genre_names: enriched.genre_names ?? [],
+          parent_genre_names: enriched.parent_genre_names ?? [],
+          publishers: enriched.publishers ?? [],
+          writers: enriched.writers ?? [],
+          open_url: openUrl,
+          open_label: openUrl ? "Play movie" : enriched.open_label || null,
+          subseries: [
+            {
+              id: film.id,
+              title: film.title,
+              date_iso: film.date_iso,
+              display_date: film.display_date ?? null,
+              folder_path: film.folder_path,
+              cover_url: film.cover_url,
+              season_count: 1,
+              open_url: openUrl,
+              open_label: openUrl ? "Play movie" : null,
+            },
+          ],
+          season_count: 1,
+          subseries_count: 1,
+        } as SeriesFranchiseCard;
+      }),
+      nsfwUnlocked
+    );
   }, [catalogScope, franchises, films]);
 
   const openWork = (
@@ -510,9 +534,12 @@ export default function MoviesModule({
       }
     }
     if (card?.is_standalone && card.primary_film_id) {
+      const primaryFilm = films.find((f) => f.id === card.primary_film_id);
       pushMoviesRoute({
         franchiseId: workId,
+        franchiseName: card.name,
         filmId: card.primary_film_id,
+        filmTitle: primaryFilm?.title,
         section: "overview",
         overviewTab: "about",
       });
@@ -527,6 +554,7 @@ export default function MoviesModule({
     }
     pushMoviesRoute({
       franchiseId: workId,
+      franchiseName: card?.name,
       section: "overview",
       overviewTab: "about",
     });

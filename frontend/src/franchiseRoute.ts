@@ -2,6 +2,7 @@ import type { SeriesOverviewTab, SeriesSection } from "./types";
 import {
   dec,
   enc,
+  franchiseUrlSegment,
   isReservedSegment,
   parseUniverseId,
   withUniverseQuery,
@@ -64,7 +65,11 @@ function parseTail(parts: string[]): {
 }
 
 export function franchisePath(route: FranchiseRoute): string {
-  let path = `${FRANCHISE_PATH_PREFIX}/${enc(route.franchiseId)}`;
+  const franchiseSeg = franchiseUrlSegment(
+    route.franchiseId,
+    route.franchiseName
+  );
+  let path = `${FRANCHISE_PATH_PREFIX}/${enc(franchiseSeg)}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
     const tab =

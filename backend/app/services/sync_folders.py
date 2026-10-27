@@ -71,13 +71,34 @@ async def sync_bands(
     return {"table": "bands", "added": added, "scanned": scanned}
 
 
-def _iter_series_franchise_dirs(series_root: Path) -> list[Path]:
-    """Yield franchise folders under Series/{Letter}/{Franchise}/ (or legacy flat Series/{Show}/)."""
+def _iter_series_franchise_dirs(
+    series_root: Path, *, media_root: Path | None = None
+) -> list[Path]:
+    """Yield franchise folders under Series/{Letter}/{Franchise}/ (or legacy flat Series/{Show}/).
+
+    Follows ``.path`` / ``.lnk`` / symlink portals under letter tiers.
+    """
+    from app.media_paths_util import entry_display_name, resolve_media_entry
+
     out: list[Path] = []
+    root_for_paths = media_root or (
+        series_root.parent if series_root.name.casefold() == "series" else series_root
+    )
     try:
         children = sorted(series_root.iterdir(), key=lambda p: p.name.casefold())
     except OSError:
         return out
+
+    def _append_franchise(entry: Path) -> None:
+        display = entry_display_name(entry)
+        if display.startswith("["):
+            return
+        if entry.is_dir():
+            out.append(entry)
+            return
+        resolved = resolve_media_entry(entry, media_root=root_for_paths)
+        if resolved and resolved.is_dir():
+            out.append(resolved)
 
     letter_dirs = [
         p
@@ -90,16 +111,14 @@ def _iter_series_franchise_dirs(series_root: Path) -> list[Path]:
                 for franchise_dir in sorted(
                     letter_dir.iterdir(), key=lambda p: p.name.casefold()
                 ):
-                    if franchise_dir.is_dir() and not franchise_dir.name.startswith("["):
-                        out.append(franchise_dir)
+                    _append_franchise(franchise_dir)
             except OSError:
                 continue
         return out
 
     # Legacy: Series/{Show}/ directly under Series/
     for show_dir in children:
-        if show_dir.is_dir() and not show_dir.name.startswith("["):
-            out.append(show_dir)
+        _append_franchise(show_dir)
     return out
 
 
@@ -116,7 +135,7 @@ async def sync_series(
     known = _existing_names(db, Series.ser_name, Series.ser_name)
     added = 0
     scanned = 0
-    for franchise_dir in _iter_series_franchise_dirs(series_root):
+    for franchise_dir in _iter_series_franchise_dirs(series_root, media_root=root):
         scanned += 1
         folder_name = _normalize_folder_name(franchise_dir.name)
         if folder_name in known:
@@ -242,7 +261,7 @@ async def run_folder_sync(
         results.append(sync_movies(db, root))
     if module in ("books", "all"):
         results.append(sync_books(db, root))
-    if module in ("all", "movies", "books", "series", "franchise"):
+    if module in ("all", "movies", "books", "series", "games", "franchise"):
         results.append(rebuild_franchise_index(root))
     # Media-tab caches (artist Movies/Series/Books) keep stale folder paths after moves.
     if module in ("all", "movies", "series", "books", "music", "bands"):

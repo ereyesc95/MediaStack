@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isAdultGenreName } from "../../adultContent";
+import { getStoredProfile } from "../../auth";
 import { formatTrackDate } from "../../formatDate";
 import type { SeriesOverview, SeriesSubseriesCard } from "../../types";
 import {
@@ -303,7 +305,10 @@ export default function SeriesAbout({
   const hasBio = Boolean(data.bio);
   const writers = data.writers || [];
   const activityPeriods = data.activity_periods || [];
-  const genres = data.genres || [];
+  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
+  const genres = (data.genres || []).filter(
+    (g) => nsfwUnlocked || !isAdultGenreName(g?.name)
+  );
   const publishers = data.publishers || [];
   const hasSubseriesCarousel = visibleSubseries.length > 6;
 

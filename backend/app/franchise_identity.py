@@ -75,7 +75,12 @@ def _display_folder_name(name: str | None) -> str:
 def franchise_letter_dir(
     media_root: Path, module_folder: str, name: str
 ) -> Path | None:
-    """Return ``{Module}/{Letter}/{Name}/`` when it exists on disk."""
+    """Return ``{Module}/{Letter}/{Name}/`` when it exists on disk.
+
+    Follows ``.path`` / ``.lnk`` / symlink portals for the franchise folder.
+    """
+    from app.media_paths_util import resolve_named_child
+
     safe = _display_folder_name(name)
     if not safe:
         return None
@@ -84,18 +89,9 @@ def franchise_letter_dir(
         return None
     letter = _letter_folder(safe)
     letter_path = _resolve_child_dir(module_dir, letter)
-    direct = letter_path / safe
-    if direct.is_dir():
-        return direct
-    if letter_path.is_dir():
-        target = safe.casefold()
-        try:
-            for child in letter_path.iterdir():
-                if child.is_dir() and child.name.casefold() == target:
-                    return child
-        except OSError:
-            pass
-    return None
+    if not letter_path.is_dir():
+        return None
+    return resolve_named_child(letter_path, safe, media_root=media_root)
 
 
 def find_music_artist_dir(

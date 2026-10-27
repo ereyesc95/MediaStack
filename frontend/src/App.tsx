@@ -225,6 +225,13 @@ export default function App() {
       if (cancelled) return;
       if (resolved) {
         setView(resolved.view);
+        if (
+          resolved.canonicalPath &&
+          resolved.canonicalPath !==
+            window.location.pathname + window.location.search
+        ) {
+          window.history.replaceState(null, "", resolved.canonicalPath);
+        }
       }
     }
 
@@ -312,6 +319,13 @@ export default function App() {
 
       if (resolved) {
         setView(resolved.view);
+        if (
+          resolved.canonicalPath &&
+          resolved.canonicalPath !==
+            window.location.pathname + window.location.search
+        ) {
+          window.history.replaceState(null, "", resolved.canonicalPath);
+        }
         return;
       }
 
@@ -435,45 +449,39 @@ export default function App() {
   }
 
   async function handleSync() {
-
     setBusy("Syncing…");
-
     try {
-
       await syncFolders("all");
-
       setBusy("Sync done");
-
       window.setTimeout(() => setBusy(""), 2500);
-
-      void rescanSeriesLocalData(true).catch(() => {});
-
+      // Folder sync already rebuilds the franchise index; refresh dashboards.
       clearMusicDashboardCache();
-
       clearSeriesDashboardCache();
-
       clearMoviesDashboardCache();
-
       clearBooksDashboardCache();
-
       void prefetchMusicDashboard({ force: true });
-
       void prefetchSeriesDashboard({ force: true });
-
       void prefetchMoviesDashboard({ force: true });
-
       void prefetchBooksDashboard({ force: true });
-
       setSyncTick((t) => t + 1);
-
     } catch (e) {
-
       setError(e instanceof Error ? e.message : String(e));
-
       setBusy("");
-
     }
+  }
 
+  async function handleRebuildRelatedIndex() {
+    setBusy("Rebuilding related index…");
+    try {
+      const result = await rescanSeriesLocalData(true);
+      const n = result.franchise_count ?? 0;
+      setBusy(`Related index rebuilt · ${n} franchise${n === 1 ? "" : "s"}`);
+      window.setTimeout(() => setBusy(""), 3500);
+      setSyncTick((t) => t + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy("");
+    }
   }
 
 
@@ -615,6 +623,9 @@ export default function App() {
     <AppMenu
       onImport={handleImport}
       onSync={handleSync}
+      onRebuildRelatedIndex={
+        isAdmin ? () => void handleRebuildRelatedIndex() : undefined
+      }
       onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
       onRegenerateModuleIcons={
         isAdmin ? () => setModuleIconsConfirmOpen(true) : undefined
@@ -898,7 +909,9 @@ export default function App() {
                 }
                 pushSeriesRoute({
                   franchiseId: leaf.franchiseId,
+                  franchiseName: leaf.franchiseName,
                   subseriesId: leaf.subseriesId,
+                  subseriesTitle: leaf.subseriesTitle,
                   section: "overview",
                   overviewTab: "about",
                 });
@@ -1367,23 +1380,44 @@ export default function App() {
             universeId={view.universeId}
             cardOrientation={cardOrientation}
             onSetOrientation={setOrientation}
-            onNavigate={(patch) =>
+            onNavigate={(patch) => {
+              const franchiseId =
+                "franchiseId" in patch ? patch.franchiseId : view.franchiseId;
+              const subseriesId =
+                "subseriesId" in patch ? patch.subseriesId : view.subseriesId;
+              const seasonId =
+                "seasonId" in patch ? patch.seasonId : view.seasonId;
+              const section = patch.section ?? view.section ?? "overview";
+              const overviewTab =
+                "overviewTab" in patch
+                  ? patch.overviewTab
+                  : view.overviewTab;
+              const universeId =
+                "universeId" in patch ? patch.universeId : view.universeId;
+              if (franchiseId) {
+                pushSeriesRoute({
+                  franchiseId,
+                  franchiseName: patch.franchiseName,
+                  subseriesId,
+                  subseriesTitle: patch.subseriesTitle,
+                  seasonId,
+                  seasonTitle: patch.seasonTitle,
+                  section: section as import("./types").SeriesSection,
+                  overviewTab:
+                    overviewTab as import("./types").SeriesOverviewTab,
+                  universeId,
+                });
+              }
               setView({
                 kind: "series",
-                franchiseId:
-                  "franchiseId" in patch ? patch.franchiseId : view.franchiseId,
-                subseriesId:
-                  "subseriesId" in patch ? patch.subseriesId : view.subseriesId,
-                seasonId: "seasonId" in patch ? patch.seasonId : view.seasonId,
-                section: patch.section ?? view.section,
-                overviewTab:
-                  "overviewTab" in patch
-                    ? patch.overviewTab
-                    : view.overviewTab,
-                universeId:
-                  "universeId" in patch ? patch.universeId : view.universeId,
-              })
-            }
+                franchiseId,
+                subseriesId,
+                seasonId,
+                section,
+                overviewTab,
+                universeId,
+              });
+            }}
             onOpenMusicRelease={(bandId, releaseId, seriesCtx) => {
               if (seriesCtx?.franchiseId) {
                 saveReleaseReferrer({

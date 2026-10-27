@@ -97,6 +97,43 @@ export function parseUniverseId(search: string): number | undefined {
   return Number(raw);
 }
 
+/**
+ * Franchise hub URL segment: prefer display name when provided.
+ * Ids are usually already slug-like (`dragon ball`); names keep casing for readability.
+ */
+export function franchiseUrlSegment(
+  id: string,
+  name?: string | null
+): string {
+  const n = (name || "").trim();
+  if (n) return n;
+  return (id || "").trim();
+}
+
+/**
+ * Leaf URL segment for series/movies/books/games.
+ * - Dated folder ids (`2015.07.05. Title`) stay as-is (unique + readable).
+ * - Hash ids (`film_…` / `book_…`) prefer a display title when known.
+ * - Otherwise prefer title; fall back to id.
+ */
+export function leafUrlSegment(opts: {
+  id: string;
+  title?: string | null;
+}): string {
+  const id = (opts.id || "").trim();
+  const title = (opts.title || "").trim();
+  if (!id && title) return stripDatedFolderTitle(title) || title;
+  if (!id) return "";
+  if (/^\d{4}(?:\.\d{2}){0,2}\.\s+\S/.test(id)) return id;
+  if ((isFilmId(id) || isBookId(id) || /^game_[0-9a-f]/i.test(id)) && title) {
+    return stripDatedFolderTitle(title) || title;
+  }
+  if (title && !isReservedSegment(title.split("/")[0] || title)) {
+    return stripDatedFolderTitle(title) || title;
+  }
+  return id;
+}
+
 export function withUniverseQuery(path: string, universeId?: number): string {
   if (universeId == null) return path;
   return `${path}?universe=${universeId}`;

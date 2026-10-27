@@ -48,6 +48,7 @@ export type SeriesLeafFromPath = {
   franchiseId: string;
   subseriesId?: string;
   franchiseName?: string;
+  subseriesTitle?: string;
 };
 
 export async function seriesLeafFromFolderPath(
@@ -85,6 +86,7 @@ export async function seriesLeafFromFolderPath(
         franchiseId,
         subseriesId: hit.id,
         franchiseName: detail?.name ?? franchiseName,
+        subseriesTitle: hit.title || undefined,
       };
     }
   } catch {
@@ -95,5 +97,6 @@ export async function seriesLeafFromFolderPath(
     franchiseId,
     subseriesId: leafFolder,
     franchiseName,
+    subseriesTitle: leafFolder,
   };
 }

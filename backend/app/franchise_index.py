@@ -4,7 +4,7 @@ Builds a slug-keyed map of Movies, Series, Books, and Games entries that share
 the same {Franchise} folder name. See docs/franchise_index.md and
 docs/media_library_layout.md.
 
-Status: Phase 1 (index builder) — scan/save/load implemented; API + UI not wired yet.
+Status: Phase 1–2 — scan/save/load + related API; rebuild via sync + admin UI.
 """
 
 from __future__ import annotations
@@ -162,6 +162,147 @@ def franchise_index_cache_path() -> Path:
     return cache_dir / "index.json"
 
 
+def franchise_aliases_path() -> Path:
+    return DATA_DIR / "franchise_aliases.json"
+
+
+def franchise_overrides_path() -> Path:
+    return DATA_DIR / "franchise_overrides.json"
+
+
+def load_franchise_aliases() -> dict[str, str]:
+    """Map alias slug → canonical franchise slug (flat string values only).
+
+    Parent-link objects in the JSON are ignored here (reserved for later).
+    """
+    path = franchise_aliases_path()
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, val in raw.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(val, str) and val.strip():
+            alias = normalize_franchise_slug(key)
+            canon = normalize_franchise_slug(val)
+            if alias and canon and alias != canon:
+                out[alias] = canon
+    return out
+
+
+def load_franchise_overrides() -> list[dict[str, Any]]:
+    """Load include/exclude/link edges from franchise_overrides.json."""
+    path = franchise_overrides_path()
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [row for row in raw if isinstance(row, dict)]
+
+
+def canonical_franchise_slug(
+    name: str, aliases: dict[str, str] | None = None
+) -> str:
+    """Normalize then resolve through the alias map (one hop)."""
+    slug = normalize_franchise_slug(name)
+    if not slug:
+        return slug
+    table = aliases if aliases is not None else load_franchise_aliases()
+    return table.get(slug, slug)
+
+
+def _apply_aliases(index: FranchiseIndex, aliases: dict[str, str]) -> None:
+    """Merge alias franchise groups into their canonical slug buckets."""
+    if not aliases:
+        return
+    for alias, canon in list(aliases.items()):
+        if alias not in index.franchises or alias == canon:
+            continue
+        src = index.franchises.pop(alias)
+        dest = index.franchises.get(canon)
+        if not dest:
+            dest = FranchiseGroup(
+                display_name=src.display_name,
+                slug=canon,
+                letter=src.letter,
+                entries=[],
+            )
+            index.franchises[canon] = dest
+        seen = {e.path.casefold() for e in dest.entries}
+        for entry in src.entries:
+            if entry.path.casefold() not in seen:
+                dest.entries.append(entry)
+                seen.add(entry.path.casefold())
+
+
+def _apply_overrides(index: FranchiseIndex, overrides: list[dict[str, Any]]) -> None:
+    """Apply exclude/link edges after the disk scan."""
+    if not overrides:
+        return
+
+    def _norm_path(p: str) -> str:
+        return (p or "").replace("\\", "/").strip().rstrip("/").casefold()
+
+    # Index entries by path for fast lookup
+    by_path: dict[str, FranchiseEntry] = {}
+    for group in index.franchises.values():
+        for entry in group.entries:
+            by_path[entry.path.casefold().rstrip("/")] = entry
+
+    for row in overrides:
+        kind = str(row.get("type") or "").strip().casefold()
+        if kind == "exclude":
+            frm = _norm_path(str(row.get("from") or ""))
+            to = _norm_path(str(row.get("to") or ""))
+            if frm and to:
+                index.exclude_edges.append((frm, to))
+        elif kind == "link":
+            frm = str(row.get("from") or "").replace("\\", "/").strip().rstrip("/")
+            to = str(row.get("to") or "").replace("\\", "/").strip().rstrip("/")
+            if not frm or not to:
+                continue
+            target_entry = by_path.get(to.casefold())
+            if not target_entry:
+                continue
+            # Attach a copy of the target entry under the franchise of `from`
+            from_parts = [p for p in frm.split("/") if p]
+            if len(from_parts) >= 3:
+                display = from_parts[2]
+                slug = normalize_franchise_slug(display)
+            else:
+                display = Path(frm).name
+                slug = normalize_franchise_slug(display)
+            if not slug:
+                continue
+            clone = FranchiseEntry(
+                kind=target_entry.kind,
+                path=target_entry.path,
+                title=target_entry.title,
+                date_iso=target_entry.date_iso,
+                letter=target_entry.letter,
+                platform=target_entry.platform,
+                subseries=target_entry.subseries,
+                franchise_display=target_entry.franchise_display,
+            )
+            _register_entry(
+                index,
+                slug=slug,
+                display_name=display,
+                letter=from_parts[1] if len(from_parts) >= 2 else None,
+                entry=clone,
+            )
+
+
 @dataclass
 class FranchiseEntry:
     kind: EntryKind
@@ -187,6 +328,8 @@ class FranchiseIndex:
     index_version: int = FRANCHISE_INDEX_VERSION
     scanned_at: str = field(default_factory=_now_iso)
     franchises: dict[str, FranchiseGroup] = field(default_factory=dict)
+    # Normalized path pairs: hide `to` when related-for `from`.
+    exclude_edges: list[tuple[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -201,6 +344,9 @@ class FranchiseIndex:
                 }
                 for slug, group in self.franchises.items()
             },
+            "exclude_edges": [
+                {"from": a, "to": b} for a, b in self.exclude_edges
+            ],
         }
 
 
@@ -535,10 +681,33 @@ def build_franchise_index(media_root: Path) -> FranchiseIndex:
     index = FranchiseIndex()
     if not media_root.is_dir():
         return index
+    aliases = load_franchise_aliases()
     _scan_movies(media_root, index)
     _scan_series(media_root, index)
     _scan_books(media_root, index)
     _scan_games(media_root, index)
+    # Re-key scanned folders through aliases (folder "DBZ" → dragon ball).
+    if aliases:
+        remapped: dict[str, FranchiseGroup] = {}
+        for slug, group in index.franchises.items():
+            canon = aliases.get(slug, slug)
+            existing = remapped.get(canon)
+            if not existing:
+                remapped[canon] = FranchiseGroup(
+                    display_name=group.display_name,
+                    slug=canon,
+                    letter=group.letter,
+                    entries=list(group.entries),
+                )
+            else:
+                seen = {e.path.casefold() for e in existing.entries}
+                for entry in group.entries:
+                    if entry.path.casefold() not in seen:
+                        existing.entries.append(entry)
+                        seen.add(entry.path.casefold())
+        index.franchises = remapped
+        _apply_aliases(index, aliases)
+    _apply_overrides(index, load_franchise_overrides())
     index.scanned_at = _now_iso()
     return index
 
@@ -567,10 +736,19 @@ def load_franchise_index(path: Path | None = None) -> FranchiseIndex | None:
             letter=group.get("letter"),
             entries=entries,
         )
+    exclude_edges: list[tuple[str, str]] = []
+    for edge in raw.get("exclude_edges") or []:
+        if not isinstance(edge, dict):
+            continue
+        frm = str(edge.get("from") or "").casefold().rstrip("/")
+        to = str(edge.get("to") or "").casefold().rstrip("/")
+        if frm and to:
+            exclude_edges.append((frm, to))
     return FranchiseIndex(
         index_version=int(raw.get("index_version") or FRANCHISE_INDEX_VERSION),
         scanned_at=raw.get("scanned_at") or _now_iso(),
         franchises=franchises,
+        exclude_edges=exclude_edges,
     )
 
 
@@ -598,8 +776,17 @@ def franchise_slug_for_path(index: FranchiseIndex, rel_path: str) -> str | None:
     return None
 
 
-def related_for_path(index: FranchiseIndex, rel_path: str) -> dict[str, list[dict[str, Any]]]:
-    """Return related entries for a catalog path (excluding the path itself)."""
+def related_for_path(
+    index: FranchiseIndex,
+    rel_path: str,
+    *,
+    subseries: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return related entries for a catalog path (excluding the path itself).
+
+    When ``subseries`` is set, keep only entries whose ``subseries`` field
+    matches (casefold), or franchise-root entries with no subseries tag.
+    """
     norm = rel_path.replace("\\", "/").casefold().rstrip("/")
     slug = franchise_slug_for_path(index, rel_path)
     if not slug:
@@ -607,12 +794,28 @@ def related_for_path(index: FranchiseIndex, rel_path: str) -> dict[str, list[dic
     group = index.franchises.get(slug)
     if not group:
         return {}
+    want_sub = (subseries or "").strip().casefold() or None
     out: dict[str, list[dict[str, Any]]] = {
         bucket: [] for bucket in _KIND_BUCKETS.values()
     }
+    blocked: set[str] = set()
+    for frm, to in index.exclude_edges:
+        if (
+            norm == frm
+            or norm.startswith(frm + "/")
+            or frm.startswith(norm + "/")
+        ):
+            blocked.add(to)
     for entry in group.entries:
-        if entry.path.casefold().rstrip("/") == norm:
+        entry_norm = entry.path.casefold().rstrip("/")
+        if entry_norm == norm:
             continue
+        if entry_norm in blocked:
+            continue
+        if want_sub:
+            entry_sub = (entry.subseries or "").strip().casefold()
+            if entry_sub and entry_sub != want_sub:
+                continue
         bucket = _KIND_BUCKETS.get(entry.kind, "music")
         out[bucket].append(asdict(entry))
     return out

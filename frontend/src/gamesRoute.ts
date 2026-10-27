@@ -2,7 +2,9 @@ import { franchisePath, type FranchiseRoute } from "./franchiseRoute";
 import {
   dec,
   enc,
+  franchiseUrlSegment,
   isReservedSegment,
+  leafUrlSegment,
   parseUniverseId,
   withUniverseQuery,
 } from "./routeSlug";
@@ -141,7 +143,13 @@ export function gamesPath(route: GamesRoute): string {
     return franchisePath(fr);
   }
 
-  let path = `/games/${enc(route.franchiseId)}/${enc(route.gameId!)}`;
+  const franchiseSeg = franchiseUrlSegment(
+    route.franchiseId,
+    route.franchiseName
+  );
+  let path = `/games/${enc(franchiseSeg)}/${enc(
+    leafUrlSegment({ id: route.gameId!, title: route.gameTitle })
+  )}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {
     const tab =

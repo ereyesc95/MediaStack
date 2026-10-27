@@ -25,7 +25,7 @@ from app.paths import DATA_DIR
 VIDEO_ROOT = "Video"
 LIBRARY_ROOT = "Library"
 # Bump when scan semantics change so disk caches refresh.
-MEDIA_TAB_SCAN_VERSION = 9
+MEDIA_TAB_SCAN_VERSION = 10
 
 # Artist media tabs now prefer sibling module franchise folders:
 # video → Movies/{L}/{Artist}/, library → Books/{L}/{Artist}/, series → Series/…
@@ -289,7 +289,7 @@ def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]
         return []
 
     known = _known_categories(kind)
-    category_dirs: list[Path] = []
+    category_dirs: list[tuple[str, Path]] = []
     root_entries: list[tuple[Path, Path]] = []
 
     try:
@@ -302,22 +302,31 @@ def _scan_section_root(section: Path, media_root: Path, kind: str) -> list[dict]
             continue
         if entry.name.casefold() in _SKIP_ITEM_NAMES:
             continue
-        if entry.is_dir() and entry.name.casefold() in known:
-            category_dirs.append(entry)
+        label = entry_display_name(entry)
+        display = label.casefold()
+        if display in known:
+            # Real category folder, or Documentaries.path / .lnk portal.
+            resolved_cat = (
+                entry
+                if entry.is_dir()
+                else resolve_media_entry(entry, media_root=media_root)
+            )
+            if resolved_cat and resolved_cat.is_dir():
+                category_dirs.append((label, resolved_cat))
             continue
         resolved = resolve_media_entry(entry, media_root=media_root)
         if resolved:
             root_entries.append((entry, resolved))
 
     categories: list[dict] = []
-    for cat_dir in category_dirs:
+    for label, cat_dir in category_dirs:
         items = _scan_items_in_container(cat_dir, media_root, kind)
         if not items:
             continue
         categories.append(
             {
-                "key": cat_dir.name.casefold().replace(" ", "_"),
-                "label": cat_dir.name,
+                "key": label.casefold().replace(" ", "_"),
+                "label": label,
                 "items": items,
             }
         )
@@ -407,9 +416,17 @@ def iter_resolved_media_items(
             continue
         if entry.name.casefold() in _SKIP_ITEM_NAMES:
             continue
-        if entry.is_dir() and entry.name.casefold() in known:
+        label = entry_display_name(entry)
+        if label.casefold() in known:
+            cat_dir = (
+                entry
+                if entry.is_dir()
+                else resolve_media_entry(entry, media_root=media_root)
+            )
+            if not cat_dir or not cat_dir.is_dir():
+                continue
             try:
-                nested = sorted(entry.iterdir(), key=lambda p: p.name.casefold())
+                nested = sorted(cat_dir.iterdir(), key=lambda p: p.name.casefold())
             except OSError:
                 continue
             for child in nested:

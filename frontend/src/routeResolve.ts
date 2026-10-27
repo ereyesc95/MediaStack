@@ -203,9 +203,12 @@ export async function resolveSeriesRoute(
   route: SeriesRoute
 ): Promise<SeriesRoute> {
   let subseriesId = route.subseriesId;
-  if (subseriesId) {
-    try {
-      const detail = await fetchSeriesFranchise(route.franchiseId);
+  let subseriesTitle = route.subseriesTitle;
+  let franchiseName = route.franchiseName;
+  try {
+    const detail = await fetchSeriesFranchise(route.franchiseId);
+    if (!franchiseName && detail?.name) franchiseName = detail.name;
+    if (subseriesId) {
       const subs = [
         ...(detail.subseries || []),
         ...(detail.is_standalone && detail.primary_subseries_id
@@ -215,52 +218,82 @@ export async function resolveSeriesRoute(
       const hit = matchLeafTitle(subs, subseriesId);
       if (hit) {
         subseriesId = hit.id;
-        rememberLeafSlug("series", route.franchiseId, hit.title || subseriesId, hit.id);
+        subseriesTitle = hit.title || subseriesTitle;
+        rememberLeafSlug(
+          "series",
+          route.franchiseId,
+          hit.title || subseriesId,
+          hit.id
+        );
       }
-    } catch {
-      /* keep raw slug */
     }
+  } catch {
+    /* keep raw slug */
   }
-  return { ...route, subseriesId };
+  return { ...route, franchiseName, subseriesId, subseriesTitle };
 }
 
 export async function resolveMoviesRoute(route: MoviesRoute): Promise<MoviesRoute> {
   let filmId = route.filmId;
-  if (filmId && !isFilmId(filmId)) {
-    try {
-      const detail = await fetchMoviesFranchise(route.franchiseId);
+  let filmTitle = route.filmTitle;
+  let franchiseName = route.franchiseName;
+  try {
+    const detail = await fetchMoviesFranchise(route.franchiseId);
+    if (!franchiseName && detail?.name) franchiseName = detail.name;
+    if (filmId) {
       const films = detail.films || [];
-      const hit = matchLeafTitle(films, filmId);
+      const hit =
+        matchLeafTitle(films, filmId) ||
+        (isFilmId(filmId)
+          ? films.find((f) => f.id === filmId)
+          : undefined);
       if (hit) {
         filmId = hit.id;
-        rememberLeafSlug("movies", route.franchiseId, hit.title || filmId, hit.id);
+        filmTitle = hit.title || filmTitle;
+        rememberLeafSlug(
+          "movies",
+          route.franchiseId,
+          hit.title || filmId,
+          hit.id
+        );
       }
-    } catch {
-      /* keep slug */
     }
+  } catch {
+    /* keep slug */
   }
-  return { ...route, filmId };
+  return { ...route, franchiseName, filmId, filmTitle };
 }
 
 export async function resolveBooksRoute(route: BooksRoute): Promise<BooksRoute> {
   let bookId = route.bookId;
-  if (bookId && !isBookId(bookId)) {
-    try {
-      const detail = await fetchBooksFranchise(route.franchiseId);
+  let bookTitle = route.bookTitle;
+  let franchiseName = route.franchiseName;
+  try {
+    const detail = await fetchBooksFranchise(route.franchiseId);
+    if (!franchiseName && detail?.name) franchiseName = detail.name;
+    if (bookId) {
       const books =
         (detail as { books?: typeof detail.films }).books ||
         detail.films ||
         [];
-      const hit = matchLeafTitle(books, bookId);
+      const hit =
+        matchLeafTitle(books, bookId) ||
+        (isBookId(bookId) ? books.find((b) => b.id === bookId) : undefined);
       if (hit) {
         bookId = hit.id;
-        rememberLeafSlug("books", route.franchiseId, hit.title || bookId, hit.id);
+        bookTitle = hit.title || bookTitle;
+        rememberLeafSlug(
+          "books",
+          route.franchiseId,
+          hit.title || bookId,
+          hit.id
+        );
       }
-    } catch {
-      /* keep slug */
     }
+  } catch {
+    /* keep slug */
   }
-  return { ...route, bookId };
+  return { ...route, franchiseName, bookId, bookTitle };
 }
 
 export async function resolveUniverseRoute(
@@ -430,6 +463,7 @@ export async function resolvePathToView(
       };
     }
     const seriesRoute = await resolveSeriesRoute(seriesParsed);
+    const { seriesPath } = await import("./seriesRoute");
     return {
       view: {
         kind: "series",
@@ -440,6 +474,7 @@ export async function resolvePathToView(
         overviewTab: seriesRoute.overviewTab,
         universeId: seriesRoute.universeId,
       },
+      canonicalPath: seriesPath(seriesRoute),
     };
   }
 
@@ -468,6 +503,7 @@ export async function resolvePathToView(
       };
     }
     const moviesRoute = await resolveMoviesRoute(moviesParsed);
+    const { moviesPath } = await import("./moviesRoute");
     return {
       view: {
         kind: "movies",
@@ -477,6 +513,7 @@ export async function resolvePathToView(
         overviewTab: moviesRoute.overviewTab,
         universeId: moviesRoute.universeId,
       },
+      canonicalPath: moviesPath(moviesRoute),
     };
   }
 
@@ -505,6 +542,7 @@ export async function resolvePathToView(
       };
     }
     const booksRoute = await resolveBooksRoute(booksParsed);
+    const { booksPath } = await import("./booksRoute");
     return {
       view: {
         kind: "books",
@@ -514,6 +552,7 @@ export async function resolvePathToView(
         overviewTab: booksRoute.overviewTab,
         universeId: booksRoute.universeId,
       },
+      canonicalPath: booksPath(booksRoute),
     };
   }
 
@@ -546,6 +585,7 @@ export async function resolvePathToView(
         canonicalPath: franchisePath(fr),
       };
     }
+    const { gamesPath } = await import("./gamesRoute");
     return {
       view: {
         kind: "games",
@@ -555,6 +595,10 @@ export async function resolvePathToView(
         overviewTab: gamesParsed.overviewTab,
         universeId: gamesParsed.universeId,
       },
+      canonicalPath: gamesPath({
+        ...gamesParsed,
+        franchiseName: gamesParsed.franchiseName,
+      }),
     };
   }
 

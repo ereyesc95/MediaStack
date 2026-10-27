@@ -39,7 +39,9 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 | Staff roles (Original / Dub / Hybrid) | Done (`staff_roles` + `/api/series/staff-roles`) |
 | Per-film NSFW genres | Done (`movies_catalog_meta` leaf genres) |
 | `backend/app/franchise_index.py` | Phase 1–2: scan/save/load + `GET /api/media/related` |
-| Games module UI | Placeholders |
+| Games module UI | Done (shared SeriesFranchisePage / leaf chrome) |
+| Files module | Done (`Files/{Tab}/` browse + admin Manage Files) |
+| Hobbies module | Done (presets, Excel import/export, private collections) |
 
 ## Series / Movies / Books files
 
@@ -62,11 +64,11 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 
 ## Next work (in order)
 
-1. Pass display titles into more `push*Route` call sites so slug URLs appear immediately (not only after resolve)
-2. Enrich related API with cover URLs; hook franchise-index rebuild into media scan
-3. **Phase 5** — aliases/overrides; biopic/subject DB links
-4. Games module UI (same franchise patterns)
-5. Title-collision disambiguation for slug leaves (date/hash fallback)
+1. Optional Music artist Related panel when franchise/subject links exist
+2. Expose slug on series/movie/book/game overview payloads
+3. Biopic / subject relations in DB (+ optional alias admin UI)
+4. Title-collision disambiguation polish for remaining leaf edge cases
+5. Files: optional in-UI file move/rename/delete (API already exists)
 
 ## Key code files
 

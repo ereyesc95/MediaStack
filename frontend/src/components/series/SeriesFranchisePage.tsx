@@ -607,10 +607,12 @@ export default function SeriesFranchisePage({
   ]);
 
   useEffect(() => {
+    const franchiseName = data?.name || shell?.name || undefined;
     if (isGames) {
       pushGamesRoute(
         {
           franchiseId,
+          franchiseName,
           section: section as import("../../gamesRoute").GamesSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
           universeId,
@@ -623,6 +625,7 @@ export default function SeriesFranchisePage({
       pushBooksRoute(
         {
           franchiseId,
+          franchiseName,
           section: section as import("../../booksRoute").BooksSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
           universeId,
@@ -635,6 +638,7 @@ export default function SeriesFranchisePage({
       pushMoviesRoute(
         {
           franchiseId,
+          franchiseName,
           section: section as import("../../moviesRoute").MoviesSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
           universeId,
@@ -646,6 +650,7 @@ export default function SeriesFranchisePage({
     pushSeriesRoute(
       {
         franchiseId,
+        franchiseName,
         subseriesId,
         seasonId,
         section,
@@ -664,6 +669,8 @@ export default function SeriesFranchisePage({
     isMoviesOnly,
     isGames,
     universeId,
+    data?.name,
+    shell?.name,
   ]);
 
   useEffect(() => {
