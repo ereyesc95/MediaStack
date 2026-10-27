@@ -330,6 +330,70 @@ def get_tmdb_key(db: Session) -> str | None:
     return None
 
 
+def get_google_books_key(db: Session | None = None) -> str | None:
+    """Env MYSTACK_GOOGLE_BOOKS_API_KEY or ApiAuth row named Google Books."""
+    from app.config import settings
+    from app.models import ApiAuth
+
+    env = (getattr(settings, "google_books_api_key", "") or "").strip()
+    if env:
+        return env
+    if db is None:
+        from app.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            return get_google_books_key(session)
+        finally:
+            session.close()
+    row = db.scalar(
+        select(ApiAuth).where(
+            ApiAuth.api_name.in_(
+                ("Google Books", "GoogleBooks", "google_books", "googlebooks")
+            )
+        )
+    )
+    if row and row.api_key_encrypted:
+        return (row.api_key_encrypted or "").strip() or None
+    if row and row.api_token:
+        return (row.api_token or "").strip() or None
+    return None
+
+
+def save_google_books_key(db: Session, api_key: str) -> None:
+    """Upsert ApiAuth row for Google Books (same pattern as Spotify/IGDB)."""
+    from app.models import ApiAuth
+
+    key = (api_key or "").strip()
+    if not key:
+        raise ValueError("Google Books API key is required")
+    row = db.scalar(
+        select(ApiAuth).where(
+            ApiAuth.api_name.in_(
+                ("Google Books", "GoogleBooks", "google_books", "googlebooks")
+            )
+        )
+    )
+    if not row:
+        next_id = int(db.scalar(select(func.max(ApiAuth.api_id))) or 0) + 1
+        row = ApiAuth(
+            api_id=next_id,
+            api_name="Google Books",
+            api_key_encrypted=key,
+            api_url="https://www.googleapis.com/books/v1/volumes",
+            api_doc="https://developers.google.com/books/docs/v1/using",
+        )
+        db.add(row)
+    else:
+        row.api_name = "Google Books"
+        row.api_key_encrypted = key
+        if not row.api_url:
+            row.api_url = "https://www.googleapis.com/books/v1/volumes"
+        if not row.api_doc:
+            row.api_doc = "https://developers.google.com/books/docs/v1/using"
+    db.commit()
+
+
 def record_play(
     db: Session,
     *,

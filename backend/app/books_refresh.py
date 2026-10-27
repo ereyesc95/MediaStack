@@ -6,16 +6,25 @@ from pathlib import Path
 from app.books_index import find_book_dir, find_work_dir
 from app.books_store import load_work_about, save_work_about
 from app.manual_metadata import mark_manual
-from app.services.google_books import get_google_book, search_google_books
+from app.services.google_books import (
+    GoogleBooksError,
+    get_google_book,
+    search_google_books,
+)
 
 
 def search_book_metadata(query: str) -> dict:
-    return {"results": search_google_books(query)}
+    try:
+        return {"results": search_google_books(query)}
+    except GoogleBooksError as exc:
+        return {"results": [], "error": str(exc)}
 
 
 def preview_book_metadata(volume_id: str) -> dict | None:
-    data = get_google_book(volume_id)
-    return data
+    try:
+        return get_google_book(volume_id)
+    except GoogleBooksError:
+        return None
 
 
 def apply_book_metadata_stub(book_id: str, volume_id: str) -> dict:
@@ -23,7 +32,10 @@ def apply_book_metadata_stub(book_id: str, volume_id: str) -> dict:
     v1: return normalized metadata payload for the client / future DB persist.
     Local art remains authoritative on disk; this seeds bio/authors/genres.
     """
-    data = get_google_book(volume_id)
+    try:
+        data = get_google_book(volume_id)
+    except GoogleBooksError as exc:
+        return {"ok": False, "error": str(exc)}
     if not data:
         return {"ok": False, "error": "Volume not found"}
     found = find_book_dir(book_id)
@@ -49,7 +61,10 @@ def apply_book_metadata_stub(book_id: str, volume_id: str) -> dict:
 def search_work_metadata(work_id: str, query: str | None = None) -> dict:
     found = find_work_dir(work_id)
     name = found[0].name if found else work_id
-    return {"results": search_google_books(query or name)}
+    try:
+        return {"results": search_google_books(query or name)}
+    except GoogleBooksError as exc:
+        return {"results": [], "error": str(exc)}
 
 
 def patch_work_about(

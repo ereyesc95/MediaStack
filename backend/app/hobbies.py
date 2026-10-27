@@ -41,7 +41,7 @@ _LEGACY_PRESET_NAMES: dict[str, frozenset[str]] = {
 # Columns shown per preset (shared bag; unused stay null)
 PRESET_FIELDS: dict[str, tuple[str, ...]] = {
     "marbles": ("type", "size", "style", "quantity", "image"),
-    "puzzle": ("title", "brand", "theme", "box_size", "image", "shop_url"),
+    "puzzle": ("title", "brand", "theme", "size", "box_size", "image", "shop_url"),
     "cube": ("title", "brand", "category", "image", "shop_url", "tutorial_url"),
     "uno": ("title", "brand", "theme", "image", "shop_url"),
     "poker": ("title", "brand", "theme", "type", "image", "shop_url"),

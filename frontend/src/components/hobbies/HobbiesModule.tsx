@@ -41,18 +41,50 @@ import ModuleTopBar from "../ModuleTopBar";
 import AppMenu from "../AppMenu";
 import ModalPortal from "../ModalPortal";
 import ConfirmDialog from "../ConfirmDialog";
-import { IconPencil } from "../MenuIcons";
+import GalleryViewerModal, {
+  type GalleryViewerItem,
+} from "../music/artist/GalleryViewerModal";
+import {
+  IconExternalLink,
+  IconPencil,
+  IconTrash,
+} from "../MenuIcons";
 
 type HobbyCollectionMenu = {
   onAdd: () => void;
   onImport: () => void;
   onExport: () => void;
   onTemplate: () => void;
+  onDeleteItems: () => void;
+  deleteItemsActive: boolean;
   onDelete: () => void;
   privateChecked: boolean | null;
   privateBusy: boolean;
   onPrivateChange: (next: boolean) => void;
 };
+
+type SortState = { col: string; dir: "asc" | "desc" };
+
+function normalizeExternalUrl(raw: string): string {
+  const url = raw.trim();
+  if (!url) return "";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
+  return `https://${url}`;
+}
+
+function cellSortValue(it: HobbyItem, col: string): string | number {
+  if (col === "image") return it.image ? 1 : 0;
+  if (col === "quantity" || col === "total_slots" || col === "items_collected") {
+    const n = Number((it as Record<string, unknown>)[col]);
+    return Number.isFinite(n) ? n : -Infinity;
+  }
+  if (col === "completion_pct") return it.completion_pct ?? -Infinity;
+  if (col === "missing" || col === "duplicates") {
+    return ((it[col as "missing" | "duplicates"] || []) as string[]).join(", ");
+  }
+  const val = (it as Record<string, unknown>)[col];
+  return val == null ? "" : String(val);
+}
 
 type Props = {
   mediaOptions: MediaOption[];
@@ -88,6 +120,11 @@ const FIELD_LABELS: Record<string, string> = {
   tutorial_url: "Tutorial",
   notes: "Notes",
 };
+
+function fieldLabel(col: string, preset?: string): string {
+  if (col === "size" && preset === "puzzle") return "Pieces";
+  return FIELD_LABELS[col] || col;
+}
 
 export default function HobbiesModule({
   mediaOptions,
@@ -241,6 +278,10 @@ export default function HobbiesModule({
               onCollectionImport={collectionMenu?.onImport}
               onCollectionExport={collectionMenu?.onExport}
               onCollectionTemplate={collectionMenu?.onTemplate}
+              onCollectionDeleteItems={collectionMenu?.onDeleteItems}
+              collectionDeleteItemsActive={
+                collectionMenu?.deleteItemsActive ?? false
+              }
               onCollectionDelete={collectionMenu?.onDelete}
               collectionPrivate={collectionMenu?.privateChecked ?? null}
               collectionPrivateBusy={collectionMenu?.privateBusy}
@@ -348,9 +389,22 @@ function HobbyCollectionView({
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<HobbyItem | null | "new">(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [sort, setSort] = useState<SortState>({ col: "title", dir: "asc" });
   const [privateBusy, setPrivateBusy] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [itemDeleteTarget, setItemDeleteTarget] = useState<HobbyItem | null>(
+    null
+  );
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [itemDeleteBusy, setItemDeleteBusy] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{
+    url: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
   const showPrivateToggle = isAdmin && nsfwUnlocked;
@@ -369,6 +423,7 @@ function HobbyCollectionView({
   useEffect(() => {
     setLoading(true);
     setSelected(new Set());
+    setSelectMode(false);
     void reload();
   }, [reload]);
 
@@ -400,6 +455,13 @@ function HobbyCollectionView({
 
   const runDeleteCollection = useCallback(() => {
     setDeleteConfirmOpen(true);
+  }, []);
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((prev) => {
+      if (prev) setSelected(new Set());
+      return !prev;
+    });
   }, []);
 
   const confirmDeleteCollection = useCallback(() => {
@@ -434,6 +496,8 @@ function HobbyCollectionView({
       onImport: runImport,
       onExport: runExport,
       onTemplate: runTemplate,
+      onDeleteItems: toggleSelectMode,
+      deleteItemsActive: selectMode,
       onDelete: runDeleteCollection,
       privateChecked: showPrivateToggle ? Boolean(collection.private) : null,
       privateBusy,
@@ -445,6 +509,8 @@ function HobbyCollectionView({
     runImport,
     runExport,
     runTemplate,
+    toggleSelectMode,
+    selectMode,
     runDeleteCollection,
     runPrivateChange,
     showPrivateToggle,
@@ -455,12 +521,64 @@ function HobbyCollectionView({
   const tableCols = useMemo(() => {
     const cols = fields.filter((f) => f !== "image" && f !== "notes");
     if (collection.preset === "fillable_album") {
-      for (const extra of ["items_collected", "completion_pct", "missing_count"] as const) {
+      for (const extra of [
+        "items_collected",
+        "completion_pct",
+        "missing_count",
+      ] as const) {
         if (!cols.includes(extra)) cols.push(extra);
       }
     }
     return cols;
   }, [fields, collection.preset]);
+
+  const sortedItems = useMemo(() => {
+    const list = [...items];
+    const { col, dir } = sort;
+    const mul = dir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      const va = cellSortValue(a, col);
+      const vb = cellSortValue(b, col);
+      if (typeof va === "number" && typeof vb === "number") {
+        if (va === vb) return 0;
+        return va < vb ? -mul : mul;
+      }
+      return (
+        String(va).localeCompare(String(vb), undefined, {
+          sensitivity: "base",
+          numeric: true,
+        }) * mul
+      );
+    });
+    return list;
+  }, [items, sort]);
+
+  const galleryItems: GalleryViewerItem[] = useMemo(
+    () =>
+      sortedItems
+        .filter((it) => Boolean(it.image))
+        .map((it) => ({
+          id: String(it.id),
+          url: withMediaAccess(String(it.image)),
+          caption: it.title || "Item",
+        })),
+    [sortedItems]
+  );
+
+  function toggleSort(col: string) {
+    setSort((prev) =>
+      prev.col === col
+        ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { col, dir: "asc" }
+    );
+  }
+
+  function sortMark(col: string) {
+    if (sort.col !== col) return "";
+    return sort.dir === "asc" ? " ▲" : " ▼";
+  }
+
+  const colSpan = tableCols.length + 2 + (selectMode ? 1 : 0);
 
   return (
     <div className="hobbies-collection">
@@ -530,20 +648,11 @@ function HobbyCollectionView({
             ) : null}
           </h2>
         </div>
-        {selected.size > 0 ? (
+        {selectMode && selected.size > 0 ? (
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => {
-              if (!window.confirm(`Delete ${selected.size} item(s)?`)) return;
-              void deleteHobbyItemsBatch(collection.id, [...selected]).then(
-                () => {
-                  setSelected(new Set());
-                  void reload();
-                  onChanged();
-                }
-              );
-            }}
+            onClick={() => setBatchDeleteOpen(true)}
           >
             Delete selected ({selected.size})
           </button>
@@ -554,65 +663,116 @@ function HobbyCollectionView({
         <table className="hobbies-collection__table">
           <thead>
             <tr>
+              {selectMode ? (
+                <th className="hobbies-collection__select-col">
+                  <input
+                    type="checkbox"
+                    checked={
+                      sortedItems.length > 0 &&
+                      selected.size === sortedItems.length
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelected(new Set(sortedItems.map((i) => i.id)));
+                      } else setSelected(new Set());
+                    }}
+                    aria-label="Select all"
+                  />
+                </th>
+              ) : null}
               <th>
-                <input
-                  type="checkbox"
-                  checked={
-                    items.length > 0 && selected.size === items.length
-                  }
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelected(new Set(items.map((i) => i.id)));
-                    } else setSelected(new Set());
-                  }}
-                  aria-label="Select all"
-                />
+                <button
+                  type="button"
+                  className="hobbies-collection__sort-btn"
+                  onClick={() => toggleSort("image")}
+                >
+                  Image{sortMark("image")}
+                </button>
               </th>
-              <th>Img</th>
               {tableCols.map((col) => (
-                <th key={col}>{FIELD_LABELS[col] || col}</th>
+                <th key={col}>
+                  <button
+                    type="button"
+                    className="hobbies-collection__sort-btn"
+                    onClick={() => toggleSort(col)}
+                  >
+                    {fieldLabel(col, collection.preset)}
+                    {sortMark(col)}
+                  </button>
+                </th>
               ))}
-              <th />
+              <th className="hobbies-collection__actions-col" aria-hidden />
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={tableCols.length + 3} className="muted">
+                <td colSpan={colSpan} className="muted">
                   Loading…
                 </td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : sortedItems.length === 0 ? (
               <tr>
-                <td colSpan={tableCols.length + 3} className="muted">
+                <td colSpan={colSpan} className="muted">
                   No items yet.
                 </td>
               </tr>
             ) : (
-              items.map((it) => (
-                <tr key={it.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(it.id)}
-                      onChange={(e) => {
-                        setSelected((prev) => {
-                          const next = new Set(prev);
-                          if (e.target.checked) next.add(it.id);
-                          else next.delete(it.id);
-                          return next;
-                        });
-                      }}
-                      aria-label={`Select ${it.title || it.id}`}
-                    />
-                  </td>
+              sortedItems.map((it) => (
+                <tr key={it.id} className="hobbies-collection__row">
+                  {selectMode ? (
+                    <td className="hobbies-collection__select-col">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(it.id)}
+                        onChange={(e) => {
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(it.id);
+                            else next.delete(it.id);
+                            return next;
+                          });
+                        }}
+                        aria-label={`Select ${it.title || it.id}`}
+                      />
+                    </td>
+                  ) : null}
                   <td>
                     {it.image ? (
-                      <img
-                        src={withMediaAccess(it.image)}
-                        alt=""
-                        className="hobbies-collection__thumb"
-                      />
+                      <button
+                        type="button"
+                        className="hobbies-collection__thumb-btn"
+                        onMouseEnter={(e) => {
+                          const rect = (
+                            e.currentTarget as HTMLElement
+                          ).getBoundingClientRect();
+                          const previewW = 260;
+                          const x =
+                            rect.right + 12 + previewW > window.innerWidth
+                              ? Math.max(8, rect.left - previewW - 12)
+                              : rect.right + 12;
+                          setHoverPreview({
+                            url: withMediaAccess(String(it.image)),
+                            x,
+                            y: Math.max(8, rect.top),
+                          });
+                        }}
+                        onMouseLeave={() => setHoverPreview(null)}
+                        onClick={() => {
+                          setHoverPreview(null);
+                          const idx = galleryItems.findIndex(
+                            (g) => g.id === String(it.id)
+                          );
+                          if (idx >= 0) setViewerIndex(idx);
+                        }}
+                        aria-label={`View ${it.title || "image"}`}
+                      >
+                        <img
+                          src={withMediaAccess(String(it.image))}
+                          alt=""
+                          className="hobbies-collection__thumb"
+                        />
+                      </button>
                     ) : (
                       "—"
                     )}
@@ -620,65 +780,65 @@ function HobbyCollectionView({
                   {tableCols.map((col) => (
                     <td key={col}>{renderCell(it, col, collection)}</td>
                   ))}
-                  <td className="hobbies-collection__row-actions">
-                    {collection.preset === "marbles" ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          title="Decrease qty"
-                          onClick={() => {
-                            void adjustHobbyItemQuantity(
-                              collection.id,
-                              it.id,
-                              { delta: -1 }
-                            ).then(() => {
-                              void reload();
-                              onChanged();
-                            });
-                          }}
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          title="Increase qty"
-                          onClick={() => {
-                            void adjustHobbyItemQuantity(
-                              collection.id,
-                              it.id,
-                              { delta: 1 }
-                            ).then(() => {
-                              void reload();
-                              onChanged();
-                            });
-                          }}
-                        >
-                          +
-                        </button>
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => setEditItem(it)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => {
-                        if (!window.confirm("Delete this item?")) return;
-                        void deleteHobbyItem(collection.id, it.id).then(() => {
-                          void reload();
-                          onChanged();
-                        });
-                      }}
-                    >
-                      Del
-                    </button>
+                  <td className="hobbies-collection__actions-col">
+                    <div className="hobbies-collection__row-actions">
+                      {collection.preset === "marbles" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="hobbies-collection__icon-action"
+                            title="Decrease qty"
+                            onClick={() => {
+                              void adjustHobbyItemQuantity(
+                                collection.id,
+                                it.id,
+                                { delta: -1 }
+                              ).then(() => {
+                                void reload();
+                                onChanged();
+                              });
+                            }}
+                          >
+                            −
+                          </button>
+                          <button
+                            type="button"
+                            className="hobbies-collection__icon-action"
+                            title="Increase qty"
+                            onClick={() => {
+                              void adjustHobbyItemQuantity(
+                                collection.id,
+                                it.id,
+                                { delta: 1 }
+                              ).then(() => {
+                                void reload();
+                                onChanged();
+                              });
+                            }}
+                          >
+                            +
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="hobbies-collection__icon-action"
+                        title="Edit"
+                        aria-label="Edit"
+                        onClick={() => setEditItem(it)}
+                      >
+                        <IconPencil />
+                      </button>
+                      <button
+                        type="button"
+                        className="hobbies-collection__icon-action hobbies-collection__icon-action--danger"
+                        title="Delete"
+                        aria-label="Delete"
+                        onClick={() => setItemDeleteTarget(it)}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -686,6 +846,25 @@ function HobbyCollectionView({
           </tbody>
         </table>
       </div>
+
+      {hoverPreview ? (
+        <div
+          className="hobbies-collection__thumb-preview"
+          style={{ left: hoverPreview.x, top: hoverPreview.y }}
+          aria-hidden
+        >
+          <img src={hoverPreview.url} alt="" />
+        </div>
+      ) : null}
+
+      {viewerIndex != null && galleryItems.length ? (
+        <GalleryViewerModal
+          items={galleryItems}
+          index={viewerIndex}
+          onIndexChange={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
+      ) : null}
 
       {editItem !== null ? (
         <HobbyItemModal
@@ -713,6 +892,51 @@ function HobbyCollectionView({
           }}
         />
       ) : null}
+      {itemDeleteTarget ? (
+        <ConfirmDialog
+          title="Delete item"
+          message={`Delete “${itemDeleteTarget.title || "this item"}”?`}
+          confirmLabel="Delete"
+          destructive
+          busy={itemDeleteBusy}
+          onConfirm={() => {
+            setItemDeleteBusy(true);
+            void deleteHobbyItem(collection.id, itemDeleteTarget.id)
+              .then(() => {
+                setItemDeleteTarget(null);
+                void reload();
+                onChanged();
+              })
+              .finally(() => setItemDeleteBusy(false));
+          }}
+          onClose={() => {
+            if (!itemDeleteBusy) setItemDeleteTarget(null);
+          }}
+        />
+      ) : null}
+      {batchDeleteOpen ? (
+        <ConfirmDialog
+          title="Delete items"
+          message={`Delete ${selected.size} selected item(s)?`}
+          confirmLabel="Delete"
+          destructive
+          busy={itemDeleteBusy}
+          onConfirm={() => {
+            setItemDeleteBusy(true);
+            void deleteHobbyItemsBatch(collection.id, [...selected])
+              .then(() => {
+                setSelected(new Set());
+                setBatchDeleteOpen(false);
+                void reload();
+                onChanged();
+              })
+              .finally(() => setItemDeleteBusy(false));
+          }}
+          onClose={() => {
+            if (!itemDeleteBusy) setBatchDeleteOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -723,11 +947,21 @@ function renderCell(
   collection: HobbyCollection
 ): ReactNode {
   if (col === "shop_url" || col === "tutorial_url") {
-    const url = (it as Record<string, unknown>)[col] as string | null | undefined;
+    const raw = (it as Record<string, unknown>)[col];
+    const url = typeof raw === "string" ? normalizeExternalUrl(raw) : "";
     if (!url) return "—";
+    const label = col === "shop_url" ? "Open shop" : "Open tutorial";
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer">
-        Open
+      <a
+        className="hobbies-collection__ext-link"
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={url}
+        aria-label={label}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <IconExternalLink />
       </a>
     );
   }
@@ -903,7 +1137,7 @@ function HobbyItemModal({
             if (f === "missing" || f === "duplicates" || f === "notes") {
               return (
                 <label key={f}>
-                  {FIELD_LABELS[f] || f}
+                  {fieldLabel(f, collection.preset)}
                   <textarea
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
@@ -929,11 +1163,16 @@ function HobbyItemModal({
               const list = options[f] || [];
               return (
                 <label key={f}>
-                  {FIELD_LABELS[f] || f}
+                  {fieldLabel(f, collection.preset)}
                   <input
                     list={`hobby-opts-${f}`}
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
+                    placeholder={
+                      f === "size" && collection.preset === "puzzle"
+                        ? "e.g. 1000"
+                        : undefined
+                    }
                   />
                   <datalist id={`hobby-opts-${f}`}>
                     {list.map((opt) => (
@@ -949,7 +1188,7 @@ function HobbyItemModal({
                 : undefined;
             return (
               <label key={f}>
-                {FIELD_LABELS[f] || f}
+                {fieldLabel(f, collection.preset)}
                 <input
                   type={
                     f === "quantity" || f === "total_slots" ? "number" : "text"

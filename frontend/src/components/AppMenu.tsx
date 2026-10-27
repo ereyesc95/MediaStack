@@ -72,6 +72,9 @@ type Props = {
   onCollectionImport?: () => void;
   onCollectionExport?: () => void;
   onCollectionTemplate?: () => void;
+  /** Hobbies: toggle multi-select / bulk delete column. */
+  onCollectionDeleteItems?: () => void;
+  collectionDeleteItemsActive?: boolean;
   onCollectionDelete?: () => void;
   /** When set, show a Private toggle in My collection (admin + NSFW unlock). */
   collectionPrivate?: boolean | null;
@@ -205,6 +208,8 @@ export default function AppMenu({
   onCollectionImport,
   onCollectionExport,
   onCollectionTemplate,
+  onCollectionDeleteItems,
+  collectionDeleteItemsActive = false,
   onCollectionDelete,
   collectionPrivate = null,
   collectionPrivateBusy = false,
@@ -1346,6 +1351,24 @@ export default function AppMenu({
                             <IconSquare className="menu-item-icon" />
                           )}
                           Private
+                        </button>
+                      ) : null}
+                      {onCollectionDeleteItems ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCollectionDeleteItems();
+                            setOpen(false);
+                          }}
+                        >
+                          {collectionDeleteItemsActive ? (
+                            <IconCheck className="menu-item-icon" />
+                          ) : (
+                            <IconTrash className="menu-item-icon" />
+                          )}
+                          {collectionDeleteItemsActive
+                            ? "Done deleting"
+                            : "Delete items"}
                         </button>
                       ) : null}
                       {onCollectionDelete ? (

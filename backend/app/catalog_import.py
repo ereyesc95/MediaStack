@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.catalog_import_guide import get_catalog_user_guide
 from app.config import settings
-from app.crud import get_tmdb_key
+from app.crud import get_google_books_key, get_tmdb_key
 from app.database import get_db
 from app.deps import require_admin
 from app.franchise_identity import set_explicit_franchise_home
@@ -28,7 +28,11 @@ from app.franchise_index import (
 from app.gallery import _letter_folder
 from app.http_ssl import aget
 from app.models import BookLeaf, BookWork, Game, MovieWork, Series, User
-from app.services.google_books import get_google_book, search_google_books
+from app.services.google_books import (
+    GoogleBooksError,
+    get_google_book,
+    search_google_books,
+)
 from app.services.igdb import IgdbNotConfigured, get_game as igdb_get_game, igdb_configured, search_games as igdb_search_games
 from app.services.tmdb import (
     TMDB_BASE,
@@ -581,15 +585,42 @@ async def _tmdb_direct_lookup(
 
 
 def _google_books_id_query(value: str) -> str | None:
+    """Extract a volume id from a bare id or Google Books / google.com edition URL."""
     clean = value.strip()
-    if "books.google." in clean.casefold():
+    low = clean.casefold()
+    looks_like_url = (
+        "books.google." in low
+        or "googleapis.com/books" in low
+        or "/books/" in low
+        or low.startswith("http://")
+        or low.startswith("https://")
+    )
+    if looks_like_url:
         parsed = urlparse(clean)
         query_id = (parse_qs(parsed.query).get("id") or [None])[0]
-        if query_id:
+        if query_id and re.fullmatch(r"[A-Za-z0-9_-]{8,}", query_id):
             return query_id
+        parts = [p for p in parsed.path.split("/") if p]
+        lower_parts = [p.casefold() for p in parts]
+        if "edition" in lower_parts:
+            idx = lower_parts.index("edition")
+            # /books/edition/{title_or_underscore}/{volumeId}
+            if idx + 2 < len(parts) and re.fullmatch(
+                r"[A-Za-z0-9_-]{8,}", parts[idx + 2]
+            ):
+                return parts[idx + 2]
+            if idx + 1 < len(parts) and re.fullmatch(
+                r"[A-Za-z0-9_-]{8,}", parts[idx + 1]
+            ):
+                return parts[idx + 1]
         tail = parsed.path.rstrip("/").rsplit("/", 1)[-1]
-        if tail and tail.casefold() not in {"books", "edition"}:
+        if (
+            tail
+            and tail.casefold() not in {"books", "edition"}
+            and re.fullmatch(r"[A-Za-z0-9_-]{8,}", tail)
+        ):
             return tail
+        return None
     if (
         len(clean) >= 8
         and " " not in clean
@@ -597,6 +628,13 @@ def _google_books_id_query(value: str) -> str | None:
     ):
         return clean
     return None
+
+
+def _google_books_http_error(exc: GoogleBooksError) -> HTTPException:
+    status = 429 if exc.status_code == 429 else 400
+    if exc.status_code in (401, 403):
+        status = 400
+    return HTTPException(status, str(exc))
 
 
 def _google_books_search_item(item: dict) -> dict:
@@ -629,25 +667,31 @@ async def search_catalog_import(
         raise HTTPException(404, "Unsupported catalog module")
     local = _local_franchises(module, q)
     if module == "books":
-        direct_id = _google_books_id_query(q)
-        direct = (
-            await asyncio.to_thread(get_google_book, direct_id)
-            if direct_id
-            else None
-        )
-        if direct and direct.get("id"):
-            remote = [_google_books_search_item(direct)]
-        else:
-            book_results = await asyncio.to_thread(
-                search_google_books, q, max_results=20
+        gb_key = get_google_books_key(db)
+        try:
+            direct_id = _google_books_id_query(q)
+            direct = (
+                await asyncio.to_thread(
+                    get_google_book, direct_id, api_key=gb_key
+                )
+                if direct_id
+                else None
             )
-            remote = _sort_catalog_search_items(
-                [
-                    _google_books_search_item(item)
-                    for item in book_results
-                    if item.get("id")
-                ]
-            )
+            if direct and direct.get("id"):
+                remote = [_google_books_search_item(direct)]
+            else:
+                book_results = await asyncio.to_thread(
+                    search_google_books, q, max_results=20, api_key=gb_key
+                )
+                remote = _sort_catalog_search_items(
+                    [
+                        _google_books_search_item(item)
+                        for item in book_results
+                        if item.get("id")
+                    ]
+                )
+        except GoogleBooksError as exc:
+            raise _google_books_http_error(exc) from exc
     elif module == "games":
         if not igdb_configured():
             raise HTTPException(
@@ -784,13 +828,25 @@ async def preview_catalog_import(
             ],
         }
         return {"franchise_name": item["title"], "items": [item], "scope": "series"}
-    selected = await asyncio.to_thread(get_google_book, provider_id)
+    gb_key = get_google_books_key(db)
+    try:
+        selected = await asyncio.to_thread(
+            get_google_book, provider_id, api_key=gb_key
+        )
+    except GoogleBooksError as exc:
+        raise _google_books_http_error(exc) from exc
     if not selected:
         raise HTTPException(404, "Google Books title not found")
     base = _book_series_title(selected.get("title") or "")
-    candidates = await asyncio.to_thread(
-        search_google_books, f'intitle:"{base}"', max_results=40
-    )
+    try:
+        candidates = await asyncio.to_thread(
+            search_google_books,
+            f'intitle:"{base}"',
+            max_results=40,
+            api_key=gb_key,
+        )
+    except GoogleBooksError as exc:
+        raise _google_books_http_error(exc) from exc
     selected_authors = {
         str(author).casefold() for author in selected.get("authors") or []
     }
@@ -1425,9 +1481,17 @@ async def create_catalog_import(
                         ensure_book_work,
                     )
 
-                    data = (
-                        await asyncio.to_thread(get_google_book, provider_id) or {}
-                    )
+                    try:
+                        data = (
+                            await asyncio.to_thread(
+                                get_google_book,
+                                provider_id,
+                                api_key=get_google_books_key(db),
+                            )
+                            or {}
+                        )
+                    except GoogleBooksError as exc:
+                        raise _google_books_http_error(exc) from exc
                     work_slug = normalize_franchise_slug(franchise_name)
                     rel = _relative(leaf_dir, root)
                     ensure_book_work(
