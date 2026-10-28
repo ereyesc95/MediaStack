@@ -635,6 +635,8 @@ def migrate_schema(eng: Engine) -> None:
                         "hbcPreset" VARCHAR(32) NOT NULL DEFAULT 'generic',
                         "hbcIconPath" TEXT,
                         "hbcPrivate" INTEGER NOT NULL DEFAULT 0,
+                        "hbcFieldsJson" TEXT,
+                        "hbcCustomFieldsJson" TEXT,
                         "hbcCreatedAt" TEXT,
                         "hbcUpdatedAt" TEXT
                     )
@@ -658,6 +660,20 @@ def migrate_schema(eng: Engine) -> None:
                         'ADD COLUMN "hbcPrivate" INTEGER NOT NULL DEFAULT 0'
                     )
                 )
+            if "hbcFieldsJson" not in hbc_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_collections '
+                        'ADD COLUMN "hbcFieldsJson" TEXT'
+                    )
+                )
+            if "hbcCustomFieldsJson" not in hbc_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_collections '
+                        'ADD COLUMN "hbcCustomFieldsJson" TEXT'
+                    )
+                )
 
         if "hobby_items" not in tables:
             conn.execute(
@@ -676,6 +692,7 @@ def migrate_schema(eng: Engine) -> None:
                         "hbiStyle" TEXT,
                         "hbiQuantity" INTEGER DEFAULT 1,
                         "hbiTotalSlots" INTEGER,
+                        "hbiYear" INTEGER,
                         "hbiBoxSize" TEXT,
                         "hbiMissingJson" TEXT,
                         "hbiDuplicatesJson" TEXT,
@@ -684,6 +701,7 @@ def migrate_schema(eng: Engine) -> None:
                         "hbiShopUrl" TEXT,
                         "hbiTutorialUrl" TEXT,
                         "hbiNotes" TEXT,
+                        "hbiExtraJson" TEXT,
                         "hbiCreatedAt" TEXT,
                         "hbiUpdatedAt" TEXT
                     )
@@ -702,6 +720,24 @@ def migrate_schema(eng: Engine) -> None:
                     'ON hobby_items ("hbiUserID")'
                 )
             )
+        else:
+            hbi_cols = {
+                c["name"] for c in inspect(eng).get_columns("hobby_items")
+            }
+            if "hbiYear" not in hbi_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_items '
+                        'ADD COLUMN "hbiYear" INTEGER'
+                    )
+                )
+            if "hbiExtraJson" not in hbi_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_items '
+                        'ADD COLUMN "hbiExtraJson" TEXT'
+                    )
+                )
 
         if "hobby_field_options" not in tables:
             conn.execute(

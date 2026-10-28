@@ -866,6 +866,12 @@ class HobbyCollection(Base):
     hbc_preset: Mapped[str] = mapped_column("hbcPreset", String(32), default="generic")
     hbc_icon_path: Mapped[str | None] = mapped_column("hbcIconPath", Text)
     hbc_private: Mapped[bool] = mapped_column("hbcPrivate", Integer, default=0)
+    # Ordered enabled field keys (builtins + custom_*); null → preset defaults.
+    hbc_fields_json: Mapped[str | None] = mapped_column("hbcFieldsJson", Text)
+    # [{ "key": "custom_…", "label": "…" }] user-defined text columns.
+    hbc_custom_fields_json: Mapped[str | None] = mapped_column(
+        "hbcCustomFieldsJson", Text
+    )
     hbc_created_at: Mapped[str | None] = mapped_column("hbcCreatedAt", Text)
     hbc_updated_at: Mapped[str | None] = mapped_column("hbcUpdatedAt", Text)
 
@@ -887,6 +893,7 @@ class HobbyItem(Base):
     hbi_style: Mapped[str | None] = mapped_column("hbiStyle", Text)
     hbi_quantity: Mapped[int] = mapped_column("hbiQuantity", Integer, default=1)
     hbi_total_slots: Mapped[int | None] = mapped_column("hbiTotalSlots", Integer)
+    hbi_year: Mapped[int | None] = mapped_column("hbiYear", Integer)
     hbi_box_size: Mapped[str | None] = mapped_column("hbiBoxSize", Text)
     hbi_missing_json: Mapped[str | None] = mapped_column("hbiMissingJson", Text)
     hbi_duplicates_json: Mapped[str | None] = mapped_column("hbiDuplicatesJson", Text)
@@ -895,6 +902,8 @@ class HobbyItem(Base):
     hbi_shop_url: Mapped[str | None] = mapped_column("hbiShopUrl", Text)
     hbi_tutorial_url: Mapped[str | None] = mapped_column("hbiTutorialUrl", Text)
     hbi_notes: Mapped[str | None] = mapped_column("hbiNotes", Text)
+    # Values for custom_* columns: { "custom_abc": "text" }.
+    hbi_extra_json: Mapped[str | None] = mapped_column("hbiExtraJson", Text)
     hbi_created_at: Mapped[str | None] = mapped_column("hbiCreatedAt", Text)
     hbi_updated_at: Mapped[str | None] = mapped_column("hbiUpdatedAt", Text)
 

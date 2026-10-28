@@ -18,6 +18,7 @@ from app.hobbies import (
 # Universal headers — extra columns ignored per preset at import time
 HEADERS = (
     "TITLE",
+    "YEAR",
     "BRAND",
     "THEME",
     "TYPE",
@@ -38,6 +39,7 @@ HEADERS = (
 
 _HEADER_MAP = {
     "title": "title",
+    "year": "year",
     "brand": "brand",
     "theme": "theme",
     "type": "type",
@@ -102,6 +104,7 @@ def export_hobbies_xlsx(db: Session, user_id: int, collection_id: int) -> bytes:
         ws.append(
             [
                 it.get("title"),
+                it.get("year"),
                 it.get("brand"),
                 it.get("theme"),
                 it.get("type"),
@@ -134,6 +137,7 @@ def template_hobbies_xlsx() -> bytes:
     ws.append(
         [
             "Example title",
+            2018,
             "Brand",
             "Theme",
             "Type",
@@ -211,8 +215,20 @@ def _row_to_body(mapped: dict) -> dict:
         )
     except (TypeError, ValueError):
         slots = None
+    year_raw = mapped.get("year")
+    try:
+        year = (
+            int(str(year_raw).strip()[:4])
+            if year_raw is not None and str(year_raw).strip() != ""
+            else None
+        )
+    except (TypeError, ValueError):
+        year = None
+    if year is not None and not (1000 <= year <= 9999):
+        year = None
     return {
         "title": _cell(mapped, "title"),
+        "year": year,
         "brand": _cell(mapped, "brand"),
         "theme": _cell(mapped, "theme"),
         "type": _cell(mapped, "type"),

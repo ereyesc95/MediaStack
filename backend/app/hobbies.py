@@ -14,6 +14,17 @@ from app.paths import ASSETS_DIR, ensure_assets_dir
 
 PRESETS = (
     "generic",
+    "custom",
+    "marbles",
+    "puzzle",
+    "cube",
+    "uno",
+    "poker",
+    "fillable_album",
+)
+
+# Hub specialty tiles (General removed; custom collections are named cards).
+HUB_PRESETS = (
     "marbles",
     "puzzle",
     "cube",
@@ -30,7 +41,11 @@ PRESET_LABELS = {
     "poker": "Poker",
     "fillable_album": "Albums",
     "generic": "General",
+    "custom": "Custom",
 }
+
+# Named / freeform collections (many allowed per profile).
+MULTI_INSTANCE_PRESETS = frozenset({"custom", "generic"})
 
 # Older hub labels → current (so existing rows pick up renames).
 _LEGACY_PRESET_NAMES: dict[str, frozenset[str]] = {
@@ -40,24 +55,33 @@ _LEGACY_PRESET_NAMES: dict[str, frozenset[str]] = {
 
 # Columns shown per preset (shared bag; unused stay null)
 PRESET_FIELDS: dict[str, tuple[str, ...]] = {
-    "marbles": ("type", "size", "style", "quantity", "image"),
+    "marbles": ("type", "size", "style", "theme", "quantity", "image"),
     "puzzle": ("title", "brand", "theme", "size", "box_size", "image", "shop_url"),
-    "cube": ("title", "brand", "category", "image", "shop_url", "tutorial_url"),
+    "cube": (
+        "title",
+        "brand",
+        "category",
+        "theme",
+        "image",
+        "shop_url",
+        "tutorial_url",
+    ),
     "uno": ("title", "brand", "theme", "image", "shop_url"),
     "poker": ("title", "brand", "theme", "type", "image", "shop_url"),
     "fillable_album": (
         "title",
+        "year",
         "brand",
         "theme",
         "type",
         "total_slots",
         "missing",
-        "duplicates",
         "image",
         "shop_url",
     ),
     "generic": (
         "title",
+        "year",
         "brand",
         "theme",
         "type",
@@ -74,7 +98,68 @@ PRESET_FIELDS: dict[str, tuple[str, ...]] = {
         "tutorial_url",
         "notes",
     ),
+    "custom": (
+        "title",
+        "year",
+        "brand",
+        "theme",
+        "type",
+        "category",
+        "size",
+        "style",
+        "quantity",
+        "box_size",
+        "image",
+        "shop_url",
+        "notes",
+    ),
 }
+
+# Builtin field catalog for New/Edit collection column picker.
+# default_on → preselected for new custom collections.
+FIELD_CATALOG: tuple[dict, ...] = (
+    {"key": "image", "label": "Image", "default_on": True, "computed": False},
+    {"key": "title", "label": "Title", "default_on": True, "computed": False},
+    {"key": "year", "label": "Year", "default_on": True, "computed": False},
+    {"key": "brand", "label": "Brand", "default_on": True, "computed": False},
+    {"key": "theme", "label": "Theme", "default_on": True, "computed": False},
+    {"key": "type", "label": "Type", "default_on": True, "computed": False},
+    {"key": "category", "label": "Category", "default_on": True, "computed": False},
+    {"key": "size", "label": "Size / Pieces", "default_on": True, "computed": False},
+    {"key": "style", "label": "Style", "default_on": True, "computed": False},
+    {"key": "quantity", "label": "Quantity", "default_on": True, "computed": False},
+    {"key": "box_size", "label": "Box size", "default_on": True, "computed": False},
+    {"key": "total_slots", "label": "Total slots", "default_on": False, "computed": False},
+    {"key": "missing", "label": "Missing", "default_on": False, "computed": False},
+    {"key": "duplicates", "label": "Duplicates", "default_on": False, "computed": False},
+    {
+        "key": "items_collected",
+        "label": "Collected",
+        "default_on": False,
+        "computed": True,
+    },
+    {
+        "key": "completion_pct",
+        "label": "Complete %",
+        "default_on": False,
+        "computed": True,
+    },
+    {"key": "shop_url", "label": "Shop", "default_on": True, "computed": False},
+    {"key": "tutorial_url", "label": "Tutorial", "default_on": False, "computed": False},
+    {"key": "pdf_url", "label": "PDF", "default_on": False, "computed": True},
+    {"key": "notes", "label": "Notes", "default_on": True, "computed": False},
+)
+
+BUILTIN_FIELD_KEYS = frozenset(f["key"] for f in FIELD_CATALOG)
+COMPUTED_FIELD_KEYS = frozenset(
+    f["key"] for f in FIELD_CATALOG if f.get("computed")
+)
+DEFAULT_CUSTOM_FIELDS = tuple(
+    f["key"] for f in FIELD_CATALOG if f.get("default_on")
+)
+
+_CUSTOM_KEY_RE = re.compile(r"^custom_[a-z0-9_]{1,40}$")
+_SAFE_CUSTOM_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 DEFAULT_MARBLE_STYLES = (
     "confetti",
@@ -97,10 +182,237 @@ DEFAULT_MARBLE_STYLES = (
 )
 
 _SAFE_NAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+# Books leaf / PDF stem: ``2018.10.23. Title`` or ``2018. Title``
+_BOOKS_DATE_TITLE_RE = re.compile(
+    r"^(?P<year>\d{4})(?:\.\d{2}\.\d{2})?\.\s+(?P<title>.+)$",
+    re.IGNORECASE,
+)
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _norm_book_title(value: str | None) -> str:
+    text = (value or "").replace("█", "'").replace("■", ",")
+    text = text.casefold()
+    text = re.sub(r"[^\w\s]+", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _parse_year(value: object | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        year = int(str(value).strip()[:4])
+    except (TypeError, ValueError):
+        return None
+    if 1000 <= year <= 9999:
+        return year
+    return None
+
+
+def _books_pdf_media_url(rel_posix: str) -> str:
+    from urllib.parse import quote
+
+    return f"/api/media/file?path={quote(rel_posix, safe='/')}"
+
+
+def _iter_books_pdf_hits(root: Path) -> list[tuple[int, str, str, str]]:
+    """Scan Books PDFs → (year, franchise_norm, title_norm, relative path)."""
+    books = root / "Books"
+    if not books.is_dir():
+        return []
+    hits: list[tuple[int, str, str, str]] = []
+    try:
+        letter_dirs = [p for p in books.iterdir() if p.is_dir()]
+    except OSError:
+        return []
+    for letter_dir in letter_dirs:
+        try:
+            work_dirs = [p for p in letter_dir.iterdir() if p.is_dir()]
+        except OSError:
+            continue
+        for work_dir in work_dirs:
+            franchise_n = _norm_book_title(work_dir.name)
+            if not franchise_n:
+                continue
+            # Pattern B: Books/{Letter}/{Book Title}/{date}. {Book Title}.pdf
+            try:
+                for pdf in work_dir.glob("*.pdf"):
+                    m = _BOOKS_DATE_TITLE_RE.match(pdf.stem)
+                    if not m:
+                        continue
+                    year = int(m.group("year"))
+                    title_n = _norm_book_title(m.group("title"))
+                    if title_n:
+                        hits.append(
+                            (
+                                year,
+                                franchise_n,
+                                title_n,
+                                pdf.relative_to(root).as_posix(),
+                            )
+                        )
+            except OSError:
+                pass
+            # Pattern A: Books/{Letter}/{Franchise}/{date}. {Title}/….pdf
+            try:
+                children = list(work_dir.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                if not child.is_dir():
+                    continue
+                m = _BOOKS_DATE_TITLE_RE.match(child.name)
+                if not m:
+                    continue
+                year = int(m.group("year"))
+                title_n = _norm_book_title(m.group("title"))
+                pdf_hit: Path | None = None
+                preferred = child / f"{child.name}.pdf"
+                if preferred.is_file():
+                    pdf_hit = preferred
+                else:
+                    try:
+                        pdfs = sorted(child.glob("*.pdf"))
+                    except OSError:
+                        pdfs = []
+                    if pdfs:
+                        pdf_hit = pdfs[0]
+                if pdf_hit is None or not title_n:
+                    continue
+                hits.append(
+                    (
+                        year,
+                        franchise_n,
+                        title_n,
+                        pdf_hit.relative_to(root).as_posix(),
+                    )
+                )
+    return hits
+
+
+def resolve_album_pdf_url(
+    title: str | None,
+    year: int | str | None,
+    theme: str | None = None,
+    *,
+    index: list[tuple[int, str, str, str]] | None = None,
+) -> str | None:
+    """Resolve album PDF via Theme (franchise) + year, then title, then year-only."""
+    want_year = _parse_year(year)
+    if want_year is None:
+        return None
+    want_theme = _norm_book_title(theme)
+    want_title = _norm_book_title(title)
+    if not want_theme and not want_title:
+        return None
+    from app.config import settings
+
+    root = Path(settings.media_root or "")
+    if not root.is_dir():
+        return None
+    hits = index if index is not None else _iter_books_pdf_hits(root)
+
+    def _pick(
+        rows: list[tuple[int, str, str, str]], *, require_title: bool
+    ) -> str | None:
+        exact: str | None = None
+        fuzzy: str | None = None
+        any_year: str | None = None
+        for _y, _fr, htitle, rel in rows:
+            if any_year is None:
+                any_year = rel
+            if not want_title:
+                continue
+            if htitle == want_title:
+                exact = rel
+                break
+            if want_title in htitle or htitle in want_title:
+                fuzzy = fuzzy or rel
+        if exact:
+            return exact
+        if fuzzy:
+            return fuzzy
+        if require_title:
+            return None
+        return any_year
+
+    if want_theme:
+        scoped = [h for h in hits if h[0] == want_year and h[1] == want_theme]
+        # Title match under franchise, else any PDF for that franchise+year.
+        rel = _pick(scoped, require_title=False)
+        return _books_pdf_media_url(rel) if rel else None
+
+    # No theme: title+year across Books (standalone or leaf title).
+    year_hits = [h for h in hits if h[0] == want_year]
+    rel = _pick(year_hits, require_title=True)
+    return _books_pdf_media_url(rel) if rel else None
+
+
+def list_franchise_theme_options() -> list[str]:
+    """Franchise folder names from Books/Games (and franchise index) for Theme dropdown."""
+    from app.config import settings
+    from app.franchise_index import build_franchise_index, load_franchise_index
+
+    names: dict[str, str] = {}
+
+    def _add(raw: str | None) -> None:
+        text = (raw or "").strip()
+        if not text:
+            return
+        key = text.casefold()
+        if key not in names:
+            names[key] = text
+
+    root = Path(settings.media_root or "")
+    if root.is_dir():
+        for module in ("Books", "Games"):
+            base = root / module
+            if not base.is_dir():
+                continue
+            try:
+                for letter in base.iterdir():
+                    if not letter.is_dir():
+                        continue
+                    # Games: Games/{Platform}/{Letter}/{Franchise}
+                    # Books: Books/{Letter}/{Franchise}
+                    if module == "Games":
+                        try:
+                            letter_dirs = [
+                                p for p in letter.iterdir() if p.is_dir()
+                            ]
+                        except OSError:
+                            continue
+                        for letter_dir in letter_dirs:
+                            try:
+                                for work in letter_dir.iterdir():
+                                    if work.is_dir():
+                                        _add(work.name)
+                            except OSError:
+                                continue
+                    else:
+                        try:
+                            for work in letter.iterdir():
+                                if work.is_dir():
+                                    _add(work.name)
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+
+    try:
+        index = load_franchise_index()
+        if index is None and root.is_dir():
+            index = build_franchise_index(root)
+        if index is not None:
+            for group in index.franchises.values():
+                _add(getattr(group, "display_name", None))
+    except Exception:
+        pass
+
+    return sorted(names.values(), key=lambda s: s.casefold())
 
 
 def _json_list(raw: str | None) -> list[str]:
@@ -151,6 +463,10 @@ def collection_is_private(row: HobbyCollection) -> bool:
 
 def _display_collection_name(row: HobbyCollection) -> str:
     """Prefer current preset label when the stored name is a known legacy default."""
+    if row.hbc_preset in MULTI_INSTANCE_PRESETS:
+        return (row.hbc_name or "").strip() or PRESET_LABELS.get(
+            row.hbc_preset, "Collection"
+        )
     label = PRESET_LABELS.get(row.hbc_preset)
     if not label:
         return row.hbc_name
@@ -163,13 +479,158 @@ def _display_collection_name(row: HobbyCollection) -> str:
     return stored
 
 
+def _parse_json_obj(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_custom_field_defs(raw: str | None) -> list[dict]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        label = str(item.get("label") or "").strip()
+        if not key or not _CUSTOM_KEY_RE.match(key) or key in seen:
+            continue
+        if not label:
+            label = key
+        seen.add(key)
+        out.append({"key": key, "label": label})
+    return out
+
+
+def _default_fields_for_preset(preset: str) -> list[str]:
+    return list(PRESET_FIELDS.get(preset, PRESET_FIELDS["custom"]))
+
+
+def collection_field_keys(row: HobbyCollection) -> list[str]:
+    raw = getattr(row, "hbc_fields_json", None)
+    if raw:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, list):
+            custom_keys = {
+                d["key"] for d in _parse_custom_field_defs(
+                    getattr(row, "hbc_custom_fields_json", None)
+                )
+            }
+            out: list[str] = []
+            seen: set[str] = set()
+            for item in data:
+                key = str(item or "").strip()
+                if not key or key in seen:
+                    continue
+                if key in BUILTIN_FIELD_KEYS or key in custom_keys:
+                    seen.add(key)
+                    out.append(key)
+            if out:
+                return out
+    fields = _default_fields_for_preset(row.hbc_preset)
+    # Album template always exposes computed columns in the table.
+    if row.hbc_preset == "fillable_album":
+        for extra in ("items_collected", "completion_pct", "pdf_url"):
+            if extra not in fields:
+                fields.append(extra)
+    return fields
+
+
+def collection_field_labels(row: HobbyCollection) -> dict[str, str]:
+    labels = {f["key"]: f["label"] for f in FIELD_CATALOG}
+    if row.hbc_preset == "puzzle":
+        labels["size"] = "Pieces"
+    for cf in _parse_custom_field_defs(
+        getattr(row, "hbc_custom_fields_json", None)
+    ):
+        labels[cf["key"]] = cf["label"]
+    return labels
+
+
+def _normalize_fields_selection(
+    fields: list[str] | None,
+    custom_defs: list[dict],
+) -> list[str]:
+    custom_keys = {d["key"] for d in custom_defs}
+    selected = [str(f).strip() for f in (fields or []) if str(f).strip()]
+    # Auto-require deps for computed columns.
+    if "pdf_url" in selected:
+        for dep in ("title", "year", "theme"):
+            if dep not in selected:
+                selected.append(dep)
+    if "items_collected" in selected or "completion_pct" in selected:
+        for dep in ("total_slots", "missing"):
+            if dep not in selected:
+                selected.append(dep)
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in selected:
+        if key in seen:
+            continue
+        if key in BUILTIN_FIELD_KEYS or key in custom_keys:
+            seen.add(key)
+            out.append(key)
+    return out or list(DEFAULT_CUSTOM_FIELDS)
+
+
+def _slug_custom_key(label: str, used: set[str]) -> str:
+    base = _SAFE_CUSTOM_SLUG_RE.sub("_", (label or "").casefold()).strip("_")
+    base = base[:32] or "field"
+    key = f"custom_{base}"
+    if key not in used and _CUSTOM_KEY_RE.match(key):
+        return key
+    n = 2
+    while True:
+        cand = f"custom_{base}_{n}"[:48]
+        if cand not in used and _CUSTOM_KEY_RE.match(cand):
+            return cand
+        n += 1
+
+
+def field_catalog_payload() -> dict:
+    return {
+        "fields": [
+            {
+                "key": f["key"],
+                "label": f["label"],
+                "default_on": bool(f["default_on"]),
+                "computed": bool(f.get("computed")),
+            }
+            for f in FIELD_CATALOG
+        ],
+        "default_fields": list(DEFAULT_CUSTOM_FIELDS),
+    }
+
+
 def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
+    custom_defs = _parse_custom_field_defs(
+        getattr(row, "hbc_custom_fields_json", None)
+    )
+    fields = collection_field_keys(row)
     return {
         "id": row.hbc_id,
         "name": _display_collection_name(row),
         "preset": row.hbc_preset,
         "preset_label": PRESET_LABELS.get(row.hbc_preset, row.hbc_preset),
-        "fields": list(PRESET_FIELDS.get(row.hbc_preset, PRESET_FIELDS["generic"])),
+        "fields": fields,
+        "field_labels": collection_field_labels(row),
+        "custom_fields": custom_defs,
+        "is_custom": row.hbc_preset in MULTI_INSTANCE_PRESETS,
         "icon_url": icon_url(row.hbc_icon_path)
         or "/api/assets/media/hobbies",
         "icon_path": row.hbc_icon_path,
@@ -180,7 +641,12 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
     }
 
 
-def serialize_item(row: HobbyItem, preset: str) -> dict:
+def serialize_item(
+    row: HobbyItem,
+    preset: str,
+    *,
+    fields: list[str] | None = None,
+) -> dict:
     missing = _json_list(row.hbi_missing_json)
     duplicates = _json_list(row.hbi_duplicates_json)
     total_slots = row.hbi_total_slots
@@ -193,7 +659,9 @@ def serialize_item(row: HobbyItem, preset: str) -> dict:
         completion_pct = (
             round(100.0 * items_collected / total_slots, 1) if total_slots > 0 else 0.0
         )
-    return {
+    year = getattr(row, "hbi_year", None)
+    extras = _parse_json_obj(getattr(row, "hbi_extra_json", None))
+    payload = {
         "id": row.hbi_id,
         "collection_id": row.hbi_collection_id,
         "title": row.hbi_title,
@@ -205,6 +673,7 @@ def serialize_item(row: HobbyItem, preset: str) -> dict:
         "style": row.hbi_style,
         "quantity": row.hbi_quantity if row.hbi_quantity is not None else 1,
         "total_slots": total_slots,
+        "year": year,
         "items_collected": items_collected,
         "missing_count": missing_count,
         "completion_pct": completion_pct,
@@ -217,17 +686,109 @@ def serialize_item(row: HobbyItem, preset: str) -> dict:
         "shop_url": row.hbi_shop_url,
         "tutorial_url": row.hbi_tutorial_url,
         "notes": row.hbi_notes,
+        "extra": extras,
+        "pdf_url": None,
         "preset": preset,
         "created_at": row.hbi_created_at,
         "updated_at": row.hbi_updated_at,
     }
+    for key, val in extras.items():
+        if key.startswith("custom_"):
+            payload[key] = val
+    want_pdf = (
+        fields is None and preset == "fillable_album"
+    ) or (fields is not None and "pdf_url" in fields)
+    if want_pdf:
+        payload["pdf_url"] = resolve_album_pdf_url(
+            row.hbi_title, year, theme=row.hbi_theme
+        )
+    return payload
+
+
+def list_hobby_themes(
+    db: Session, user_id: int, *, nsfw_unlocked: bool = False
+) -> list[dict]:
+    """Distinct non-empty themes across visible collections (A→Z)."""
+    collections, _hidden = list_collections(
+        db, user_id, nsfw_unlocked=nsfw_unlocked
+    )
+    col_ids = [int(c["id"]) for c in collections if c.get("id") is not None]
+    if not col_ids:
+        return []
+    rows = db.scalars(
+        select(HobbyItem).where(
+            HobbyItem.hbi_user_id == user_id,
+            HobbyItem.hbi_collection_id.in_(col_ids),
+        )
+    ).all()
+    by_key: dict[str, dict] = {}
+    for row in rows:
+        theme = (row.hbi_theme or "").strip()
+        if not theme:
+            continue
+        key = theme.casefold()
+        entry = by_key.get(key)
+        if entry is None:
+            by_key[key] = {"theme": theme, "item_count": 1}
+        else:
+            entry["item_count"] = int(entry["item_count"]) + 1
+    return sorted(by_key.values(), key=lambda t: str(t["theme"]).casefold())
+
+
+def list_items_by_theme(
+    db: Session,
+    user_id: int,
+    theme: str,
+    *,
+    nsfw_unlocked: bool = False,
+) -> list[dict]:
+    """Items matching theme across visible collections (theme column → collection)."""
+    want = (theme or "").strip().casefold()
+    if not want:
+        return []
+    collections, _hidden = list_collections(
+        db, user_id, nsfw_unlocked=nsfw_unlocked
+    )
+    by_id = {int(c["id"]): c for c in collections if c.get("id") is not None}
+    if not by_id:
+        return []
+    rows = db.scalars(
+        select(HobbyItem).where(
+            HobbyItem.hbi_user_id == user_id,
+            HobbyItem.hbi_collection_id.in_(list(by_id.keys())),
+        )
+    ).all()
+    out: list[dict] = []
+    for row in rows:
+        item_theme = (row.hbi_theme or "").strip()
+        if not item_theme or item_theme.casefold() != want:
+            continue
+        coll = by_id.get(int(row.hbi_collection_id))
+        if not coll:
+            continue
+        preset = str(coll.get("preset") or "generic")
+        ser = serialize_item(row, preset, fields=list(coll.get("fields") or []))
+        # Themes table never includes PDF / album-only computed fields.
+        ser.pop("pdf_url", None)
+        ser["collection_id"] = coll["id"]
+        ser["collection_name"] = coll.get("name") or coll.get("preset_label")
+        ser["collection_preset"] = preset
+        out.append(ser)
+    out.sort(
+        key=lambda it: (
+            str(it.get("collection_name") or "").casefold(),
+            str(it.get("title") or "").casefold(),
+        )
+    )
+    return out
 
 
 def list_presets() -> list[dict]:
+    """Specialty hub presets only (no General / Custom templates)."""
     from app.hobby_assets import hobby_preset_urls
 
     out: list[dict] = []
-    for p in PRESETS:
+    for p in HUB_PRESETS:
         arts = hobby_preset_urls(p)
         out.append(
             {
@@ -304,21 +865,40 @@ def create_collection(
     name: str,
     preset: str,
     icon_path: str | None = None,
+    fields: list[str] | None = None,
+    custom_fields: list[dict] | None = None,
 ) -> dict:
     title = (name or "").strip()
     if not title:
         raise ValueError("Name is required")
-    preset_key = (preset or "generic").strip().casefold()
+    preset_key = (preset or "custom").strip().casefold()
     if preset_key not in PRESETS:
         raise ValueError("Unknown preset")
-    if get_collection_by_preset(db, user_id, preset_key):
-        raise ValueError("A collection for this preset already exists")
+    if preset_key not in MULTI_INSTANCE_PRESETS:
+        if get_collection_by_preset(db, user_id, preset_key):
+            raise ValueError("A collection for this preset already exists")
+    custom_defs = _parse_custom_field_defs(
+        json.dumps(custom_fields or [], ensure_ascii=False)
+    )
+    if fields is not None or custom_defs or preset_key in MULTI_INSTANCE_PRESETS:
+        field_keys = _normalize_fields_selection(
+            fields if fields is not None else list(DEFAULT_CUSTOM_FIELDS),
+            custom_defs,
+        )
+    else:
+        field_keys = None
     now = _now_iso()
     row = HobbyCollection(
         hbc_user_id=user_id,
         hbc_name=title,
         hbc_preset=preset_key,
         hbc_icon_path=icon_path,
+        hbc_fields_json=(
+            json.dumps(field_keys, ensure_ascii=False) if field_keys else None
+        ),
+        hbc_custom_fields_json=(
+            json.dumps(custom_defs, ensure_ascii=False) if custom_defs else None
+        ),
         hbc_created_at=now,
         hbc_updated_at=now,
     )
@@ -329,6 +909,41 @@ def create_collection(
     db.commit()
     db.refresh(row)
     return serialize_collection(row, item_count=0)
+
+
+def create_custom_collection(
+    db: Session,
+    user_id: int,
+    *,
+    name: str,
+    fields: list[str] | None = None,
+    custom_fields: list[dict] | None = None,
+    icon_path: str | None = None,
+) -> dict:
+    """Create a named multi-instance collection (hub card)."""
+    defs_in = list(custom_fields or [])
+    normalized_defs: list[dict] = []
+    used_keys: set[str] = set(BUILTIN_FIELD_KEYS)
+    for item in defs_in:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()
+        key = str(item.get("key") or "").strip()
+        if not label:
+            continue
+        if not key or not _CUSTOM_KEY_RE.match(key) or key in used_keys:
+            key = _slug_custom_key(label, used_keys)
+        used_keys.add(key)
+        normalized_defs.append({"key": key, "label": label})
+    return create_collection(
+        db,
+        user_id,
+        name=name,
+        preset="custom",
+        icon_path=icon_path,
+        fields=fields,
+        custom_fields=normalized_defs,
+    )
 
 
 def ensure_collection_for_preset(
@@ -375,6 +990,9 @@ def update_collection(
     icon_path: str | None = None,
     clear_icon: bool = False,
     private: bool | None = None,
+    fields: list[str] | None = None,
+    custom_fields: list[dict] | None = None,
+    set_fields: bool = False,
 ) -> dict | None:
     row = get_collection(db, user_id, collection_id)
     if not row:
@@ -390,6 +1008,41 @@ def update_collection(
         row.hbc_icon_path = icon_path
     if private is not None:
         row.hbc_private = 1 if private else 0
+    if set_fields or fields is not None or custom_fields is not None:
+        defs_in = (
+            custom_fields
+            if custom_fields is not None
+            else _parse_custom_field_defs(
+                getattr(row, "hbc_custom_fields_json", None)
+            )
+        )
+        normalized_defs: list[dict] = []
+        used_keys: set[str] = set(BUILTIN_FIELD_KEYS)
+        for item in defs_in or []:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()
+            key = str(item.get("key") or "").strip()
+            if not label and not key:
+                continue
+            if not label:
+                label = key
+            if not key or not _CUSTOM_KEY_RE.match(key) or key in used_keys:
+                key = _slug_custom_key(label, used_keys)
+            used_keys.add(key)
+            normalized_defs.append({"key": key, "label": label})
+        selected = (
+            fields
+            if fields is not None
+            else collection_field_keys(row)
+        )
+        field_keys = _normalize_fields_selection(selected, normalized_defs)
+        row.hbc_fields_json = json.dumps(field_keys, ensure_ascii=False)
+        row.hbc_custom_fields_json = (
+            json.dumps(normalized_defs, ensure_ascii=False)
+            if normalized_defs
+            else None
+        )
     row.hbc_updated_at = _now_iso()
     db.commit()
     db.refresh(row)
@@ -481,6 +1134,14 @@ def list_items(
         )
     ).all()
     qf = (q or "").strip().casefold()
+    pdf_index: list[tuple[int, str, str, str]] | None = None
+    if "pdf_url" in collection_field_keys(coll):
+        from app.config import settings
+
+        media_root = Path(settings.media_root or "")
+        pdf_index = (
+            _iter_books_pdf_hits(media_root) if media_root.is_dir() else []
+        )
     out: list[dict] = []
     for row in rows:
         if type_filter and (row.hbi_type or "").casefold() != type_filter.casefold():
@@ -493,7 +1154,15 @@ def list_items(
             continue
         if category_filter and (row.hbi_category or "").casefold() != category_filter.casefold():
             continue
-        ser = serialize_item(row, coll.hbc_preset)
+        field_keys = collection_field_keys(coll)
+        ser = serialize_item(row, coll.hbc_preset, fields=field_keys)
+        if "pdf_url" in field_keys and pdf_index is not None:
+            ser["pdf_url"] = resolve_album_pdf_url(
+                row.hbi_title,
+                getattr(row, "hbi_year", None),
+                theme=row.hbi_theme,
+                index=pdf_index,
+            )
         if qf:
             hay = " ".join(
                 str(ser.get(k) or "")
@@ -507,6 +1176,7 @@ def list_items(
                     "style",
                     "box_size",
                     "notes",
+                    "year",
                 )
             ).casefold()
             if qf not in hay:
@@ -645,10 +1315,40 @@ def upsert_item(
             row.hbi_total_slots = int(ts) if ts is not None and str(ts).strip() != "" else None
         except (TypeError, ValueError):
             row.hbi_total_slots = None
+    if "year" in body:
+        row.hbi_year = _parse_year(body.get("year"))
     if "missing" in body:
         row.hbi_missing_json = _dump_list(body.get("missing") or [])
     if "duplicates" in body:
         row.hbi_duplicates_json = _dump_list(body.get("duplicates") or [])
+
+    # Custom text columns → hbi_extra_json
+    custom_defs = _parse_custom_field_defs(
+        getattr(coll, "hbc_custom_fields_json", None)
+    )
+    custom_keys = {d["key"] for d in custom_defs}
+    if custom_keys:
+        extras = _parse_json_obj(getattr(row, "hbi_extra_json", None))
+        touched = False
+        body_extra = body.get("extra") if isinstance(body.get("extra"), dict) else {}
+        for key in custom_keys:
+            if key in body:
+                val = body.get(key)
+                extras[key] = (
+                    str(val).strip() if val is not None and str(val).strip() else ""
+                )
+                touched = True
+            elif key in body_extra:
+                val = body_extra.get(key)
+                extras[key] = (
+                    str(val).strip() if val is not None and str(val).strip() else ""
+                )
+                touched = True
+        if touched:
+            cleaned = {k: v for k, v in extras.items() if v}
+            row.hbi_extra_json = (
+                json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+            )
 
     # Qty 0 → delete (marbles decrement path)
     if row.hbi_quantity is not None and int(row.hbi_quantity) <= 0:
@@ -660,7 +1360,9 @@ def upsert_item(
     _remember_field_values(db, user_id, collection_id, body)
     db.commit()
     db.refresh(row)
-    return serialize_item(row, coll.hbc_preset)
+    return serialize_item(
+        row, coll.hbc_preset, fields=collection_field_keys(coll)
+    )
 
 
 def adjust_quantity(

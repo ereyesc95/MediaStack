@@ -53,9 +53,10 @@ def build_books_dashboard(
     )
 
     def is_saga(card: dict | None) -> bool:
+        """Best Sagas: non-standalone franchise folders (even a single book)."""
         if not card or card.get("is_standalone"):
             return False
-        return int(card.get("book_count") or card.get("film_count") or 0) > 1
+        return int(card.get("book_count") or card.get("film_count") or 0) >= 1
 
     def _book_card(card: dict) -> dict:
         """Ensure Best Books panes have a display name (books use ``title``)."""
@@ -66,7 +67,12 @@ def build_books_dashboard(
             out["name"] = title
         return out
 
-    sagas = [f for f in franchises if is_saga(f)]
+    # Prefer larger franchises first so Best Sagas fills denser shelves first.
+    sagas = sorted(
+        [f for f in franchises if is_saga(f)],
+        key=lambda f: int(f.get("book_count") or f.get("film_count") or 0),
+        reverse=True,
+    )
     top_books = [_book_card(b) for b in books[:12]]
 
     genre_counts: Counter[int] = Counter()

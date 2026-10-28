@@ -1,4 +1,9 @@
-import { authHeaders, type ProfileUser } from "./auth";
+import {
+  authHeaders,
+  forceProfileReauth,
+  isProfileAuthFailure,
+  type ProfileUser,
+} from "./auth";
 import type {
   AlbumCard,
   ArtistCard,
@@ -90,9 +95,23 @@ async function request<T>(
     externalSignal?.removeEventListener("abort", abortFromCaller);
   }
   if (!res.ok) {
-    throw new Error(await errorMessageFromResponse(res));
+    const message = await errorMessageFromResponse(res);
+    if (isProfileAuthFailure(res.status, message)) {
+      forceProfileReauth();
+    }
+    throw new Error(message);
   }
   return res.json();
+}
+
+/** Shared auth-aware failure for ad-hoc fetch() helpers outside request(). */
+async function throwIfNotOk(res: Response): Promise<void> {
+  if (res.ok) return;
+  const message = await errorMessageFromResponse(res);
+  if (isProfileAuthFailure(res.status, message)) {
+    forceProfileReauth();
+  }
+  throw new Error(message);
 }
 
 export async function fetchHealth(): Promise<Health> {
@@ -159,10 +178,7 @@ export async function uploadProfileAvatar(
   } finally {
     window.clearTimeout(timeout);
   }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
+  await throwIfNotOk(res);
   return res.json();
 }
 
@@ -1338,10 +1354,7 @@ export async function fetchFileTagsCoverPreviewUrl(
     headers.set(k, v);
   }
   const res = await fetch(previewUrl, { headers });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Cover preview failed");
-  }
+  await throwIfNotOk(res);
   return URL.createObjectURL(await res.blob());
 }
 
@@ -1681,10 +1694,7 @@ export async function uploadArtistPhoto(
     headers,
     body: form,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
+  await throwIfNotOk(res);
   return res.json();
 }
 
@@ -1958,10 +1968,7 @@ export async function uploadEntityLinkLogo(
       ? `${API}/music/bands/${entityId}/links/${linkId}/logo`
       : `${API}/music/artists/${entityId}/links/${linkId}/logo`;
   const res = await fetch(base, { method: "POST", headers, body: form });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
+  await throwIfNotOk(res);
   return res.json();
 }
 
@@ -1994,10 +2001,7 @@ export async function uploadUserPlaylistCover(
   } finally {
     window.clearTimeout(timeout);
   }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
+  await throwIfNotOk(res);
   return res.json();
 }
 
@@ -2960,10 +2964,7 @@ export async function uploadUniverseArt(
     headers,
     body: form,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
+  await throwIfNotOk(res);
   return res.json() as Promise<
     import("./types").Universe & { uploaded?: string; url?: string }
   >;
@@ -3682,6 +3683,23 @@ export type CatalogCrossRelatedPayload = {
   items: CatalogCrossRelatedItem[];
 };
 
+export type FranchiseOccupancy = {
+  display_name: string;
+  modules: string[];
+  module_labels: string[];
+};
+
+/** Exact franchise/artist name occupancy across Music/Series/Movies/Books/Games. */
+export async function fetchFranchiseOccupancy(
+  name: string,
+  signal?: AbortSignal
+) {
+  return request<FranchiseOccupancy>(
+    `${API}/catalog-import/franchise-occupancy?q=${encodeURIComponent(name.trim())}`,
+    { signal }
+  );
+}
+
 export async function searchCatalogImport(
   module: CatalogImportModule,
   query: string,
@@ -4111,7 +4129,7 @@ export async function previewCollectionImport(file: File) {
     headers,
     body: form,
   });
-  if (!res.ok) throw new Error(await res.text());
+  await throwIfNotOk(res);
   return res.json() as Promise<{
     ok: boolean;
     counts: Record<string, number>;
@@ -4135,7 +4153,7 @@ export async function exportCollectionXlsx(): Promise<Blob> {
   const headers = new Headers();
   for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
   const res = await fetch(`${API}/music/collection/export.xlsx`, { headers });
-  if (!res.ok) throw new Error(await res.text());
+  await throwIfNotOk(res);
   return res.blob();
 }
 
@@ -4245,13 +4263,27 @@ export type HobbyPreset = {
   icon_url?: string | null;
 };
 
+export type HobbyCustomFieldDef = { key: string; label: string };
+
+export type HobbyFieldCatalogEntry = {
+  key: string;
+  label: string;
+  default_on: boolean;
+  computed: boolean;
+};
+
 export type HobbyCollection = {
   id: number;
   name: string;
   preset: string;
   preset_label: string;
   fields: string[];
+  field_labels?: Record<string, string>;
+  custom_fields?: HobbyCustomFieldDef[];
+  is_custom?: boolean;
   icon_url: string;
+  /** Relative asset path when a custom icon was uploaded; null/absent = default. */
+  icon_path?: string | null;
   item_count: number;
   /** Whole collection hidden unless NSFW is unlocked. */
   private?: boolean;
@@ -4269,6 +4301,7 @@ export type HobbyItem = {
   style?: string | null;
   quantity: number;
   total_slots?: number | null;
+  year?: number | null;
   items_collected?: number | null;
   missing_count?: number | null;
   completion_pct?: number | null;
@@ -4281,12 +4314,75 @@ export type HobbyItem = {
   shop_url?: string | null;
   tutorial_url?: string | null;
   notes?: string | null;
+  /** Values for custom_* columns. */
+  extra?: Record<string, string>;
+  /** Resolved Books PDF media URL when year+title match a disk book. */
+  pdf_url?: string | null;
+  /** Present on Themes-tab rows (cross-collection). */
+  collection_name?: string | null;
+  collection_preset?: string | null;
   preset?: string;
   deleted?: boolean;
 };
 
 export async function fetchHobbyPresets() {
   return request<{ presets: HobbyPreset[] }>(`${API}/hobbies/presets`);
+}
+
+export async function fetchHobbyFieldCatalog() {
+  return request<{
+    fields: HobbyFieldCatalogEntry[];
+    default_fields: string[];
+  }>(`${API}/hobbies/field-catalog`);
+}
+
+export async function createHobbyCustomCollection(body: {
+  name: string;
+  fields: string[];
+  custom_fields?: HobbyCustomFieldDef[];
+  icon?: File | null;
+}) {
+  if (!body.icon) {
+    return request<HobbyCollection>(`${API}/hobbies/collections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: body.name,
+        preset: "custom",
+        fields: body.fields,
+        custom_fields: body.custom_fields,
+      }),
+    });
+  }
+  // Query params for JSON; multipart for optional icon.
+  const qs = new URLSearchParams({ name: body.name });
+  qs.set("fields", JSON.stringify(body.fields));
+  if (body.custom_fields?.length) {
+    qs.set("custom_fields", JSON.stringify(body.custom_fields));
+  }
+  const fd = new FormData();
+  fd.append("icon", body.icon);
+  return request<HobbyCollection>(
+    `${API}/hobbies/collections/custom?${qs}`,
+    { method: "POST", body: fd }
+  );
+}
+
+export async function fetchHobbyFranchiseOptions() {
+  return request<{ options: string[] }>(`${API}/hobbies/franchise-options`);
+}
+
+export async function fetchHobbyThemes() {
+  return request<{ themes: { theme: string; item_count: number }[] }>(
+    `${API}/hobbies/themes`
+  );
+}
+
+export async function fetchHobbyThemeItems(theme: string) {
+  const qs = new URLSearchParams({ theme });
+  return request<{ theme: string; items: HobbyItem[] }>(
+    `${API}/hobbies/themes/items?${qs}`
+  );
 }
 
 export async function fetchHobbyCollections() {
@@ -4318,7 +4414,14 @@ export async function ensureHobbyCollection(preset: string) {
 
 export async function updateHobbyCollection(
   id: number,
-  body: { name?: string; clear_icon?: boolean; private?: boolean }
+  body: {
+    name?: string;
+    clear_icon?: boolean;
+    private?: boolean;
+    fields?: string[];
+    custom_fields?: HobbyCustomFieldDef[];
+    set_fields?: boolean;
+  }
 ) {
   return request<HobbyCollection>(`${API}/hobbies/collections/${id}`, {
     method: "PUT",
@@ -4465,7 +4568,7 @@ export async function exportHobbyXlsx(collectionId: number): Promise<Blob> {
     `${API}/hobbies/collections/${collectionId}/export.xlsx`,
     { headers }
   );
-  if (!res.ok) throw new Error(await res.text());
+  await throwIfNotOk(res);
   return res.blob();
 }
 
@@ -4473,7 +4576,7 @@ export async function downloadHobbyTemplateXlsx(): Promise<Blob> {
   const headers = new Headers();
   for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
   const res = await fetch(`${API}/hobbies/template.xlsx`, { headers });
-  if (!res.ok) throw new Error(await res.text());
+  await throwIfNotOk(res);
   return res.blob();
 }
 
@@ -4486,7 +4589,7 @@ export async function previewHobbyImport(collectionId: number, file: File) {
     `${API}/hobbies/collections/${collectionId}/import/preview`,
     { method: "POST", headers, body: fd }
   );
-  if (!res.ok) throw new Error(await res.text());
+  await throwIfNotOk(res);
   return res.json() as Promise<{
     ok: boolean;
     rows: Record<string, unknown>[];

@@ -11,7 +11,9 @@ import {
   type ArtistImportResult,
 } from "../../api";
 import type { MbArtistMatch } from "../../types";
+import { useFranchiseOccupancy } from "../../franchiseOccupancy";
 import useSlowLookupHint from "../../useSlowLookupHint";
+import FranchiseOccupancyNotice from "../FranchiseOccupancyNotice";
 import SearchableDropdown, {
   type DropdownOption,
 } from "../SearchableDropdown";
@@ -54,6 +56,10 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
   const importIdRef = useRef("");
   const lookupControllerRef = useRef<AbortController | null>(null);
   const slowLookup = useSlowLookupHint(searching || estimating);
+  const occupancyName = (pendingArtist?.name || query).trim();
+  const { occupancy } = useFranchiseOccupancy(
+    mode === "add" ? occupancyName : ""
+  );
 
   useEffect(() => {
     if (!importing) return;
@@ -492,6 +498,31 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                   ))}
                 </ul>
               )}
+              {matches.length > 0 &&
+                !searching &&
+                !importing &&
+                !pendingArtist &&
+                !notFound &&
+                query.trim() ? (
+                <>
+                  <p className="manage-artists-modal__not-found-body">
+                    Or{" "}
+                    <button
+                      type="button"
+                      className="manage-artists-modal__inline-link"
+                      onClick={() => void continueWithoutRegistration()}
+                      disabled={busy}
+                    >
+                      continue with no registration
+                    </button>{" "}
+                    to proceed
+                  </p>
+                  <FranchiseOccupancyNotice
+                    occupancy={occupancy}
+                    className="manage-artists-modal__occupancy"
+                  />
+                </>
+              ) : null}
               {notFound && !importing && !pendingArtist && (
                 <div className="manage-artists-modal__not-found">
                   <p className="manage-artists-modal__not-found-title">
@@ -517,6 +548,10 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                     </button>{" "}
                     to proceed
                   </p>
+                  <FranchiseOccupancyNotice
+                    occupancy={occupancy}
+                    className="manage-artists-modal__occupancy"
+                  />
                   <label className="ms-checkbox manage-artists-modal__guide-option">
                     <input
                       type="checkbox"
@@ -555,6 +590,10 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                       </button>
                     )}
                   </div>
+                  <FranchiseOccupancyNotice
+                    occupancy={occupancy}
+                    className="manage-artists-modal__occupancy"
+                  />
                   {estimating && (
                     <>
                       <p className="muted">Calculating...</p>

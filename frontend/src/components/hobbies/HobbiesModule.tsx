@@ -10,6 +10,7 @@ import {
   adjustHobbyItemQuantity,
   addHobbyFieldOption,
   commitHobbyImport,
+  createHobbyCustomCollection,
   createHobbyItem,
   deleteHobbyCollection,
   deleteHobbyItem,
@@ -18,15 +19,21 @@ import {
   ensureHobbyCollection,
   exportHobbyXlsx,
   fetchHobbyCollections,
+  fetchHobbyFieldCatalog,
   fetchHobbyFieldOptions,
+  fetchHobbyFranchiseOptions,
   fetchHobbyItems,
   fetchHobbyPresets,
+  fetchHobbyThemeItems,
+  fetchHobbyThemes,
   previewHobbyImport,
   updateHobbyCollection,
   updateHobbyItem,
   uploadHobbyCollectionIcon,
   uploadHobbyItemImage,
   type HobbyCollection,
+  type HobbyCustomFieldDef,
+  type HobbyFieldCatalogEntry,
   type HobbyItem,
   type HobbyPreset,
 } from "../../api";
@@ -34,6 +41,8 @@ import { getStoredProfile } from "../../auth";
 import {
   pushHobbiesCollectionRoute,
   pushHobbiesRootRoute,
+  pushHobbiesThemesRoute,
+  type HobbiesHubTab,
 } from "../../hobbiesRoute";
 import { withMediaAccess } from "../../mediaFileUrl";
 import type { MediaOption } from "../ModuleTopBar";
@@ -74,13 +83,23 @@ function normalizeExternalUrl(raw: string): string {
 
 function cellSortValue(it: HobbyItem, col: string): string | number {
   if (col === "image") return it.image ? 1 : 0;
-  if (col === "quantity" || col === "total_slots" || col === "items_collected") {
+  if (col === "pdf_url") return it.pdf_url ? 1 : 0;
+  if (
+    col === "quantity" ||
+    col === "total_slots" ||
+    col === "items_collected" ||
+    col === "year"
+  ) {
     const n = Number((it as Record<string, unknown>)[col]);
     return Number.isFinite(n) ? n : -Infinity;
   }
   if (col === "completion_pct") return it.completion_pct ?? -Infinity;
   if (col === "missing" || col === "duplicates") {
     return ((it[col as "missing" | "duplicates"] || []) as string[]).join(", ");
+  }
+  if (col.startsWith("custom_")) {
+    const extra = (it as { extra?: Record<string, string> }).extra;
+    return extra?.[col] ?? (it as Record<string, unknown>)[col] ?? "";
   }
   const val = (it as Record<string, unknown>)[col];
   return val == null ? "" : String(val);
@@ -90,6 +109,8 @@ type Props = {
   mediaOptions: MediaOption[];
   onSelectMedia: (opt: MediaOption) => void;
   collectionId?: number;
+  /** Hub tab when not inside a collection (`/hobbies` vs `/hobbies/themes`). */
+  hubTab?: HobbiesHubTab;
   busy?: string;
   isAdmin?: boolean;
   onSwitchProfile?: () => void;
@@ -99,18 +120,27 @@ type Props = {
   onChooseSource?: () => void;
 };
 
+const THEMES_TABLE_COLS = [
+  "title",
+  "collection",
+  "brand",
+  "type_category",
+  "year",
+  "shop_url",
+] as const;
+
 const FIELD_LABELS: Record<string, string> = {
   title: "Title",
+  year: "Year",
   brand: "Brand",
   theme: "Theme",
   type: "Type",
   category: "Category",
   size: "Size",
   style: "Style",
-  quantity: "Qty",
+  quantity: "Quantity",
   total_slots: "Total slots",
   items_collected: "Collected",
-  missing_count: "Missing #",
   completion_pct: "Complete %",
   box_size: "Box size",
   missing: "Missing",
@@ -118,18 +148,59 @@ const FIELD_LABELS: Record<string, string> = {
   image: "Image",
   shop_url: "Shop",
   tutorial_url: "Tutorial",
+  pdf_url: "PDF",
+  collection: "Collection",
+  type_category: "Type",
   notes: "Notes",
 };
 
-function fieldLabel(col: string, preset?: string): string {
+/** Album table column order (image is rendered as the leading fixed column). */
+const ALBUM_TABLE_COLS = [
+  "title",
+  "year",
+  "brand",
+  "theme",
+  "type",
+  "total_slots",
+  "missing",
+  "items_collected",
+  "completion_pct",
+  "shop_url",
+  "pdf_url",
+] as const;
+
+function fieldLabel(
+  col: string,
+  preset?: string,
+  labels?: Record<string, string> | null
+): string {
+  if (labels?.[col]) return labels[col];
   if (col === "size" && preset === "puzzle") return "Pieces";
+  if (col.startsWith("custom_")) return col.replace(/^custom_/, "").replace(/_/g, " ");
   return FIELD_LABELS[col] || col;
+}
+
+function mergeUniqueOptions(...lists: string[][]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const raw of list) {
+      const val = String(raw || "").trim();
+      if (!val) continue;
+      const key = val.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(val);
+    }
+  }
+  return out;
 }
 
 export default function HobbiesModule({
   mediaOptions,
   onSelectMedia,
   collectionId,
+  hubTab = "home",
   busy,
   isAdmin = false,
   onSwitchProfile,
@@ -147,17 +218,36 @@ export default function HobbiesModule({
   const [openingPreset, setOpeningPreset] = useState<string | null>(null);
   const [hubError, setHubError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<number | undefined>(collectionId);
+  /** Stays after leaving a collection for Home/Themes; replaced only by another open. */
+  const [pinnedId, setPinnedId] = useState<number | undefined>(collectionId);
+  const [activeHubTab, setActiveHubTab] = useState<HobbiesHubTab>(hubTab);
   const [collectionMenu, setCollectionMenu] =
     useState<HobbyCollectionMenu | null>(null);
+  const [editorOpen, setEditorOpen] = useState<
+    null | "new" | HobbyCollection
+  >(null);
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
 
   useEffect(() => {
     setActiveId(collectionId);
+    if (collectionId != null) setPinnedId(collectionId);
   }, [collectionId]);
+
+  useEffect(() => {
+    if (collectionId == null) setActiveHubTab(hubTab);
+  }, [hubTab, collectionId]);
 
   const active = useMemo(
     () => collections.find((c) => c.id === activeId) ?? null,
     [collections, activeId]
+  );
+
+  const pinned = useMemo(
+    () =>
+      pinnedId != null
+        ? collections.find((c) => c.id === pinnedId) ?? null
+        : null,
+    [collections, pinnedId]
   );
 
   const byPreset = useMemo(() => {
@@ -166,26 +256,58 @@ export default function HobbiesModule({
     return map;
   }, [collections]);
 
+  type HubTile =
+    | { kind: "preset"; key: string; label: string; preset: HobbyPreset; collection?: HobbyCollection }
+    | { kind: "collection"; key: string; label: string; collection: HobbyCollection };
+
   const hubTiles = useMemo(() => {
     const hidden = new Set(hiddenPrivatePresets);
-    const list = presets.filter((p) => !hidden.has(p.id));
-    list.sort((a, b) => {
-      if (a.id === "generic") return 1;
-      if (b.id === "generic") return -1;
-      return a.label.localeCompare(b.label);
-    });
-    return list;
-  }, [presets, hiddenPrivatePresets]);
+    const tiles: HubTile[] = [];
+    for (const p of presets) {
+      if (hidden.has(p.id)) continue;
+      if (p.id === "generic" || p.id === "custom") continue;
+      tiles.push({
+        kind: "preset",
+        key: `preset:${p.id}`,
+        label: p.label,
+        preset: p,
+        collection: byPreset.get(p.id),
+      });
+    }
+    for (const c of collections) {
+      if (c.preset === "custom" || c.preset === "generic" || c.is_custom) {
+        tiles.push({
+          kind: "collection",
+          key: `col:${c.id}`,
+          label: c.name,
+          collection: c,
+        });
+      }
+    }
+    tiles.sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+    );
+    return tiles;
+  }, [presets, hiddenPrivatePresets, collections, byPreset]);
 
   function goHome() {
     pushHobbiesRootRoute();
     setActiveId(undefined);
+    setActiveHubTab("home");
+    setCollectionMenu(null);
+  }
+
+  function goThemes() {
+    pushHobbiesThemesRoute();
+    setActiveId(undefined);
+    setActiveHubTab("themes");
     setCollectionMenu(null);
   }
 
   function openCollection(id: number) {
     pushHobbiesCollectionRoute(id);
     setActiveId(id);
+    setPinnedId(id);
   }
 
   const reloadCollections = useCallback(async () => {
@@ -247,16 +369,22 @@ export default function HobbiesModule({
           {
             id: "home",
             label: "HOME",
-            active: activeId == null,
+            active: activeId == null && activeHubTab === "home",
             onClick: () => goHome(),
           },
-          ...(active
+          {
+            id: "themes",
+            label: "THEMES",
+            active: activeId == null && activeHubTab === "themes",
+            onClick: () => goThemes(),
+          },
+          ...(pinned
             ? [
                 {
                   id: "collection",
-                  label: active.name.toUpperCase(),
-                  active: true,
-                  onClick: () => openCollection(active.id),
+                  label: pinned.name.toUpperCase(),
+                  active: activeId === pinned.id,
+                  onClick: () => openCollection(pinned.id),
                 },
               ]
             : []),
@@ -271,9 +399,20 @@ export default function HobbiesModule({
               onImport={onImport}
               onSync={onSync ?? (() => {})}
               onChooseSource={onChooseSource}
+              onNewHobbyCollection={
+                activeId == null && activeHubTab === "home"
+                  ? () => setEditorOpen("new")
+                  : undefined
+              }
+              onEditHobbyCollection={
+                active
+                  ? () => setEditorOpen(active)
+                  : undefined
+              }
               showManageCollection={Boolean(collectionMenu)}
-              manageCollectionLabel="My Collections"
-              collectionAddLabel="Add"
+              manageCollectionLabel="My collections"
+              collectionAddLabel="Add item"
+              editHobbyCollectionLabel="Edit"
               onCollectionAddManual={collectionMenu?.onAdd}
               onCollectionImport={collectionMenu?.onImport}
               onCollectionExport={collectionMenu?.onExport}
@@ -292,13 +431,64 @@ export default function HobbiesModule({
       />
 
       <div className="hobbies-module__body">
-        {activeId == null ? (
+        {activeId == null && activeHubTab === "themes" ? (
+          <HobbyThemesView onOpenCollection={openCollection} />
+        ) : activeId == null ? (
           <div className="hobbies-hub">
             {loading ? <p className="muted hobbies-hub__status">Loading…</p> : null}
             {hubError ? <p className="error hobbies-hub__status">{hubError}</p> : null}
             <div className="hobbies-hub__grid">
-              {hubTiles.map((p) => {
-                const col = byPreset.get(p.id);
+              {hubTiles.map((tile) => {
+                if (tile.kind === "collection") {
+                  const col = tile.collection;
+                  const coverUrl = col.icon_url || null;
+                  const status =
+                    col.item_count === 0
+                      ? "Empty"
+                      : `${col.item_count} item${
+                          col.item_count === 1 ? "" : "s"
+                        }`;
+                  return (
+                    <button
+                      key={tile.key}
+                      type="button"
+                      className="hobbies-hub__card"
+                      title={tile.label}
+                      onClick={() => openCollection(col.id)}
+                      aria-label={`${tile.label}, ${status}`}
+                    >
+                      <span
+                        className="hobbies-hub__card-bg card-bg-layer"
+                        style={
+                          coverUrl
+                            ? {
+                                backgroundImage: `url("${withMediaAccess(
+                                  coverUrl
+                                )}")`,
+                              }
+                            : undefined
+                        }
+                      />
+                      <span className="hobbies-hub__card-dim" />
+                      <span className="hobbies-hub__card-footer">
+                        {coverUrl ? (
+                          <img
+                            src={withMediaAccess(coverUrl)}
+                            alt=""
+                            className="hobbies-hub__card-logo"
+                          />
+                        ) : (
+                          <span className="hobbies-hub__card-name">
+                            {tile.label}
+                          </span>
+                        )}
+                        <span className="hobbies-hub__card-meta">{status}</span>
+                      </span>
+                    </button>
+                  );
+                }
+                const p = tile.preset;
+                const col = tile.collection;
                 const busyTile = openingPreset === p.id;
                 const coverUrl = p.cover_url || null;
                 const hoverLogo =
@@ -314,12 +504,13 @@ export default function HobbiesModule({
                         }`;
                 return (
                   <button
-                    key={p.id}
+                    key={tile.key}
                     type="button"
                     className="hobbies-hub__card"
+                    title={tile.label}
                     disabled={busyTile || openingPreset != null}
                     onClick={() => void openPreset(p.id)}
-                    aria-label={`${p.label}, ${status}`}
+                    aria-label={`${tile.label}, ${status}`}
                   >
                     <span
                       className="hobbies-hub__card-bg card-bg-layer"
@@ -342,7 +533,9 @@ export default function HobbiesModule({
                           className="hobbies-hub__card-logo"
                         />
                       ) : (
-                        <span className="hobbies-hub__card-name">{p.label}</span>
+                        <span className="hobbies-hub__card-name">
+                          {tile.label}
+                        </span>
                       )}
                       <span className="hobbies-hub__card-meta">{status}</span>
                     </span>
@@ -359,15 +552,580 @@ export default function HobbiesModule({
             onRegisterMenu={setCollectionMenu}
             onChanged={() => void reloadCollections()}
             onDeleted={() => {
-              void reloadCollections().then(() => goHome());
+              const deletedId = activeId;
+              void reloadCollections().then(() => {
+                if (deletedId != null && pinnedId === deletedId) {
+                  setPinnedId(undefined);
+                }
+                goHome();
+              });
             }}
           />
         ) : (
           <p className="muted">Collection not found.</p>
         )}
       </div>
+      {editorOpen != null ? (
+        <HobbyCollectionEditorModal
+          mode={editorOpen === "new" ? "create" : "edit"}
+          collection={editorOpen === "new" ? null : editorOpen}
+          onClose={() => setEditorOpen(null)}
+          onSaved={async (col) => {
+            const wasCreate = editorOpen === "new";
+            setEditorOpen(null);
+            await reloadCollections();
+            if (wasCreate && col?.id) openCollection(col.id);
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+function applyComputedFieldDeps(
+  selected: Set<string>,
+  catalog: HobbyFieldCatalogEntry[]
+): Set<string> {
+  const next = new Set(selected);
+  const byKey = new Map(catalog.map((f) => [f.key, f]));
+  if (next.has("pdf_url")) {
+    for (const dep of ["title", "year", "theme"]) next.add(dep);
+  }
+  if (next.has("items_collected") || next.has("completion_pct")) {
+    for (const dep of ["total_slots", "missing"]) next.add(dep);
+  }
+  // Drop unknown keys except custom_*
+  for (const key of [...next]) {
+    if (!byKey.has(key) && !key.startsWith("custom_")) next.delete(key);
+  }
+  return next;
+}
+
+function HobbyCollectionEditorModal({
+  mode,
+  collection,
+  onClose,
+  onSaved,
+}: {
+  mode: "create" | "edit";
+  collection: HobbyCollection | null;
+  onClose: () => void;
+  onSaved: (col: HobbyCollection | null) => void | Promise<void>;
+}) {
+  const [catalog, setCatalog] = useState<HobbyFieldCatalogEntry[]>([]);
+  const [name, setName] = useState(collection?.name || "");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [customFields, setCustomFields] = useState<HobbyCustomFieldDef[]>(
+    () => collection?.custom_fields || []
+  );
+  const [newCustomLabel, setNewCustomLabel] = useState("");
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const iconRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchHobbyFieldCatalog().then((data) => {
+      if (cancelled) return;
+      const fields = data.fields || [];
+      setCatalog(fields);
+      if (mode === "create") {
+        setSelected(
+          new Set(data.default_fields || fields.filter((f) => f.default_on).map((f) => f.key))
+        );
+      } else if (collection) {
+        setSelected(new Set(collection.fields || []));
+        setCustomFields(collection.custom_fields || []);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, collection]);
+
+  useEffect(() => {
+    if (!iconFile) {
+      setIconPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(iconFile);
+    setIconPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [iconFile]);
+
+  function toggleField(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return applyComputedFieldDeps(next, catalog);
+    });
+  }
+
+  function addCustomColumn() {
+    const label = newCustomLabel.trim();
+    if (!label) return;
+    const key = `custom_${label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, 32) || "field"}`;
+    let unique = key;
+    let n = 2;
+    const used = new Set([
+      ...catalog.map((f) => f.key),
+      ...customFields.map((f) => f.key),
+    ]);
+    while (used.has(unique)) {
+      unique = `${key}_${n}`.slice(0, 48);
+      n += 1;
+    }
+    setCustomFields((prev) => [...prev, { key: unique, label }]);
+    setSelected((prev) => new Set(prev).add(unique));
+    setNewCustomLabel("");
+  }
+
+  async function save() {
+    const title = name.trim();
+    if (!title) {
+      setError("Name is required");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const fields = [
+        ...catalog.map((f) => f.key).filter((k) => selected.has(k)),
+        ...customFields.map((f) => f.key).filter((k) => selected.has(k)),
+      ];
+      const customPayload = customFields.filter((f) => selected.has(f.key));
+      let saved: HobbyCollection;
+      if (mode === "create") {
+        saved = await createHobbyCustomCollection({
+          name: title,
+          fields,
+          custom_fields: customPayload,
+          icon: iconFile,
+        });
+      } else if (collection) {
+        saved = await updateHobbyCollection(collection.id, {
+          name: title,
+          fields,
+          custom_fields: customPayload,
+          set_fields: true,
+        });
+        if (iconFile) {
+          saved = await uploadHobbyCollectionIcon(collection.id, iconFile);
+        }
+      } else {
+        throw new Error("Missing collection");
+      }
+      await onSaved(saved);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const existingIcon =
+    !iconPreview && collection?.icon_path && collection.icon_url
+      ? withMediaAccess(collection.icon_url)
+      : null;
+  const shownIcon = iconPreview || existingIcon;
+
+  return (
+    <ModalPortal onClose={onClose}>
+      <div
+        className="modal-panel artist-admin-modal hobbies-collection-editor"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-panel-header">
+          <h3>{mode === "create" ? "New collection" : "Edit collection"}</h3>
+          <button type="button" className="modal-close-x" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        {error ? <p className="error">{error}</p> : null}
+        <div className="artist-admin-form">
+          <div className="hobbies-collection-editor__identity">
+            <input
+              ref={iconRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => setIconFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              className={`hobbies-collection-editor__icon${
+                shownIcon ? " hobbies-collection-editor__icon--filled" : ""
+              }`}
+              onClick={() => iconRef.current?.click()}
+              aria-label={shownIcon ? "Change image" : "Add image"}
+            >
+              {shownIcon ? (
+                <>
+                  <img src={shownIcon} alt="" />
+                  <span className="hobbies-collection-editor__icon-overlay" aria-hidden>
+                    Change
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="hobbies-collection-editor__icon-plus" aria-hidden>
+                    +
+                  </span>
+                  <span className="hobbies-collection-editor__icon-caption">
+                    Add image
+                  </span>
+                </>
+              )}
+            </button>
+            <input
+              className="hobbies-collection-editor__name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name of collection"
+              aria-label="Name of collection"
+              autoFocus
+            />
+          </div>
+          <fieldset className="hobbies-collection-editor__fields">
+            <legend>Columns</legend>
+            <div className="hobbies-collection-editor__grid">
+              {catalog.map((f) => (
+                <label
+                  key={f.key}
+                  className="ms-checkbox hobbies-collection-editor__check"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(f.key)}
+                    onChange={() => toggleField(f.key)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label">
+                    {f.label}
+                    {f.computed && f.key !== "pdf_url" ? " (auto)" : ""}
+                  </span>
+                </label>
+              ))}
+              {customFields.map((f) => (
+                <label
+                  key={f.key}
+                  className="ms-checkbox hobbies-collection-editor__check"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(f.key)}
+                    onChange={() => toggleField(f.key)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label">{f.label}</span>
+                </label>
+              ))}
+              <div className="hobbies-collection-editor__add-custom">
+                <input
+                  value={newCustomLabel}
+                  onChange={(e) => setNewCustomLabel(e.target.value)}
+                  placeholder="New column"
+                  aria-label="New column name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomColumn();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="hobbies-collection-editor__add-btn"
+                  onClick={addCustomColumn}
+                  disabled={!newCustomLabel.trim()}
+                  title="Add column"
+                  aria-label="Add column"
+                >
+                  ✓
+                </button>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+        <div className="modal-actions-row">
+          <span className="modal-actions__spacer" />
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() => void save()}
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function HobbyThemesView({
+  onOpenCollection,
+}: {
+  onOpenCollection: (id: number) => void;
+}) {
+  const [themes, setThemes] = useState<{ theme: string; item_count: number }[]>(
+    []
+  );
+  const [selectedTheme, setSelectedTheme] = useState<string>("");
+  const [items, setItems] = useState<HobbyItem[]>([]);
+  const [loadingThemes, setLoadingThemes] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [sort, setSort] = useState<SortState>({ col: "title", dir: "asc" });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingThemes(true);
+    setError(null);
+    void fetchHobbyThemes()
+      .then((data) => {
+        if (cancelled) return;
+        const list = data.themes || [];
+        setThemes(list);
+        setSelectedTheme((prev) => {
+          if (prev && list.some((t) => t.theme === prev)) return prev;
+          return list[0]?.theme || "";
+        });
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+          setThemes([]);
+          setSelectedTheme("");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingThemes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTheme) {
+      setItems([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingItems(true);
+    void fetchHobbyThemeItems(selectedTheme)
+      .then((data) => {
+        if (!cancelled) setItems(data.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingItems(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTheme]);
+
+  const sortedItems = useMemo(() => {
+    const list = [...items];
+    const mul = sort.dir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      const va = themesCellSortValue(a, sort.col);
+      const vb = themesCellSortValue(b, sort.col);
+      if (typeof va === "number" && typeof vb === "number") {
+        if (va === vb) return 0;
+        return va < vb ? -mul : mul;
+      }
+      return (
+        String(va).localeCompare(String(vb), undefined, {
+          sensitivity: "base",
+          numeric: true,
+        }) * mul
+      );
+    });
+    return list;
+  }, [items, sort]);
+
+  function toggleSort(col: string) {
+    setSort((prev) =>
+      prev.col === col
+        ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { col, dir: "asc" }
+    );
+  }
+
+  function sortMark(col: string) {
+    if (sort.col !== col) return "";
+    return sort.dir === "asc" ? " ▲" : " ▼";
+  }
+
+  return (
+    <div className="hobbies-collection hobbies-themes">
+      <div className="hobbies-themes__toolbar">
+        <label className="hobbies-themes__theme-picker">
+          Theme
+          <select
+            value={selectedTheme}
+            disabled={loadingThemes || themes.length === 0}
+            onChange={(e) => setSelectedTheme(e.target.value)}
+          >
+            {themes.length === 0 ? (
+              <option value="">No themes yet</option>
+            ) : (
+              themes.map((t) => (
+                <option key={t.theme} value={t.theme}>
+                  {t.theme} ({t.item_count})
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+      {error ? <p className="error hobbies-hub__status">{error}</p> : null}
+      <div className="hobbies-collection__table-wrap">
+        <table className="hobbies-collection__table">
+          <thead>
+            <tr>
+              <th>
+                <button
+                  type="button"
+                  className="hobbies-collection__sort-btn"
+                  onClick={() => toggleSort("image")}
+                >
+                  Image{sortMark("image")}
+                </button>
+              </th>
+              {THEMES_TABLE_COLS.map((col) => (
+                <th key={col}>
+                  <button
+                    type="button"
+                    className="hobbies-collection__sort-btn"
+                    onClick={() => toggleSort(col)}
+                  >
+                    {FIELD_LABELS[col] || col}
+                    {sortMark(col)}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loadingThemes || loadingItems ? (
+              <tr>
+                <td colSpan={THEMES_TABLE_COLS.length + 1} className="muted">
+                  Loading…
+                </td>
+              </tr>
+            ) : !selectedTheme ? (
+              <tr>
+                <td colSpan={THEMES_TABLE_COLS.length + 1} className="muted">
+                  Add a Theme on collection items to group them here.
+                </td>
+              </tr>
+            ) : sortedItems.length === 0 ? (
+              <tr>
+                <td colSpan={THEMES_TABLE_COLS.length + 1} className="muted">
+                  No items for this theme.
+                </td>
+              </tr>
+            ) : (
+              sortedItems.map((it) => (
+                <tr
+                  key={`${it.collection_id}-${it.id}`}
+                  className="hobbies-collection__row"
+                >
+                  <td>
+                    {it.image ? (
+                      <img
+                        src={withMediaAccess(String(it.image))}
+                        alt=""
+                        className="hobbies-collection__thumb"
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  {THEMES_TABLE_COLS.map((col) => (
+                    <td key={col}>
+                      {renderThemesCell(it, col, onOpenCollection)}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function themesCellSortValue(it: HobbyItem, col: string): string | number {
+  if (col === "image") return it.image ? 1 : 0;
+  if (col === "collection") return it.collection_name || "";
+  if (col === "type_category") return it.type || it.category || "";
+  if (col === "year") return it.year ?? -Infinity;
+  if (col === "shop_url") return it.shop_url || "";
+  const val = (it as Record<string, unknown>)[col];
+  return val == null ? "" : String(val);
+}
+
+function renderThemesCell(
+  it: HobbyItem,
+  col: string,
+  onOpenCollection: (id: number) => void
+): ReactNode {
+  if (col === "collection") {
+    const name = it.collection_name || "Collection";
+    const id = it.collection_id;
+    if (!id) return name;
+    return (
+      <button
+        type="button"
+        className="hobbies-themes__collection-link"
+        onClick={() => onOpenCollection(id)}
+      >
+        {name}
+      </button>
+    );
+  }
+  if (col === "type_category") {
+    const val = (it.type || it.category || "").trim();
+    return val || "—";
+  }
+  if (col === "year") {
+    return it.year != null ? String(it.year) : "—";
+  }
+  if (col === "shop_url") {
+    const url = normalizeExternalUrl(it.shop_url || "");
+    if (!url) return "—";
+    return (
+      <a
+        className="hobbies-collection__ext-link"
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={url}
+        aria-label="Open shop"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <IconExternalLink />
+      </a>
+    );
+  }
+  const val = (it as Record<string, unknown>)[col];
+  if (val == null || val === "") return "—";
+  return String(val);
 }
 
 function HobbyCollectionView({
@@ -410,6 +1168,7 @@ function HobbyCollectionView({
   const showPrivateToggle = isAdmin && nsfwUnlocked;
 
   const fields = collection.fields;
+  const fieldLabels = collection.field_labels || null;
 
   const reload = useCallback(async () => {
     try {
@@ -519,18 +1278,17 @@ function HobbyCollectionView({
   ]);
 
   const tableCols = useMemo(() => {
-    const cols = fields.filter((f) => f !== "image" && f !== "notes");
-    if (collection.preset === "fillable_album") {
-      for (const extra of [
-        "items_collected",
-        "completion_pct",
-        "missing_count",
-      ] as const) {
-        if (!cols.includes(extra)) cols.push(extra);
-      }
-    }
-    return cols;
-  }, [fields, collection.preset]);
+    const enabled = fields.filter((f) => f !== "image" && f !== "notes");
+    // Prefer album-style order when those columns are enabled.
+    const preferred = ALBUM_TABLE_COLS.filter((c) => enabled.includes(c));
+    const rest = enabled.filter((c) => !preferred.includes(c as typeof ALBUM_TABLE_COLS[number]));
+    return preferred.length ? [...preferred, ...rest] : enabled;
+  }, [fields]);
+
+  const missingTotal = useMemo(() => {
+    if (!fields.includes("missing")) return 0;
+    return items.reduce((sum, it) => sum + (it.missing?.length || 0), 0);
+  }, [fields, items]);
 
   const sortedItems = useMemo(() => {
     const list = [...items];
@@ -696,7 +1454,9 @@ function HobbyCollectionView({
                     className="hobbies-collection__sort-btn"
                     onClick={() => toggleSort(col)}
                   >
-                    {fieldLabel(col, collection.preset)}
+                    {col === "missing" && missingTotal > 0
+                      ? `Missing (${missingTotal})`
+                      : fieldLabel(col, collection.preset, fieldLabels)}
                     {sortMark(col)}
                   </button>
                 </th>
@@ -946,6 +1706,34 @@ function renderCell(
   col: string,
   collection: HobbyCollection
 ): ReactNode {
+  if (col === "pdf_url") {
+    const url = (it.pdf_url || "").trim();
+    if (!url) {
+      return (
+        <span
+          className="hobbies-collection__ext-link hobbies-collection__ext-link--disabled"
+          title="PDF not found in Books"
+          aria-label="PDF not found"
+          aria-disabled="true"
+        >
+          <IconExternalLink />
+        </span>
+      );
+    }
+    return (
+      <a
+        className="hobbies-collection__ext-link"
+        href={withMediaAccess(url)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open PDF"
+        aria-label="Open PDF"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <IconExternalLink />
+      </a>
+    );
+  }
   if (col === "shop_url" || col === "tutorial_url") {
     const raw = (it as Record<string, unknown>)[col];
     const url = typeof raw === "string" ? normalizeExternalUrl(raw) : "";
@@ -972,8 +1760,17 @@ function renderCell(
   if (col === "completion_pct") {
     return it.completion_pct != null ? `${it.completion_pct}%` : "—";
   }
+  if (col === "year") {
+    return it.year != null ? String(it.year) : "—";
+  }
   if (col === "quantity" && collection.preset === "marbles") {
     return it.quantity;
+  }
+  if (col.startsWith("custom_")) {
+    const extra = (it as { extra?: Record<string, string> }).extra;
+    const val = extra?.[col] ?? (it as Record<string, unknown>)[col];
+    if (val == null || val === "") return "—";
+    return String(val);
   }
   const val = (it as Record<string, unknown>)[col];
   if (val == null || val === "") return "—";
@@ -991,26 +1788,43 @@ function HobbyItemModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const fields = collection.fields;
-  const [form, setForm] = useState<Record<string, unknown>>(() => ({
-    title: item?.title ?? "",
-    brand: item?.brand ?? "",
-    theme: item?.theme ?? "",
-    type: item?.type ?? "",
-    category: item?.category ?? "",
-    size: item?.size ?? "",
-    style: item?.style ?? "",
-    quantity: item?.quantity ?? 1,
-    total_slots: item?.total_slots ?? "",
-    box_size: item?.box_size ?? "",
-    missing: (item?.missing || []).join(", "),
-    duplicates: (item?.duplicates || []).join(", "),
-    image_url: item?.image_url ?? "",
-    shop_url: item?.shop_url ?? "",
-    tutorial_url: item?.tutorial_url ?? "",
-    notes: item?.notes ?? "",
-  }));
+  const fields = collection.fields.filter(
+    (f) => f !== "items_collected" && f !== "completion_pct" && f !== "pdf_url"
+  );
+  const fieldLabels = collection.field_labels || null;
+  const [form, setForm] = useState<Record<string, unknown>>(() => {
+    const extra = (item as { extra?: Record<string, string> } | null)?.extra || {};
+    const base: Record<string, unknown> = {
+      title: item?.title ?? "",
+      year: item?.year ?? "",
+      brand: item?.brand ?? "",
+      theme: item?.theme ?? "",
+      type: item?.type ?? "",
+      category: item?.category ?? "",
+      size: item?.size ?? "",
+      style: item?.style ?? "",
+      quantity: item?.quantity ?? 1,
+      total_slots: item?.total_slots ?? "",
+      box_size: item?.box_size ?? "",
+      missing: (item?.missing || []).join(", "),
+      duplicates: (item?.duplicates || []).join(", "),
+      image_url: item?.image_url ?? "",
+      shop_url: item?.shop_url ?? "",
+      tutorial_url: item?.tutorial_url ?? "",
+      notes: item?.notes ?? "",
+    };
+    for (const f of collection.fields) {
+      if (f.startsWith("custom_")) {
+        base[f] =
+          extra[f] ??
+          (item as Record<string, unknown> | null)?.[f] ??
+          "";
+      }
+    }
+    return base;
+  });
   const [options, setOptions] = useState<Record<string, string[]>>({});
+  const [franchiseOptions, setFranchiseOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -1030,6 +1844,11 @@ function HobbyItemModal({
       for (const [f, opts] of pairs) map[f] = opts;
       setOptions(map);
     });
+    if (fields.includes("theme")) {
+      void fetchHobbyFranchiseOptions()
+        .then((res) => setFranchiseOptions(res.options || []))
+        .catch(() => setFranchiseOptions([]));
+    }
   }, [collection.id, fields]);
 
   function setField(key: string, value: unknown) {
@@ -1051,10 +1870,18 @@ function HobbyItemModal({
             .filter(Boolean);
           continue;
         }
-        if (f === "quantity" || f === "total_slots") {
+        if (f === "quantity" || f === "total_slots" || f === "year") {
           const raw = form[f];
           body[f] =
-            raw === "" || raw == null ? (f === "quantity" ? 1 : null) : Number(raw);
+            raw === "" || raw == null
+              ? f === "quantity"
+                ? 1
+                : null
+              : Number(raw);
+          continue;
+        }
+        if (f.startsWith("custom_")) {
+          body[f] = String(form[f] ?? "").trim() || null;
           continue;
         }
         if (f in form) body[f === "image" ? "image_url" : f] = form[f] || null;
@@ -1137,7 +1964,7 @@ function HobbyItemModal({
             if (f === "missing" || f === "duplicates" || f === "notes") {
               return (
                 <label key={f}>
-                  {fieldLabel(f, collection.preset)}
+                  {fieldLabel(f, collection.preset, fieldLabels)}
                   <textarea
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
@@ -1160,18 +1987,24 @@ function HobbyItemModal({
               "brand",
             ].includes(f);
             if (isDropdown) {
-              const list = options[f] || [];
+              const remembered = options[f] || [];
+              const list =
+                f === "theme"
+                  ? mergeUniqueOptions(franchiseOptions, remembered)
+                  : remembered;
               return (
                 <label key={f}>
-                  {fieldLabel(f, collection.preset)}
+                  {fieldLabel(f, collection.preset, fieldLabels)}
                   <input
                     list={`hobby-opts-${f}`}
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
                     placeholder={
-                      f === "size" && collection.preset === "puzzle"
-                        ? "e.g. 1000"
-                        : undefined
+                      f === "theme"
+                        ? "Franchise name (e.g. Super Mario)"
+                        : f === "size" && collection.preset === "puzzle"
+                          ? "e.g. 1000"
+                          : undefined
                     }
                   />
                   <datalist id={`hobby-opts-${f}`}>
@@ -1188,19 +2021,25 @@ function HobbyItemModal({
                 : undefined;
             return (
               <label key={f}>
-                {fieldLabel(f, collection.preset)}
+                {fieldLabel(f, collection.preset, fieldLabels)}
                 <input
                   type={
-                    f === "quantity" || f === "total_slots" ? "number" : "text"
+                    f === "quantity" || f === "total_slots" || f === "year"
+                      ? "number"
+                      : "text"
                   }
                   value={String(form[f] ?? "")}
                   onChange={(e) => setField(f, e.target.value)}
-                  placeholder={placeholder}
+                  placeholder={
+                    f === "year" ? "e.g. 2018" : placeholder
+                  }
+                  min={f === "year" ? 1000 : undefined}
+                  max={f === "year" ? 9999 : undefined}
                 />
               </label>
             );
           })}
-          {collection.preset === "fillable_album" && form.total_slots ? (
+          {fields.includes("total_slots") && form.total_slots ? (
             <p className="muted">
               Collected / completion update from total slots − missing tags.
             </p>

@@ -32,6 +32,7 @@ import {
   clearProfile,
   getProfileToken,
   getStoredProfile,
+  PROFILE_REQUIRED_EVENT,
   saveProfile,
   type ProfileUser,
 } from "./auth";
@@ -77,6 +78,7 @@ import {
 } from "./filesRoute";
 import {
   parseHobbiesCollectionPath,
+  parseHobbiesThemesPath,
   pushHobbiesRootRoute,
 } from "./hobbiesRoute";
 import {
@@ -162,9 +164,13 @@ function viewFromLocationPath(pathname: string): View {
     };
   }
   if (path.startsWith("/hobbies")) {
+    if (parseHobbiesThemesPath(path)) {
+      return { kind: "hobbies", tab: "themes" };
+    }
     const collectionId = parseHobbiesCollectionPath(path);
     return {
       kind: "hobbies",
+      tab: "home",
       ...(collectionId != null ? { collectionId } : {}),
     };
   }
@@ -301,6 +307,19 @@ export default function App() {
     void prefetchUniverses("series");
     void prefetchUniverses("books");
   }, [mediaRootConfigured, profile]);
+
+  useEffect(() => {
+    function onProfileRequired() {
+      setSwitchingProfile(false);
+      setHighlightProfileId(null);
+      setEditProfileOpen(false);
+      setProfile(null);
+    }
+    window.addEventListener(PROFILE_REQUIRED_EVENT, onProfileRequired);
+    return () => {
+      window.removeEventListener(PROFILE_REQUIRED_EVENT, onProfileRequired);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -549,7 +568,7 @@ export default function App() {
 
     if (opt.kind === "hobbies") {
       pushHobbiesRootRoute();
-      setView({ kind: "hobbies" });
+      setView({ kind: "hobbies", tab: "home" });
     }
   }
 
@@ -2053,6 +2072,7 @@ export default function App() {
             key={`hobbies-${profile.user_id}`}
             mediaOptions={MEDIA_OPTIONS}
             collectionId={view.collectionId}
+            hubTab={view.collectionId != null ? undefined : view.tab || "home"}
             busy={busy}
             onSelectMedia={selectMedia}
             onImport={handleImport}

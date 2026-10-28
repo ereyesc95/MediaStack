@@ -20,6 +20,7 @@ import {
   fetchMoviesFranchiseSeries,
   fetchGamesFranchiseOverview,
   fetchGamesFranchiseAudio,
+  fetchGamesFranchiseMedia,
   refreshGamesFranchiseMetadata,
   refreshMoviesWorkMetadata,
   refreshBooksWorkMetadata,
@@ -1316,6 +1317,89 @@ export default function SeriesFranchisePage({
     if (section !== "library") return;
     let cancelled = false;
     setLibLoading(true);
+
+    const mapLibRows = (
+      rows: Array<Record<string, unknown>>,
+      idFallback: (row: Record<string, unknown>, i: number) => string
+    ): SeriesMediaCard[] =>
+      rows.map((b, i) => {
+        const row = b as {
+          path?: string;
+          id?: string;
+          title?: string;
+          cover_url?: string | null;
+          banner_url?: string | null;
+          logo_url?: string | null;
+          display_date?: string | null;
+          date_iso?: string | null;
+          subseries?: string | null;
+          open_url?: string | null;
+          open_mode?: "tab" | "local" | null;
+          open_label?: string | null;
+          official?: boolean;
+        };
+        return {
+          id: idFallback(b, i),
+          title: row.title || "Untitled",
+          cover_url: row.cover_url,
+          banner_url: row.banner_url || row.cover_url || null,
+          logo_url: row.logo_url || null,
+          open_url: row.open_url || null,
+          open_mode:
+            row.open_mode || (row.open_url ? ("tab" as const) : null),
+          open_label: row.open_label || "Read",
+          date_label: row.display_date || row.date_iso,
+          path: row.path,
+          meta: row.subseries || undefined,
+          official: row.official,
+        };
+      });
+
+    // Games hub: BOOKS tab is cross-module related books (franchise index).
+    // Prefer overview.related.books (covers enriched); do not hit Movies library.
+    if (isGames && !sharedSeries) {
+      if (!data) return () => {
+        cancelled = true;
+      };
+      const relatedBooks =
+        (
+          data as {
+            related?: { books?: Array<Record<string, unknown>> };
+          } | null
+        )?.related?.books || [];
+      if (relatedBooks.length > 0) {
+        setLibCards(
+          mapLibRows(
+            relatedBooks,
+            (row, i) =>
+              String(row.path || row.id || `book-${i}`)
+          )
+        );
+        setLibLoading(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+      void fetchGamesFranchiseMedia(franchiseId, "books")
+        .then((payload) => {
+          if (cancelled) return;
+          setLibCards(
+            mapLibRows(payload.items || [], (row, i) =>
+              String(row.path || row.id || `book-${i}`)
+            )
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setLibCards([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLibLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const useSeriesLib = !isMovies || sharedSeries;
     const libId = useSeriesLib ? seriesFranchiseId : franchiseId;
     const fetchLib = useSeriesLib
@@ -1327,37 +1411,9 @@ export default function SeriesFranchisePage({
       .then((payload) => {
         if (cancelled) return;
         setLibCards(
-          (payload.items || []).map((b, i) => {
-            const row = b as {
-              path?: string;
-              title?: string;
-              cover_url?: string | null;
-              banner_url?: string | null;
-              logo_url?: string | null;
-              display_date?: string | null;
-              date_iso?: string | null;
-              subseries?: string | null;
-              open_url?: string | null;
-              open_mode?: "tab" | "local" | null;
-              open_label?: string | null;
-              official?: boolean;
-            };
-            return {
-              id: row.path || `book-${i}`,
-              title: row.title || "Untitled",
-              cover_url: row.cover_url,
-              banner_url: row.banner_url || row.cover_url || null,
-              logo_url: row.logo_url || null,
-              open_url: row.open_url || null,
-              open_mode:
-                row.open_mode || (row.open_url ? ("tab" as const) : null),
-              open_label: row.open_label || "Read",
-              date_label: row.display_date || row.date_iso,
-              path: row.path,
-              meta: row.subseries || undefined,
-              official: row.official,
-            };
-          })
+          mapLibRows(payload.items || [], (row, i) =>
+            String(row.path || `book-${i}`)
+          )
         );
       })
       .catch(() => {
@@ -1369,7 +1425,16 @@ export default function SeriesFranchisePage({
     return () => {
       cancelled = true;
     };
-  }, [section, franchiseId, isMovies, isBooks, sharedSeries, seriesFranchiseId]);
+  }, [
+    section,
+    franchiseId,
+    isMovies,
+    isBooks,
+    isGames,
+    sharedSeries,
+    seriesFranchiseId,
+    data,
+  ]);
 
   useEffect(() => {
     if (section !== "games") return;

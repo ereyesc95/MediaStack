@@ -1,6 +1,8 @@
 """HobbyStack API — per-profile collections and items."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -12,14 +14,19 @@ from app.hobbies import (
     add_field_option,
     adjust_quantity,
     create_collection,
+    create_custom_collection,
     delete_collection,
     delete_item,
     delete_items,
     ensure_collection_for_preset,
+    field_catalog_payload,
     get_collection,
     list_collections,
     list_field_options,
+    list_franchise_theme_options,
+    list_hobby_themes,
     list_items,
+    list_items_by_theme,
     list_presets,
     require_collection_access,
     save_uploaded_image,
@@ -42,7 +49,9 @@ router = APIRouter(prefix="/api/hobbies", tags=["hobbies"])
 
 class CollectionCreateBody(BaseModel):
     name: str
-    preset: str = "generic"
+    preset: str = "custom"
+    fields: list[str] | None = None
+    custom_fields: list[dict] | None = None
 
 
 class CollectionEnsureBody(BaseModel):
@@ -53,6 +62,14 @@ class CollectionUpdateBody(BaseModel):
     name: str | None = None
     clear_icon: bool = False
     private: bool | None = None
+    fields: list[str] | None = None
+    custom_fields: list[dict] | None = None
+    set_fields: bool = False
+
+
+class CustomFieldDef(BaseModel):
+    key: str | None = None
+    label: str
 
 
 def _accessible_collection(
@@ -72,6 +89,8 @@ def _accessible_collection(
 
 
 class ItemBody(BaseModel):
+    model_config = {"extra": "allow"}
+
     title: str | None = None
     brand: str | None = None
     theme: str | None = None
@@ -81,6 +100,7 @@ class ItemBody(BaseModel):
     style: str | None = None
     quantity: int | None = 1
     total_slots: int | None = None
+    year: int | None = None
     box_size: str | None = None
     missing: list[str] | None = None
     duplicates: list[str] | None = None
@@ -89,6 +109,7 @@ class ItemBody(BaseModel):
     shop_url: str | None = None
     tutorial_url: str | None = None
     notes: str | None = None
+    extra: dict | None = None
 
 
 class QtyBody(BaseModel):
@@ -113,6 +134,45 @@ def hobbies_presets(_user: User = Depends(get_current_user)):
     return {"presets": list_presets()}
 
 
+@router.get("/field-catalog")
+def hobbies_field_catalog(_user: User = Depends(get_current_user)):
+    return field_catalog_payload()
+
+
+@router.get("/franchise-options")
+def hobbies_franchise_options(_user: User = Depends(get_current_user)):
+    """Books/Games franchise folder names for Theme dropdowns."""
+    return {"options": list_franchise_theme_options()}
+
+
+@router.get("/themes")
+def hobbies_themes(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    return {
+        "themes": list_hobby_themes(
+            db, user.usr_id, nsfw_unlocked=nsfw_unlocked
+        )
+    }
+
+
+@router.get("/themes/items")
+def hobbies_theme_items(
+    theme: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    return {
+        "theme": theme.strip(),
+        "items": list_items_by_theme(
+            db, user.usr_id, theme, nsfw_unlocked=nsfw_unlocked
+        ),
+    }
+
+
 @router.get("/collections")
 def hobbies_collections(
     db: Session = Depends(get_db),
@@ -135,8 +195,69 @@ def hobbies_create_collection(
     user: User = Depends(get_current_user),
 ):
     try:
+        preset = (body.preset or "custom").strip().casefold()
+        if preset in ("custom", "generic"):
+            return create_custom_collection(
+                db,
+                user.usr_id,
+                name=body.name,
+                fields=body.fields,
+                custom_fields=body.custom_fields,
+            )
         return create_collection(
-            db, user.usr_id, name=body.name, preset=body.preset
+            db,
+            user.usr_id,
+            name=body.name,
+            preset=preset,
+            fields=body.fields,
+            custom_fields=body.custom_fields,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/collections/custom")
+async def hobbies_create_custom_collection(
+    name: str = Query(..., min_length=1),
+    fields: str | None = Query(None),
+    custom_fields: str | None = Query(None),
+    icon: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Create a named custom collection; optional icon upload."""
+    import json as _json
+
+    field_list: list[str] | None = None
+    if fields:
+        try:
+            parsed = _json.loads(fields)
+            if isinstance(parsed, list):
+                field_list = [str(x) for x in parsed]
+        except _json.JSONDecodeError as e:
+            raise HTTPException(400, "Invalid fields JSON") from e
+    custom_defs: list[dict] | None = None
+    if custom_fields:
+        try:
+            parsed = _json.loads(custom_fields)
+            if isinstance(parsed, list):
+                custom_defs = [x for x in parsed if isinstance(x, dict)]
+        except _json.JSONDecodeError as e:
+            raise HTTPException(400, "Invalid custom_fields JSON") from e
+    icon_path = None
+    if icon is not None and icon.filename:
+        data = await icon.read()
+        if data:
+            ext = Path(icon.filename).suffix or ".png"
+            icon_path = store_icon_file(name.strip(), data, ext)
+    try:
+        return create_custom_collection(
+            db,
+            user.usr_id,
+            name=name,
+            fields=field_list,
+            custom_fields=custom_defs,
+            icon_path=icon_path,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -198,6 +319,11 @@ def hobbies_update_collection(
             name=body.name,
             clear_icon=body.clear_icon,
             private=body.private,
+            fields=body.fields,
+            custom_fields=body.custom_fields,
+            set_fields=body.set_fields
+            or body.fields is not None
+            or body.custom_fields is not None,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

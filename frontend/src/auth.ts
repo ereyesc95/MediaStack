@@ -69,6 +69,25 @@ export function clearProfile() {
   }
 }
 
+/** Fired when the API says the profile session is missing/invalid. */
+export const PROFILE_REQUIRED_EVENT = "mystack:profile-required";
+
+export function isProfileAuthFailure(
+  status: number,
+  message: string
+): boolean {
+  if (status !== 401) return false;
+  const m = message.trim().toLowerCase();
+  return m === "profile not selected" || m === "invalid profile";
+}
+
+/** Clear stored session and send the user to the profile picker. */
+export function forceProfileReauth(): void {
+  clearProfile();
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PROFILE_REQUIRED_EVENT));
+}
+
 export function authHeaders(): HeadersInit {
   const token = getProfileToken();
   if (!token) return {};

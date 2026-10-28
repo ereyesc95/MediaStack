@@ -343,6 +343,84 @@ def _local_franchises(module: str, query: str) -> list[dict]:
     return sorted(unique.values(), key=lambda item: item["title"].casefold())
 
 
+# Occupancy notice: Music · Series · Movies · Books · Games
+_OCCUPANCY_MODULE_ORDER = ("music", "series", "movies", "books", "games")
+_OCCUPANCY_MODULE_LABELS = {
+    "music": "Music",
+    "series": "Series",
+    "movies": "Movies",
+    "books": "Books",
+    "games": "Games",
+}
+
+
+def franchise_occupancy(name: str) -> dict:
+    """Exact franchise/artist slug match across media modules (and Music)."""
+    raw = (name or "").strip()
+    slug = normalize_franchise_slug(raw)
+    if not slug:
+        return {"display_name": "", "modules": [], "module_labels": []}
+    root = _root()
+    found: dict[str, str] = {}
+
+    def _take(module_key: str, folder_name: str) -> None:
+        if module_key in found:
+            return
+        if normalize_franchise_slug(folder_name) == slug:
+            found[module_key] = folder_name
+
+    for module_key, dirname in MODULE_DIRS.items():
+        module_root = root / dirname
+        if not module_root.is_dir():
+            continue
+        if module_key == "games":
+            for platform in module_root.iterdir():
+                if not platform.is_dir():
+                    continue
+                for letter in platform.iterdir():
+                    if not letter.is_dir():
+                        continue
+                    for folder in letter.iterdir():
+                        if folder.is_dir():
+                            _take("games", folder.name)
+        else:
+            for letter in module_root.iterdir():
+                if not letter.is_dir():
+                    continue
+                for folder in letter.iterdir():
+                    if folder.is_dir():
+                        _take(module_key, folder.name)
+
+    music_root = root / "Music"
+    if music_root.is_dir():
+        for letter in music_root.iterdir():
+            if not letter.is_dir():
+                continue
+            for folder in letter.iterdir():
+                if folder.is_dir():
+                    _take("music", folder.name)
+
+    modules = [m for m in _OCCUPANCY_MODULE_ORDER if m in found]
+    display = found[modules[0]] if modules else raw
+    return {
+        "display_name": display,
+        "modules": modules,
+        "module_labels": [_OCCUPANCY_MODULE_LABELS[m] for m in modules],
+    }
+
+
+@router.get("/franchise-occupancy")
+def catalog_franchise_occupancy(
+    q: str = Query("", max_length=200),
+    _admin: User = Depends(require_admin),
+):
+    """Exact-name occupancy for add flows (notice before joining a slug)."""
+    try:
+        return franchise_occupancy(q)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/{module}/registrations")
 def search_catalog_registrations(
     module: str,
@@ -691,7 +769,12 @@ async def search_catalog_import(
                     ]
                 )
         except GoogleBooksError as exc:
-            raise _google_books_http_error(exc) from exc
+            # Google intermittently returns 503; after retries, treat as no hits
+            # so the UI can show the normal “not found” path instead of an error.
+            if getattr(exc, "transient", False):
+                remote = []
+            else:
+                raise _google_books_http_error(exc) from exc
     elif module == "games":
         if not igdb_configured():
             raise HTTPException(

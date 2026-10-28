@@ -225,7 +225,8 @@ def build_work_overview(
             "has_series": has_series,
             "has_movies": has_movies,
             "has_books": has_books,
-            "has_library": False,
+            # BOOKS tab flag (series shell uses has_library for cross-module books).
+            "has_library": has_books,
             "has_games": len(games) > 0,
             "has_gallery": has_gallery,
         },
@@ -256,7 +257,7 @@ def build_work_overview(
         "has_series": has_series,
         "has_books": has_books,
         "has_games": len(games) > 0,
-        "has_library": False,
+        "has_library": has_books,
         "eras": eras,
         "about": {
             "overview": about_disk.get("overview"),

@@ -627,11 +627,16 @@ export async function resolvePathToView(
   }
 
   {
-    const { parseHobbiesCollectionPath, parseHobbiesRootPath } = await import(
-      "./hobbiesRoute"
-    );
+    const {
+      parseHobbiesCollectionPath,
+      parseHobbiesRootPath,
+      parseHobbiesThemesPath,
+    } = await import("./hobbiesRoute");
+    if (parseHobbiesThemesPath(pathname)) {
+      return { view: { kind: "hobbies", tab: "themes" } };
+    }
     if (parseHobbiesRootPath(pathname)) {
-      return { view: { kind: "hobbies" } };
+      return { view: { kind: "hobbies", tab: "home" } };
     }
     const hobbyId = parseHobbiesCollectionPath(pathname);
     if (hobbyId != null) {
@@ -858,8 +863,11 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
 
   {
     // Sync path parse — dynamic import not available; inline match
+    if (pathname === "/hobbies/themes" || pathname === "/hobbies/themes/") {
+      return { kind: "hobbies", tab: "themes" };
+    }
     if (pathname === "/hobbies" || pathname === "/hobbies/") {
-      return { kind: "hobbies" };
+      return { kind: "hobbies", tab: "home" };
     }
     const hobbyMatch = pathname.match(/^\/hobbies\/(\d+)\/?$/i);
     if (hobbyMatch) {

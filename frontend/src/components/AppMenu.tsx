@@ -33,6 +33,7 @@ import {
   IconLyrics,
   IconMetadata,
   IconDownload,
+  IconPencil,
   IconPlus,
   IconSettings,
   IconSwitchProfile,
@@ -69,6 +70,12 @@ type Props = {
   collectionClearMode?: boolean;
   onCollectionAddManual?: () => void;
   collectionAddLabel?: string;
+  /** HobbyStack home: create a named custom collection. */
+  onNewHobbyCollection?: () => void;
+  newHobbyCollectionLabel?: string;
+  /** HobbyStack: edit columns / name for the open collection. */
+  onEditHobbyCollection?: () => void;
+  editHobbyCollectionLabel?: string;
   onCollectionImport?: () => void;
   onCollectionExport?: () => void;
   onCollectionTemplate?: () => void;
@@ -205,6 +212,10 @@ export default function AppMenu({
   collectionClearMode = false,
   onCollectionAddManual,
   collectionAddLabel = "Add manually",
+  onNewHobbyCollection,
+  newHobbyCollectionLabel = "New collection",
+  onEditHobbyCollection,
+  editHobbyCollectionLabel = "Edit",
   onCollectionImport,
   onCollectionExport,
   onCollectionTemplate,
@@ -1261,6 +1272,18 @@ export default function AppMenu({
               Add playlist
             </button>
           )}
+          {onNewHobbyCollection ? (
+            <button
+              type="button"
+              onClick={() => {
+                onNewHobbyCollection();
+                setOpen(false);
+              }}
+            >
+              <IconPlus className="menu-item-icon" />
+              {newHobbyCollectionLabel}
+            </button>
+          ) : null}
           {showManageCollection && (
             <>
               <button
@@ -1299,6 +1322,18 @@ export default function AppMenu({
                         >
                           <IconPlus className="menu-item-icon" />
                           {collectionAddLabel}
+                        </button>
+                      ) : null}
+                      {onEditHobbyCollection ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onEditHobbyCollection();
+                            setOpen(false);
+                          }}
+                        >
+                          <IconPencil className="menu-item-icon" />
+                          {editHobbyCollectionLabel}
                         </button>
                       ) : null}
                       {onCollectionImport ? (

@@ -21,7 +21,9 @@ import {
   type CatalogImportSearchItem,
   type CatalogRegistration,
 } from "../api";
+import { useFranchiseOccupancy } from "../franchiseOccupancy";
 import useSlowLookupHint from "../useSlowLookupHint";
+import FranchiseOccupancyNotice from "./FranchiseOccupancyNotice";
 import ModalPortal from "./ModalPortal";
 
 type Props = {
@@ -898,6 +900,22 @@ export default function ManageCatalogModal({
     () => items.filter((item) => selectedKeys.has(item.key)),
     [items, selectedKeys]
   );
+
+  const occupancyName = useMemo(() => {
+    if (mode !== "add") return "";
+    if (step === "search") return query.trim();
+    if (belongsToFranchise) return franchiseName.trim();
+    return (chosenItems[0]?.title || franchiseName).trim();
+  }, [
+    mode,
+    step,
+    query,
+    belongsToFranchise,
+    franchiseName,
+    chosenItems,
+  ]);
+  const { occupancy } = useFranchiseOccupancy(occupancyName);
+
   const gamesForPlatform = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const plat of activePlatforms) {
@@ -1208,6 +1226,10 @@ export default function ManageCatalogModal({
             </button>{" "}
             to proceed
           </p>
+          <FranchiseOccupancyNotice
+            occupancy={occupancy}
+            className="manage-catalog-modal__occupancy"
+          />
         </div>
       ) : null}
     </>
@@ -1283,6 +1305,30 @@ export default function ManageCatalogModal({
             })}
           </ul>
         </div>
+      ) : null}
+
+      {!searching &&
+      !notFound &&
+      query.trim() &&
+      (results.length > 0 || localFranchises.length > 0) ? (
+        <>
+          <p className="manage-artists-modal__not-found-body">
+            Or{" "}
+            <button
+              type="button"
+              className="manage-artists-modal__inline-link"
+              onClick={continueWithoutRegistration}
+              disabled={saving}
+            >
+              continue with no registration
+            </button>{" "}
+            to proceed
+          </p>
+          <FranchiseOccupancyNotice
+            occupancy={occupancy}
+            className="manage-catalog-modal__occupancy"
+          />
+        </>
       ) : null}
     </>
   );
@@ -1443,8 +1489,18 @@ export default function ManageCatalogModal({
                   onChange={(e) => setFranchiseName(e.target.value)}
                   disabled={saving}
                 />
+                <FranchiseOccupancyNotice
+                  occupancy={occupancy}
+                  className="manage-catalog-modal__occupancy"
+                  as="span"
+                />
               </label>
-            ) : null}
+            ) : (
+              <FranchiseOccupancyNotice
+                occupancy={occupancy}
+                className="manage-catalog-modal__occupancy"
+              />
+            )}
 
             {belongsToFranchise &&
             (module === "series" ||
