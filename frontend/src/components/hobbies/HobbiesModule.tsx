@@ -41,7 +41,7 @@ import { getStoredProfile } from "../../auth";
 import {
   pushHobbiesCollectionRoute,
   pushHobbiesRootRoute,
-  pushHobbiesThemesRoute,
+  pushHobbiesFranchisesRoute,
   type HobbiesHubTab,
 } from "../../hobbiesRoute";
 import { withMediaAccess } from "../../mediaFileUrl";
@@ -56,6 +56,7 @@ import GalleryViewerModal, {
 import {
   IconExternalLink,
   IconPencil,
+  IconStar,
   IconTrash,
 } from "../MenuIcons";
 
@@ -109,7 +110,7 @@ type Props = {
   mediaOptions: MediaOption[];
   onSelectMedia: (opt: MediaOption) => void;
   collectionId?: number;
-  /** Hub tab when not inside a collection (`/hobbies` vs `/hobbies/themes`). */
+  /** Hub tab when not inside a collection (`/hobbies` vs `/hobbies/franchises`). */
   hubTab?: HobbiesHubTab;
   busy?: string;
   isAdmin?: boolean;
@@ -133,13 +134,13 @@ const FIELD_LABELS: Record<string, string> = {
   title: "Title",
   year: "Year",
   brand: "Brand",
-  theme: "Theme",
+  theme: "Franchise",
   type: "Type",
   category: "Category",
   size: "Size",
   style: "Style",
   quantity: "Quantity",
-  total_slots: "Total slots",
+  total_slots: "Total",
   items_collected: "Collected",
   completion_pct: "Complete %",
   box_size: "Box size",
@@ -218,7 +219,7 @@ export default function HobbiesModule({
   const [openingPreset, setOpeningPreset] = useState<string | null>(null);
   const [hubError, setHubError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<number | undefined>(collectionId);
-  /** Stays after leaving a collection for Home/Themes; replaced only by another open. */
+  /** Stays after leaving a collection for Home/Franchises; replaced only by another open. */
   const [pinnedId, setPinnedId] = useState<number | undefined>(collectionId);
   const [activeHubTab, setActiveHubTab] = useState<HobbiesHubTab>(hubTab);
   const [collectionMenu, setCollectionMenu] =
@@ -297,10 +298,10 @@ export default function HobbiesModule({
     setCollectionMenu(null);
   }
 
-  function goThemes() {
-    pushHobbiesThemesRoute();
+  function goFranchises() {
+    pushHobbiesFranchisesRoute();
     setActiveId(undefined);
-    setActiveHubTab("themes");
+    setActiveHubTab("franchises");
     setCollectionMenu(null);
   }
 
@@ -373,10 +374,10 @@ export default function HobbiesModule({
             onClick: () => goHome(),
           },
           {
-            id: "themes",
-            label: "THEMES",
-            active: activeId == null && activeHubTab === "themes",
-            onClick: () => goThemes(),
+            id: "franchises",
+            label: "FRANCHISES",
+            active: activeId == null && activeHubTab === "franchises",
+            onClick: () => goFranchises(),
           },
           ...(pinned
             ? [
@@ -431,8 +432,8 @@ export default function HobbiesModule({
       />
 
       <div className="hobbies-module__body">
-        {activeId == null && activeHubTab === "themes" ? (
-          <HobbyThemesView onOpenCollection={openCollection} />
+        {activeId == null && activeHubTab === "franchises" ? (
+          <HobbyFranchisesView onOpenCollection={openCollection} />
         ) : activeId == null ? (
           <div className="hobbies-hub">
             {loading ? <p className="muted hobbies-hub__status">Loading…</p> : null}
@@ -482,7 +483,18 @@ export default function HobbiesModule({
                             {tile.label}
                           </span>
                         )}
-                        <span className="hobbies-hub__card-meta">{status}</span>
+                        <span className="hobbies-hub__card-meta">
+                          {status}
+                          {col.is_complete ? (
+                            <span
+                              className="hobbies-collection__complete-star"
+                              title="Collection complete"
+                              aria-label="Collection complete"
+                            >
+                              <IconStar />
+                            </span>
+                          ) : null}
+                        </span>
                       </span>
                     </button>
                   );
@@ -537,7 +549,18 @@ export default function HobbiesModule({
                           {tile.label}
                         </span>
                       )}
-                      <span className="hobbies-hub__card-meta">{status}</span>
+                      <span className="hobbies-hub__card-meta">
+                        {status}
+                        {col?.is_complete ? (
+                          <span
+                            className="hobbies-collection__complete-star"
+                            title="Collection complete"
+                            aria-label="Collection complete"
+                          >
+                            <IconStar />
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                   </button>
                 );
@@ -614,6 +637,15 @@ function HobbyCollectionEditorModal({
 }) {
   const [catalog, setCatalog] = useState<HobbyFieldCatalogEntry[]>([]);
   const [name, setName] = useState(collection?.name || "");
+  const [collectionTotalOn, setCollectionTotalOn] = useState(
+    () =>
+      collection?.collection_total != null && collection.collection_total > 0
+  );
+  const [collectionTotal, setCollectionTotal] = useState(() =>
+    collection?.collection_total != null && collection.collection_total > 0
+      ? String(collection.collection_total)
+      : ""
+  );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customFields, setCustomFields] = useState<HobbyCustomFieldDef[]>(
     () => collection?.custom_fields || []
@@ -693,6 +725,15 @@ function HobbyCollectionEditorModal({
       setError("Name is required");
       return;
     }
+    let totalValue: number | null = null;
+    if (collectionTotalOn) {
+      const n = Number.parseInt(collectionTotal.trim(), 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        setError("Collection total must be a positive whole number");
+        return;
+      }
+      totalValue = n;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -707,6 +748,7 @@ function HobbyCollectionEditorModal({
           name: title,
           fields,
           custom_fields: customPayload,
+          collection_total: totalValue,
           icon: iconFile,
         });
       } else if (collection) {
@@ -715,6 +757,8 @@ function HobbyCollectionEditorModal({
           fields,
           custom_fields: customPayload,
           set_fields: true,
+          collection_total: totalValue,
+          set_collection_total: true,
         });
         if (iconFile) {
           saved = await uploadHobbyCollectionIcon(collection.id, iconFile);
@@ -792,6 +836,31 @@ function HobbyCollectionEditorModal({
               aria-label="Name of collection"
               autoFocus
             />
+            <label className="ms-checkbox hobbies-collection-editor__total-check">
+              <input
+                type="checkbox"
+                checked={collectionTotalOn}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setCollectionTotalOn(on);
+                  if (!on) setCollectionTotal("");
+                }}
+              />
+              <span className="ms-checkbox__box" aria-hidden="true" />
+              <span className="ms-checkbox__label">Collection total</span>
+            </label>
+            {collectionTotalOn ? (
+              <input
+                className="hobbies-collection-editor__total-input"
+                type="number"
+                min={1}
+                step={1}
+                value={collectionTotal}
+                onChange={(e) => setCollectionTotal(e.target.value)}
+                placeholder="e.g. 6"
+                aria-label="Collection total"
+              />
+            ) : null}
           </div>
           <fieldset className="hobbies-collection-editor__fields">
             <legend>Columns</legend>
@@ -870,7 +939,7 @@ function HobbyCollectionEditorModal({
   );
 }
 
-function HobbyThemesView({
+function HobbyFranchisesView({
   onOpenCollection,
 }: {
   onOpenCollection: (id: number) => void;
@@ -969,26 +1038,34 @@ function HobbyThemesView({
     return sort.dir === "asc" ? " ▲" : " ▼";
   }
 
+  const selectedCount =
+    themes.find((t) => t.theme === selectedTheme)?.item_count ?? 0;
+
   return (
     <div className="hobbies-collection hobbies-themes">
       <div className="hobbies-themes__toolbar">
         <label className="hobbies-themes__theme-picker">
-          Theme
+          <span className="hobbies-themes__theme-label">Franchise</span>
           <select
             value={selectedTheme}
             disabled={loadingThemes || themes.length === 0}
             onChange={(e) => setSelectedTheme(e.target.value)}
           >
             {themes.length === 0 ? (
-              <option value="">No themes yet</option>
+              <option value="">No franchises yet</option>
             ) : (
               themes.map((t) => (
                 <option key={t.theme} value={t.theme}>
-                  {t.theme} ({t.item_count})
+                  {t.theme}
                 </option>
               ))
             )}
           </select>
+          {selectedTheme ? (
+            <span className="hobbies-themes__theme-count">
+              {selectedCount} {selectedCount === 1 ? "item" : "items"}
+            </span>
+          ) : null}
         </label>
       </div>
       {error ? <p className="error hobbies-hub__status">{error}</p> : null}
@@ -1029,13 +1106,13 @@ function HobbyThemesView({
             ) : !selectedTheme ? (
               <tr>
                 <td colSpan={THEMES_TABLE_COLS.length + 1} className="muted">
-                  Add a Theme on collection items to group them here.
+                  No items yet.
                 </td>
               </tr>
             ) : sortedItems.length === 0 ? (
               <tr>
                 <td colSpan={THEMES_TABLE_COLS.length + 1} className="muted">
-                  No items for this theme.
+                  No items for this franchise.
                 </td>
               </tr>
             ) : (
@@ -1146,6 +1223,7 @@ function HobbyCollectionView({
   const [items, setItems] = useState<HobbyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<HobbyItem | null | "new">(null);
+  const [editFocusField, setEditFocusField] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [sort, setSort] = useState<SortState>({ col: "title", dir: "asc" });
@@ -1251,7 +1329,10 @@ function HobbyCollectionView({
 
   useEffect(() => {
     onRegisterMenu({
-      onAdd: () => setEditItem("new"),
+      onAdd: () => {
+        setEditFocusField(null);
+        setEditItem("new");
+      },
       onImport: runImport,
       onExport: runExport,
       onTemplate: runTemplate,
@@ -1401,6 +1482,15 @@ function HobbyCollectionView({
           />
           <h2 className="hobbies-collection__title">
             {collection.name}
+            {collection.is_complete ? (
+              <span
+                className="hobbies-collection__complete-star"
+                title="Collection complete"
+                aria-label="Collection complete"
+              >
+                <IconStar />
+              </span>
+            ) : null}
             {collection.private ? (
               <span className="hobbies-collection__private-badge">Private</span>
             ) : null}
@@ -1538,7 +1628,14 @@ function HobbyCollectionView({
                     )}
                   </td>
                   {tableCols.map((col) => (
-                    <td key={col}>{renderCell(it, col, collection)}</td>
+                    <td key={col}>
+                      {renderCell(it, col, collection, {
+                        onMissingMore: () => {
+                          setEditFocusField("missing");
+                          setEditItem(it);
+                        },
+                      })}
+                    </td>
                   ))}
                   <td className="hobbies-collection__actions-col">
                     <div className="hobbies-collection__row-actions">
@@ -1585,7 +1682,10 @@ function HobbyCollectionView({
                         className="hobbies-collection__icon-action"
                         title="Edit"
                         aria-label="Edit"
-                        onClick={() => setEditItem(it)}
+                        onClick={() => {
+                          setEditFocusField(null);
+                          setEditItem(it);
+                        }}
                       >
                         <IconPencil />
                       </button>
@@ -1630,9 +1730,14 @@ function HobbyCollectionView({
         <HobbyItemModal
           collection={collection}
           item={editItem === "new" ? null : editItem}
-          onClose={() => setEditItem(null)}
+          focusField={editFocusField}
+          onClose={() => {
+            setEditItem(null);
+            setEditFocusField(null);
+          }}
           onSaved={() => {
             setEditItem(null);
+            setEditFocusField(null);
             void reload();
             onChanged();
           }}
@@ -1704,7 +1809,8 @@ function HobbyCollectionView({
 function renderCell(
   it: HobbyItem,
   col: string,
-  collection: HobbyCollection
+  collection: HobbyCollection,
+  handlers?: { onMissingMore?: () => void }
 ): ReactNode {
   if (col === "pdf_url") {
     const url = (it.pdf_url || "").trim();
@@ -1755,10 +1861,50 @@ function renderCell(
   }
   if (col === "missing" || col === "duplicates") {
     const list = (it[col as "missing" | "duplicates"] || []) as string[];
-    return list.length ? list.join(", ") : "—";
+    if (!list.length) return "—";
+    if (col === "missing" && list.length > 5) {
+      return (
+        <span className="hobbies-collection__tag-list">
+          {list.slice(0, 5).join(", ")}{" "}
+          <button
+            type="button"
+            className="hobbies-collection__more-pill"
+            title={`Show all ${list.length} missing`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlers?.onMissingMore?.();
+            }}
+          >
+            +more
+          </button>
+        </span>
+      );
+    }
+    return list.join(", ");
   }
   if (col === "completion_pct") {
-    return it.completion_pct != null ? `${it.completion_pct}%` : "—";
+    if (it.completion_pct == null) return "—";
+    const complete = it.completion_pct >= 100;
+    return (
+      <span
+        className={
+          complete
+            ? "hobbies-collection__pct hobbies-collection__pct--complete"
+            : "hobbies-collection__pct"
+        }
+      >
+        {`${it.completion_pct}%`}
+        {complete ? (
+          <span
+            className="hobbies-collection__complete-star"
+            title="Complete"
+            aria-label="Complete"
+          >
+            <IconStar />
+          </span>
+        ) : null}
+      </span>
+    );
   }
   if (col === "year") {
     return it.year != null ? String(it.year) : "—";
@@ -1780,17 +1926,53 @@ function renderCell(
 function HobbyItemModal({
   collection,
   item,
+  focusField = null,
   onClose,
   onSaved,
 }: {
   collection: HobbyCollection;
   item: HobbyItem | null;
+  focusField?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const fields = collection.fields.filter(
-    (f) => f !== "items_collected" && f !== "completion_pct" && f !== "pdf_url"
-  );
+  const fields = useMemo(() => {
+    const enabled = collection.fields.filter(
+      (f) => f !== "items_collected" && f !== "completion_pct" && f !== "pdf_url"
+    );
+    const preferredPairs: [string, string][] = [
+      ["title", "year"],
+      ["brand", "theme"],
+      ["type", "total_slots"],
+    ];
+    const used = new Set<string>();
+    const layout: Array<{ kind: "pair"; a: string; b: string } | { kind: "single"; key: string }> =
+      [];
+    for (const [a, b] of preferredPairs) {
+      if (enabled.includes(a) && enabled.includes(b)) {
+        layout.push({ kind: "pair", a, b });
+        used.add(a);
+        used.add(b);
+      }
+    }
+    // Image after title/year pair when both exist; otherwise first available slot.
+    if (enabled.includes("image")) {
+      const titlePairIdx = layout.findIndex(
+        (row) => row.kind === "pair" && row.a === "title"
+      );
+      if (titlePairIdx >= 0) {
+        layout.splice(titlePairIdx + 1, 0, { kind: "single", key: "image" });
+      } else {
+        layout.unshift({ kind: "single", key: "image" });
+      }
+      used.add("image");
+    }
+    for (const key of enabled) {
+      if (used.has(key)) continue;
+      layout.push({ kind: "single", key });
+    }
+    return { enabled, layout };
+  }, [collection.fields]);
   const fieldLabels = collection.field_labels || null;
   const [form, setForm] = useState<Record<string, unknown>>(() => {
     const extra = (item as { extra?: Record<string, string> } | null)?.extra || {};
@@ -1825,16 +2007,19 @@ function HobbyItemModal({
   });
   const [options, setOptions] = useState<Record<string, string[]>>({});
   const [franchiseOptions, setFranchiseOptions] = useState<string[]>([]);
+  const [franchiseOpen, setFranchiseOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const missingRef = useRef<HTMLTextAreaElement>(null);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     const dropdownFields = ["type", "size", "style", "theme", "category", "brand"];
     void Promise.all(
       dropdownFields
-        .filter((f) => fields.includes(f))
+        .filter((f) => fields.enabled.includes(f))
         .map(async (f) => {
           const res = await fetchHobbyFieldOptions(collection.id, f);
           return [f, res.options] as const;
@@ -1844,12 +2029,49 @@ function HobbyItemModal({
       for (const [f, opts] of pairs) map[f] = opts;
       setOptions(map);
     });
-    if (fields.includes("theme")) {
+    if (fields.enabled.includes("theme")) {
       void fetchHobbyFranchiseOptions()
         .then((res) => setFranchiseOptions(res.options || []))
         .catch(() => setFranchiseOptions([]));
     }
-  }, [collection.id, fields]);
+  }, [collection.id, fields.enabled]);
+
+  useEffect(() => {
+    if (focusField !== "missing") return;
+    const t = window.setTimeout(() => {
+      missingRef.current?.focus();
+      missingRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [focusField]);
+
+  useEffect(() => {
+    if (!pendingImage) {
+      setImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(pendingImage);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingImage]);
+
+  const existingImage =
+    !imagePreview && item?.image ? withMediaAccess(String(item.image)) : null;
+  const shownImage = imagePreview || existingImage;
+
+  const franchiseList = useMemo(
+    () => mergeUniqueOptions(franchiseOptions, options.theme || []),
+    [franchiseOptions, options.theme]
+  );
+  const franchiseQuery = String(form.theme ?? "").trim();
+  const franchiseSuggestions = useMemo(() => {
+    const q = franchiseQuery.toLowerCase();
+    // Only suggest after the user types; empty focus must not dump the full list.
+    if (!q) return [];
+    return franchiseList
+      .filter((opt) => opt.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [franchiseList, franchiseQuery]);
 
   function setField(key: string, value: unknown) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -1860,7 +2082,7 @@ function HobbyItemModal({
     setError(null);
     try {
       const body: Record<string, unknown> = {};
-      for (const f of fields) {
+      for (const f of fields.enabled) {
         if (f === "image") continue;
         if (f === "missing" || f === "duplicates") {
           const raw = String(form[f] ?? "");
@@ -1884,7 +2106,7 @@ function HobbyItemModal({
           body[f] = String(form[f] ?? "").trim() || null;
           continue;
         }
-        if (f in form) body[f === "image" ? "image_url" : f] = form[f] || null;
+        if (f in form) body[f] = form[f] || null;
       }
       if ("image_url" in form) body.image_url = form.image_url || null;
 
@@ -1897,7 +2119,6 @@ function HobbyItemModal({
       if (pendingImage && saved.id && !saved.deleted) {
         await uploadHobbyItemImage(collection.id, saved.id, pendingImage);
       }
-      // Remember new dropdown values
       for (const f of ["type", "size", "style", "theme", "category", "brand"]) {
         const v = String(form[f] || "").trim();
         if (v) {
@@ -1926,124 +2147,188 @@ function HobbyItemModal({
         </div>
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
-          {fields.map((f) => {
-            if (f === "image") {
-              return (
-                <label key={f} className="hobbies-item-modal__image-field">
-                  Image
-                  <div className="hobbies-item-modal__image-row">
-                    <input
-                      ref={imageRef}
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={(e) =>
-                        setPendingImage(e.target.files?.[0] ?? null)
+          {fields.layout.map((row) => {
+            const keys =
+              row.kind === "pair" ? [row.a, row.b] : ([row.key] as string[]);
+            const controls = keys.map((f) => {
+              if (f === "image") {
+                return (
+                  <div key={f} className="hobbies-item-modal__image-field">
+                    <span className="hobbies-item-modal__image-label">Image</span>
+                    <div className="hobbies-item-modal__image-row">
+                      <input
+                        ref={imageRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) =>
+                          setPendingImage(e.target.files?.[0] ?? null)
+                        }
+                      />
+                      <button
+                        type="button"
+                        className={`hobbies-item-modal__image-pick${
+                          shownImage
+                            ? " hobbies-item-modal__image-pick--filled"
+                            : ""
+                        }`}
+                        onClick={() => imageRef.current?.click()}
+                        aria-label={shownImage ? "Change image" : "Add image"}
+                      >
+                        {shownImage ? (
+                          <>
+                            <img src={shownImage} alt="" />
+                            <span
+                              className="hobbies-item-modal__image-overlay"
+                              aria-hidden
+                            >
+                              Change
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="hobbies-item-modal__image-plus"
+                              aria-hidden
+                            >
+                              +
+                            </span>
+                            <span className="hobbies-item-modal__image-caption">
+                              Add image
+                            </span>
+                          </>
+                        )}
+                      </button>
+                      <input
+                        className="hobbies-item-modal__image-url"
+                        value={String(form.image_url ?? "")}
+                        onChange={(e) => setField("image_url", e.target.value)}
+                        placeholder="Image URL"
+                        aria-label="Image URL"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+              if (f === "missing" || f === "duplicates" || f === "notes") {
+                return (
+                  <label key={f}>
+                    {fieldLabel(f, collection.preset, fieldLabels)}
+                    <textarea
+                      ref={f === "missing" ? missingRef : undefined}
+                      value={String(form[f] ?? "")}
+                      onChange={(e) => setField(f, e.target.value)}
+                      rows={f === "missing" ? 4 : 2}
+                      placeholder={
+                        f === "missing" || f === "duplicates"
+                          ? "Comma-separated tags"
+                          : undefined
                       }
                     />
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={() => imageRef.current?.click()}
-                    >
-                      {pendingImage ? pendingImage.name : "Choose file…"}
-                    </button>
-                    <span className="muted hobbies-item-modal__image-or">
-                      or
-                    </span>
+                  </label>
+                );
+              }
+              if (f === "theme") {
+                return (
+                  <label key={f} className="hobbies-item-modal__franchise">
+                    {fieldLabel(f, collection.preset, fieldLabels)}
                     <input
-                      className="hobbies-item-modal__image-url"
-                      value={String(form.image_url ?? "")}
-                      onChange={(e) => setField("image_url", e.target.value)}
-                      placeholder="Add image URL"
+                      value={String(form.theme ?? "")}
+                      onChange={(e) => {
+                        setField("theme", e.target.value);
+                        setFranchiseOpen(true);
+                      }}
+                      onFocus={() => setFranchiseOpen(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setFranchiseOpen(false), 150);
+                      }}
+                      autoComplete="off"
                     />
-                  </div>
-                </label>
-              );
-            }
-            if (f === "missing" || f === "duplicates" || f === "notes") {
-              return (
-                <label key={f}>
-                  {fieldLabel(f, collection.preset, fieldLabels)}
-                  <textarea
-                    value={String(form[f] ?? "")}
-                    onChange={(e) => setField(f, e.target.value)}
-                    rows={2}
-                    placeholder={
-                      f === "missing" || f === "duplicates"
-                        ? "Comma-separated tags"
-                        : undefined
-                    }
-                  />
-                </label>
-              );
-            }
-            const isDropdown = [
-              "type",
-              "size",
-              "style",
-              "theme",
-              "category",
-              "brand",
-            ].includes(f);
-            if (isDropdown) {
-              const remembered = options[f] || [];
-              const list =
-                f === "theme"
-                  ? mergeUniqueOptions(franchiseOptions, remembered)
-                  : remembered;
+                    {franchiseOpen && franchiseSuggestions.length > 0 ? (
+                      <ul
+                        className="hobbies-item-modal__suggest"
+                        role="listbox"
+                      >
+                        {franchiseSuggestions.map((opt) => (
+                          <li key={opt}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setField("theme", opt);
+                                setFranchiseOpen(false);
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </label>
+                );
+              }
+              const isDropdown = [
+                "type",
+                "size",
+                "style",
+                "category",
+                "brand",
+              ].includes(f);
+              if (isDropdown) {
+                const list = options[f] || [];
+                return (
+                  <label key={f}>
+                    {fieldLabel(f, collection.preset, fieldLabels)}
+                    <input
+                      list={`hobby-opts-${f}`}
+                      value={String(form[f] ?? "")}
+                      onChange={(e) => setField(f, e.target.value)}
+                      placeholder={
+                        f === "size" && collection.preset === "puzzle"
+                          ? "e.g. 1000"
+                          : undefined
+                      }
+                    />
+                    <datalist id={`hobby-opts-${f}`}>
+                      {list.map((opt) => (
+                        <option key={opt} value={opt} />
+                      ))}
+                    </datalist>
+                  </label>
+                );
+              }
+              const placeholder =
+                f === "shop_url" || f === "tutorial_url"
+                  ? "https://…"
+                  : undefined;
               return (
                 <label key={f}>
                   {fieldLabel(f, collection.preset, fieldLabels)}
                   <input
-                    list={`hobby-opts-${f}`}
+                    type={
+                      f === "quantity" || f === "total_slots" || f === "year"
+                        ? "number"
+                        : "text"
+                    }
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
-                    placeholder={
-                      f === "theme"
-                        ? "Franchise name (e.g. Super Mario)"
-                        : f === "size" && collection.preset === "puzzle"
-                          ? "e.g. 1000"
-                          : undefined
-                    }
+                    placeholder={f === "year" ? "e.g. 2018" : placeholder}
+                    min={f === "year" ? 1000 : undefined}
+                    max={f === "year" ? 9999 : undefined}
                   />
-                  <datalist id={`hobby-opts-${f}`}>
-                    {list.map((opt) => (
-                      <option key={opt} value={opt} />
-                    ))}
-                  </datalist>
                 </label>
               );
+            });
+            if (row.kind === "pair") {
+              return (
+                <div key={`${row.a}-${row.b}`} className="hobbies-item-modal__row">
+                  {controls}
+                </div>
+              );
             }
-            const placeholder =
-              f === "shop_url" || f === "tutorial_url"
-                ? "https://…"
-                : undefined;
-            return (
-              <label key={f}>
-                {fieldLabel(f, collection.preset, fieldLabels)}
-                <input
-                  type={
-                    f === "quantity" || f === "total_slots" || f === "year"
-                      ? "number"
-                      : "text"
-                  }
-                  value={String(form[f] ?? "")}
-                  onChange={(e) => setField(f, e.target.value)}
-                  placeholder={
-                    f === "year" ? "e.g. 2018" : placeholder
-                  }
-                  min={f === "year" ? 1000 : undefined}
-                  max={f === "year" ? 9999 : undefined}
-                />
-              </label>
-            );
+            return controls[0];
           })}
-          {fields.includes("total_slots") && form.total_slots ? (
-            <p className="muted">
-              Collected / completion update from total slots − missing tags.
-            </p>
-          ) : null}
         </div>
         <div className="modal-actions-row">
           <span className="modal-actions__spacer" />

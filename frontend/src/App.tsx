@@ -165,7 +165,7 @@ function viewFromLocationPath(pathname: string): View {
   }
   if (path.startsWith("/hobbies")) {
     if (parseHobbiesThemesPath(path)) {
-      return { kind: "hobbies", tab: "themes" };
+      return { kind: "hobbies", tab: "franchises" };
     }
     const collectionId = parseHobbiesCollectionPath(path);
     return {

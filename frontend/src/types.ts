@@ -1554,7 +1554,7 @@ export type View =
     }
   | { kind: "photos" }
   | { kind: "files"; tabId?: string }
-  | { kind: "hobbies"; collectionId?: number; tab?: "home" | "themes" };
+  | { kind: "hobbies"; collectionId?: number; tab?: "home" | "franchises" };
 
 export type MoviesFilmCard = {
   id: string;

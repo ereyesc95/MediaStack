@@ -637,6 +637,7 @@ def migrate_schema(eng: Engine) -> None:
                         "hbcPrivate" INTEGER NOT NULL DEFAULT 0,
                         "hbcFieldsJson" TEXT,
                         "hbcCustomFieldsJson" TEXT,
+                        "hbcCollectionTotal" INTEGER,
                         "hbcCreatedAt" TEXT,
                         "hbcUpdatedAt" TEXT
                     )
@@ -672,6 +673,13 @@ def migrate_schema(eng: Engine) -> None:
                     text(
                         'ALTER TABLE hobby_collections '
                         'ADD COLUMN "hbcCustomFieldsJson" TEXT'
+                    )
+                )
+            if "hbcCollectionTotal" not in hbc_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_collections '
+                        'ADD COLUMN "hbcCollectionTotal" INTEGER'
                     )
                 )
 

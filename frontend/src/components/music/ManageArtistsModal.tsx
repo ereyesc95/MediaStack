@@ -361,7 +361,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
         className="manage-artists-modal__inline-link"
         onClick={() => void continueWithoutRegistration()}
       >
-        continue with no registration
+        add manually
       </button>
     </p>
   ) : null;
@@ -513,7 +513,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                       onClick={() => void continueWithoutRegistration()}
                       disabled={busy}
                     >
-                      continue with no registration
+                      add manually
                     </button>{" "}
                     to proceed
                   </p>
@@ -544,7 +544,7 @@ export default function ManageArtistsModal({ onClose, onChanged }: Props) {
                       onClick={() => void addUnregisteredArtist()}
                       disabled={busy}
                     >
-                      continue with no registration
+                      add manually
                     </button>{" "}
                     to proceed
                   </p>

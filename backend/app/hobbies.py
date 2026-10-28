@@ -122,14 +122,14 @@ FIELD_CATALOG: tuple[dict, ...] = (
     {"key": "title", "label": "Title", "default_on": True, "computed": False},
     {"key": "year", "label": "Year", "default_on": True, "computed": False},
     {"key": "brand", "label": "Brand", "default_on": True, "computed": False},
-    {"key": "theme", "label": "Theme", "default_on": True, "computed": False},
+    {"key": "theme", "label": "Franchise", "default_on": True, "computed": False},
     {"key": "type", "label": "Type", "default_on": True, "computed": False},
     {"key": "category", "label": "Category", "default_on": True, "computed": False},
     {"key": "size", "label": "Size / Pieces", "default_on": True, "computed": False},
     {"key": "style", "label": "Style", "default_on": True, "computed": False},
     {"key": "quantity", "label": "Quantity", "default_on": True, "computed": False},
     {"key": "box_size", "label": "Box size", "default_on": True, "computed": False},
-    {"key": "total_slots", "label": "Total slots", "default_on": False, "computed": False},
+    {"key": "total_slots", "label": "Total", "default_on": False, "computed": False},
     {"key": "missing", "label": "Missing", "default_on": False, "computed": False},
     {"key": "duplicates", "label": "Duplicates", "default_on": False, "computed": False},
     {
@@ -352,7 +352,7 @@ def resolve_album_pdf_url(
 
 
 def list_franchise_theme_options() -> list[str]:
-    """Franchise folder names from Books/Games (and franchise index) for Theme dropdown."""
+    """Franchise folder names from Books/Games/Movies/Series (+ Music artists, index)."""
     from app.config import settings
     from app.franchise_index import build_franchise_index, load_franchise_index
 
@@ -368,7 +368,7 @@ def list_franchise_theme_options() -> list[str]:
 
     root = Path(settings.media_root or "")
     if root.is_dir():
-        for module in ("Books", "Games"):
+        for module in ("Books", "Movies", "Series", "Games"):
             base = root / module
             if not base.is_dir():
                 continue
@@ -377,7 +377,7 @@ def list_franchise_theme_options() -> list[str]:
                     if not letter.is_dir():
                         continue
                     # Games: Games/{Platform}/{Letter}/{Franchise}
-                    # Books: Books/{Letter}/{Franchise}
+                    # Others: {Module}/{Letter}/{Franchise}
                     if module == "Games":
                         try:
                             letter_dirs = [
@@ -401,6 +401,21 @@ def list_franchise_theme_options() -> list[str]:
                             continue
             except OSError:
                 continue
+
+        music = root / "Music"
+        if music.is_dir():
+            try:
+                for letter in music.iterdir():
+                    if not letter.is_dir():
+                        continue
+                    try:
+                        for artist in letter.iterdir():
+                            if artist.is_dir():
+                                _add(artist.name)
+                    except OSError:
+                        continue
+            except OSError:
+                pass
 
     try:
         index = load_franchise_index()
@@ -622,6 +637,18 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
         getattr(row, "hbc_custom_fields_json", None)
     )
     fields = collection_field_keys(row)
+    collection_total = getattr(row, "hbc_collection_total", None)
+    try:
+        collection_total = (
+            int(collection_total) if collection_total is not None else None
+        )
+    except (TypeError, ValueError):
+        collection_total = None
+    if collection_total is not None and collection_total <= 0:
+        collection_total = None
+    is_complete = (
+        collection_total is not None and item_count >= collection_total
+    )
     return {
         "id": row.hbc_id,
         "name": _display_collection_name(row),
@@ -636,6 +663,8 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
         "icon_path": row.hbc_icon_path,
         "private": collection_is_private(row),
         "item_count": item_count,
+        "collection_total": collection_total,
+        "is_complete": is_complete,
         "created_at": row.hbc_created_at,
         "updated_at": row.hbc_updated_at,
     }
@@ -858,6 +887,20 @@ def get_collection_by_preset(
     ).first()
 
 
+def _normalize_collection_total(value: object | None) -> int | None:
+    if value is None or value is False:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        n = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as e:
+        raise ValueError("Collection total must be a positive whole number") from e
+    if n <= 0:
+        return None
+    return n
+
+
 def create_collection(
     db: Session,
     user_id: int,
@@ -867,6 +910,7 @@ def create_collection(
     icon_path: str | None = None,
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
+    collection_total: int | None = None,
 ) -> dict:
     title = (name or "").strip()
     if not title:
@@ -887,6 +931,7 @@ def create_collection(
         )
     else:
         field_keys = None
+    total = _normalize_collection_total(collection_total)
     now = _now_iso()
     row = HobbyCollection(
         hbc_user_id=user_id,
@@ -899,6 +944,7 @@ def create_collection(
         hbc_custom_fields_json=(
             json.dumps(custom_defs, ensure_ascii=False) if custom_defs else None
         ),
+        hbc_collection_total=total,
         hbc_created_at=now,
         hbc_updated_at=now,
     )
@@ -919,6 +965,7 @@ def create_custom_collection(
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
     icon_path: str | None = None,
+    collection_total: int | None = None,
 ) -> dict:
     """Create a named multi-instance collection (hub card)."""
     defs_in = list(custom_fields or [])
@@ -943,6 +990,7 @@ def create_custom_collection(
         icon_path=icon_path,
         fields=fields,
         custom_fields=normalized_defs,
+        collection_total=collection_total,
     )
 
 
@@ -993,6 +1041,7 @@ def update_collection(
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
     set_fields: bool = False,
+    collection_total: object | None = ...,
 ) -> dict | None:
     row = get_collection(db, user_id, collection_id)
     if not row:
@@ -1008,6 +1057,8 @@ def update_collection(
         row.hbc_icon_path = icon_path
     if private is not None:
         row.hbc_private = 1 if private else 0
+    if collection_total is not ...:
+        row.hbc_collection_total = _normalize_collection_total(collection_total)
     if set_fields or fields is not None or custom_fields is not None:
         defs_in = (
             custom_fields

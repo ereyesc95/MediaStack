@@ -1,20 +1,30 @@
 export const HOBBIES_ROOT_PATH = "/hobbies";
+/** Canonical hub tab path (legacy `/hobbies/themes` still accepted). */
+export const HOBBIES_FRANCHISES_PATH = "/hobbies/franchises";
 export const HOBBIES_THEMES_PATH = "/hobbies/themes";
 
-export type HobbiesHubTab = "home" | "themes";
+export type HobbiesHubTab = "home" | "franchises";
 
 export function parseHobbiesRootPath(pathname: string): boolean {
   return pathname === HOBBIES_ROOT_PATH || pathname === `${HOBBIES_ROOT_PATH}/`;
 }
 
-export function parseHobbiesThemesPath(pathname: string): boolean {
+export function parseHobbiesFranchisesPath(pathname: string): boolean {
   return (
-    pathname === HOBBIES_THEMES_PATH || pathname === `${HOBBIES_THEMES_PATH}/`
+    pathname === HOBBIES_FRANCHISES_PATH ||
+    pathname === `${HOBBIES_FRANCHISES_PATH}/` ||
+    pathname === HOBBIES_THEMES_PATH ||
+    pathname === `${HOBBIES_THEMES_PATH}/`
   );
 }
 
+/** @deprecated Prefer parseHobbiesFranchisesPath */
+export function parseHobbiesThemesPath(pathname: string): boolean {
+  return parseHobbiesFranchisesPath(pathname);
+}
+
 export function parseHobbiesHubTab(pathname: string): HobbiesHubTab | null {
-  if (parseHobbiesThemesPath(pathname)) return "themes";
+  if (parseHobbiesFranchisesPath(pathname)) return "franchises";
   if (parseHobbiesRootPath(pathname)) return "home";
   return null;
 }
@@ -24,9 +34,14 @@ export function pushHobbiesRootRoute(replace = false): void {
   else window.history.pushState({}, "", HOBBIES_ROOT_PATH);
 }
 
+export function pushHobbiesFranchisesRoute(replace = false): void {
+  if (replace) window.history.replaceState({}, "", HOBBIES_FRANCHISES_PATH);
+  else window.history.pushState({}, "", HOBBIES_FRANCHISES_PATH);
+}
+
+/** @deprecated Prefer pushHobbiesFranchisesRoute */
 export function pushHobbiesThemesRoute(replace = false): void {
-  if (replace) window.history.replaceState({}, "", HOBBIES_THEMES_PATH);
-  else window.history.pushState({}, "", HOBBIES_THEMES_PATH);
+  pushHobbiesFranchisesRoute(replace);
 }
 
 export function hobbiesCollectionPath(collectionId: number): string {

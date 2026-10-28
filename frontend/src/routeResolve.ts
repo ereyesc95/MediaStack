@@ -633,7 +633,7 @@ export async function resolvePathToView(
       parseHobbiesThemesPath,
     } = await import("./hobbiesRoute");
     if (parseHobbiesThemesPath(pathname)) {
-      return { view: { kind: "hobbies", tab: "themes" } };
+      return { view: { kind: "hobbies", tab: "franchises" } };
     }
     if (parseHobbiesRootPath(pathname)) {
       return { view: { kind: "hobbies", tab: "home" } };
@@ -863,8 +863,13 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
 
   {
     // Sync path parse — dynamic import not available; inline match
-    if (pathname === "/hobbies/themes" || pathname === "/hobbies/themes/") {
-      return { kind: "hobbies", tab: "themes" };
+    if (
+      pathname === "/hobbies/franchises" ||
+      pathname === "/hobbies/franchises/" ||
+      pathname === "/hobbies/themes" ||
+      pathname === "/hobbies/themes/"
+    ) {
+      return { kind: "hobbies", tab: "franchises" };
     }
     if (pathname === "/hobbies" || pathname === "/hobbies/") {
       return { kind: "hobbies", tab: "home" };

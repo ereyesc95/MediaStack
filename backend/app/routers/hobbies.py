@@ -52,6 +52,7 @@ class CollectionCreateBody(BaseModel):
     preset: str = "custom"
     fields: list[str] | None = None
     custom_fields: list[dict] | None = None
+    collection_total: int | None = None
 
 
 class CollectionEnsureBody(BaseModel):
@@ -65,6 +66,8 @@ class CollectionUpdateBody(BaseModel):
     fields: list[str] | None = None
     custom_fields: list[dict] | None = None
     set_fields: bool = False
+    collection_total: int | None = None
+    set_collection_total: bool = False
 
 
 class CustomFieldDef(BaseModel):
@@ -203,6 +206,7 @@ def hobbies_create_collection(
                 name=body.name,
                 fields=body.fields,
                 custom_fields=body.custom_fields,
+                collection_total=body.collection_total,
             )
         return create_collection(
             db,
@@ -211,6 +215,7 @@ def hobbies_create_collection(
             preset=preset,
             fields=body.fields,
             custom_fields=body.custom_fields,
+            collection_total=body.collection_total,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -221,6 +226,7 @@ async def hobbies_create_custom_collection(
     name: str = Query(..., min_length=1),
     fields: str | None = Query(None),
     custom_fields: str | None = Query(None),
+    collection_total: int | None = Query(None),
     icon: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -258,6 +264,7 @@ async def hobbies_create_custom_collection(
             fields=field_list,
             custom_fields=custom_defs,
             icon_path=icon_path,
+            collection_total=collection_total,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -324,6 +331,9 @@ def hobbies_update_collection(
             set_fields=body.set_fields
             or body.fields is not None
             or body.custom_fields is not None,
+            collection_total=(
+                body.collection_total if body.set_collection_total else ...
+            ),
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

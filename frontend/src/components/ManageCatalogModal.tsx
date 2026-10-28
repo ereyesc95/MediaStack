@@ -1197,7 +1197,7 @@ export default function ManageCatalogModal({
             className="manage-artists-modal__inline-link"
             onClick={continueWithoutRegistration}
           >
-            continue with no registration
+            add manually
           </button>
         </p>
       ) : null}
@@ -1222,7 +1222,7 @@ export default function ManageCatalogModal({
               className="manage-artists-modal__inline-link"
               onClick={continueWithoutRegistration}
             >
-              continue with no registration
+              add manually
             </button>{" "}
             to proceed
           </p>
@@ -1320,7 +1320,7 @@ export default function ManageCatalogModal({
               onClick={continueWithoutRegistration}
               disabled={saving}
             >
-              continue with no registration
+              add manually
             </button>{" "}
             to proceed
           </p>

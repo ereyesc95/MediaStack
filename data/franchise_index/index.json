@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-10-27T21:07:02.065531+00:00",
+  "scanned_at": "2026-10-28T20:45:52.519213+00:00",
   "franchises": {
     "courage test film": {
       "display_name": "Courage Test Film",
@@ -844,6 +844,23 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "Kemonozume"
+        }
+      ]
+    },
+    "chocolates jet": {
+      "display_name": "Chocolates Jet",
+      "slug": "chocolates jet",
+      "letter": "C",
+      "entries": [
+        {
+          "kind": "book",
+          "path": "Books/C/Chocolates Jet/2002.09.01. Historia Natural",
+          "title": "Historia Natural",
+          "date_iso": "2002-09-01",
+          "letter": "C",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Chocolates Jet"
         }
       ]
     },

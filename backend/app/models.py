@@ -872,6 +872,10 @@ class HobbyCollection(Base):
     hbc_custom_fields_json: Mapped[str | None] = mapped_column(
         "hbcCustomFieldsJson", Text
     )
+    # Optional finite size for the whole collection (e.g. 6 cans in a set).
+    hbc_collection_total: Mapped[int | None] = mapped_column(
+        "hbcCollectionTotal", Integer
+    )
     hbc_created_at: Mapped[str | None] = mapped_column("hbcCreatedAt", Text)
     hbc_updated_at: Mapped[str | None] = mapped_column("hbcUpdatedAt", Text)
 

@@ -4285,6 +4285,10 @@ export type HobbyCollection = {
   /** Relative asset path when a custom icon was uploaded; null/absent = default. */
   icon_path?: string | null;
   item_count: number;
+  /** Optional finite size for the whole collection (e.g. 6 cans). */
+  collection_total?: number | null;
+  /** True when collection_total is set and item_count meets it. */
+  is_complete?: boolean;
   /** Whole collection hidden unless NSFW is unlocked. */
   private?: boolean;
 };
@@ -4318,7 +4322,7 @@ export type HobbyItem = {
   extra?: Record<string, string>;
   /** Resolved Books PDF media URL when year+title match a disk book. */
   pdf_url?: string | null;
-  /** Present on Themes-tab rows (cross-collection). */
+  /** Present on Franchises-tab rows (cross-collection). */
   collection_name?: string | null;
   collection_preset?: string | null;
   preset?: string;
@@ -4340,6 +4344,7 @@ export async function createHobbyCustomCollection(body: {
   name: string;
   fields: string[];
   custom_fields?: HobbyCustomFieldDef[];
+  collection_total?: number | null;
   icon?: File | null;
 }) {
   if (!body.icon) {
@@ -4351,6 +4356,7 @@ export async function createHobbyCustomCollection(body: {
         preset: "custom",
         fields: body.fields,
         custom_fields: body.custom_fields,
+        collection_total: body.collection_total ?? null,
       }),
     });
   }
@@ -4359,6 +4365,9 @@ export async function createHobbyCustomCollection(body: {
   qs.set("fields", JSON.stringify(body.fields));
   if (body.custom_fields?.length) {
     qs.set("custom_fields", JSON.stringify(body.custom_fields));
+  }
+  if (body.collection_total != null && body.collection_total > 0) {
+    qs.set("collection_total", String(body.collection_total));
   }
   const fd = new FormData();
   fd.append("icon", body.icon);
@@ -4421,6 +4430,8 @@ export async function updateHobbyCollection(
     fields?: string[];
     custom_fields?: HobbyCustomFieldDef[];
     set_fields?: boolean;
+    collection_total?: number | null;
+    set_collection_total?: boolean;
   }
 ) {
   return request<HobbyCollection>(`${API}/hobbies/collections/${id}`, {
