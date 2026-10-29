@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,7 @@ import {
 } from "../../../usePhoneLayout";
 import AppMenu from "../../AppMenu";
 import TopBarTitle from "../../TopBarTitle";
+import MsDisclosure from "../../MsDisclosure";
 import MediaBeatFx from "../MediaBeatFx";
 import PlaylistBoot from "../../PlaylistBoot";
 import GalleryViewerModal, {
@@ -62,6 +64,34 @@ import {
 } from "../release/releaseTrackActionIcons";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { IconMediaMusic, IconVideo } from "../../MenuIcons";
+import {
+  getCachedTrackCredits,
+  prefetchTrackCredits,
+} from "../../../releaseTrackCreditsCache";
+
+/** Grow/shrink a nowrap flex line so its content fills the row without wrapping. */
+function fitNowrapLine(
+  el: HTMLElement | null,
+  { maxPx = 17, minPx = 10 }: { maxPx?: number; minPx?: number } = {}
+) {
+  if (!el) return;
+  const width = el.clientWidth;
+  if (width <= 0) return;
+  let lo = minPx;
+  let hi = maxPx;
+  el.style.fontSize = `${hi}px`;
+  if (el.scrollWidth <= width + 0.5) {
+    el.style.fontSize = `${hi}px`;
+    return;
+  }
+  for (let i = 0; i < 14; i++) {
+    const mid = (lo + hi) / 2;
+    el.style.fontSize = `${mid}px`;
+    if (el.scrollWidth <= width + 0.5) lo = mid;
+    else hi = mid;
+  }
+  el.style.fontSize = `${lo}px`;
+}
 
 type Props = {
   bandId: number;
@@ -693,13 +723,16 @@ function OverviewFlipCard({
       </button>
     );
   }
+  const flippable = Boolean(back && back !== front);
   return (
     <div
-      className={
-        landscape
-          ? "tour-show-page__flip-wrap tour-show-page__flip-wrap--landscape"
-          : "tour-show-page__flip-wrap"
-      }
+      className={[
+        "tour-show-page__flip-wrap",
+        landscape ? "tour-show-page__flip-wrap--landscape" : "",
+        flippable ? "tour-show-page__flip-wrap--flippable" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <ReleasePhotocard
         frontUrl={front}
@@ -883,6 +916,8 @@ function SetlistTabPanel({
   artistName,
   visible = true,
   showKey,
+  bannerLayout = false,
+  eraBannerUrl = null,
   onOpenRelease,
   onOpenArtist,
   onPlaybackBackdrop,
@@ -900,6 +935,10 @@ function SetlistTabPanel({
   visible?: boolean;
   /** When this changes (show switch), stop playback and reset panel art. */
   showKey?: string | null;
+  /** Mobile portrait — match release banner player (collapse + dock). */
+  bannerLayout?: boolean;
+  /** Artist/era scenic banner (not release cover) for player backdrop. */
+  eraBannerUrl?: string | null;
   onOpenRelease?: (releaseId: string, bandId?: number | null) => void;
   onOpenArtist?: (bandId: number) => void;
   onPlaybackBackdrop?: (url: string | null) => void;
@@ -926,6 +965,8 @@ function SetlistTabPanel({
     release_date?: string | null;
   } | null>(null);
   const [repeatOne, setRepeatOne] = useState(false);
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
+  const [trackWriters, setTrackWriters] = useState<string[]>([]);
   const [playerBubbleOpen, setPlayerBubbleOpen] = useState(false);
   const playerBubbleRef = useRef<HTMLDivElement>(null);
   const links =
@@ -1118,6 +1159,41 @@ function SetlistTabPanel({
     playingPath,
   ]);
 
+  useEffect(() => {
+    if (bannerLayout && playingPath) setMoreInfoOpen(true);
+  }, [bannerLayout, playingPath]);
+
+  useEffect(() => {
+    if (!playingPath || !nowPlaying?.title) {
+      setTrackWriters([]);
+      return;
+    }
+    const creditsBand = nowPlaying.navigate_band_id ?? bandId;
+    const releaseId = panelArt?.release_id || nowPlaying.navigate_release_id;
+    if (!releaseId) {
+      setTrackWriters([]);
+      return;
+    }
+    const cached = getCachedTrackCredits(
+      creditsBand,
+      releaseId,
+      nowPlaying.title
+    );
+    if (cached?.writers?.length) setTrackWriters(cached.writers);
+    void prefetchTrackCredits(creditsBand, releaseId, nowPlaying.title).then(
+      (res) => {
+        setTrackWriters(res?.writers ?? []);
+      }
+    );
+  }, [
+    bandId,
+    nowPlaying?.navigate_band_id,
+    nowPlaying?.navigate_release_id,
+    nowPlaying?.title,
+    panelArt?.release_id,
+    playingPath,
+  ]);
+
   if (loading && !payload) {
     return (
       <div
@@ -1172,6 +1248,192 @@ function SetlistTabPanel({
     trackMeta?.lines.filter(
       (l) => l.kind !== "featuring" && l.kind !== "cover" && l.kind !== "performer"
     ) ?? [];
+  const bannerBgUrl =
+    eraBannerUrl ||
+    panelArt?.background_layers?.[0] ||
+    panelCoverStill ||
+    coverUrl ||
+    null;
+  const useBannerPlayer = Boolean(bannerLayout && showPlayingPanel);
+
+  const brandRow = (
+    <div className="release-page__brand-row">
+      {panelArt?.logo_url || panelArt?.icon_url ? (
+        <button
+          type="button"
+          className="release-page__artist-link release-page__brand-row-btn"
+          onClick={() => onOpenArtist?.(bandId)}
+          aria-label={artistName ? `Open ${artistName}` : "Open artist"}
+        >
+          {panelArt.icon_url ? (
+            <MediaBeatFrame variant="logo">
+              <img
+                src={panelArt.icon_url}
+                alt=""
+                className="release-page__meta-icon"
+                draggable={false}
+              />
+            </MediaBeatFrame>
+          ) : null}
+          {panelArt.logo_url ? (
+            <MediaBeatFrame variant="logo">
+              <img
+                src={panelArt.logo_url}
+                alt=""
+                className="release-page__meta-logo"
+                draggable={false}
+              />
+            </MediaBeatFrame>
+          ) : null}
+        </button>
+      ) : artistName ? (
+        <button
+          type="button"
+          className="release-page__artist-link release-page__artist-link--text"
+          onClick={() => onOpenArtist?.(bandId)}
+        >
+          {artistName}
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const trackMetaBlock = panelTitle ? (
+    <div className="release-page__track-panel">
+      <h2 className="release-page__track-panel-title">{panelTitle}</h2>
+      {coverLine && coverLine.kind === "cover" ? (
+        <p className="release-page__track-panel-cover">
+          <button
+            type="button"
+            className="release-page__person-link release-page__person-link--plain"
+            onClick={() => void openCoverArtist(coverLine.artist)}
+          >
+            {coverLine.artist}
+          </button>{" "}
+          cover
+        </p>
+      ) : null}
+      {releaseDateLabel ? (
+        <p className="release-page__track-panel-date">
+          Released on {releaseDateLabel}
+        </p>
+      ) : null}
+      {trackMeta?.versionLabel ? (
+        <p className="release-page__track-panel-version">
+          {trackMeta.versionLabel}
+        </p>
+      ) : null}
+      {panelAlbum ? (
+        releaseId && onOpenRelease ? (
+          <p className="release-page__track-panel-source">
+            Taken from{" "}
+            <button
+              type="button"
+              className="release-page__release-link"
+              onClick={() =>
+                onOpenRelease(
+                  releaseId,
+                  nowPlaying?.navigate_band_id ?? null
+                )
+              }
+            >
+              {panelAlbum}
+            </button>
+          </p>
+        ) : (
+          <p className="release-page__track-panel-source">
+            Taken from {panelAlbum}
+          </p>
+        )
+      ) : null}
+      {featuringLine && featuringLine.kind === "featuring" ? (
+        <p className="release-page__track-panel-line">
+          Featuring{" "}
+          {featuringLine.artists.map((name, j) => (
+            <span key={name}>
+              {j > 0 &&
+                (j === featuringLine.artists.length - 1 ? " and " : ", ")}
+              <button
+                type="button"
+                className="release-page__person-link"
+                onClick={() => void openCoverArtist(name)}
+              >
+                {name}
+              </button>
+            </span>
+          ))}
+        </p>
+      ) : null}
+      {otherLines.map((line, i) =>
+        line.kind === "other" ? (
+          <p key={i} className="release-page__track-panel-line">
+            {line.text}
+          </p>
+        ) : null
+      )}
+      {trackWriters.length > 0 ? (
+        <p className="release-page__track-panel-writers">
+          Written by{" "}
+          {trackWriters.map((name, i) => (
+            <span key={name}>
+              {i > 0 && (i === trackWriters.length - 1 ? " and " : ", ")}
+              <button
+                type="button"
+                className="release-page__person-link"
+                onClick={() => void openCoverArtist(name)}
+              >
+                {name}
+              </button>
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+
+  const trackActions = (
+    <div
+      className={
+        useBannerPlayer
+          ? "release-page__track-actions release-page__track-actions--in-info"
+          : "release-page__track-actions release-page__track-actions--above-player"
+      }
+    >
+      <span className="release-page__track-action" title="Lyrics" aria-hidden>
+        <TrackActionLyricsIcon className="release-page__track-action-icon" />
+      </span>
+      <span className="release-page__track-action" title="Versions" aria-hidden>
+        <TrackActionVersionsIcon className="release-page__track-action-icon" />
+      </span>
+      <span
+        className="release-page__track-action"
+        title="Add to playlist"
+        aria-hidden
+      >
+        <TrackActionPlaylistIcon className="release-page__track-action-icon" />
+      </span>
+      {fullRecordingUrl ? (
+        <RecordingVideoButton
+          url={fullRecordingUrl}
+          className="release-page__track-action"
+        />
+      ) : null}
+    </div>
+  );
+
+  const playerControls = (
+    <MiniAudioPlayerControls
+      playing={miniAudio.playing}
+      progress={miniAudio.progress}
+      duration={miniAudio.duration}
+      toggle={miniAudio.toggle}
+      seek={miniAudio.seek}
+      onPrev={() => playAdjacentTrack("prev")}
+      onNext={() => playAdjacentTrack("next")}
+      repeatOne={repeatOne}
+      onRepeatToggle={() => setRepeatOne((r) => !r)}
+    />
+  );
 
   return (
     <div
@@ -1183,7 +1445,11 @@ function SetlistTabPanel({
           : "tour-show-page__setlist-tab--idle",
         visible ? "" : "tour-show-page__setlist-tab--hidden",
         showPlayingPanel ? "release-page--beat-ready" : "",
-        canvasUrl && showPlayingPanel ? "release-page--canvas" : "",
+        canvasUrl && showPlayingPanel && !useBannerPlayer
+          ? "release-page--canvas"
+          : "",
+        useBannerPlayer ? "release-page--banner-layout" : "",
+        useBannerPlayer ? "release-page--stacked" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -1199,17 +1465,22 @@ function SetlistTabPanel({
               "release-page__panel",
               "release-page__panel--track",
               "tour-show-page__setlist-panel",
-              canvasUrl ? "release-page__panel--canvas" : "",
+              useBannerPlayer ? "release-page__panel--banner" : "",
+              canvasUrl && !useBannerPlayer
+                ? "release-page__panel--canvas"
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}
             style={
               bgLayer
-                ? ({ ["--panel-fade" as string]: `url("${bgLayer}")` } as CSSProperties)
+                ? ({
+                    ["--panel-fade" as string]: `url("${bgLayer}")`,
+                  } as CSSProperties)
                 : undefined
             }
           >
-            {canvasUrl ? (
+            {canvasUrl && !useBannerPlayer ? (
               <div className="release-page__panel-canvas-layer" aria-hidden>
                 <video
                   ref={canvasRef}
@@ -1224,9 +1495,30 @@ function SetlistTabPanel({
             ) : null}
             <div className="release-page__panel-content">
               <div className="release-page__art">
-                <div className="release-page__art-stage">
+                <div
+                  className={`release-page__art-stage${
+                    useBannerPlayer ? " release-page__art-stage--banner" : ""
+                  }`}
+                >
+                  {useBannerPlayer ? (
+                    <span
+                      className="release-page__banner-bg"
+                      style={
+                        bannerBgUrl
+                          ? { backgroundImage: `url("${bannerBgUrl}")` }
+                          : undefined
+                      }
+                      aria-hidden
+                    />
+                  ) : null}
                   {panelCover ? (
-                    <span className="release-page__cover-wrap">
+                    <span
+                      className={`release-page__cover-wrap${
+                        useBannerPlayer
+                          ? " release-page__cover-wrap--banner-cover"
+                          : ""
+                      }`}
+                    >
                       {panelCoverIsVideo ? (
                         <video
                           className="release-page__cover release-page__cover--video"
@@ -1252,157 +1544,70 @@ function SetlistTabPanel({
                     alt=""
                     className={[
                       "release-page__disc",
+                      useBannerPlayer ? "release-page__disc--banner" : "",
                       isPlaying
                         ? "release-page__disc--spin"
                         : "release-page__disc--spin-paused",
-                    ].join(" ")}
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     draggable={false}
                   />
                 </div>
               </div>
-              <div className="release-page__panel-meta">
-                <div className="release-page__panel-fit">
-                  <div className="release-page__panel-fit-inner">
-                    <div className="release-page__panel-body">
-                      <div className="release-page__brand-row">
-                        {panelArt?.logo_url || panelArt?.icon_url ? (
-                          <span className="release-page__artist-brand">
-                            {panelArt.icon_url ? (
-                              <MediaBeatFrame variant="logo">
-                                <img
-                                  src={panelArt.icon_url}
-                                  alt=""
-                                  className="release-page__meta-icon"
-                                  draggable={false}
-                                />
-                              </MediaBeatFrame>
-                            ) : null}
-                            {panelArt.logo_url ? (
-                              <MediaBeatFrame variant="logo">
-                                <img
-                                  src={panelArt.logo_url}
-                                  alt=""
-                                  className="release-page__meta-logo"
-                                  draggable={false}
-                                />
-                              </MediaBeatFrame>
-                            ) : null}
-                          </span>
-                        ) : artistName ? (
-                          <p className="release-page__artist-link release-page__artist-link--text">
-                            {artistName}
-                          </p>
-                        ) : null}
+
+              {useBannerPlayer ? (
+                <button
+                  type="button"
+                  className={`release-page__more-info${
+                    moreInfoOpen ? " is-open" : ""
+                  } release-page__more-info--track`}
+                  onClick={() => setMoreInfoOpen((o) => !o)}
+                  aria-expanded={moreInfoOpen}
+                >
+                  {panelTitle || "Track"}
+                </button>
+              ) : null}
+
+              <MsDisclosure open={!useBannerPlayer || moreInfoOpen}>
+                <div
+                  className={`release-page__panel-meta${
+                    useBannerPlayer
+                      ? " release-page__panel-meta--glass"
+                      : ""
+                  }`}
+                >
+                  <div className="release-page__panel-fit">
+                    <div className="release-page__panel-fit-inner">
+                      <div className="release-page__panel-body">
+                        {brandRow}
+                        {trackMetaBlock}
+                        {useBannerPlayer ? trackActions : null}
                       </div>
-                      {panelTitle ? (
-                        <div className="release-page__track-panel">
-                          <h2 className="release-page__track-panel-title">{panelTitle}</h2>
-                          {coverLine && coverLine.kind === "cover" ? (
-                            <p className="release-page__track-panel-cover">
-                              <button
-                                type="button"
-                                className="release-page__person-link release-page__person-link--plain"
-                                onClick={() => void openCoverArtist(coverLine.artist)}
-                              >
-                                {coverLine.artist}
-                              </button>{" "}
-                              cover
-                            </p>
-                          ) : null}
-                          {trackMeta?.versionLabel ? (
-                            <p className="release-page__track-panel-version">
-                              {trackMeta.versionLabel}
-                            </p>
-                          ) : null}
-                          {panelAlbum ? (
-                            releaseId && onOpenRelease ? (
-                              <p className="release-page__track-panel-source">
-                                Taken from{" "}
-                                <button
-                                  type="button"
-                                  className="release-page__release-link"
-                                  onClick={() =>
-                                    onOpenRelease(
-                                      releaseId,
-                                      nowPlaying?.navigate_band_id ?? null
-                                    )
-                                  }
-                                >
-                                  {panelAlbum}
-                                </button>
-                              </p>
-                            ) : (
-                              <p className="release-page__track-panel-source">
-                                Taken from {panelAlbum}
-                              </p>
-                            )
-                          ) : null}
-                          {featuringLine && featuringLine.kind === "featuring" ? (
-                            <p className="release-page__track-panel-line">
-                              Featuring{" "}
-                              {featuringLine.artists.map((name, j) => (
-                                <span key={name}>
-                                  {j > 0 &&
-                                    (j === featuringLine.artists.length - 1
-                                      ? " and "
-                                      : ", ")}
-                                  {name}
-                                </span>
-                              ))}
-                            </p>
-                          ) : null}
-                          {otherLines.map((line, i) =>
-                            line.kind === "other" ? (
-                              <p key={i} className="release-page__track-panel-line">
-                                {line.text}
-                              </p>
-                            ) : null
-                          )}
-                          {releaseDateLabel ? (
-                            <p className="muted tour-show-page__setlist-panel-meta">
-                              {releaseDateLabel}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
                     </div>
                   </div>
+                  {!useBannerPlayer ? (
+                    <div className="release-page__panel-bottom">
+                      {trackActions}
+                      <div className="release-page__panel-footer">
+                        <div className="release-page__panel-player">
+                          {playerControls}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="release-page__panel-bottom">
-                  <div className="release-page__track-actions release-page__track-actions--above-player">
-                    <span className="release-page__track-action" title="Lyrics" aria-hidden>
-                      <TrackActionLyricsIcon className="release-page__track-action-icon" />
-                    </span>
-                    <span className="release-page__track-action" title="Versions" aria-hidden>
-                      <TrackActionVersionsIcon className="release-page__track-action-icon" />
-                    </span>
-                    <span className="release-page__track-action" title="Add to playlist" aria-hidden>
-                      <TrackActionPlaylistIcon className="release-page__track-action-icon" />
-                    </span>
-                    {fullRecordingUrl ? (
-                      <RecordingVideoButton
-                        url={fullRecordingUrl}
-                        className="release-page__track-action"
-                      />
-                    ) : null}
-                  </div>
+              </MsDisclosure>
+
+              {useBannerPlayer ? (
+                <div className="release-page__panel-dock">
                   <div className="release-page__panel-footer">
                     <div className="release-page__panel-player">
-                      <MiniAudioPlayerControls
-                        playing={miniAudio.playing}
-                        progress={miniAudio.progress}
-                        duration={miniAudio.duration}
-                        toggle={miniAudio.toggle}
-                        seek={miniAudio.seek}
-                        onPrev={() => playAdjacentTrack("prev")}
-                        onNext={() => playAdjacentTrack("next")}
-                        repeatOne={repeatOne}
-                        onRepeatToggle={() => setRepeatOne((r) => !r)}
-                      />
+                      {playerControls}
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         </aside>
@@ -1413,7 +1618,7 @@ function SetlistTabPanel({
             editions={editions}
             playingPath={playingPath}
             setlistId="tour-show"
-            showReleaseTitles
+            showReleaseTitles={!bannerLayout}
             onOpenRelease={onOpenRelease}
             onOpenCoverArtist={openCoverArtist}
             onPlay={(path, title, key) => {
@@ -1501,6 +1706,8 @@ export default function TourShowPage({
 }: Props) {
   const deviceLayout = useDeviceLayout();
   const bannerHero = isMobilePortraitLayout(deviceLayout);
+  const hubEventLineRef = useRef<HTMLParagraphElement | null>(null);
+  const hubCompaniesLineRef = useRef<HTMLDivElement | null>(null);
   const [tour, setTour] = useState<TourDetail | null>(null);
   const [detail, setDetail] = useState<TourShowDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1676,6 +1883,47 @@ export default function TourShowPage({
       setSetlistLoading(false);
     }
   };
+
+  const hasSupportActs = Boolean(
+    detail?.show?.bill?.some((b) => b.role !== "main")
+  );
+  const hubFitKey = [
+    bannerHero ? "1" : "0",
+    hasSupportActs ? "1" : "0",
+    tour?.title || "",
+    detail?.show.date_iso || "",
+    detail?.show.city || "",
+    detail?.show.venue || "",
+    detail?.show.promoter || "",
+    detail?.show.ticketer || "",
+  ].join("|");
+
+  useLayoutEffect(() => {
+    const eventEl = hubEventLineRef.current;
+    const companiesEl = hubCompaniesLineRef.current;
+    const clear = () => {
+      if (eventEl) eventEl.style.fontSize = "";
+      if (companiesEl) companiesEl.style.fontSize = "";
+    };
+    if (!bannerHero || !hasSupportActs) {
+      clear();
+      return;
+    }
+    const fit = () => {
+      fitNowrapLine(eventEl, { maxPx: 16.5, minPx: 10 });
+      fitNowrapLine(companiesEl, { maxPx: 16.5, minPx: 10 });
+    };
+    fit();
+    const ro = new ResizeObserver(() => fit());
+    if (eventEl) ro.observe(eventEl);
+    if (companiesEl) ro.observe(companiesEl);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+      clear();
+    };
+  }, [bannerHero, hasSupportActs, hubFitKey]);
 
   if (loading && !detail && !tour) {
     return <PlaylistBoot label="Loading show…" />;
@@ -2066,14 +2314,49 @@ export default function TourShowPage({
                     show.venue ||
                     show.promoter ||
                     show.ticketer) && (
-                    <section className="release-page__section-glass tour-show-page__hub">
-                      <div className="tour-show-page__hub-performer-col">
-                        {mains[0] ? (
-                          <BillCircle
-                            entry={mains[0]}
-                            label="Performer"
-                            onOpenArtist={onOpenArtist}
-                          />
+                    <section
+                      className={[
+                        "release-page__section-glass",
+                        "tour-show-page__hub",
+                        openers.length
+                          ? "tour-show-page__hub--with-openers"
+                          : "tour-show-page__hub--solo-performer",
+                      ].join(" ")}
+                    >
+                      <div className="tour-show-page__hub-acts">
+                        <div className="tour-show-page__hub-performer-col">
+                          {mains[0] ? (
+                            <BillCircle
+                              entry={mains[0]}
+                              label="Performer"
+                              onOpenArtist={onOpenArtist}
+                            />
+                          ) : null}
+                        </div>
+                        {openers.length ? (
+                          <div
+                            className={[
+                              "tour-show-page__hub-openers-block",
+                              openers.length === 1
+                                ? "tour-show-page__hub-openers-block--solo"
+                                : "tour-show-page__hub-openers-block--multi",
+                            ].join(" ")}
+                          >
+                            <span className="tour-show-page__bill-label">
+                              {openers.length > 1
+                                ? "Support Acts"
+                                : "Support Act"}
+                            </span>
+                            <div className="tour-show-page__hub-line tour-show-page__hub-line--openers">
+                              {openers.map((b) => (
+                                <BillCircle
+                                  key={`op-${b.artist_name}-${b.opener_order || ""}`}
+                                  entry={b}
+                                  onOpenArtist={onOpenArtist}
+                                />
+                              ))}
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                       <div className="tour-show-page__hub-details">
@@ -2089,7 +2372,11 @@ export default function TourShowPage({
                               >
                                 <span className="tour-show-page__hub-member-photo">
                                   {m.photo_url ? (
-                                    <img src={m.photo_url} alt="" draggable={false} />
+                                    <img
+                                      src={m.photo_url}
+                                      alt=""
+                                      draggable={false}
+                                    />
                                   ) : (
                                     <span className="tour-show-page__hub-member-initials">
                                       {m.name.slice(0, 2).toUpperCase()}
@@ -2097,7 +2384,9 @@ export default function TourShowPage({
                                   )}
                                 </span>
                                 <span className="tour-show-page__hub-member-text">
-                                  <span className="tour-show-page__hub-member-name">{m.name}</span>
+                                  <span className="tour-show-page__hub-member-name">
+                                    {m.name}
+                                  </span>
                                   {m.roles?.length ? (
                                     <span className="tour-show-page__hub-member-role">
                                       {m.roles.join(", ")}
@@ -2108,138 +2397,109 @@ export default function TourShowPage({
                             ))}
                           </div>
                         ) : null}
-                        {(() => {
-                          const eventLine = (
-                            <p className="tour-show-page__hub-line tour-show-page__hub-line--event">
-                              <span>{tour.title}</span>
-                              {dateLabel ? (
-                                <>
-                                  <span className="tour-show-page__hub-sep"> · </span>
-                                  <span>{dateLabel}</span>
-                                </>
-                              ) : null}
-                              {place ? (
-                                <>
-                                  <span className="tour-show-page__hub-sep"> · </span>
-                                  <span className="tour-show-page__place">
-                                    {placeIso ? (
-                                      <span
-                                        className={`fi fi-${placeIso} tour-show-page__place-flag`}
-                                        title={placeCountry || undefined}
-                                        aria-label={placeCountry || undefined}
-                                      />
-                                    ) : null}
-                                    <span>{placeLocality || (!placeIso ? placeCountry : "")}</span>
-                                  </span>
-                                </>
-                              ) : null}
-                            </p>
-                          );
-                          const companiesLine =
-                            show.venue || show.promoter || show.ticketer ? (
-                              <div className="tour-show-page__hub-line tour-show-page__hub-line--companies">
-                                {show.venue ? (
-                                  <button
-                                    type="button"
-                                    className="tour-show-page__hub-company"
-                                    onClick={openVenueSearch}
-                                    title={show.venue}
-                                  >
-                                    <CompanyGlyph kind="venue" />
-                                    {show.venue_logo_url ? (
-                                      <img
-                                        src={show.venue_logo_url}
-                                        alt=""
-                                        className="tour-show-page__company-logo"
-                                      />
-                                    ) : (
-                                      <span>{show.venue}</span>
-                                    )}
-                                  </button>
-                                ) : null}
-                                {show.promoter ? (
-                                  <button
-                                    type="button"
-                                    className="tour-show-page__hub-company"
-                                    onClick={openPromoterSearch}
-                                    title={show.promoter}
-                                  >
-                                    <CompanyGlyph kind="promoter" />
-                                    {show.promoter_logo_url ? (
-                                      <img
-                                        src={show.promoter_logo_url}
-                                        alt=""
-                                        className="tour-show-page__company-logo"
-                                      />
-                                    ) : (
-                                      <span>{show.promoter}</span>
-                                    )}
-                                  </button>
-                                ) : null}
-                                {show.ticketer ? (
-                                  <button
-                                    type="button"
-                                    className="tour-show-page__hub-company"
-                                    onClick={openTicketerSite}
-                                    title={show.ticketer}
-                                  >
-                                    <CompanyGlyph kind="ticketer" />
-                                    {show.ticketer_logo_url ? (
-                                      <img
-                                        src={show.ticketer_logo_url}
-                                        alt=""
-                                        className="tour-show-page__company-logo"
-                                      />
-                                    ) : (
-                                      <span>{show.ticketer}</span>
-                                    )}
-                                  </button>
-                                ) : null}
-                              </div>
-                            ) : null;
-                          const openersRow = openers.length ? (
-                            <div className="tour-show-page__hub-openers-block">
-                              <span className="tour-show-page__bill-label">
-                                {openers.length > 1 ? "Support Acts" : "Support Act"}
-                              </span>
-                              <div className="tour-show-page__hub-line tour-show-page__hub-line--openers">
-                                {openers.map((b) => (
-                                  <BillCircle
-                                    key={`op-${b.artist_name}-${b.opener_order || ""}`}
-                                    entry={b}
-                                    onOpenArtist={onOpenArtist}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          ) : null;
-                          if (openers.length >= 7) {
-                            return (
-                              <>
-                                {openersRow}
-                                {eventLine}
-                                {companiesLine}
-                              </>
-                            );
-                          }
-                          if (openers.length) {
-                            return (
-                              <div className="tour-show-page__hub-openers-split">
-                                {openersRow}
-                                <div className="tour-show-page__hub-openers-meta">
-                                  {eventLine}
-                                  {companiesLine}
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
+                        <p
+                          ref={hubEventLineRef}
+                          className="tour-show-page__hub-line tour-show-page__hub-line--event"
+                        >
+                          <span>{tour.title}</span>
+                          {dateLabel ? (
                             <>
-                              {eventLine}
-                              {companiesLine}
+                              <span className="tour-show-page__hub-sep"> · </span>
+                              <span>{dateLabel}</span>
                             </>
-                          );
-                        })()}
+                          ) : null}
+                          {place ? (
+                            <>
+                              <span className="tour-show-page__hub-sep"> · </span>
+                              <span className="tour-show-page__place">
+                                {placeIso ? (
+                                  <span
+                                    className={`fi fi-${placeIso} tour-show-page__place-flag`}
+                                    title={placeCountry || undefined}
+                                    aria-label={placeCountry || undefined}
+                                  />
+                                ) : null}
+                                <span>
+                                  {placeLocality ||
+                                    (!placeIso ? placeCountry : "")}
+                                </span>
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
+                        {show.venue || show.promoter || show.ticketer ? (
+                          <div
+                            ref={hubCompaniesLineRef}
+                            className="tour-show-page__hub-line tour-show-page__hub-line--companies"
+                          >
+                            {show.venue ? (
+                              <button
+                                type="button"
+                                className="tour-show-page__hub-company tour-show-page__hub-company--venue"
+                                onClick={openVenueSearch}
+                                title={show.venue}
+                              >
+                                <CompanyGlyph kind="venue" />
+                                {show.venue_logo_url ? (
+                                  <img
+                                    src={show.venue_logo_url}
+                                    alt=""
+                                    className="tour-show-page__company-logo"
+                                  />
+                                ) : null}
+                                <span className="tour-show-page__hub-venue-name">
+                                  {show.venue}
+                                </span>
+                              </button>
+                            ) : null}
+                            {show.venue && (show.promoter || show.ticketer) ? (
+                              <span className="tour-show-page__hub-sep"> · </span>
+                            ) : null}
+                            {show.promoter ? (
+                              <button
+                                type="button"
+                                className="tour-show-page__hub-company"
+                                onClick={openPromoterSearch}
+                                title={show.promoter}
+                              >
+                                <CompanyGlyph kind="promoter" />
+                                {show.promoter_logo_url ? (
+                                  <img
+                                    src={show.promoter_logo_url}
+                                    alt=""
+                                    className="tour-show-page__company-logo"
+                                  />
+                                ) : null}
+                                <span className="tour-show-page__hub-company-name">
+                                  {show.promoter}
+                                </span>
+                              </button>
+                            ) : null}
+                            {show.promoter && show.ticketer ? (
+                              <span className="tour-show-page__hub-sep"> · </span>
+                            ) : null}
+                            {show.ticketer ? (
+                              <button
+                                type="button"
+                                className="tour-show-page__hub-company"
+                                onClick={openTicketerSite}
+                                title={show.ticketer}
+                              >
+                                <CompanyGlyph kind="ticketer" />
+                                {show.ticketer_logo_url ? (
+                                  <img
+                                    src={show.ticketer_logo_url}
+                                    alt=""
+                                    className="tour-show-page__company-logo"
+                                  />
+                                ) : null}
+                                <span className="tour-show-page__hub-company-name">
+                                  {show.ticketer}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     </section>
                   )}
@@ -2389,6 +2649,10 @@ export default function TourShowPage({
             loading={setlistLoading}
             visible={activeTab === "setlist"}
             showKey={activeShowSlug}
+            bannerLayout={bannerHero}
+            eraBannerUrl={
+              show.banner_url || tour.banner_url || tourPhotoUrl || null
+            }
             coverUrl={
               showPosterUrls[0] ||
               tourPosterUrls[0] ||

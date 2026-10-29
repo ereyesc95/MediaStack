@@ -18200,7 +18200,7 @@ button.lyrics-status-badge--icon-only {
   max-width: calc(var(--lineup-photo) + 3rem);
 }
 
-/* Movie/series/book cast on mobile portrait: max 3 circles per row, wrap down. */
+/* Movie/series/book/game cast on mobile portrait: max 3 circles per row, wrap down. */
 .artist-page--mobile-portrait .series-cast .artist-lineup-grid,
 .series-subseries-page--mobile-portrait .series-cast .artist-lineup-grid,
 .series-subseries-page--mobile-portrait .artist-lineup-grid {
@@ -18212,6 +18212,18 @@ button.lyrics-status-badge--icon-only {
   width: 100%;
   max-width: 100%;
   --lineup-photo: clamp(3.35rem, 22vw, 4.75rem);
+}
+/* Fewer than 3: center the circles instead of left-aligning in a 3-col grid */
+.artist-page--mobile-portrait .series-cast .artist-lineup-grid[data-count="1"],
+.series-subseries-page--mobile-portrait .series-cast .artist-lineup-grid[data-count="1"],
+.series-subseries-page--mobile-portrait .artist-lineup-grid[data-count="1"],
+.artist-page--mobile-portrait .series-cast .artist-lineup-grid[data-count="2"],
+.series-subseries-page--mobile-portrait .series-cast .artist-lineup-grid[data-count="2"],
+.series-subseries-page--mobile-portrait .artist-lineup-grid[data-count="2"] {
+  grid-template-columns: repeat(auto-fit, minmax(4.5rem, max-content));
+  justify-content: center;
+  justify-items: center;
+  gap: 0.85rem 1.25rem;
 }
 
 .artist-page--mobile-portrait .series-cast .artist-lineup-row,
@@ -20474,6 +20486,31 @@ button.lyrics-status-badge--icon-only {
   flex: 1 1 0;
   width: auto;
   max-width: calc(var(--overview-photo-col) * var(--overview-photocard-scale, 1));
+}
+
+/* Single photocard: don't stretch into an empty landscape-looking slot */
+.series-subseries-page.release-page--stacked
+  .release-page__photocards:has(> .release-photocard:only-child),
+.series-subseries-page.release-page--stacked
+  .release-page__overview-side
+  .release-page__photocards:has(> .release-photocard:only-child) {
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+.series-subseries-page.release-page--stacked
+  .release-page__photocards:has(> .release-photocard:only-child)
+  .release-photocard,
+.series-subseries-page.release-page--stacked
+  .release-page__photocards:has(> .release-photocard:only-child)
+  .release-photocard--portrait,
+.series-subseries-page.release-page--stacked
+  .release-page__photocards:has(> .release-photocard:only-child)
+  .release-photocard--landscape {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: min(52vw, 14rem);
+  align-self: center;
 }
 
 .series-subseries-page .release-page__overview-side .release-photocard,
@@ -27844,6 +27881,117 @@ button.lyrics-status-badge--icon-only {
   margin-top: 0.35rem;
   pointer-events: auto;
 }
+
+/*
+ * Mobile portrait setlist: stack like release pages — banner/art on top,
+ * tracklist underneath (desktop keeps side-by-side poster + list).
+ */
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page__tracklist-layout,
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--idle.release-page__tracklist-layout,
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--playing.release-page__tracklist-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  box-sizing: border-box;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-hero-col {
+  aspect-ratio: var(--banner-aspect-ratio);
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  align-self: stretch;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-idle-hero {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside,
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--playing .tour-show-page__setlist-aside.release-page__aside,
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--playing .release-page__aside.tour-show-page__setlist-aside {
+  aspect-ratio: unset;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  align-self: stretch;
+  position: relative;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  /* Match release banner player — bleed to body edges */
+  margin-inline: -0.75rem;
+  width: calc(100% + 1.5rem);
+  max-width: none;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  border-radius: 0;
+  padding: 0;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page--banner-layout .release-page__panel-content {
+  gap: 0;
+  width: 100%;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page--banner-layout .release-page__art,
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page--banner-layout .release-page__art-stage--banner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+/* Keep release banner cover/disc sizing (cover fits banner height; disc peeks right). */
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page--banner-layout
+  .release-page__art-stage--banner
+  .release-page__cover-wrap--banner-cover {
+  width: var(--release-cover-size);
+  height: var(--release-cover-size);
+  margin: var(--release-banner-pad) 0 var(--release-banner-pad) var(--release-banner-inset);
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-tab.release-page--banner-layout
+  .release-page__art-stage--banner
+  .release-page__disc--banner {
+  position: absolute;
+  left: calc(var(--release-banner-inset) + var(--release-cover-size) * 0.5);
+  top: var(--release-banner-pad);
+  bottom: var(--release-banner-pad);
+  margin: auto 0;
+  width: var(--release-disc-size);
+  height: var(--release-disc-size);
+  z-index: 1;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-main {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: visible;
+  box-sizing: border-box;
+  /* Equal inset with tracklist glass card */
+  padding: 0.5rem 0 1rem;
+  margin: 0;
+}
+.tour-show-page--banner-hero .tour-show-page__setlist-main .setlist-tracklist,
+.tour-show-page--banner-hero .tour-show-page__setlist-main .release-tracklist {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-inline: 0;
+}
 .tour-show-page__poster-col {
   width: 100%;
 }
@@ -27954,6 +28102,10 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__hub-company .tour-show-page__company-logo {
   cursor: pointer;
+}
+/* Logo stands in for the company name when present (mobile with-openers shows text instead) */
+.tour-show-page__hub-company:has(.tour-show-page__company-logo) .tour-show-page__hub-company-name {
+  display: none;
 }
 .tour-show-page__album {
   display: flex;
@@ -28367,25 +28519,34 @@ button.lyrics-status-badge--icon-only {
   box-sizing: border-box;
   overflow: hidden;
 }
-.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__art {
+/* Desktop/poster playing panel only — do not fight banner-layout cover+disc. */
+.tour-show-page__setlist-tab--playing:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__art {
   display: flex;
   flex-shrink: 0;
   overflow: visible;
   min-height: 14.5rem;
   padding-top: 0.35rem;
 }
-.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__art-stage {
+.tour-show-page__setlist-tab--playing:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__art-stage {
   /* Rem-based — % of indefinite parent collapses cover+disc to 0 */
   --release-cover-size: 13.25rem;
   overflow: visible;
 }
-.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__cover {
+.tour-show-page__setlist-tab--playing:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__cover {
   width: var(--release-cover-size);
   max-width: var(--release-cover-size);
   max-height: var(--release-cover-size);
   display: block;
 }
-.tour-show-page__setlist-tab--playing .tour-show-page__setlist-panel .release-page__disc {
+.tour-show-page__setlist-tab--playing:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__disc {
   width: calc(var(--release-cover-size) * 0.96);
   height: calc(var(--release-cover-size) * 0.96);
   margin-left: calc(var(--release-cover-size) * -0.38);
@@ -28426,7 +28587,9 @@ button.lyrics-status-badge--icon-only {
   padding-top: 0.2rem;
   padding-bottom: 0.35rem;
 }
-.tour-show-page__setlist-panel .release-page__art-stage {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__art-stage {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -28436,19 +28599,25 @@ button.lyrics-status-badge--icon-only {
   margin: 0 auto;
   --release-cover-size: 15.5rem;
 }
-.tour-show-page__setlist-panel .release-page__cover-wrap {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__cover-wrap {
   position: relative;
   z-index: 2;
   display: inline-block;
   width: auto;
 }
-.tour-show-page__setlist-panel .release-page__cover {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__cover {
   width: var(--release-cover-size);
   max-width: var(--release-cover-size);
   max-height: var(--release-cover-size);
   display: block;
 }
-.tour-show-page__setlist-panel .release-page__disc {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__disc {
   position: relative;
   width: calc(var(--release-cover-size) * 0.96);
   height: calc(var(--release-cover-size) * 0.96);
@@ -29234,13 +29403,24 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__hub.release-page__section-glass {
   border-radius: 0;
 }
+.tour-show-page__hub-acts {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.85rem 1.1rem;
+  min-width: 0;
+}
+.tour-show-page__hub--solo-performer .tour-show-page__hub-acts {
+  align-items: stretch;
+}
 .tour-show-page__hub-performer-col {
   border-right: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
   padding-right: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  align-self: stretch;
 }
 .tour-show-page__hub-performer-col .tour-show-page__bill-circle {
   width: 6.25rem;
@@ -29255,6 +29435,18 @@ button.lyrics-status-badge--icon-only {
   gap: 0.55rem;
   min-width: 0;
   justify-content: center;
+}
+.tour-show-page__hub-venue-name {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(0.58rem, 2.6vw, 0.82rem);
+}
+.tour-show-page__hub-company--venue {
+  min-width: 0;
+  max-width: 100%;
 }
 .tour-show-page__hub-line {
   margin: 0;
@@ -29300,6 +29492,10 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__hub-openers-block .tour-show-page__bill-label {
   text-align: center;
   width: 100%;
+}
+.tour-show-page__hub--with-openers .tour-show-page__hub-acts {
+  /* Performer + support share the left column on desktop */
+  flex-wrap: wrap;
 }
 .tour-show-page__hub-openers-split {
   display: flex;
@@ -29746,7 +29942,9 @@ button.lyrics-status-badge--icon-only {
   padding-top: 0.75rem;
   padding-bottom: 0.35rem;
 }
-.tour-show-page__setlist-panel .release-page__art-stage {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__art-stage {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -29756,19 +29954,25 @@ button.lyrics-status-badge--icon-only {
   margin: 0.2rem auto 0;
   --release-cover-size: 15.5rem;
 }
-.tour-show-page__setlist-panel .release-page__cover-wrap {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__cover-wrap {
   position: relative;
   z-index: 2;
   display: inline-block;
   width: auto;
 }
-.tour-show-page__setlist-panel .release-page__cover {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__cover {
   width: var(--release-cover-size);
   max-width: var(--release-cover-size);
   max-height: var(--release-cover-size);
   display: block;
 }
-.tour-show-page__setlist-panel .release-page__disc {
+.tour-show-page__setlist-tab:not(.release-page--banner-layout)
+  .tour-show-page__setlist-panel
+  .release-page__disc {
   position: relative;
   width: calc(var(--release-cover-size) * 0.96);
   height: calc(var(--release-cover-size) * 0.96);
@@ -29890,7 +30094,315 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__lineup-grid { justify-content: flex-start; }
 .tour-show-page__lineup-card { pointer-events: none; }
 @media (max-width: 720px) {
-  .tour-show-page__overview-cols { grid-template-columns: 1fr; }
+  /* Support acts: acts on one row, event data as a simplified row under */
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    grid-template-columns: none;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-acts {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem 1rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-performer-col {
+    border-right: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+    padding-right: 0.75rem;
+    justify-content: center;
+    align-self: center;
+    flex: 0 0 auto;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-openers-block {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: stretch;
+  }
+  /* Single support: center in its section; multi: left-align + horizontal scroll */
+  .tour-show-page--banner-hero .tour-show-page__hub-openers-block--solo {
+    align-items: center;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-openers-block--solo .tour-show-page__hub-line--openers {
+    justify-content: center;
+    width: 100%;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-openers-block--multi .tour-show-page__hub-line--openers {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 0.15rem;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--openers .tour-show-page__bill-circle {
+    width: 4.85rem;
+    flex: 0 0 auto;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--openers .release-lineup-card__photo {
+    width: 4.15rem;
+    height: 4.15rem;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--openers .tour-show-page__bill-name {
+    font-size: 0.7rem;
+    max-width: 5rem;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-details {
+    container-type: inline-size;
+    width: 100%;
+    padding-top: 0.4rem;
+    border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+    gap: 0.22rem;
+    min-width: 0;
+  }
+  /*
+   * Exactly 2 lines under acts:
+   * 1) tour · date · city(+flag)
+   * 2) venue · promoter · ticketer
+   * fitNowrapLine scales each row to fill width without wrapping.
+   */
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--event,
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--companies {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.28rem 0.45rem;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: clamp(0.72rem, 3.8cqi, 1.05rem);
+    line-height: 1.3;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--event > span,
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--event .tour-show-page__place,
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--companies .tour-show-page__hub-company {
+    /* No flex-shrink so fit measures true content width */
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: none;
+    overflow: visible;
+    white-space: nowrap;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-company--venue {
+    flex: 0 0 auto;
+    max-width: none;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-sep {
+    flex: 0 0 auto;
+    opacity: 0.55;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__place {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    flex-wrap: nowrap;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__place-flag {
+    flex: 0 0 auto;
+    font-size: 0.9em;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-company {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28em;
+    flex: 0 0 auto;
+    min-width: 0;
+    font-size: inherit;
+    line-height: inherit;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-company-icon {
+    width: 1em;
+    height: 1em;
+    flex: 0 0 auto;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__company-logo {
+    /* Prefer text on the compact 2-line meta row */
+    display: none;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-venue-name,
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-company-name {
+    display: inline;
+    font-size: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--with-openers .tour-show-page__hub-line--lineup {
+    display: none; /* keep the 2 meta lines clean under acts on mobile */
+  }
+  /* No support: performer left (vertically centered), event data right */
+  .tour-show-page--banner-hero .tour-show-page__hub--solo-performer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.75rem 1rem;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--solo-performer .tour-show-page__hub-acts {
+    align-self: stretch;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub--solo-performer .tour-show-page__hub-performer-col {
+    justify-content: center;
+    align-self: stretch;
+    height: 100%;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-line--companies {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    min-width: 0;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-company--venue {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-venue-name {
+    display: inline;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    font-size: clamp(0.62rem, 3vw, 0.82rem);
+  }
+  .tour-show-page--banner-hero .tour-show-page__hub-company--venue .tour-show-page__company-logo {
+    flex: 0 0 auto;
+    max-width: 3.5rem;
+    height: 1.1rem;
+  }
+
+  /* Flippable tickets: rotate −90° and span full column width like setlist images */
+  .tour-show-page--banner-hero .tour-show-page__ticket-col {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    padding-block: 0;
+    padding-bottom: 0.15rem;
+    box-sizing: border-box;
+  }
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable {
+    container-type: inline-size;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 100%;
+    /* Tighter landscape frame — less letterbox above/below vs setlist rhythm */
+    aspect-ratio: 2.55 / 1;
+    height: auto;
+    max-height: none;
+    margin-block: 0;
+    margin-inline: 0;
+    overflow: hidden;
+    perspective: none;
+    contain: none;
+    box-sizing: border-box;
+  }
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .tour-show-page__photocard,
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    /* Long side of portrait = 100% column width → after −90° matches setlist width */
+    width: auto !important;
+    height: 100cqi !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    transform-origin: center center;
+  }
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard__scene,
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard__face--front,
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard__face--front .release-photocard__clip {
+    width: auto !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+  }
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard__face--front .release-photocard__clip img,
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap--flippable .release-photocard__face--back .release-photocard__clip img {
+    width: auto !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain;
+    object-position: center;
+  }
+  /* Non-flippable tickets: keep natural orientation, centered, capped */
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap:not(.tour-show-page__flip-wrap--flippable) {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap:not(.tour-show-page__flip-wrap--flippable) .release-photocard,
+  .tour-show-page--banner-hero .tour-show-page__ticket-col .tour-show-page__flip-wrap:not(.tour-show-page__flip-wrap--flippable) .release-photocard__face--front .release-photocard__clip img {
+    max-width: min(100%, 16rem);
+    max-height: min(42vw, 12rem);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .tour-show-page__overview-cols {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: 0.85rem;
+    /* Body already insets equally — don't add extra side offset */
+    padding-inline: 0;
+    margin-inline: 0;
+  }
+  .tour-show-page__overview-col--setlist,
+  .tour-show-page__ticket-col,
+  .tour-show-page__codes-col,
+  .tour-show-page__overview-col {
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
+    align-self: stretch;
+    align-items: stretch;
+    box-sizing: border-box;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  /* Keep setlist / QR frames inside equal left+right body padding */
+  .tour-show-page__overview-col--setlist .tour-show-page__paged-media--overlay,
+  .tour-show-page__overview-col--setlist .tour-show-page__paged-media-open,
+  .tour-show-page__overview-col--setlist .tour-show-page__paged-stage {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .tour-show-page__overview-col--setlist .tour-show-page__paged-sizer {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    object-position: center top;
+  }
+  .tour-show-page__codes-col .tour-show-page__code-thumb,
+  .tour-show-page__codes-col .tour-show-page__code-thumb--natural,
+  .tour-show-page__codes-col .tour-show-page__code-thumb--natural img {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }
 .tour-show-page__flip-wrap { max-width: 140px; }
 .tour-show-page__overview-col--stretch .tour-show-page__flip-wrap {
