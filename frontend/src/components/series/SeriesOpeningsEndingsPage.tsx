@@ -1097,8 +1097,8 @@ export default function SeriesOpeningsEndingsPage({
       </div>
       <audio
         ref={audio.audioRef}
-        src={audio.src ?? undefined}
-        preload="metadata"
+        preload="auto"
+        playsInline
       />
       {plusOpen && active ? (
         <ReleaseAddToPlaylistModal

@@ -5010,15 +5010,15 @@ input {
   }
 
   .module-top-bar {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 0.2rem;
     padding: 0 0.35rem;
   }
 
   .module-top-bar__media {
-    flex: 0 0 auto;
+    justify-self: start;
   }
 
   .module-top-bar__media-btn {
@@ -5031,12 +5031,16 @@ input {
     display: none;
   }
 
+  .module-top-bar__tabs,
+  .module-top-bar__center {
+    justify-self: center;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .module-top-bar__tabs {
-    flex: 1 1 auto;
     display: flex;
     justify-content: center;
-    justify-self: unset;
-    min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -5058,7 +5062,7 @@ input {
   }
 
   .module-top-bar__menu {
-    flex: 0 0 auto;
+    justify-self: end;
     align-items: center;
   }
 
@@ -5909,15 +5913,29 @@ input {
   width: 100%;
 }
 
-/* Mobile portrait: center title column must shrink so TopBarTitle can fit/scroll. */
+/* Mobile portrait: keep equal side columns so logo/title stays viewport-centered
+   even when left (back) / right (menu + extras) widths differ. */
 .artist-page--stacked .artist-page__top,
 .artist-page--mobile-portrait .artist-page__top {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  position: relative;
 }
 
 .artist-page--stacked .artist-page__top-center,
 .artist-page--mobile-portrait .artist-page__top-center {
-  max-width: 100%;
+  max-width: min(18rem, 52vw);
+  justify-self: center;
+  z-index: 1;
+}
+
+.artist-page--stacked .artist-page__top-left,
+.artist-page--mobile-portrait .artist-page__top-left {
+  z-index: 2;
+}
+
+.artist-page--stacked .artist-page__top-right,
+.artist-page--mobile-portrait .artist-page__top-right {
+  z-index: 2;
 }
 
 .artist-page__top-right {
@@ -27628,9 +27646,15 @@ button.lyrics-status-badge--icon-only {
 .release-tracklist__collection-alone { display: flex; justify-content: flex-end; margin: 0.25rem 0 0.5rem; }
 @media (max-width: 720px) {
   .collection-modal__columns, .collection-modal__artwork-cols { grid-template-columns: 1fr; }
-  .collection-table th:nth-child(n+5), .collection-table td:nth-child(n+5) { display: none; }
-  .collection-table th:nth-child(4), .collection-table td:nth-child(4) { display: table-cell; }
   .collection-browse__toolbar { flex-direction: column; align-items: stretch; }
+  .collection-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .collection-table {
+    width: max-content;
+    min-width: 100%;
+  }
 }
 
 /* Collection hover enhancements */
@@ -27802,6 +27826,23 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page--banner-hero .tour-show-page__hero {
   grid-template-columns: 1fr;
+  align-items: start;
+  gap: 0.75rem;
+}
+.tour-show-page--banner-hero .tour-show-page__hero-col {
+  /* Match artist/release banners — drop poster AR that left a tall empty gap. */
+  aspect-ratio: unset;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  align-self: stretch;
+}
+.tour-show-page--banner-hero .tour-show-page__hero-col .tour-show-page__tour-nav {
+  position: static;
+  margin-top: 0.35rem;
+  pointer-events: auto;
 }
 .tour-show-page__poster-col {
   width: 100%;
@@ -27817,9 +27858,13 @@ button.lyrics-status-badge--icon-only {
 }
 .tour-show-page__banner {
   width: 100%;
-  max-height: 220px;
+  aspect-ratio: var(--banner-aspect-ratio);
+  max-height: none;
+  height: auto;
   object-fit: cover;
+  object-position: center;
   border-radius: 0.25rem;
+  display: block;
 }
 .tour-show-page__tour-title {
   margin: 0;
@@ -29358,7 +29403,15 @@ button.lyrics-status-badge--icon-only {
 .tour-show-page__poster-tabs button.active { color: var(--text); }
 .tour-show-page__photo-col { cursor: pointer; }
 .tour-show-page--banner-hero .tour-show-page__banner {
-  width: 100%; max-height: min(42vw, 220px); object-fit: cover; display: block; border-radius: 0;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: var(--banner-aspect-ratio);
+  height: auto;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  border-radius: 0;
 }
 .tour-show-page__tour-nav {
   display: flex; align-items: stretch; justify-content: space-between; gap: 0.5rem; margin-top: 0.35rem;

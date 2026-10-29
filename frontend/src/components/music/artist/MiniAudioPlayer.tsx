@@ -48,6 +48,7 @@ export function useMiniAudio() {
       setSrc(url);
       // Start play in this user-gesture turn. Do not call load() first —
       // on mobile Safari that resets the element and drops autoplay permission.
+      // Do not bind src via React props (absolute vs relative URL fights el.play()).
       if (el) {
         resumeBeatAudioContext();
         el.src = url;
@@ -62,7 +63,7 @@ export function useMiniAudio() {
 
   useEffect(() => {
     const el = audioRef.current;
-    if (!el || !src) return;
+    if (!el) return;
     const onTime = () => setProgress(el.currentTime);
     const onMeta = () => setDuration(el.duration || 0);
     const onPlay = () => setPlaying(true);
@@ -75,10 +76,10 @@ export function useMiniAudio() {
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnd);
     // Only assign if loadSrc ran before <audio> mounted — never reload/interrupt.
-    if (!el.getAttribute("src")) {
+    if (src && !el.getAttribute("src")) {
       el.src = src;
     }
-    if (autoPlayRef.current) {
+    if (src && autoPlayRef.current) {
       autoPlayRef.current = false;
       resumeBeatAudioContext();
       void el.play().catch(() => {});
@@ -225,7 +226,7 @@ export default function MiniAudioPlayer({
   return (
     <>
       <MiniAudioPlayerControls {...controls} onPrev={onPrev} onNext={onNext} />
-      <audio ref={audioRef} src={src} preload="auto" />
+      <audio ref={audioRef} preload="auto" playsInline />
     </>
   );
 }

@@ -3683,8 +3683,8 @@ export default function ReleasePage({
       {!embedded ? (
         <audio
           ref={localMiniAudio.audioRef}
-          src={localMiniAudio.src ?? undefined}
           preload="auto"
+          playsInline
         />
       ) : null}
     </div>

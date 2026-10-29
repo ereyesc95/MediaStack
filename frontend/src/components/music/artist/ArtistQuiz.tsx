@@ -8,6 +8,7 @@ import {
   playTrack,
   saveQuizScore,
 } from "../../../api";
+import { musicStreamUrl } from "../../../musicStreamUrl";
 import { useBeatPulse } from "../../../useBeatPulse";
 import type { QuizScoreEntry, QuizScores } from "../../../types";
 import PlaylistBoot from "../../PlaylistBoot";
@@ -452,17 +453,14 @@ export default function ArtistQuiz({
   }, []);
 
   const playSnippet = useCallback(
-    async (path: string) => {
-      const reqId = ++playRequestRef.current;
-      try {
-        const res = await playTrack({ path, artist_id: bandId, record: false });
-        if (reqId !== playRequestRef.current) return;
-        quizAudio.loadSrc(res.stream_url, true);
-      } catch {
+    (path: string) => {
+      playRequestRef.current += 1;
+      quizAudio.loadSrc(musicStreamUrl(path), true);
+      void playTrack({ path, artist_id: bandId, record: false }).catch(() => {
         /* ignore */
-      }
+      });
     },
-    [bandId, quizAudio.loadSrc]
+    [bandId, quizAudio]
   );
 
   const stopQuizAudio = useCallback(() => {
@@ -1283,7 +1281,7 @@ export default function ArtistQuiz({
       )}
 
       {quizAudio.src && (
-        <audio ref={quizAudio.audioRef} src={quizAudio.src} preload="auto" />
+        <audio ref={quizAudio.audioRef} preload="auto" playsInline />
       )}
     </div>
   );

@@ -17,6 +17,7 @@ import {
   fetchPlaylistSubgenres,
   fetchFilterOptions,
 } from "../../../api";
+import { musicStreamUrl } from "../../../musicStreamUrl";
 import { getCachedOverview, prefetchBandOverview } from "../../../overviewCache";
 import {
   getCachedArtistPlaylistDetail,
@@ -963,33 +964,30 @@ export default function SystemPlaylistPage({
       const target = direction === "prev" ? adj.prev : adj.next;
       if (!target?.play_path) return;
       const source = tracks.find((t) => t.play_path === target.play_path);
-      void (async () => {
-        setPlayingPath(target.play_path!);
-        setNowPlayingTitle(target.title);
-        const artArgs = artArgsForTrack(source);
-        const art = await resolvePlaybackArt(
-          artArgs.path || target.play_path!,
-          artArgs.releaseId ?? target.navigate_release_id ?? source?.navigate_release_id,
-          target.navigate_band_id ?? source?.navigate_band_id ?? bandId
-        );
+      setPlayingPath(target.play_path!);
+      setNowPlayingTitle(target.title);
+      miniAudio.loadSrc(musicStreamUrl(target.play_path!), true);
+      const artArgs = artArgsForTrack(source);
+      void resolvePlaybackArt(
+        artArgs.path || target.play_path!,
+        artArgs.releaseId ?? target.navigate_release_id ?? source?.navigate_release_id,
+        target.navigate_band_id ?? source?.navigate_band_id ?? bandId
+      ).then((art) => {
         if (art) setPlaybackArt(art);
-        try {
-          const res = await playTrack({
-            path: target.play_path!,
-            artist_id: target.navigate_band_id ?? source?.navigate_band_id ?? bandId ?? undefined,
-            title: target.title,
-          });
-          miniAudio.loadSrc(res.stream_url, true);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      })();
+      });
+      void playTrack({
+        path: target.play_path!,
+        artist_id: target.navigate_band_id ?? source?.navigate_band_id ?? bandId ?? undefined,
+        title: target.title,
+      }).catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
     },
     [artArgsForTrack, bandId, isUserPlaylist, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
   );
 
   const handlePlayTrack = useCallback(
-    async (
+    (
       path: string,
       title: string,
       art?: ReleasePlaybackArt,
@@ -1024,30 +1022,29 @@ export default function SystemPlaylistPage({
       if (source?.cover_url || source?.art_play_path) {
         sourceArtCacheRef.current.set(path, fallbackArt);
       }
+      const restart =
+        !isUserPlaylist && slug === "setlists" && playingPath === path && !sameSetlistPlayback;
+      miniAudio.loadSrc(musicStreamUrl(path), true, { restart });
       const artArgs = artArgsForTrack(source);
-      const resolved = await resolvePlaybackArt(
+      void resolvePlaybackArt(
         artArgs.path || path,
         artArgs.releaseId ??
           source?.navigate_release_id ??
           panelActionTrack?.navigate_release_id,
         source?.navigate_band_id ?? bandId
-      );
-      if (resolved) {
-        setPlaybackArt(resolved);
-        sourceArtCacheRef.current.set(path, resolved);
-      }
-      try {
-        const res = await playTrack({
-          path,
-          artist_id: source?.navigate_band_id ?? bandId ?? undefined,
-          title,
-        });
-        const restart =
-          !isUserPlaylist && slug === "setlists" && playingPath === path && !sameSetlistPlayback;
-        miniAudio.loadSrc(res.stream_url, true, { restart });
-      } catch (e) {
+      ).then((resolved) => {
+        if (resolved) {
+          setPlaybackArt(resolved);
+          sourceArtCacheRef.current.set(path, resolved);
+        }
+      });
+      void playTrack({
+        path,
+        artist_id: source?.navigate_band_id ?? bandId ?? undefined,
+        title,
+      }).catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      }
+      });
       void prefetchTrackCredits(
         source?.navigate_band_id ?? bandId ?? 0,
         source?.navigate_release_id ?? "",
@@ -2375,7 +2372,7 @@ export default function SystemPlaylistPage({
         </main>
       </div>
 
-      <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+      <audio ref={miniAudio.audioRef} preload="auto" playsInline />
       {isUserPlaylist && (
         <input
           ref={coverInputRef}

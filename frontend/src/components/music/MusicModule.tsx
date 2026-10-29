@@ -7,6 +7,7 @@ import {
   fetchUserPlaylists,
   playTrack,
 } from "../../api";
+import { musicStreamUrl } from "../../musicStreamUrl";
 import type {
   AlbumCard,
   AlbumFilterMode,
@@ -1177,7 +1178,7 @@ export default function MusicModule({
     [homeTracks, homePlayingPath]
   );
 
-  async function handlePlay(
+  function handlePlay(
     path: string,
     artistId: number | null,
     title: string | null
@@ -1195,22 +1196,24 @@ export default function MusicModule({
         homeAudio.toggle();
         return;
       }
-      const res = await playTrack({
-        path,
-        artist_id: artistId ?? undefined,
-        title: title ?? undefined,
-      });
-      if (!res.stream_url) return;
+      // Start stream inside the tap gesture — await playTrack breaks mobile autoplay.
       setHomePlayingPath(path);
       setHomePlayerBarHidden(false);
-      homeAudio.loadSrc(res.stream_url, true);
+      homeAudio.loadSrc(musicStreamUrl(path), true);
       setPlaybackPlaying(true);
       if (!bandId) {
         applyPlaybackThemeFromCover(
-          resolveHomeTrackCover(path) ?? res.cover_url ?? null,
+          resolveHomeTrackCover(path) ?? null,
           userId
         );
       }
+      void playTrack({
+        path,
+        artist_id: artistId ?? undefined,
+        title: title ?? undefined,
+      }).catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1536,8 +1539,8 @@ export default function MusicModule({
       {showModuleChrome && (tab === "home" || tab === "artists" || tab === "collection" || tab === "events" || tab === "playlists" || tab === "merch") && (
         <audio
           ref={homeAudio.audioRef}
-          src={homeAudio.src ?? undefined}
           preload="auto"
+          playsInline
         />
       )}
 

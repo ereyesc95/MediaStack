@@ -25,6 +25,7 @@ import {
   ensureArtistDesktopIni,
   generateArtistFolderIcons,
 } from "../../../api";
+import { musicStreamUrl } from "../../../musicStreamUrl";
 import { getStoredProfile } from "../../../auth";
 import { setCachedOverview } from "../../../overviewCache";
 import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
@@ -876,7 +877,7 @@ export default function ArtistPage({
   }, [section, stopPageAudio]);
 
   const handlePlay = useCallback(
-    async (path: string, title: string) => {
+    (path: string, title: string) => {
       if (playingPath === path && audioSrc) {
         if (!playing) {
           toggle();
@@ -891,14 +892,12 @@ export default function ArtistPage({
       }
       setPlayingPath(path);
       const track = playableTracks.find((t) => t.play_path === path);
-      try {
-        const res = await playTrack({ path, artist_id: bandId, title });
-        setPlaybackPlaying(true);
-        loadSrc(res.stream_url, true);
-        applyPlaybackThemeFromCover(track?.cover_url ?? res.cover_url ?? null, userId);
-      } catch (e) {
+      setPlaybackPlaying(true);
+      loadSrc(musicStreamUrl(path), true);
+      applyPlaybackThemeFromCover(track?.cover_url ?? null, userId);
+      void playTrack({ path, artist_id: bandId, title }).catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      }
+      });
     },
     [bandId, loadSrc, playingPath, audioSrc, playing, toggle, playableTracks, userId]
   );
@@ -1707,7 +1706,7 @@ export default function ArtistPage({
         />
       </div>
 
-      <audio ref={audioRef} src={audioSrc ?? undefined} preload="auto" />
+      <audio ref={audioRef} preload="auto" playsInline />
 
       <div
         className={`artist-page__body${

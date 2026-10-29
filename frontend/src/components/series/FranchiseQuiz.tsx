@@ -13,6 +13,7 @@ import {
   type FranchiseQuizMode,
   type FranchiseQuizSoundQuestion,
 } from "../../api";
+import { musicStreamUrl } from "../../musicStreamUrl";
 import type { QuizScoreEntry } from "../../types";
 import PlaylistBoot from "../PlaylistBoot";
 import { useMiniAudio } from "../music/artist/MiniAudioPlayer";
@@ -282,16 +283,14 @@ export default function FranchiseQuiz({
     }
   };
 
-  const playQuestion = async (question: FranchiseQuizSoundQuestion) => {
-    try {
-      const response = await playTrack({
-        path: question.play_path,
-        record: false,
-      });
-      audio.loadSrc(response.stream_url, true);
-    } catch {
+  const playQuestion = (question: FranchiseQuizSoundQuestion) => {
+    audio.loadSrc(musicStreamUrl(question.play_path), true);
+    void playTrack({
+      path: question.play_path,
+      record: false,
+    }).catch(() => {
       /* Keep choices usable even when a media file cannot play. */
-    }
+    });
   };
 
   const processGuess = (value: string) => {
@@ -634,7 +633,7 @@ export default function FranchiseQuiz({
         </div>
       )}
       {audio.src ? (
-        <audio ref={audio.audioRef} src={audio.src} preload="auto" />
+        <audio ref={audio.audioRef} preload="auto" playsInline />
       ) : null}
     </div>
   );

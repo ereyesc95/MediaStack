@@ -19,6 +19,7 @@ import {
   syncTourShow,
   syncTourShowArtists,
 } from "../../../api";
+import { musicStreamUrl } from "../../../musicStreamUrl";
 import { formatShowTabDate, formatTrackDate } from "../../../formatDate";
 import { isVideoMediaUrl } from "../../../isVideoMediaUrl";
 import { useBeatPulse } from "../../../useBeatPulse";
@@ -1008,7 +1009,7 @@ function SetlistTabPanel({
   }, [showKey]);
 
   const handlePlay = useCallback(
-    async (path: string, title: string, _playbackKey: string) => {
+    (path: string, title: string, _playbackKey: string) => {
       if (playingPath === path && miniAudio.src) {
         miniAudio.toggle();
         return;
@@ -1026,47 +1027,43 @@ function SetlistTabPanel({
         release_date:
           (track as { release_date?: string | null })?.release_date ?? null,
       });
-      try {
-        const res = await playTrack({ path, artist_id: bandId, title });
-        miniAudio.loadSrc(res.stream_url, true);
-        const releaseId = track?.navigate_release_id;
-        const artBandId = track?.navigate_band_id ?? bandId;
-        let next = {
-          cover_url: res.cover_url || track?.cover_url || coverUrl || null,
-          disc_url: null as string | null,
-          logo_url: null as string | null,
-          icon_url: null as string | null,
-          canvas_url: null as string | null,
-          cover_animation_url: null as string | null,
-          background_layers: [] as string[],
-          album_title: track?.album_title || null,
-          release_id: releaseId || null,
-          release_date:
-            (track as { release_date?: string | null })?.release_date ?? null,
-        };
-        if (releaseId) {
-          try {
-            const art = await fetchTrackSourceArt(artBandId, releaseId, path);
-            next = {
+      miniAudio.loadSrc(musicStreamUrl(path), true);
+      void playTrack({ path, artist_id: bandId, title }).catch(() => {
+        /* history/stats only */
+      });
+      const releaseId = track?.navigate_release_id;
+      const artBandId = track?.navigate_band_id ?? bandId;
+      let next = {
+        cover_url: track?.cover_url || coverUrl || null,
+        disc_url: null as string | null,
+        logo_url: null as string | null,
+        icon_url: null as string | null,
+        canvas_url: null as string | null,
+        cover_animation_url: null as string | null,
+        background_layers: [] as string[],
+        album_title: track?.album_title || null,
+        release_id: releaseId || null,
+        release_date:
+          (track as { release_date?: string | null })?.release_date ?? null,
+      };
+      if (releaseId) {
+        void fetchTrackSourceArt(artBandId, releaseId, path)
+          .then((art) => {
+            setPanelArt({
               ...next,
               cover_url: art.playback?.cover_url || next.cover_url,
               disc_url: art.playback?.disc_url ?? null,
               logo_url: art.playback?.logo_url ?? null,
-              icon_url: (art.playback as { icon_url?: string | null })?.icon_url ?? null,
+              icon_url:
+                (art.playback as { icon_url?: string | null })?.icon_url ?? null,
               canvas_url: art.playback?.canvas_url ?? null,
               cover_animation_url: art.playback?.cover_animation_url ?? null,
               background_layers: art.playback?.background_layers ?? [],
-            };
-          } catch {
+            });
+          })
+          .catch(() => {
             /* optional */
-          }
-        }
-        setPanelArt(next);
-        if (res.cover_url && track) {
-          setNowPlaying({ ...track, title, cover_url: res.cover_url });
-        }
-      } catch {
-        /* stream failed */
+          });
       }
     },
     [bandId, coverUrl, miniAudio, playable, playingPath]
@@ -1133,7 +1130,7 @@ function SetlistTabPanel({
           .join(" ")}
       >
         {visible ? <PlaylistBoot className="playlist-boot--compact" label="Loading setlist…" /> : null}
-        <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+        <audio ref={miniAudio.audioRef} preload="auto" playsInline />
       </div>
     );
   }
@@ -1429,7 +1426,7 @@ function SetlistTabPanel({
           </p>
         )}
       </div>
-      <audio ref={miniAudio.audioRef} src={miniAudio.src ?? undefined} preload="auto" />
+      <audio ref={miniAudio.audioRef} preload="auto" playsInline />
       {showHeaderPlayer && playerSlotEl
         ? createPortal(
             <div
