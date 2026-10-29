@@ -796,7 +796,11 @@ async def search_catalog_import(
                 "name": h.get("name") or "Untitled",
                 "date": h.get("date_iso"),
                 "poster_url": h.get("cover_url"),
-                "backdrop_url": None,
+                "backdrop_url": h.get("backdrop_url"),
+                "portrait_urls": h.get("portrait_urls") or [],
+                "landscape_urls": h.get("landscape_urls") or [],
+                "artwork_urls": h.get("artwork_urls") or [],
+                "screenshot_urls": h.get("screenshot_urls") or [],
                 "overview": h.get("overview"),
                 "platforms": h.get("platforms") or [],
                 "kind": "game",
@@ -858,7 +862,11 @@ async def preview_catalog_import(
                     "title": game.get("name") or "Untitled",
                     "date": game.get("date_iso"),
                     "poster_url": game.get("cover_url"),
-                    "backdrop_url": None,
+                    "backdrop_url": game.get("backdrop_url"),
+                    "portrait_urls": game.get("portrait_urls") or [],
+                    "landscape_urls": game.get("landscape_urls") or [],
+                    "artwork_urls": game.get("artwork_urls") or [],
+                    "screenshot_urls": game.get("screenshot_urls") or [],
                     "platforms": game_platforms,
                 }
             ],
@@ -1007,6 +1015,24 @@ async def _download_primary(url: str | None, destination: Path) -> bool:
         return True
     except Exception:
         return False
+
+
+async def _download_igdb_gallery_extras(
+    covers_dir: Path,
+    *,
+    portrait_urls: list[str] | None = None,
+    landscape_urls: list[str] | None = None,
+    skip_urls: set[str] | None = None,
+) -> None:
+    """Save IGDB artwork/screenshot extras as Portrait/Landscape 01… (no overwrite)."""
+    covers_dir.mkdir(parents=True, exist_ok=True)
+    skip = {u for u in (skip_urls or set()) if u}
+    portraits = [u for u in (portrait_urls or []) if u and u not in skip][:8]
+    landscapes = [u for u in (landscape_urls or []) if u and u not in skip][:8]
+    for i, url in enumerate(portraits, start=1):
+        await _download_primary(url, covers_dir / f"Portrait {i:02d}")
+    for i, url in enumerate(landscapes, start=1):
+        await _download_primary(url, covers_dir / f"Landscape {i:02d}")
 
 
 def _rebuild_franchise_index(root: Path) -> None:
@@ -1348,7 +1374,9 @@ async def create_catalog_import(
                 first_item.get("poster_url"), artwork / "Cover - Portrait"
             )
             await _download_primary(
-                first_item.get("backdrop_url"), artwork / "Cover - Landscape"
+                first_item.get("backdrop_url")
+                or (first_item.get("landscape_urls") or [None])[0],
+                artwork / "Cover - Landscape",
             )
             # Structural Artwork ico + ini; then refresh franchise root ico from covers.
             decorate_folder(artwork)
@@ -1410,28 +1438,65 @@ async def create_catalog_import(
             covers = leaf_dir / "Gallery" / "Covers"
             poster_url = raw.get("poster_url")
             backdrop_url = raw.get("backdrop_url")
+            portrait_urls = list(raw.get("portrait_urls") or [])
+            landscape_urls = list(raw.get("landscape_urls") or [])
             # Games: prefer a cover from an IGDB entry that lists this platform;
             # fall back to the selected/default cover when none matches.
+            # Also refresh artworks/screenshots when we re-resolve the game.
             if module == "games":
                 try:
-                    from app.games_igdb import resolve_cover_for_platform
+                    from app.games_igdb import (
+                        igdb_platforms_match,
+                        resolve_igdb_game_for_platform,
+                    )
 
-                    poster_url = await resolve_cover_for_platform(
+                    hit = await resolve_igdb_game_for_platform(
                         title=title,
                         platform=platform_name,
                         provider_id=provider_id or None,
-                        fallback_url=poster_url,
                     )
+                    if hit:
+                        hit_cover = (hit.get("cover_url") or "").strip() or None
+                        if platform_name and igdb_platforms_match(
+                            platform_name, hit.get("platforms") or []
+                        ):
+                            poster_url = hit_cover or poster_url
+                        else:
+                            poster_url = poster_url or hit_cover
+                        backdrop_url = hit.get("backdrop_url") or backdrop_url
+                        if hit.get("portrait_urls"):
+                            portrait_urls = list(hit.get("portrait_urls") or [])
+                        if hit.get("landscape_urls"):
+                            landscape_urls = list(hit.get("landscape_urls") or [])
                 except Exception:
-                    if provider_id and not poster_url:
+                    if provider_id and (not poster_url or not backdrop_url):
                         try:
                             game = await igdb_get_game(provider_id)
                             if game:
-                                poster_url = game.get("cover_url")
+                                poster_url = poster_url or game.get("cover_url")
+                                backdrop_url = backdrop_url or game.get(
+                                    "backdrop_url"
+                                )
+                                if not portrait_urls:
+                                    portrait_urls = list(
+                                        game.get("portrait_urls") or []
+                                    )
+                                if not landscape_urls:
+                                    landscape_urls = list(
+                                        game.get("landscape_urls") or []
+                                    )
                         except Exception:
                             pass
             await _download_primary(poster_url, covers / "Cover - Portrait")
             await _download_primary(backdrop_url, covers / "Cover - Landscape")
+            if module == "games":
+                skip = {u for u in (poster_url, backdrop_url) if u}
+                await _download_igdb_gallery_extras(
+                    covers,
+                    portrait_urls=portrait_urls,
+                    landscape_urls=landscape_urls,
+                    skip_urls=skip,
+                )
             # Browser games: persist launch URL in DB metadata (optional).
             pending_web_url = ""
             if (

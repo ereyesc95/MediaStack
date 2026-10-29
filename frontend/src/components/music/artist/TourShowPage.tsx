@@ -1686,8 +1686,27 @@ export default function TourShowPage({
   if (error && !detail) {
     return (
       <div className="tour-show-page tour-show-page--standalone">
-        <button type="button" className="artist-page__catalog-back" onClick={onBack}>
-          ← {backLabel}
+        <button
+          type="button"
+          className="artist-page__catalog-back"
+          onClick={onBack}
+          aria-label={`Back to ${backLabel.toLowerCase()}`}
+        >
+          <svg
+            className="artist-page__catalog-chevron"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              d="M15 6l-6 6 6 6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="artist-page__catalog-label">{backLabel}</span>
         </button>
         <p className="error">{error}</p>
       </div>
@@ -1696,8 +1715,27 @@ export default function TourShowPage({
   if (!tour || !detail) {
     return (
       <div className="tour-show-page tour-show-page--standalone">
-        <button type="button" className="artist-page__catalog-back" onClick={onBack}>
-          ← {backLabel}
+        <button
+          type="button"
+          className="artist-page__catalog-back"
+          onClick={onBack}
+          aria-label={`Back to ${backLabel.toLowerCase()}`}
+        >
+          <svg
+            className="artist-page__catalog-chevron"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              d="M15 6l-6 6 6 6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="artist-page__catalog-label">{backLabel}</span>
         </button>
         <p className="muted">No shows on this tour.</p>
       </div>

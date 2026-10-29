@@ -47,12 +47,26 @@ from app.models import HobbyItem, User
 router = APIRouter(prefix="/api/hobbies", tags=["hobbies"])
 
 
+class CollectionMetaBody(BaseModel):
+    year: int | None = None
+    brand: str | None = None
+    theme: str | None = None
+    missing: list[str] | str | None = None
+    duplicates: list[str] | str | None = None
+    shop_url: str | None = None
+    tutorial_url: str | None = None
+
+
 class CollectionCreateBody(BaseModel):
     name: str
     preset: str = "custom"
     fields: list[str] | None = None
     custom_fields: list[dict] | None = None
+    limited: bool = False
     collection_total: int | None = None
+    meta: CollectionMetaBody | None = None
+    pdf_enabled: bool = False
+    allow_missing_item_conflicts: bool = False
 
 
 class CollectionEnsureBody(BaseModel):
@@ -66,8 +80,13 @@ class CollectionUpdateBody(BaseModel):
     fields: list[str] | None = None
     custom_fields: list[dict] | None = None
     set_fields: bool = False
+    limited: bool | None = None
     collection_total: int | None = None
     set_collection_total: bool = False
+    meta: CollectionMetaBody | None = None
+    set_meta: bool = False
+    pdf_enabled: bool | None = None
+    allow_missing_item_conflicts: bool = False
 
 
 class CustomFieldDef(BaseModel):
@@ -130,6 +149,24 @@ class ImportCommitBody(BaseModel):
 
 class FieldOptionBody(BaseModel):
     value: str
+
+
+def _http_from_hobby_value_error(exc: ValueError) -> HTTPException:
+    msg = str(exc)
+    if msg.startswith("MISSING_ITEM_CONFLICT:"):
+        tags = [t for t in msg.split(":", 1)[1].split(",") if t]
+        return HTTPException(
+            status_code=409,
+            detail={
+                "code": "MISSING_ITEM_CONFLICT",
+                "message": (
+                    "Some Missing tags match existing items: "
+                    + ", ".join(tags)
+                ),
+                "conflicts": tags,
+            },
+        )
+    return HTTPException(400, msg)
 
 
 @router.get("/presets")
@@ -199,6 +236,7 @@ def hobbies_create_collection(
 ):
     try:
         preset = (body.preset or "custom").strip().casefold()
+        meta = body.meta.model_dump() if body.meta is not None else None
         if preset in ("custom", "generic"):
             return create_custom_collection(
                 db,
@@ -206,7 +244,11 @@ def hobbies_create_collection(
                 name=body.name,
                 fields=body.fields,
                 custom_fields=body.custom_fields,
+                limited=body.limited,
                 collection_total=body.collection_total,
+                meta=meta,
+                pdf_enabled=body.pdf_enabled,
+                allow_missing_item_conflicts=body.allow_missing_item_conflicts,
             )
         return create_collection(
             db,
@@ -215,10 +257,14 @@ def hobbies_create_collection(
             preset=preset,
             fields=body.fields,
             custom_fields=body.custom_fields,
+            limited=body.limited,
             collection_total=body.collection_total,
+            meta=meta,
+            pdf_enabled=body.pdf_enabled,
+            allow_missing_item_conflicts=body.allow_missing_item_conflicts,
         )
     except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+        raise _http_from_hobby_value_error(e) from e
 
 
 @router.post("/collections/custom")
@@ -226,7 +272,10 @@ async def hobbies_create_custom_collection(
     name: str = Query(..., min_length=1),
     fields: str | None = Query(None),
     custom_fields: str | None = Query(None),
+    limited: bool = Query(False),
     collection_total: int | None = Query(None),
+    meta: str | None = Query(None),
+    pdf_enabled: bool = Query(False),
     icon: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -250,6 +299,14 @@ async def hobbies_create_custom_collection(
                 custom_defs = [x for x in parsed if isinstance(x, dict)]
         except _json.JSONDecodeError as e:
             raise HTTPException(400, "Invalid custom_fields JSON") from e
+    meta_obj: dict | None = None
+    if meta:
+        try:
+            parsed = _json.loads(meta)
+            if isinstance(parsed, dict):
+                meta_obj = parsed
+        except _json.JSONDecodeError as e:
+            raise HTTPException(400, "Invalid meta JSON") from e
     icon_path = None
     if icon is not None and icon.filename:
         data = await icon.read()
@@ -264,10 +321,13 @@ async def hobbies_create_custom_collection(
             fields=field_list,
             custom_fields=custom_defs,
             icon_path=icon_path,
+            limited=limited,
             collection_total=collection_total,
+            meta=meta_obj,
+            pdf_enabled=pdf_enabled,
         )
     except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+        raise _http_from_hobby_value_error(e) from e
 
 
 @router.post("/collections/ensure")
@@ -331,12 +391,19 @@ def hobbies_update_collection(
             set_fields=body.set_fields
             or body.fields is not None
             or body.custom_fields is not None,
+            limited=body.limited,
             collection_total=(
-                body.collection_total if body.set_collection_total else ...
+                body.collection_total
+                if body.set_collection_total or body.limited is not None
+                else ...
             ),
+            meta=body.meta.model_dump() if body.meta is not None else None,
+            set_meta=body.set_meta or body.meta is not None,
+            pdf_enabled=body.pdf_enabled,
+            allow_missing_item_conflicts=body.allow_missing_item_conflicts,
         )
     except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+        raise _http_from_hobby_value_error(e) from e
     if not result:
         raise HTTPException(404, "Collection not found")
     return result
@@ -490,6 +557,7 @@ def hobbies_adjust_qty(
 def hobbies_delete_item(
     collection_id: int,
     item_id: int,
+    restore_missing: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
@@ -497,15 +565,23 @@ def hobbies_delete_item(
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
-    if not delete_item(db, user.usr_id, collection_id, item_id):
+    result = delete_item(
+        db,
+        user.usr_id,
+        collection_id,
+        item_id,
+        restore_missing=restore_missing,
+    )
+    if not result:
         raise HTTPException(404, "Item not found")
-    return {"ok": True}
+    return result
 
 
 @router.post("/collections/{collection_id}/items/delete-batch")
 def hobbies_delete_batch(
     collection_id: int,
     body: BatchDeleteBody,
+    restore_missing: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
@@ -513,7 +589,13 @@ def hobbies_delete_batch(
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
-    n = delete_items(db, user.usr_id, collection_id, body.ids)
+    n = delete_items(
+        db,
+        user.usr_id,
+        collection_id,
+        body.ids,
+        restore_missing=restore_missing,
+    )
     return {"ok": True, "deleted": n}
 
 

@@ -15,6 +15,14 @@ export type ArtistAudioCacheEntry = {
   playlists: ArtistPlaylistCard[];
 };
 
+export type PrefetchArtistAudioOptions = {
+  force?: boolean;
+  /** Hit the API with force=false even if memory/session cache exists. */
+  revalidate?: boolean;
+  /** Called as soon as the audio index returns (before playlists). */
+  onAudio?: (audio: AudioIndexPayload) => void;
+};
+
 type CacheKey = `${number}`;
 
 const store = new Map<CacheKey, ArtistAudioCacheEntry>();
@@ -65,11 +73,23 @@ export function clearArtistAudioCache(bandId?: number): void {
 
 async function fetchArtistAudioEntry(
   bandId: number,
-  force = false
+  force = false,
+  onAudio?: (audio: AudioIndexPayload) => void
 ): Promise<ArtistAudioCacheEntry> {
+  const audioPromise = fetchBandAudioIndex(bandId, force).then((audio) => {
+    const prev = getCachedArtistAudio(bandId);
+    remember(bandId, {
+      audio,
+      playlists: prev?.playlists ?? [],
+    });
+    onAudio?.(audio);
+    return audio;
+  });
+  const playlistsPromise = fetchBandPlaylistIndex(bandId, force);
+
   const [audio, playlistPayload] = await Promise.all([
-    fetchBandAudioIndex(bandId, force),
-    fetchBandPlaylistIndex(bandId, force),
+    audioPromise,
+    playlistsPromise,
   ]);
   const entry: ArtistAudioCacheEntry = {
     audio,
@@ -81,21 +101,26 @@ async function fetchArtistAudioEntry(
 
 export function prefetchArtistAudio(
   bandId: number,
-  options?: { force?: boolean }
+  options?: PrefetchArtistAudioOptions
 ): Promise<ArtistAudioCacheEntry> {
   const key = cacheKey(bandId);
   const force = options?.force ?? false;
+  const revalidate = options?.revalidate ?? false;
+  const onAudio = options?.onAudio;
 
-  if (!force) {
+  if (!force && !revalidate) {
     const cached = getCachedArtistAudio(bandId);
-    if (cached) return Promise.resolve(cached);
+    if (cached) {
+      onAudio?.(cached.audio);
+      return Promise.resolve(cached);
+    }
     const existing = inflight.get(key);
     if (existing) return existing;
   } else {
     inflight.delete(key);
   }
 
-  const pending = fetchArtistAudioEntry(bandId, force).finally(() => {
+  const pending = fetchArtistAudioEntry(bandId, force, onAudio).finally(() => {
     inflight.delete(key);
   });
 

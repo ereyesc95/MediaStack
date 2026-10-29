@@ -94,6 +94,10 @@ import {
   useMiniAudio,
 } from "../artist/MiniAudioPlayer";
 import {
+  musicStreamUrl,
+  warmMusicStreamForPath,
+} from "../../../musicStreamUrl";
+import {
   getSharedPlaybackMeta,
   setSharedPlaybackMeta,
   useSharedMiniAudio,
@@ -1682,8 +1686,23 @@ export default function ReleasePage({
     return () => onEmbedChromeChange(null);
   }, [embedded, onEmbedChromeChange]);
 
+  const warmAdjacentStreams = useCallback((currentPath: string) => {
+    const tracks = (tracklistRef.current?.allTracks() ?? []).filter(
+      (t) => !t.is_video
+    );
+    if (!tracks.length) return;
+    const idx = tracks.findIndex((t) => t.play_path === currentPath);
+    if (idx < 0) return;
+    const next = tracks[(idx + 1) % tracks.length];
+    const prev = tracks[(idx - 1 + tracks.length) % tracks.length];
+    if (next?.play_path) warmMusicStreamForPath(next.play_path, "next");
+    if (prev?.play_path && prev.play_path !== next?.play_path) {
+      warmMusicStreamForPath(prev.play_path, "prev");
+    }
+  }, []);
+
   const handlePlayTrack = useCallback(
-    async (
+    (
       path: string,
       title: string,
       _art?: ReleasePlaybackArt,
@@ -1696,18 +1715,17 @@ export default function ReleasePage({
         }
         return;
       }
+      // Start audio first while still inside the tap gesture (mobile autoplay).
+      miniAudio.loadSrc(musicStreamUrl(path), true);
+
       setPlayingPath(path);
       setNowPlayingTitle(title);
       setVersionSource(null);
       setPanelDateIso(null);
       if (_art) {
         setPlaybackArt(normalizePlaybackArt(_art));
-      }
-      let resolved = await resolveTrackSource(path);
-      if (resolved?.playback) {
-        setPlaybackArt(resolved.playback);
-        setTrackPhotocards(resolved.photocards);
-      } else if (!_art && data) {
+      } else if (data) {
+        // Optimistic album art until track source art resolves.
         setPlaybackArt({
           cover_url: data.cover_url,
           cover_back_url: data.cover_back_url,
@@ -1716,8 +1734,28 @@ export default function ReleasePage({
           disc_url: data.disc_url,
           background_layers: data.background_layers,
         });
-        setTrackPhotocards(null);
       }
+
+      // Prefetch neighbors after play starts so we don't contend for bandwidth.
+      window.setTimeout(() => warmAdjacentStreams(path), 750);
+
+      void resolveTrackSource(path).then((resolved) => {
+        if (resolved?.playback) {
+          setPlaybackArt(resolved.playback);
+          setTrackPhotocards(resolved.photocards);
+        } else if (!_art && data) {
+          setPlaybackArt({
+            cover_url: data.cover_url,
+            cover_back_url: data.cover_back_url,
+            cover_animation_url: data.cover_animation_url,
+            canvas_url: data.canvas_url,
+            disc_url: data.disc_url,
+            background_layers: data.background_layers,
+          });
+          setTrackPhotocards(null);
+        }
+      });
+
       const cachedCredits = getCachedTrackCredits(bandId, releaseId, title);
       if (cachedCredits) {
         setTrackWriters(cachedCredits.writers ?? []);
@@ -1725,28 +1763,25 @@ export default function ReleasePage({
       void prefetchTrackCredits(bandId, releaseId, title).then((res) => {
         setTrackWriters(res.writers ?? []);
       });
-      try {
-        if (embedded) {
-          setSharedPlaybackMeta({
-            path,
-            title,
-            bandId,
-            releaseId: data?.navigate_release_id ?? releaseId,
-            coverUrl: data?.cover_url ?? null,
-            artist: data?.artist_name ?? null,
-            source: "release",
-          });
-        }
-        const res = await playTrack({
+
+      if (embedded) {
+        setSharedPlaybackMeta({
           path,
-          artist_id: bandId,
           title,
-          release: data?.title,
+          bandId,
+          releaseId: data?.navigate_release_id ?? releaseId,
+          coverUrl: data?.cover_url ?? null,
+          artist: data?.artist_name ?? null,
+          source: "release",
         });
-        miniAudio.loadSrc(res.stream_url, true);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
       }
+      // History / stats only — playback already started from the stream URL.
+      void playTrack({
+        path,
+        artist_id: bandId,
+        title,
+        release: data?.title,
+      }).catch(() => {});
     },
     [
       bandId,
@@ -1756,8 +1791,9 @@ export default function ReleasePage({
       playingPath,
       releaseId,
       resolveTrackSource,
+      warmAdjacentStreams,
     ]
-  );
+  ); // sync handler — keep play() inside the tap gesture
 
   const playAdjacentTrack = useCallback(
     (direction: "prev" | "next") => {

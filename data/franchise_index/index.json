@@ -1,6 +1,6 @@
 {
   "index_version": 2,
-  "scanned_at": "2026-10-28T20:45:52.519213+00:00",
+  "scanned_at": "2026-10-29T18:24:12.772693+00:00",
   "franchises": {
     "courage test film": {
       "display_name": "Courage Test Film",
@@ -979,6 +979,23 @@
           "platform": "Browser",
           "subseries": null,
           "franchise_display": "Bloxorz"
+        }
+      ]
+    },
+    "mcdonald's": {
+      "display_name": "McDonald's",
+      "slug": "mcdonald's",
+      "letter": "M",
+      "entries": [
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Entertainment System/M/McDonald's/1992.12.31. McDonaldland",
+          "title": "McDonaldland",
+          "date_iso": "1992-12-31",
+          "letter": "M",
+          "platform": "Nintendo Entertainment System",
+          "subseries": null,
+          "franchise_display": "McDonald's"
         }
       ]
     }

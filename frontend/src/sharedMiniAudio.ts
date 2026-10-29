@@ -110,8 +110,9 @@ export function useSharedMiniAudio() {
       autoPlayRef.current = autoPlay;
       srcRef.current = url;
       setSrc(url);
+      // Avoid el.load() before play — breaks mobile Safari autoplay gesture.
+      resumeBeatAudioContext();
       el.src = url;
-      el.load();
       if (autoPlay) {
         autoPlayRef.current = false;
         void el.play().catch(() => {});

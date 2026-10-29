@@ -26,7 +26,7 @@ HEADERS = (
     "SIZE",
     "PIECES",
     "STYLE",
-    "QUANTITY",
+    "NUMBER",
     "TOTAL",
     "BOX SIZE",
     "MISSING",
@@ -48,6 +48,7 @@ _HEADER_MAP = {
     "pieces": "size",  # puzzle piece count → size
     "style": "style",
     "quantity": "quantity",
+    "number": "quantity",
     "total": "total_slots",
     "total slots": "total_slots",
     "totalslots": "total_slots",

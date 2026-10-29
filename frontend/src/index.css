@@ -20,6 +20,18 @@
   --banner-aspect-ratio: var(--banner-source-w) / var(--banner-source-h);
 }
 
+/* Phone: top-left back controls show chevron only (aria-label keeps destination). */
+html[data-phone] .artist-page__catalog-label,
+html[data-phone] .series-subseries-page__back-label,
+html[data-phone] .series-subseries-page__back-icon,
+html[data-phone] .release-page__back > span,
+html[data-phone] .media-item-page__back > span,
+html[data-phone] .artist-playlist-detail__back-label,
+html[data-phone] .ms-page-back__label,
+html[data-phone] .series-franchise__back-label {
+  display: none !important;
+}
+
 [data-theme="light"] {
   --bg: #f2f4f8;
   --bg-elevated: #ffffff;
@@ -10152,6 +10164,9 @@ button.media-release-card--banner {
 }
 
 .artist-playlist-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   margin: 0 0 1rem;
   padding: 0;
   border: none;
@@ -10159,6 +10174,11 @@ button.media-release-card--banner {
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
+}
+.artist-playlist-detail__back svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .artist-playlist-detail__back:hover {
@@ -30769,16 +30789,97 @@ button.lyrics-status-badge--icon-only {
   min-width: 0;
   align-self: center;
 }
-.hobbies-collection-editor__total-check {
+/* Beat `.artist-admin-form label` column stack — box left of two-line label. */
+.artist-admin-form label.hobbies-collection-editor__limited-check.ms-checkbox {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
   flex: 0 0 auto;
   align-self: center;
+  margin: 0;
+}
+.hobbies-collection-editor__limited-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  font-size: 0.78rem;
+  white-space: normal;
+}
+.hobbies-collection-editor__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0.35rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.hobbies-collection-editor__meta label {
+  margin: 0;
+}
+.hobbies-collection-editor__auto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+}
+.hobbies-collection-editor__auto-label {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
   white-space: nowrap;
 }
-.hobbies-collection-editor__total-input {
-  flex: 0 0 5.5rem;
-  width: 5.5rem;
+.hobbies-collection__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
-  align-self: center;
+}
+.hobbies-collection__info-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+  line-height: 1.3;
+  cursor: default;
+  user-select: none;
+}
+.hobbies-collection__info-strip > span:not(:last-child)::after,
+.hobbies-collection__info-strip > button:not(:last-child)::after,
+.hobbies-collection__info-strip > a:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.65rem;
+  color: color-mix(in srgb, var(--text) 35%, transparent);
+  font-weight: 400;
+  pointer-events: none;
+}
+.hobbies-collection__info-strip .hobbies-collection__ext-link {
+  margin-left: 0.1rem;
+  cursor: pointer;
+}
+.hobbies-collection__missing-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.hobbies-collection__missing-link:hover,
+.hobbies-collection__missing-link:focus-visible {
+  text-decoration: none;
+  color: inherit;
+  outline: none;
 }
 .hobbies-collection-editor__fields {
   margin: 0;
@@ -30796,6 +30897,7 @@ button.lyrics-status-badge--icon-only {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem 0.65rem;
+  align-items: center;
   max-height: 17rem;
   overflow-y: auto;
   padding: 0.1rem 0.05rem 0.2rem;
@@ -30830,21 +30932,25 @@ button.lyrics-status-badge--icon-only {
 }
 .hobbies-collection-editor__add-custom {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
   align-items: center;
   min-width: 0;
+  height: 1.2rem;
 }
 .hobbies-collection-editor__add-custom input {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  padding: 0.28rem 0.4rem;
+  height: 1.2rem;
+  box-sizing: border-box;
+  padding: 0 0.35rem;
   font-size: 0.78rem;
+  line-height: 1.2rem;
 }
 .hobbies-collection-editor__add-btn {
   flex: 0 0 auto;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.2rem;
+  height: 1.2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -30854,7 +30960,7 @@ button.lyrics-status-badge--icon-only {
   border-radius: 0.18rem;
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   color: var(--accent);
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -30982,6 +31088,14 @@ button.lyrics-status-badge--icon-only {
   text-align: left;
   white-space: nowrap;
   vertical-align: middle;
+}
+.hobbies-collection__notes-cell {
+  display: inline-block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 .hobbies-collection__table thead th {
   color: color-mix(in srgb, var(--text) 70%, transparent);

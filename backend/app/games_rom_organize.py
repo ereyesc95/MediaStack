@@ -515,9 +515,19 @@ async def enrich_organized_games(
                 continue
 
             cover_url = match.get("cover_url")
+            backdrop_url = match.get("backdrop_url")
             covers = leaf_dir / "Gallery" / "Covers"
             covers.mkdir(parents=True, exist_ok=True)
             await _download_primary(cover_url, covers / "Cover - Portrait")
+            await _download_primary(backdrop_url, covers / "Cover - Landscape")
+            from app.catalog_import import _download_igdb_gallery_extras
+
+            await _download_igdb_gallery_extras(
+                covers,
+                portrait_urls=list(match.get("portrait_urls") or []),
+                landscape_urls=list(match.get("landscape_urls") or []),
+                skip_urls={u for u in (cover_url, backdrop_url) if u},
+            )
 
             # Franchise home [Artwork] only when we just created Games as home
             # and IGDB matched.
@@ -526,6 +536,9 @@ async def enrich_organized_games(
                 artwork = work_dir / "[Artwork]"
                 artwork.mkdir(parents=True, exist_ok=True)
                 await _download_primary(cover_url, artwork / "Cover - Portrait")
+                await _download_primary(
+                    backdrop_url, artwork / "Cover - Landscape"
+                )
                 from app.folder_icons import (
                     cleanup_franchise_artwork_dir,
                     decorate_folder,

@@ -294,8 +294,23 @@ export function ArtistPlaylistDetailView({
   if (slug === "setlists" && !detail.tracks.length) {
     return (
       <div className="artist-playlist-detail">
-        <button type="button" className="artist-playlist-detail__back" onClick={onBack}>
-          ← Playlists
+        <button
+          type="button"
+          className="artist-playlist-detail__back"
+          onClick={onBack}
+          aria-label="Back to playlists"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M15 6l-6 6 6 6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="artist-playlist-detail__back-label">Playlists</span>
         </button>
         <h2 className="artist-playlist-detail__title">{detail.name}</h2>
         <p className="muted artist-playlist-detail__hint">
@@ -313,8 +328,23 @@ export function ArtistPlaylistDetailView({
 
   return (
     <div className="artist-playlist-detail">
-      <button type="button" className="artist-playlist-detail__back" onClick={onBack}>
-        ← Playlists
+      <button
+        type="button"
+        className="artist-playlist-detail__back"
+        onClick={onBack}
+        aria-label="Back to playlists"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M15 6l-6 6 6 6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="artist-playlist-detail__back-label">Playlists</span>
       </button>
       <h2 className="artist-playlist-detail__title">{detail.name}</h2>
       <div className="artist-playlist-tracks">

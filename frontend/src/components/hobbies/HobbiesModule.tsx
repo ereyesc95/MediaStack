@@ -139,7 +139,7 @@ const FIELD_LABELS: Record<string, string> = {
   category: "Category",
   size: "Size",
   style: "Style",
-  quantity: "Quantity",
+  quantity: "Number",
   total_slots: "Total",
   items_collected: "Collected",
   completion_pct: "Complete %",
@@ -155,8 +155,62 @@ const FIELD_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
-/** Album table column order (image is rendered as the leading fixed column). */
-const ALBUM_TABLE_COLS = [
+/** Leave Columns when Limited is on; become collection-level info instead. */
+const LIMITED_META_KEYS = new Set([
+  "year",
+  "brand",
+  "theme",
+  "total_slots",
+  "missing",
+  "duplicates",
+  "shop_url",
+  "tutorial_url",
+  "pdf_url",
+]);
+
+function splitTags(raw: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of raw.replace(/\r/g, "").split("\n")) {
+    for (const piece of line.split(/[,|;]+/)) {
+      const p = piece.trim();
+      if (!p) continue;
+      const key = p.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+/** Columns picker order (row-major 3-col grid): Image → Number → Title first. */
+const COLUMN_PICKER_ORDER = [
+  "image",
+  "quantity",
+  "title",
+  "year",
+  "brand",
+  "theme",
+  "type",
+  "category",
+  "size",
+  "style",
+  "box_size",
+  "total_slots",
+  "missing",
+  "duplicates",
+  "items_collected",
+  "completion_pct",
+  "shop_url",
+  "tutorial_url",
+  "pdf_url",
+  "notes",
+] as const;
+
+/** Table column order after the fixed Image column. */
+const TABLE_COL_ORDER = [
+  "quantity",
   "title",
   "year",
   "brand",
@@ -168,6 +222,7 @@ const ALBUM_TABLE_COLS = [
   "completion_pct",
   "shop_url",
   "pdf_url",
+  "notes",
 ] as const;
 
 function fieldLabel(
@@ -175,10 +230,11 @@ function fieldLabel(
   preset?: string,
   labels?: Record<string, string> | null
 ): string {
-  if (labels?.[col]) return labels[col];
   if (col === "size" && preset === "puzzle") return "Pieces";
+  if (FIELD_LABELS[col]) return FIELD_LABELS[col];
+  if (labels?.[col]) return labels[col];
   if (col.startsWith("custom_")) return col.replace(/^custom_/, "").replace(/_/g, " ");
-  return FIELD_LABELS[col] || col;
+  return col;
 }
 
 function mergeUniqueOptions(...lists: string[][]): string[] {
@@ -227,7 +283,18 @@ export default function HobbiesModule({
   const [editorOpen, setEditorOpen] = useState<
     null | "new" | HobbyCollection
   >(null);
+  const [editorFocusField, setEditorFocusField] = useState<string | null>(
+    null
+  );
   const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
+
+  function openCollectionEditor(
+    target: "new" | HobbyCollection,
+    focusField: string | null = null
+  ) {
+    setEditorFocusField(focusField);
+    setEditorOpen(target);
+  }
 
   useEffect(() => {
     setActiveId(collectionId);
@@ -402,12 +469,12 @@ export default function HobbiesModule({
               onChooseSource={onChooseSource}
               onNewHobbyCollection={
                 activeId == null && activeHubTab === "home"
-                  ? () => setEditorOpen("new")
+                  ? () => openCollectionEditor("new")
                   : undefined
               }
               onEditHobbyCollection={
                 active
-                  ? () => setEditorOpen(active)
+                  ? () => openCollectionEditor(active)
                   : undefined
               }
               showManageCollection={Boolean(collectionMenu)}
@@ -573,6 +640,9 @@ export default function HobbiesModule({
             isAdmin={isAdmin}
             nsfwUnlocked={nsfwUnlocked}
             onRegisterMenu={setCollectionMenu}
+            onEditCollection={(focusField) =>
+              openCollectionEditor(active, focusField ?? null)
+            }
             onChanged={() => void reloadCollections()}
             onDeleted={() => {
               const deletedId = activeId;
@@ -592,10 +662,15 @@ export default function HobbiesModule({
         <HobbyCollectionEditorModal
           mode={editorOpen === "new" ? "create" : "edit"}
           collection={editorOpen === "new" ? null : editorOpen}
-          onClose={() => setEditorOpen(null)}
+          focusField={editorFocusField}
+          onClose={() => {
+            setEditorOpen(null);
+            setEditorFocusField(null);
+          }}
           onSaved={async (col) => {
             const wasCreate = editorOpen === "new";
             setEditorOpen(null);
+            setEditorFocusField(null);
             await reloadCollections();
             if (wasCreate && col?.id) openCollection(col.id);
           }}
@@ -627,24 +702,62 @@ function applyComputedFieldDeps(
 function HobbyCollectionEditorModal({
   mode,
   collection,
+  focusField = null,
   onClose,
   onSaved,
 }: {
   mode: "create" | "edit";
   collection: HobbyCollection | null;
+  focusField?: string | null;
   onClose: () => void;
   onSaved: (col: HobbyCollection | null) => void | Promise<void>;
 }) {
   const [catalog, setCatalog] = useState<HobbyFieldCatalogEntry[]>([]);
   const [name, setName] = useState(collection?.name || "");
-  const [collectionTotalOn, setCollectionTotalOn] = useState(
-    () =>
-      collection?.collection_total != null && collection.collection_total > 0
+  const [limited, setLimited] = useState(() => Boolean(collection?.limited));
+  const [metaYear, setMetaYear] = useState(() =>
+    collection?.year != null ? String(collection.year) : ""
   );
-  const [collectionTotal, setCollectionTotal] = useState(() =>
+  const [metaBrand, setMetaBrand] = useState(() => collection?.brand || "");
+  const [metaTheme, setMetaTheme] = useState(() => collection?.theme || "");
+  const [metaTotal, setMetaTotal] = useState(() =>
     collection?.collection_total != null && collection.collection_total > 0
       ? String(collection.collection_total)
       : ""
+  );
+  const [metaItemsList, setMetaItemsList] = useState(() =>
+    (collection?.items_list?.length
+      ? collection.items_list
+      : collection?.missing || []
+    ).join(", ")
+  );
+  const [metaMissing, setMetaMissing] = useState(() =>
+    (collection?.missing || []).join(", ")
+  );
+  const [metaDuplicates, setMetaDuplicates] = useState(() =>
+    (collection?.duplicates || []).join(", ")
+  );
+  const metaMissingRef = useRef<HTMLTextAreaElement>(null);
+  const [metaShop, setMetaShop] = useState(() => collection?.shop_url || "");
+  const [metaTutorial, setMetaTutorial] = useState(
+    () => collection?.tutorial_url || ""
+  );
+  const [pdfEnabled, setPdfEnabled] = useState(() =>
+    Boolean(collection?.pdf_enabled)
+  );
+  const [collectedEnabled, setCollectedEnabled] = useState(() =>
+    Boolean(
+      !collection ||
+        collection.fields?.includes("items_collected") ||
+        collection.limited
+    )
+  );
+  const [completionEnabled, setCompletionEnabled] = useState(() =>
+    Boolean(
+      !collection ||
+        collection.fields?.includes("completion_pct") ||
+        collection.limited
+    )
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customFields, setCustomFields] = useState<HobbyCustomFieldDef[]>(
@@ -655,7 +768,10 @@ function HobbyCollectionEditorModal({
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [franchiseOptions, setFranchiseOptions] = useState<string[]>([]);
+  const [franchiseOpen, setFranchiseOpen] = useState(false);
   const iconRef = useRef<HTMLInputElement>(null);
+  const preLimitedSelectedRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -676,6 +792,85 @@ function HobbyCollectionEditorModal({
       cancelled = true;
     };
   }, [mode, collection]);
+
+  useEffect(() => {
+    if (!limited) {
+      setFranchiseOpen(false);
+      return;
+    }
+    let cancelled = false;
+    void fetchHobbyFranchiseOptions()
+      .then((res) => {
+        if (!cancelled) setFranchiseOptions(res.options || []);
+      })
+      .catch(() => {
+        if (!cancelled) setFranchiseOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [limited]);
+
+  useEffect(() => {
+    if (focusField !== "missing" || !limited) return;
+    const t = window.setTimeout(() => {
+      metaMissingRef.current?.focus();
+      metaMissingRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [focusField, limited]);
+
+  const franchiseSuggestions = useMemo(() => {
+    const q = metaTheme.trim().toLowerCase();
+    if (!q) return [];
+    return franchiseOptions
+      .filter((opt) => opt.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [franchiseOptions, metaTheme]);
+
+  const sortedCatalog = useMemo(() => {
+    const rank = new Map(
+      COLUMN_PICKER_ORDER.map((key, i) => [key, i] as const)
+    );
+    return [...catalog].sort((a, b) => {
+      const ra = rank.get(a.key as (typeof COLUMN_PICKER_ORDER)[number]);
+      const rb = rank.get(b.key as (typeof COLUMN_PICKER_ORDER)[number]);
+      if (ra != null && rb != null) return ra - rb;
+      if (ra != null) return -1;
+      if (rb != null) return 1;
+      return a.key.localeCompare(b.key);
+    });
+  }, [catalog]);
+
+  function setLimitedOn(on: boolean) {
+    if (!on && limited) {
+      setMetaYear("");
+      setMetaBrand("");
+      setMetaTheme("");
+      setMetaTotal("");
+      setMetaItemsList("");
+      setMetaMissing("");
+      setMetaDuplicates("");
+      setMetaShop("");
+      setMetaTutorial("");
+      setPdfEnabled(false);
+      setCollectedEnabled(false);
+      setCompletionEnabled(false);
+      const restored = preLimitedSelectedRef.current;
+      if (restored) {
+        setSelected(new Set(restored));
+        preLimitedSelectedRef.current = null;
+      }
+    }
+    setLimited(on);
+    if (on) {
+      preLimitedSelectedRef.current = new Set(selected);
+      setSelected(new Set(["image", "quantity", "title"]));
+      setCollectedEnabled(true);
+      setCompletionEnabled(true);
+      setPdfEnabled(false);
+    }
+  }
 
   useEffect(() => {
     if (!iconFile) {
@@ -719,17 +914,28 @@ function HobbyCollectionEditorModal({
     setNewCustomLabel("");
   }
 
-  async function save() {
+  async function save(allowMissingConflicts = false) {
     const title = name.trim();
     if (!title) {
       setError("Name is required");
       return;
     }
     let totalValue: number | null = null;
-    if (collectionTotalOn) {
-      const n = Number.parseInt(collectionTotal.trim(), 10);
+    const itemsListTags = limited ? splitTags(metaItemsList) : [];
+    const missingTags =
+      limited
+        ? mode === "create"
+          ? itemsListTags
+          : splitTags(metaMissing)
+        : [];
+    if (limited) {
+      const n = Number.parseInt(metaTotal.trim(), 10);
       if (!Number.isFinite(n) || n <= 0) {
-        setError("Collection total must be a positive whole number");
+        setError("Total must be a positive whole number");
+        return;
+      }
+      if (missingTags.length > n) {
+        setError(`Missing (${missingTags.length}) cannot exceed Total (${n})`);
         return;
       }
       totalValue = n;
@@ -738,17 +944,53 @@ function HobbyCollectionEditorModal({
     setError(null);
     try {
       const fields = [
-        ...catalog.map((f) => f.key).filter((k) => selected.has(k)),
+        ...catalog.map((f) => f.key).filter((k) => {
+          if (!selected.has(k)) return false;
+          if (
+            limited &&
+            (LIMITED_META_KEYS.has(k) ||
+              k === "items_collected" ||
+              k === "completion_pct")
+          ) {
+            return false;
+          }
+          return true;
+        }),
         ...customFields.map((f) => f.key).filter((k) => selected.has(k)),
       ];
+      if (limited) {
+        if (collectedEnabled && !fields.includes("items_collected")) {
+          fields.push("items_collected");
+        }
+        if (completionEnabled && !fields.includes("completion_pct")) {
+          fields.push("completion_pct");
+        }
+        if (pdfEnabled && !fields.includes("pdf_url")) fields.push("pdf_url");
+      }
       const customPayload = customFields.filter((f) => selected.has(f.key));
+      const meta = limited
+        ? {
+            year: metaYear.trim() ? Number.parseInt(metaYear.trim(), 10) : null,
+            brand: metaBrand.trim() || null,
+            theme: metaTheme.trim() || null,
+            items_list: itemsListTags,
+            missing: missingTags,
+            duplicates: splitTags(metaDuplicates),
+            shop_url: metaShop.trim() || null,
+            tutorial_url: metaTutorial.trim() || null,
+          }
+        : null;
       let saved: HobbyCollection;
       if (mode === "create") {
         saved = await createHobbyCustomCollection({
           name: title,
           fields,
           custom_fields: customPayload,
+          limited,
           collection_total: totalValue,
+          meta,
+          pdf_enabled: pdfEnabled,
+          allow_missing_item_conflicts: allowMissingConflicts,
           icon: iconFile,
         });
       } else if (collection) {
@@ -757,8 +999,13 @@ function HobbyCollectionEditorModal({
           fields,
           custom_fields: customPayload,
           set_fields: true,
+          limited,
           collection_total: totalValue,
           set_collection_total: true,
+          meta,
+          set_meta: true,
+          pdf_enabled: pdfEnabled,
+          allow_missing_item_conflicts: allowMissingConflicts,
         });
         if (iconFile) {
           saved = await uploadHobbyCollectionIcon(collection.id, iconFile);
@@ -768,7 +1015,20 @@ function HobbyCollectionEditorModal({
       }
       await onSaved(saved);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        !allowMissingConflicts &&
+        /Missing tags match existing items/i.test(msg)
+      ) {
+        const ok = window.confirm(
+          `${msg}\n\nRemove those tags from Missing and save?`
+        );
+        if (ok) {
+          await save(true);
+          return;
+        }
+      }
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -836,36 +1096,193 @@ function HobbyCollectionEditorModal({
               aria-label="Name of collection"
               autoFocus
             />
-            <label className="ms-checkbox hobbies-collection-editor__total-check">
+            <label className="ms-checkbox hobbies-collection-editor__limited-check">
               <input
                 type="checkbox"
-                checked={collectionTotalOn}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setCollectionTotalOn(on);
-                  if (!on) setCollectionTotal("");
-                }}
+                checked={limited}
+                onChange={(e) => setLimitedOn(e.target.checked)}
               />
               <span className="ms-checkbox__box" aria-hidden="true" />
-              <span className="ms-checkbox__label">Collection total</span>
+              <span className="ms-checkbox__label hobbies-collection-editor__limited-label">
+                <span>Limited</span>
+                <span>collection</span>
+              </span>
             </label>
-            {collectionTotalOn ? (
-              <input
-                className="hobbies-collection-editor__total-input"
-                type="number"
-                min={1}
-                step={1}
-                value={collectionTotal}
-                onChange={(e) => setCollectionTotal(e.target.value)}
-                placeholder="e.g. 6"
-                aria-label="Collection total"
-              />
-            ) : null}
           </div>
+          {limited ? (
+            <div className="hobbies-collection-editor__meta">
+              <div className="hobbies-item-modal__row">
+                <label>
+                  Year
+                  <input
+                    type="number"
+                    value={metaYear}
+                    onChange={(e) => setMetaYear(e.target.value)}
+                    min={1000}
+                    max={9999}
+                  />
+                </label>
+                <label>
+                  Brand
+                  <input
+                    value={metaBrand}
+                    onChange={(e) => setMetaBrand(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="hobbies-item-modal__row">
+                <label className="hobbies-item-modal__franchise">
+                  Franchise
+                  <input
+                    value={metaTheme}
+                    onChange={(e) => {
+                      setMetaTheme(e.target.value);
+                      setFranchiseOpen(true);
+                    }}
+                    onFocus={() => setFranchiseOpen(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setFranchiseOpen(false), 150);
+                    }}
+                    autoComplete="off"
+                  />
+                  {franchiseOpen && franchiseSuggestions.length > 0 ? (
+                    <ul
+                      className="hobbies-item-modal__suggest"
+                      role="listbox"
+                    >
+                      {franchiseSuggestions.map((opt) => (
+                        <li key={opt}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setMetaTheme(opt);
+                              setFranchiseOpen(false);
+                            }}
+                          >
+                            {opt}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </label>
+                <label>
+                  Total
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={metaTotal}
+                    onChange={(e) => setMetaTotal(e.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                Items list
+                <textarea
+                  value={metaItemsList}
+                  onChange={(e) => setMetaItemsList(e.target.value)}
+                  rows={2}
+                  placeholder="Add comma-separated values"
+                />
+              </label>
+              {mode === "edit" ? (
+                <div className="hobbies-item-modal__row">
+                  <label>
+                    Missing
+                    <textarea
+                      ref={metaMissingRef}
+                      value={metaMissing}
+                      onChange={(e) => setMetaMissing(e.target.value)}
+                      rows={2}
+                      placeholder="Add comma-separated values"
+                    />
+                  </label>
+                  <label>
+                    Duplicates
+                    <textarea
+                      value={metaDuplicates}
+                      onChange={(e) => setMetaDuplicates(e.target.value)}
+                      rows={2}
+                      placeholder="Add comma-separated values"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label>
+                  Duplicates
+                  <textarea
+                    value={metaDuplicates}
+                    onChange={(e) => setMetaDuplicates(e.target.value)}
+                    rows={2}
+                    placeholder="Add comma-separated values"
+                  />
+                </label>
+              )}
+              <div className="hobbies-item-modal__row">
+                <label>
+                  Shop
+                  <input
+                    value={metaShop}
+                    onChange={(e) => setMetaShop(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Tutorial
+                  <input
+                    value={metaTutorial}
+                    onChange={(e) => setMetaTutorial(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="hobbies-collection-editor__auto-row">
+                <span className="hobbies-collection-editor__auto-label">
+                  Auto values:
+                </span>
+                <label className="ms-checkbox hobbies-collection-editor__check">
+                  <input
+                    type="checkbox"
+                    checked={collectedEnabled}
+                    onChange={(e) => setCollectedEnabled(e.target.checked)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label">Collected</span>
+                </label>
+                <label className="ms-checkbox hobbies-collection-editor__check">
+                  <input
+                    type="checkbox"
+                    checked={completionEnabled}
+                    onChange={(e) => setCompletionEnabled(e.target.checked)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label">Complete %</span>
+                </label>
+                <label className="ms-checkbox hobbies-collection-editor__check">
+                  <input
+                    type="checkbox"
+                    checked={pdfEnabled}
+                    onChange={(e) => setPdfEnabled(e.target.checked)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label">PDF</span>
+                </label>
+              </div>
+            </div>
+          ) : null}
           <fieldset className="hobbies-collection-editor__fields">
             <legend>Columns</legend>
             <div className="hobbies-collection-editor__grid">
-              {catalog.map((f) => (
+              {sortedCatalog.map((f) => {
+                if (
+                  limited &&
+                  (LIMITED_META_KEYS.has(f.key) ||
+                    f.key === "items_collected" ||
+                    f.key === "completion_pct")
+                ) {
+                  return null;
+                }
+                return (
                 <label
                   key={f.key}
                   className="ms-checkbox hobbies-collection-editor__check"
@@ -877,11 +1294,12 @@ function HobbyCollectionEditorModal({
                   />
                   <span className="ms-checkbox__box" aria-hidden="true" />
                   <span className="ms-checkbox__label">
-                    {f.label}
-                    {f.computed && f.key !== "pdf_url" ? " (auto)" : ""}
+                    {FIELD_LABELS[f.key] || f.label}
+                    {f.computed && !limited ? " (auto)" : ""}
                   </span>
                 </label>
-              ))}
+              );
+              })}
               {customFields.map((f) => (
                 <label
                   key={f.key}
@@ -1210,6 +1628,7 @@ function HobbyCollectionView({
   isAdmin,
   nsfwUnlocked,
   onRegisterMenu,
+  onEditCollection,
   onChanged,
   onDeleted,
 }: {
@@ -1217,6 +1636,7 @@ function HobbyCollectionView({
   isAdmin: boolean;
   nsfwUnlocked: boolean;
   onRegisterMenu: (menu: HobbyCollectionMenu | null) => void;
+  onEditCollection: (focusField?: string | null) => void;
   onChanged: () => void;
   onDeleted: () => void;
 }) {
@@ -1359,12 +1779,20 @@ function HobbyCollectionView({
   ]);
 
   const tableCols = useMemo(() => {
-    const enabled = fields.filter((f) => f !== "image" && f !== "notes");
-    // Prefer album-style order when those columns are enabled.
-    const preferred = ALBUM_TABLE_COLS.filter((c) => enabled.includes(c));
-    const rest = enabled.filter((c) => !preferred.includes(c as typeof ALBUM_TABLE_COLS[number]));
-    return preferred.length ? [...preferred, ...rest] : enabled;
-  }, [fields]);
+    // Image is always the fixed leading column; every other enabled field is shown.
+    let enabled = fields.filter((f) => f !== "image");
+    // Limited set progress lives in the header, not per-row columns.
+    if (collection.limited) {
+      enabled = enabled.filter(
+        (f) => f !== "items_collected" && f !== "completion_pct"
+      );
+    }
+    const preferred = TABLE_COL_ORDER.filter((c) => enabled.includes(c));
+    const rest = enabled.filter(
+      (c) => !preferred.includes(c as (typeof TABLE_COL_ORDER)[number])
+    );
+    return [...preferred, ...rest];
+  }, [fields, collection.limited]);
 
   const missingTotal = useMemo(() => {
     if (!fields.includes("missing")) return 0;
@@ -1480,21 +1908,115 @@ function HobbyCollectionView({
               e.target.value = "";
             }}
           />
-          <h2 className="hobbies-collection__title">
-            {collection.name}
-            {collection.is_complete ? (
-              <span
-                className="hobbies-collection__complete-star"
-                title="Collection complete"
-                aria-label="Collection complete"
-              >
-                <IconStar />
-              </span>
-            ) : null}
-            {collection.private ? (
-              <span className="hobbies-collection__private-badge">Private</span>
-            ) : null}
-          </h2>
+          <div className="hobbies-collection__title-block">
+            <h2 className="hobbies-collection__title">
+              {collection.name}
+              {collection.is_complete ? (
+                <span
+                  className="hobbies-collection__complete-star"
+                  title="Collection complete"
+                  aria-label="Collection complete"
+                >
+                  <IconStar />
+                </span>
+              ) : null}
+              {collection.private ? (
+                <span className="hobbies-collection__private-badge">Private</span>
+              ) : null}
+            </h2>
+            {collection.limited ? (
+              <div className="hobbies-collection__info-strip">
+                {collection.theme ? <span>{collection.theme}</span> : null}
+                {collection.brand &&
+                collection.brand.trim().toLowerCase() !==
+                  (collection.theme || "").trim().toLowerCase() ? (
+                  <span>{collection.brand}</span>
+                ) : null}
+                {collection.year != null ? (
+                  <span>{collection.year}</span>
+                ) : null}
+                {fields.includes("items_collected") &&
+                collection.items_collected != null &&
+                collection.collection_total != null ? (
+                  <span title="Collected">
+                    {collection.items_collected}/{collection.collection_total}
+                  </span>
+                ) : null}
+                {fields.includes("completion_pct") &&
+                collection.completion_pct != null ? (
+                  <span>{collection.completion_pct}%</span>
+                ) : null}
+                <button
+                  type="button"
+                  className="hobbies-collection__missing-link"
+                  title={
+                    collection.missing?.length
+                      ? collection.missing.join(", ")
+                      : "Edit missing items"
+                  }
+                  onClick={() => onEditCollection("missing")}
+                >
+                  Missing {collection.missing?.length ?? 0}
+                </button>
+                {collection.collection_total != null ? (
+                  <span
+                    title={
+                      collection.items_list?.length
+                        ? collection.items_list.join(", ")
+                        : undefined
+                    }
+                  >
+                    Total {collection.collection_total}
+                  </span>
+                ) : null}
+                {collection.shop_url ? (
+                  <a
+                    className="hobbies-collection__ext-link"
+                    href={normalizeExternalUrl(collection.shop_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Shop"
+                    aria-label="Shop"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <IconExternalLink />
+                  </a>
+                ) : null}
+                {collection.pdf_url ? (
+                  <a
+                    className="hobbies-collection__ext-link"
+                    href={withMediaAccess(String(collection.pdf_url))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="PDF"
+                    aria-label="PDF"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <IconExternalLink />
+                  </a>
+                ) : null}
+                {collection.tutorial_url ? (
+                  <a
+                    className="hobbies-collection__ext-link"
+                    href={normalizeExternalUrl(collection.tutorial_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Tutorial"
+                    aria-label="Tutorial"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <IconExternalLink />
+                  </a>
+                ) : null}
+              </div>
+            ) : (
+              <div className="hobbies-collection__info-strip">
+                <span>
+                  {items.length} {items.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         {selectMode && selected.size > 0 ? (
           <button
@@ -1765,8 +2287,15 @@ function HobbyCollectionView({
           destructive
           busy={itemDeleteBusy}
           onConfirm={() => {
+            const title = (itemDeleteTarget.title || "").trim();
+            let restore = false;
+            if (collection.limited && title) {
+              restore = window.confirm(`Add “${title}” back to Missing?`);
+            }
             setItemDeleteBusy(true);
-            void deleteHobbyItem(collection.id, itemDeleteTarget.id)
+            void deleteHobbyItem(collection.id, itemDeleteTarget.id, {
+              restore_missing: restore,
+            })
               .then(() => {
                 setItemDeleteTarget(null);
                 void reload();
@@ -1787,8 +2316,16 @@ function HobbyCollectionView({
           destructive
           busy={itemDeleteBusy}
           onConfirm={() => {
+            let restore = false;
+            if (collection.limited) {
+              restore = window.confirm(
+                "Add deleted item titles back to Missing when possible?"
+              );
+            }
             setItemDeleteBusy(true);
-            void deleteHobbyItemsBatch(collection.id, [...selected])
+            void deleteHobbyItemsBatch(collection.id, [...selected], {
+              restore_missing: restore,
+            })
               .then(() => {
                 setSelected(new Set());
                 setBatchDeleteOpen(false);
@@ -1912,6 +2449,15 @@ function renderCell(
   if (col === "quantity" && collection.preset === "marbles") {
     return it.quantity;
   }
+  if (col === "notes") {
+    const text = (it.notes || "").trim();
+    if (!text) return "—";
+    return (
+      <span className="hobbies-collection__notes-cell" title={text}>
+        {text}
+      </span>
+    );
+  }
   if (col.startsWith("custom_")) {
     const extra = (it as { extra?: Record<string, string> }).extra;
     const val = extra?.[col] ?? (it as Record<string, unknown>)[col];
@@ -1937,13 +2483,15 @@ function HobbyItemModal({
   onSaved: () => void;
 }) {
   const fields = useMemo(() => {
+    // Item form mirrors table columns only (limited meta stays on the collection).
     const enabled = collection.fields.filter(
       (f) => f !== "items_collected" && f !== "completion_pct" && f !== "pdf_url"
     );
     const preferredPairs: [string, string][] = [
       ["title", "year"],
       ["brand", "theme"],
-      ["type", "total_slots"],
+      ["type", "category"],
+      ["size", "style"],
     ];
     const used = new Set<string>();
     const layout: Array<{ kind: "pair"; a: string; b: string } | { kind: "single"; key: string }> =
@@ -1955,20 +2503,32 @@ function HobbyItemModal({
         used.add(b);
       }
     }
-    // Image after title/year pair when both exist; otherwise first available slot.
+    // Image first, then Number beside Title when both are columns.
     if (enabled.includes("image")) {
-      const titlePairIdx = layout.findIndex(
-        (row) => row.kind === "pair" && row.a === "title"
-      );
-      if (titlePairIdx >= 0) {
-        layout.splice(titlePairIdx + 1, 0, { kind: "single", key: "image" });
-      } else {
-        layout.unshift({ kind: "single", key: "image" });
-      }
+      layout.unshift({ kind: "single", key: "image" });
       used.add("image");
     }
-    for (const key of enabled) {
-      if (used.has(key)) continue;
+    if (
+      enabled.includes("quantity") &&
+      enabled.includes("title") &&
+      !used.has("quantity") &&
+      !used.has("title")
+    ) {
+      layout.push({ kind: "pair", a: "quantity", b: "title" });
+      used.add("quantity");
+      used.add("title");
+    }
+    const restOrder = [
+      ...TABLE_COL_ORDER,
+      ...COLUMN_PICKER_ORDER.filter(
+        (k) => !TABLE_COL_ORDER.includes(k as (typeof TABLE_COL_ORDER)[number])
+      ),
+    ];
+    const orderedRest = [
+      ...restOrder.filter((k) => enabled.includes(k) && !used.has(k)),
+      ...enabled.filter((k) => !used.has(k) && !restOrder.includes(k as never)),
+    ];
+    for (const key of orderedRest) {
       layout.push({ kind: "single", key });
     }
     return { enabled, layout };
@@ -2313,7 +2873,7 @@ function HobbyItemModal({
                     }
                     value={String(form[f] ?? "")}
                     onChange={(e) => setField(f, e.target.value)}
-                    placeholder={f === "year" ? "e.g. 2018" : placeholder}
+                    placeholder={placeholder}
                     min={f === "year" ? 1000 : undefined}
                     max={f === "year" ? 9999 : undefined}
                   />

@@ -40,6 +40,12 @@ async function errorMessageFromResponse(res: Response): Promise<string> {
     const parsed = JSON.parse(text) as { detail?: unknown };
     if (typeof parsed.detail === "string" && parsed.detail.trim()) {
       message = parsed.detail.trim();
+    } else if (
+      parsed.detail &&
+      typeof parsed.detail === "object" &&
+      typeof (parsed.detail as { message?: unknown }).message === "string"
+    ) {
+      message = String((parsed.detail as { message: string }).message).trim();
     }
   } catch {
     /* plain text body */
@@ -4272,6 +4278,18 @@ export type HobbyFieldCatalogEntry = {
   computed: boolean;
 };
 
+export type HobbyCollectionMeta = {
+  year?: number | null;
+  brand?: string | null;
+  theme?: string | null;
+  /** Catalog / set checklist (reference). Seeded into Missing on create. */
+  items_list?: string[] | string | null;
+  missing?: string[] | string | null;
+  duplicates?: string[] | string | null;
+  shop_url?: string | null;
+  tutorial_url?: string | null;
+};
+
 export type HobbyCollection = {
   id: number;
   name: string;
@@ -4285,9 +4303,24 @@ export type HobbyCollection = {
   /** Relative asset path when a custom icon was uploaded; null/absent = default. */
   icon_path?: string | null;
   item_count: number;
-  /** Optional finite size for the whole collection (e.g. 6 cans). */
+  /** Finite / limited set (vs evergrowing). */
+  limited?: boolean;
+  /** Expected size when limited (Total). */
   collection_total?: number | null;
-  /** True when collection_total is set and item_count meets it. */
+  year?: number | null;
+  brand?: string | null;
+  theme?: string | null;
+  items_list?: string[];
+  missing?: string[];
+  duplicates?: string[];
+  shop_url?: string | null;
+  tutorial_url?: string | null;
+  items_collected?: number | null;
+  missing_count?: number | null;
+  completion_pct?: number | null;
+  pdf_url?: string | null;
+  pdf_enabled?: boolean;
+  /** True when limited and Missing is empty. */
   is_complete?: boolean;
   /** Whole collection hidden unless NSFW is unlocked. */
   private?: boolean;
@@ -4337,6 +4370,7 @@ export async function fetchHobbyFieldCatalog() {
   return request<{
     fields: HobbyFieldCatalogEntry[];
     default_fields: string[];
+    limited_meta_keys?: string[];
   }>(`${API}/hobbies/field-catalog`);
 }
 
@@ -4344,20 +4378,29 @@ export async function createHobbyCustomCollection(body: {
   name: string;
   fields: string[];
   custom_fields?: HobbyCustomFieldDef[];
+  limited?: boolean;
   collection_total?: number | null;
+  meta?: HobbyCollectionMeta | null;
+  pdf_enabled?: boolean;
+  allow_missing_item_conflicts?: boolean;
   icon?: File | null;
 }) {
+  const payload = {
+    name: body.name,
+    preset: "custom",
+    fields: body.fields,
+    custom_fields: body.custom_fields,
+    limited: Boolean(body.limited),
+    collection_total: body.limited ? body.collection_total ?? null : null,
+    meta: body.limited ? body.meta ?? null : null,
+    pdf_enabled: Boolean(body.limited && body.pdf_enabled),
+    allow_missing_item_conflicts: Boolean(body.allow_missing_item_conflicts),
+  };
   if (!body.icon) {
     return request<HobbyCollection>(`${API}/hobbies/collections`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: body.name,
-        preset: "custom",
-        fields: body.fields,
-        custom_fields: body.custom_fields,
-        collection_total: body.collection_total ?? null,
-      }),
+      body: JSON.stringify(payload),
     });
   }
   // Query params for JSON; multipart for optional icon.
@@ -4366,9 +4409,14 @@ export async function createHobbyCustomCollection(body: {
   if (body.custom_fields?.length) {
     qs.set("custom_fields", JSON.stringify(body.custom_fields));
   }
-  if (body.collection_total != null && body.collection_total > 0) {
+  if (body.limited) qs.set("limited", "true");
+  if (body.limited && body.collection_total != null && body.collection_total > 0) {
     qs.set("collection_total", String(body.collection_total));
   }
+  if (body.limited && body.meta) {
+    qs.set("meta", JSON.stringify(body.meta));
+  }
+  if (body.limited && body.pdf_enabled) qs.set("pdf_enabled", "true");
   const fd = new FormData();
   fd.append("icon", body.icon);
   return request<HobbyCollection>(
@@ -4430,8 +4478,13 @@ export async function updateHobbyCollection(
     fields?: string[];
     custom_fields?: HobbyCustomFieldDef[];
     set_fields?: boolean;
+    limited?: boolean;
     collection_total?: number | null;
     set_collection_total?: boolean;
+    meta?: HobbyCollectionMeta | null;
+    set_meta?: boolean;
+    pdf_enabled?: boolean;
+    allow_missing_item_conflicts?: boolean;
   }
 ) {
   return request<HobbyCollection>(`${API}/hobbies/collections/${id}`, {
@@ -4514,19 +4567,31 @@ export async function adjustHobbyItemQuantity(
   );
 }
 
-export async function deleteHobbyItem(collectionId: number, itemId: number) {
-  return request<{ ok: boolean }>(
-    `${API}/hobbies/collections/${collectionId}/items/${itemId}`,
-    { method: "DELETE" }
-  );
+export async function deleteHobbyItem(
+  collectionId: number,
+  itemId: number,
+  opts?: { restore_missing?: boolean }
+) {
+  const qs = opts?.restore_missing ? "?restore_missing=true" : "";
+  return request<{
+    ok: boolean;
+    id?: number;
+    title?: string | null;
+    limited?: boolean;
+    restored_missing?: boolean;
+  }>(`${API}/hobbies/collections/${collectionId}/items/${itemId}${qs}`, {
+    method: "DELETE",
+  });
 }
 
 export async function deleteHobbyItemsBatch(
   collectionId: number,
-  ids: number[]
+  ids: number[],
+  opts?: { restore_missing?: boolean }
 ) {
+  const qs = opts?.restore_missing ? "?restore_missing=true" : "";
   return request<{ ok: boolean; deleted: number }>(
-    `${API}/hobbies/collections/${collectionId}/items/delete-batch`,
+    `${API}/hobbies/collections/${collectionId}/items/delete-batch${qs}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

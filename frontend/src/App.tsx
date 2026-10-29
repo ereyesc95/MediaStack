@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { isPhoneLayout, useDeviceLayout } from "./usePhoneLayout";
 
 import {
   fetchAppSettings,
@@ -179,6 +180,13 @@ function viewFromLocationPath(pathname: string): View {
 }
 
 export default function App() {
+  const deviceLayout = useDeviceLayout();
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-device-layout", deviceLayout);
+    if (isPhoneLayout(deviceLayout)) root.setAttribute("data-phone", "");
+    else root.removeAttribute("data-phone");
+  }, [deviceLayout]);
 
   const [view, setView] = useState<View>(() => {
     if (typeof window === "undefined") return { kind: "hub" };

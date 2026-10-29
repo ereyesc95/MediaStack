@@ -119,6 +119,7 @@ PRESET_FIELDS: dict[str, tuple[str, ...]] = {
 # default_on → preselected for new custom collections.
 FIELD_CATALOG: tuple[dict, ...] = (
     {"key": "image", "label": "Image", "default_on": True, "computed": False},
+    {"key": "quantity", "label": "Number", "default_on": True, "computed": False},
     {"key": "title", "label": "Title", "default_on": True, "computed": False},
     {"key": "year", "label": "Year", "default_on": True, "computed": False},
     {"key": "brand", "label": "Brand", "default_on": True, "computed": False},
@@ -127,7 +128,6 @@ FIELD_CATALOG: tuple[dict, ...] = (
     {"key": "category", "label": "Category", "default_on": True, "computed": False},
     {"key": "size", "label": "Size / Pieces", "default_on": True, "computed": False},
     {"key": "style", "label": "Style", "default_on": True, "computed": False},
-    {"key": "quantity", "label": "Quantity", "default_on": True, "computed": False},
     {"key": "box_size", "label": "Box size", "default_on": True, "computed": False},
     {"key": "total_slots", "label": "Total", "default_on": False, "computed": False},
     {"key": "missing", "label": "Missing", "default_on": False, "computed": False},
@@ -157,6 +157,23 @@ COMPUTED_FIELD_KEYS = frozenset(
 DEFAULT_CUSTOM_FIELDS = tuple(
     f["key"] for f in FIELD_CATALOG if f.get("default_on")
 )
+
+# When a collection is limited, these leave the Columns picker and become
+# collection-level info (Collected / Complete % stay optional column toggles).
+LIMITED_META_FIELD_KEYS = frozenset(
+    {
+        "year",
+        "brand",
+        "theme",
+        "total_slots",
+        "missing",
+        "duplicates",
+        "shop_url",
+        "tutorial_url",
+        "pdf_url",
+    }
+)
+LIMITED_AUTO_COLUMN_KEYS = ("items_collected", "completion_pct")
 
 _CUSTOM_KEY_RE = re.compile(r"^custom_[a-z0-9_]{1,40}$")
 _SAFE_CUSTOM_SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -588,6 +605,9 @@ def _normalize_fields_selection(
         for dep in ("title", "year", "theme"):
             if dep not in selected:
                 selected.append(dep)
+    # Item-level Collected/Complete% need per-row Total+Missing. Limited
+    # collections compute those at collection level instead — callers strip
+    # LIMITED_META_FIELD_KEYS afterward when limited.
     if "items_collected" in selected or "completion_pct" in selected:
         for dep in ("total_slots", "missing"):
             if dep not in selected:
@@ -619,6 +639,7 @@ def _slug_custom_key(label: str, used: set[str]) -> str:
 
 def field_catalog_payload() -> dict:
     return {
+        "limited_meta_keys": sorted(LIMITED_META_FIELD_KEYS),
         "fields": [
             {
                 "key": f["key"],
@@ -632,11 +653,161 @@ def field_catalog_payload() -> dict:
     }
 
 
-def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
+def _collection_meta(row: HobbyCollection) -> dict:
+    meta = _parse_json_obj(getattr(row, "hbc_meta_json", None))
+    missing = meta.get("missing")
+    if not isinstance(missing, list):
+        missing = []
+    missing = [str(x).strip() for x in missing if str(x).strip()]
+    items_list = meta.get("items_list")
+    if not isinstance(items_list, list):
+        items_list = []
+    items_list = [str(x).strip() for x in items_list if str(x).strip()]
+    duplicates = meta.get("duplicates")
+    if not isinstance(duplicates, list):
+        duplicates = []
+    year = _parse_year(meta.get("year"))
+    return {
+        "year": year,
+        "brand": (str(meta.get("brand") or "").strip() or None),
+        "theme": (str(meta.get("theme") or "").strip() or None),
+        "items_list": items_list,
+        "missing": missing,
+        "duplicates": [str(x).strip() for x in duplicates if str(x).strip()],
+        "shop_url": (str(meta.get("shop_url") or "").strip() or None),
+        "tutorial_url": (str(meta.get("tutorial_url") or "").strip() or None),
+    }
+
+
+def _ensure_items_list_catalog(
+    meta: dict,
+    *,
+    seed_tags: list[str] | None = None,
+    item_titles: list[str] | None = None,
+) -> list[str]:
+    """Keep Items list stable when Missing shrinks.
+
+    Seeds an empty catalog from ``seed_tags`` (Missing *before* a removal),
+    current Missing, and collected item titles. Never removes catalog entries;
+    collected titles are always folded in additively so a reduced Missing list
+    cannot erase the reference checklist.
+    """
+    seeded: list[str] = [
+        str(x).strip() for x in (meta.get("items_list") or []) if str(x).strip()
+    ]
+
+    def _add(tag: object) -> None:
+        t = str(tag or "").strip()
+        if not t:
+            return
+        if any(_tag_matches(s, t) for s in seeded):
+            return
+        seeded.append(t)
+
+    if not seeded:
+        for tag in seed_tags or []:
+            _add(tag)
+        for tag in meta.get("missing") or []:
+            _add(tag)
+    for title in item_titles or []:
+        _add(title)
+    meta["items_list"] = seeded
+    return seeded
+
+
+def _dump_collection_meta(meta: dict) -> str | None:
+    payload = {
+        "year": meta.get("year"),
+        "brand": meta.get("brand") or None,
+        "theme": meta.get("theme") or None,
+        "items_list": list(meta.get("items_list") or []),
+        "missing": list(meta.get("missing") or []),
+        "duplicates": list(meta.get("duplicates") or []),
+        "shop_url": meta.get("shop_url") or None,
+        "tutorial_url": meta.get("tutorial_url") or None,
+    }
+    # Drop empty lists / None-only payload noise but keep structure.
+    if not any(
+        [
+            payload["year"] is not None,
+            payload["brand"],
+            payload["theme"],
+            payload["items_list"],
+            payload["missing"],
+            payload["duplicates"],
+            payload["shop_url"],
+            payload["tutorial_url"],
+        ]
+    ):
+        return None
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _collection_is_limited(row: HobbyCollection) -> bool:
+    if bool(getattr(row, "hbc_limited", 0)):
+        return True
+    # Legacy: collection_total alone implied a finite set.
+    total = getattr(row, "hbc_collection_total", None)
+    try:
+        return total is not None and int(total) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _normalize_tag_list(raw: object | None) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        parts: list[str] = []
+        for line in raw.replace("\r", "").split("\n"):
+            for piece in re.split(r"[,|;]+", line):
+                p = piece.strip()
+                if p:
+                    parts.append(p)
+        raw = parts
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = str(item).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
+def _tag_matches(a: str, b: str) -> bool:
+    left = (a or "").strip().casefold()
+    right = (b or "").strip().casefold()
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    # "#12" / "12" convenience for sticker-style tags
+    def _num(s: str) -> str | None:
+        t = s.lstrip("#").strip()
+        return t if t.isdigit() else None
+
+    na, nb = _num(left), _num(right)
+    return na is not None and na == nb
+
+
+def serialize_collection(
+    row: HobbyCollection,
+    *,
+    item_count: int = 0,
+    item_titles: list[str] | None = None,
+) -> dict:
     custom_defs = _parse_custom_field_defs(
         getattr(row, "hbc_custom_fields_json", None)
     )
-    fields = collection_field_keys(row)
+    raw_fields = collection_field_keys(row)
+    limited = _collection_is_limited(row)
     collection_total = getattr(row, "hbc_collection_total", None)
     try:
         collection_total = (
@@ -646,9 +817,46 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
         collection_total = None
     if collection_total is not None and collection_total <= 0:
         collection_total = None
-    is_complete = (
-        collection_total is not None and item_count >= collection_total
+    meta = _collection_meta(row)
+    missing = meta["missing"]
+    if limited:
+        # Display/heal catalog without treating Missing as the Items list.
+        items_list = _ensure_items_list_catalog(
+            meta,
+            seed_tags=list(missing),
+            item_titles=item_titles,
+        )
+    else:
+        items_list = list(meta.get("items_list") or [])
+    missing_count = len(missing)
+    items_collected = None
+    completion_pct = None
+    if limited and collection_total is not None:
+        items_collected = max(0, int(collection_total) - missing_count)
+        completion_pct = (
+            round(100.0 * items_collected / collection_total, 1)
+            if collection_total > 0
+            else 0.0
+        )
+    is_complete = bool(
+        limited
+        and collection_total is not None
+        and collection_total > 0
+        and missing_count == 0
     )
+    pdf_url = None
+    if limited and "pdf_url" in raw_fields:
+        pdf_url = resolve_album_pdf_url(
+            _display_collection_name(row),
+            meta.get("year"),
+            theme=meta.get("theme"),
+        )
+    # Columns never include limited meta keys while limited (pdf stays
+    # as a stored toggle for the header, not a table column).
+    if limited:
+        fields = [f for f in raw_fields if f not in LIMITED_META_FIELD_KEYS]
+    else:
+        fields = raw_fields
     return {
         "id": row.hbc_id,
         "name": _display_collection_name(row),
@@ -663,7 +871,21 @@ def serialize_collection(row: HobbyCollection, *, item_count: int = 0) -> dict:
         "icon_path": row.hbc_icon_path,
         "private": collection_is_private(row),
         "item_count": item_count,
+        "limited": limited,
         "collection_total": collection_total,
+        "year": meta.get("year") if limited else None,
+        "brand": meta.get("brand") if limited else None,
+        "theme": meta.get("theme") if limited else None,
+        "items_list": items_list if limited else [],
+        "missing": missing if limited else [],
+        "duplicates": meta.get("duplicates") if limited else [],
+        "shop_url": meta.get("shop_url") if limited else None,
+        "tutorial_url": meta.get("tutorial_url") if limited else None,
+        "items_collected": items_collected if limited else None,
+        "missing_count": missing_count if limited else None,
+        "completion_pct": completion_pct if limited else None,
+        "pdf_url": pdf_url,
+        "pdf_enabled": bool(limited and "pdf_url" in raw_fields),
         "is_complete": is_complete,
         "created_at": row.hbc_created_at,
         "updated_at": row.hbc_updated_at,
@@ -734,33 +956,63 @@ def serialize_item(
     return payload
 
 
+def _collection_franchise_theme(coll: dict) -> str:
+    """Franchise for a collection: limited meta theme, else empty."""
+    if not coll.get("limited"):
+        return ""
+    return str(coll.get("theme") or "").strip()
+
+
+def _item_effective_theme(row: HobbyItem, coll: dict | None) -> str:
+    """Item theme column, else limited collection Franchise meta."""
+    item_theme = (row.hbi_theme or "").strip()
+    if item_theme:
+        return item_theme
+    if coll:
+        return _collection_franchise_theme(coll)
+    return ""
+
+
 def list_hobby_themes(
     db: Session, user_id: int, *, nsfw_unlocked: bool = False
 ) -> list[dict]:
-    """Distinct non-empty themes across visible collections (A→Z)."""
+    """Distinct franchises from item themes and limited collection meta (A→Z)."""
     collections, _hidden = list_collections(
         db, user_id, nsfw_unlocked=nsfw_unlocked
     )
-    col_ids = [int(c["id"]) for c in collections if c.get("id") is not None]
-    if not col_ids:
+    by_id = {int(c["id"]): c for c in collections if c.get("id") is not None}
+    if not by_id:
         return []
+    by_key: dict[str, dict] = {}
+
+    def _bump(theme: str, n: int = 1) -> None:
+        label = (theme or "").strip()
+        if not label:
+            return
+        key = label.casefold()
+        entry = by_key.get(key)
+        if entry is None:
+            by_key[key] = {"theme": label, "item_count": max(0, int(n))}
+        else:
+            entry["item_count"] = int(entry["item_count"]) + int(n)
+
+    # Collection-level Franchise (limited) must appear even with zero items.
+    for coll in by_id.values():
+        meta_theme = _collection_franchise_theme(coll)
+        if meta_theme:
+            _bump(meta_theme, 0)
+
     rows = db.scalars(
         select(HobbyItem).where(
             HobbyItem.hbi_user_id == user_id,
-            HobbyItem.hbi_collection_id.in_(col_ids),
+            HobbyItem.hbi_collection_id.in_(list(by_id.keys())),
         )
     ).all()
-    by_key: dict[str, dict] = {}
     for row in rows:
-        theme = (row.hbi_theme or "").strip()
-        if not theme:
-            continue
-        key = theme.casefold()
-        entry = by_key.get(key)
-        if entry is None:
-            by_key[key] = {"theme": theme, "item_count": 1}
-        else:
-            entry["item_count"] = int(entry["item_count"]) + 1
+        coll = by_id.get(int(row.hbi_collection_id))
+        theme = _item_effective_theme(row, coll)
+        if theme:
+            _bump(theme, 1)
     return sorted(by_key.values(), key=lambda t: str(t["theme"]).casefold())
 
 
@@ -771,7 +1023,7 @@ def list_items_by_theme(
     *,
     nsfw_unlocked: bool = False,
 ) -> list[dict]:
-    """Items matching theme across visible collections (theme column → collection)."""
+    """Items matching franchise via item theme or limited collection meta."""
     want = (theme or "").strip().casefold()
     if not want:
         return []
@@ -789,11 +1041,11 @@ def list_items_by_theme(
     ).all()
     out: list[dict] = []
     for row in rows:
-        item_theme = (row.hbi_theme or "").strip()
-        if not item_theme or item_theme.casefold() != want:
-            continue
         coll = by_id.get(int(row.hbi_collection_id))
         if not coll:
+            continue
+        effective = _item_effective_theme(row, coll)
+        if not effective or effective.casefold() != want:
             continue
         preset = str(coll.get("preset") or "generic")
         ser = serialize_item(row, preset, fields=list(coll.get("fields") or []))
@@ -802,6 +1054,19 @@ def list_items_by_theme(
         ser["collection_id"] = coll["id"]
         ser["collection_name"] = coll.get("name") or coll.get("preset_label")
         ser["collection_preset"] = preset
+        if not (ser.get("theme") or "").strip() and effective:
+            ser["theme"] = effective
+        # Limited sets: Franchises table inherits collection meta (not per-item).
+        if coll.get("limited"):
+            for key in ("brand", "year", "theme", "shop_url", "tutorial_url"):
+                coll_val = coll.get(key)
+                if coll_val is None or coll_val == "":
+                    continue
+                ser[key] = coll_val
+            if not (ser.get("type") or "").strip() and not (
+                ser.get("category") or ""
+            ).strip():
+                ser["type"] = "Limited Edition"
         out.append(ser)
     out.sort(
         key=lambda it: (
@@ -847,12 +1112,28 @@ def list_collections(
         if collection_is_private(row) and not nsfw_unlocked:
             hidden_private_presets.append(row.hbc_preset)
             continue
-        n = len(
-            db.scalars(
-                select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)
-            ).all()
+        items = db.scalars(
+            select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)
+        ).all()
+        titles = [
+            (it.hbi_title or "").strip()
+            for it in items
+            if (it.hbi_title or "").strip()
+        ]
+        meta_before = _collection_meta(row)
+        payload = serialize_collection(
+            row, item_count=len(items), item_titles=titles
         )
-        out.append(serialize_collection(row, item_count=n))
+        # Persist healed / expanded Items list for limited collections.
+        if _collection_is_limited(row) and payload.get("items_list"):
+            before_list = list(meta_before.get("items_list") or [])
+            after_list = list(payload.get("items_list") or [])
+            if after_list != before_list:
+                healed = dict(meta_before)
+                healed["items_list"] = after_list
+                row.hbc_meta_json = _dump_collection_meta(healed)
+        out.append(payload)
+    db.commit()
     return out, hidden_private_presets
 
 
@@ -895,10 +1176,61 @@ def _normalize_collection_total(value: object | None) -> int | None:
     try:
         n = int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as e:
-        raise ValueError("Collection total must be a positive whole number") from e
+        raise ValueError("Total must be a positive whole number") from e
     if n <= 0:
         return None
     return n
+
+
+def _apply_limited_fields(
+    fields: list[str] | None,
+    *,
+    limited: bool,
+    pdf_enabled: bool,
+) -> list[str] | None:
+    if fields is None:
+        return None
+    selected = [str(f).strip() for f in fields if str(f).strip()]
+    if not limited:
+        return selected
+    # Drop meta keys from columns; keep Collected / Complete % only if requested.
+    out = [f for f in selected if f not in LIMITED_META_FIELD_KEYS]
+    if pdf_enabled and "pdf_url" not in out:
+        # Stored toggle only — stripped from table columns on serialize.
+        out.append("pdf_url")
+    elif not pdf_enabled:
+        out = [f for f in out if f != "pdf_url"]
+    return out
+
+
+def _validate_limited_meta(
+    *,
+    total: int | None,
+    missing: list[str],
+    item_titles: list[str] | None = None,
+    allow_missing_item_conflicts: bool = False,
+) -> list[str]:
+    """Return conflicting missing tags that match existing item titles.
+
+    Raises ValueError when missing exceeds total.
+    """
+    if total is None:
+        raise ValueError("Limited collections require a Total greater than 0")
+    if len(missing) > total:
+        raise ValueError(
+            f"Missing ({len(missing)}) cannot exceed Total ({total})"
+        )
+    conflicts: list[str] = []
+    if item_titles:
+        for tag in missing:
+            if any(_tag_matches(tag, title) for title in item_titles if title):
+                conflicts.append(tag)
+    if conflicts and not allow_missing_item_conflicts:
+        raise ValueError(
+            "MISSING_ITEM_CONFLICT:"
+            + ",".join(conflicts)
+        )
+    return conflicts
 
 
 def create_collection(
@@ -910,7 +1242,11 @@ def create_collection(
     icon_path: str | None = None,
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
+    limited: bool = False,
     collection_total: int | None = None,
+    meta: dict | None = None,
+    pdf_enabled: bool = False,
+    allow_missing_item_conflicts: bool = False,
 ) -> dict:
     title = (name or "").strip()
     if not title:
@@ -924,14 +1260,55 @@ def create_collection(
     custom_defs = _parse_custom_field_defs(
         json.dumps(custom_fields or [], ensure_ascii=False)
     )
-    if fields is not None or custom_defs or preset_key in MULTI_INSTANCE_PRESETS:
+    limited_on = bool(limited)
+    total = _normalize_collection_total(collection_total) if limited_on else None
+    meta_in = dict(meta or {})
+    items_list = _normalize_tag_list(meta_in.get("items_list"))
+    missing = _normalize_tag_list(meta_in.get("missing"))
+    # Create: Items list seeds Missing when Missing was omitted.
+    if limited_on and items_list and not missing:
+        missing = list(items_list)
+    if limited_on and not items_list and missing:
+        items_list = list(missing)
+    duplicates = _normalize_tag_list(meta_in.get("duplicates"))
+    if limited_on:
+        _validate_limited_meta(
+            total=total,
+            missing=missing,
+            allow_missing_item_conflicts=True,
+        )
+        if fields is None:
+            fields = list(DEFAULT_CUSTOM_FIELDS)
+        field_keys = _apply_limited_fields(
+            _normalize_fields_selection(fields, custom_defs),
+            limited=True,
+            pdf_enabled=pdf_enabled,
+        )
+    elif fields is not None or custom_defs or preset_key in MULTI_INSTANCE_PRESETS:
         field_keys = _normalize_fields_selection(
             fields if fields is not None else list(DEFAULT_CUSTOM_FIELDS),
             custom_defs,
         )
     else:
         field_keys = None
-    total = _normalize_collection_total(collection_total)
+    meta_payload = {
+        "year": _parse_year(meta_in.get("year")) if limited_on else None,
+        "brand": (str(meta_in.get("brand") or "").strip() or None)
+        if limited_on
+        else None,
+        "theme": (str(meta_in.get("theme") or "").strip() or None)
+        if limited_on
+        else None,
+        "items_list": items_list if limited_on else [],
+        "missing": missing if limited_on else [],
+        "duplicates": duplicates if limited_on else [],
+        "shop_url": (str(meta_in.get("shop_url") or "").strip() or None)
+        if limited_on
+        else None,
+        "tutorial_url": (str(meta_in.get("tutorial_url") or "").strip() or None)
+        if limited_on
+        else None,
+    }
     now = _now_iso()
     row = HobbyCollection(
         hbc_user_id=user_id,
@@ -944,7 +1321,9 @@ def create_collection(
         hbc_custom_fields_json=(
             json.dumps(custom_defs, ensure_ascii=False) if custom_defs else None
         ),
-        hbc_collection_total=total,
+        hbc_limited=1 if limited_on else 0,
+        hbc_collection_total=total if limited_on else None,
+        hbc_meta_json=_dump_collection_meta(meta_payload) if limited_on else None,
         hbc_created_at=now,
         hbc_updated_at=now,
     )
@@ -965,7 +1344,11 @@ def create_custom_collection(
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
     icon_path: str | None = None,
+    limited: bool = False,
     collection_total: int | None = None,
+    meta: dict | None = None,
+    pdf_enabled: bool = False,
+    allow_missing_item_conflicts: bool = False,
 ) -> dict:
     """Create a named multi-instance collection (hub card)."""
     defs_in = list(custom_fields or [])
@@ -990,7 +1373,11 @@ def create_custom_collection(
         icon_path=icon_path,
         fields=fields,
         custom_fields=normalized_defs,
+        limited=limited,
         collection_total=collection_total,
+        meta=meta,
+        pdf_enabled=pdf_enabled,
+        allow_missing_item_conflicts=allow_missing_item_conflicts,
     )
 
 
@@ -1041,7 +1428,12 @@ def update_collection(
     fields: list[str] | None = None,
     custom_fields: list[dict] | None = None,
     set_fields: bool = False,
+    limited: bool | None = None,
     collection_total: object | None = ...,
+    meta: dict | None = None,
+    set_meta: bool = False,
+    pdf_enabled: bool | None = None,
+    allow_missing_item_conflicts: bool = False,
 ) -> dict | None:
     row = get_collection(db, user_id, collection_id)
     if not row:
@@ -1057,9 +1449,65 @@ def update_collection(
         row.hbc_icon_path = icon_path
     if private is not None:
         row.hbc_private = 1 if private else 0
+
+    limited_on = (
+        bool(limited) if limited is not None else _collection_is_limited(row)
+    )
+    if limited is not None:
+        row.hbc_limited = 1 if limited_on else 0
+        if not limited_on:
+            row.hbc_collection_total = None
+            row.hbc_meta_json = None
+
+    current_meta = _collection_meta(row)
+    if set_meta and meta is not None and limited_on:
+        items_list = _normalize_tag_list(meta.get("items_list"))
+        missing = _normalize_tag_list(meta.get("missing"))
+        if not items_list and missing and "items_list" not in meta:
+            items_list = list(current_meta.get("items_list") or missing)
+        current_meta = {
+            "year": _parse_year(meta.get("year")),
+            "brand": (str(meta.get("brand") or "").strip() or None),
+            "theme": (str(meta.get("theme") or "").strip() or None),
+            "items_list": items_list,
+            "missing": missing,
+            "duplicates": _normalize_tag_list(meta.get("duplicates")),
+            "shop_url": (str(meta.get("shop_url") or "").strip() or None),
+            "tutorial_url": (str(meta.get("tutorial_url") or "").strip() or None),
+        }
+
     if collection_total is not ...:
-        row.hbc_collection_total = _normalize_collection_total(collection_total)
-    if set_fields or fields is not None or custom_fields is not None:
+        row.hbc_collection_total = (
+            _normalize_collection_total(collection_total) if limited_on else None
+        )
+
+    if limited_on and (set_meta or collection_total is not ... or limited is not None):
+        items = db.scalars(
+            select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)
+        ).all()
+        titles = [(it.hbi_title or "").strip() for it in items]
+        conflicts = _validate_limited_meta(
+            total=row.hbc_collection_total,
+            missing=list(current_meta.get("missing") or []),
+            item_titles=titles,
+            allow_missing_item_conflicts=allow_missing_item_conflicts,
+        )
+        if conflicts and allow_missing_item_conflicts:
+            # Strip tags that already exist as items.
+            current_meta["missing"] = [
+                t
+                for t in (current_meta.get("missing") or [])
+                if not any(_tag_matches(t, c) for c in conflicts)
+            ]
+        row.hbc_meta_json = _dump_collection_meta(current_meta)
+
+    pdf_on = (
+        bool(pdf_enabled)
+        if pdf_enabled is not None
+        else ("pdf_url" in collection_field_keys(row))
+    )
+
+    if set_fields or fields is not None or custom_fields is not None or limited is not None or pdf_enabled is not None:
         defs_in = (
             custom_fields
             if custom_fields is not None
@@ -1088,6 +1536,10 @@ def update_collection(
             else collection_field_keys(row)
         )
         field_keys = _normalize_fields_selection(selected, normalized_defs)
+        if limited_on:
+            field_keys = _apply_limited_fields(
+                field_keys, limited=True, pdf_enabled=pdf_on
+            ) or field_keys
         row.hbc_fields_json = json.dumps(field_keys, ensure_ascii=False)
         row.hbc_custom_fields_json = (
             json.dumps(normalized_defs, ensure_ascii=False)
@@ -1403,10 +1855,32 @@ def upsert_item(
 
     # Qty 0 → delete (marbles decrement path)
     if row.hbi_quantity is not None and int(row.hbi_quantity) <= 0:
+        title_for_restore = (row.hbi_title or "").strip()
         _delete_asset_file(row.hbi_image_path)
         db.delete(row)
         db.commit()
-        return {"deleted": True, "id": item_id}
+        return {
+            "deleted": True,
+            "id": item_id,
+            "title": title_for_restore or None,
+            "limited": _collection_is_limited(coll),
+        }
+
+    # Limited sets: drop matching Missing tags when an item is saved.
+    # Items list is the catalog and must not shrink with Missing.
+    if _collection_is_limited(coll):
+        title = (row.hbi_title or "").strip()
+        if title:
+            meta = _collection_meta(coll)
+            before = list(meta.get("missing") or [])
+            after = [t for t in before if not _tag_matches(t, title)]
+            if len(after) != len(before):
+                _ensure_items_list_catalog(
+                    meta, seed_tags=before, item_titles=[title]
+                )
+                meta["missing"] = after
+                coll.hbc_meta_json = _dump_collection_meta(meta)
+                coll.hbc_updated_at = _now_iso()
 
     _remember_field_values(db, user_id, collection_id, body)
     db.commit()
@@ -1438,22 +1912,66 @@ def adjust_quantity(
     return serialize_item(row, coll.hbc_preset)
 
 
-def delete_item(db: Session, user_id: int, collection_id: int, item_id: int) -> bool:
+def delete_item(
+    db: Session,
+    user_id: int,
+    collection_id: int,
+    item_id: int,
+    *,
+    restore_missing: bool = False,
+) -> dict | None:
     row = db.get(HobbyItem, item_id)
     if not row or row.hbi_user_id != user_id or row.hbi_collection_id != collection_id:
-        return False
+        return None
+    coll = get_collection(db, user_id, collection_id)
+    title = (row.hbi_title or "").strip()
+    limited = bool(coll and _collection_is_limited(coll))
     _delete_asset_file(row.hbi_image_path)
     db.delete(row)
+    restored = False
+    if limited and restore_missing and title and coll is not None:
+        meta = _collection_meta(coll)
+        missing = list(meta.get("missing") or [])
+        total = getattr(coll, "hbc_collection_total", None)
+        try:
+            total_i = int(total) if total is not None else None
+        except (TypeError, ValueError):
+            total_i = None
+        already = any(_tag_matches(m, title) for m in missing)
+        if not already and (total_i is None or len(missing) < total_i):
+            _ensure_items_list_catalog(meta, item_titles=[title])
+            missing.append(title)
+            meta["missing"] = missing
+            coll.hbc_meta_json = _dump_collection_meta(meta)
+            coll.hbc_updated_at = _now_iso()
+            restored = True
     db.commit()
-    return True
+    return {
+        "ok": True,
+        "id": item_id,
+        "title": title or None,
+        "limited": limited,
+        "restored_missing": restored,
+    }
 
 
 def delete_items(
-    db: Session, user_id: int, collection_id: int, item_ids: list[int]
+    db: Session,
+    user_id: int,
+    collection_id: int,
+    item_ids: list[int],
+    *,
+    restore_missing: bool = False,
 ) -> int:
     n = 0
     for iid in item_ids:
-        if delete_item(db, user_id, collection_id, iid):
+        if delete_item(
+            db,
+            user_id,
+            collection_id,
+            iid,
+            restore_missing=restore_missing,
+        ):
             n += 1
     return n
 

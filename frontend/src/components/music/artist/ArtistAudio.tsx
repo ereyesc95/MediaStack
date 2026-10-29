@@ -126,12 +126,15 @@ export function useArtistAudio(
       return;
     }
     let cancelled = false;
-    const cached = refreshKey > 0 ? null : getCachedArtistAudio(bandId);
-    if (cached) {
-      setIndex(cached.audio);
-      setPlaylists(cached.playlists);
+    const force = refreshKey > 0;
+    const cached = force ? null : getCachedArtistAudio(bandId);
+
+    function applyAudio(audio: AudioIndexPayload) {
+      if (cancelled) return;
+      setIndex(audio);
+      setLoading(false);
       setCategory((prev) => {
-        const cat = pickAudioCategory(bandId, cached.audio, prev);
+        const cat = pickAudioCategory(bandId, audio, prev);
         if (compilationBoxSetsFromPending(bandId, cat)) {
           setCompilationBoxSetsOnly(true);
         }
@@ -140,62 +143,63 @@ export function useArtistAudio(
       clearPendingAudioCategory(bandId);
       setOfficialOnly(true);
       setSelectedPlaylist(null);
-      setLoading(false);
+    }
+
+    function scheduleStaleRefresh(audio: AudioIndexPayload) {
+      if (!audio.stale) return;
+      window.setTimeout(() => {
+        prefetchArtistAudio(bandId, { force: true })
+          .then((fresh) => {
+            if (!cancelled && !fresh.audio.stale) {
+              setIndex(fresh.audio);
+              setPlaylists(fresh.playlists);
+            }
+          })
+          .catch(() => {});
+      }, 2500);
+    }
+
+    if (cached) {
+      applyAudio(cached.audio);
+      setPlaylists(cached.playlists);
       setError(null);
-      prefetchArtistAudio(bandId, { force: true })
+      // Soft revalidate via disk/API cache (no forced folder rescan).
+      prefetchArtistAudio(bandId, {
+        revalidate: true,
+        onAudio: (audio) => {
+          if (!cancelled) setIndex(audio);
+        },
+      })
         .then((entry) => {
           if (cancelled) return;
           setIndex(entry.audio);
           setPlaylists(entry.playlists);
-          if (entry.audio.stale) {
-            window.setTimeout(() => {
-              prefetchArtistAudio(bandId, { force: true })
-                .then((fresh) => {
-                  if (!cancelled && !fresh.audio.stale) setIndex(fresh.audio);
-                })
-                .catch(() => {});
-            }, 2500);
-          }
+          scheduleStaleRefresh(entry.audio);
         })
         .catch(() => {});
       return () => {
         cancelled = true;
       };
     }
+
     setLoading(true);
     setError(null);
-    prefetchArtistAudio(bandId, { force: true })
+    prefetchArtistAudio(bandId, {
+      force,
+      onAudio: applyAudio,
+    })
       .then((entry) => {
         if (cancelled) return;
         setIndex(entry.audio);
         setPlaylists(entry.playlists);
-        setCategory((prev) => {
-          const cat = pickAudioCategory(bandId, entry.audio, prev);
-          if (compilationBoxSetsFromPending(bandId, cat)) {
-            setCompilationBoxSetsOnly(true);
-          }
-          return cat;
-        });
-        clearPendingAudioCategory(bandId);
-        setOfficialOnly(true);
-        setSelectedPlaylist(null);
-        if (entry.audio.stale) {
-          window.setTimeout(() => {
-            prefetchArtistAudio(bandId, { force: true })
-              .then((fresh) => {
-                if (!cancelled && !fresh.audio.stale) setIndex(fresh.audio);
-              })
-              .catch(() => {});
-          }, 2500);
-        }
+        setLoading(false);
+        scheduleStaleRefresh(entry.audio);
       })
       .catch((e) => {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;

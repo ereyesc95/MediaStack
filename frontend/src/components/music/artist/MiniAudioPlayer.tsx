@@ -20,43 +20,49 @@ export function useMiniAudio() {
 
   const loadSrc = useCallback(
     (url: string | null, autoPlay = false, options?: { restart?: boolean }) => {
-    if (!url) {
-      autoPlayRef.current = false;
-      srcRef.current = null;
-      setSrc(null);
-      setPlaying(false);
-      setProgress(0);
-      setDuration(0);
       const el = audioRef.current;
-      if (el) {
-        el.pause();
-        el.removeAttribute("src");
-        el.load();
-      }
-      return;
-    }
-    if (url === srcRef.current) {
-      const el = audioRef.current;
-      if (options?.restart && el) {
-        el.currentTime = 0;
+      if (!url) {
+        autoPlayRef.current = false;
+        srcRef.current = null;
+        setSrc(null);
+        setPlaying(false);
         setProgress(0);
+        setDuration(0);
+        if (el) {
+          el.pause();
+          el.removeAttribute("src");
+          el.load();
+        }
+        return;
       }
-      if (autoPlay) {
-        if (el) void el.play().catch(() => {});
+      if (url === srcRef.current) {
+        if (options?.restart && el) {
+          el.currentTime = 0;
+          setProgress(0);
+        }
+        if (autoPlay && el) void el.play().catch(() => {});
+        return;
       }
-      return;
-    }
-    autoPlayRef.current = autoPlay;
-    srcRef.current = url;
-    setSrc(url);
-  },
+      autoPlayRef.current = autoPlay;
+      srcRef.current = url;
+      setSrc(url);
+      // Start play in this user-gesture turn. Do not call load() first —
+      // on mobile Safari that resets the element and drops autoplay permission.
+      if (el) {
+        resumeBeatAudioContext();
+        el.src = url;
+        if (autoPlay) {
+          autoPlayRef.current = false;
+          void el.play().catch(() => {});
+        }
+      }
+    },
     []
   );
 
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !src) return;
-    el.load();
     const onTime = () => setProgress(el.currentTime);
     const onMeta = () => setDuration(el.duration || 0);
     const onPlay = () => setPlaying(true);
@@ -68,8 +74,13 @@ export function useMiniAudio() {
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnd);
+    // Only assign if loadSrc ran before <audio> mounted — never reload/interrupt.
+    if (!el.getAttribute("src")) {
+      el.src = src;
+    }
     if (autoPlayRef.current) {
       autoPlayRef.current = false;
+      resumeBeatAudioContext();
       void el.play().catch(() => {});
     }
     return () => {

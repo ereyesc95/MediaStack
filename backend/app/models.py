@@ -872,10 +872,14 @@ class HobbyCollection(Base):
     hbc_custom_fields_json: Mapped[str | None] = mapped_column(
         "hbcCustomFieldsJson", Text
     )
+    # Limited / finite set (vs evergrowing like marbles).
+    hbc_limited: Mapped[bool] = mapped_column("hbcLimited", Integer, default=0)
     # Optional finite size for the whole collection (e.g. 6 cans in a set).
     hbc_collection_total: Mapped[int | None] = mapped_column(
         "hbcCollectionTotal", Integer
     )
+    # Limited-set meta: year, brand, theme, missing, duplicates, shop_url, tutorial_url.
+    hbc_meta_json: Mapped[str | None] = mapped_column("hbcMetaJson", Text)
     hbc_created_at: Mapped[str | None] = mapped_column("hbcCreatedAt", Text)
     hbc_updated_at: Mapped[str | None] = mapped_column("hbcUpdatedAt", Text)
 
