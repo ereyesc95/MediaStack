@@ -531,6 +531,71 @@ def band_gallery_index(
     return payload
 
 
+class AddExternalReleaseBody(BaseModel):
+    """UI Audio category key (e.g. compilations) — destination for new .lnk files."""
+
+    category: str
+
+
+@router.post("/bands/{band_id}/media/audio/add-external")
+async def band_add_external_release(
+    band_id: int,
+    body: AddExternalReleaseBody,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Admin: pick external Music release folder(s) → .lnk under this artist's category."""
+    import asyncio
+
+    from app.artist_external_release import link_external_releases_to_artist
+    from app.band_library import AUDIO_CATEGORIES
+    from app.folder_picker import pick_folders
+    from app.media_index import refresh_audio_index_cache
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+    category = (body.category or "").strip()
+    if category not in AUDIO_CATEGORIES:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    root = settings.media_root
+    if not root:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+    media_root = Path(root).resolve()
+    music_root = media_root / "Music"
+    initial = str(music_root) if music_root.is_dir() else str(media_root)
+
+    loop = asyncio.get_running_loop()
+    try:
+        selected = await loop.run_in_executor(
+            None,
+            lambda: pick_folders(
+                title="Choose external Music release folder(s)",
+                initial_dir=initial,
+                allow_multiple=True,
+            ),
+        )
+    except Exception:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    if not selected:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    result = link_external_releases_to_artist(
+        host_artist_name=row.bnd_name or "",
+        category_key=category,
+        selected_folders=[Path(p) for p in selected],
+        media_root=media_root,
+    )
+    if result.get("created"):
+        try:
+            refresh_audio_index_cache(db, band_id)
+        except Exception:
+            pass
+    return {**result, "cancelled": False}
+
+
 @router.get("/bands/{band_id}/media/audio")
 def band_audio_index(
     band_id: int,

@@ -50,6 +50,7 @@ import {
   launchGame,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
+  addLeafAudio,
   updateSeriesFoldersFromTmdb,
   saveMoviesFilmTrailer,
   fetchMoviesRemote,
@@ -100,6 +101,11 @@ import {
   leafPageCacheKey,
   setCachedLeafPage,
 } from "../../leafPageCache";
+import {
+  readSessionEntry,
+  sessionCacheKey,
+  writeSessionEntry,
+} from "../../sessionCache";
 import type {
   ArtistCard as ArtistCardType,
   BandOverview,
@@ -632,6 +638,7 @@ type SubseriesMediaCacheEntry = {
   libraryCards: SeriesMediaCard[];
   gameCards: SeriesMediaCard[];
 };
+const MEDIA_CACHE_NS = "leaf-media-v1";
 const subseriesMediaCache = new Map<string, SubseriesMediaCacheEntry>();
 
 function cacheKey(
@@ -647,6 +654,29 @@ function cacheKey(
     id,
     isGame ? "game" : isBook ? "book" : isFilm ? "film" : "sub"
   );
+}
+
+function getCachedLeafMedia(key: string): SubseriesMediaCacheEntry | null {
+  const mem = subseriesMediaCache.get(key);
+  if (mem) return mem;
+  const fromSession = readSessionEntry<SubseriesMediaCacheEntry>(
+    sessionCacheKey(MEDIA_CACHE_NS, key)
+  );
+  if (fromSession) {
+    subseriesMediaCache.set(key, fromSession);
+    return fromSession;
+  }
+  return null;
+}
+
+function setCachedLeafMedia(key: string, entry: SubseriesMediaCacheEntry): void {
+  if (subseriesMediaCache.has(key)) subseriesMediaCache.delete(key);
+  subseriesMediaCache.set(key, entry);
+  while (subseriesMediaCache.size > 32) {
+    const oldest = subseriesMediaCache.keys().next().value;
+    if (oldest) subseriesMediaCache.delete(oldest);
+  }
+  writeSessionEntry(sessionCacheKey(MEDIA_CACHE_NS, key), entry);
 }
 
 function extraPlayUrl(ep: SeriesEpisodeItem): string | null {
@@ -827,25 +857,24 @@ export default function SeriesSubseriesPage({
     userId ? getStoredReleaseCardLayout(userId) : "cover"
   );
   const [gamePlatform, setGamePlatform] = useState<string>("all");
+  const initialMedia = getCachedLeafMedia(pageCacheKey);
   const [movieCards, setMovieCards] = useState<SeriesMediaCard[]>(
-    () => subseriesMediaCache.get(pageCacheKey)?.movieCards ?? []
+    () => initialMedia?.movieCards ?? []
   );
   const [seriesCards, setSeriesCards] = useState<SeriesMediaCard[]>(
-    () => subseriesMediaCache.get(pageCacheKey)?.seriesCards ?? []
+    () => initialMedia?.seriesCards ?? []
   );
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>(
-    () => subseriesMediaCache.get(pageCacheKey)?.audioCards ?? []
+    () => initialMedia?.audioCards ?? []
   );
   const [libraryCards, setLibraryCards] = useState<SeriesMediaCard[]>(
-    () => subseriesMediaCache.get(pageCacheKey)?.libraryCards ?? []
+    () => initialMedia?.libraryCards ?? []
   );
   const [gameCards, setGameCards] = useState<SeriesMediaCard[]>(
-    () => subseriesMediaCache.get(pageCacheKey)?.gameCards ?? []
+    () => initialMedia?.gameCards ?? []
   );
-  const [mediaLoading, setMediaLoading] = useState(
-    () => !subseriesMediaCache.has(pageCacheKey)
-  );
-  const [mediaReady, setMediaReady] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(() => !initialMedia);
+  const [mediaReady, setMediaReady] = useState(() => Boolean(initialMedia));
   const [rescanTick, setRescanTick] = useState(0);
   const [extraVideos, setExtraVideos] = useState<SeriesEpisodeItem[]>(
     () => initialCached?.extraVideos ?? []
@@ -1719,13 +1748,14 @@ export default function SeriesSubseriesPage({
     setMoviesExpanded(false);
     setGamePlatform("all");
     const mediaKey = cacheKey(isFilm, franchiseId, subseriesId, isBook, isGame);
-    const cachedMedia = subseriesMediaCache.get(mediaKey);
+    const cachedMedia = getCachedLeafMedia(mediaKey);
     if (cachedMedia) {
       setMovieCards(cachedMedia.movieCards);
       setSeriesCards(cachedMedia.seriesCards ?? []);
       setAudioCards(cachedMedia.audioCards);
       setLibraryCards(cachedMedia.libraryCards);
       setGameCards(cachedMedia.gameCards);
+      setMediaLoading(false);
       setMediaReady(true);
     } else {
       setMediaReady(false);
@@ -2492,7 +2522,7 @@ export default function SeriesSubseriesPage({
     }
     let cancelled = false;
     const mediaKey = cacheKey(isFilm, franchiseId, subseriesId, isBook, isGame);
-    const cachedMedia = subseriesMediaCache.get(mediaKey);
+    const cachedMedia = getCachedLeafMedia(mediaKey);
     const hadCachedMedia = Boolean(cachedMedia) && rescanTick === 0;
     if (hadCachedMedia && cachedMedia) {
       setMovieCards(cachedMedia.movieCards);
@@ -2500,6 +2530,7 @@ export default function SeriesSubseriesPage({
       setAudioCards(cachedMedia.audioCards);
       setLibraryCards(cachedMedia.libraryCards);
       setGameCards(cachedMedia.gameCards);
+      setMediaLoading(false);
       setMediaReady(true);
       if (isFilm && !isBook) {
         const siblingCards = siblingFilmMediaCards(siblings, subseriesId);
@@ -3410,7 +3441,7 @@ export default function SeriesSubseriesPage({
   useEffect(() => {
     if (!mediaReady) return;
     const key = cacheKey(isFilm, franchiseId, subseriesId, isBook, isGame);
-    subseriesMediaCache.set(key, {
+    setCachedLeafMedia(key, {
       movieCards,
       seriesCards,
       audioCards,
@@ -3425,6 +3456,7 @@ export default function SeriesSubseriesPage({
     libraryCards,
     gameCards,
     isFilm,
+    isBook,
     isGame,
     franchiseId,
     subseriesId,
@@ -3658,9 +3690,16 @@ export default function SeriesSubseriesPage({
     siblingMovieCount > 0 ||
     libraryCards.length > 0 ||
     relatedBookCount > 0;
-  // Leaf Audio tab: only real leaf/filtered cards — not franchise has_audio
-  // (that flag is true when a Music band shares the name).
-  const hasAudio = audioCards.length > 0;
+  // Audio tab: prefer live cards; fall back to leaf has_audio so the tab
+  // appears with Gallery/Movies as soon as overview/detail lands (not after
+  // the slower Audio/.lnk scan). Do not use franchise-level music-band flags.
+  const leafHasAudioFlag = Boolean(
+    detail?.has_audio ||
+      (isBook || isGame || (isFilm && !isBook)
+        ? overview?.media?.has_audio
+        : false)
+  );
+  const hasAudio = audioCards.length > 0 || leafHasAudioFlag;
   /** Top-bar player: only when we have real release cards (not empty Audio/ stubs). */
   const showAudioPlayer = audioCards.length > 0;
   const hasLibrary = isFilm
@@ -4549,7 +4588,8 @@ export default function SeriesSubseriesPage({
               !stacked ? (
                 <SeriesAudioPlayer
                   franchiseId={franchiseId}
-                  filmId={isFilm ? subseriesId : undefined}
+                  filmId={isFilm && !isBook ? subseriesId : undefined}
+                  bookId={isBook ? subseriesId : undefined}
                   gameId={isGame ? subseriesId : undefined}
                   enabled={showAudioPlayer}
                   onPlayingChange={setSeriesPlaying}
@@ -4559,7 +4599,8 @@ export default function SeriesSubseriesPage({
               ) : (
                 <SeriesAudioPlayer
                   franchiseId={franchiseId}
-                  filmId={isFilm ? subseriesId : undefined}
+                  filmId={isFilm && !isBook ? subseriesId : undefined}
+                  bookId={isBook ? subseriesId : undefined}
                   gameId={isGame ? subseriesId : undefined}
                   enabled={showAudioPlayer}
                   onPlayingChange={setSeriesPlaying}
@@ -4644,6 +4685,22 @@ export default function SeriesSubseriesPage({
               onEditAbout={
                 isAdmin && overview
                   ? () => setAboutEditOpen(true)
+                  : undefined
+              }
+              onAddAudio={
+                isAdmin && leafFolderPath
+                  ? () => {
+                      void (async () => {
+                        try {
+                          const result = await addLeafAudio(leafFolderPath);
+                          if (result.created > 0) {
+                            setRescanTick((t) => t + 1);
+                          }
+                        } catch {
+                          /* silent per product choice */
+                        }
+                      })();
+                    }
                   : undefined
               }
               onAddMember={

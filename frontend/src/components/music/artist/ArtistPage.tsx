@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  addExternalRelease,
   deleteBand,
   fetchBandOverview,
   fetchBandRelated,
@@ -28,7 +29,11 @@ import {
 import { musicStreamUrl } from "../../../musicStreamUrl";
 import { getStoredProfile } from "../../../auth";
 import { setCachedOverview } from "../../../overviewCache";
-import { getCachedArtistAudio, prefetchArtistAudio } from "../../../artistAudioCache";
+import {
+  clearArtistAudioCache,
+  getCachedArtistAudio,
+  prefetchArtistAudio,
+} from "../../../artistAudioCache";
 import {
   getCachedArtistGallery,
   clearArtistGalleryCache,
@@ -1474,6 +1479,32 @@ export default function ArtistPage({
               onEditAbout={
                 isAdmin && overviewTab === "about"
                   ? () => setAboutEditOpen(true)
+                  : undefined
+              }
+              onAddExternalRelease={
+                isAdmin &&
+                section === "audio" &&
+                Boolean(audioState.category) &&
+                audioState.category !== "playlists"
+                  ? () => {
+                      const category = audioState.category;
+                      void (async () => {
+                        try {
+                          const result = await addExternalRelease(
+                            bandId,
+                            category
+                          );
+                          if (result.created > 0) {
+                            clearArtistAudioCache(bandId);
+                            await prefetchArtistAudio(bandId, { force: true });
+                            setAudioRefreshKey((k) => k + 1);
+                            load({ silent: true });
+                          }
+                        } catch {
+                          /* silent per product choice */
+                        }
+                      })();
+                    }
                   : undefined
               }
               onRemoveArtist={

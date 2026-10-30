@@ -4,6 +4,7 @@ import {
   fetchSeriesPlayerTracks,
   fetchMoviesFilmPlayerTracks,
   fetchGamesGamePlayerTracks,
+  fetchBooksBookPlayerTracks,
 } from "../../api";
 import { IconMediaMusic } from "../MenuIcons";
 import { MiniAudioPlayerControls } from "../music/artist/MiniAudioPlayer";
@@ -30,6 +31,8 @@ type Props = {
   franchiseId: string;
   /** When set, load tracks from the film Audio/ folder instead of series. */
   filmId?: string;
+  /** When set, load tracks from the book Audio/ folder. */
+  bookId?: string;
   /** When set, load tracks from the game Audio/ folder. */
   gameId?: string;
   enabled?: boolean;
@@ -67,6 +70,7 @@ function displayTrackArtist(
 export default function SeriesAudioPlayer({
   franchiseId,
   filmId,
+  bookId,
   gameId,
   enabled = true,
   onPlayingChange,
@@ -142,15 +146,19 @@ export default function SeriesAudioPlayer({
     setLoading(true);
     const cacheKey = gameId
       ? `game:${gameId}`
-      : filmId
-        ? `film:${filmId}`
-        : `series:${franchiseId}`;
+      : bookId
+        ? `book:${bookId}`
+        : filmId
+          ? `film:${filmId}`
+          : `series:${franchiseId}`;
     try {
       const data = gameId
         ? await fetchGamesGamePlayerTracks(gameId)
-        : filmId
-          ? await fetchMoviesFilmPlayerTracks(filmId)
-          : await fetchSeriesPlayerTracks(franchiseId);
+        : bookId
+          ? await fetchBooksBookPlayerTracks(bookId)
+          : filmId
+            ? await fetchMoviesFilmPlayerTracks(filmId)
+            : await fetchSeriesPlayerTracks(franchiseId);
       const shuffled = shuffle(data.tracks || []);
       setTracks(shuffled);
       queueRef.current = shuffled;
@@ -174,7 +182,7 @@ export default function SeriesAudioPlayer({
     } finally {
       setLoading(false);
     }
-  }, [franchiseId, filmId, gameId, playAt]);
+  }, [franchiseId, filmId, bookId, gameId, playAt]);
 
   const indexForSharedPath = useCallback(() => {
     const path = sharedMeta.path;
@@ -204,9 +212,11 @@ export default function SeriesAudioPlayer({
 
   const scopeKey = gameId
     ? `game:${gameId}`
-    : filmId
-      ? `film:${filmId}`
-      : `series:${franchiseId}`;
+    : bookId
+      ? `book:${bookId}`
+      : filmId
+        ? `film:${filmId}`
+        : `series:${franchiseId}`;
 
   useEffect(() => {
     if (open && loadedForRef.current !== scopeKey) {

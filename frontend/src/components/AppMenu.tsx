@@ -46,6 +46,7 @@ import {
   IconCollection,
   IconImport,
   IconMediaGames,
+  IconMediaMusic,
 } from "./MenuIcons";
 
 type Props = {
@@ -150,6 +151,10 @@ type Props = {
   /** Leaf admin: Set episodes / Set links / Set volumes (remote URL media). */
   onSetRemoteMedia?: () => void;
   setRemoteMediaLabel?: string;
+  /** Leaf admin: pick Music release folder(s) and create Audio/.lnk shortcuts. */
+  onAddAudio?: () => void;
+  /** Artist Audio admin: pick external release folder(s) → .lnk in current category. */
+  onAddExternalRelease?: () => void;
   /**
    * Leaf Audio embed: Track data + Edit Release (between Edit data and Theme).
    * Handlers come from the embedded ReleasePage.
@@ -271,6 +276,8 @@ export default function AppMenu({
   addSimilarLabel = "Add similar artist",
   onSetRemoteMedia,
   setRemoteMediaLabel = "Set links",
+  onAddAudio,
+  onAddExternalRelease,
   embeddedReleaseMenu = null,
   onRefreshRelatedSimilar,
   onRefreshRelatedParticipations,
@@ -501,6 +508,8 @@ export default function AppMenu({
     isAdmin &&
     (onAddToUniverse ||
       onEditAbout ||
+      onAddAudio ||
+      onAddExternalRelease ||
       onRemoveArtist ||
       onAddMember ||
       onAddLink ||
@@ -722,6 +731,30 @@ export default function AppMenu({
             >
               <IconEditProfile className="menu-item-icon" />
               {updateLeafLabel}
+            </button>
+          )}
+          {onAddAudio && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddAudio();
+                setOpen(false);
+              }}
+            >
+              <IconMediaMusic className="menu-item-icon" />
+              Add audio
+            </button>
+          )}
+          {onAddExternalRelease && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddExternalRelease();
+                setOpen(false);
+              }}
+            >
+              <IconMediaMusic className="menu-item-icon" />
+              Add external release
             </button>
           )}
           {onRemoveArtist && (

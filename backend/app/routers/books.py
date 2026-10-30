@@ -360,6 +360,15 @@ def books_book_audio(book_id: str, db: Session = Depends(get_db)):
     return scan_folder_audio(db, detail.get("folder_path") or "")
 
 
+@router.get("/books/{book_id}/player-tracks")
+def books_book_player_tracks(book_id: str, db: Session = Depends(get_db)):
+    """Playable audio tracks from a book folder's Audio/ shortcuts."""
+    from app.series_extras import collect_book_audio_tracks
+
+    tracks = collect_book_audio_tracks(db, book_id)
+    return {"tracks": tracks, "count": len(tracks)}
+
+
 @router.get("/books/{book_id}/overview")
 def book_overview(
     book_id: str,

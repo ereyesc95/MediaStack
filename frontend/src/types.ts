@@ -1464,6 +1464,8 @@ export type ReleaseOverview = {
   next: ReleaseNeighbor | null;
   navigate_band_id: number;
   navigate_release_id: string;
+  /** Disk hint for Tracklist tab before full tracklist payload loads. */
+  has_tracklist?: boolean;
 };
 
 /** @deprecated Use AudioReleaseCard via lazy /media/audio endpoint */

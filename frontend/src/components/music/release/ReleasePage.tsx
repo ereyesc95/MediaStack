@@ -463,9 +463,18 @@ export default function ReleasePage({
           cached.extras.length > 0)
     );
   });
-  const [showTracklistTab, setShowTracklistTab] = useState(() =>
-    releaseTracklistHasTracks(getCachedReleaseTracklist(bandId, releaseId))
-  );
+  const [showTracklistTab, setShowTracklistTab] = useState(() => {
+    if (releaseTracklistHasTracks(getCachedReleaseTracklist(bandId, releaseId))) {
+      return true;
+    }
+    const ov = isReleaseId(releaseId)
+      ? getCachedReleaseOverview(bandId, releaseId)
+      : null;
+    if (ov?.has_tracklist === true) return true;
+    if (ov?.has_tracklist === false) return false;
+    // No definitive hint yet — show with Overview/Gallery; refine after fetch.
+    return true;
+  });
   const [tracklistVisibilityReady, setTracklistVisibilityReady] = useState(() =>
     getCachedReleaseTracklist(bandId, releaseId) != null
   );
@@ -1572,11 +1581,25 @@ export default function ReleasePage({
     if (cached) syncGalleryTabVisibility(cached);
   }, [playingPath, bandId, releaseId, syncGalleryTabVisibility]);
 
+  /* Show Tracklist with Overview as soon as overview hints tracks (or cache). */
+  useEffect(() => {
+    if (data?.has_tracklist) {
+      setShowTracklistTab(true);
+    }
+  }, [data?.has_tracklist, bandId, releaseId]);
+
   useEffect(() => {
     let cancelled = false;
-    setTracklistVisibilityReady(
-      getCachedReleaseTracklist(bandId, releaseId) != null
-    );
+    const cachedTl = getCachedReleaseTracklist(bandId, releaseId);
+    if (releaseTracklistHasTracks(cachedTl)) {
+      setShowTracklistTab(true);
+      setTracklistVisibilityReady(true);
+    } else if (data?.has_tracklist) {
+      setShowTracklistTab(true);
+      setTracklistVisibilityReady(cachedTl != null);
+    } else {
+      setTracklistVisibilityReady(cachedTl != null);
+    }
     void prefetchReleaseTracklist(bandId, releaseId)
       .then((payload) => {
         if (cancelled) return;
@@ -1585,13 +1608,14 @@ export default function ReleasePage({
       })
       .catch(() => {
         if (cancelled) return;
-        setShowTracklistTab(false);
+        // Keep overview hint until we know the fetch failed with no cache.
+        if (!data?.has_tracklist) setShowTracklistTab(false);
         setTracklistVisibilityReady(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [bandId, releaseId]);
+  }, [bandId, releaseId, data?.has_tracklist]);
 
   useEffect(() => {
     if (!showGalleryTab && tab === "gallery") {

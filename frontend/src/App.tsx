@@ -1830,6 +1830,33 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
+            onOpenMusicRelease={(bandId, releaseId) => {
+              if (view.franchiseId) {
+                saveReleaseReferrer({
+                  bandId,
+                  section: "audio",
+                  source: "books",
+                  franchiseId: view.franchiseId,
+                  subseriesId: view.bookId,
+                });
+              }
+              pushArtistRoute({
+                bandId,
+                section: "audio",
+                overviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+              setView({
+                kind: "music",
+                tab: "artists",
+                bandId,
+                artistSection: "audio",
+                artistOverviewTab: "about",
+                releaseId,
+                releaseTab: "overview",
+              });
+            }}
           />
         )}
 

@@ -127,9 +127,11 @@ export function useArtistAudio(
     }
     let cancelled = false;
     const force = refreshKey > 0;
-    const cached = force ? null : getCachedArtistAudio(bandId);
 
-    function applyAudio(audio: AudioIndexPayload) {
+    function applyAudio(
+      audio: AudioIndexPayload,
+      opts?: { resetFilters?: boolean }
+    ) {
       if (cancelled) return;
       setIndex(audio);
       setLoading(false);
@@ -141,8 +143,11 @@ export function useArtistAudio(
         return cat;
       });
       clearPendingAudioCategory(bandId);
-      setOfficialOnly(true);
-      setSelectedPlaylist(null);
+      if (opts?.resetFilters) {
+        setOfficialOnly(true);
+        setCompilationBoxSetsOnly(false);
+        setSelectedPlaylist(null);
+      }
     }
 
     function scheduleStaleRefresh(audio: AudioIndexPayload) {
@@ -158,6 +163,42 @@ export function useArtistAudio(
           .catch(() => {});
       }, 2500);
     }
+
+    // After mutations the caller force-prefetches then bumps refreshKey.
+    // Apply the warm cache immediately so new cards show without waiting
+    // for another round-trip (and without a late soft-revalidate clobber).
+    if (force) {
+      const warm = getCachedArtistAudio(bandId);
+      if (warm) {
+        applyAudio(warm.audio, { resetFilters: true });
+        setPlaylists(warm.playlists);
+        setError(null);
+      } else {
+        setLoading(true);
+        setError(null);
+      }
+      prefetchArtistAudio(bandId, {
+        force: true,
+        onAudio: (audio) => applyAudio(audio, { resetFilters: true }),
+      })
+        .then((entry) => {
+          if (cancelled) return;
+          setIndex(entry.audio);
+          setPlaylists(entry.playlists);
+          setLoading(false);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : String(e));
+            setLoading(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const cached = getCachedArtistAudio(bandId);
 
     if (cached) {
       applyAudio(cached.audio);
@@ -185,7 +226,7 @@ export function useArtistAudio(
     setLoading(true);
     setError(null);
     prefetchArtistAudio(bandId, {
-      force,
+      force: false,
       onAudio: applyAudio,
     })
       .then((entry) => {

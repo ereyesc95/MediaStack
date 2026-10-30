@@ -748,6 +748,26 @@ export async function fetchBandAudioIndex(
   );
 }
 
+/** Admin: native multi-folder picker → .lnk under artist's current Audio category. */
+export async function addExternalRelease(
+  bandId: number,
+  category: string
+): Promise<{
+  created: number;
+  skipped: number;
+  cancelled: boolean;
+}> {
+  return request(
+    `${API}/music/bands/${bandId}/media/audio/add-external`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category }),
+    },
+    300_000
+  );
+}
+
 export async function fetchReleaseOverview(
   bandId: number,
   releaseId: string,
@@ -2320,6 +2340,23 @@ export async function pickMediaRoot(): Promise<{
   );
 }
 
+/** Admin: native multi-folder picker → create leaf Audio/*.lnk to Music releases. */
+export async function addLeafAudio(folderPath: string): Promise<{
+  created: number;
+  skipped: number;
+  cancelled: boolean;
+}> {
+  return request(
+    `${API}/media/leaf-audio/add`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_path: folderPath }),
+    },
+    300_000
+  );
+}
+
 export async function setMediaRoot(path: string): Promise<{
   media_root: string;
   media_root_configured: boolean;
@@ -2453,6 +2490,20 @@ export async function fetchBooksBookAudio(bookId: string) {
   return request<{ releases: Array<Record<string, unknown>> }>(
     `${API}/books/books/${encodeURIComponent(bookId)}/media/audio`
   );
+}
+
+export async function fetchBooksBookPlayerTracks(bookId: string) {
+  return request<{
+    tracks: Array<{
+      id: string;
+      title: string;
+      play_url: string;
+      play_path?: string | null;
+      cover_url?: string | null;
+      artist?: string | null;
+    }>;
+    count: number;
+  }>(`${API}/books/books/${encodeURIComponent(bookId)}/player-tracks`);
 }
 
 export async function fetchMoviesFilterOptions() {

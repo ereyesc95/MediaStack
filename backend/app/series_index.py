@@ -110,6 +110,20 @@ def _has_exclusive_gallery(folder: Path) -> bool:
     return has_exclusive_gallery(folder)
 
 
+def _folder_has_audio(folder: Path) -> bool:
+    """True when Audio / [Audio] exists and has any entry (.lnk, category, …)."""
+    for audio_name in ("[Audio]", "Audio", "audio"):
+        d = folder / audio_name
+        if not d.is_dir():
+            continue
+        try:
+            if any(d.iterdir()):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _series_folder_cover(folder: Path, media_root: Path) -> str | None:
     """Portrait card art from Gallery/Covers or [Artwork].
 
@@ -1118,6 +1132,7 @@ def build_folder_detail(rel_path: str, media_root: Path | None = None) -> dict |
         "photocards": photocards,
         "has_gallery": _has_gallery(folder),
         "has_exclusive_gallery": _has_exclusive_gallery(folder),
+        "has_audio": _folder_has_audio(folder),
         "official": not is_unofficial_folder(folder.name),
     }
 

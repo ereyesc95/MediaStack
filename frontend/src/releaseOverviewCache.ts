@@ -7,8 +7,8 @@ import {
 } from "./sessionCache";
 
 const MAX_ENTRIES = 32;
-/* v16: Cover - Front preferred over Cover - Portrait for audio covers */
-const NAMESPACE = "release-overview-v16";
+/* v17: has_tracklist for early Tracklist tab chrome */
+const NAMESPACE = "release-overview-v17";
 
 type CacheKey = string;
 

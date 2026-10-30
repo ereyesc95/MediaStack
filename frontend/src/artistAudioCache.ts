@@ -27,6 +27,8 @@ type CacheKey = `${number}`;
 
 const store = new Map<CacheKey, ArtistAudioCacheEntry>();
 const inflight = new Map<CacheKey, Promise<ArtistAudioCacheEntry>>();
+/** Bumped on clear/force so late in-flight responses cannot overwrite fresher data. */
+const epoch = new Map<CacheKey, number>();
 
 function cacheKey(bandId: number): CacheKey {
   return `${bandId}`;
@@ -34,6 +36,16 @@ function cacheKey(bandId: number): CacheKey {
 
 function sessionKey(bandId: number): string {
   return sessionCacheKey(NAMESPACE, cacheKey(bandId));
+}
+
+function currentEpoch(key: CacheKey): number {
+  return epoch.get(key) ?? 0;
+}
+
+function bumpEpoch(key: CacheKey): number {
+  const next = currentEpoch(key) + 1;
+  epoch.set(key, next);
+  return next;
 }
 
 function remember(bandId: number, entry: ArtistAudioCacheEntry): void {
@@ -64,19 +76,24 @@ export function clearArtistAudioCache(bandId?: number): void {
     const key = cacheKey(bandId);
     store.delete(key);
     inflight.delete(key);
+    bumpEpoch(key);
     removeSessionEntry(sessionKey(bandId));
     return;
   }
   store.clear();
   inflight.clear();
+  epoch.clear();
 }
 
 async function fetchArtistAudioEntry(
   bandId: number,
   force = false,
-  onAudio?: (audio: AudioIndexPayload) => void
+  onAudio?: (audio: AudioIndexPayload) => void,
+  fetchEpoch = 0
 ): Promise<ArtistAudioCacheEntry> {
+  const key = cacheKey(bandId);
   const audioPromise = fetchBandAudioIndex(bandId, force).then((audio) => {
+    if (currentEpoch(key) !== fetchEpoch) return audio;
     const prev = getCachedArtistAudio(bandId);
     remember(bandId, {
       audio,
@@ -91,6 +108,14 @@ async function fetchArtistAudioEntry(
     audioPromise,
     playlistsPromise,
   ]);
+  if (currentEpoch(key) !== fetchEpoch) {
+    return (
+      getCachedArtistAudio(bandId) ?? {
+        audio,
+        playlists: playlistPayload.playlists,
+      }
+    );
+  }
   const entry: ArtistAudioCacheEntry = {
     audio,
     playlists: playlistPayload.playlists,
@@ -118,10 +143,17 @@ export function prefetchArtistAudio(
     if (existing) return existing;
   } else {
     inflight.delete(key);
+    if (force) bumpEpoch(key);
   }
 
-  const pending = fetchArtistAudioEntry(bandId, force, onAudio).finally(() => {
-    inflight.delete(key);
+  const fetchEpoch = currentEpoch(key);
+  const pending = fetchArtistAudioEntry(
+    bandId,
+    force,
+    onAudio,
+    fetchEpoch
+  ).finally(() => {
+    if (inflight.get(key) === pending) inflight.delete(key);
   });
 
   inflight.set(key, pending);

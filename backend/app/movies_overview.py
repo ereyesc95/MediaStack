@@ -49,6 +49,21 @@ def _ensure_franchise_index(media_root: Path):
     return index
 
 
+def _film_folder_has_audio(folder: Path | None) -> bool:
+    if folder is None or not folder.is_dir():
+        return False
+    for audio_name in ("[Audio]", "Audio", "audio"):
+        d = folder / audio_name
+        if not d.is_dir():
+            continue
+        try:
+            if any(d.iterdir()):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _group_links(links_raw: list) -> dict:
     by_cat: dict[str, list] = {
         "social": [],
@@ -886,7 +901,7 @@ def build_film_overview(
         "logos_switchable": bool(lang_logos.get("logos_switchable")),
         "cast": cast,
         "media": {
-            "has_audio": False,
+            "has_audio": _film_folder_has_audio(film_dir),
             "has_series": bool(related_disk.get("series")),
             "has_movies": False,
             "has_library": bool(related_disk.get("books")),

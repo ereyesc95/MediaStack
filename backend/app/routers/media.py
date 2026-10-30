@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.config import settings
+from app.deps import require_admin
+from app.folder_picker import pick_folders
 from app.franchise_index import (
     build_franchise_index,
     franchise_slug_for_path,
@@ -15,8 +19,14 @@ from app.franchise_index import (
     related_for_path,
     save_franchise_index,
 )
+from app.leaf_audio_link import link_music_releases_to_leaf
+from app.models import User
 
 router = APIRouter(prefix="/api/media", tags=["media"])
+
+
+class LeafAudioAddBody(BaseModel):
+    folder_path: str
 
 
 def _ensure_index():
@@ -75,6 +85,56 @@ def _enrich_buckets(
             stamped.append(row)
         out[bucket] = _enrich_related_cards(stamped, root)
     return out
+
+
+@router.post("/leaf-audio/add")
+async def add_leaf_audio(
+    body: LeafAudioAddBody,
+    _admin: User = Depends(require_admin),
+):
+    """Admin: pick Music release folder(s) and create Audio/.lnk under a leaf.
+
+    Silent on cancel / invalid picks — returns created/skipped counts only.
+    """
+    root = settings.media_root
+    if not root:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+    media_root = Path(root).resolve()
+    cleaned = (body.folder_path or "").replace("\\", "/").strip().lstrip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        return {"created": 0, "skipped": 0, "cancelled": True}
+    leaf = (media_root / cleaned).resolve()
+    try:
+        leaf.relative_to(media_root)
+    except ValueError:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+    if not leaf.is_dir():
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    music_root = media_root / "Music"
+    initial = str(music_root) if music_root.is_dir() else str(media_root)
+    loop = asyncio.get_running_loop()
+    try:
+        selected = await loop.run_in_executor(
+            None,
+            lambda: pick_folders(
+                title="Choose Music release folder(s)",
+                initial_dir=initial,
+                allow_multiple=True,
+            ),
+        )
+    except Exception:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    if not selected:
+        return {"created": 0, "skipped": 0, "cancelled": True}
+
+    result = link_music_releases_to_leaf(
+        leaf_folder=leaf,
+        selected_folders=[Path(p) for p in selected],
+        media_root=media_root,
+    )
+    return {**result, "cancelled": False}
 
 
 @router.post("/open-local")

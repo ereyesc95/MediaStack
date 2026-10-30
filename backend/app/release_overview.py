@@ -552,6 +552,25 @@ def _collect_release_audio_files(root: Path) -> list[Path]:
     return files
 
 
+def _release_has_tracklist(root: Path) -> bool:
+    """Cheap existence check for Tracklist tab (any audio / track shortcut)."""
+    if not root.is_dir():
+        return False
+    skip = {"desktop.ini", "folder.ico", "thumbs.db"}
+    try:
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if path.name.casefold() in skip:
+                continue
+            suf = path.suffix.casefold()
+            if suf in AUDIO_EXTS or suf in {".lnk", ".path"}:
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def _featured_artists_for_release(
     db: Session,
     media_root: Path,
@@ -1060,6 +1079,8 @@ def build_release_overview(
         "next": next_r,
         "navigate_band_id": card.get("navigate_band_id") or band_id,
         "navigate_release_id": card.get("navigate_release_id") or card["id"],
+        # Early tab chrome — refined when full tracklist fetch completes.
+        "has_tracklist": _release_has_tracklist(content),
     }
 
     payload = _enrich_from_db(db, band_id, payload["title"], payload)
