@@ -1550,6 +1550,199 @@ input {
   overflow: hidden;
 }
 
+.dash-row--listening {
+  flex: 0 0 auto;
+}
+.listening-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  width: 100%;
+  padding: 0.35rem 0.15rem 0.15rem;
+}
+.listening-strip__streak {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+.listening-strip__streak strong {
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.listening-strip__streak span {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.listening-strip__meta {
+  font-size: 0.78rem;
+  flex: 1 1 auto;
+}
+.listening-strip__wrapped {
+  margin-left: auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.music-wrapped {
+  width: min(28rem, 94vw);
+  max-height: min(88vh, 40rem);
+  overflow: auto;
+  background: color-mix(in srgb, var(--bg) 94%, #1a1420);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 0.85rem;
+  padding: 1.15rem 1.2rem 1.35rem;
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 45%, transparent);
+  position: relative;
+}
+.music-wrapped__header {
+  margin-bottom: 1rem;
+  padding-right: 2rem;
+}
+.music-wrapped__eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+.music-wrapped__title {
+  margin: 0.2rem 0 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.music-wrapped__close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.7rem;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.music-wrapped__close:hover { opacity: 1; }
+.music-wrapped__status,
+.music-wrapped__empty {
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+}
+.music-wrapped__empty p { margin: 0 0 0.35rem; }
+.music-wrapped__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+.music-wrapped__stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.4rem;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  text-align: center;
+}
+.music-wrapped__stats strong {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.music-wrapped__stats span {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.music-wrapped__section { margin-top: 0.85rem; }
+.music-wrapped__section h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.music-wrapped__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.music-wrapped__row {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.25rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.music-wrapped__row:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.music-wrapped__row img,
+.music-wrapped__art-fallback {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.3rem;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.music-wrapped__row strong {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.music-wrapped__row em {
+  display: block;
+  font-style: normal;
+  font-size: 0.72rem;
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.music-wrapped__count {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.music-wrapped__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+}
+.music-wrapped__chips span {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+}
+@media (max-width: 520px) {
+  .music-wrapped__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .listening-strip__wrapped { margin-left: 0; }
+}
+
 /* Player bar visible: rows already flex-shrink. Do not clamp card sizes —
    hover titles sit on the covers, so shrinking them leaves empty pane space
    and hiding the bar would not restore the old clamps. */
@@ -26592,6 +26785,218 @@ button.lyrics-status-badge--icon-only {
 .collection-browse__empty-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
 .collection-browse__empty-actions .btn { font-size: 0.78rem; display: inline-flex; align-items: center; gap: 0.35rem; }
 .collection-browse__empty-icon { width: 0.95rem; height: 0.95rem; flex-shrink: 0; }
+
+/* —— Vinyl shelf (collection layout) —— */
+.vinyl-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.75rem 0 1.5rem;
+  min-height: 16rem;
+}
+.vinyl-shelf--empty {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1rem;
+  gap: 0.35rem;
+}
+.vinyl-shelf--empty p { margin: 0; font-size: 0.95rem; }
+.vinyl-shelf__stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.2rem;
+  min-height: 11.5rem;
+  padding: 0.5rem 0.35rem 0;
+  overflow-x: auto;
+}
+.vinyl-shelf__spine {
+  appearance: none;
+  border: 0;
+  position: relative;
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 10.5rem;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 0.12rem 0.12rem 0 0;
+  background: var(--spine-tone, #3a3340);
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #000 35%, transparent),
+    inset 1px 0 0 color-mix(in srgb, #fff 12%, transparent),
+    0 0 0 1px color-mix(in srgb, #000 25%, transparent);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, margin 0.22s ease;
+  transform-origin: bottom center;
+}
+.vinyl-shelf__spine--ten { height: 8.75rem; width: 1.4rem; }
+.vinyl-shelf__spine--seven { height: 6.5rem; width: 1.15rem; }
+.vinyl-shelf__spine-art {
+  position: absolute;
+  inset: 0;
+  background-image: var(--spine-art);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+.vinyl-shelf__spine-label {
+  position: absolute;
+  inset: 0.45rem 0.12rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: color-mix(in srgb, #fff 92%, transparent);
+  text-shadow: 0 1px 2px color-mix(in srgb, #000 70%, transparent);
+  font-size: 0.58rem;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  pointer-events: none;
+}
+.vinyl-shelf__spine-artist {
+  opacity: 0.78;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 42%;
+}
+.vinyl-shelf__spine-title {
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 55%;
+}
+.vinyl-shelf__spine:hover,
+.vinyl-shelf__spine:focus-visible {
+  transform: translateY(-0.45rem);
+  z-index: 2;
+  outline: none;
+}
+.vinyl-shelf__spine.is-pulled {
+  transform: translateY(-1.1rem);
+  z-index: 3;
+  margin-inline: 0.35rem;
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, #000 35%, transparent),
+    inset 1px 0 0 color-mix(in srgb, #fff 12%, transparent),
+    0 8px 18px color-mix(in srgb, #000 35%, transparent);
+}
+.vinyl-shelf__plank {
+  height: 0.55rem;
+  margin: -0.15rem 0 0;
+  border-radius: 0.15rem;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #8b6914 55%, var(--bg)) 0%,
+      color-mix(in srgb, #5c4210 70%, var(--bg)) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent),
+    0 2px 6px color-mix(in srgb, #000 22%, transparent);
+}
+.vinyl-shelf__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  text-align: center;
+}
+.vinyl-shelf__pullout {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 10rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  padding: 0.35rem 0.25rem 0.5rem;
+  animation: vinyl-shelf-pull 0.28s ease;
+}
+@keyframes vinyl-shelf-pull {
+  from { opacity: 0; transform: translateY(0.4rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.vinyl-shelf__sleeve {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.2rem;
+  overflow: visible;
+}
+.vinyl-shelf__sleeve-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.15rem;
+  box-shadow: 0 6px 16px color-mix(in srgb, #000 35%, transparent);
+  position: relative;
+  z-index: 2;
+}
+.vinyl-shelf__disc {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  left: 42%;
+  width: 84%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%,
+      #1a1a1a 0 12%,
+      #2c2c2c 13% 14%,
+      #111 15% 48%,
+      #3a3a3a 49% 50%,
+      #151515 51% 100%);
+  box-shadow: 0 4px 12px color-mix(in srgb, #000 40%, transparent);
+  z-index: 1;
+  transition: transform 0.35s ease;
+}
+.vinyl-shelf__sleeve:hover .vinyl-shelf__disc,
+.vinyl-shelf__sleeve:focus-visible .vinyl-shelf__disc {
+  transform: translateX(18%);
+}
+.vinyl-shelf__meta { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.vinyl-shelf__meta-artist {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.vinyl-shelf__meta-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.vinyl-shelf__meta-line { margin: 0.15rem 0 0; font-size: 0.8rem; }
+.vinyl-shelf__meta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+@media (max-width: 640px) {
+  .vinyl-shelf__pullout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+  .vinyl-shelf__sleeve { max-width: 11rem; }
+  .vinyl-shelf__meta-actions { justify-content: center; }
+  .vinyl-shelf__spine { width: 1.35rem; height: 9rem; }
+  .vinyl-shelf__spine--ten { height: 7.5rem; }
+  .vinyl-shelf__spine--seven { height: 5.75rem; }
+}
+
 .collection-browse__pager { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.78rem; }
 .collection-browse__pager-nav { display: flex; gap: 0.5rem; align-items: center; }
 .collection-import-preview { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.75rem; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 0.5rem; font-size: 0.82rem; }
@@ -32189,12 +32594,37 @@ button.lyrics-status-badge--icon-only {
     column-count: 1;
   }
 }
+.files-module__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  margin-bottom: 0.65rem;
+}
+.files-module__sel-count,
+.files-module__upload-hint {
+  font-size: 0.85em;
+}
 .files-module__row {
   break-inside: avoid;
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
   padding: 0.15rem 0;
+}
+.files-module__row.is-selected .files-module__file-name {
+  color: var(--accent, #8cf);
+}
+.files-module__check {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.files-module__check input {
+  margin: 0;
+  cursor: pointer;
 }
 .files-module__file {
   appearance: none;
@@ -32214,6 +32644,61 @@ button.lyrics-status-badge--icon-only {
 }
 .files-module__file-name {
   word-break: break-word;
+}
+.files-module__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+.files-module__actions .ghost {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.35rem;
+  opacity: 0.75;
+}
+.files-module__actions .ghost:hover {
+  opacity: 1;
+}
+.franchise-links-modal {
+  max-width: min(720px, 96vw);
+  max-height: min(85vh, 900px);
+  overflow: auto;
+}
+.franchise-links-modal__table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+.franchise-links-modal__row,
+.franchise-links-modal__override {
+  display: grid;
+  gap: 0.35rem;
+  align-items: center;
+}
+.franchise-links-modal__row {
+  grid-template-columns: 1fr auto 1fr auto;
+}
+.franchise-links-modal__override {
+  grid-template-columns: 6.5rem 1fr;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #444) 70%, transparent);
+}
+.franchise-links-modal__override select,
+.franchise-links-modal__override input,
+.franchise-links-modal__row input {
+  width: 100%;
+  min-width: 0;
+}
+.franchise-links-modal__warn {
+  color: color-mix(in srgb, #c9a227 85%, var(--text, #eee));
+  margin: 0.35rem 0 0;
+  font-size: 0.92em;
+}
+@media (min-width: 640px) {
+  .franchise-links-modal__override {
+    grid-template-columns: 6.5rem 1fr 1fr 1fr auto;
+  }
 }
 .sr-only {
   position: absolute;

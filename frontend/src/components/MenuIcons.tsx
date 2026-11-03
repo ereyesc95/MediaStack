@@ -135,6 +135,28 @@ export function IconCardBanner({ className }: IconProps) {
   );
 }
 
+/** Vinyl shelf — plank + upright spines. */
+export function IconCardShelf({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        d="M3 19h18"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        d="M5 19V8M9 19V6M13 19V9M17 19V7M20 19V10"
+      />
+    </svg>
+  );
+}
+
 export function IconCardRound({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="20" height="20" aria-hidden>

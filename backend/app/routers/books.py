@@ -92,7 +92,15 @@ def books_catalog(
             enrich_catalog_with_music_identity,
         )
 
-        catalog = build_books_catalog()
+        from pathlib import Path
+
+        from app.config import settings
+        from app.module_catalog_cache import get_or_build_catalog
+
+        root = Path(settings.media_root or "")
+        catalog = get_or_build_catalog(
+            "books", media_root=root, builder=build_books_catalog
+        )
         catalog = enrich_books_catalog(db, catalog)
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"

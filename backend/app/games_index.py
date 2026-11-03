@@ -706,12 +706,15 @@ def resolve_games_path(
             game_dir = root / "/".join(parts[:5])
             if game_dir.is_dir():
                 rel = game_dir.relative_to(root).as_posix()
+                _date, game_title = parse_dated_folder_name(parts[4])
                 return {
                     "franchise_id": franchise_id,
                     "game_id": _game_id(rel),
                     "platform": platform,
                     "letter": letter,
                     "path": rel,
+                    "name": franchise_name,
+                    "game_title": game_title or parts[4],
                 }
         return {
             "franchise_id": franchise_id,
@@ -719,5 +722,7 @@ def resolve_games_path(
             "platform": platform,
             "letter": letter,
             "path": "/".join(parts[:4]),
+            "name": franchise_name,
+            "game_title": None,
         }
     return None

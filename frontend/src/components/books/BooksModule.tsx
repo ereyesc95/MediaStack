@@ -3,6 +3,7 @@ import {
   fetchBooksCatalog,
   fetchBooksFilterOptions,
   resolveBooksPath,
+  resolveGamesPath,
   resolveMoviesPath,
 } from "../../api";
 import {
@@ -132,6 +133,12 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  onOpenGamesFranchise?: (
+    franchiseId: string,
+    gameId?: string,
+    section?: string,
+    universeId?: number
+  ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (
     bandId: number,
@@ -167,6 +174,7 @@ export default function BooksModule({
   onNavigate,
   onOpenSeriesFranchise,
   onOpenMoviesFranchise,
+  onOpenGamesFranchise,
   onOpenMusicRelease,
   onOpenArtist,
   onOpenUniversePage,
@@ -886,6 +894,16 @@ export default function BooksModule({
             })
             .catch(() => {});
         }}
+        onOpenGamesPath={(path) => {
+          void resolveGamesPath(path)
+            .then((hit) => {
+              onOpenGamesFranchise?.(
+                hit.franchise_id,
+                hit.game_id ?? undefined
+              );
+            })
+            .catch(() => {});
+        }}
         onNavigate={(patch) => {
           const nextFilmId =
             "subseriesId" in patch ? patch.subseriesId : bookId;
@@ -1007,6 +1025,16 @@ export default function BooksModule({
                 overviewTab: "about",
                 universeId,
               });
+            })
+            .catch(() => {});
+        }}
+        onOpenGamesPath={(path) => {
+          void resolveGamesPath(path)
+            .then((hit) => {
+              onOpenGamesFranchise?.(
+                hit.franchise_id,
+                hit.game_id ?? undefined
+              );
             })
             .catch(() => {});
         }}

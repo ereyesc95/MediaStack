@@ -434,7 +434,7 @@ export default function SeriesHome({
       <section className="dash-row dash-row--flags">
         <DashPaneLabel
           logo="/api/assets/icons/pane-global"
-          title="GLOBAL ACTS"
+          title="ORIGINS"
           subtitle="Origins of your content"
         />
         <div className="dash-scroll dash-scroll--flags">
@@ -466,6 +466,13 @@ export default function SeriesHome({
         </div>
       </section>
       </>
+      {!loading &&
+      !topFranchises.length &&
+      !topSeries.length ? (
+        <p className="muted module-placeholder">
+          No series found under Series/ — add show folders to get started.
+        </p>
+      ) : null}
     </div>
   );
 }

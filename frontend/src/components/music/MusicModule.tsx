@@ -51,8 +51,11 @@ import ReleaseCardLayoutPicker from "../ReleaseCardLayoutPicker";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import type { ArtistOverviewTab, ArtistSection } from "../../types";
 import {
+  getStoredCollectionLayout,
   getStoredReleaseCardLayout,
+  saveCollectionLayout,
   saveReleaseCardLayout,
+  type CollectionBrowseLayout,
 } from "../../themes";
 import ManageArtistsModal from "./ManageArtistsModal";
 import AddPlaylistModal, { markSpotifyCredentialsRepair } from "./AddPlaylistModal";
@@ -181,6 +184,16 @@ type Props = {
     filmId: string,
     opts?: { franchiseName?: string; filmTitle?: string }
   ) => void;
+  onOpenBooksLeaf?: (
+    franchiseId: string,
+    bookId?: string,
+    opts?: { franchiseName?: string; bookTitle?: string }
+  ) => void;
+  onOpenGamesLeaf?: (
+    franchiseId: string,
+    gameId?: string,
+    opts?: { franchiseName?: string; gameTitle?: string }
+  ) => void;
 };
 
 export default function MusicModule({
@@ -229,10 +242,21 @@ export default function MusicModule({
   onBackToPhotos,
   onOpenSeriesFolder,
   onOpenMoviesLeaf,
+  onOpenBooksLeaf,
+  onOpenGamesLeaf,
 }: Props) {
   const [showManageArtists, setShowManageArtists] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
-  const [collectionView, setCollectionView] = useState<"list" | "cover" | "banner">("list");
+  const [collectionView, setCollectionView] = useState<CollectionBrowseLayout>(
+    () => (userId ? getStoredCollectionLayout(userId) : "list")
+  );
+  const setCollectionViewPersisted = useCallback(
+    (next: CollectionBrowseLayout) => {
+      setCollectionView(next);
+      if (userId) saveCollectionLayout(userId, next);
+    },
+    [userId]
+  );
   const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const pendingCollectionManual = useRef(false);
@@ -531,6 +555,10 @@ export default function MusicModule({
 
   useEffect(() => {
     if (userId) setAlbumCardLayout(getStoredReleaseCardLayout(userId));
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) setCollectionView(getStoredCollectionLayout(userId));
   }, [userId]);
 
   useEffect(() => {
@@ -1405,7 +1433,7 @@ export default function MusicModule({
               {tab === "collection" && collectionHasItems ? (
                 <CollectionLayoutPicker
                   value={collectionView}
-                  onChange={setCollectionView}
+                  onChange={setCollectionViewPersisted}
                 />
               ) : null}
               {tab === "events" && !portraitMenuChrome ? (
@@ -2072,6 +2100,8 @@ export default function MusicModule({
           }
           onOpenMoviesLeaf={onOpenMoviesLeaf}
           onOpenSeriesFolder={onOpenSeriesFolder}
+          onOpenBooksLeaf={onOpenBooksLeaf}
+          onOpenGamesLeaf={onOpenGamesLeaf}
           onOpenTour={(tour) => {
             tourEntryRef.current = "artist";
             pushArtistRoute({
@@ -2334,7 +2364,7 @@ export default function MusicModule({
         <CollectionBrowse
           isAdmin={isAdmin}
           view={collectionView}
-          onViewChange={setCollectionView}
+          onViewChange={setCollectionViewPersisted}
           manageApiRef={collectionManageRef}
           onInventoryChange={setCollectionHasItems}
           onClearModeChange={setCollectionClearMode}

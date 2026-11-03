@@ -28,7 +28,16 @@ def series_catalog(
         enrich_catalog_with_music_identity,
     )
 
-    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    from pathlib import Path
+
+    from app.config import settings
+    from app.module_catalog_cache import get_or_build_catalog
+
+    root = Path(settings.media_root or "")
+    fs_catalog = get_or_build_catalog(
+        "series", media_root=root, builder=build_series_catalog
+    )
+    catalog = enrich_catalog_metadata(db, fs_catalog)
     catalog = enrich_catalog_with_music_identity(
         db, catalog, orientation="portrait"
     )

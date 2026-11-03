@@ -440,7 +440,7 @@ export default function MoviesHome({
       <section className="dash-row dash-row--flags">
         <DashPaneLabel
           logo="/api/assets/icons/pane-global"
-          title="GLOBAL ACTS"
+          title="ORIGINS"
           subtitle="Origin of your content"
         />
         <div className="dash-scroll dash-scroll--flags">
@@ -472,6 +472,13 @@ export default function MoviesHome({
         </div>
       </section>
       </>
+      {!loading &&
+      !topFranchises.length &&
+      !topFilms.length ? (
+        <p className="muted module-placeholder">
+          No movies found under Movies/ — add franchise folders to get started.
+        </p>
+      ) : null}
     </div>
   );
 }

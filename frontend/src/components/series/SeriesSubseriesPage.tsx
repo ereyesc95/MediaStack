@@ -185,6 +185,7 @@ import SeriesAudioPlayer from "./SeriesAudioPlayer";
 import SeriesCast, { languageHasCharacterCast } from "./SeriesCast";
 import SeriesEpisodeList from "./SeriesEpisodeList";
 import SeriesGalleryPanel from "./SeriesGalleryPanel";
+import ConfirmDialog from "../ConfirmDialog";
 import SeriesMediaGrid, {
   type SeriesMediaCard,
   useSeriesAudioCategories,
@@ -1445,11 +1446,13 @@ export default function SeriesSubseriesPage({
   }, [userId]);
 
   useEffect(() => {
+    const routeFranchiseId =
+      (overview?.slug || franchiseId).trim() || franchiseId;
     if (isGame) {
       const gamesSection = tabToSection(tab) as import("../../gamesRoute").GamesSection;
       pushGamesRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName: franchiseName || undefined,
           gameId: subseriesId,
           gameTitle: overview?.name || detail?.title || card?.title || undefined,
@@ -1469,7 +1472,7 @@ export default function SeriesSubseriesPage({
           : (moviesSection as import("../../booksRoute").BooksSection);
       pushBooksRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName: franchiseName || undefined,
           bookId: subseriesId,
           bookTitle:
@@ -1496,7 +1499,7 @@ export default function SeriesSubseriesPage({
         undefined;
       pushMoviesRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName: workName,
           filmId: subseriesId,
           filmTitle: leafTitle,
@@ -1510,7 +1513,7 @@ export default function SeriesSubseriesPage({
     }
     pushSeriesRoute(
       {
-        franchiseId,
+        franchiseId: routeFranchiseId,
         franchiseName: franchiseName || undefined,
         subseriesId,
         subseriesTitle: detail?.title || card?.title || undefined,
@@ -1523,6 +1526,7 @@ export default function SeriesSubseriesPage({
     );
   }, [
     franchiseId,
+    overview?.slug,
     franchiseName,
     subseriesId,
     seasonId,
@@ -1564,6 +1568,7 @@ export default function SeriesSubseriesPage({
         : "series";
   const [leafOwned, setLeafOwned] = useState(false);
   const [leafSigned, setLeafSigned] = useState(false);
+  const [signedGalleryNudge, setSignedGalleryNudge] = useState(false);
 
   useEffect(() => {
     if (!leafFolderPath || !userId) {
@@ -4731,9 +4736,16 @@ export default function SeriesSubseriesPage({
                           const result = await addLeafAudio(leafFolderPath);
                           if (result.created > 0) {
                             setRescanTick((t) => t + 1);
+                            setError(null);
+                          } else {
+                            setError("Audio folder already present.");
                           }
-                        } catch {
-                          /* silent per product choice */
+                        } catch (e) {
+                          setError(
+                            e instanceof Error
+                              ? e.message
+                              : "Could not add audio folder."
+                          );
                         }
                       })();
                     }
@@ -4783,6 +4795,13 @@ export default function SeriesSubseriesPage({
                               detail: { module: "books" },
                             })
                           );
+                          if (
+                            Boolean(s.signed) &&
+                            hasGallery &&
+                            tab !== "gallery"
+                          ) {
+                            setSignedGalleryNudge(true);
+                          }
                         })
                         .catch(() => undefined);
                     }
@@ -6955,10 +6974,12 @@ export default function SeriesSubseriesPage({
                 loading={mediaLoading && filteredAudio.length === 0}
                 emptyMessage={
                   isGame
-                    ? "No audio for this game."
+                    ? "No audio for this game yet."
                     : isFilm
-                      ? "No audio for this movie."
-                      : "No audio for this series."
+                      ? "No audio for this movie yet."
+                      : isBook
+                        ? "No audio for this book yet."
+                        : "No audio for this series yet."
                 }
                 cardLayout={cardLayout}
                 squareCovers={cardLayout === "cover"}
@@ -7185,6 +7206,20 @@ export default function SeriesSubseriesPage({
           index={coverViewerIndex}
           onIndexChange={setCoverViewerIndex}
           onClose={() => setCoverViewerItems([])}
+        />
+      ) : null}
+
+      {signedGalleryNudge ? (
+        <ConfirmDialog
+          title="Signed copy"
+          message="Open Gallery to review signed photos for this title?"
+          confirmLabel="Open Gallery"
+          cancelLabel="Not now"
+          onClose={() => setSignedGalleryNudge(false)}
+          onConfirm={() => {
+            setSignedGalleryNudge(false);
+            setTab("gallery");
+          }}
         />
       ) : null}
     </div>

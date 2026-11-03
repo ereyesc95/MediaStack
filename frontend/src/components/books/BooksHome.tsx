@@ -444,7 +444,7 @@ export default function BooksHome({
       <section className="dash-row dash-row--flags">
         <DashPaneLabel
           logo="/api/assets/icons/pane-global"
-          title="GLOBAL ACTS"
+          title="ORIGINS"
           subtitle="Origin of your content"
         />
         <div className="dash-scroll dash-scroll--flags">
@@ -476,6 +476,13 @@ export default function BooksHome({
         </div>
       </section>
       </>
+      {!loading &&
+      !topFranchises.length &&
+      !topBooks.length ? (
+        <p className="muted module-placeholder">
+          No books found under Books/ — add work folders to get started.
+        </p>
+      ) : null}
     </div>
   );
 }

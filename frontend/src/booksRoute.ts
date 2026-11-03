@@ -17,6 +17,7 @@ export type BooksSection =
   | "movies"
   | "series"
   | "audio"
+  | "music"
   | "library"
   | "games"
   | "gallery"
@@ -30,6 +31,8 @@ export type BooksRoute = {
   franchiseName?: string;
   bookId?: string;
   bookTitle?: string;
+  /** When siblings share a bare title, URL uses ``Title (YYYY)``. */
+  leafYear?: string;
   section: BooksSection;
   overviewTab?: BooksOverviewTab;
   universeId?: number;
@@ -42,6 +45,7 @@ const SECTIONS: BooksSection[] = [
   "movies",
   "series",
   "audio",
+  "music",
   "library",
   "games",
   "gallery",
@@ -156,7 +160,11 @@ export function booksPath(route: BooksRoute): string {
   );
   let path = `/books/${enc(franchiseSeg)}`;
   path += `/${enc(
-    leafUrlSegment({ id: route.bookId!, title: route.bookTitle })
+    leafUrlSegment({
+      id: route.bookId!,
+      title: route.bookTitle,
+      year: route.leafYear,
+    })
   )}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";

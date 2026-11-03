@@ -1,8 +1,13 @@
 import type { ReactElement } from "react";
 import { useTopBarHoverPicker } from "../useTopBarHoverPicker";
-import { IconCardBanner, IconCardCover, IconList } from "./MenuIcons";
+import {
+  IconCardBanner,
+  IconCardCover,
+  IconCardShelf,
+  IconList,
+} from "./MenuIcons";
 
-export type CollectionLayout = "list" | "cover" | "banner";
+export type CollectionLayout = "list" | "cover" | "banner" | "shelf";
 
 const OPTIONS: {
   id: CollectionLayout;
@@ -12,6 +17,7 @@ const OPTIONS: {
   { id: "list", label: "List", Icon: IconList },
   { id: "cover", label: "Cover", Icon: IconCardCover },
   { id: "banner", label: "Banner", Icon: IconCardBanner },
+  { id: "shelf", label: "Shelf", Icon: IconCardShelf },
 ];
 
 type Props = {

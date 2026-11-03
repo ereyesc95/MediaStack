@@ -208,6 +208,20 @@ export async function fetchMusicDashboard(): Promise<MusicDashboard> {
   }
 }
 
+export async function fetchListeningStreaks() {
+  return request<import("./types").ListeningStreaks>(
+    `${API}/music/listening/streaks`
+  );
+}
+
+export async function fetchListeningWrapped(year?: number) {
+  const q =
+    year != null ? `?year=${encodeURIComponent(String(year))}` : "";
+  return request<import("./types").ListeningWrapped>(
+    `${API}/music/listening/wrapped${q}`
+  );
+}
+
 export async function fetchArtistCards(
   params: URLSearchParams
 ): Promise<{ items: ArtistCard[]; total: number; page: number }> {
@@ -922,6 +936,36 @@ export async function reorderPlaylistTracks(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ entry_ids: entryIds }),
   });
+}
+
+export async function fetchBandMediaRelated(bandId: number) {
+  return request<import("./types").BandMediaRelatedPayload>(
+    `${API}/music/bands/${bandId}/media/related`
+  );
+}
+
+export async function addBandSubjectMediaLink(
+  bandId: number,
+  body: { path: string; reason?: string | null; module?: string | null }
+) {
+  return request<{ ok: boolean; link: import("./types").SubjectMediaLink }>(
+    `${API}/music/bands/${bandId}/media/related/subject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function removeBandSubjectMediaLink(
+  bandId: number,
+  linkId: number
+) {
+  return request<{ ok: boolean }>(
+    `${API}/music/bands/${bandId}/media/related/subject/${linkId}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function fetchBandVideoIndex(
@@ -2306,6 +2350,67 @@ export async function fetchFranchiseIndexStatus() {
     path?: string;
     index_version?: number;
   }>(`${API}/sync/franchise-index`);
+}
+
+export type FranchiseOverrideEdge = {
+  type: "link" | "exclude" | string;
+  from: string;
+  to: string;
+  reason?: string;
+};
+
+export async function fetchFranchiseAliases() {
+  return request<{
+    aliases: Record<string, string>;
+    storage?: string;
+    setting_key?: string;
+    count: number;
+  }>(`${API}/sync/franchise-aliases`);
+}
+
+export async function saveFranchiseAliases(
+  aliases: Record<string, string>,
+  rebuild = true
+) {
+  return request<{
+    ok: boolean;
+    aliases: Record<string, string>;
+    count: number;
+    storage?: string;
+    setting_key?: string;
+    rebuilt?: { franchise_count: number; scanned_at?: string | null } | null;
+  }>(`${API}/sync/franchise-aliases?rebuild=${rebuild ? "true" : "false"}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aliases }),
+  });
+}
+
+export async function fetchFranchiseOverrides() {
+  return request<{
+    overrides: FranchiseOverrideEdge[];
+    storage?: string;
+    setting_key?: string;
+    count: number;
+  }>(`${API}/sync/franchise-overrides`);
+}
+
+export async function saveFranchiseOverrides(
+  overrides: FranchiseOverrideEdge[],
+  rebuild = true
+) {
+  return request<{
+    ok: boolean;
+    overrides: FranchiseOverrideEdge[];
+    count: number;
+    storage?: string;
+    setting_key?: string;
+    rebuilt?: { franchise_count: number; scanned_at?: string | null } | null;
+  }>(`${API}/sync/franchise-overrides?rebuild=${rebuild ? "true" : "false"}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ overrides }),
+  });
 }
 
 export async function fetchMediaRelated(
@@ -4836,6 +4941,8 @@ export async function resolveGamesPath(path: string) {
     platform?: string;
     letter?: string;
     path?: string;
+    name?: string;
+    game_title?: string | null;
   }>(`${API}/games/resolve?path=${encodeURIComponent(path)}`);
 }
 
@@ -5054,6 +5161,7 @@ export type FilesTab = {
 };
 
 export type FilesItem = {
+  /** Relative path under Files/ (also used by rename/move/delete APIs). */
   id: string;
   name: string;
   ext: string;
@@ -5165,4 +5273,42 @@ export async function deleteFilesFiles(paths: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paths }),
   });
+}
+
+export async function uploadFilesFiles(
+  tab: string,
+  files: File[],
+  folder?: string | null
+) {
+  if (!files.length) {
+    throw new Error("No files selected");
+  }
+  const form = new FormData();
+  form.append("tab", tab);
+  if (folder) form.append("folder", folder);
+  for (const file of files) {
+    form.append("files", file, file.name);
+  }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    LONG_RUNNING_TIMEOUT_MS
+  );
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) {
+    headers.set(k, v);
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${API}/files/upload`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+  await throwIfNotOk(res);
+  return res.json() as Promise<{ files: FilesItem[]; count: number }>;
 }

@@ -180,6 +180,7 @@ function albumFolderDisplayTitle(folder: string | null | undefined): string | nu
 }
 import ArtistQuiz, { QUIZ_MODES, type QuizMode } from "./ArtistQuiz";
 import ArtistRelated from "./ArtistRelated";
+import ArtistRelatedMedia from "./ArtistRelatedMedia";
 import AddSimilarModal from "./AddSimilarModal";
 import AddProjectModal from "./AddProjectModal";
 import ArtistMemberModal from "./ArtistMemberModal";
@@ -274,6 +275,16 @@ type Props = {
   ) => void;
   /** Open a Series leaf from artist SERIES tab (folder under Series/…). */
   onOpenSeriesFolder?: (folderPath: string) => void;
+  onOpenBooksLeaf?: (
+    franchiseId: string,
+    bookId?: string,
+    opts?: { franchiseName?: string; bookTitle?: string }
+  ) => void;
+  onOpenGamesLeaf?: (
+    franchiseId: string,
+    gameId?: string,
+    opts?: { franchiseName?: string; gameTitle?: string }
+  ) => void;
   onOpenTour?: (tour: TourCard) => void;
 };
 
@@ -315,6 +326,8 @@ export default function ArtistPage({
   onOpenMediaItem,
   onOpenMoviesLeaf,
   onOpenSeriesFolder,
+  onOpenBooksLeaf,
+  onOpenGamesLeaf,
   onOpenTour,
 }: Props) {
   const [data, setData] = useState<BandOverview | null>(null);
@@ -344,6 +357,7 @@ export default function ArtistPage({
   const [linkTab, setLinkTab] = useState<LinkCategory>("social");
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
+  const [addSubjectMediaOpen, setAddSubjectMediaOpen] = useState(false);
   const [quizMode, setQuizMode] = useState<QuizMode>("discography");
   const [quizAvailability, setQuizAvailability] = useState<Record<
     QuizMode,
@@ -1540,13 +1554,19 @@ export default function ArtistPage({
                     ? () => setAddSimilarOpen(true)
                     : relatedTab === "participations"
                       ? () => setAddProjectOpen(true)
-                      : undefined
+                      : ["movies", "series", "books", "games"].includes(
+                            relatedTab
+                          )
+                        ? () => setAddSubjectMediaOpen(true)
+                        : undefined
                   : undefined
               }
               addSimilarLabel={
                 relatedTab === "participations"
                   ? "Add project"
-                  : "Add similar artist"
+                  : ["movies", "series", "books", "games"].includes(relatedTab)
+                    ? "Add related media"
+                    : "Add similar artist"
               }
               onRefreshRelatedSimilar={
                 isAdmin && overviewTab === "related"
@@ -1709,11 +1729,43 @@ export default function ArtistPage({
 
         {section === "overview" && overviewTab === "related" && data?.related && (
           <nav className="artist-page__subtabs artist-page__related-subtabs">
-            {RELATED_TABS.map((t) => {
+            {[
+              ...RELATED_TABS,
+              ...(data.related_media?.movies
+                ? [{ id: "movies" as const, label: "MOVIES", short: "MOVIES" }]
+                : []),
+              ...(data.related_media?.series
+                ? [{ id: "series" as const, label: "SERIES", short: "SERIES" }]
+                : []),
+              ...(data.related_media?.books
+                ? [{ id: "books" as const, label: "BOOKS", short: "BOOKS" }]
+                : []),
+              ...(data.related_media?.games
+                ? [{ id: "games" as const, label: "GAMES", short: "GAMES" }]
+                : []),
+              ...(isAdmin &&
+              !(
+                data.related_media?.movies ||
+                data.related_media?.series ||
+                data.related_media?.books ||
+                data.related_media?.games
+              )
+                ? (
+                    [
+                      { id: "movies" as const, label: "MOVIES", short: "MOVIES" },
+                      { id: "series" as const, label: "SERIES", short: "SERIES" },
+                      { id: "books" as const, label: "BOOKS", short: "BOOKS" },
+                      { id: "games" as const, label: "GAMES", short: "GAMES" },
+                    ] as const
+                  )
+                : []),
+            ].map((t) => {
               const count =
                 t.id === "similar"
                   ? data.related.similar_count
-                  : data.related.participations_count;
+                  : t.id === "participations"
+                    ? data.related.participations_count
+                    : data.related_media?.[t.id] ?? 0;
               return (
                 <button
                   key={t.id}
@@ -1920,7 +1972,8 @@ export default function ArtistPage({
           />
         )}
 
-        {data?.related && (
+        {data?.related &&
+          (relatedTab === "similar" || relatedTab === "participations") && (
           <ArtistRelated
             related={data.related}
             tab={relatedTab}
@@ -1933,6 +1986,24 @@ export default function ArtistPage({
             onDataChanged={load}
           />
         )}
+
+        {section === "overview" &&
+          overviewTab === "related" &&
+          ["movies", "series", "books", "games"].includes(relatedTab) && (
+            <ArtistRelatedMedia
+              bandId={bandId}
+              tab={relatedTab}
+              orientation={cardOrientation}
+              isAdmin={isAdmin}
+              addOpen={addSubjectMediaOpen}
+              onAddClose={() => setAddSubjectMediaOpen(false)}
+              onDataChanged={() => load({ silent: true })}
+              onOpenMoviesLeaf={onOpenMoviesLeaf}
+              onOpenSeriesFolder={onOpenSeriesFolder}
+              onOpenBooksLeaf={onOpenBooksLeaf}
+              onOpenGamesLeaf={onOpenGamesLeaf}
+            />
+          )}
 
         {data && section === "quiz" && (
           <ArtistQuiz

@@ -16,6 +16,7 @@ export type GamesSection =
   | "series"
   | "books"
   | "audio"
+  | "music"
   | "gallery"
   | "quiz";
 
@@ -26,6 +27,8 @@ export type GamesRoute = {
   franchiseName?: string;
   gameId?: string;
   gameTitle?: string;
+  /** When siblings share a bare title, URL uses ``Title (YYYY)``. */
+  leafYear?: string;
   section: GamesSection;
   overviewTab?: GamesOverviewTab;
   universeId?: number;
@@ -39,6 +42,7 @@ const SECTIONS: GamesSection[] = [
   "series",
   "books",
   "audio",
+  "music",
   "gallery",
   "quiz",
 ];
@@ -148,7 +152,11 @@ export function gamesPath(route: GamesRoute): string {
     route.franchiseName
   );
   let path = `/games/${enc(franchiseSeg)}/${enc(
-    leafUrlSegment({ id: route.gameId!, title: route.gameTitle })
+    leafUrlSegment({
+      id: route.gameId!,
+      title: route.gameTitle,
+      year: route.leafYear,
+    })
   )}`;
   const section = SECTIONS.includes(route.section) ? route.section : "overview";
   if (section === "overview") {

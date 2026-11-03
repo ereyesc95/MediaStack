@@ -3,7 +3,11 @@ import {
   fetchSeriesFranchiseShows,
   resolveMoviesPath,
 } from "./api";
-import { normalizeSlug, slugMatch, stripDatedFolderTitle } from "./routeSlug";
+import {
+  matchLeafTitle,
+  normalizeSlug,
+  stripDatedFolderTitle,
+} from "./routeSlug";
 
 export type MoviesLeafFromPath = {
   franchiseId: string;
@@ -72,15 +76,12 @@ export async function seriesLeafFromFolderPath(
     const candidates = [
       ...(detail?.subseries || []),
       ...(shows.items || []),
-    ];
-    const hit = candidates.find(
-      (s) =>
-        s.id === leafFolder ||
-        (s.folder_path &&
-          s.folder_path.replace(/\\/g, "/").split("/").pop() === leafFolder) ||
-        slugMatch(s.title || "", leafFolder) ||
-        slugMatch(("name" in s && s.name) || "", leafFolder)
-    );
+    ].map((s) => ({
+      ...s,
+      folder_name:
+        s.folder_path?.replace(/\\/g, "/").split("/").pop() || undefined,
+    }));
+    const hit = matchLeafTitle(candidates, leafFolder);
     if (hit?.id) {
       return {
         franchiseId,

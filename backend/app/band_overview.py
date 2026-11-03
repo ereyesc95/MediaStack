@@ -585,6 +585,24 @@ def build_band_overview(
         orientation=card_orientation,
     )
 
+    related_media_counts: dict[str, int] = {
+        "movies": 0,
+        "series": 0,
+        "books": 0,
+        "games": 0,
+    }
+    try:
+        from app.subject_media import related_media_counts as _rm_counts
+
+        related_media_counts = _rm_counts(
+            db,
+            band_id=band.bnd_id,
+            band_name=band.bnd_name,
+            media_root=root,
+        )
+    except Exception:
+        pass
+
     various_artists_hub = None
     if is_various and root:
         from app.various_artists_hub import (
@@ -649,6 +667,7 @@ def build_band_overview(
         "is_various_artists": is_various,
         "various_artists_hub": various_artists_hub,
         "related": related,
+        "related_media": related_media_counts,
         "media": media,
         "has_local_folder": bool(artist_dir and artist_dir.is_dir()),
         "metadata_refreshed_at": band.bnd_metadata_refreshed_at,

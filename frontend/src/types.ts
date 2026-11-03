@@ -194,6 +194,29 @@ export const EMPTY_DASHBOARD: MusicDashboard = {
   top_countries: [],
 };
 
+export type ListeningStreaks = {
+  current_streak: number;
+  longest_streak: number;
+  last_play_date: string | null;
+  active_days_30: number;
+  active_days_year: number;
+  plays_year: number;
+  year: number;
+};
+
+export type ListeningWrapped = {
+  year: number;
+  total_plays: number;
+  active_days: number;
+  current_streak: number;
+  longest_streak: number;
+  top_tracks: DashboardTrack[];
+  top_artists: ArtistCard[];
+  top_genres: MusicDashboard["top_genres"];
+  top_countries: MusicDashboard["top_countries"];
+  empty: boolean;
+};
+
 export type UserPlaylist = {
   id: number;
   name: string | null;
@@ -596,7 +619,22 @@ export type EntityLinksPayload = {
   categories: LinkCategoryTab[];
 };
 
-export type RelatedTab = "similar" | "participations";
+export type RelatedTab =
+  | "similar"
+  | "participations"
+  | "movies"
+  | "series"
+  | "books"
+  | "games";
+
+export type SubjectMediaLink = {
+  id: number;
+  band_id: number;
+  module: string;
+  path: string;
+  reason?: string | null;
+  created_at?: string | null;
+};
 
 export type RelatedCardItem = {
   id: number;
@@ -688,6 +726,13 @@ export type BandOverview = {
   is_solo: boolean;
   solo_performer: LineupMember | null;
   related: EntityRelatedPayload;
+  /** Cross-module franchise + subject-link counts for Related MEDIA subtabs. */
+  related_media?: {
+    movies: number;
+    series: number;
+    books: number;
+    games: number;
+  };
   media: MediaFlags;
   metadata_refreshed_at: string | null;
   library_scanned_at: string | null;
@@ -1484,6 +1529,7 @@ export type SeriesSection =
   | "movies"
   | "books"
   | "audio"
+  | "music"
   | "library"
   | "games"
   | "gallery"
@@ -1945,8 +1991,14 @@ export type FranchiseMediaEntry = {
   landscape_url?: string | null;
   banner_url?: string | null;
   logo_url?: string | null;
+  icon_url?: string | null;
   open_url?: string | null;
   display_date?: string | null;
+  subject_link_id?: number | null;
+  subject_reason?: string | null;
+  /** Soundtrack-bridge: open Music artist page. */
+  band_id?: number | null;
+  navigate_band_id?: number | null;
 };
 
 export type MediaRelatedPayload = {
@@ -1957,6 +2009,23 @@ export type MediaRelatedPayload = {
   books: FranchiseMediaEntry[];
   games: FranchiseMediaEntry[];
   music: FranchiseMediaEntry[];
+};
+
+export type BandMediaRelatedPayload = {
+  band_id: number;
+  artist?: string | null;
+  movies: FranchiseMediaEntry[];
+  series: FranchiseMediaEntry[];
+  books: FranchiseMediaEntry[];
+  games: FranchiseMediaEntry[];
+  music?: FranchiseMediaEntry[];
+  subject_links: SubjectMediaLink[];
+  counts: {
+    movies: number;
+    series: number;
+    books: number;
+    games: number;
+  };
 };
 
 export type SeriesCatalogPayload = {
@@ -2232,6 +2301,8 @@ export type SeriesOverview = {
   >;
   media: {
     has_audio: boolean;
+    /** Cross-module Music artist (Related MUSIC) — not leaf Audio/. */
+    has_music?: boolean;
     has_series: boolean;
     has_movies?: boolean;
     has_books?: boolean;

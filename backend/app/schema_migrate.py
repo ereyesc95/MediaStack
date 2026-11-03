@@ -830,6 +830,43 @@ def migrate_schema(eng: Engine) -> None:
                 )
             )
 
+        if "listening_day_plays" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE listening_day_plays (
+                        "ldpID" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        "ldpUserID" INTEGER NOT NULL,
+                        "ldpDate" TEXT NOT NULL,
+                        "ldpPath" TEXT NOT NULL,
+                        "ldpArtistID" INTEGER,
+                        "ldpTitle" TEXT,
+                        "ldpRelease" TEXT,
+                        "ldpCount" INTEGER NOT NULL DEFAULT 1
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_listening_day_plays_user" '
+                    'ON listening_day_plays ("ldpUserID")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS "ix_listening_day_plays_date" '
+                    'ON listening_day_plays ("ldpDate")'
+                )
+            )
+            conn.execute(
+                text(
+                    'CREATE UNIQUE INDEX IF NOT EXISTS '
+                    '"ux_listening_day_plays_user_date_path" '
+                    'ON listening_day_plays ("ldpUserID", "ldpDate", "ldpPath")'
+                )
+            )
+
         if "subgenres" in tables:
             # Hentai belongs under Anime (not Adult); still NSFW via adult_content.py.
             conn.execute(

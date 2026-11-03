@@ -10,14 +10,16 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 
 | Module   | Status |
 |----------|--------|
-| **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, **physical Collection**, Video/Library/Series tabs, **Tours** (folder-gated shows, EVENTS, Live shows playlist) |
-| **Series** | Active — franchise/show pages, cast/staff, episodes, related media, NSFW gating, stable leaf IDs in URLs |
-| **Movies** | Active — works/films, cast, More Movies, NSFW per-film genres, stable leaf IDs in URLs |
-| **Books** | Active — works/volumes, types (Manga/Book/…), More Books, NSFW gating, stable leaf IDs in URLs |
-| **Universes** | Active — shared hubs across series/movies/books with SFW filtering |
-| Games    | API stubs / browse shell — full UI pending |
+| **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, **physical Collection** (incl. vinyl **shelf**), Video/Library/Series tabs, **Tours**, Home **streaks / Wrapped** |
+| **Series** | Mature — franchise/show pages, cast/staff, episodes, related media, MUSIC soundtrack-bridge, quiz, NSFW gating, slug URLs |
+| **Movies** | Mature — works/films, cast, More Movies, related, MUSIC bridge, quiz, NSFW per-film genres, slug URLs |
+| **Books** | Mature — works/volumes, types, More Books, related, quiz, signed → Gallery nudge, NSFW gating, slug URLs |
+| **Games** | Mature — franchise/leaf chrome shared with Series, related, MUSIC bridge, quiz |
+| **Universes** | Mature — shared hubs across series/movies/books with SFW filtering |
+| **Files** | Mature — tab browse, Manage Files, rename/move/copy/delete, multi-select, upload |
+| **Hobbies** | Mature — presets, Excel import/export, private collections |
 
-Music remains the richest playback experience; Series / Movies / Books share franchise chrome, cast UI, and human-readable routes (legacy ID/hash URLs still resolve).
+Music remains the richest playback experience; Series / Movies / Books / Games share franchise chrome, cast UI, Related media, and human-readable routes (legacy ID/hash URLs still resolve).
 
 ### Cross-module library layout (all modules)
 
@@ -34,7 +36,7 @@ Canonical paths for Movies, Series, Books, Games, and Music Video/Library catego
 | **Books** | `Books/{Letter}/{Work}/{date}. {Volume or Edition}/` |
 | **Games** | `Games/{Platform}/{Letter}/{Franchise}/{date}. {Title}/` |
 
-**Related media** across modules is discovered automatically when the same franchise/work folder name appears under each module (e.g. `Dragon Ball` under `Series/D/`, `Movies/D/`, `Books/D/`, and `Games/*/D/Dragon Ball/`). Manual `.path` / symlink portals are optional exceptions (biopics, name collisions). See the design doc for implementation status and next steps.
+**Related media** across modules is discovered automatically when the same franchise/work folder name appears under each module (e.g. `Dragon Ball` under `Series/D/`, `Movies/D/`, `Books/D/`, and `Games/*/D/Dragon Ball/`). Matching Music artists can surface on a franchise **MUSIC** tab (soundtrack-bridge), separate from leaf `[Audio]` embeds. Manual `.path` / symlink portals and Setup → **Aliases & overrides…** cover biopics and name collisions. See [docs/franchise_index.md](docs/franchise_index.md).
 
 ---
 
@@ -648,12 +650,14 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 - **Top tracks & tracklist covers** — single edition → `Cover - {title}` in `[Artwork]` → album front; singles matched by title under `Audio/Singles/`
 - **Writer links** — “Written by” names open in-app when the artist has a local folder, matching **band aliases** (`bndOtherNames`, e.g. Ville Valo → VV)
 - **Themes** — **Adaptive** (default on content pages: colors sampled from page art; choice persists across refresh) plus Dark/Light/Midnight/Ember/Ocean/Custom presets. Picking a preset pins it until you choose Adaptive again. Playback temporarily overrides with the playing track’s cover art.
-- **Switch media** — hamburger menu (all pages except Hub home): **Switch media** → Music / Series / Movies / Books / Games jumps to that module’s home.
+- **Switch media** — hamburger menu (all pages except Hub home): **Switch media** → Music / Series / Movies / Books / Games / Files / … jumps to that module’s home.
+- **Files** — `Files/{Tab}/[Nested]/` browse; admin Manage Files (tabs/folders), rename/move/copy/delete, multi-select batch actions, and upload into the active tab (or nested subfolder when filtered).
+- **Aliases & overrides** — Setup menu: merge franchise folder names and add link/exclude edges (DB-backed; rebuilds Related index on save).
 - **Track actions** — Lyrics, Versions, Add to playlist, and YouTube (when a link exists) above the player bar
 - **Versions panel** — acoustic/live/remix/**edit** plus language adaptations via `of` tags; playing a version from another release shows **Taken from {release}** in the left panel (clickable in-app navigation)
 - **Lyrics** — inline synced LRC with active-line highlight and auto-scroll; **Synced** / **Not synced** badges; admin fetch (LRCLIB), `.lrc` upload (**Set lyrics**), and plain edit (preserves existing LRC); stored in DB via `track_overrides`
 - **YouTube** — per-track official video links in DB (multiple URLs per track supported); bulk fetch, manual set, picker when several exist, open in new tab with autoplay
-- **Physical collection** — **COLLECTION** tab for owned editions (cards/list, filters, Excel import/export). **Add to collection** on release tracklist editions; checklist of Cover / Photo / Photocards / Codes / Media / Branding (labels drop the group prefix, so `Code - Spotify` shows as Spotify). **My collection** in the hamburger while the tab is active. Preferred code artwork filenames: `Code - Spotify`, `Code - Spotify Card`, `Code - QR`, `Code - QR Card` (legacy `Spotify - *` / `QR - *` still detected). Genres in the add modal match the release page, not the artist’s full genre list.
+- **Physical collection** — **COLLECTION** tab for owned editions (list / cover / banner / **shelf**, filters, Excel import/export). **Shelf** stands LP / 7" / 10" editions as spines (pull sleeve, then open). **Add to collection** on release tracklist editions; checklist of Cover / Photo / Photocards / Codes / Media / Branding (labels drop the group prefix, so `Code - Spotify` shows as Spotify). **My collection** in the hamburger while the tab is active. Preferred code artwork filenames: `Code - Spotify`, `Code - Spotify Card`, `Code - QR`, `Code - QR Card` (legacy `Spotify - *` / `QR - *` still detected). Genres in the add modal match the release page, not the artist’s full genre list.
 - **Playlists** — user playlists (`plaType` 200) + **artist system playlists** scanned from disk (suffix tags, singles, editions, cross-library, play counts); alphabetical grid under **Music → Playlists** (`/music/playlists`); add-to-playlist modal on release pages; **Add playlist** from the hamburger menu on the Playlists grid (create local playlist with optional cover, or **Import from file** / CSV snapshot; Spotify Premium import stays available via OAuth return, not on the create flow)
 - **User playlist pages** — Ballads-style layout with artist, album, and year in evenly spaced columns on each row; unavailable tracks (Spotify/CSV imports), YouTube links, and **Find in disk** for unmatched files; click the cover to replace artwork (Most Played and snapshot imports without a custom cover use a default disc-only layout until you add a cover). Hamburger **Edit playlist** toggles reorder (drag-and-drop) and library search for local lists, or per-track genre/label fields for **snapshot** playlists, plus inline edit of name, description, and cover. CSV snapshot playlists also get **Refresh Playlist** (CSV filename must match the playlist name; checkbox: **Add new songs only** vs **Overwriting playlist**). Hamburger **Delete playlist** removes user-created/local/snapshot playlists (not **Most Played**).
 - **Snapshot playlists (Spotify/CSV)** — filter bar (**All Artists** / **All Genres**) and sort (original order, artist/album/year, audio features); disk filenames with `[By …; feat. …]` credits prefer that credit for the artist column and strip it from the title. **Length/Duration** sort uses on-disk (or snapshot) length for matched tracks only; unmatched rows (YouTube / Find in disk) cluster at the opposite end when you toggle ascending/descending. On **mobile portrait**, filters sit on two rows (artists+genres, then sort+reset) and the tracklist shows **# / Title** (artist under the title) **/ Length** only — rows are denser, YouTube / Find in disk stack vertically in Length, and the Length header/sort chevron stay inside the column; Artist, Album, and Year remain available as sort options.
@@ -667,7 +671,7 @@ Album defaults: `Cover - Front` / `Cover - Album`, `Animation - Album` (legacy `
 
 Phone **landscape** uses dedicated layouts (`usePhoneLayout`, scoped CSS classes). Portrait, tablet, and desktop layouts are unchanged.
 
-- **Home** — horizontally scrolling dashboard panes (10 items); On Repeat auto-scrolls to the active track
+- **Home** — listening streak strip + **Wrapped** year recap (dated plays from today onward); horizontally scrolling dashboard panes (10 items); On Repeat auto-scrolls to the active track
 - **Artist** — lineup and audio discography five per row; gallery five columns; scrollable About tab with beat-reactive photo glow; member modal uses side-by-side photo and info
 - **Release** — split tracklist and track panel; scrollable panels; cover, disc, and canvas playback in the left panel when a track is playing; gallery sub-bars and full-width five-column photo grid
 

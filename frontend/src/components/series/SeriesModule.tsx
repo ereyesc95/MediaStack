@@ -3,6 +3,7 @@ import {
   fetchSeriesCatalog,
   fetchSeriesFilterOptions,
   resolveBooksPath,
+  resolveGamesPath,
   resolveMoviesPath,
 } from "../../api";
 import {
@@ -134,6 +135,12 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  onOpenGamesFranchise?: (
+    franchiseId: string,
+    gameId?: string,
+    section?: string,
+    universeId?: number
+  ) => void;
   /** Return to Games/Movies/Books when franchise was opened from that stack. */
   onOpenGamesHome?: (restore?: {
     fromTab?: "home" | "catalog";
@@ -180,6 +187,7 @@ export default function SeriesModule({
   onOpenArtist,
   onOpenMoviesFranchise,
   onOpenBooksFranchise,
+  onOpenGamesFranchise,
   onOpenGamesHome,
   onOpenMoviesHome,
   onOpenBooksHome,
@@ -920,6 +928,16 @@ export default function SeriesModule({
               })
               .catch(() => {});
           }}
+          onOpenGamesPath={(path) => {
+            void resolveGamesPath(path)
+              .then((hit) => {
+                onOpenGamesFranchise?.(
+                  hit.franchise_id,
+                  hit.game_id ?? undefined
+                );
+              })
+              .catch(() => {});
+          }}
           onOpenUniverseLeaf={(leaf) => {
             if (leaf.module === "movies") {
               onOpenMoviesFranchise?.(
@@ -1075,6 +1093,16 @@ export default function SeriesModule({
             void resolveBooksPath(path)
               .then((hit) => {
                 onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+              })
+              .catch(() => {});
+          }}
+          onOpenGamesPath={(path) => {
+            void resolveGamesPath(path)
+              .then((hit) => {
+                onOpenGamesFranchise?.(
+                  hit.franchise_id,
+                  hit.game_id ?? undefined
+                );
               })
               .catch(() => {});
           }}

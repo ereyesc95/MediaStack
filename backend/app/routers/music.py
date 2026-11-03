@@ -232,6 +232,27 @@ def music_dashboard(
         }
 
 
+@router.get("/listening/streaks")
+def music_listening_streaks(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.listening import build_streaks
+
+    return build_streaks(db, user.usr_id)
+
+
+@router.get("/listening/wrapped")
+def music_listening_wrapped(
+    year: int | None = Query(None, ge=1970, le=2100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.listening import build_wrapped
+
+    return build_wrapped(db, user.usr_id, year=year)
+
+
 @router.get("/filters/options")
 def music_filter_options(
     db: Session = Depends(get_db),
@@ -1076,6 +1097,98 @@ def _enrich_media_tab_banners(db: Session, band_id: int, data: dict) -> dict:
         items.extend(cat.get("items") or [])
     enrich_items_with_banners(db, band_id, items)
     return data
+
+
+class SubjectMediaLinkBody(BaseModel):
+    path: str
+    reason: str | None = None
+    module: str | None = None
+
+
+@router.get("/bands/{band_id}/media/related")
+def band_media_related(
+    band_id: int,
+    db: Session = Depends(get_db),
+):
+    """Cross-module Related media for a Music artist (franchise + subject links)."""
+    from app.config import settings
+    from app.routers.media import _enrich_buckets
+    from app.subject_media import list_links, related_media_for_band, serialize_link
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    root = Path(settings.media_root or "")
+    buckets = related_media_for_band(
+        db,
+        band_id=band_id,
+        band_name=row.bnd_name,
+        media_root=root if root.is_dir() else None,
+    )
+    enriched = _enrich_buckets(buckets, media_root=root if root.is_dir() else None)
+    links = [serialize_link(r) for r in list_links(db, band_id)]
+    return {
+        "band_id": band_id,
+        "artist": row.bnd_name,
+        "movies": enriched.get("movies") or [],
+        "series": enriched.get("series") or [],
+        "books": enriched.get("books") or [],
+        "games": enriched.get("games") or [],
+        "music": enriched.get("music") or [],
+        "subject_links": links,
+        "counts": {
+            "movies": len(enriched.get("movies") or []),
+            "series": len(enriched.get("series") or []),
+            "books": len(enriched.get("books") or []),
+            "games": len(enriched.get("games") or []),
+        },
+    }
+
+
+@router.post("/bands/{band_id}/media/related/subject")
+def band_add_subject_link(
+    band_id: int,
+    body: SubjectMediaLinkBody,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    from app.band_overview_cache import invalidate_overview_cache
+    from app.subject_media import add_link, serialize_link
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    try:
+        link = add_link(
+            db,
+            band_id=band_id,
+            folder_path=body.path,
+            reason=body.reason,
+            module=body.module,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    invalidate_overview_cache(band_id)
+    return {"ok": True, "link": serialize_link(link)}
+
+
+@router.delete("/bands/{band_id}/media/related/subject/{link_id}")
+def band_remove_subject_link(
+    band_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    from app.band_overview_cache import invalidate_overview_cache
+    from app.subject_media import remove_link
+
+    row = crud.get_band(db, band_id)
+    if not row:
+        raise HTTPException(404, "Band not found")
+    if not remove_link(db, band_id=band_id, link_id=link_id):
+        raise HTTPException(404, "Link not found")
+    invalidate_overview_cache(band_id)
+    return {"ok": True}
 
 
 @router.get("/bands/{band_id}/media/video")

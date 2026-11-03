@@ -288,6 +288,23 @@ class Reproduction(Base):
     rep_user_id: Mapped[int | None] = mapped_column("repUserID", Integer)
 
 
+class ListeningDayPlay(Base):
+    """Per-profile, per-day track plays for streaks and year Wrapped."""
+
+    __tablename__ = "listening_day_plays"
+
+    ldp_id: Mapped[int] = mapped_column(
+        "ldpID", Integer, primary_key=True, autoincrement=True
+    )
+    ldp_user_id: Mapped[int] = mapped_column("ldpUserID", Integer, index=True)
+    ldp_date: Mapped[str] = mapped_column("ldpDate", String(10), index=True)
+    ldp_path: Mapped[str] = mapped_column("ldpPath", Text)
+    ldp_artist_id: Mapped[int | None] = mapped_column("ldpArtistID", Integer)
+    ldp_title: Mapped[str | None] = mapped_column("ldpTitle", Text)
+    ldp_release: Mapped[str | None] = mapped_column("ldpRelease", Text)
+    ldp_count: Mapped[int] = mapped_column("ldpCount", Integer, default=1)
+
+
 class Movie(Base):
     __tablename__ = "movies"
 
@@ -963,3 +980,27 @@ class LeafOwnership(Base):
     lfo_owned: Mapped[int] = mapped_column("lfoOwned", Integer, default=0)
     lfo_signed: Mapped[int] = mapped_column("lfoSigned", Integer, default=0)
     lfo_updated_at: Mapped[str | None] = mapped_column("lfoUpdatedAt", Text)
+
+
+class SubjectMediaLink(Base):
+    """Band ↔ cross-module media path (biopics / subject bridges).
+
+    Complements franchise_overrides.json ``link`` edges when the artist folder
+    name does not match the movie/series/book/game franchise slug.
+    """
+
+    __tablename__ = "subject_media_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "smlBandID",
+            "smlFolderPath",
+            name="uq_subject_media_band_path",
+        ),
+    )
+
+    sml_id: Mapped[int] = mapped_column("smlID", Integer, primary_key=True)
+    sml_band_id: Mapped[int] = mapped_column("smlBandID", Integer, index=True)
+    sml_module: Mapped[str] = mapped_column("smlModule", String(16), index=True)
+    sml_folder_path: Mapped[str] = mapped_column("smlFolderPath", Text)
+    sml_reason: Mapped[str | None] = mapped_column("smlReason", Text)
+    sml_created_at: Mapped[str | None] = mapped_column("smlCreatedAt", Text)

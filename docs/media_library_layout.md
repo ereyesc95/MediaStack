@@ -411,7 +411,7 @@ Windows **`.lnk`** is supported; prefer `.path` for cross-module links on NAS.
 | Franchise index | Phase 1–5 (aliases/overrides); Related UI on Series/Movies/Books/Games |
 | Movies / Series / Books / Games modules | Done (shared franchise/leaf chrome) |
 | Series folder sync | Letter-tier `Series/{Letter}/{Franchise}/` (+ portals) |
-| Files (`Files/{Tab}/`) | Done — browse + admin Manage Files |
+| Files (`Files/{Tab}/`) | Done — browse, Manage Files, rename/move/copy/delete, multi-select, upload |
 | Hobbies | Done — presets, items, Excel import/export, private |
 
 ---
@@ -419,7 +419,7 @@ Windows **`.lnk`** is supported; prefer `.path` for cross-module links on NAS.
 ## Naming discipline checklist
 
 1. One **canonical spelling** per franchise (`Dragon Ball`, not mixed `DBZ` / `Dragonball` in the franchise tier).
-2. Register **aliases** in DB or `data/franchise_aliases.json` when needed (future).
+2. Register **aliases / overrides** via Setup → **Aliases & overrides…** (DB-backed; legacy JSON is migrated once).
 3. Disambiguate collisions in folder names: `Heat (1995)` vs `Heat (2013)`.
 4. **Music** uses **artist** names; link to films via subject/metadata, not artist folder name alone.
 5. Omit empty Music Video/Library categories — do not create placeholder folders.

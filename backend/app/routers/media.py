@@ -40,21 +40,12 @@ class LeafOwnershipBody(BaseModel):
 
 
 def _ensure_index():
-    from app.franchise_index import FRANCHISE_INDEX_VERSION
+    from app.franchise_index import ensure_franchise_index
 
-    cached = load_franchise_index()
-    if (
-        cached
-        and cached.franchises
-        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
-    ):
-        return cached
     root = settings.media_root
     if not root:
         raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
-    index = build_franchise_index(Path(root))
-    save_franchise_index(index)
-    return index
+    return ensure_franchise_index(Path(root))
 
 
 def _enrich_buckets(

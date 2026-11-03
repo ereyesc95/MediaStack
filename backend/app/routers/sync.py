@@ -87,6 +87,7 @@ def franchise_index_status(_admin: User = Depends(require_admin)):
             "path": str(path),
             "franchise_count": 0,
             "scanned_at": None,
+            "disk_listing": None,
             "index_version": FRANCHISE_INDEX_VERSION,
         }
     return {
@@ -94,6 +95,7 @@ def franchise_index_status(_admin: User = Depends(require_admin)):
         "path": str(path),
         "franchise_count": len(cached.franchises),
         "scanned_at": cached.scanned_at,
+        "disk_listing": getattr(cached, "disk_listing", "") or None,
         "index_version": getattr(cached, "index_version", FRANCHISE_INDEX_VERSION),
     }
 
@@ -106,18 +108,126 @@ def sync_franchise_index(
     """Rebuild the Related-media franchise index from disk."""
     from pathlib import Path
 
-    from app.franchise_index import build_franchise_index, save_franchise_index
+    from app.franchise_index import (
+        ensure_franchise_index,
+        franchise_index_cache_path,
+    )
 
-    _ = force  # Always rebuild when explicitly requested.
     root = settings.media_root
     if not root:
         raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
-    index = build_franchise_index(Path(root))
-    path = save_franchise_index(index)
+    # Explicit admin sync always rebuilds.
+    index = ensure_franchise_index(Path(root), force=True)
     return {
         "status": "completed",
-        "path": str(path),
+        "path": str(franchise_index_cache_path()),
         "franchise_count": len(index.franchises),
         "scanned_at": index.scanned_at,
+        "disk_listing": index.disk_listing or None,
         "force": force,
+    }
+
+
+@router.get("/franchise-aliases")
+def get_franchise_aliases(_admin: User = Depends(require_admin)):
+    from app.franchise_index import ALIASES_SETTING_KEY, load_franchise_aliases
+
+    aliases = load_franchise_aliases()
+    return {
+        "aliases": aliases,
+        "storage": "database",
+        "setting_key": ALIASES_SETTING_KEY,
+        "count": len(aliases),
+    }
+
+
+@router.put("/franchise-aliases")
+def put_franchise_aliases(
+    body: dict,
+    rebuild: bool = Query(True),
+    _admin: User = Depends(require_admin),
+):
+    from pathlib import Path
+
+    from app.franchise_index import (
+        ALIASES_SETTING_KEY,
+        ensure_franchise_index,
+        load_franchise_aliases,
+        save_franchise_aliases,
+    )
+
+    raw = body.get("aliases") if isinstance(body, dict) else None
+    if not isinstance(raw, dict):
+        raise HTTPException(400, "Body must include aliases object")
+    save_franchise_aliases(
+        {str(k): str(v) for k, v in raw.items() if v is not None}
+    )
+    rebuilt = None
+    if rebuild and settings.media_root:
+        index = ensure_franchise_index(Path(settings.media_root), force=True)
+        rebuilt = {
+            "franchise_count": len(index.franchises),
+            "scanned_at": index.scanned_at,
+        }
+    saved = load_franchise_aliases()
+    return {
+        "ok": True,
+        "storage": "database",
+        "setting_key": ALIASES_SETTING_KEY,
+        "count": len(saved),
+        "aliases": saved,
+        "rebuilt": rebuilt,
+    }
+
+
+@router.get("/franchise-overrides")
+def get_franchise_overrides(_admin: User = Depends(require_admin)):
+    from app.franchise_index import (
+        OVERRIDES_SETTING_KEY,
+        load_franchise_overrides,
+    )
+
+    rows = load_franchise_overrides()
+    return {
+        "overrides": rows,
+        "storage": "database",
+        "setting_key": OVERRIDES_SETTING_KEY,
+        "count": len(rows),
+    }
+
+
+@router.put("/franchise-overrides")
+def put_franchise_overrides(
+    body: dict,
+    rebuild: bool = Query(True),
+    _admin: User = Depends(require_admin),
+):
+    from pathlib import Path
+
+    from app.franchise_index import (
+        OVERRIDES_SETTING_KEY,
+        ensure_franchise_index,
+        load_franchise_overrides,
+        save_franchise_overrides,
+    )
+
+    raw = body.get("overrides") if isinstance(body, dict) else None
+    if not isinstance(raw, list):
+        raise HTTPException(400, "Body must include overrides list")
+    save_franchise_overrides(raw)
+    rebuilt = None
+    if rebuild and settings.media_root:
+        index = ensure_franchise_index(Path(settings.media_root), force=True)
+        rebuilt = {
+            "franchise_count": len(index.franchises),
+            "scanned_at": index.scanned_at,
+        }
+    saved = load_franchise_overrides()
+    return {
+        "ok": True,
+        "storage": "database",
+        "setting_key": OVERRIDES_SETTING_KEY,
+        "count": len(saved),
+        "overrides": saved,
+        "rebuilt": rebuilt,
     }

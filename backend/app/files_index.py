@@ -475,3 +475,22 @@ def delete_files(paths: list[str]) -> int:
             target.unlink()
             n += 1
     return n
+
+
+def save_uploaded_file(
+    tab: str,
+    nested: str | None,
+    filename: str,
+    data: bytes,
+) -> dict:
+    """Write uploaded bytes into a Files tab (or nested folder)."""
+    if not data:
+        raise ValueError("Empty file")
+    # Cap individual uploads (200 MiB) — UI can send multiple sequentially.
+    if len(data) > 200 * 1024 * 1024:
+        raise ValueError("File too large (max 200 MB)")
+    safe = sanitize_file_name(filename)
+    dest_dir = _dest_dir(tab, nested)
+    dest = unique_dest(dest_dir / safe)
+    dest.write_bytes(data)
+    return _file_entry(dest, nested)

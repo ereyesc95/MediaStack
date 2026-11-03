@@ -49,6 +49,7 @@ import {
   IconMediaGames,
   IconMediaMusic,
 } from "./MenuIcons";
+import FranchiseLinksModal from "./FranchiseLinksModal";
 
 type Props = {
   onImport?: () => void;
@@ -326,6 +327,7 @@ export default function AppMenu({
     if (collectionClearMode) setManageCollectionOpen(true);
   }, [collectionClearMode]);
   const [customOpen, setCustomOpen] = useState(false);
+  const [franchiseLinksOpen, setFranchiseLinksOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
   const ref = useRef<HTMLDivElement>(null);
@@ -1671,6 +1673,16 @@ export default function AppMenu({
                     <IconSync className="menu-item-icon" />
                     Rebuild related index
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFranchiseLinksOpen(true);
+                      setOpen(false);
+                    }}
+                  >
+                    <IconCards className="menu-item-icon" />
+                    Aliases & overrides…
+                  </button>
                   {onGenerateFolderIcons && (
                     <button
                       type="button"
@@ -1749,6 +1761,9 @@ export default function AppMenu({
             </button>
           )}
         </div>
+      ) : null}
+      {franchiseLinksOpen && isAdmin ? (
+        <FranchiseLinksModal onClose={() => setFranchiseLinksOpen(false)} />
       ) : null}
     </div>
   );

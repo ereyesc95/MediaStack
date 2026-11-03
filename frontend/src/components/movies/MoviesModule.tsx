@@ -3,6 +3,7 @@ import {
   fetchMoviesCatalog,
   fetchMoviesFilterOptions,
   resolveBooksPath,
+  resolveGamesPath,
   resolveMoviesPath,
 } from "../../api";
 import { filterAdultCards } from "../../adultContent";
@@ -138,6 +139,12 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
+  onOpenGamesFranchise?: (
+    franchiseId: string,
+    gameId?: string,
+    section?: string,
+    universeId?: number
+  ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (
     bandId: number,
@@ -173,6 +180,7 @@ export default function MoviesModule({
   onNavigate,
   onOpenSeriesFranchise,
   onOpenBooksFranchise,
+  onOpenGamesFranchise,
   onOpenMusicRelease,
   onOpenArtist,
   onOpenUniversePage,
@@ -977,6 +985,16 @@ export default function MoviesModule({
             })
             .catch(() => {});
         }}
+        onOpenGamesPath={(path) => {
+          void resolveGamesPath(path)
+            .then((hit) => {
+              onOpenGamesFranchise?.(
+                hit.franchise_id,
+                hit.game_id ?? undefined
+              );
+            })
+            .catch(() => {});
+        }}
         onNavigate={(patch) => {
           const nextFilmId =
             "subseriesId" in patch ? patch.subseriesId : filmId;
@@ -1098,6 +1116,16 @@ export default function MoviesModule({
           void resolveBooksPath(path)
             .then((hit) => {
               onOpenBooksFranchise?.(hit.work_id, hit.book_id ?? undefined);
+            })
+            .catch(() => {});
+        }}
+        onOpenGamesPath={(path) => {
+          void resolveGamesPath(path)
+            .then((hit) => {
+              onOpenGamesFranchise?.(
+                hit.franchise_id,
+                hit.game_id ?? undefined
+              );
             })
             .catch(() => {});
         }}

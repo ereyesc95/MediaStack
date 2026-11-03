@@ -33,12 +33,10 @@ def _root() -> Path:
 
 
 def _ensure_index(root: Path):
-    """Load franchise index; rebuild when missing or Books work has no related hits."""
-    index = load_franchise_index()
-    if index is None and root.is_dir():
-        index = build_franchise_index(root)
-        save_franchise_index(index)
-    return index
+    """Load franchise index; rebuild when listing/version is stale."""
+    from app.franchise_index import ensure_franchise_index
+
+    return ensure_franchise_index(root)
 
 
 def _related_for_work(root: Path, folder_path: str, work_name: str = ""):
@@ -249,8 +247,20 @@ def build_work_overview(
         for b in books
     ]
 
+    from app.franchise_identity import (
+        find_music_band_for_franchise,
+        merge_music_band_into_related,
+    )
+
+    music_band = find_music_band_for_franchise(
+        db, detail.get("name") or work_dir.name, media_root=root
+    )
+    related_music = merge_music_band_into_related(
+        related_disk.get("music") or [], music_band, root
+    )
     media = {
         "has_audio": _has_audio(work_dir),
+        "has_music": bool(related_music),
         "has_series": bool(related_disk.get("series")),
         "has_movies": bool(related_disk.get("movies") or related_disk.get("movie")),
         "has_library": len(books) > 1,
@@ -270,6 +280,7 @@ def build_work_overview(
         "series": _enrich_related_cards(related_disk.get("series") or [], root),
         "books": [],
         "games": _enrich_related_cards(related_disk.get("games") or [], root),
+        "music": related_music,
         "creator": creator,
         "similar": similar,
     }
@@ -303,6 +314,7 @@ def build_work_overview(
         "id": detail["id"],
         "name": detail.get("name"),
         "letter": detail.get("letter"),
+        "slug": slug,
         "folder_path": folder_path,
         "cover_url": detail.get("cover_url"),
         "portrait_url": detail.get("portrait_url"),
@@ -328,6 +340,7 @@ def build_work_overview(
         "seasons": [],
         "media": media,
         "related": related,
+        "music_band_id": music_band.bnd_id if music_band else None,
         "links": links_payload,
         "universes": universes,
         "universe": universe,
@@ -412,8 +425,22 @@ def build_book_overview(
     }
 
     volumes = detail.get("volumes") or []
+    from app.franchise_identity import (
+        find_music_band_for_franchise,
+        merge_music_band_into_related,
+    )
+
+    music_band = find_music_band_for_franchise(
+        db,
+        work.get("name") or (work_dir.name if work_dir else "") or hub_title,
+        media_root=root,
+    )
+    related_music = merge_music_band_into_related(
+        related_disk.get("music") or [], music_band, root
+    )
     media = {
         "has_audio": _has_audio(book_dir),
+        "has_music": bool(related_music),
         "has_series": bool(related_series),
         "has_movies": bool(related_movies),
         "has_library": False,
@@ -453,10 +480,21 @@ def build_book_overview(
         db, genre_names, "book"
     )
 
+    from app.franchise_index import normalize_franchise_slug
+
+    work_slug = (
+        work.get("slug")
+        or work.get("id")
+        or work_id
+        or normalize_franchise_slug(work_dir.name if work_dir else "")
+        or ""
+    )
+
     return {
         "id": detail["id"],
         "name": detail.get("title"),
         "letter": (detail.get("title") or "?")[:1].upper(),
+        "slug": work_slug,
         "folder_path": folder_path,
         "hub_title": hub_title,
         "hub_path": hub_path,
@@ -501,9 +539,11 @@ def build_book_overview(
             "series": _enrich_related_cards(related_series, root),
             "books": [],
             "games": _enrich_related_cards(related_games, root),
+            "music": related_music,
             "creator": visible_related(about, "creator"),
             "similar": visible_related(about, "similar"),
         },
+        "music_band_id": music_band.bnd_id if music_band else None,
         "links": leaf_links,
         "universes": universes,
         "universe": universe,

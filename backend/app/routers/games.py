@@ -101,7 +101,15 @@ def games_catalog(
 
         from app.games_catalog_meta import enrich_games_catalog
 
-        catalog = build_games_catalog()
+        from pathlib import Path
+
+        from app.config import settings
+        from app.module_catalog_cache import get_or_build_catalog
+
+        root = Path(settings.media_root or "")
+        catalog = get_or_build_catalog(
+            "games", media_root=root, builder=build_games_catalog
+        )
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )

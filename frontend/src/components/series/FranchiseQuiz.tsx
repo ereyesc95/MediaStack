@@ -402,14 +402,20 @@ export default function FranchiseQuiz({
         <div className="artist-quiz__ready">
           <p className="artist-quiz__intro">
             {mode === "catalog"
-              ? "Type every Series, Movies, and Books title in this franchise."
+              ? "Type every Series, Movies, Books, and Games title in this franchise."
               : mode === "encyclopedia"
                 ? "Reveal every entry in the selected topic."
                 : "Listen to each excerpt and choose the correct title."}
           </p>
-          <button type="button" className="artist-quiz__start" onClick={begin}>
-            Start
-          </button>
+          {total === 0 ? (
+            <p className="muted artist-quiz__ready-best">
+              Not enough items for this mode yet.
+            </p>
+          ) : (
+            <button type="button" className="artist-quiz__start" onClick={begin}>
+              Start
+            </button>
+          )}
           {best ? (
             <p className="artist-quiz__ready-best muted">
               Best: {best.best_score}/{best.best_total}

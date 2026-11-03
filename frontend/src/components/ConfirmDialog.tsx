@@ -7,6 +7,7 @@ type Props = {
   cancelLabel?: string;
   destructive?: boolean;
   busy?: boolean;
+  error?: string | null;
   onConfirm: () => void;
   onClose: () => void;
   /** Hide bottom cancel — close via × only (default false). */
@@ -20,6 +21,7 @@ export default function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive = false,
   busy = false,
+  error = null,
   onConfirm,
   onClose,
   hideCancel = false,
@@ -37,6 +39,7 @@ export default function ConfirmDialog({
           </button>
         </div>
         <p className="confirm-dialog__message">{message}</p>
+        {error ? <p className="error">{error}</p> : null}
         <div className="modal-actions-row confirm-dialog__actions">
           {!hideCancel ? (
             <button type="button" className="btn" onClick={onClose} disabled={busy}>

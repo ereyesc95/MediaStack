@@ -25,7 +25,9 @@ import {
   useVirtualWindow,
 } from "./collectionHover";
 
-type BrowseView = "list" | "cover" | "banner";
+import VinylShelf from "./VinylShelf";
+
+type BrowseView = "list" | "cover" | "banner" | "shelf";
 
 const PAGE_SIZE_PRESETS = [10, 20, 25, 50, 100] as const;
 
@@ -1788,8 +1790,16 @@ export default function CollectionBrowse({
         <div className="collection-browse__empty">
           <p>No items match these filters.</p>
         </div>
+      ) : view === "shelf" ? (
+        loading && items.length === 0 ? (
+          <p className="muted collection-browse__empty">Loading…</p>
+        ) : (
+          <VinylShelf items={items} onOpen={navigateTitle} />
+        )
       ) : view === "cover" || view === "banner" ? (
-        loading ? null : (
+        loading && items.length === 0 ? (
+          <p className="muted collection-browse__empty">Loading…</p>
+        ) : (
         <div
           className={`media-release-grid collection-cards${
             view === "banner"

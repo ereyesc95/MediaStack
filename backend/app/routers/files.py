@@ -1,7 +1,7 @@
 """FileStack API — browse and manage `{media_root}/Files/`."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.deps import get_current_user, get_nsfw_unlocked, require_admin
@@ -208,5 +208,28 @@ def delete_files(
     try:
         n = fi.delete_files(body.paths)
         return {"ok": True, "deleted": n}
+    except Exception as exc:
+        raise _http_from_exc(exc) from exc
+
+
+@router.post("/upload")
+async def upload_files(
+    tab: str = Form(...),
+    folder: str | None = Form(None),
+    files: list[UploadFile] = File(...),
+    _admin: User = Depends(require_admin),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    if not files:
+        raise HTTPException(400, "No files")
+    _require_tab_access(tab, nsfw_unlocked=nsfw_unlocked)
+    nested = (folder or "").strip() or None
+    saved: list[dict] = []
+    try:
+        for upload in files:
+            raw_name = upload.filename or "upload.bin"
+            data = await upload.read()
+            saved.append(fi.save_uploaded_file(tab, nested, raw_name, data))
+        return {"files": saved, "count": len(saved)}
     except Exception as exc:
         raise _http_from_exc(exc) from exc

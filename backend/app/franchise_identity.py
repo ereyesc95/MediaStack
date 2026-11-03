@@ -129,6 +129,62 @@ def music_folder_exists_for_name(
     return bool(find_music_artist_dir(franchise_name, media_root))
 
 
+def music_related_entry_for_band(
+    band: Band, media_root: Path | None = None
+) -> dict | None:
+    """Related MUSIC card for a same-named Music artist (not leaf Audio/)."""
+    name = (band.bnd_name or "").strip()
+    if not name:
+        return None
+    root = _media_root(media_root)
+    artist_dir = find_music_artist_dir(name, root)
+    letter = _letter_folder(name)
+    if artist_dir and root:
+        try:
+            path = artist_dir.relative_to(root).as_posix()
+        except ValueError:
+            path = f"Music/{letter}/{name}"
+    else:
+        path = f"Music/{letter}/{name}"
+    card = resolve_artist_card(name, orientation="portrait")
+    cover = card.portrait_url or card.photo_url
+    return {
+        "kind": "music",
+        "path": path,
+        "title": name,
+        "date_iso": None,
+        "letter": letter,
+        "franchise_display": name,
+        "band_id": band.bnd_id,
+        "navigate_band_id": band.bnd_id,
+        "cover_url": cover,
+        "portrait_url": cover,
+        "landscape_url": card.landscape_url or card.photo_url,
+        "banner_url": card.banner_url or card.landscape_url or card.photo_url,
+        "logo_url": card.logo_url,
+        "icon_url": card.icon_url,
+    }
+
+
+def merge_music_band_into_related(
+    related_music: list | None,
+    band: Band | None,
+    media_root: Path | None = None,
+) -> list[dict]:
+    """Ensure Related MUSIC includes the franchise's Music artist when present."""
+    out: list[dict] = [e for e in (related_music or []) if isinstance(e, dict)]
+    if not band:
+        return out
+    want = band.bnd_id
+    for entry in out:
+        if entry.get("band_id") == want or entry.get("navigate_band_id") == want:
+            return out
+    card = music_related_entry_for_band(band, media_root)
+    if card:
+        out.insert(0, card)
+    return out
+
+
 def preferred_artwork_owner(
     franchise_name: str, media_root: Path | None = None
 ) -> tuple[str, Path] | None:

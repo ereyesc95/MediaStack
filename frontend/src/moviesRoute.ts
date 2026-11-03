@@ -16,6 +16,7 @@ export type MoviesSection =
   | "movies"
   | "series"
   | "audio"
+  | "music"
   | "library"
   | "games"
   | "gallery"
@@ -29,6 +30,8 @@ export type MoviesRoute = {
   franchiseName?: string;
   filmId?: string;
   filmTitle?: string;
+  /** When siblings share a bare title, URL uses ``Title (YYYY)``. */
+  leafYear?: string;
   section: MoviesSection;
   overviewTab?: MoviesOverviewTab;
   universeId?: number;
@@ -40,6 +43,7 @@ const SECTIONS: MoviesSection[] = [
   "movies",
   "series",
   "audio",
+  "music",
   "library",
   "games",
   "gallery",
@@ -156,7 +160,11 @@ export function moviesPath(route: MoviesRoute): string {
   );
   let path = `/movies/${enc(franchiseSeg)}`;
   path += `/${enc(
-    leafUrlSegment({ id: route.filmId!, title: route.filmTitle })
+    leafUrlSegment({
+      id: route.filmId!,
+      title: route.filmTitle,
+      year: route.leafYear,
+    })
   )}`;
 
   const section = SECTIONS.includes(route.section) ? route.section : "overview";

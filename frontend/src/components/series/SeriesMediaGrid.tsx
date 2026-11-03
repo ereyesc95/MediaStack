@@ -319,7 +319,7 @@ export default function SeriesMediaGrid({
   }, [tapReveal, revealedId]);
 
   if (loading && !(items && items.length)) {
-    return null;
+    return <p className="muted artist-section-empty">Loading…</p>;
   }
   if (!items.length) {
     return <p className="muted artist-section-empty">{emptyMessage}</p>;

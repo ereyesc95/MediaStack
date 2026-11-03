@@ -181,6 +181,8 @@ type Props = {
   onOpenMoviesPath?: (path: string) => void;
   /** Open a Books work/book page from LIBRARY (or related book cards). */
   onOpenBooksPath?: (path: string) => void;
+  /** Open a Games franchise/game from quiz catalog or related cards. */
+  onOpenGamesPath?: (path: string) => void;
   /** Movies module: open a Series franchise (optionally a subseries) from the SERIES tab. */
   onOpenSeriesFranchise?: (
     franchiseId: string,
@@ -213,6 +215,7 @@ const SERIES_SECTIONS: FranchiseNavSection[] = [
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "music", label: "MUSIC", flag: "has_music" },
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
@@ -225,6 +228,7 @@ const MOVIES_SECTIONS: FranchiseNavSection[] = [
   { id: "movies", label: "MOVIES", flag: null },
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "music", label: "MUSIC", flag: "has_music" },
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
@@ -238,6 +242,7 @@ const SERIES_FROM_BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "music", label: "MUSIC", flag: "has_music" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
   { id: "quiz", label: "QUIZ", flag: null },
@@ -250,6 +255,7 @@ const BOOKS_SECTIONS: FranchiseNavSection[] = [
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "music", label: "MUSIC", flag: "has_music" },
   { id: "games", label: "GAMES", flag: "has_games" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
   { id: "quiz", label: "QUIZ", flag: null },
@@ -262,6 +268,7 @@ const GAMES_SECTIONS: FranchiseNavSection[] = [
   { id: "series", label: "SERIES", flag: "has_series" },
   { id: "movies", label: "MOVIES", flag: "has_movies" },
   { id: "audio", label: "AUDIO", flag: "has_audio" },
+  { id: "music", label: "MUSIC", flag: "has_music" },
   { id: "library", label: "BOOKS", flag: "has_library" },
   { id: "gallery", label: "GALLERY", mobileLabel: "ART", flag: "has_gallery" },
   { id: "quiz", label: "QUIZ", flag: null },
@@ -320,6 +327,7 @@ export default function SeriesFranchisePage({
   onOpenArtist,
   onOpenMoviesPath,
   onOpenBooksPath,
+  onOpenGamesPath,
   onOpenSeriesFranchise,
   onOpenMoviesFranchise,
   onShellUpdate,
@@ -463,6 +471,7 @@ export default function SeriesFranchisePage({
 
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
   const [audioLoading, setAudioLoading] = useState(() => section === "audio");
+  const [musicCards, setMusicCards] = useState<SeriesMediaCard[]>([]);
   const [opedOpen, setOpedOpen] = useState(false);
   const [seriesPlaying, setSeriesPlaying] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
@@ -565,6 +574,7 @@ export default function SeriesFranchisePage({
     setPlayerOpen(false);
     setRefreshing(false);
     setAudioCards([]);
+    setMusicCards([]);
     setMovieCards([]);
     setShowCards([]);
     setLibCards([]);
@@ -575,6 +585,49 @@ export default function SeriesFranchisePage({
     cachedLogoRef.current = null;
     cachedIconRef.current = null;
   }, [franchiseId]);
+
+  useEffect(() => {
+    const related =
+      (
+        data as {
+          related?: {
+            music?: Array<{
+              path?: string;
+              title?: string;
+              cover_url?: string | null;
+              portrait_url?: string | null;
+              landscape_url?: string | null;
+              banner_url?: string | null;
+              logo_url?: string | null;
+              band_id?: number | null;
+              navigate_band_id?: number | null;
+            }>;
+          };
+          music_band_id?: number | null;
+        } | null
+      )?.related?.music || [];
+    const bandId = (
+      data as { music_band_id?: number | null } | null
+    )?.music_band_id;
+    if (!related.length && bandId == null) {
+      setMusicCards([]);
+      return;
+    }
+    setMusicCards(
+      related.map((m, i) => ({
+        id: String(m.navigate_band_id || m.band_id || m.path || `music-${i}`),
+        title: String(m.title || "Untitled"),
+        cover_url: m.portrait_url || m.cover_url || null,
+        portrait_url: m.portrait_url || m.cover_url || null,
+        landscape_url: m.landscape_url || m.cover_url || null,
+        banner_url: m.banner_url || m.landscape_url || m.cover_url || null,
+        logo_url: m.logo_url || null,
+        path: m.path,
+        navigate_band_id: m.navigate_band_id || m.band_id || null,
+        open_label: "Open artist",
+      }))
+    );
+  }, [data]);
 
   useEffect(() => {
     setGallerySectionKey("");
@@ -609,10 +662,11 @@ export default function SeriesFranchisePage({
 
   useEffect(() => {
     const franchiseName = data?.name || shell?.name || undefined;
+    const routeFranchiseId = (data?.slug || franchiseId).trim() || franchiseId;
     if (isGames) {
       pushGamesRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName,
           section: section as import("../../gamesRoute").GamesSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
@@ -625,7 +679,7 @@ export default function SeriesFranchisePage({
     if (isBooks) {
       pushBooksRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName,
           section: section as import("../../booksRoute").BooksSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
@@ -638,7 +692,7 @@ export default function SeriesFranchisePage({
     if (isMoviesOnly) {
       pushMoviesRoute(
         {
-          franchiseId,
+          franchiseId: routeFranchiseId,
           franchiseName,
           section: section as import("../../moviesRoute").MoviesSection,
           overviewTab: section === "overview" ? overviewTab : undefined,
@@ -650,7 +704,7 @@ export default function SeriesFranchisePage({
     }
     pushSeriesRoute(
       {
-        franchiseId,
+        franchiseId: routeFranchiseId,
         franchiseName,
         subseriesId,
         seasonId,
@@ -662,6 +716,8 @@ export default function SeriesFranchisePage({
     );
   }, [
     franchiseId,
+    data?.slug,
+    data?.name,
     subseriesId,
     seasonId,
     section,
@@ -751,7 +807,8 @@ export default function SeriesFranchisePage({
       const canScaffold =
         scaffoldModule === "movies" ||
         scaffoldModule === "series" ||
-        scaffoldModule === "books";
+        scaffoldModule === "books" ||
+        scaffoldModule === "games";
       if (!franchiseName || !canScaffold) {
         setError("No folders were affected");
         return;
@@ -1656,9 +1713,16 @@ export default function SeriesFranchisePage({
         return (related?.movies?.length || 0) > 0 || Boolean(media.has_movies);
       }
       if (s.flag === "has_audio") {
-        // media.has_audio is true when a Music band shares the name — that is
-        // not the same as Series/[Audio] releases. Only show with real cards.
+        // Leaf Audio/ only — Music artist bridge is the MUSIC tab (has_music).
         return audioCards.length > 0;
+      }
+      if (s.flag === "has_music") {
+        if (musicCards.length > 0) return true;
+        return (
+          (related?.music?.length || 0) > 0 ||
+          Boolean(media.has_music) ||
+          data.music_band_id != null
+        );
       }
       if (s.flag === "has_library" || s.flag === "has_books") {
         if (libCards.length > 0) return true;
@@ -1682,6 +1746,7 @@ export default function SeriesFranchisePage({
     showCards.length,
     movieCards.length,
     audioCards.length,
+    musicCards.length,
     libCards.length,
     gameCards.length,
     isMovies,
@@ -2031,6 +2096,10 @@ export default function SeriesFranchisePage({
       onOpenMusicRelease?.(item.navigate_band_id, item.navigate_release_id);
       return;
     }
+    if (item.navigate_band_id && onOpenArtist) {
+      onOpenArtist(item.navigate_band_id);
+      return;
+    }
     if (isGames && section === "games" && item.id) {
       onNavigate({
         franchiseId,
@@ -2074,7 +2143,7 @@ export default function SeriesFranchisePage({
 
   const openQuizCatalogItem = (item: FranchiseQuizCatalogItem) => {
     if (item.module === "series") {
-      if (!isMovies && !isBooks) {
+      if (!isMovies && !isBooks && !isGames) {
         onNavigate({
           franchiseId,
           subseriesId: item.navigate_id,
@@ -2092,6 +2161,19 @@ export default function SeriesFranchisePage({
     }
     if (item.module === "book") {
       onOpenBooksPath?.(item.path);
+      return;
+    }
+    if (item.module === "game") {
+      if (isGames) {
+        onNavigate({
+          franchiseId,
+          subseriesId: item.navigate_id,
+          section: "overview",
+          overviewTab: "about",
+        });
+        return;
+      }
+      onOpenGamesPath?.(item.path);
     }
   };
 
@@ -3071,17 +3153,22 @@ export default function SeriesFranchisePage({
             <SeriesMediaGrid
               items={scopedAudioCards}
               loading={loading || (audioLoading && audioCards.length === 0)}
-              emptyMessage={
-                isMovies
-                  ? "No audio for this franchise yet."
-                  : "No audio for this series."
-              }
+              emptyMessage="No audio for this franchise yet."
               cardLayout={releaseCardLayout}
               squareCovers={releaseCardLayout === "cover"}
               coverAspect="square"
               onOpen={openMediaCard}
             />
           )
+        ) : null}
+
+        {section === "music" ? (
+          <SeriesMediaGrid
+            items={musicCards}
+            loading={loading && musicCards.length === 0}
+            emptyMessage="No Music artist linked for this franchise."
+            onOpen={openMediaCard}
+          />
         ) : null}
 
         {section === "movies" || section === "books" ? (
@@ -3095,16 +3182,14 @@ export default function SeriesFranchisePage({
                   : !officialOnly && showMovieOfficialBar
                     ? "No unofficial books in this work yet."
                     : "No book folders under this work yet."
-                : isMoviesOnly
-                  ? mediaSubFilter !== "all"
-                    ? "No movies linked to this series yet."
-                    : officialOnly && showMovieOfficialBar
+                : mediaSubFilter !== "all"
+                  ? "No movies match this filter."
+                  : isMoviesOnly
+                    ? officialOnly && showMovieOfficialBar
                       ? "No official film folders under this work yet."
                       : !officialOnly && showMovieOfficialBar
                         ? "No unofficial film folders under this work yet."
                         : "No film folders under this work yet."
-                  : mediaSubFilter !== "all"
-                    ? "No movies linked to this series yet."
                     : "No movies linked to this franchise yet."
             }
             cardLayout={releaseCardLayout}

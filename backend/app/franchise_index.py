@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from app.paths import DATA_DIR
 
-FRANCHISE_INDEX_VERSION = 2
+FRANCHISE_INDEX_VERSION = 3
 
 MODULE_MOVIES = "movies"
 MODULE_SERIES = "series"
@@ -162,26 +162,21 @@ def franchise_index_cache_path() -> Path:
     return cache_dir / "index.json"
 
 
+ALIASES_SETTING_KEY = "franchise_aliases"
+OVERRIDES_SETTING_KEY = "franchise_overrides"
+
+
 def franchise_aliases_path() -> Path:
+    """Legacy JSON path (read-once migrate into DB; no longer written)."""
     return DATA_DIR / "franchise_aliases.json"
 
 
 def franchise_overrides_path() -> Path:
+    """Legacy JSON path (read-once migrate into DB; no longer written)."""
     return DATA_DIR / "franchise_overrides.json"
 
 
-def load_franchise_aliases() -> dict[str, str]:
-    """Map alias slug → canonical franchise slug (flat string values only).
-
-    Parent-link objects in the JSON are ignored here (reserved for later).
-    """
-    path = franchise_aliases_path()
-    if not path.is_file():
-        return {}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+def _normalize_alias_map(raw: Any) -> dict[str, str]:
     if not isinstance(raw, dict):
         return {}
     out: dict[str, str] = {}
@@ -196,18 +191,150 @@ def load_franchise_aliases() -> dict[str, str]:
     return out
 
 
-def load_franchise_overrides() -> list[dict[str, Any]]:
-    """Load include/exclude/link edges from franchise_overrides.json."""
-    path = franchise_overrides_path()
-    if not path.is_file():
+def _normalize_override_rows(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
         return []
+    cleaned: list[dict[str, Any]] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        kind = str(row.get("type") or "").strip().casefold()
+        if kind not in ("link", "exclude"):
+            continue
+        frm = str(row.get("from") or "").replace("\\", "/").strip().rstrip("/")
+        to = str(row.get("to") or "").replace("\\", "/").strip().rstrip("/")
+        if not frm or not to:
+            continue
+        entry: dict[str, Any] = {"type": kind, "from": frm, "to": to}
+        reason = str(row.get("reason") or "").strip()
+        if reason:
+            entry["reason"] = reason
+        cleaned.append(entry)
+    return cleaned
+
+
+def _read_setting_json(key: str) -> Any | None:
+    from app.database import SessionLocal
+    from app.models import AppSetting
+
+    db = SessionLocal()
+    try:
+        row = db.get(AppSetting, key)
+        if not row or not (row.aps_value or "").strip():
+            return None
+        return json.loads(row.aps_value or "")
+    except (json.JSONDecodeError, OSError, TypeError):
+        return None
+    finally:
+        db.close()
+
+
+def _write_setting_json(key: str, value: Any) -> None:
+    from app.database import SessionLocal
+    from app.models import AppSetting
+
+    payload = json.dumps(value, ensure_ascii=False)
+    db = SessionLocal()
+    try:
+        row = db.get(AppSetting, key)
+        if row:
+            row.aps_value = payload
+        else:
+            db.add(AppSetting(aps_key=key, aps_value=payload))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _migrate_legacy_aliases_file() -> dict[str, str] | None:
+    path = franchise_aliases_path()
+    if not path.is_file():
+        return None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return []
-    if not isinstance(raw, list):
-        return []
-    return [row for row in raw if isinstance(row, dict)]
+        return None
+    cleaned = _normalize_alias_map(raw)
+    _write_setting_json(ALIASES_SETTING_KEY, cleaned)
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    return cleaned
+
+
+def _migrate_legacy_overrides_file() -> list[dict[str, Any]] | None:
+    path = franchise_overrides_path()
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    cleaned = _normalize_override_rows(raw)
+    _write_setting_json(OVERRIDES_SETTING_KEY, cleaned)
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    return cleaned
+
+
+def load_franchise_aliases() -> dict[str, str]:
+    """Map alias slug → canonical franchise slug (DB ``app_settings``).
+
+    If a legacy ``franchise_aliases.json`` is present, import it into the DB
+    (overwriting) and delete the file — then serve from the database.
+    """
+    if franchise_aliases_path().is_file():
+        migrated = _migrate_legacy_aliases_file()
+        if migrated is not None:
+            return migrated
+    raw = _read_setting_json(ALIASES_SETTING_KEY)
+    if raw is not None:
+        return _normalize_alias_map(raw)
+    return {}
+
+
+def load_franchise_overrides() -> list[dict[str, Any]]:
+    """Load link/exclude edges from DB ``app_settings``.
+
+    If a legacy ``franchise_overrides.json`` is present, import it into the DB
+    (overwriting) and delete the file — then serve from the database.
+    """
+    if franchise_overrides_path().is_file():
+        migrated = _migrate_legacy_overrides_file()
+        if migrated is not None:
+            return migrated
+    raw = _read_setting_json(OVERRIDES_SETTING_KEY)
+    if raw is not None:
+        return _normalize_override_rows(raw)
+    return []
+
+
+def save_franchise_aliases(aliases: dict[str, str]) -> None:
+    """Persist flat alias → canonical map in the database (not a local JSON file)."""
+    cleaned = _normalize_alias_map(aliases or {})
+    _write_setting_json(ALIASES_SETTING_KEY, cleaned)
+    # Drop legacy file if still present so disk stays clean.
+    path = franchise_aliases_path()
+    if path.is_file():
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+
+def save_franchise_overrides(overrides: list[dict[str, Any]]) -> None:
+    """Persist link/exclude edges in the database (not a local JSON file)."""
+    cleaned = _normalize_override_rows(overrides or [])
+    _write_setting_json(OVERRIDES_SETTING_KEY, cleaned)
+    path = franchise_overrides_path()
+    if path.is_file():
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def canonical_franchise_slug(
@@ -327,6 +454,7 @@ class FranchiseGroup:
 class FranchiseIndex:
     index_version: int = FRANCHISE_INDEX_VERSION
     scanned_at: str = field(default_factory=_now_iso)
+    disk_listing: str = ""
     franchises: dict[str, FranchiseGroup] = field(default_factory=dict)
     # Normalized path pairs: hide `to` when related-for `from`.
     exclude_edges: list[tuple[str, str]] = field(default_factory=list)
@@ -335,6 +463,7 @@ class FranchiseIndex:
         return {
             "index_version": self.index_version,
             "scanned_at": self.scanned_at,
+            "disk_listing": self.disk_listing,
             "franchises": {
                 slug: {
                     "display_name": group.display_name,
@@ -678,9 +807,12 @@ def _scan_games(media_root: Path, index: FranchiseIndex) -> None:
 
 def build_franchise_index(media_root: Path) -> FranchiseIndex:
     """Scan media root and build franchise slug index."""
+    from app.media_listing_sig import media_modules_listing_sig
+
     index = FranchiseIndex()
     if not media_root.is_dir():
         return index
+    index.disk_listing = media_modules_listing_sig(media_root)
     aliases = load_franchise_aliases()
     _scan_movies(media_root, index)
     _scan_series(media_root, index)
@@ -747,9 +879,79 @@ def load_franchise_index(path: Path | None = None) -> FranchiseIndex | None:
     return FranchiseIndex(
         index_version=int(raw.get("index_version") or FRANCHISE_INDEX_VERSION),
         scanned_at=raw.get("scanned_at") or _now_iso(),
+        disk_listing=str(raw.get("disk_listing") or ""),
         franchises=franchises,
         exclude_edges=exclude_edges,
     )
+
+
+def ensure_franchise_index(
+    media_root: Path | None = None,
+    *,
+    force: bool = False,
+) -> FranchiseIndex:
+    """Load cached franchise index or rebuild when version/listing is stale.
+
+    Listing fingerprint catches folder add/delete that leave max mtime unchanged.
+    """
+    from app.config import settings
+    from app.media_listing_sig import media_modules_listing_sig
+
+    root = media_root
+    if root is None:
+        raw = settings.media_root
+        root = Path(raw) if raw else None
+    if root is None or not root.is_dir():
+        return load_franchise_index() or FranchiseIndex()
+
+    listing = media_modules_listing_sig(root)
+    cached = None if force else load_franchise_index()
+    if (
+        cached
+        and cached.franchises is not None
+        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
+        and (cached.disk_listing or "") == listing
+    ):
+        return cached
+    index = build_franchise_index(root)
+    # Prefer the precomputed listing (build also sets it; keep in sync).
+    index.disk_listing = listing or index.disk_listing
+    save_franchise_index(index)
+    try:
+        from app.module_catalog_cache import invalidate_module_catalog
+
+        invalidate_module_catalog()
+    except Exception:
+        pass
+    return index
+
+
+def related_for_artist_name(
+    index: FranchiseIndex,
+    artist_name: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Related media for a Music artist via franchise slug (= artist folder name).
+
+    Covers same-named franchises and override ``link`` edges registered under
+    the artist slug (e.g. biopic links from Music/H/HIM/… → Movies/…).
+    """
+    slug = normalize_franchise_slug(artist_name or "")
+    if not slug:
+        return {bucket: [] for bucket in _KIND_BUCKETS.values()}
+    group = index.franchises.get(slug)
+    if not group:
+        return {bucket: [] for bucket in _KIND_BUCKETS.values()}
+    out: dict[str, list[dict[str, Any]]] = {
+        bucket: [] for bucket in _KIND_BUCKETS.values()
+    }
+    for entry in group.entries:
+        # Music Video/Library local paths stay on artist media tabs — Related
+        # panel is for cross-module franchise content.
+        if entry.kind == "music":
+            continue
+        bucket = _KIND_BUCKETS.get(entry.kind, "music")
+        out[bucket].append(asdict(entry))
+    return out
 
 
 _KIND_BUCKETS: dict[EntryKind, str] = {

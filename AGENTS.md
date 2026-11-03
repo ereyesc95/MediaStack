@@ -25,22 +25,26 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 - **Music** is artist-centric: `Music/{Letter}/{Artist}/Audio|Video|Library|Gallery/`
 - **Movies / Series / Books / Games** use franchise/work folder names as the cross-module key
 - **Default linking:** same `{Franchise}` folder name across modules → **Related media** (no portal farms)
-- **Exceptions:** `.path` sidecars (NAS), symlinks, or future `franchise_overrides.json` for biopics, collisions, subseries filters
+- **Exceptions:** `.path` sidecars (NAS), symlinks, or DB franchise aliases/overrides for biopics, collisions, subseries filters (Setup → **Aliases & overrides…**)
 - **Music ≠ movie franchise** (e.g. HIM vs *Elvis* biopic): needs subject/DB links, not folder name alone
+- **Soundtrack-bridge:** matching Music artist can appear on franchise **MUSIC** tab / Related (distinct from leaf `[Audio]` embeds)
 
-## Implementation status (2026-08)
+## Implementation status (2026-08+)
 
 | Area | Status |
 |------|--------|
 | Music Audio / Video / Library / Tours | Done (Tours: dedicated show pages, EVENTS layouts/filters, Live shows) |
-| Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, NSFW) |
+| Physical Collection | Done (list / cover / banner / **shelf** vinyl spines) |
+| Listening streaks + Wrapped | Done (`listening_day_plays` + Music Home strip) |
+| Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, NSFW, quiz) |
 | Universes | Done (multi-module hubs + SFW filter) |
-| Human-readable URL slugs | Done (dual-parse legacy + slug; see README) |
+| Human-readable URL slugs | Done (dual-parse legacy + slug; year disambiguation on title collision) |
 | Staff roles (Original / Dub / Hybrid) | Done (`staff_roles` + `/api/series/staff-roles`) |
 | Per-film NSFW genres | Done (`movies_catalog_meta` leaf genres) |
-| `backend/app/franchise_index.py` | Phase 1–2: scan/save/load + `GET /api/media/related` |
-| Games module UI | Done (shared SeriesFranchisePage / leaf chrome) |
-| Files module | Done (`Files/{Tab}/` browse + admin Manage Files) |
+| `backend/app/franchise_index.py` | Done through Phase 5 (aliases/overrides DB + admin UI) |
+| Soundtrack-bridge / franchise MUSIC | Done (`music_band_id` merge into Related) |
+| Games module UI | Done (shared SeriesFranchisePage / leaf chrome + quiz) |
+| Files module | Done (browse, Manage Files, rename/move/copy/delete, multi-select, upload) |
 | Hobbies module | Done (presets, Excel import/export, private collections) |
 
 ## Series / Movies / Books files
@@ -64,11 +68,8 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 
 ## Next work (in order)
 
-1. Optional Music artist Related panel when franchise/subject links exist
-2. Expose slug on series/movie/book/game overview payloads
-3. Biopic / subject relations in DB (+ optional alias admin UI)
-4. Title-collision disambiguation polish for remaining leaf edge cases
-5. Files: optional in-UI file move/rename/delete (API already exists)
+1. Opportunistic UX polish as issues surface in day-to-day use
+2. Optional later: deeper Files nesting, drag-drop upload, larger Wrapped history backfill
 
 ## Key code files
 

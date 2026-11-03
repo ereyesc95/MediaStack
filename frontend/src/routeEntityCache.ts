@@ -1,4 +1,4 @@
-import { normalizeSlug } from "./routeSlug";
+import { bareLeafTitle, normalizeSlug, yearToken } from "./routeSlug";
 import {
   readSessionEntry,
   removeSessionEntry,
@@ -9,6 +9,8 @@ import {
 const ARTIST_KEY = sessionCacheKey("route-entity", "artist-slug");
 const RELEASE_KEY = sessionCacheKey("route-entity", "release-slug");
 const LEAF_KEY = sessionCacheKey("route-entity", "leaf-slug");
+
+export type LeafModule = "movies" | "series" | "books" | "games";
 
 type SlugMap = Record<string, number>;
 type ReleaseMap = Record<string, string>;
@@ -58,29 +60,56 @@ export function releaseIdFromSlug(
   return readMap<ReleaseMap>(RELEASE_KEY)[`${bandId}:${slug}`] ?? null;
 }
 
+function leafCacheKey(
+  module: LeafModule,
+  franchiseId: string,
+  slug: string
+): string {
+  const fr = normalizeSlug(franchiseId) || franchiseId;
+  return `${module}:${fr}:${slug}`;
+}
+
+/**
+ * Remember a leaf id under its slug/title.
+ * When ``year`` is set, also store ``Title (YYYY)`` / ``Title YYYY`` keys.
+ * When ``ambiguousBare`` is true, skip the bare (year-less) key so collisions
+ * do not overwrite each other (last visit wins).
+ */
 export function rememberLeafSlug(
-  module: "movies" | "series" | "books",
+  module: LeafModule,
   franchiseId: string,
   slugOrTitle: string,
-  leafId: string
+  leafId: string,
+  opts?: { year?: string | null; ambiguousBare?: boolean }
 ): void {
   const slug = normalizeSlug(slugOrTitle);
-  const fr = normalizeSlug(franchiseId) || franchiseId;
   if (!slug || !leafId.trim()) return;
   const map = readMap<LeafMap>(LEAF_KEY);
-  map[`${module}:${fr}:${slug}`] = leafId;
+  map[leafCacheKey(module, franchiseId, slug)] = leafId;
+
+  const year = (opts?.year || yearToken(slugOrTitle) || "").trim();
+  const bare = bareLeafTitle(slugOrTitle);
+  const bareSlug = normalizeSlug(bare);
+  if (bareSlug && !opts?.ambiguousBare) {
+    map[leafCacheKey(module, franchiseId, bareSlug)] = leafId;
+  }
+  if (year && bareSlug) {
+    map[leafCacheKey(module, franchiseId, normalizeSlug(`${bare} (${year})`))] =
+      leafId;
+    map[leafCacheKey(module, franchiseId, normalizeSlug(`${bare} ${year}`))] =
+      leafId;
+  }
   writeMap(LEAF_KEY, map);
 }
 
 export function leafIdFromSlug(
-  module: "movies" | "series" | "books",
+  module: LeafModule,
   franchiseId: string,
   slugOrTitle: string
 ): string | null {
   const slug = normalizeSlug(slugOrTitle);
-  const fr = normalizeSlug(franchiseId) || franchiseId;
   if (!slug) return null;
-  return readMap<LeafMap>(LEAF_KEY)[`${module}:${fr}:${slug}`] ?? null;
+  return readMap<LeafMap>(LEAF_KEY)[leafCacheKey(module, franchiseId, slug)] ?? null;
 }
 
 export function clearRouteEntityCache(): void {

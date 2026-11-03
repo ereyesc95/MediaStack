@@ -428,6 +428,20 @@ def record_play(
             row.rep_reproductions = str(count)
         db.commit()
         db.refresh(row)
+        if not is_quiz_play_title(title) and not is_quiz_play_title(row.rep_title):
+            try:
+                from app.listening import record_listening_day
+
+                record_listening_day(
+                    db,
+                    user_id=user_id,
+                    path=path,
+                    artist_id=artist_id or row.rep_artist_id,
+                    title=title or row.rep_title,
+                    release=release or row.rep_release,
+                )
+            except Exception:
+                pass
         return row
     if is_quiz_play_title(title):
         return Reproduction(
@@ -453,6 +467,19 @@ def record_play(
     db.add(row)
     db.commit()
     db.refresh(row)
+    try:
+        from app.listening import record_listening_day
+
+        record_listening_day(
+            db,
+            user_id=user_id,
+            path=path,
+            artist_id=artist_id,
+            title=title,
+            release=release,
+        )
+    except Exception:
+        pass
     return row
 
 

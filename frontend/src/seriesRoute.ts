@@ -17,6 +17,8 @@ export type SeriesRoute = {
   franchiseName?: string;
   subseriesId?: string;
   subseriesTitle?: string;
+  /** When siblings share a bare title, URL uses ``Title (YYYY)``. */
+  leafYear?: string;
   seasonId?: string;
   seasonTitle?: string;
   section: SeriesSection;
@@ -31,6 +33,7 @@ const SECTIONS: SeriesSection[] = [
   "series",
   "movies",
   "audio",
+  "music",
   "library",
   "games",
   "gallery",
@@ -166,6 +169,7 @@ export function seriesPath(route: SeriesRoute): string {
       leafUrlSegment({
         id: route.subseriesId,
         title: route.subseriesTitle,
+        year: route.leafYear,
       })
     )}`;
   }

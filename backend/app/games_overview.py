@@ -10,6 +10,7 @@ from app.franchise_identity import find_artwork_home
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
+    normalize_franchise_slug,
     related_for_path,
     save_franchise_index,
 )
@@ -30,11 +31,9 @@ def _root() -> Path:
 
 
 def _ensure_index(root: Path):
-    index = load_franchise_index()
-    if index is None and root.is_dir():
-        index = build_franchise_index(root)
-        save_franchise_index(index)
-    return index
+    from app.franchise_index import ensure_franchise_index
+
+    return ensure_franchise_index(root)
 
 
 def _related_for_path(root: Path, folder_path: str, work_name: str = ""):
@@ -198,11 +197,38 @@ def build_work_overview(
     has_books = bool(related_disk.get("books"))
     creator = visible_related(about_disk, "creator")
     similar = visible_related(about_disk, "similar")
+    music_band = None
+    related_music: list = []
+    if db is not None:
+        try:
+            from app.franchise_identity import (
+                find_music_band_for_franchise,
+                merge_music_band_into_related,
+            )
+
+            music_band = find_music_band_for_franchise(
+                db, detail.get("name") or work_id, media_root=root
+            )
+            related_music = merge_music_band_into_related(
+                related_disk.get("music") or [], music_band, root
+            )
+        except Exception:
+            related_music = list(related_disk.get("music") or [])
+    else:
+        related_music = list(related_disk.get("music") or [])
     # SeriesAbout / franchise shell expect a SeriesOverview-shaped payload.
+    slug = (
+        detail.get("slug")
+        or detail.get("id")
+        or normalize_franchise_slug(detail.get("name") or "")
+        or ""
+    )
+
     return {
         "id": detail.get("id"),
         "name": detail.get("name"),
         "letter": detail.get("letter"),
+        "slug": slug,
         "folder_path": folder_path,
         "platforms": detail.get("platforms") or [],
         "cover_url": detail.get("cover_url"),
@@ -222,6 +248,7 @@ def build_work_overview(
         "links": {"categories": []},
         "media": {
             "has_audio": has_audio,
+            "has_music": bool(related_music),
             "has_series": has_series,
             "has_movies": has_movies,
             "has_books": has_books,
@@ -252,6 +279,7 @@ def build_work_overview(
         "primary_game_id": detail.get("primary_game_id"),
         "primary_film_id": detail.get("primary_film_id"),
         "has_audio": has_audio,
+        "has_music": bool(related_music),
         "has_gallery": has_gallery,
         "has_movies": has_movies,
         "has_series": has_series,
@@ -276,12 +304,13 @@ def build_work_overview(
             "series": _enrich_related_cards(related_disk.get("series") or [], root),
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": games,
-            "music": _enrich_related_cards(related_disk.get("music") or [], root),
+            "music": related_music,
             "creator": creator,
             "similar": similar,
             "creator_count": len(creator),
             "similar_count": len(similar),
         },
+        "music_band_id": music_band.bnd_id if music_band else None,
         "universes": universes,
         "universe": universe,
         "universe_cards": universe_cards,
@@ -351,6 +380,30 @@ def build_game_overview(
     has_books = bool(related_disk.get("books"))
     leaf_creator = visible_related(about_disk, "creator")
     leaf_similar = visible_related(about_disk, "similar")
+    music_band = None
+    related_music: list = []
+    if db is not None:
+        try:
+            from app.franchise_identity import (
+                find_music_band_for_franchise,
+                merge_music_band_into_related,
+            )
+
+            franchise_name = (
+                (detail.get("franchise") or {}).get("name")
+                or detail.get("work_name")
+                or work_id
+            )
+            music_band = find_music_band_for_franchise(
+                db, franchise_name, media_root=root
+            )
+            related_music = merge_music_band_into_related(
+                related_disk.get("music") or [], music_band, root
+            )
+        except Exception:
+            related_music = list(related_disk.get("music") or [])
+    else:
+        related_music = list(related_disk.get("music") or [])
 
     web_url = str(about_disk.get("web_url") or detail.get("web_url") or "").strip()
     if web_url and "://" not in web_url:
@@ -386,12 +439,21 @@ def build_game_overview(
         if str(x).strip()
     ]
 
+    work_slug = (
+        work_id
+        or (detail.get("franchise") or {}).get("slug")
+        or (detail.get("franchise") or {}).get("id")
+        or normalize_franchise_slug(detail.get("work_name") or "")
+        or ""
+    )
+
     return {
         "id": detail.get("id"),
         "title": detail.get("title"),
         "name": detail.get("title"),
         "date_iso": detail.get("date_iso") or release_s or None,
         "display_date": detail.get("display_date") or release_s or None,
+        "slug": work_slug,
         "folder_path": folder_path,
         "platform": platform,
         "work_id": work_id,
@@ -439,6 +501,7 @@ def build_game_overview(
         "eras": eras,
         "media": {
             "has_audio": has_audio,
+            "has_music": bool(related_music),
             "has_series": has_series,
             "has_movies": has_movies,
             "has_library": has_books,
@@ -468,12 +531,13 @@ def build_game_overview(
             "series": _enrich_related_cards(related_disk.get("series") or [], root),
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": siblings,
-            "music": _enrich_related_cards(related_disk.get("music") or [], root),
+            "music": related_music,
             "creator": leaf_creator,
             "similar": leaf_similar,
             "creator_count": len(leaf_creator),
             "similar_count": len(leaf_similar),
         },
+        "music_band_id": music_band.bnd_id if music_band else None,
         "franchise": detail.get("franchise"),
         "module": "games",
     }

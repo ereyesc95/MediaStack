@@ -14,17 +14,22 @@ import type { FranchiseRoute } from "./franchiseRoute";
 import type { ArtistRoute } from "./musicRoute";
 import type { MoviesRoute } from "./moviesRoute";
 import type { BooksRoute } from "./booksRoute";
+import type { GamesRoute } from "./gamesRoute";
 import type { SeriesRoute } from "./seriesRoute";
 import type { UniverseRoute } from "./universeRoute";
 import type { View } from "./types";
 import {
   isBookId,
   isFilmId,
+  isGameId,
   isMediaItemId,
   isReleaseId,
+  leafTitleCollides,
+  leafYearFromMeta,
+  matchLeafTitle,
   slugMatch,
-  stripDatedFolderTitle,
 } from "./routeSlug";
+export { matchLeafTitle } from "./routeSlug";
 import { parseBooksPath } from "./booksRoute";
 import { parseGamesPath } from "./gamesRoute";
 import { parseFranchisePath, parseLegacyFranchiseHubPath } from "./franchiseRoute";
@@ -43,27 +48,6 @@ import {
 } from "./routeEntityCache";
 
 type FranchiseHomeModule = "series" | "movies" | "books" | "games";
-
-function matchLeafTitle<
-  T extends { id: string; title?: string | null; name?: string | null; folder_name?: string | null },
->(items: T[] | undefined, slug: string): T | undefined {
-  if (!items?.length) return undefined;
-  const decoded = slug.trim();
-  const byId = items.find(
-    (it) =>
-      it.id === decoded ||
-      slugMatch(it.id, decoded) ||
-      slugMatch(stripDatedFolderTitle(it.id), decoded) ||
-      slugMatch(it.folder_name || "", decoded) ||
-      slugMatch(stripDatedFolderTitle(it.folder_name || ""), decoded)
-  );
-  if (byId) return byId;
-  const byTitle = items.filter((it) =>
-    slugMatch(it.title || it.name || "", decoded)
-  );
-  if (byTitle.length === 1) return byTitle[0];
-  return undefined;
-}
 
 async function resolveFranchiseHomeModule(
   franchiseId: string
@@ -127,19 +111,6 @@ async function resolveReleaseTitle(
       rememberReleaseSlug(bandId, title, hit.id);
       return hit.id;
     }
-    const query = title.trim();
-    if (query.length >= 2) {
-      const loose = res.releases?.find(
-        (row) =>
-          slugMatch(row.title || "", query) ||
-          slugMatch(stripDatedFolderTitle(row.id || ""), query) ||
-          slugMatch(stripDatedFolderTitle(row.folder_name || ""), query)
-      );
-      if (loose?.id) {
-        rememberReleaseSlug(bandId, title, loose.id);
-        return loose.id;
-      }
-    }
   } catch {
     return undefined;
   }
@@ -199,11 +170,27 @@ export async function resolveArtistRouteDeep(
   };
 }
 
+function leafMetaYear(hit: {
+  title?: string | null;
+  name?: string | null;
+  folder_name?: string | null;
+  date_iso?: string | null;
+  id?: string;
+}): string | null {
+  return leafYearFromMeta({
+    title: hit.title || hit.name,
+    folder_name: hit.folder_name,
+    date_iso: hit.date_iso,
+    id: hit.id,
+  });
+}
+
 export async function resolveSeriesRoute(
   route: SeriesRoute
 ): Promise<SeriesRoute> {
   let subseriesId = route.subseriesId;
   let subseriesTitle = route.subseriesTitle;
+  let leafYear = route.leafYear;
   let franchiseName = route.franchiseName;
   try {
     const detail = await fetchSeriesFranchise(route.franchiseId);
@@ -219,23 +206,27 @@ export async function resolveSeriesRoute(
       if (hit) {
         subseriesId = hit.id;
         subseriesTitle = hit.title || subseriesTitle;
-        rememberLeafSlug(
-          "series",
-          route.franchiseId,
-          hit.title || subseriesId,
-          hit.id
-        );
+        const titles = subs.map((s) => s.title || "");
+        const title = hit.title || subseriesId;
+        const ambiguous = leafTitleCollides(title, titles);
+        const year = ambiguous ? leafMetaYear(hit) : null;
+        if (year) leafYear = year;
+        rememberLeafSlug("series", route.franchiseId, title, hit.id, {
+          year: year || undefined,
+          ambiguousBare: ambiguous,
+        });
       }
     }
   } catch {
     /* keep raw slug */
   }
-  return { ...route, franchiseName, subseriesId, subseriesTitle };
+  return { ...route, franchiseName, subseriesId, subseriesTitle, leafYear };
 }
 
 export async function resolveMoviesRoute(route: MoviesRoute): Promise<MoviesRoute> {
   let filmId = route.filmId;
   let filmTitle = route.filmTitle;
+  let leafYear = route.leafYear;
   let franchiseName = route.franchiseName;
   try {
     const detail = await fetchMoviesFranchise(route.franchiseId);
@@ -250,23 +241,27 @@ export async function resolveMoviesRoute(route: MoviesRoute): Promise<MoviesRout
       if (hit) {
         filmId = hit.id;
         filmTitle = hit.title || filmTitle;
-        rememberLeafSlug(
-          "movies",
-          route.franchiseId,
-          hit.title || filmId,
-          hit.id
-        );
+        const titles = films.map((f) => f.title || "");
+        const title = hit.title || filmId;
+        const ambiguous = leafTitleCollides(title, titles);
+        const year = ambiguous ? leafMetaYear(hit) : null;
+        if (year) leafYear = year;
+        rememberLeafSlug("movies", route.franchiseId, title, hit.id, {
+          year: year || undefined,
+          ambiguousBare: ambiguous,
+        });
       }
     }
   } catch {
     /* keep slug */
   }
-  return { ...route, franchiseName, filmId, filmTitle };
+  return { ...route, franchiseName, filmId, filmTitle, leafYear };
 }
 
 export async function resolveBooksRoute(route: BooksRoute): Promise<BooksRoute> {
   let bookId = route.bookId;
   let bookTitle = route.bookTitle;
+  let leafYear = route.leafYear;
   let franchiseName = route.franchiseName;
   try {
     const detail = await fetchBooksFranchise(route.franchiseId);
@@ -282,18 +277,57 @@ export async function resolveBooksRoute(route: BooksRoute): Promise<BooksRoute> 
       if (hit) {
         bookId = hit.id;
         bookTitle = hit.title || bookTitle;
-        rememberLeafSlug(
-          "books",
-          route.franchiseId,
-          hit.title || bookId,
-          hit.id
-        );
+        const titles = books.map((b) => b.title || "");
+        const title = hit.title || bookId;
+        const ambiguous = leafTitleCollides(title, titles);
+        const year = ambiguous ? leafMetaYear(hit) : null;
+        if (year) leafYear = year;
+        rememberLeafSlug("books", route.franchiseId, title, hit.id, {
+          year: year || undefined,
+          ambiguousBare: ambiguous,
+        });
       }
     }
   } catch {
     /* keep slug */
   }
-  return { ...route, franchiseName, bookId, bookTitle };
+  return { ...route, franchiseName, bookId, bookTitle, leafYear };
+}
+
+export async function resolveGamesRoute(route: GamesRoute): Promise<GamesRoute> {
+  let gameId = route.gameId;
+  let gameTitle = route.gameTitle;
+  let leafYear = route.leafYear;
+  let franchiseName = route.franchiseName;
+  try {
+    const detail = await fetchGamesFranchise(route.franchiseId);
+    if (!franchiseName && detail?.name) franchiseName = detail.name;
+    if (gameId) {
+      const games =
+        (detail as { games?: typeof detail.films }).games ||
+        detail.films ||
+        [];
+      const hit =
+        matchLeafTitle(games, gameId) ||
+        (isGameId(gameId) ? games.find((g) => g.id === gameId) : undefined);
+      if (hit) {
+        gameId = hit.id;
+        gameTitle = hit.title || gameTitle;
+        const titles = games.map((g) => g.title || "");
+        const title = hit.title || gameId;
+        const ambiguous = leafTitleCollides(title, titles);
+        const year = ambiguous ? leafMetaYear(hit) : null;
+        if (year) leafYear = year;
+        rememberLeafSlug("games", route.franchiseId, title, hit.id, {
+          year: year || undefined,
+          ambiguousBare: ambiguous,
+        });
+      }
+    }
+  } catch {
+    /* keep slug */
+  }
+  return { ...route, franchiseName, gameId, gameTitle, leafYear };
 }
 
 export async function resolveUniverseRoute(
@@ -585,20 +619,18 @@ export async function resolvePathToView(
         canonicalPath: franchisePath(fr),
       };
     }
+    const gamesRoute = await resolveGamesRoute(gamesParsed);
     const { gamesPath } = await import("./gamesRoute");
     return {
       view: {
         kind: "games",
-        franchiseId: gamesParsed.franchiseId,
-        gameId: gamesParsed.gameId,
-        section: gamesParsed.section,
-        overviewTab: gamesParsed.overviewTab,
-        universeId: gamesParsed.universeId,
+        franchiseId: gamesRoute.franchiseId,
+        gameId: gamesRoute.gameId,
+        section: gamesRoute.section,
+        overviewTab: gamesRoute.overviewTab,
+        universeId: gamesRoute.universeId,
       },
-      canonicalPath: gamesPath({
-        ...gamesParsed,
-        franchiseName: gamesParsed.franchiseName,
-      }),
+      canonicalPath: gamesPath(gamesRoute),
     };
   }
 
@@ -832,7 +864,15 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
     return {
       kind: "games",
       franchiseId: gamesParsed.franchiseId,
-      gameId: gamesParsed.gameId,
+      gameId: gamesParsed.gameId
+        ? isGameId(gamesParsed.gameId)
+          ? gamesParsed.gameId
+          : leafIdFromSlug(
+              "games",
+              gamesParsed.franchiseId,
+              gamesParsed.gameId
+            ) ?? gamesParsed.gameId
+        : undefined,
       section: gamesParsed.section,
       overviewTab: gamesParsed.overviewTab,
       universeId: gamesParsed.universeId,

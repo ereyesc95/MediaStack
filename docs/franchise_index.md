@@ -164,7 +164,7 @@ When viewing a **movie**, show sibling films in same `Movies/{L}/{Franchise}/` p
 |------|----------|
 | **Music artist ≠ movie franchise** (HIM vs *Elvis* biopic) | DB relation, `[about Elvis]` tag, or manual override |
 | **Composer OST** (Kageyama ↔ DB) | Music path + credit DB; or `Music/…/Dragon Ball/` franchise folder if used |
-| **Name collision** (`Heat`) | Disambiguate in folder name or alias slug |
+| **Name collision** (`Heat`) | Prefer folder names `Heat (1995)` vs `Heat (2013)`; leaf URLs also append `(YYYY)` when siblings collide |
 | **Various Artists** | No franchise slug; playlists / tags only |
 | **Subseries-only films** | Tag `[DBZ]` on movie folder, override edge, or subseries filter rules |
 
@@ -172,9 +172,9 @@ When viewing a **movie**, show sibling films in same `Movies/{L}/{Franchise}/` p
 
 ## Overrides and aliases
 
-### Aliases (`data/franchise_aliases.json`)
+### Aliases (database `app_settings.franchise_aliases`)
 
-Loaded at index build time. Flat string values merge alias folders into a canonical slug:
+Loaded at index build time. Flat string map merges alias folders into a canonical slug:
 
 ```json
 {
@@ -183,9 +183,9 @@ Loaded at index build time. Flat string values merge alias folders into a canoni
 }
 ```
 
-Object values (parent links) are reserved for a later pass and ignored by the loader today.
+Edit via Setup → **Aliases & overrides…**. Legacy `data/franchise_aliases.json` is imported once into the DB then removed.
 
-### Overrides (`data/franchise_overrides.json`)
+### Overrides (database `app_settings.franchise_overrides`)
 
 Applied after the disk scan:
 
@@ -208,6 +208,8 @@ Applied after the disk scan:
 
 - **`exclude`**: hide the `to` path from Related when viewing the franchise that owns `from`
 - **`link`**: attach the `to` entry under the franchise inferred from `from` (biopic / subject bridges)
+
+Edit via Setup → **Aliases & overrides…** (Overrides tab). Legacy `data/franchise_overrides.json` is imported once into the DB then removed.
 
 Manual **`.path`** files remain valid; scanner resolves target and registers an override edge if slug differs.
 
@@ -244,12 +246,12 @@ Manual **`.path`** files remain valid; scanner resolves target and registers an 
 - [x] `GET /api/media/franchise/{slug}/related` (same)
 - [x] `POST /api/sync/franchise-index` (manual rebuild) + admin **Rebuild related index**
 - [x] Hook rebuild into folder sync / media scan pipeline (incl. games)
-- [ ] Expose slug on series/movie/book/game overview payloads
+- [x] Expose slug on series/movie/book/game overview payloads
 
 ### Phase 3 — UI
 
 - [x] **Related media** panel on Series, Movie, Book, Game pages (when modules exist)
-- [ ] Optional panel on Music artist when franchise/subject links exist
+- [x] Optional panel on Music artist when franchise/subject links exist
 - [x] Subseries filter query param on related API (`?subseries=…`)
 
 ### Phase 4 — Scanner alignment
@@ -262,8 +264,9 @@ Manual **`.path`** files remain valid; scanner resolves target and registers an 
 
 - [x] `franchise_aliases.json` loader (flat alias → canonical)
 - [x] `franchise_overrides.json` (`link` / `exclude` edges)
-- [ ] Admin UI for aliases/overrides (optional)
-- [ ] Biopic / subject relations in DB
+- [x] Admin UI for aliases/overrides (DB-backed; Setup → **Aliases & overrides…**; save both tabs, dirty Close, drop warnings)
+- [x] Biopic / subject relations in DB (`subject_media_links` + admin add/remove)
+- [x] Title-collision leaf URLs (`Title (YYYY)` when siblings share a bare title; games leaf slug cache parity)
 
 ---
 

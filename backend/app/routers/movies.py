@@ -42,12 +42,11 @@ router = APIRouter(prefix="/api/movies", tags=["movies"])
 
 
 def _franchise_media_items(work_id: str, kind: str) -> list[dict]:
+    from app.franchise_index import ensure_franchise_index
+
     slug = normalize_franchise_slug(work_id) or work_id.casefold()
-    index = load_franchise_index()
     root = Path(settings.media_root or "")
-    if index is None and root.is_dir():
-        index = build_franchise_index(root)
-        save_franchise_index(index)
+    index = ensure_franchise_index(root) if root.is_dir() else load_franchise_index()
     items: list[dict] = []
     bucket = index.franchises.get(slug) if index else None
     if not bucket:
@@ -94,7 +93,13 @@ def movies_catalog(
             enrich_catalog_with_music_identity,
         )
 
-        catalog = enrich_movies_catalog(db, build_movies_catalog())
+        from app.module_catalog_cache import get_or_build_catalog
+
+        root = Path(settings.media_root or "")
+        fs_catalog = get_or_build_catalog(
+            "movies", media_root=root, builder=build_movies_catalog
+        )
+        catalog = enrich_movies_catalog(db, fs_catalog)
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )

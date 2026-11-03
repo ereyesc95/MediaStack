@@ -251,6 +251,32 @@ export function saveReleaseCardLayout(userId: number, value: ReleaseCardLayout) 
   localStorage.setItem(releaseCardLayoutKey(userId), value);
 }
 
+export type CollectionBrowseLayout = "list" | "cover" | "banner" | "shelf";
+
+export function collectionLayoutKey(userId: number) {
+  return `music-collection-layout:${userId}`;
+}
+
+export function getStoredCollectionLayout(
+  userId: number,
+  fallback: CollectionBrowseLayout = "list"
+): CollectionBrowseLayout {
+  const raw = localStorage.getItem(collectionLayoutKey(userId));
+  return raw === "list" ||
+    raw === "cover" ||
+    raw === "banner" ||
+    raw === "shelf"
+    ? raw
+    : fallback;
+}
+
+export function saveCollectionLayout(
+  userId: number,
+  value: CollectionBrowseLayout
+) {
+  localStorage.setItem(collectionLayoutKey(userId), value);
+}
+
 export function applyProfilePreferences(userId: number) {
   applyTheme(getStoredTheme(userId), userId);
 }

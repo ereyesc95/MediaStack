@@ -8,7 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.franchise_identity import find_artwork_home, find_music_band_for_franchise
+from app.franchise_identity import (
+    find_artwork_home,
+    find_music_band_for_franchise,
+    merge_music_band_into_related,
+)
 from app.franchise_index import (
     build_franchise_index,
     load_franchise_index,
@@ -37,16 +41,9 @@ from app.series_paths import find_logo_file, gallery_sections
 
 
 def _ensure_franchise_index(media_root: Path):
-    cached = load_franchise_index()
-    if (
-        cached
-        and cached.franchises
-        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
-    ):
-        return cached
-    index = build_franchise_index(media_root)
-    save_franchise_index(index)
-    return index
+    from app.franchise_index import ensure_franchise_index
+
+    return ensure_franchise_index(media_root)
 
 
 def _film_folder_has_audio(folder: Path | None) -> bool:
@@ -370,8 +367,13 @@ def build_work_overview(
             except OSError:
                 pass
 
+    music_band = find_music_band_for_franchise(db, name, media_root=root)
+    related_music = merge_music_band_into_related(
+        related_disk.get("music") or [], music_band, root
+    )
     media_flags = {
         "has_audio": has_audio,
+        "has_music": bool(related_music),
         "has_series": bool(related_disk.get("series")),
         "has_movies": bool(detail.get("films")),
         "has_library": bool(related_disk.get("books")),
@@ -602,7 +604,7 @@ def build_work_overview(
             "series": _enrich_related_cards(related_disk.get("series") or [], root),
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": _enrich_related_cards(related_disk.get("games") or [], root),
-            "music": related_disk.get("music") or [],
+            "music": related_music,
             "creator": _stamp_creator_via(
                 creator,
                 list(meta.get("directors") or [])
@@ -622,6 +624,7 @@ def build_work_overview(
                 for g in universe_groups
             ],
         },
+        "music_band_id": music_band.bnd_id if music_band else None,
         "subseries": films_as_subseries,
         "films": films,
         "seasons": [],
@@ -864,7 +867,10 @@ def build_film_overview(
     kind_label, parent_genre_names = kind_label_from_genre_labels(
         db, genre_names, "film"
     )
-    music_band = find_music_band_for_franchise(db, work_dir.name)
+    music_band = find_music_band_for_franchise(db, work_dir.name, media_root=root)
+    related_music = merge_music_band_into_related(
+        related_disk.get("music") or [], music_band, root
+    )
 
     return {
         "id": fid,
@@ -902,6 +908,7 @@ def build_film_overview(
         "cast": cast,
         "media": {
             "has_audio": _film_folder_has_audio(film_dir),
+            "has_music": bool(related_music),
             "has_series": bool(related_disk.get("series")),
             "has_movies": False,
             "has_library": bool(related_disk.get("books")),
@@ -914,7 +921,7 @@ def build_film_overview(
             "series": _enrich_related_cards(related_disk.get("series") or [], root),
             "books": _enrich_related_cards(related_disk.get("books") or [], root),
             "games": _enrich_related_cards(related_disk.get("games") or [], root),
-            "music": [],
+            "music": related_music,
             "creator": _stamp_creator_via(
                 creator,
                 list(directors or []) or list(writers or []),

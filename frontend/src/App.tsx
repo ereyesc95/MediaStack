@@ -979,6 +979,60 @@ export default function App() {
               });
             }}
 
+            onOpenBooksLeaf={(franchiseId, bookId, opts) => {
+              const bandId = view.kind === "music" ? view.bandId : undefined;
+              if (bandId != null) {
+                saveSeriesEntryReferrer({
+                  kind: "music",
+                  bandId,
+                  artistSection: "library",
+                  title: opts?.franchiseName,
+                });
+              }
+              pushBooksRoute({
+                franchiseId,
+                franchiseName: opts?.franchiseName,
+                bookId,
+                bookTitle: opts?.bookTitle,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "books",
+                franchiseId,
+                bookId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+
+            onOpenGamesLeaf={(franchiseId, gameId, opts) => {
+              const bandId = view.kind === "music" ? view.bandId : undefined;
+              if (bandId != null) {
+                saveSeriesEntryReferrer({
+                  kind: "music",
+                  bandId,
+                  artistSection: "overview",
+                  title: opts?.franchiseName,
+                });
+              }
+              pushGamesRoute({
+                franchiseId,
+                franchiseName: opts?.franchiseName,
+                gameId,
+                gameTitle: opts?.gameTitle,
+                section: "overview",
+                overviewTab: "about",
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
+                section: "overview",
+                overviewTab: "about",
+              });
+            }}
+
             onReleaseNavigate={(releaseId, releaseTab, patchBandId) =>
               openMusic({
                 releaseId,
@@ -1495,6 +1549,7 @@ export default function App() {
                 | "movies"
                 | "series"
                 | "audio"
+                | "music"
                 | "library"
                 | "games"
                 | "gallery") || "overview";
@@ -1521,6 +1576,7 @@ export default function App() {
                 | "movies"
                 | "series"
                 | "audio"
+                | "music"
                 | "library"
                 | "games"
                 | "gallery") || "overview";
@@ -1535,6 +1591,33 @@ export default function App() {
                 kind: "books",
                 franchiseId,
                 bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
+            onOpenGamesFranchise={(franchiseId, gameId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "music"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushGamesRoute({
+                franchiseId,
+                gameId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
                 section: nextSection,
                 overviewTab: isLanding ? "related" : "about",
                 universeId,
@@ -1658,6 +1741,7 @@ export default function App() {
                 | "movies"
                 | "series"
                 | "audio"
+                | "music"
                 | "library"
                 | "games"
                 | "gallery") || "overview";
@@ -1672,6 +1756,33 @@ export default function App() {
                 kind: "books",
                 franchiseId,
                 bookId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
+            onOpenGamesFranchise={(franchiseId, gameId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "music"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushGamesRoute({
+                franchiseId,
+                gameId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
                 section: nextSection,
                 overviewTab: isLanding ? "related" : "about",
                 universeId,
@@ -1790,6 +1901,7 @@ export default function App() {
                 | "movies"
                 | "series"
                 | "audio"
+                | "music"
                 | "library"
                 | "games"
                 | "gallery") || "overview";
@@ -1804,6 +1916,33 @@ export default function App() {
                 kind: "movies",
                 franchiseId,
                 filmId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+            }}
+            onOpenGamesFranchise={(franchiseId, gameId, section, universeId) => {
+              const isLanding = universeId != null;
+              const nextSection = (section as
+                | "overview"
+                | "movies"
+                | "series"
+                | "audio"
+                | "music"
+                | "library"
+                | "games"
+                | "gallery") || "overview";
+              pushGamesRoute({
+                franchiseId,
+                gameId,
+                section: nextSection,
+                overviewTab: isLanding ? "related" : "about",
+                universeId,
+              });
+              setView({
+                kind: "games",
+                franchiseId,
+                gameId,
                 section: nextSection,
                 overviewTab: isLanding ? "related" : "about",
                 universeId,

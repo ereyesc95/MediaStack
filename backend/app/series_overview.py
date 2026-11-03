@@ -404,18 +404,9 @@ def _enrich_cast_member(
 
 
 def _ensure_franchise_index(media_root: Path):
-    from app.franchise_index import FRANCHISE_INDEX_VERSION
+    from app.franchise_index import ensure_franchise_index
 
-    cached = load_franchise_index()
-    if (
-        cached
-        and cached.franchises
-        and getattr(cached, "index_version", 0) == FRANCHISE_INDEX_VERSION
-    ):
-        return cached
-    index = build_franchise_index(media_root)
-    save_franchise_index(index)
-    return index
+    return ensure_franchise_index(media_root)
 
 
 def _stamp_creator_via(
@@ -969,12 +960,21 @@ def build_series_overview(
     series_audio = scan_series_audio(db, franchise_id)
     has_series_audio = bool(series_audio.get("releases"))
 
-    from app.franchise_identity import find_artwork_home, has_module_franchise_content
+    from app.franchise_identity import (
+        find_artwork_home,
+        has_module_franchise_content,
+        merge_music_band_into_related,
+    )
 
     has_books_module = has_module_franchise_content(root, "books", name)
 
+    related_music = merge_music_band_into_related(
+        related.get("music") or [], music_band, root
+    )
     media_flags = {
-        "has_audio": music_band is not None or has_series_audio,
+        # Leaf Audio/ only — Music artist bridge is Related MUSIC (has_music).
+        "has_audio": has_series_audio,
+        "has_music": bool(related_music),
         "has_series": bool(detail.get("subseries") or detail.get("seasons")),
         "has_movies": bool(related.get("movies")),
         "has_library": bool(related.get("books")) or has_books_module,
@@ -1252,7 +1252,7 @@ def build_series_overview(
         "ser_id": row.ser_id,
         "name": name,
         "letter": letter,
-        "slug": detail.get("slug"),
+        "slug": detail.get("slug") or normalize_franchise_slug(name) or detail["id"],
         "folder_path": folder_path,
         "cover_url": detail.get("cover_url") or row.ser_poster_url,
         "bio": row.ser_bio,
@@ -1292,7 +1292,7 @@ def build_series_overview(
             "series": related_series,
             "books": related_books,
             "games": related_games,
-            "music": related.get("music") or [],
+            "music": related_music,
             "creator": _stamp_creator_via(creator_cards, writers),
             "similar": similar_cards,
             "creator_count": len(creator_cards),
