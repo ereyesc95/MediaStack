@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAlbumCards,
   fetchArtistCards,
+  fetchCollection,
   fetchFilterOptions,
   fetchGlobalLiveShowsCard,
   fetchUserPlaylists,
@@ -234,6 +235,7 @@ export default function MusicModule({
   const [collectionView, setCollectionView] = useState<"list" | "cover" | "banner">("list");
   const [collectionHasItems, setCollectionHasItems] = useState(false);
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
+  const pendingCollectionManual = useRef(false);
   const [collectionClearMode, setCollectionClearMode] = useState(false);
   const [eventsFilters, setEventsFilters] = useState<EventsFilters>(
     EMPTY_EVENTS_FILTERS
@@ -600,6 +602,39 @@ export default function MusicModule({
     },
     [onBand, onReleaseNavigate, primeArtistShell]
   );
+
+  useEffect(() => {
+    if (!userId) {
+      setCollectionHasItems(false);
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      void fetchCollection({ page: 1, page_size: 1, view: "table" })
+        .then((res) => {
+          if (!cancelled) setCollectionHasItems((res.total ?? 0) > 0);
+        })
+        .catch(() => {
+          if (!cancelled) setCollectionHasItems(false);
+        });
+    };
+    refresh();
+    const onChanged = () => refresh();
+    window.addEventListener("collection-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("collection-changed", onChanged);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (tab !== "collection" || !pendingCollectionManual.current) return;
+    pendingCollectionManual.current = false;
+    const t = window.setTimeout(() => {
+      collectionManageRef.current?.openManual();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [tab]);
 
   const homeBeatActive = Boolean(!bandId && homeAudio.src);
   const homeBeatPlaying = homeBeatActive && homeAudio.playing;
@@ -1302,12 +1337,16 @@ export default function MusicModule({
               active: tab === "playlists",
               onClick: () => onTab("playlists"),
             },
-            {
-              id: "collection",
-              label: "COLLECTION",
-              active: tab === "collection",
-              onClick: () => onTab("collection"),
-            },
+            ...(collectionHasItems || tab === "collection"
+              ? [
+                  {
+                    id: "collection" as const,
+                    label: "COLLECTION",
+                    active: tab === "collection",
+                    onClick: () => onTab("collection"),
+                  },
+                ]
+              : []),
             {
               id: "events",
               label: "EVENTS",
@@ -1430,11 +1469,18 @@ export default function MusicModule({
                   setAddPlaylistInitialMode("local");
                   setShowAddPlaylist(true);
                 }}
-                showManageCollection={tab === "collection"}
-                collectionClearMode={collectionClearMode}
-                onCollectionAddManual={() =>
-                  collectionManageRef.current?.openManual()
+                showManageCollection={
+                  tab === "collection" || !collectionHasItems
                 }
+                collectionClearMode={collectionClearMode}
+                onCollectionAddManual={() => {
+                  if (tab !== "collection") {
+                    pendingCollectionManual.current = true;
+                    onTab("collection");
+                    return;
+                  }
+                  collectionManageRef.current?.openManual();
+                }}
                 onCollectionImport={() =>
                   collectionManageRef.current?.importExcel()
                 }

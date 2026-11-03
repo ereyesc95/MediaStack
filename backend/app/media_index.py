@@ -45,7 +45,7 @@ BRACKET_SUFFIX_RE = re.compile(r"\s*\[([^\]]+)\]\s*$")
 STANDARD_EDITION = "standard edition"
 VARIOUS_ARTISTS_DEFAULT_ID = 120
 
-AUDIO_INDEX_VERSION = 5
+AUDIO_INDEX_VERSION = 6
 
 CATEGORY_ORDER = list(AUDIO_CATEGORIES.keys())
 
@@ -818,16 +818,18 @@ def _cache_path(band_id: int) -> Path:
     return cache_dir / f"{band_id}.json"
 
 
-def _audio_mtime(artist_dir: Path) -> float:
-    """Max mtime across Audio/, category folders, and immediate release entries.
+def _audio_dir_stats(artist_dir: Path) -> tuple[float, str]:
+    """Max mtime + listing signature across Audio category entries.
 
-    Creating a new album under Albums/ often does not bump Audio/'s own mtime
-    on Windows, so a shallow check would keep a stale cache forever.
+    Max mtime alone misses deletions: removing a non-newest .lnk/folder leaves
+    the same max, so the index cache would keep serving the removed card.
+    The listing signature is a stable digest of entry names (and counts).
     """
     audio = _audio_root(artist_dir)
     if not audio.is_dir():
-        return 0.0
+        return 0.0, ""
     latest = 0.0
+    names: list[str] = []
     try:
         latest = max(latest, audio.stat().st_mtime)
     except OSError:
@@ -844,13 +846,21 @@ def _audio_mtime(artist_dir: Path) -> float:
             for child in cat.iterdir():
                 if child.name.casefold() in ("desktop.ini", "folder.ico", "thumbs.db"):
                     continue
+                names.append(f"{folder_name.casefold()}:{child.name.casefold()}")
                 try:
                     latest = max(latest, child.stat().st_mtime)
                 except OSError:
                     continue
         except OSError:
             continue
-    return latest
+    names.sort()
+    listing = f"{len(names)}:" + "|".join(names)
+    return latest, listing
+
+
+def _audio_mtime(artist_dir: Path) -> float:
+    """Max mtime across Audio/, category folders, and immediate release entries."""
+    return _audio_dir_stats(artist_dir)[0]
 
 
 def invalidate_media_cache(band_id: int) -> None:
@@ -887,7 +897,7 @@ def _audio_index_from_releases(
 
 def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> dict:
     artist_dir = _artist_dir(media_root, band.bnd_name)
-    mtime = _audio_mtime(artist_dir) if artist_dir else 0.0
+    mtime, listing = _audio_dir_stats(artist_dir) if artist_dir else (0.0, "")
     releases = scan_audio_releases(db, band, media_root)
     categories, unofficial, box_sets, standard_compilations = _audio_index_from_releases(
         releases
@@ -896,6 +906,7 @@ def _build_and_cache_audio_index(db: Session, band: Band, media_root: Path) -> d
         "band_id": band.bnd_id,
         "index_version": AUDIO_INDEX_VERSION,
         "audio_mtime": mtime,
+        "audio_listing": listing,
         "scanned_at": _now(),
         "releases": releases,
         "categories": categories,
@@ -992,25 +1003,24 @@ def get_audio_index(
 
     cache_file = _cache_path(band.bnd_id)
     artist_dir = _artist_dir(media_root, band.bnd_name)
-    mtime = _audio_mtime(artist_dir) if artist_dir else 0.0
-    stale_cache: dict | None = None
+    mtime, listing = _audio_dir_stats(artist_dir) if artist_dir else (0.0, "")
 
     if cache_file.is_file():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
             if cached.get("releases") is not None:
-                if (
-                    not force
-                    and cached.get("audio_mtime") == mtime
+                cache_ok = (
+                    cached.get("audio_mtime") == mtime
+                    and cached.get("audio_listing") == listing
                     and cached.get("index_version") == AUDIO_INDEX_VERSION
-                ):
+                )
+                if not force and cache_ok:
                     return _cached_audio_response(cached, stale=False)
-                if not force:
-                    stale_cache = cached
+                # Membership/mtime changed (e.g. deleted .lnk): rebuild now so
+                # soft fetches and hard refresh do not keep serving ghost cards.
+                if not force and not cache_ok:
+                    return _build_and_cache_audio_index(db, band, media_root)
         except (json.JSONDecodeError, OSError):
             pass
-
-    if stale_cache is not None:
-        return _cached_audio_response(stale_cache, stale=True)
 
     return _build_and_cache_audio_index(db, band, media_root)

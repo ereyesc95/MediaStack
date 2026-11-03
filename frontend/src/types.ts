@@ -1763,6 +1763,10 @@ export type SeriesSubseriesCard = {
   hub_title?: string | null;
   genre_names?: string[];
   parent_genre_names?: string[];
+  /** Per-profile physical ownership (catalog badges / OWNED filter). */
+  owned?: boolean;
+  /** Books only: signed copy (implies owned). */
+  signed?: boolean;
 };
 
 export type SeriesSeasonCard = {
@@ -1845,6 +1849,9 @@ export type SeriesFranchiseCard = {
   music_band_id?: number | null;
   /** Module that owns franchise-level [Artwork] (series/movies/books). */
   artwork_home_module?: "series" | "movies" | "books" | "music" | null;
+  /** Per-profile physical ownership when this card is a leaf (shows scope). */
+  owned?: boolean;
+  signed?: boolean;
 };
 
 export type SeriesFranchiseDetail = SeriesFranchiseCard & {
@@ -2041,7 +2048,9 @@ export type SeriesFilterMode =
   | "writer"
   | "developer"
   | "most_played"
-  | "platform";
+  | "platform"
+  | "owned"
+  | "signed";
 
 export type SeriesFilterOptions = {
   continents: { id: number; name: string }[];

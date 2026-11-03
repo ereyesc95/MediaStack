@@ -44,6 +44,7 @@ import {
   IconUniverse,
   IconVideo,
   IconCollection,
+  IconCollectionAdded,
   IconImport,
   IconMediaGames,
   IconMediaMusic,
@@ -155,6 +156,11 @@ type Props = {
   onAddAudio?: () => void;
   /** Artist Audio admin: pick external release folder(s) → .lnk in current category. */
   onAddExternalRelease?: () => void;
+  /** Per-profile physical ownership (Books/Movies/Series/Games leaves). */
+  onToggleOwned?: () => void;
+  ownedActive?: boolean;
+  onToggleSigned?: () => void;
+  signedActive?: boolean;
   /**
    * Leaf Audio embed: Track data + Edit Release (between Edit data and Theme).
    * Handlers come from the embedded ReleasePage.
@@ -278,6 +284,10 @@ export default function AppMenu({
   setRemoteMediaLabel = "Set links",
   onAddAudio,
   onAddExternalRelease,
+  onToggleOwned,
+  ownedActive = false,
+  onToggleSigned,
+  signedActive = false,
   embeddedReleaseMenu = null,
   onRefreshRelatedSimilar,
   onRefreshRelatedParticipations,
@@ -858,6 +868,38 @@ export default function AppMenu({
               {editDataBlock}
             </>
           ) : null}
+          {onToggleOwned && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleOwned();
+                setOpen(false);
+              }}
+            >
+              {ownedActive ? (
+                <IconCollectionAdded className="menu-item-icon" />
+              ) : (
+                <IconCollection className="menu-item-icon" />
+              )}
+              {ownedActive ? "Remove owned" : "Mark owned"}
+            </button>
+          )}
+          {onToggleSigned && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleSigned();
+                setOpen(false);
+              }}
+            >
+              {signedActive ? (
+                <IconCollectionAdded className="menu-item-icon" />
+              ) : (
+                <IconCollection className="menu-item-icon" />
+              )}
+              {signedActive ? "Remove signed" : "Mark signed"}
+            </button>
+          )}
           {editDataFlat && embeddedReleaseMenu ? (
             <>
               {(embeddedReleaseMenu.onFetchLyrics ||

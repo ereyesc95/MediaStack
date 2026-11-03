@@ -31,6 +31,11 @@ import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
 } from "../../catalogBackdrop";
+import {
+  loadOwnershipIndex,
+  markFranchiseOwnership,
+  type OwnershipIndex,
+} from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
   clearSeriesEntryReferrer,
@@ -226,6 +231,64 @@ export default function SeriesModule({
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
   /** True when a leaf/show was opened directly from Home (Best Series), not via franchise hub. */
   const directLeafFromHomeRef = useRef(false);
+  const [ownership, setOwnership] = useState<OwnershipIndex | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setOwnership(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void loadOwnershipIndex("series")
+        .then((idx) => {
+          if (!cancelled) setOwnership(idx);
+        })
+        .catch(() => {
+          if (!cancelled) setOwnership(null);
+        });
+    };
+    load();
+    const onChanged = (e: Event) => {
+      const mod = (e as CustomEvent<{ module?: string }>).detail?.module;
+      if (mod && mod !== "series") return;
+      load();
+    };
+    window.addEventListener("leaf-ownership-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("leaf-ownership-changed", onChanged);
+    };
+  }, [userId, syncTick]);
+
+  const ownedFranchises = useMemo(
+    () => markFranchiseOwnership(franchises, ownership),
+    [franchises, ownership]
+  );
+
+  const seriesLeafFilterModes = useMemo(() => {
+    const modes: { id: SeriesFilterMode; label: string }[] = [
+      { id: "name", label: "NAME" },
+      { id: "continent", label: "CONTINENT" },
+      { id: "country", label: "COUNTRY" },
+      { id: "start", label: "START DATE" },
+      { id: "end", label: "END DATE" },
+      { id: "genre", label: "GENRE" },
+      { id: "publisher", label: "PUBLISHER" },
+      { id: "writer", label: "WRITER" },
+      { id: "most_played", label: "MOST PLAYED" },
+    ];
+    if (catalogScope === "shows" && (ownership?.counts.owned ?? 0) > 0) {
+      modes.push({ id: "owned", label: "OWNED" });
+    }
+    return modes;
+  }, [catalogScope, ownership]);
+
+  useEffect(() => {
+    if (catalogScope !== "shows" && filterMode === "owned") {
+      setFilterMode("name");
+    }
+  }, [catalogScope, filterMode]);
 
   const backgroundIso = useMemo(
     () => catalogBackgroundIso(filterMode, countryId, filterOptions),
@@ -1253,11 +1316,12 @@ export default function SeriesModule({
         </div>
       ) : (
         <SeriesBrowse
-          franchises={franchises}
+          franchises={ownedFranchises}
           universes={universes}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
+          filterModes={seriesLeafFilterModes}
           catalogScope={catalogScope}
           search={search}
           letter={letter}

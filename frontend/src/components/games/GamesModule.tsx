@@ -8,6 +8,11 @@ import {
   resolveMoviesPath,
 } from "../../api";
 import { getCachedUniverses, prefetchUniverses } from "../../universesCache";
+import {
+  loadOwnershipIndex,
+  markLeafCards,
+  type OwnershipIndex,
+} from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
 import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
@@ -160,6 +165,60 @@ export default function GamesModule({
   const [error, setError] = useState<string | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<string | null>(null);
+  const [ownership, setOwnership] = useState<OwnershipIndex | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setOwnership(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void loadOwnershipIndex("games")
+        .then((idx) => {
+          if (!cancelled) setOwnership(idx);
+        })
+        .catch(() => {
+          if (!cancelled) setOwnership(null);
+        });
+    };
+    load();
+    const onChanged = (e: Event) => {
+      const mod = (e as CustomEvent<{ module?: string }>).detail?.module;
+      if (mod && mod !== "games") return;
+      load();
+    };
+    window.addEventListener("leaf-ownership-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("leaf-ownership-changed", onChanged);
+    };
+  }, [userId, syncTick]);
+
+  const ownedGames = useMemo(
+    () => markLeafCards(games, ownership),
+    [games, ownership]
+  );
+
+  const gamesFilterModes = useMemo(() => {
+    const modes = [...FILTER_MODES];
+    const leafScope =
+      catalogScope === "shows" ||
+      (catalogScope === "platforms" && Boolean(platformFilter));
+    if (leafScope && (ownership?.counts.owned ?? 0) > 0) {
+      modes.push({ id: "owned", label: "OWNED" });
+    }
+    return modes;
+  }, [catalogScope, platformFilter, ownership]);
+
+  useEffect(() => {
+    const leafScope =
+      catalogScope === "shows" ||
+      (catalogScope === "platforms" && Boolean(platformFilter));
+    if (!leafScope && filterMode === "owned") {
+      setFilterMode("name");
+    }
+  }, [catalogScope, platformFilter, filterMode]);
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
@@ -370,12 +429,12 @@ export default function GamesModule({
       (catalogScope === "platforms" && platformFilter)
     ) {
       const list = platformFilter
-        ? games.filter(
+        ? ownedGames.filter(
             (g) =>
               ((g as { platform?: string }).platform || "").toLowerCase() ===
               platformFilter.toLowerCase()
           )
-        : games;
+        : ownedGames;
       return list.map((g) => {
         const titleLetter = (() => {
           const ch = (g.title || "").trim().charAt(0).toUpperCase();
@@ -391,6 +450,7 @@ export default function GamesModule({
           (g as { directors?: string[]; writers?: string[] }).directors ||
           (g as { writers?: string[] }).writers ||
           [];
+        const owned = Boolean((g as { owned?: boolean }).owned);
         return {
           id: g.id,
           name: g.title,
@@ -426,6 +486,7 @@ export default function GamesModule({
             (g as { open_url?: string | null }).open_url
               ? "Play game"
               : null,
+          owned,
           subseries: [
             {
               id: g.id,
@@ -435,6 +496,7 @@ export default function GamesModule({
               folder_path: g.folder_path,
               cover_url: g.cover_url,
               season_count: 1,
+              owned,
             },
           ],
           subseries_count: 1,
@@ -443,7 +505,7 @@ export default function GamesModule({
       });
     }
     return filteredFranchises;
-  }, [catalogScope, franchises, games, platformFilter]);
+  }, [catalogScope, franchises, ownedGames, platformFilter]);
 
   if (franchiseId) {
     if (gameId) {
@@ -929,7 +991,7 @@ export default function GamesModule({
           developer={developer}
           platformName={platformFilter || ""}
           unitNoun="game"
-          filterModes={FILTER_MODES}
+          filterModes={gamesFilterModes}
           loading={catalogLoading}
           onSearchChange={setSearch}
           onLetterChange={setLetter}

@@ -62,6 +62,9 @@ export type SeriesCatalogCard = {
   open_label?: string | null;
   /** Games: launch target id when Play game is clicked. */
   launch_game_id?: string | null;
+  folder_path?: string | null;
+  owned?: boolean;
+  signed?: boolean;
 };
 
 function decadeLabel(d: number) {
@@ -317,6 +320,10 @@ export default function SeriesBrowse({
             (filterOptions.platforms?.length ?? 0) > 0 ||
             Boolean(platformName.trim())
           );
+        case "owned":
+        case "signed":
+          // Parent only includes these modes when the profile has ≥1 mark.
+          return true;
         default:
           return true;
       }
@@ -345,6 +352,9 @@ export default function SeriesBrowse({
 
   // Auto-select first subbar option when entering a filter tab (Music catalog parity)
   useEffect(() => {
+    if (filterMode === "owned" || filterMode === "signed") {
+      return;
+    }
     if (filterMode === "name" || filterMode === "platform") {
       if (!letter || (availableLetters.length && !availableLetters.includes(letter))) {
         const first = availableLetters[0];
@@ -810,6 +820,10 @@ export default function SeriesBrowse({
           if (q && !s.title.toLowerCase().includes(q) && !f.name.toLowerCase().includes(q)) {
             continue;
           }
+          const leafOwned = Boolean(s.owned ?? f.owned);
+          const leafSigned = Boolean(s.signed ?? f.signed);
+          if (filterMode === "owned" && !leafOwned) continue;
+          if (filterMode === "signed" && !leafSigned) continue;
           if ((filterMode === "name" || filterMode === "platform") && letter) {
             const want = letter === HASH ? "#" : letter.toUpperCase();
             // Films/shows A–Z must use the leaf title, not the parent work letter
@@ -853,6 +867,9 @@ export default function SeriesBrowse({
             badge_url: s.badge_url || f.badge_url,
             date_iso: s.date_iso,
             display_date: s.display_date ?? null,
+            folder_path: s.folder_path || f.folder_path,
+            owned: leafOwned,
+            signed: leafSigned,
             meta: showMeta(s, unitNoun),
             open_label:
               unitNoun === "game" &&
@@ -1003,6 +1020,18 @@ export default function SeriesBrowse({
   );
 
   const subBar = useMemo(() => {
+    if (filterMode === "owned" || filterMode === "signed") {
+      return (
+        <div className="filter-subbar filter-subbar--spread">
+          <input
+            className="filter-subbar-search"
+            placeholder="Search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+        </div>
+      );
+    }
     if (
       !filterOptions &&
       filterMode !== "name" &&
@@ -1388,6 +1417,16 @@ export default function SeriesBrowse({
                     }
                   />
                   <span className="artist-card-dim" />
+                  {card.owned || card.signed ? (
+                    <span className="artist-card-ownership" aria-hidden>
+                      {card.owned ? (
+                        <span className="collection-badge">Owned</span>
+                      ) : null}
+                      {card.signed ? (
+                        <span className="collection-badge">Signed</span>
+                      ) : null}
+                    </span>
+                  ) : null}
                   <span className="artist-card-footer">
                     {playLabel ? (
                       <span className="artist-card-title-stack">

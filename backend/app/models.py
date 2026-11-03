@@ -940,3 +940,26 @@ class SeriesEpisodeTags(Base):
     set_leaf_path: Mapped[str] = mapped_column("setLeafPath", Text, index=True)
     set_episode_id: Mapped[str] = mapped_column("setEpisodeID", Text, index=True)
     set_tags_json: Mapped[str | None] = mapped_column("setTagsJson", Text)
+
+
+class LeafOwnership(Base):
+    """Per-profile owned/signed markers for Books/Movies/Series/Games leaves."""
+
+    __tablename__ = "leaf_ownership"
+    __table_args__ = (
+        UniqueConstraint(
+            "lfoUserID",
+            "lfoModule",
+            "lfoFolderPath",
+            name="uq_leaf_ownership_user_mod_path",
+        ),
+    )
+
+    lfo_id: Mapped[int] = mapped_column("lfoID", Integer, primary_key=True)
+    lfo_user_id: Mapped[int] = mapped_column("lfoUserID", Integer, index=True)
+    lfo_module: Mapped[str] = mapped_column("lfoModule", String(16), index=True)
+    lfo_folder_path: Mapped[str] = mapped_column("lfoFolderPath", Text, index=True)
+    lfo_leaf_id: Mapped[str | None] = mapped_column("lfoLeafID", String(64))
+    lfo_owned: Mapped[int] = mapped_column("lfoOwned", Integer, default=0)
+    lfo_signed: Mapped[int] = mapped_column("lfoSigned", Integer, default=0)
+    lfo_updated_at: Mapped[str | None] = mapped_column("lfoUpdatedAt", Text)

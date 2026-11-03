@@ -36,6 +36,11 @@ import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
 } from "../../catalogBackdrop";
+import {
+  loadOwnershipIndex,
+  markLeafCards,
+  type OwnershipIndex,
+} from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
   pushMoviesCatalogRoute,
@@ -217,10 +222,58 @@ export default function MoviesModule({
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
   /** True when a film was opened directly from Home (Best Movies), not via franchise hub. */
   const directFilmFromHomeRef = useRef(false);
+  const [ownership, setOwnership] = useState<OwnershipIndex | null>(null);
 
   useEffect(() => {
     clearMediaTheme(userId);
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setOwnership(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void loadOwnershipIndex("movies")
+        .then((idx) => {
+          if (!cancelled) setOwnership(idx);
+        })
+        .catch(() => {
+          if (!cancelled) setOwnership(null);
+        });
+    };
+    load();
+    const onChanged = (e: Event) => {
+      const mod = (e as CustomEvent<{ module?: string }>).detail?.module;
+      if (mod && mod !== "movies") return;
+      load();
+    };
+    window.addEventListener("leaf-ownership-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("leaf-ownership-changed", onChanged);
+    };
+  }, [userId, syncTick]);
+
+  const ownedFilms = useMemo(
+    () => markLeafCards(films, ownership),
+    [films, ownership]
+  );
+
+  const filmsLeafFilterModes = useMemo(() => {
+    const modes = [...MOVIES_FILTER_MODES_FILMS];
+    if ((ownership?.counts.owned ?? 0) > 0) {
+      modes.push({ id: "owned", label: "OWNED" });
+    }
+    return modes;
+  }, [ownership]);
+
+  useEffect(() => {
+    if (catalogScope !== "shows" && filterMode === "owned") {
+      setFilterMode("name");
+    }
+  }, [catalogScope, filterMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -434,7 +487,7 @@ export default function MoviesModule({
       });
     }
     return filterAdultCards(
-      films.map((film) => {
+      ownedFilms.map((film) => {
         const enriched = film as MoviesFilmCard & {
           country_iso?: string | null;
           country_id?: number | null;
@@ -446,6 +499,8 @@ export default function MoviesModule({
           writers?: string[];
           open_url?: string | null;
           open_label?: string | null;
+          owned?: boolean;
+          signed?: boolean;
         };
         const titleLetter = (() => {
           const ch = (film.title || "").trim().charAt(0).toUpperCase();
@@ -472,6 +527,8 @@ export default function MoviesModule({
           writers: enriched.writers ?? [],
           open_url: openUrl,
           open_label: openUrl ? "Play movie" : enriched.open_label || null,
+          owned: Boolean(enriched.owned),
+          signed: Boolean(enriched.signed),
           subseries: [
             {
               id: film.id,
@@ -483,6 +540,8 @@ export default function MoviesModule({
               season_count: 1,
               open_url: openUrl,
               open_label: openUrl ? "Play movie" : null,
+              owned: Boolean(enriched.owned),
+              signed: Boolean(enriched.signed),
             },
           ],
           season_count: 1,
@@ -491,7 +550,7 @@ export default function MoviesModule({
       }),
       nsfwUnlocked
     );
-  }, [catalogScope, franchises, films]);
+  }, [catalogScope, franchises, ownedFilms]);
 
   const openWork = (
     workId: string,
@@ -1295,7 +1354,7 @@ export default function MoviesModule({
           filterModes={
             catalogScope === "franchises"
               ? MOVIES_FILTER_MODES_GROUPS
-              : MOVIES_FILTER_MODES_FILMS
+              : filmsLeafFilterModes
           }
           search={search}
           letter={letter}

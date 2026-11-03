@@ -2357,6 +2357,63 @@ export async function addLeafAudio(folderPath: string): Promise<{
   );
 }
 
+export type LeafOwnershipModule = "books" | "movies" | "series" | "games";
+
+export type LeafOwnershipStatus = {
+  owned: boolean;
+  signed: boolean;
+  folder_path?: string;
+};
+
+export type LeafOwnershipItem = LeafOwnershipStatus & {
+  id?: number;
+  module: LeafOwnershipModule | string;
+  leaf_id?: string | null;
+};
+
+export async function fetchLeafOwnershipSummary(): Promise<{
+  modules: Record<string, { owned: number; signed: number }>;
+}> {
+  return request(`${API}/media/ownership/summary`);
+}
+
+export async function fetchLeafOwnership(
+  module: LeafOwnershipModule
+): Promise<{
+  module: string;
+  items: LeafOwnershipItem[];
+  counts: { owned: number; signed: number };
+}> {
+  return request(
+    `${API}/media/ownership?module=${encodeURIComponent(module)}`
+  );
+}
+
+export async function fetchLeafOwnershipStatus(
+  module: LeafOwnershipModule,
+  folderPath: string
+): Promise<LeafOwnershipStatus> {
+  const q = new URLSearchParams({
+    module,
+    folder_path: folderPath,
+  });
+  return request(`${API}/media/ownership/status?${q}`);
+}
+
+export async function setLeafOwnership(body: {
+  module: LeafOwnershipModule;
+  folder_path: string;
+  leaf_id?: string | null;
+  owned?: boolean;
+  signed?: boolean;
+}): Promise<LeafOwnershipStatus> {
+  return request(`${API}/media/ownership`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function setMediaRoot(path: string): Promise<{
   media_root: string;
   media_root_configured: boolean;

@@ -30,6 +30,11 @@ import {
   catalogBackgroundIso,
   catalogBackgroundUrl,
 } from "../../catalogBackdrop";
+import {
+  loadOwnershipIndex,
+  markLeafCards,
+  type OwnershipIndex,
+} from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
 import {
   pushBooksCatalogRoute,
@@ -209,10 +214,61 @@ export default function BooksModule({
   const [publisher, setPublisher] = useState("");
   const [writer, setWriter] = useState("");
   const [entrySource, setEntrySource] = useState<"home" | "catalog">("catalog");
+  const [ownership, setOwnership] = useState<OwnershipIndex | null>(null);
 
   useEffect(() => {
     clearMediaTheme(userId);
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setOwnership(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void loadOwnershipIndex("books")
+        .then((idx) => {
+          if (!cancelled) setOwnership(idx);
+        })
+        .catch(() => {
+          if (!cancelled) setOwnership(null);
+        });
+    };
+    load();
+    const onChanged = (e: Event) => {
+      const mod = (e as CustomEvent<{ module?: string }>).detail?.module;
+      if (mod && mod !== "books") return;
+      load();
+    };
+    window.addEventListener("leaf-ownership-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("leaf-ownership-changed", onChanged);
+    };
+  }, [userId, syncTick]);
+
+  const ownedBooks = useMemo(
+    () => markLeafCards(films, ownership),
+    [films, ownership]
+  );
+
+  const booksLeafFilterModes = useMemo(() => {
+    const modes = [...BOOKS_FILTER_MODES_BOOKS];
+    if ((ownership?.counts.owned ?? 0) > 0) {
+      modes.push({ id: "owned", label: "OWNED" });
+    }
+    if ((ownership?.counts.signed ?? 0) > 0) {
+      modes.push({ id: "signed", label: "SIGNED" });
+    }
+    return modes;
+  }, [ownership]);
+
+  useEffect(() => {
+    if (catalogScope !== "shows" && (filterMode === "owned" || filterMode === "signed")) {
+      setFilterMode("name");
+    }
+  }, [catalogScope, filterMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -415,7 +471,7 @@ export default function BooksModule({
         } as SeriesFranchiseCard;
       });
     }
-    return films.map((film) => {
+    return ownedBooks.map((film) => {
       const enriched = film as BooksBookCard & {
         country_iso?: string | null;
         country_id?: number | null;
@@ -424,6 +480,8 @@ export default function BooksModule({
         genre_names?: string[];
         publishers?: string[];
         writers?: string[];
+        owned?: boolean;
+        signed?: boolean;
       };
       const titleLetter = (() => {
         const ch = (film.title || "").trim().charAt(0).toUpperCase();
@@ -446,6 +504,8 @@ export default function BooksModule({
         genre_names: enriched.genre_names ?? [],
         publishers: enriched.publishers ?? [],
         writers: enriched.writers ?? [],
+        owned: Boolean(enriched.owned),
+        signed: Boolean(enriched.signed),
         subseries: [
           {
             id: film.id,
@@ -455,13 +515,15 @@ export default function BooksModule({
             folder_path: film.folder_path,
             cover_url: film.cover_url,
             season_count: 1,
+            owned: Boolean(enriched.owned),
+            signed: Boolean(enriched.signed),
           },
         ],
         season_count: 1,
         subseries_count: 1,
       } as SeriesFranchiseCard;
     });
-  }, [catalogScope, franchises, films]);
+  }, [catalogScope, franchises, ownedBooks]);
 
   const openWork = (
     workId: string,
@@ -1206,7 +1268,7 @@ export default function BooksModule({
           filterModes={
             catalogScope === "franchises"
               ? BOOKS_FILTER_MODES_GROUPS
-              : BOOKS_FILTER_MODES_BOOKS
+              : booksLeafFilterModes
           }
           search={search}
           letter={letter}

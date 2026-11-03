@@ -51,6 +51,9 @@ import {
   refreshSeriesMetadata,
   rescanSeriesLocalData,
   addLeafAudio,
+  fetchLeafOwnershipStatus,
+  setLeafOwnership,
+  type LeafOwnershipModule,
   updateSeriesFoldersFromTmdb,
   saveMoviesFilmTrailer,
   fetchMoviesRemote,
@@ -1552,6 +1555,39 @@ export default function SeriesSubseriesPage({
   const isVideoCollection = detail?.content_kind === "video_collection";
 
   const leafFolderPath = detail?.folder_path || "";
+  const ownershipModule: LeafOwnershipModule = isGame
+    ? "games"
+    : isBook
+      ? "books"
+      : variant === "film"
+        ? "movies"
+        : "series";
+  const [leafOwned, setLeafOwned] = useState(false);
+  const [leafSigned, setLeafSigned] = useState(false);
+
+  useEffect(() => {
+    if (!leafFolderPath || !userId) {
+      setLeafOwned(false);
+      setLeafSigned(false);
+      return;
+    }
+    let cancelled = false;
+    void fetchLeafOwnershipStatus(ownershipModule, leafFolderPath)
+      .then((s) => {
+        if (cancelled) return;
+        setLeafOwned(Boolean(s.owned));
+        setLeafSigned(Boolean(s.signed));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLeafOwned(false);
+          setLeafSigned(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leafFolderPath, ownershipModule, userId]);
 
   useEffect(() => {
     if (!leafFolderPath || isBook || isFilm) {
@@ -4703,6 +4739,56 @@ export default function SeriesSubseriesPage({
                     }
                   : undefined
               }
+              onToggleOwned={
+                userId && leafFolderPath
+                  ? () => {
+                      const next = !leafOwned;
+                      void setLeafOwnership({
+                        module: ownershipModule,
+                        folder_path: leafFolderPath,
+                        leaf_id: subseriesId || detail?.id || null,
+                        owned: next,
+                        ...(next ? {} : { signed: false }),
+                      })
+                        .then((s) => {
+                          setLeafOwned(Boolean(s.owned));
+                          setLeafSigned(Boolean(s.signed));
+                          window.dispatchEvent(
+                            new CustomEvent("leaf-ownership-changed", {
+                              detail: { module: ownershipModule },
+                            })
+                          );
+                        })
+                        .catch(() => undefined);
+                    }
+                  : undefined
+              }
+              ownedActive={leafOwned}
+              onToggleSigned={
+                userId && leafFolderPath && isBook
+                  ? () => {
+                      const next = !leafSigned;
+                      void setLeafOwnership({
+                        module: "books",
+                        folder_path: leafFolderPath,
+                        leaf_id: subseriesId || detail?.id || null,
+                        signed: next,
+                        ...(next ? { owned: true } : {}),
+                      })
+                        .then((s) => {
+                          setLeafOwned(Boolean(s.owned));
+                          setLeafSigned(Boolean(s.signed));
+                          window.dispatchEvent(
+                            new CustomEvent("leaf-ownership-changed", {
+                              detail: { module: "books" },
+                            })
+                          );
+                        })
+                        .catch(() => undefined);
+                    }
+                  : undefined
+              }
+              signedActive={leafSigned}
               onAddMember={
                 isAdmin
                   ? () => {

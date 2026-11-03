@@ -2918,6 +2918,23 @@ input {
   opacity: 1;
 }
 
+.artist-card-ownership {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  pointer-events: none;
+}
+
+.artist-card-ownership .collection-badge {
+  margin-left: 0;
+  background: color-mix(in srgb, var(--bg, #111) 72%, transparent);
+  backdrop-filter: blur(4px);
+}
+
 .artist-card-footer {
   position: absolute;
   left: 0;

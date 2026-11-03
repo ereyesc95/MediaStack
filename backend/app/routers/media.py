@@ -7,9 +7,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.deps import require_admin
+from app.database import get_db
+from app.deps import get_current_user, require_admin
 from app.folder_picker import pick_folders
 from app.franchise_index import (
     build_franchise_index,
@@ -27,6 +29,14 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 
 class LeafAudioAddBody(BaseModel):
     folder_path: str
+
+
+class LeafOwnershipBody(BaseModel):
+    module: str
+    folder_path: str
+    leaf_id: str | None = None
+    owned: bool | None = None
+    signed: bool | None = None
 
 
 def _ensure_index():
@@ -85,6 +95,69 @@ def _enrich_buckets(
             stamped.append(row)
         out[bucket] = _enrich_related_cards(stamped, root)
     return out
+
+
+@router.get("/ownership/summary")
+def ownership_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.leaf_ownership import counts_by_module
+
+    return {"modules": counts_by_module(db, user_id=user.usr_id)}
+
+
+@router.get("/ownership")
+def ownership_list(
+    module: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.leaf_ownership import list_module, normalize_module
+
+    if not normalize_module(module):
+        raise HTTPException(400, "Invalid module")
+    return list_module(db, user_id=user.usr_id, module=module)
+
+
+@router.get("/ownership/status")
+def ownership_status(
+    module: str = Query(..., min_length=1),
+    folder_path: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.leaf_ownership import get_status, normalize_module
+
+    if not normalize_module(module):
+        raise HTTPException(400, "Invalid module")
+    return get_status(
+        db, user_id=user.usr_id, module=module, folder_path=folder_path
+    )
+
+
+@router.put("/ownership")
+def ownership_upsert(
+    body: LeafOwnershipBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.leaf_ownership import normalize_module, upsert
+
+    if not normalize_module(body.module):
+        raise HTTPException(400, "Invalid module")
+    try:
+        return upsert(
+            db,
+            user_id=user.usr_id,
+            module=body.module,
+            folder_path=body.folder_path,
+            leaf_id=body.leaf_id,
+            owned=body.owned,
+            signed=body.signed,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/leaf-audio/add")
