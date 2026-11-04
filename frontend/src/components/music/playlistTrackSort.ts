@@ -3,6 +3,7 @@ import type { ArtistPlaylistTrack } from "../../types";
 export type PlaylistTrackSortKey =
   | "original"
   | "number"
+  | "plays"
   | "title"
   | "artist"
   | "album"
@@ -137,6 +138,8 @@ function sortValue(
         return track.track_number;
       }
       return originalNumber(track, originalNumbers);
+    case "plays":
+      return track.play_count ?? 0;
     case "title":
       if (track.is_music_video && track.video_label?.trim()) {
         return `${track.title || ""} ${track.video_label}`.toLowerCase();

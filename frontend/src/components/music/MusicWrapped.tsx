@@ -25,6 +25,8 @@ type Props = {
   ) => void;
   onArtist?: (id: number) => void;
   onGenre?: (id: number) => void;
+  /** Refresh Playlists tab after creating the Wrapped playlist. */
+  onPlaylistCreated?: () => void;
 };
 
 export default function MusicWrapped({
@@ -33,6 +35,7 @@ export default function MusicWrapped({
   onPlayTrack,
   onArtist,
   onGenre,
+  onPlaylistCreated,
 }: Props) {
   const cached = getCachedListeningWrapped(year);
   const [data, setData] = useState<ListeningWrapped | null>(cached);
@@ -111,7 +114,7 @@ export default function MusicWrapped({
     try {
       const created = await createUserPlaylist({
         name: playlistName,
-        description: `${year} listening Wrapped — On Repeat`,
+        description: `Your most played tracks in ${year} are here!`,
       });
       if (!created.ok || created.id == null) {
         throw new Error(created.error || "Could not create playlist");
@@ -120,13 +123,15 @@ export default function MusicWrapped({
       for (const t of tracks) {
         if (!t.path) continue;
         await addTrackToPlaylist(id, {
-          title: t.title || "Track",
+          title: t.title_full || t.title || "Track",
           artist: t.artist_name || "",
           release: t.release || "",
           path: t.path,
+          allow_wrapped_fill: true,
         });
       }
       setPlaylistId(id);
+      onPlaylistCreated?.();
     } catch (e) {
       setPlaylistError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -134,6 +139,8 @@ export default function MusicWrapped({
     }
   }
 
+  const featuredTrack = tracks[0];
+  const restTracks = tracks.slice(1);
   const featuredArtist = artists[0];
   const restArtists = artists.slice(1);
   const featuredGenre = genres[0];
@@ -217,49 +224,95 @@ export default function MusicWrapped({
             <div className="music-wrapped__body">
               {tab === "tracks" ? (
                 <div className="music-wrapped__pane music-wrapped__pane--tracks">
-                  {tracks.length === 0 ? (
-                    <p className="muted music-wrapped__status">No tracks yet.</p>
-                  ) : (
-                    <ol className="music-wrapped__list">
-                      {tracks.map((t, i) => {
-                        const slim = i >= 10;
-                        return (
-                          <li key={t.path || t.id}>
-                            <button
-                              type="button"
-                              className={`music-wrapped__row${
-                                slim ? " music-wrapped__row--slim" : ""
-                              }`}
-                              onClick={() => {
-                                if (t.path) {
-                                  onPlayTrack?.(t.path, t.artist_id, t.title);
-                                }
-                              }}
-                            >
-                              {!slim ? (
-                                t.cover_url ? (
-                                  <img src={t.cover_url} alt="" />
-                                ) : (
-                                  <span className="music-wrapped__art-fallback" />
-                                )
-                              ) : (
-                                <span className="music-wrapped__rank">
-                                  {i + 1}
-                                </span>
-                              )}
-                              <span>
-                                <strong>{t.title}</strong>
-                                <em>{t.artist_name}</em>
+                  <div className="music-wrapped__pane-scroll">
+                    {tracks.length === 0 ? (
+                      <p className="muted music-wrapped__status">No tracks yet.</p>
+                    ) : (
+                      <>
+                        {featuredTrack ? (
+                          <button
+                            type="button"
+                            className="music-wrapped__feature music-wrapped__feature--track"
+                            onClick={() => {
+                              if (featuredTrack.path) {
+                                onPlayTrack?.(
+                                  featuredTrack.path,
+                                  featuredTrack.artist_id,
+                                  featuredTrack.title
+                                );
+                              }
+                            }}
+                          >
+                            {featuredTrack.cover_url ? (
+                              <img
+                                className="music-wrapped__feature-art music-wrapped__feature-art--square"
+                                src={featuredTrack.cover_url}
+                                alt=""
+                              />
+                            ) : (
+                              <span className="music-wrapped__feature-art music-wrapped__feature-art--square music-wrapped__art-fallback" />
+                            )}
+                            <span className="music-wrapped__feature-meta">
+                              <span className="music-wrapped__feature-rank">
+                                #1 On repeat
                               </span>
-                              <span className="music-wrapped__count">
-                                {t.play_count}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  )}
+                              <strong>{featuredTrack.title}</strong>
+                              <em>
+                                {featuredTrack.artist_name}
+                                {featuredTrack.play_count != null
+                                  ? ` · ${featuredTrack.play_count.toLocaleString()} plays`
+                                  : ""}
+                              </em>
+                            </span>
+                          </button>
+                        ) : null}
+                        <ol className="music-wrapped__list">
+                          {restTracks.map((t, i) => {
+                            const rank = i + 2;
+                            const slim = rank > 10;
+                            return (
+                              <li key={t.path || t.id}>
+                                <button
+                                  type="button"
+                                  className={`music-wrapped__row${
+                                    slim ? " music-wrapped__row--slim" : ""
+                                  }`}
+                                  onClick={() => {
+                                    if (t.path) {
+                                      onPlayTrack?.(
+                                        t.path,
+                                        t.artist_id,
+                                        t.title
+                                      );
+                                    }
+                                  }}
+                                >
+                                  {!slim ? (
+                                    t.cover_url ? (
+                                      <img src={t.cover_url} alt="" />
+                                    ) : (
+                                      <span className="music-wrapped__art-fallback" />
+                                    )
+                                  ) : (
+                                    <span className="music-wrapped__rank">
+                                      {rank}
+                                    </span>
+                                  )}
+                                  <span>
+                                    <strong>{t.title}</strong>
+                                    <em>{t.artist_name}</em>
+                                  </span>
+                                  <span className="music-wrapped__count">
+                                    {t.play_count.toLocaleString()} plays
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </>
+                    )}
+                  </div>
                   {tracks.length > 0 ? (
                     <div className="music-wrapped__playlist-bar">
                       {playlistError ? (

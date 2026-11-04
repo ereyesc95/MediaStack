@@ -91,6 +91,8 @@ type Props = {
   onTracksChanged?: () => void;
   editMode?: boolean;
   snapshotMetadataMode?: boolean;
+  /** Listening Wrapped: play-count bubble on title hover / tap. */
+  playCountBubble?: boolean;
   subgenreNames?: string[];
   stacked: boolean;
   compactLyricsHead?: boolean;
@@ -485,6 +487,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       onTracksChanged,
       editMode = false,
       snapshotMetadataMode = false,
+      playCountBubble = false,
       subgenreNames = [],
       stacked,
       compactLyricsHead = false,
@@ -542,6 +545,47 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
     const [searchBusy, setSearchBusy] = useState(false);
     const [addingPath, setAddingPath] = useState<string | null>(null);
     const [expandedSectionId, setExpandedSectionId] = useState<string | null>(null);
+    const [playsTip, setPlaysTip] = useState<{
+      key: string;
+      label: string;
+      left: number;
+      top: number;
+    } | null>(null);
+    const playsTipTimerRef = useRef<number | null>(null);
+
+    const clearPlaysTipTimer = useCallback(() => {
+      if (playsTipTimerRef.current != null) {
+        window.clearTimeout(playsTipTimerRef.current);
+        playsTipTimerRef.current = null;
+      }
+    }, []);
+
+    const hidePlaysTip = useCallback(() => {
+      clearPlaysTipTimer();
+      setPlaysTip(null);
+    }, [clearPlaysTipTimer]);
+
+    const openPlaysTip = useCallback(
+      (key: string, label: string, anchor: HTMLElement, autoHideMs?: number) => {
+        clearPlaysTipTimer();
+        const rect = anchor.getBoundingClientRect();
+        setPlaysTip({
+          key,
+          label,
+          left: rect.left,
+          top: rect.bottom + 6,
+        });
+        if (autoHideMs != null) {
+          playsTipTimerRef.current = window.setTimeout(() => {
+            setPlaysTip(null);
+            playsTipTimerRef.current = null;
+          }, autoHideMs);
+        }
+      },
+      [clearPlaysTipTimer]
+    );
+
+    useEffect(() => () => clearPlaysTipTimer(), [clearPlaysTipTimer]);
 
     useEffect(() => {
       if (!sections?.length) {
@@ -1122,6 +1166,16 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
             ]
               .filter(Boolean)
               .join(" ");
+            const playCount =
+              typeof track.play_count === "number" ? track.play_count : null;
+            const playsTipLabel =
+              playCountBubble && playCount != null
+                ? `${playCount.toLocaleString()} play${playCount === 1 ? "" : "s"}`
+                : null;
+            const playsTipId =
+              track.entry_id != null
+                ? `entry-${track.entry_id}`
+                : track.play_path || `idx-${index}`;
             const lead = (
               <span className="release-tracklist__lead">
                 {editMode && (
@@ -1152,12 +1206,37 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 }`}
               >
                 <span className="user-playlist-tracklist__title-main">
-                  <ReleaseTrackTitle
-                    title={displayTitle}
-                    billboard={false}
-                    hidePerformer={hidePerformer}
-                    hideCoverArtist={hideCoverArtist}
-                  />
+                  {playsTipLabel ? (
+                    <span
+                      className="user-playlist-tracklist__plays-tip"
+                      onMouseEnter={(e) =>
+                        openPlaysTip(playsTipId, playsTipLabel, e.currentTarget)
+                      }
+                      onMouseLeave={hidePlaysTip}
+                      onTouchStart={(e) =>
+                        openPlaysTip(
+                          playsTipId,
+                          playsTipLabel,
+                          e.currentTarget,
+                          2200
+                        )
+                      }
+                    >
+                      <ReleaseTrackTitle
+                        title={displayTitle}
+                        billboard={false}
+                        hidePerformer={hidePerformer}
+                        hideCoverArtist={hideCoverArtist}
+                      />
+                    </span>
+                  ) : (
+                    <ReleaseTrackTitle
+                      title={displayTitle}
+                      billboard={false}
+                      hidePerformer={hidePerformer}
+                      hideCoverArtist={hideCoverArtist}
+                    />
+                  )}
                   {track.snapshot?.explicit ? (
                     <span
                       className="user-playlist-tracklist__explicit"
@@ -1374,7 +1453,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                   <span className="live-story-tracklist__source-col live-story-tracklist__source-col--empty" aria-hidden />
                 ) : null}
                 {unavailable ? rowActions : null}
-                {!unavailable && removeCell}
+                {!unavailable && !editMode && removeCell}
               </>
             );
             return (
@@ -1738,6 +1817,19 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
             }}
           />
         )}
+
+        {playsTip
+          ? createPortal(
+              <span
+                className="user-playlist-tracklist__plays-bubble"
+                role="tooltip"
+                style={{ left: playsTip.left, top: playsTip.top }}
+              >
+                {playsTip.label}
+              </span>,
+              document.body
+            )
+          : null}
       </div>
     );
   }

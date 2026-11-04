@@ -1,6 +1,7 @@
 """User playlist CRUD, Spotify import, and track matching."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -13,6 +14,7 @@ from app.paths import ASSETS_DIR, DATA_DIR
 USER_PLAYLIST_TYPE = 200
 PLA_KIND_LOCAL = "local"
 PLA_KIND_SNAPSHOT = "snapshot"
+_WRAPPED_NAME_RE = re.compile(r"^(\d{4})\s+Wrapped$", re.IGNORECASE)
 # User uploads live under assets (not data/). Legacy data/playlist_covers still read.
 PLAYLIST_COVERS_DIR = ASSETS_DIR / "playlists" / "users"
 _LEGACY_PLAYLIST_COVERS_DIR = DATA_DIR / "playlist_covers"
@@ -124,6 +126,37 @@ def create_user_playlist(
     }
 
 
+def parse_listening_wrapped_year(name: str | None) -> int | None:
+    """Return year for names like '2026 Wrapped', else None."""
+    m = _WRAPPED_NAME_RE.match((name or "").strip())
+    return int(m.group(1)) if m else None
+
+
+def is_listening_wrapped_playlist(playlist: Playlist) -> bool:
+    return parse_listening_wrapped_year(playlist.pla_name) is not None
+
+
+def listening_wrapped_description(year: int) -> str:
+    return f"Your most played tracks in {year} are here!"
+
+
+def _resolve_path_album_year(path: str) -> tuple[str | None, str | None]:
+    from app.config import settings
+    from app.playlist_tracks import (
+        _resolve_track_release_date,
+        _resolve_track_source_labels,
+    )
+
+    media_root = Path(settings.media_root) if settings.media_root else None
+    clean = (path or "").replace("\\", "/").strip()
+    if not media_root or not clean:
+        return None, None
+    album, _rel = _resolve_track_source_labels(clean, media_root)
+    disk_date = _resolve_track_release_date(clean, media_root)
+    year = disk_date[:4] if disk_date and disk_date[:4].isdigit() else None
+    return (album.strip() if album else None), year
+
+
 def _is_editable_user_playlist(playlist: Playlist) -> bool:
     if playlist.pla_type != 200:
         return False
@@ -132,6 +165,8 @@ def _is_editable_user_playlist(playlist: Playlist) -> bool:
 
 def _tracks_editable(playlist: Playlist) -> bool:
     if not _is_editable_user_playlist(playlist):
+        return False
+    if is_listening_wrapped_playlist(playlist):
         return False
     return (playlist.pla_kind or PLA_KIND_LOCAL) != PLA_KIND_SNAPSHOT
 
@@ -149,12 +184,18 @@ def add_track_to_playlist(
     unavailable: bool = False,
     allow_duplicate: bool = False,
     sort_order: int | None = None,
+    allow_wrapped_fill: bool = False,
 ) -> dict:
     playlist = db.get(Playlist, playlist_id)
     if not playlist:
         return {"ok": False, "error": "Playlist not found"}
     if not allow_duplicate and not _tracks_editable(playlist):
-        return {"ok": False, "error": "This playlist does not allow adding tracks"}
+        # Wrapped playlists are locked in the UI, but the Wrapped modal needs
+        # to populate them once at creation time.
+        if not (
+            allow_wrapped_fill and is_listening_wrapped_playlist(playlist)
+        ):
+            return {"ok": False, "error": "This playlist does not allow adding tracks"}
 
     clean_path = path.strip()
     if not unavailable and not clean_path:
@@ -182,16 +223,28 @@ def add_track_to_playlist(
         if existing:
             return {"ok": True, "duplicate": True, "id": existing.pld_id}
 
+    album_val = (album or "").strip() or None
+    year_val = (year or "").strip() or None
+    release_val = (release or "").strip()
+    if clean_path and (not album_val or not year_val or not release_val):
+        resolved_album, resolved_year = _resolve_path_album_year(clean_path)
+        if not album_val and resolved_album:
+            album_val = resolved_album
+        if not release_val and resolved_album:
+            release_val = resolved_album
+        if not year_val and resolved_year:
+            year_val = resolved_year
+
     order = sort_order if sort_order is not None else _next_sort_order(db, playlist_id)
     row = PlaylistData(
         pld_id=_next_entry_id(db),
         pld_title=title.strip() or "Unknown",
         pld_artist=artist.strip() or "Unknown",
-        pld_release=release.strip() or "",
+        pld_release=release_val,
         pld_path=clean_path if not unavailable else "",
         pld_playlist=playlist_id,
-        pld_album=(album or "").strip() or None,
-        pld_year=(year or "").strip() or None,
+        pld_album=album_val,
+        pld_year=year_val,
         pld_sort_order=order,
         pld_unavailable=1 if unavailable else 0,
     )
@@ -365,6 +418,13 @@ def update_user_playlist(
     playlist = db.get(Playlist, playlist_id)
     if not playlist or not _is_editable_user_playlist(playlist):
         return {"ok": False, "error": "Playlist not found or not editable"}
+    if is_listening_wrapped_playlist(playlist) and (
+        name is not None or description is not None
+    ):
+        return {
+            "ok": False,
+            "error": "Wrapped playlists only allow changing the cover",
+        }
     if name is not None:
         clean = name.strip()
         if not clean:

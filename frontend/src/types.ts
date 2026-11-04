@@ -973,6 +973,8 @@ export type ArtistPlaylistDetail = {
   name: string;
   editable?: boolean;
   tracks_editable?: boolean;
+  /** Year for listening Wrapped playlists (name like "2026 Wrapped"). */
+  listening_wrapped_year?: number | null;
   snapshot_filters?: boolean;
   kind?: "local" | "snapshot" | string | null;
   description?: string | null;

@@ -1333,6 +1333,8 @@ input {
   flex-direction: column;
 }
 
+/* Keep Music Vibes rings circular when the home player bar shrinks the pane
+   (width:100% + height:auto was squashing them into ovals). Match Icons. */
 .music-dashboard--player-active .dash-scroll--genres .dash-genre-ring,
 .music-dashboard--player-active .dash-scroll--genres .dash-placeholder--circle,
 .music-dashboard--player-active.music-dashboard--mobile-landscape .dash-scroll--genres .dash-genre-ring,
@@ -1341,10 +1343,10 @@ input {
 .music-dashboard--player-active.music-dashboard--tablet-landscape .dash-row--genres .dash-placeholder--circle,
 .music-dashboard--player-active.music-dashboard--mobile-portrait .dash-scroll--genres .dash-genre-ring,
 .music-dashboard--player-active.music-dashboard--mobile-portrait .dash-scroll--genres .dash-placeholder--circle {
-  width: 100%;
-  max-width: min(100%, 7.5rem);
-  height: auto;
-  max-height: none;
+  width: auto;
+  height: min(100%, 7.5rem);
+  max-width: 100%;
+  max-height: 100%;
   min-width: 0;
   min-height: 0;
   aspect-ratio: 1;
@@ -1689,11 +1691,21 @@ input {
   min-height: 0;
   overflow: auto;
   padding-bottom: 0.35rem;
+  display: flex;
+  flex-direction: column;
 }
 .music-wrapped__pane--tracks {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.music-wrapped__pane-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 0.35rem;
 }
 .music-wrapped__list {
   list-style: none;
@@ -1801,6 +1813,12 @@ input {
   background-size: cover;
   background-position: center;
 }
+.music-wrapped__feature-art--square {
+  border-radius: 0.45rem;
+}
+.music-wrapped__feature--track {
+  margin-bottom: 0.85rem;
+}
 .music-wrapped__feature-meta {
   display: flex;
   flex-direction: column;
@@ -1877,19 +1895,17 @@ input {
   font-weight: 500;
 }
 .music-wrapped__playlist-bar {
-  position: sticky;
-  bottom: 0;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.35rem;
-  margin-top: auto;
-  padding: 0.65rem 0 0.2rem;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--bg) 96%, #1a1420) 55%,
-    transparent
-  );
+  margin-top: 0;
+  padding: 0.65rem 0 0.15rem;
+  /* Match modal fill so scrolling rows never show through. */
+  background: color-mix(in srgb, var(--bg) 94%, #1a1420);
 }
 .music-wrapped__playlist-err {
   margin: 0;
@@ -23051,7 +23067,15 @@ button.lyrics-status-badge--icon-only {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
   min-width: 5.25rem;
+}
+
+.user-playlist-tracklist__play--snapshot-edit > .user-playlist-tracklist__trailing,
+.user-playlist-tracklist__play--snapshot-edit > .release-tracklist__remove-track {
+  justify-self: end;
+  min-width: 0;
 }
 
 .user-playlist-tracklist__trailing .release-tracklist__duration {
@@ -23269,6 +23293,28 @@ button.lyrics-status-badge--icon-only {
   padding: 0.15rem 0;
 }
 
+.user-playlist-tracklist__plays-tip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.user-playlist-tracklist__plays-bubble {
+  position: fixed;
+  z-index: 80;
+  padding: 0.28rem 0.55rem;
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
 /* Must follow base header-row so mobile compact columns win on equal specificity. */
 .user-playlist-tracklist__header-row.user-playlist-tracklist__header-row--compact {
   grid-template-columns:
@@ -23431,7 +23477,8 @@ button.lyrics-status-badge--icon-only {
     2rem
     minmax(0, 1.35fr)
     minmax(0, 1fr)
-    minmax(0, 1fr);
+    minmax(0, 1fr)
+    minmax(5.25rem, 4.5rem);
 }
 
 .user-playlist-tracklist__play--snapshot-edit {
@@ -23439,9 +23486,24 @@ button.lyrics-status-badge--icon-only {
     2rem
     minmax(0, 1.35fr)
     minmax(0, 1fr)
-    minmax(0, 1fr);
+    minmax(0, 1fr)
+    minmax(5.25rem, 4.5rem);
   gap: 0.65rem;
   align-items: center;
+}
+
+/* Snapshot edit must win over the generic 4-col --edit grid. */
+.user-playlist-tracklist__play.user-playlist-tracklist__play--edit.user-playlist-tracklist__play--snapshot-edit {
+  grid-template-columns:
+    auto
+    2rem
+    minmax(0, 1.35fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(5.25rem, 4.5rem);
+  gap: 0.65rem;
+  align-items: center;
+  cursor: default;
 }
 
 .user-playlist-tracklist__meta-edit-cell {

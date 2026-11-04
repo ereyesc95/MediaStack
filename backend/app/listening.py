@@ -156,6 +156,26 @@ def build_streaks(db: Session, user_id: int) -> dict[str, Any]:
     }
 
 
+def _listening_path_key(path: str) -> str:
+    """Normalize play paths so legacy …/Audio/Albums/… matches …/Albums/…."""
+    from app.music_dashboard import _normalize_legacy_audio_rel
+
+    return _normalize_legacy_audio_rel((path or "").replace("\\", "/")).casefold()
+
+
+def path_play_counts_for_year(
+    db: Session, user_id: int, year: int
+) -> dict[str, int]:
+    """Map normalized play path → play count for a calendar year."""
+    counts: Counter[str] = Counter()
+    for r in _year_rows(db, user_id, year):
+        n = int(r.ldp_count or 0)
+        if n <= 0 or not r.ldp_path:
+            continue
+        counts[_listening_path_key(r.ldp_path)] += n
+    return dict(counts)
+
+
 def _year_rows(db: Session, user_id: int, year: int) -> list[ListeningDayPlay]:
     uid = _scoped_user_id(user_id)
     start = f"{year:04d}-01-01"

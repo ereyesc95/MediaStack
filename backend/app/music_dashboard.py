@@ -1229,6 +1229,32 @@ def get_user_playlist_detail(
             deduped.append(track)
         tracks = deduped
 
+    from app.user_playlist import (
+        listening_wrapped_description,
+        parse_listening_wrapped_year,
+    )
+
+    wrapped_year = parse_listening_wrapped_year(playlist.pla_name)
+    if wrapped_year is not None:
+        from app.listening import path_play_counts_for_year
+
+        from app.listening import _listening_path_key
+
+        counts = path_play_counts_for_year(db, user_id, wrapped_year)
+        for t in tracks:
+            path = _listening_path_key(t.get("play_path") or "")
+            t["play_count"] = int(counts.get(path, 0) or 0)
+        tracks.sort(
+            key=lambda t: (
+                -(int(t.get("play_count") or 0)),
+                (t.get("title") or "").casefold(),
+            )
+        )
+        expected_desc = listening_wrapped_description(wrapped_year)
+        if (playlist.pla_description or "").strip() != expected_desc:
+            playlist.pla_description = expected_desc
+            db.commit()
+
     all_playlists = list_user_playlists(db, user_id=user_id, is_admin=is_admin)
     prev, nxt = _playlist_neighbors(all_playlists, playlist_id)
 
@@ -1261,6 +1287,7 @@ def get_user_playlist_detail(
         "kind": playlist.pla_kind or "local",
         "editable": True,
         "tracks_editable": _tracks_editable(playlist),
+        "listening_wrapped_year": wrapped_year,
         "snapshot_filters": is_snapshot,
         "tracks": tracks,
         "prev": prev,

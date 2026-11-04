@@ -108,6 +108,7 @@ class AddPlaylistTrackBody(BaseModel):
     release: str = ""
     path: str
     allow_duplicate: bool = False
+    allow_wrapped_fill: bool = False
 
 
 class CreatePlaylistBody(BaseModel):
@@ -2985,6 +2986,7 @@ def add_playlist_track(
         release=body.release,
         path=body.path,
         allow_duplicate=body.allow_duplicate,
+        allow_wrapped_fill=body.allow_wrapped_fill,
     )
     if not result.get("ok"):
         raise HTTPException(404, result.get("error") or "Failed")

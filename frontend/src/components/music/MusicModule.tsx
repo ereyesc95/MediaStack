@@ -2304,6 +2304,7 @@ export default function MusicModule({
               year={wrappedYear}
               onClose={() => setWrappedOpen(false)}
               onPlayTrack={handlePlay}
+              onPlaylistCreated={reloadPlaylists}
               onArtist={(id) => {
                 setWrappedOpen(false);
                 const card =

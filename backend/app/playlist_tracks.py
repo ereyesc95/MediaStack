@@ -98,6 +98,12 @@ PLAYLIST_DESCRIPTIONS: dict[str, str] = {
 
 
 def _audio_file_for_play_path(play_path: str, media_root: Path) -> Path | None:
+    """Resolve on-disk audio (handles .lnk / .path / legacy separators)."""
+    from app.band_library import resolve_track_file_path
+
+    resolved = resolve_track_file_path(play_path, media_root)
+    if resolved and resolved.is_file():
+        return resolved
     audio_file = media_root / Path(play_path.replace("/", "\\"))
     if audio_file.is_file():
         return audio_file

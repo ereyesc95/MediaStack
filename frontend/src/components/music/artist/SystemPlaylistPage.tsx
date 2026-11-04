@@ -64,6 +64,7 @@ import type {
 } from "../../../types";
 import { MiniAudioPlayerControls, useMiniAudio } from "./MiniAudioPlayer";
 import PlaylistBoot from "../../PlaylistBoot";
+import ConfirmDialog from "../../ConfirmDialog";
 import MsDisclosure from "../../MsDisclosure";
 import TopBarTitle from "../../TopBarTitle";
 import { systemPlaylistCoverUrl } from "./ArtistPlaylists";
@@ -358,6 +359,9 @@ export default function SystemPlaylistPage({
   });
   const [error, setError] = useState<string | null>(null);
   const [editPlaylist, setEditPlaylist] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showReimportCsv, setShowReimportCsv] = useState(false);
   const [reimportNotice, setReimportNotice] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -613,6 +617,10 @@ export default function SystemPlaylistPage({
 
   const tracks = detail?.tracks ?? [];
   const isSnapshotPlaylist = detail?.snapshot_filters === true;
+  const isListeningWrapped =
+    isUserPlaylist &&
+    (detail?.listening_wrapped_year != null ||
+      /^\d{4}\s+Wrapped$/i.test((detail?.name || "").trim()));
   const canReimportCsv =
     isUserPlaylist &&
     isSnapshotPlaylist &&
@@ -631,6 +639,11 @@ export default function SystemPlaylistPage({
   const [trackSort, setTrackSort] = useState<{ key: PlaylistTrackSortKey; desc: boolean }>(() =>
     slug === "music-videos" ? { key: "year", desc: false } : { key: "original", desc: false }
   );
+
+  useEffect(() => {
+    if (!isListeningWrapped) return;
+    setTrackSort({ key: "plays", desc: true });
+  }, [isListeningWrapped, userPlaylistId]);
   const [subgenreNames, setSubgenreNames] = useState<string[]>([]);
   const [subgenreIdByName, setSubgenreIdByName] = useState<Map<string, number>>(new Map());
 
@@ -789,14 +802,27 @@ export default function SystemPlaylistPage({
     isUserPlaylist &&
     detail?.editable !== false &&
     editPlaylist &&
+    !isListeningWrapped &&
     !coverUploadBusy;
   const hasCustomCover = Boolean(detail?.has_custom_cover);
   const showCoverPlaceholder = canEditPlaylistCover && !hasCustomCover;
 
   const openCoverPicker = useCallback(() => {
+    if (coverUploadBusy) return;
+    if (isListeningWrapped) {
+      if (!isUserPlaylist || detail?.editable === false) return;
+      coverInputRef.current?.click();
+      return;
+    }
     if (!canEditPlaylistCover) return;
     coverInputRef.current?.click();
-  }, [canEditPlaylistCover]);
+  }, [
+    canEditPlaylistCover,
+    coverUploadBusy,
+    detail?.editable,
+    isListeningWrapped,
+    isUserPlaylist,
+  ]);
 
   const onCoverFileChange = useCallback(
     async (file: File | null) => {
@@ -1111,21 +1137,29 @@ export default function SystemPlaylistPage({
 
   const handleDeletePlaylist = useCallback(() => {
     if (!isUserPlaylist || userPlaylistId == null || detail?.editable === false) return;
-    const name = detail?.name?.trim() || "this playlist";
-    if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+    setDeleteError(null);
+    setDeleteConfirmOpen(true);
+  }, [detail?.editable, isUserPlaylist, userPlaylistId]);
+
+  const confirmDeletePlaylist = useCallback(() => {
+    if (!isUserPlaylist || userPlaylistId == null || detail?.editable === false) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
     void deleteUserPlaylist(userPlaylistId)
       .then(() => {
         clearUserPlaylistDetailCache(userPlaylistId);
+        setDeleteConfirmOpen(false);
         onPlaylistDeleted?.();
         onBack();
       })
       .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : "Failed to delete playlist";
-        window.alert(message);
-      });
+        setDeleteError(
+          err instanceof Error ? err.message : "Failed to delete playlist"
+        );
+      })
+      .finally(() => setDeleteBusy(false));
   }, [
     detail?.editable,
-    detail?.name,
     isUserPlaylist,
     onBack,
     onPlaylistDeleted,
@@ -1573,8 +1607,15 @@ export default function SystemPlaylistPage({
               onEditProfile={onEditProfile}
               menuVariant="release"
               showEditPlaylist={isUserPlaylist && detail?.editable !== false}
-              editPlaylistActive={editPlaylist}
-              onEditPlaylistToggle={() => setEditPlaylist((v) => !v)}
+              editPlaylistActive={editPlaylist && !isListeningWrapped}
+              editPlaylistLabel={isListeningWrapped ? "Edit cover" : "Edit playlist"}
+              onEditPlaylistToggle={() => {
+                if (isListeningWrapped) {
+                  openCoverPicker();
+                  return;
+                }
+                setEditPlaylist((v) => !v);
+              }}
               showReimportCsv={canReimportCsv}
               onReimportCsv={() => setShowReimportCsv(true)}
               showDeletePlaylist={isUserPlaylist && detail?.editable !== false}
@@ -2066,7 +2107,10 @@ export default function SystemPlaylistPage({
                       </div>
                     ) : (
                       <div className="release-page__panel-head">
-                        {editPlaylist && isUserPlaylist && detail?.editable !== false ? (
+                        {editPlaylist &&
+                        isUserPlaylist &&
+                        detail?.editable !== false &&
+                        !isListeningWrapped ? (
                           <div className="user-playlist-edit__panel-fields">
                             <input
                               type="text"
@@ -2341,9 +2385,11 @@ export default function SystemPlaylistPage({
                 editMode={
                   isUserPlaylist &&
                   editPlaylist &&
+                  !isListeningWrapped &&
                   detail?.tracks_editable !== false &&
                   detail?.editable !== false
                 }
+                playCountBubble={isListeningWrapped}
                 snapshotMetadataMode={
                   isUserPlaylist &&
                   editPlaylist &&
@@ -2382,6 +2428,23 @@ export default function SystemPlaylistPage({
           onChange={(e) => void onCoverFileChange(e.target.files?.[0] ?? null)}
         />
       )}
+      {deleteConfirmOpen ? (
+        <ConfirmDialog
+          title="Delete playlist"
+          message={`Delete “${detail?.name?.trim() || "this playlist"}”? This cannot be undone.`}
+          confirmLabel="Delete"
+          destructive
+          hideCancel
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={confirmDeletePlaylist}
+          onClose={() => {
+            if (deleteBusy) return;
+            setDeleteConfirmOpen(false);
+            setDeleteError(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

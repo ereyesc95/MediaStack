@@ -286,10 +286,9 @@ export default function MusicHome({
                   }
                 />
                 <DashHoverTitle
-                  title={(t.title_full ?? t.title ?? "").replace(
-                    /\s*[\[(][^\]\)]*[)\]]/g,
-                    ""
-                  ).trim()}
+                  title={(t.title_full ?? t.title ?? "")
+                    .replace(/\s*\[[^\]]*]/g, "")
+                    .trim()}
                   subtitle={(t.artist_name_full ?? t.artist_name ?? "").replace(
                     /■/g,
                     ","

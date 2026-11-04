@@ -95,6 +95,8 @@ type Props = {
   showEditPlaylist?: boolean;
   editPlaylistActive?: boolean;
   onEditPlaylistToggle?: () => void;
+  /** Override label (e.g. Wrapped playlists → "Edit cover"). */
+  editPlaylistLabel?: string;
   showDeletePlaylist?: boolean;
   onDeletePlaylist?: () => void;
   showReimportCsv?: boolean;
@@ -242,6 +244,7 @@ export default function AppMenu({
   showEditPlaylist,
   editPlaylistActive,
   onEditPlaylistToggle,
+  editPlaylistLabel = "Edit playlist",
   showDeletePlaylist,
   onDeletePlaylist,
   showReimportCsv,
@@ -1526,7 +1529,7 @@ export default function AppMenu({
               ) : (
                 <IconSquare className="menu-item-icon" />
               )}
-              <span>Edit playlist</span>
+              <span>{editPlaylistLabel}</span>
             </button>
           )}
           {showReimportCsv && onReimportCsv && (

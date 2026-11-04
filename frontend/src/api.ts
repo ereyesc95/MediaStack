@@ -57,11 +57,11 @@ async function errorMessageFromResponse(res: Response): Promise<string> {
     /econnrefused/i.test(message) ||
     /proxy error/i.test(message)
   ) {
-    return "Cannot reach the API. Start python run.py (port 8766).";
+    return "Application not running. Check and try again";
   }
   if (/^internal server error$/i.test(message.trim())) {
     // Vite's /api proxy often surfaces ECONNREFUSED as a bare 500.
-    return "Couldn't complete that request right now. If Browse/settings fail, start python run.py (port 8766) and try again.";
+    return "Application not running. Check and try again";
   }
   return message;
 }
@@ -90,10 +90,10 @@ async function request<T>(
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       if (!timedOut && externalSignal?.aborted) throw e;
-      throw new Error("Request timed out. Is MyStack running?");
+      throw new Error("Application not running. Check and try again");
     }
     if (e instanceof TypeError) {
-      throw new Error("Cannot reach the API. Start python run.py");
+      throw new Error("Application not running. Check and try again");
     }
     throw e;
   } finally {
@@ -869,6 +869,8 @@ export async function addTrackToPlaylist(
     release: string;
     path: string;
     allow_duplicate?: boolean;
+    /** Populate a listening Wrapped playlist at creation time. */
+    allow_wrapped_fill?: boolean;
   }
 ) {
   return request<{ ok: boolean; id?: number; duplicate?: boolean }>(
