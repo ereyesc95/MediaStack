@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   addTrackToPlaylist,
   createUserPlaylist,
@@ -11,7 +17,7 @@ import {
 } from "../../listeningWrappedCache";
 import type { ListeningWrapped } from "../../types";
 import { IconCheck, IconPlus } from "../MenuIcons";
-import ModalPortal from "../ModalPortal";
+import ModalPortal, { useModalClose } from "../ModalPortal";
 
 type TabId = "tracks" | "artists" | "vibes";
 
@@ -29,7 +35,22 @@ type Props = {
   onPlaylistCreated?: () => void;
 };
 
-export default function MusicWrapped({
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+export default function MusicWrapped(props: Props) {
+  return (
+    <ModalPortal onClose={props.onClose}>
+      <MusicWrappedPanel {...props} />
+    </ModalPortal>
+  );
+}
+
+function MusicWrappedPanel({
   year,
   onClose,
   onPlayTrack,
@@ -45,6 +66,11 @@ export default function MusicWrapped({
   const [playlistId, setPlaylistId] = useState<number | null>(null);
   const [playlistBusy, setPlaylistBusy] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const bodyShellRef = useRef<HTMLDivElement>(null);
+  const bodyContentRef = useRef<HTMLDivElement>(null);
+  const heightReadyRef = useRef(false);
+  const requestClose = useModalClose(onClose);
 
   const playlistName = `${year} Wrapped`;
 
@@ -107,6 +133,56 @@ export default function MusicWrapped({
     [data]
   );
 
+  useLayoutEffect(() => {
+    const shell = bodyShellRef.current;
+    const content = bodyContentRef.current;
+    const panel = panelRef.current;
+    if (!shell || !content || !panel) return;
+
+    const rootFs =
+      parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const maxPanel = Math.min(window.innerHeight * 0.88, 44 * rootFs);
+    const panelStyle = getComputedStyle(panel);
+    let chrome =
+      parseFloat(panelStyle.paddingTop) + parseFloat(panelStyle.paddingBottom);
+    for (const child of Array.from(panel.children)) {
+      if (child === shell) continue;
+      chrome += (child as HTMLElement).getBoundingClientRect().height;
+    }
+    // header / stats / tabs bottom margins
+    chrome += (0.85 + 0.85 + 0.65) * rootFs;
+    const maxBody = Math.max(8 * rootFs, maxPanel - chrome);
+
+    const from = shell.getBoundingClientRect().height;
+    shell.style.height = "auto";
+    const natural = Math.ceil(content.scrollHeight);
+    const to = Math.min(natural, Math.ceil(maxBody));
+
+    if (!heightReadyRef.current || prefersReducedMotion()) {
+      shell.style.height = `${to}px`;
+      heightReadyRef.current = true;
+      return;
+    }
+    if (Math.abs(from - to) < 1) {
+      shell.style.height = `${to}px`;
+      return;
+    }
+    shell.style.height = `${from}px`;
+    void shell.offsetHeight;
+    shell.style.height = `${to}px`;
+  }, [
+    tab,
+    loading,
+    error,
+    data,
+    tracks.length,
+    artists.length,
+    genres.length,
+    playlistId,
+    playlistBusy,
+    playlistError,
+  ]);
+
   async function addWrappedPlaylist() {
     if (playlistId != null || playlistBusy || !tracks.length) return;
     setPlaylistBusy(true);
@@ -147,8 +223,8 @@ export default function MusicWrapped({
   const restGenres = genres.slice(1);
 
   return (
-    <ModalPortal onClose={onClose}>
       <div
+        ref={panelRef}
         className="music-wrapped"
         role="dialog"
         aria-modal="true"
@@ -161,7 +237,7 @@ export default function MusicWrapped({
           <button
             type="button"
             className="music-wrapped__close"
-            onClick={onClose}
+            onClick={() => requestClose()}
             aria-label="Close"
           >
             ×
@@ -221,7 +297,12 @@ export default function MusicWrapped({
               ))}
             </div>
 
-            <div className="music-wrapped__body">
+            <div className="music-wrapped__body-shell" ref={bodyShellRef}>
+              <div
+                className="music-wrapped__body"
+                ref={bodyContentRef}
+                key={tab}
+              >
               {tab === "tracks" ? (
                 <div className="music-wrapped__pane music-wrapped__pane--tracks">
                   <div className="music-wrapped__pane-scroll">
@@ -360,8 +441,7 @@ export default function MusicWrapped({
                           type="button"
                           className="music-wrapped__feature"
                           onClick={() => {
-                            onClose();
-                            onArtist?.(featuredArtist.id);
+                            requestClose(() => onArtist?.(featuredArtist.id));
                           }}
                         >
                           {featuredArtist.photo_url || featuredArtist.icon_url ? (
@@ -394,8 +474,7 @@ export default function MusicWrapped({
                                 type="button"
                                 className="music-wrapped__grid-card"
                                 onClick={() => {
-                                  onClose();
-                                  onArtist?.(a.id);
+                                  requestClose(() => onArtist?.(a.id));
                                 }}
                               >
                                 {a.photo_url || a.icon_url ? (
@@ -438,8 +517,7 @@ export default function MusicWrapped({
                           onClick={() => {
                             const id = Number(featuredGenre.id);
                             if (!Number.isFinite(id)) return;
-                            onClose();
-                            onGenre?.(id);
+                            requestClose(() => onGenre?.(id));
                           }}
                         >
                           {featuredGenre.image_url ? (
@@ -471,8 +549,7 @@ export default function MusicWrapped({
                                 onClick={() => {
                                   const id = Number(g.id);
                                   if (!Number.isFinite(id)) return;
-                                  onClose();
-                                  onGenre?.(id);
+                                  requestClose(() => onGenre?.(id));
                                 }}
                               >
                                 {g.image_url ? (
@@ -503,10 +580,10 @@ export default function MusicWrapped({
                   )}
                 </div>
               ) : null}
+              </div>
             </div>
           </>
         ) : null}
       </div>
-    </ModalPortal>
   );
 }

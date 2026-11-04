@@ -2306,13 +2306,11 @@ export default function MusicModule({
               onPlayTrack={handlePlay}
               onPlaylistCreated={reloadPlaylists}
               onArtist={(id) => {
-                setWrappedOpen(false);
                 const card =
                   dashboard.top_artists?.find((a) => a.id === id) ?? null;
                 openArtist(id, card, "home");
               }}
               onGenre={(id) => {
-                setWrappedOpen(false);
                 onGenreFilter(id);
               }}
             />

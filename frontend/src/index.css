@@ -1590,11 +1590,11 @@ input {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--bg) 94%, #1a1420);
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  border-radius: 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 1.15rem 1.2rem 0.85rem;
-  box-shadow: 0 18px 48px color-mix(in srgb, #000 45%, transparent);
+  box-shadow: none;
   position: relative;
 }
 .music-wrapped__header {
@@ -1686,13 +1686,38 @@ input {
   opacity: 1;
   border-bottom-color: var(--accent, #5b8def);
 }
-.music-wrapped__body {
+.music-wrapped__body-shell {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  transition: height 0.28s ease;
+}
+.music-wrapped__body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding-bottom: 0.35rem;
   display: flex;
   flex-direction: column;
+  animation: music-wrapped-pane-in 0.22s ease;
+}
+@keyframes music-wrapped-pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-wrapped__body-shell {
+    transition: none;
+  }
+  .music-wrapped__body {
+    animation: none;
+  }
 }
 .music-wrapped__pane--tracks {
   display: flex;
@@ -1902,10 +1927,9 @@ input {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.35rem;
-  margin-top: 0;
-  padding: 0.65rem 0 0.15rem;
-  /* Match modal fill so scrolling rows never show through. */
-  background: color-mix(in srgb, var(--bg) 94%, #1a1420);
+  margin-top: 0.35rem;
+  padding: 0.35rem 0 0.15rem;
+  background: transparent;
 }
 .music-wrapped__playlist-err {
   margin: 0;
@@ -4107,6 +4131,71 @@ input {
 
 .modal-backdrop--stacked {
   z-index: 510;
+}
+
+/* Shared open/close motion — portal-managed uses --motion + is-visible/is-leaving. */
+.modal-backdrop.modal-backdrop--motion {
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+.modal-backdrop.modal-backdrop--motion.is-visible {
+  opacity: 1;
+}
+.modal-backdrop.modal-backdrop--motion.is-leaving {
+  opacity: 0;
+}
+.modal-backdrop.modal-backdrop--motion > * {
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease;
+}
+.modal-backdrop.modal-backdrop--motion.is-visible > * {
+  opacity: 1;
+  transform: none;
+}
+.modal-backdrop.modal-backdrop--motion.is-leaving > * {
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+}
+
+/* Raw backdrops (no portal motion class): brief enter on mount. */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.modal-backdrop:not(.modal-backdrop--motion) {
+  animation: modal-backdrop-in 0.24s ease both;
+}
+.modal-backdrop:not(.modal-backdrop--motion) > * {
+  animation: modal-panel-in 0.24s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop.modal-backdrop--motion,
+  .modal-backdrop.modal-backdrop--motion > * {
+    transition: none;
+  }
+  .modal-backdrop.modal-backdrop--motion.is-visible,
+  .modal-backdrop.modal-backdrop--motion.is-visible > * {
+    opacity: 1;
+    transform: none;
+  }
+  .modal-backdrop:not(.modal-backdrop--motion),
+  .modal-backdrop:not(.modal-backdrop--motion) > * {
+    animation: none;
+  }
 }
 
 .modal-panel {

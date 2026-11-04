@@ -541,19 +541,18 @@ export default function CollectionModal({
 
   return (
     <ModalPortal onClose={onClose}>
-      <div className="modal-backdrop" onClick={onClose}>
         <div
           className="modal-panel collection-modal"
           role="dialog"
           aria-modal="true"
           aria-label={heading}
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <header className="modal-panel-header collection-modal__header">
             <h3>{heading}</h3>
             <button
               type="button"
-              className="artist-word-cloud-modal__close"
+              className="modal-close-x artist-word-cloud-modal__close"
               onClick={onClose}
               aria-label="Close"
             >
@@ -860,7 +859,6 @@ export default function CollectionModal({
             </div>
           ) : null}
         </div>
-      </div>
     </ModalPortal>
   );
 }

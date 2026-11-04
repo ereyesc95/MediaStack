@@ -1,4 +1,4 @@
-import ModalPortal from "./ModalPortal";
+import ModalPortal, { useModalClose } from "./ModalPortal";
 
 type Props = {
   title: string;
@@ -14,7 +14,15 @@ type Props = {
   hideCancel?: boolean;
 };
 
-export default function ConfirmDialog({
+export default function ConfirmDialog(props: Props) {
+  return (
+    <ModalPortal onClose={props.onClose} layer={2}>
+      <ConfirmDialogPanel {...props} />
+    </ModalPortal>
+  );
+}
+
+function ConfirmDialogPanel({
   title,
   message,
   confirmLabel = "Confirm",
@@ -26,15 +34,15 @@ export default function ConfirmDialog({
   onClose,
   hideCancel = false,
 }: Props) {
+  const requestClose = useModalClose(onClose);
   return (
-    <ModalPortal onClose={onClose} layer={2}>
       <div
         className="modal-panel artist-admin-modal confirm-dialog"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
           <h3>{title}</h3>
-          <button type="button" className="modal-close-x" onClick={onClose}>
+          <button type="button" className="modal-close-x" onClick={() => requestClose()}>
             ×
           </button>
         </div>
@@ -42,7 +50,12 @@ export default function ConfirmDialog({
         {error ? <p className="error">{error}</p> : null}
         <div className="modal-actions-row confirm-dialog__actions">
           {!hideCancel ? (
-            <button type="button" className="btn" onClick={onClose} disabled={busy}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => requestClose()}
+              disabled={busy}
+            >
               {cancelLabel}
             </button>
           ) : (
@@ -58,6 +71,5 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </ModalPortal>
   );
 }
