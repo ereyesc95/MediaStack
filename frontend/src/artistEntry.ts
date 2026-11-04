@@ -21,6 +21,12 @@ export type ArtistEntryReferrer = {
   fromTab?: "home" | "catalog";
   /** Catalog name-letter to restore when returning to Catalog. */
   catalogLetter?: string;
+  /**
+   * Set only when returning should reopen a real franchise/leaf page
+   * (e.g. opened Artist from a Movies film MUSIC tab). Leave unset when the
+   * user opened a music-linked card from module Home/Catalog — Back must
+   * restore that Home/Catalog, not invent a Movies/Series franchise hub.
+   */
   franchiseId?: string;
   franchiseName?: string;
   filmId?: string;

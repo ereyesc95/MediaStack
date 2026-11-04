@@ -1,10 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { fetchListeningStreaks } from "../../api";
-import type { ListeningStreaks, MusicDashboard } from "../../types";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { MusicDashboard } from "../../types";
 import { EMPTY_DASHBOARD } from "../../types";
 import { DashHoverTitle, useDashCardReveal } from "../DashHoverTitle";
 import DashIconCard from "./DashIconCard";
-import MusicWrapped from "./MusicWrapped";
 
 const PHONE_MAX_WIDTH = 900;
 const PHONE_PORTRAIT_MAX_WIDTH = 480;
@@ -212,22 +210,6 @@ export default function MusicHome({
   const dash = data ?? EMPTY_DASHBOARD;
   const layout = useDashboardLayout();
   const paneLimit = paneItemLimit(layout);
-  const [streaks, setStreaks] = useState<ListeningStreaks | null>(null);
-  const [wrappedOpen, setWrappedOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchListeningStreaks()
-      .then((s) => {
-        if (!cancelled) setStreaks(s);
-      })
-      .catch(() => {
-        if (!cancelled) setStreaks(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const topTracks = slicePane(dash.top_tracks, paneLimit);
   const topArtists = slicePane(dash.top_artists, paneLimit);
@@ -274,44 +256,6 @@ export default function MusicHome({
 
   return (
     <div className={`music-dashboard${dashClass}`}>
-      <section className="dash-row dash-row--listening">
-        <div className="listening-strip">
-          <div className="listening-strip__streak">
-            <strong>{streaks?.current_streak ?? 0}</strong>
-            <span>
-              day streak
-              {streaks && streaks.longest_streak > streaks.current_streak
-                ? ` · best ${streaks.longest_streak}`
-                : ""}
-            </span>
-          </div>
-          <div className="listening-strip__meta muted">
-            {streaks
-              ? `${streaks.active_days_year} days · ${streaks.plays_year.toLocaleString()} plays in ${streaks.year}`
-              : "Play tracks to build your streak"}
-          </div>
-          <button
-            type="button"
-            className="btn listening-strip__wrapped"
-            onClick={() => setWrappedOpen(true)}
-          >
-            {streaks?.year ?? new Date().getFullYear()} Wrapped
-          </button>
-        </div>
-      </section>
-
-      {wrappedOpen ? (
-        <MusicWrapped
-          year={streaks?.year}
-          onClose={() => setWrappedOpen(false)}
-          onPlayTrack={onPlayTrack}
-          onArtist={(id) => {
-            setWrappedOpen(false);
-            onArtist(id);
-          }}
-        />
-      ) : null}
-
       <section className="dash-row dash-row--tracks">
         <DashPaneLabel
           logo="/api/assets/icons/pane-on-repeat"

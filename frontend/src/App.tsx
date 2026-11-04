@@ -60,7 +60,7 @@ import SeriesModule from "./components/series/SeriesModule";
 
 import { applyProfilePreferences, getStoredOrientation, saveOrientation } from "./themes";
 import { applyStoredThemeOrKeepAdaptive, clearMediaTheme } from "./mediaTheme";
-import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
+import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushMusicRootRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
 import {
   pushMoviesCatalogRoute,
   pushMoviesRootRoute,
@@ -533,7 +533,7 @@ export default function App() {
     clearMediaTheme(profile?.user_id);
 
     if (opt.kind === "music") {
-      window.history.pushState({}, "", "/");
+      pushMusicRootRoute();
       setView({ kind: "music", tab: "home" });
       return;
     }
@@ -849,6 +849,8 @@ export default function App() {
             onTab={(tab: MusicTab) => {
               if (tab === "playlists") {
                 pushPlaylistsGridRoute();
+              } else if (tab === "home") {
+                pushMusicRootRoute();
               }
               openMusic({ tab, bandId: undefined, playlistId: undefined });
             }}
@@ -1049,7 +1051,7 @@ export default function App() {
               if (id != null) {
                 window.history.pushState(null, "", `/music/playlists/${id}`);
               } else if (window.location.pathname.startsWith("/music/playlists/")) {
-                window.history.pushState(null, "", "/");
+                pushPlaylistsGridRoute();
               }
               openMusic({ playlistId: id, tab: "playlists", bandId: undefined });
             }}
@@ -1140,6 +1142,7 @@ export default function App() {
               });
             }}
             onBackToMovies={(franchiseId, restore, filmId, filmTitle) => {
+              // Leaf film → return to that film (e.g. opened Artist from film MUSIC).
               if (franchiseId && filmId) {
                 pushMoviesRoute({
                   franchiseId,
@@ -1157,6 +1160,7 @@ export default function App() {
                 });
                 return;
               }
+              // Empty franchiseId → Movies home/catalog (music-linked card from Home/Catalog).
               if (!franchiseId) {
                 if (restore?.tab === "home") {
                   pushMoviesRootRoute();
@@ -1184,6 +1188,7 @@ export default function App() {
                 });
                 return;
               }
+              // Real Movies franchise hub (opened Artist from hub MUSIC / related).
               pushMoviesRoute({
                 franchiseId,
                 section: "audio",

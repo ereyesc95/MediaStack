@@ -1307,7 +1307,7 @@ export default function MoviesModule({
                   source: "movies",
                   section: mediaSection,
                   fromTab: "home",
-                  franchiseId: workId,
+                  // No franchiseId — Back must return to Movies home, not a hub.
                   franchiseName: card.name,
                   backLabel: "MOVIES",
                 });
@@ -1439,7 +1439,7 @@ export default function MoviesModule({
                 section: mediaSection,
                 fromTab: "catalog",
                 catalogLetter: letter || "A",
-                franchiseId: id,
+                // No franchiseId — Back restores Movies catalog, not a hub.
                 franchiseName: card.name,
                 backLabel: "MOVIES",
               });

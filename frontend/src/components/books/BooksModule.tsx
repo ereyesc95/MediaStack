@@ -1221,7 +1221,7 @@ export default function BooksModule({
                   source: "books",
                   section: mediaSection,
                   fromTab: "home",
-                  franchiseId: workId,
+                  // No franchiseId — Back restores Books home, not a hub.
                   franchiseName: card.name,
                   backLabel: "BOOKS",
                 });
@@ -1353,7 +1353,7 @@ export default function BooksModule({
                 section: mediaSection,
                 fromTab: "catalog",
                 catalogLetter: letter || "A",
-                franchiseId: id,
+                // No franchiseId — Back restores Books catalog, not a hub.
                 franchiseName: card.name,
                 backLabel: "BOOKS",
               });

@@ -64,7 +64,7 @@ import SystemPlaylistPage from "./artist/SystemPlaylistPage";
 import MediaItemPage from "./media/MediaItemPage";
 import ReleasePage from "./release/ReleasePage";
 import type { ReleaseTab } from "../../musicRoute";
-import { pushArtistRoute, parseArtistPath, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory, saveReleaseReferrer } from "../../musicRoute";
+import { pushArtistRoute, parseArtistPath, pushMusicRootRoute, pushUserPlaylistRoute, savePendingAudioCategory, clearPendingAudioCategory, saveReleaseReferrer } from "../../musicRoute";
 import {
   clearPlaylistReturn,
   getPlaylistReturn,
@@ -90,6 +90,7 @@ import EventsLayoutPicker from "./EventsLayoutPicker";
 import MerchBrowse, { type MerchBrowseApi } from "./MerchBrowse";
 import MusicCatalogScopeToggle from "./MusicCatalogScopeToggle";
 import MusicHome from "./MusicHome";
+import MusicWrapped from "./MusicWrapped";
 import PlaylistsView from "./PlaylistsView";
 import MediaBeatFx from "./MediaBeatFx";
 import {
@@ -99,7 +100,12 @@ import {
 import TourShowPage from "./artist/TourShowPage";
 import { useBeatPulse } from "../../useBeatPulse";
 import { IconAddArtist, IconDisc, IconHeadphones, IconLineup, IconPencil, IconStar, IconUniverse } from "../MenuIcons";
-import { usePhoneLayout } from "../../usePhoneLayout";
+import {
+  isMobilePortraitLayout,
+  useDeviceLayout,
+  usePhoneLayout,
+} from "../../usePhoneLayout";
+import { wrappedSeasonYear } from "../../listeningWrappedCache";
 import type { EventsCardLayout } from "../../types";
 
 type Props = {
@@ -323,6 +329,7 @@ export default function MusicModule({
   const [homePlayingPath, setHomePlayingPath] = useState<string | null>(null);
   const [homeRepeatOne, setHomeRepeatOne] = useState(false);
   const [homePlayerBarHidden, setHomePlayerBarHidden] = useState(false);
+  const [wrappedOpen, setWrappedOpen] = useState(false);
   const [entrySource, setEntrySource] = useState<
     "home" | "catalog" | "collection" | "merch"
   >("catalog");
@@ -331,7 +338,11 @@ export default function MusicModule({
   const loadArtistsGeneration = useRef(0);
   const loadAlbumsGeneration = useRef(0);
   const isPhone = usePhoneLayout();
+  const deviceLayout = useDeviceLayout();
   const portraitMenuChrome = isPhone;
+  const wrappedIconOnly = isMobilePortraitLayout(deviceLayout);
+  const wrappedYear = wrappedSeasonYear();
+  const showHomeWrapped = tab === "home" && wrappedYear != null;
 
   const resolveArtistShell = useCallback(
     (id: number): ArtistCard | null => {
@@ -1482,6 +1493,23 @@ export default function MusicModule({
                   <IconPencil />
                 </button>
               ) : null}
+              {showHomeWrapped ? (
+                <button
+                  type="button"
+                  className={`music-home-wrapped-btn${
+                    wrappedIconOnly ? " music-home-wrapped-btn--icon" : ""
+                  }`}
+                  title={`${wrappedYear} Wrapped`}
+                  aria-label={`${wrappedYear} Wrapped`}
+                  onClick={() => setWrappedOpen(true)}
+                >
+                  {wrappedIconOnly ? (
+                    <IconHeadphones />
+                  ) : (
+                    `${wrappedYear} Wrapped`
+                  )}
+                </button>
+              ) : null}
               <AppMenu
                 onImport={onImport}
                 onSync={onSync}
@@ -2043,7 +2071,7 @@ export default function MusicModule({
           onBackToHome={() => {
             clearArtistEntryReferrer();
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("home");
@@ -2051,7 +2079,7 @@ export default function MusicModule({
           onBackToCatalog={() => {
             clearArtistEntryReferrer();
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("artists");
@@ -2059,7 +2087,7 @@ export default function MusicModule({
           onBackToCollection={() => {
             clearArtistEntryReferrer();
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onReleaseNavigate?.(undefined, undefined);
             onBand(undefined);
             onTab("collection");
@@ -2138,12 +2166,8 @@ export default function MusicModule({
             }
             if (ref?.source === "movies") {
               clearArtistEntryReferrer();
-              onBackToMovies?.(
-                ref.franchiseId || "",
-                restore,
-                ref.filmId,
-                ref.backLabel
-              );
+              // Empty franchiseId → App restores Movies home/catalog (music-linked cards).
+              onBackToMovies?.(ref.franchiseId || "", restore, ref.filmId);
               return;
             }
             if (ref?.source === "books") {
@@ -2161,7 +2185,7 @@ export default function MusicModule({
               return;
             }
             clearArtistEntryReferrer();
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onBand(undefined);
             onTab(
               entrySource === "home"
@@ -2198,21 +2222,21 @@ export default function MusicModule({
           onOpenArtist={openArtist}
           onCountry={(id) => {
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onBand(undefined);
             onTab("artists");
             onCountryFilter(id);
           }}
           onSubgenre={(id) => {
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onBand(undefined);
             onTab("artists");
             onGenreFilter(id);
           }}
           onLabel={(name) => {
             clearMediaTheme(userId);
-            window.history.pushState(null, "", "/");
+            pushMusicRootRoute();
             onBand(undefined);
             onTab("artists");
             setFilterMode("label");
@@ -2275,6 +2299,23 @@ export default function MusicModule({
               onCountryFilter(country.id, country.name);
             }}
           />
+          {wrappedOpen && wrappedYear != null ? (
+            <MusicWrapped
+              year={wrappedYear}
+              onClose={() => setWrappedOpen(false)}
+              onPlayTrack={handlePlay}
+              onArtist={(id) => {
+                setWrappedOpen(false);
+                const card =
+                  dashboard.top_artists?.find((a) => a.id === id) ?? null;
+                openArtist(id, card, "home");
+              }}
+              onGenre={(id) => {
+                setWrappedOpen(false);
+                onGenreFilter(id);
+              }}
+            />
+          ) : null}
         </div>
       ) : tab === "artists" ? (
         <ArtistBrowse

@@ -200,7 +200,7 @@ def build_wrapped(db: Session, user_id: int, *, year: int | None = None) -> dict
             artist_counts[r.ldp_artist_id] += n
 
     top_tracks = []
-    for i, (path, count) in enumerate(path_counts.most_common(10)):
+    for i, (path, count) in enumerate(path_counts.most_common(100)):
         meta = path_meta.get(path)
         artist_name = None
         aid = meta.ldp_artist_id if meta else None
@@ -227,7 +227,7 @@ def build_wrapped(db: Session, user_id: int, *, year: int | None = None) -> dict
         )
 
     top_artists = []
-    for aid, count in artist_counts.most_common(10):
+    for aid, count in artist_counts.most_common(15):
         band = db.get(Band, aid)
         if not band:
             continue
@@ -261,7 +261,7 @@ def build_wrapped(db: Session, user_id: int, *, year: int | None = None) -> dict
             country_counts[cid] += weight
 
     top_genres = []
-    for gid, count in genre_counts.most_common(8):
+    for gid, count in genre_counts.most_common(15):
         name = _resolve_subgenre_name(db, gid)
         if name:
             top_genres.append(

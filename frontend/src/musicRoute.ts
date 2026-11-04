@@ -413,6 +413,18 @@ export function pushArtistRoute(route: ArtistRoute, replace = false) {
   pushHistoryPath(path, replace);
 }
 
+/** Music home (hub entry). Hub itself stays at `/`. */
+export const MUSIC_ROOT_PATH = "/music";
+
+export function parseMusicRootPath(pathname: string): boolean {
+  return pathname === MUSIC_ROOT_PATH || pathname === `${MUSIC_ROOT_PATH}/`;
+}
+
+export function pushMusicRootRoute(replace = false): void {
+  if (replace) window.history.replaceState(null, "", MUSIC_ROOT_PATH);
+  else window.history.pushState(null, "", MUSIC_ROOT_PATH);
+}
+
 export function userPlaylistPath(playlistId: number): string {
   return `/music/playlists/${playlistId}`;
 }

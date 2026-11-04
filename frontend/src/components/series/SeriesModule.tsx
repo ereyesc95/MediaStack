@@ -566,7 +566,7 @@ export default function SeriesModule({
       section: mediaSection,
       fromTab,
       catalogLetter: fromTab === "catalog" ? letter || "A" : undefined,
-      franchiseId: id,
+      // No franchiseId — Back restores Series home/catalog, not a hub.
       franchiseName: card.name,
       backLabel: "SERIES",
     });

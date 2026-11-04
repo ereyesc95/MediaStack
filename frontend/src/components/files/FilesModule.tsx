@@ -239,6 +239,31 @@ export default function FilesModule({
     );
   }
 
+  const filtered = useMemo(() => {
+    let list = files;
+    if (nestedFilter !== "all") {
+      list = list.filter((f) => f.nested_folder === nestedFilter);
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter((f) => f.name.toLowerCase().includes(q));
+    }
+    const sorted = [...list];
+    if (sort === "format") {
+      sorted.sort((a, b) => {
+        const ea = (a.ext || "").toLowerCase();
+        const eb = (b.ext || "").toLowerCase();
+        if (ea !== eb) return ea.localeCompare(eb);
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      });
+    } else {
+      sorted.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      );
+    }
+    return sorted;
+  }, [files, search, sort, nestedFilter]);
+
   function toggleSelected(id: string) {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -274,31 +299,6 @@ export default function FilesModule({
   const allVisibleSelected =
     filtered.length > 0 &&
     filtered.every((f) => selectedIds.includes(f.id));
-
-  const filtered = useMemo(() => {
-    let list = files;
-    if (nestedFilter !== "all") {
-      list = list.filter((f) => f.nested_folder === nestedFilter);
-    }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((f) => f.name.toLowerCase().includes(q));
-    }
-    const sorted = [...list];
-    if (sort === "format") {
-      sorted.sort((a, b) => {
-        const ea = (a.ext || "").toLowerCase();
-        const eb = (b.ext || "").toLowerCase();
-        if (ea !== eb) return ea.localeCompare(eb);
-        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      });
-    } else {
-      sorted.sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-      );
-    }
-    return sorted;
-  }, [files, search, sort, nestedFilter]);
 
   function selectTab(id: string) {
     setActiveTab(id);
