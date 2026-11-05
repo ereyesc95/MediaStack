@@ -1262,10 +1262,15 @@ input {
   text-align: center;
 }
 
+.module-top-bar__tabs--icons {
+  gap: 0.2rem;
+  justify-content: center;
+}
 .module-top-bar__tabs--icons button {
-  min-width: 2.75rem;
+  flex: 0 0 auto;
+  min-width: 2.55rem;
   max-width: none;
-  padding: 0.55rem 0.45rem;
+  padding: 0.5rem 0.35rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1582,6 +1587,32 @@ input {
 .music-home-wrapped-btn--icon svg {
   width: 1.05rem;
   height: 1.05rem;
+}
+.app-menu-chrome .music-home-wrapped-btn--menu {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: calc(100% - 0.5rem);
+  margin: 0.25rem 0.25rem 0.45rem;
+  background: var(--accent, #5b8def);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.4rem;
+  border: 0;
+  box-shadow: none;
+}
+.app-menu-chrome .music-home-wrapped-btn--menu:hover {
+  filter: brightness(1.08);
+  background: var(--accent, #5b8def);
+  color: #fff;
+}
+.app-menu-chrome .music-home-wrapped-btn--menu .menu-item-icon {
+  opacity: 1;
+  color: #fff;
 }
 
 .music-wrapped {
@@ -1999,6 +2030,27 @@ input {
   padding: 0.6rem 0.75rem;
   flex: 1;
   min-height: 0;
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform 0.2s ease;
+  will-change: transform;
+}
+
+/* Home panes: inactive siblings ease out slightly while one is hovered. */
+@media (hover: hover) and (pointer: fine) {
+  .music-dashboard:has(> .dash-row:hover) > .dash-row:not(:hover) {
+    transform: scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-row {
+    transition: none;
+  }
+
+  .music-dashboard:has(> .dash-row:hover) > .dash-row:not(:hover) {
+    transform: none;
+  }
 }
 
 .dash-row-label {
@@ -5549,10 +5601,14 @@ input {
     font-size: 0.62rem;
   }
 
+  .module-top-bar__tabs--icons {
+    gap: 0.18rem;
+    justify-content: center;
+  }
   .module-top-bar__tabs--icons button {
-    flex: 1 1 0;
-    min-width: 0;
-    padding: 0.5rem 0.25rem;
+    flex: 0 0 auto;
+    min-width: 2.55rem;
+    padding: 0.5rem 0.32rem;
   }
 
   .module-top-bar__menu {
@@ -7659,7 +7715,8 @@ input {
 }
 
 .music-dashboard.dash-appear-ready .dash-row {
-  animation: dash-row-in 0.22s ease both;
+  /* backwards only — avoid locking transform after entrance (pane hover zoom). */
+  animation: dash-row-in 0.22s ease backwards;
 }
 
 @keyframes dash-row-in {
@@ -9456,6 +9513,12 @@ input {
   gap: 0.65rem;
 }
 
+.member-form input.is-invalid,
+.member-form__project-row input.is-invalid {
+  border-color: color-mix(in srgb, #e55 70%, var(--border));
+  outline-color: #e55;
+}
+
 .member-form__projects-head {
   display: flex;
   align-items: center;
@@ -9493,9 +9556,14 @@ input {
 .member-form__project-cols,
 .member-form__project-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.62fr) minmax(0, 0.62fr) minmax(0, 1.35fr) minmax(0, 7.25rem) 1.35rem;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.62fr) minmax(0, 0.62fr) minmax(0, 1.35fr) minmax(0, 8.5rem) 1.35rem;
   gap: 0.35rem;
   align-items: center;
+}
+
+.member-form__project-cols:not(:has(.member-form__col--membership)),
+.member-form__project-row--no-membership {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.62fr) minmax(0, 0.62fr) minmax(0, 1.35fr) 1.35rem;
 }
 
 .member-form__col {
@@ -9548,10 +9616,22 @@ input {
 }
 
 .member-form__membership {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.12rem;
   align-items: stretch;
+}
+
+.member-form__add-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: 0.3rem;
+  flex-shrink: 0;
+}
+
+.member-form-modal .modal-actions-row .btn {
+  display: inline-flex;
+  align-items: center;
 }
 
 .member-form__pill {
@@ -27964,6 +28044,62 @@ button.lyrics-status-badge--icon-only {
   min-width: 10rem;
   flex: 0 1 12rem;
 }
+.filter-subbar-search-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 0.4rem;
+}
+.filter-subbar-search-toggle:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-hover) 70%, transparent);
+}
+.filter-subbar-search-toggle .filter-subbar-search-icon--btn {
+  position: static;
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.filter-subbar-search-wrap--expanded {
+  animation: filter-search-expand 0.18s ease;
+}
+@keyframes filter-search-expand {
+  from {
+    opacity: 0.55;
+    transform: scaleX(0.72);
+    transform-origin: right center;
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+    transform-origin: right center;
+  }
+}
+.filter-subbar-search-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.35rem 0 0.1rem;
+  flex: 0 0 auto;
+}
+.filter-subbar-search-close:hover {
+  color: var(--text);
+}
 .filter-subbar-search-icon {
   position: absolute;
   left: 0.55rem;
@@ -27980,6 +28116,22 @@ button.lyrics-status-badge--icon-only {
   border: none;
   background: transparent;
   box-shadow: none;
+}
+@media (max-width: 720px) {
+  .filter-subbar--spread .filter-subbar-search-wrap--expanded,
+  .filter-subbar .filter-subbar-search-wrap--expanded {
+    min-width: 0;
+    flex: 1 1 8rem;
+    max-width: 12rem;
+  }
+  .filter-subbar--spread .filter-subbar-search-toggle {
+    flex: 0 0 auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .filter-subbar-search-wrap--expanded {
+    animation: none;
+  }
 }
 .catalog-display-toggle--borderless,
 .catalog-display-toggle--borderless.catalog-display-toggle,
@@ -31665,14 +31817,21 @@ button.lyrics-status-badge--icon-only {
 }
 @media (max-width: 720px) {
   .merch-browse__subbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
   }
   .merch-browse__tabs {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
   }
-  .merch-browse__search {
-    margin: 0.25rem 0.5rem 0.35rem auto;
-    min-width: 7rem;
+  .merch-browse__search,
+  .merch-browse__search.filter-subbar-search-toggle,
+  .merch-browse__search.filter-subbar-search-wrap {
+    flex: 0 0 auto;
+    margin: 0 0.35rem 0 auto;
+    min-width: 0;
   }
 }
 .merch-browse__edit-btn {
@@ -31731,15 +31890,44 @@ button.lyrics-status-badge--icon-only {
   width: 100%;
   overflow: hidden;
   border-radius: 0;
+  perspective: 1100px;
 }
 .merch-browse__card--square .merch-browse__card-media { aspect-ratio: 1 / 1; }
 .merch-browse__card--portrait .merch-browse__card-media { aspect-ratio: 2 / 3; }
 .merch-browse__card--landscape .merch-browse__card-media { aspect-ratio: 16 / 9; }
-.merch-browse__card-media > img {
+.merch-browse__card-flipper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.45s ease;
+  will-change: transform;
+}
+.merch-browse__card--flipped .merch-browse__card-flipper {
+  transform: rotateY(180deg);
+}
+.merch-browse__card-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.merch-browse__card-face--back {
+  transform: rotateY(180deg);
+}
+.merch-browse__card-face img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .merch-browse__card-flipper {
+    transition: none;
+  }
 }
 .merch-browse__flip {
   appearance: none;
@@ -31775,12 +31963,10 @@ button.lyrics-status-badge--icon-only {
     opacity: 1;
   }
 }
-.merch-browse__card:hover,
-.merch-browse__card:focus-within {
+.merch-browse__card:hover {
   z-index: 2;
 }
-.merch-browse__card-media:hover,
-.merch-browse__card-media:focus-within {
+.merch-browse__card-media:hover {
   overflow: visible;
 }
 .merch-browse__card-hover {
@@ -31800,9 +31986,13 @@ button.lyrics-status-badge--icon-only {
   z-index: 2;
   overflow: visible;
 }
-.merch-browse__card-media:hover .merch-browse__card-hover,
-.merch-browse__card-media:focus-within .merch-browse__card-hover {
+/* Hover only — :focus-within kept the overlay stuck after clicking Flip. */
+.merch-browse__card-media:hover .merch-browse__card-hover {
   opacity: 1;
+  pointer-events: none;
+}
+.merch-browse__card-hover .merch-browse__event,
+.merch-browse__card-hover .merch-browse__artist {
   pointer-events: auto;
 }
 .merch-browse__event,

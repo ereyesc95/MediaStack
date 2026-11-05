@@ -354,6 +354,23 @@ export default function ArtistPage({
   const [busy, setBusy] = useState("");
   const [memberModalId, setMemberModalId] = useState<number | null>(null);
   const [lineupTab, setLineupTab] = useState<LineupTab>("official");
+  useEffect(() => {
+    if (!data?.show_lineup || !data.lineup) return;
+    const tabs = data.is_solo ? SOLO_LINEUP_TABS : LINEUP_TABS;
+    const counts: Record<LineupTab, number> = {
+      official: data.is_solo
+        ? data.solo_performer
+          ? 1
+          : 0
+        : data.lineup.current.length,
+      original: data.lineup.founding.length,
+      touring: data.lineup.touring?.length ?? 0,
+      former: data.lineup.former.length,
+    };
+    if (counts[lineupTab] > 0) return;
+    const next = tabs.find((t) => counts[t.id] > 0);
+    if (next) setLineupTab(next.id);
+  }, [data, lineupTab]);
   const [linkTab, setLinkTab] = useState<LinkCategory>("social");
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [relatedTab, setRelatedTab] = useState<RelatedTab>("similar");
@@ -385,7 +402,6 @@ export default function ArtistPage({
   const [iconOverwriteOpen, setIconOverwriteOpen] = useState(false);
   const [iconOverwriteCount, setIconOverwriteCount] = useState(0);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
-  const [addSupportOpen, setAddSupportOpen] = useState(false);
   const [vaContributorSort, setVaContributorSort] = useState<
     "tracks" | "compilations" | "name"
   >("tracks");
@@ -1532,14 +1548,10 @@ export default function ArtistPage({
               }
               onAddMember={
                 isAdmin &&
-                overviewTab === "lineup" &&
-                data?.show_lineup
+                !data?.is_various_artists &&
+                ((overviewTab === "lineup" && data?.show_lineup) ||
+                  (data?.is_solo && overviewTab === "about"))
                   ? () => setAddMemberOpen(true)
-                  : undefined
-              }
-              onAddSupportPersonnel={
-                isAdmin && data?.is_solo && !data?.show_lineup
-                  ? () => setAddSupportOpen(true)
                   : undefined
               }
               addMemberLabel="Add member"
@@ -1627,20 +1639,24 @@ export default function ArtistPage({
 
         {section === "overview" && overviewTab === "lineup" && data?.show_lineup && (
           <nav className="artist-page__subtabs artist-page__lineup-subtabs">
-            {(data.is_solo ? SOLO_LINEUP_TABS : LINEUP_TABS).map((t) => {
-              const count =
-                t.id === "official"
-                  ? data.is_solo
-                    ? data.solo_performer
-                      ? 1
-                      : 0
-                    : data.lineup.current.length
-                  : t.id === "original"
-                    ? data.lineup.founding.length
-                    : t.id === "touring"
-                      ? data.lineup.touring?.length ?? 0
-                      : data.lineup.former.length;
-              return (
+            {(data.is_solo ? SOLO_LINEUP_TABS : LINEUP_TABS)
+              .map((t) => {
+                const count =
+                  t.id === "official"
+                    ? data.is_solo
+                      ? data.solo_performer
+                        ? 1
+                        : 0
+                      : data.lineup.current.length
+                    : t.id === "original"
+                      ? data.lineup.founding.length
+                      : t.id === "touring"
+                        ? data.lineup.touring?.length ?? 0
+                        : data.lineup.former.length;
+                return { ...t, count };
+              })
+              .filter((t) => t.count > 0)
+              .map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -1649,11 +1665,10 @@ export default function ArtistPage({
                 >
                   <span>
                     {t.label}
-                    <span className="artist-page__lineup-count">{count}</span>
+                    <span className="artist-page__lineup-count">{t.count}</span>
                   </span>
                 </button>
-              );
-            })}
+              ))}
           </nav>
         )}
 
@@ -1931,21 +1946,6 @@ export default function ArtistPage({
             cancelLabel="Fill missing only"
             onConfirm={() => void runGenerateFolderIcons(true)}
             onClose={() => void runGenerateFolderIcons(false)}
-          />
-        )}
-
-        {addSupportOpen && data && (
-          <MemberFormModal
-            mode="add"
-            bandId={bandId}
-            bandName={data.name}
-            stackLayer={1}
-            participationPreset="support"
-            onClose={() => setAddSupportOpen(false)}
-            onSaved={() => {
-              setAddSupportOpen(false);
-              load();
-            }}
           />
         )}
 

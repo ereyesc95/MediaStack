@@ -1843,6 +1843,7 @@ export async function patchParticipation(
     is_official?: boolean;
     is_founding?: boolean;
     is_former?: boolean;
+    is_touring?: boolean;
   }
 ) {
   return request(`${API}/music/bands/${bandId}/participations/${arpId}`, {

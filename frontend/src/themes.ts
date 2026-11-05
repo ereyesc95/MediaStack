@@ -262,10 +262,9 @@ export function getStoredCollectionLayout(
   fallback: CollectionBrowseLayout = "list"
 ): CollectionBrowseLayout {
   const raw = localStorage.getItem(collectionLayoutKey(userId));
-  return raw === "list" ||
-    raw === "cover" ||
-    raw === "banner" ||
-    raw === "shelf"
+  // Shelf is hidden in the UI for now; map a stored "shelf" back to list.
+  if (raw === "shelf") return fallback;
+  return raw === "list" || raw === "cover" || raw === "banner"
     ? raw
     : fallback;
 }

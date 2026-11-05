@@ -70,6 +70,7 @@ function MusicWrappedPanel({
   const bodyShellRef = useRef<HTMLDivElement>(null);
   const bodyContentRef = useRef<HTMLDivElement>(null);
   const heightReadyRef = useRef(false);
+  const pinnedTopRef = useRef<number | null>(null);
   const requestClose = useModalClose(onClose);
 
   const playlistName = `${year} Wrapped`;
@@ -161,15 +162,20 @@ function MusicWrappedPanel({
     if (!heightReadyRef.current || prefersReducedMotion()) {
       shell.style.height = `${to}px`;
       heightReadyRef.current = true;
-      return;
-    }
-    if (Math.abs(from - to) < 1) {
+    } else if (Math.abs(from - to) < 1) {
       shell.style.height = `${to}px`;
-      return;
+    } else {
+      shell.style.height = `${from}px`;
+      void shell.offsetHeight;
+      shell.style.height = `${to}px`;
     }
-    shell.style.height = `${from}px`;
-    void shell.offsetHeight;
-    shell.style.height = `${to}px`;
+
+    // Keep the header anchored; only the bottom edge slides with tab height.
+    if (pinnedTopRef.current == null) {
+      pinnedTopRef.current = panel.getBoundingClientRect().top;
+      panel.style.alignSelf = "flex-start";
+      panel.style.marginTop = `${pinnedTopRef.current}px`;
+    }
   }, [
     tab,
     loading,

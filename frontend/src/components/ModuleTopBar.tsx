@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { mediaTypeIcon, toStackName } from "../mediaStack";
 import { useMenuPresence } from "../useMenuPresence";
 import {
-  isMobilePortraitLayout,
+  isPhoneLayout,
   useDeviceLayout,
 } from "../usePhoneLayout";
 import {
@@ -11,7 +11,9 @@ import {
   IconMediaBooks,
   IconMediaGames,
   IconMediaMovies,
+  IconMediaMusic,
   IconMediaSeries,
+  IconShoppingBag,
   IconStar,
   IconTabArtists,
   IconTabCatalog,
@@ -51,11 +53,13 @@ function defaultTabIcon(id: string, label: string, mediaKind?: string): ReactNod
   if (key === "home" || text === "home") return <IconTabHome />;
   if (key === "gallery" || text === "gallery") return <IconCamera />;
   if (key === "exclusive" || text === "exclusive") return <IconStar />;
-  if (key === "artists" || text === "artists") return <IconTabArtists />;
+  /* Music catalog tab is id "artists" with label MUSIC — use note, not people. */
+  if (key === "artists" || text === "music") return <IconMediaMusic />;
+  if (text === "artists") return <IconTabArtists />;
   if (key === "collection" || text === "collection") return <IconCollection />;
   if (key === "events" || text === "events") return <IconTabEvents />;
   if (key === "playlists" || text === "playlists") return <IconTabPlaylists />;
-  if (key === "merch" || text === "merch") return <IconCollection />;
+  if (key === "merch" || text === "merch") return <IconShoppingBag />;
   /* Catalog tabs use the module name as label (SERIES / MOVIES / …). */
   if (
     key === "catalog" ||
@@ -87,7 +91,7 @@ export default function ModuleTopBar({
     useMenuPresence(mediaOpen);
   const mediaRef = useRef<HTMLDivElement>(null);
   const deviceLayout = useDeviceLayout();
-  const iconTabs = isMobilePortraitLayout(deviceLayout);
+  const iconTabs = isPhoneLayout(deviceLayout);
 
   useEffect(() => {
     function close(e: MouseEvent) {

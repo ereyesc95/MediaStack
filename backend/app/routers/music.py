@@ -181,6 +181,7 @@ class PatchParticipationBody(BaseModel):
     is_official: bool | None = None
     is_founding: bool | None = None
     is_former: bool | None = None
+    is_touring: bool | None = None
 
 
 class LinkBody(BaseModel):
@@ -2058,7 +2059,11 @@ def patch_participation_endpoint(
         is_official=body.is_official,
         is_founding=body.is_founding,
         is_former=body.is_former,
+        is_touring=body.is_touring,
     )
+    from app.band_overview_cache import invalidate_overview_cache
+
+    invalidate_overview_cache(band_id)
     return {"ok": True}
 
 
@@ -2075,6 +2080,9 @@ def delete_participation_endpoint(
     if not arp or arp.arp_fk_bands != band_id:
         raise HTTPException(404, "Participation not found")
     delete_participation(db, arp)
+    from app.band_overview_cache import invalidate_overview_cache
+
+    invalidate_overview_cache(band_id)
     return {"ok": True}
 
 

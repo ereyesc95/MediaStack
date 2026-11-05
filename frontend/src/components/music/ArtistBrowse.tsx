@@ -22,7 +22,7 @@ import type {
 import ArtistCard from "../ArtistCard";
 import CatalogAlbumCard from "./CatalogAlbumCard";
 import PlaylistBoot from "../PlaylistBoot";
-import { IconSearch } from "../MenuIcons";
+import ExpandableFilterSearch from "../ExpandableFilterSearch";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import { AUDIO_CATEGORY_META } from "./artist/ArtistAudio";
 
@@ -47,8 +47,6 @@ const ARTIST_FILTER_MODES: { id: ArtistFilterMode; label: string }[] = [
 const ALBUM_FILTER_MODES: { id: AlbumFilterMode; label: string }[] = [
   { id: "name", label: "ALBUMS" },
   { id: "artists", label: "ARTISTS" },
-  { id: "continent", label: "CONTINENT" },
-  { id: "country", label: "COUNTRY" },
   { id: "start", label: "RELEASE DATE" },
   { id: "genre", label: "GENRE" },
   { id: "label", label: "LABEL" },
@@ -460,15 +458,12 @@ export default function ArtistBrowse({
                 {l}
               </button>
             ))}
-            <div className="filter-subbar-search-wrap">
-              <IconSearch className="filter-subbar-search-icon" aria-hidden />
-              <input
-                className="filter-subbar-search"
-                placeholder="Search"
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-              />
-            </div>
+            <ExpandableFilterSearch
+              value={search}
+              onChange={onSearchChange}
+              placeholder="Search"
+              ariaLabel="Search"
+            />
           </div>
         );
       case "artists":
@@ -655,7 +650,7 @@ export default function ArtistBrowse({
 
   const hasBackdrop = Boolean(backgroundUrl || backgroundIso);
   const showAlbumCategoryBar =
-    isAlbums &&
+    catalogScope === "albums" &&
     filterMode === "artists" &&
     albumArtistId !== "" &&
     visibleAlbumCategories.length > 1;

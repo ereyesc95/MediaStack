@@ -822,6 +822,7 @@ export type ArtistParticipationRef = {
   roles?: string[];
   is_official?: boolean;
   is_founding?: boolean;
+  is_touring?: boolean;
   is_former?: boolean;
   participation_types: string | null;
   urls: Record<string, string>;
@@ -834,6 +835,7 @@ export type BandMembership = {
   roles: string[];
   is_official: boolean;
   is_founding: boolean;
+  is_touring?: boolean;
   is_former: boolean;
 };
 

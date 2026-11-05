@@ -259,6 +259,28 @@ def _producer_band_ids(db: Session, producer: str) -> set[int]:
     return band_ids
 
 
+def _bands_for_member_artist(db: Session, artist_id: int) -> set[int]:
+    """Bands linked to a person via participation, solo MBID match, or roster FK."""
+    band_ids: set[int] = {
+        arp.arp_fk_bands
+        for arp in db.scalars(
+            select(ArtistParticipation).where(
+                ArtistParticipation.arp_fk_artists == artist_id
+            )
+        ).all()
+        if arp.arp_fk_bands
+    }
+    artist = db.get(Artist, artist_id)
+    code = (artist.art_code or "").strip() if artist else ""
+    if code:
+        for b in db.scalars(select(Band).where(Band.bnd_code == code)).all():
+            band_ids.add(b.bnd_id)
+    for b in db.scalars(select(Band)).all():
+        if artist_id in _parse_ids(b.bnd_fk_artists):
+            band_ids.add(b.bnd_id)
+    return band_ids
+
+
 def _member_band_ids(db: Session, member_query: str) -> set[int]:
     q = member_query.strip().lower()
     if not q:
@@ -279,13 +301,8 @@ def _member_band_ids(db: Session, member_query: str) -> set[int]:
             artist_ids.append(a.art_id)
 
     band_ids: set[int] = set()
-    for b in db.scalars(select(Band)).all():
-        fk = (b.bnd_fk_artists or "").lower()
-        if q in fk:
-            band_ids.add(b.bnd_id)
-        for aid in artist_ids:
-            if str(aid) in fk or f"[{aid}]" in fk:
-                band_ids.add(b.bnd_id)
+    for aid in artist_ids:
+        band_ids.update(_bands_for_member_artist(db, aid))
     return band_ids
 
 
@@ -330,15 +347,7 @@ def filter_bands(
         out = [b for b in out if _matches_member_count(db, b, member_count)]
 
     if filter_mode == "members" and member_artist_id is not None:
-        allowed = {
-            arp.arp_fk_bands
-            for arp in db.scalars(
-                select(ArtistParticipation).where(
-                    ArtistParticipation.arp_fk_artists == member_artist_id
-                )
-            ).all()
-            if arp.arp_fk_bands
-        }
+        allowed = _bands_for_member_artist(db, member_artist_id)
         out = [b for b in out if b.bnd_id in allowed]
     elif filter_mode == "members" and member.strip():
         allowed = _member_band_ids(db, member)

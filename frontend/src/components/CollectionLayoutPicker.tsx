@@ -3,21 +3,20 @@ import { useTopBarHoverPicker } from "../useTopBarHoverPicker";
 import {
   IconCardBanner,
   IconCardCover,
-  IconCardShelf,
   IconList,
 } from "./MenuIcons";
 
 export type CollectionLayout = "list" | "cover" | "banner" | "shelf";
 
+/** Shelf kept in the type for stored prefs / revive later — not shown in the picker. */
 const OPTIONS: {
-  id: CollectionLayout;
+  id: Exclude<CollectionLayout, "shelf">;
   label: string;
   Icon: (props: { className?: string }) => ReactElement;
 }[] = [
   { id: "list", label: "List", Icon: IconList },
   { id: "cover", label: "Cover", Icon: IconCardCover },
   { id: "banner", label: "Banner", Icon: IconCardBanner },
-  { id: "shelf", label: "Shelf", Icon: IconCardShelf },
 ];
 
 type Props = {
@@ -41,7 +40,9 @@ export default function CollectionLayoutPicker({
     onMouseLeave,
     onToggleClick,
   } = useTopBarHoverPicker();
-  const current = OPTIONS.find((o) => o.id === value) ?? OPTIONS[0];
+  const current =
+    OPTIONS.find((o) => o.id === value) ??
+    OPTIONS[0]!;
   const CurrentIcon = current.Icon;
 
   return (

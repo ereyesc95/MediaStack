@@ -12,7 +12,8 @@ import {
 import type { CollectionLeaf } from "../../types";
 import CollectionModal from "./CollectionModal";
 import ModalPortal from "../ModalPortal";
-import { IconImport, IconPage, IconPlus, IconSearch } from "../MenuIcons";
+import ExpandableFilterSearch from "../ExpandableFilterSearch";
+import { IconImport, IconPage, IconPlus } from "../MenuIcons";
 import { DEFAULT_DISC_URL } from "./release/releaseTrackPanelMeta";
 import {
   DiscFlipPreview,
@@ -1566,18 +1567,15 @@ export default function CollectionBrowse({
                 </div>
               );
             })}
-            <div className="filter-subbar-search-wrap">
-              <IconSearch className="filter-subbar-search-icon" aria-hidden />
-              <input
-                className="filter-subbar-search"
-                placeholder="Search title"
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
+            <ExpandableFilterSearch
+              value={q}
+              onChange={(next) => {
+                setQ(next);
+                setPage(1);
+              }}
+              placeholder="Search"
+              ariaLabel="Search"
+            />
             <button
               type="button"
               className={`collection-browse__page-toggle${

@@ -630,6 +630,18 @@ export function IconMediaMusic({ className }: IconProps) {
   );
 }
 
+/** Merch / shopping — bag (distinct from Collection shelves). */
+export function IconShoppingBag({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M7.2 7.2V6.1A4.8 4.8 0 0 1 12 1.3a4.8 4.8 0 0 1 4.8 4.8v1.1h2.1A1.6 1.6 0 0 1 20.5 8.8v11A1.6 1.6 0 0 1 18.9 21.4H5.1A1.6 1.6 0 0 1 3.5 19.8v-11A1.6 1.6 0 0 1 5.1 7.2h2.1zm1.7 0h6.2V6.1A3.1 3.1 0 0 0 12 3a3.1 3.1 0 0 0-3.1 3.1v1.1zM5.2 8.9v10.7h13.6V8.9H5.2z"
+      />
+    </svg>
+  );
+}
+
 export function IconMediaSeries({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

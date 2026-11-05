@@ -13,7 +13,9 @@ import {
   uploadArtistPhoto,
 } from "../../../api";
 import type { MbArtistMatch } from "../../../types";
-import { IconSearch } from "../../MenuIcons";
+import { parseFlexibleDate } from "../../../formatDate";
+import FlexibleDateInput from "../../FlexibleDateInput";
+import { IconPlus, IconSearch } from "../../MenuIcons";
 import ModalPortal from "../../ModalPortal";
 import PlaylistBoot from "../../PlaylistBoot";
 import MultiSelectDropdown from "../../MultiSelectDropdown";
@@ -32,6 +34,7 @@ type ProjectRow = {
   is_official: boolean;
   is_founding: boolean;
   is_former: boolean;
+  is_touring: boolean;
   is_current_band: boolean;
 };
 
@@ -41,7 +44,6 @@ type Props = {
   bandName: string;
   artistId?: number;
   stackLayer?: 1 | 2;
-  participationPreset?: "default" | "support";
   onClose: () => void;
   onSaved: () => void;
 };
@@ -106,6 +108,7 @@ function emptyProjectRow(
     is_official: true,
     is_founding: false,
     is_former: false,
+    is_touring: false,
     is_current_band: isCurrentBand,
   };
 }
@@ -116,11 +119,9 @@ export default function MemberFormModal({
   bandName,
   artistId,
   stackLayer = 1,
-  participationPreset = "default",
   onClose,
   onSaved,
 }: Props) {
-  const supportPreset = participationPreset === "support";
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +220,7 @@ export default function MemberFormModal({
           is_official: p.is_official ?? true,
           is_founding: p.is_founding ?? false,
           is_former: p.is_former ?? false,
+          is_touring: p.is_touring ?? false,
           is_current_band: (p.band_db_id ?? p.band_id) === bandId,
         }));
         if (!rows.length) {
@@ -235,12 +237,7 @@ export default function MemberFormModal({
       .finally(() => setLoading(false));
   }, [mode, artistId, bandId, bandName]);
 
-  const title =
-    mode === "add"
-      ? supportPreset
-        ? "Support personnel"
-        : "Add member"
-      : "Edit member";
+  const title = mode === "add" ? "Add member" : "Edit member";
 
   const handleMbSearch = async () => {
     const q = stageName.trim();
@@ -355,23 +352,44 @@ export default function MemberFormModal({
       return;
     }
 
+    const birthStored = parseFlexibleDate(birthDate);
+    const deathStored = parseFlexibleDate(deathDate);
+    if (birthStored === null || deathStored === null) {
+      setError("Use MM/DD/YYYY, MM/YYYY, or YYYY for birth/death dates");
+      return;
+    }
+    const normalizedRows: ProjectRow[] = [];
+    for (const row of currentRows) {
+      const startStored = parseFlexibleDate(row.start);
+      const endStored = parseFlexibleDate(row.end);
+      if (startStored === null || endStored === null) {
+        setError("Use MM/DD/YYYY, MM/YYYY, or YYYY for project dates");
+        return;
+      }
+      normalizedRows.push({
+        ...row,
+        start: startStored,
+        end: endStored,
+      });
+    }
+
     setSaving(true);
     setError(null);
     try {
       if (mode === "add") {
         let newArtistId = 0;
         let createdArtist = false;
-        for (const row of currentRows) {
+        for (const row of normalizedRows) {
           const targetBandId = row.is_current_band ? bandId : row.band_id;
           const rolesText = roleIdsToText(row.role_ids, instrumentOptions);
           const body = {
             start: row.start.trim() || undefined,
             end: row.end.trim() || undefined,
             roles_text: rolesText || undefined,
-            is_official: supportPreset ? false : row.is_official,
-            is_founding: supportPreset ? false : row.is_founding,
-            is_former: supportPreset ? false : row.is_former,
-            is_touring: supportPreset,
+            is_official: row.is_official,
+            is_founding: row.is_founding,
+            is_former: row.is_former,
+            is_touring: row.is_touring,
           };
           if (!createdArtist) {
             const created = await createParticipation(targetBandId, {
@@ -392,10 +410,10 @@ export default function MemberFormModal({
           name,
           stage_name: stageName,
           aliases,
-          birth_date: birthDate,
+          birth_date: birthStored,
           birth_place: birthPlace,
           birth_country_id: birthCountryId ? Number(birthCountryId) : null,
-          death_date: deathDate,
+          death_date: deathStored,
           mbid,
         });
         if (photoFile) {
@@ -406,10 +424,10 @@ export default function MemberFormModal({
           name,
           stage_name: stageName,
           aliases,
-          birth_date: birthDate,
+          birth_date: birthStored,
           birth_place: birthPlace,
           birth_country_id: birthCountryId ? Number(birthCountryId) : null,
-          death_date: deathDate,
+          death_date: deathStored,
           mbid,
         });
         if (photoFile) {
@@ -417,7 +435,7 @@ export default function MemberFormModal({
         }
 
         const keptIds = new Set(
-          currentRows
+          normalizedRows
             .map((r) => r.participation_id)
             .filter((id): id is number => id != null)
         );
@@ -429,7 +447,7 @@ export default function MemberFormModal({
           }
         }
 
-        for (const row of currentRows) {
+        for (const row of normalizedRows) {
           const rolesText = roleIdsToText(row.role_ids, instrumentOptions);
           if (row.participation_id) {
             await patchParticipation(row.band_id, row.participation_id, {
@@ -439,6 +457,7 @@ export default function MemberFormModal({
               is_official: row.is_official,
               is_founding: row.is_founding,
               is_former: row.is_former,
+              is_touring: row.is_touring,
             });
           } else if (row.band_id > 0) {
             await createParticipation(row.band_id, {
@@ -449,6 +468,7 @@ export default function MemberFormModal({
               is_official: row.is_official,
               is_founding: row.is_founding,
               is_former: row.is_former,
+              is_touring: row.is_touring,
             });
           }
         }
@@ -578,18 +598,18 @@ export default function MemberFormModal({
                 <div className="member-form__dates">
                   <label>
                     Birth date
-                    <input
-                      type="date"
-                      value={birthDate.slice(0, 10)}
-                      onChange={(e) => setBirthDate(e.target.value)}
+                    <FlexibleDateInput
+                      value={birthDate}
+                      onChange={setBirthDate}
+                      placeholder="MM/DD/YYYY"
                     />
                   </label>
                   <label>
                     Death date
-                    <input
-                      type="date"
-                      value={deathDate.slice(0, 10)}
-                      onChange={(e) => setDeathDate(e.target.value)}
+                    <FlexibleDateInput
+                      value={deathDate}
+                      onChange={setDeathDate}
+                      placeholder="MM/DD/YYYY"
                     />
                   </label>
                 </div>
@@ -679,20 +699,18 @@ export default function MemberFormModal({
                         />
                       )}
                     </div>
-                    <input
+                    <FlexibleDateInput
                       className="member-form__col member-form__col--start"
                       value={row.start}
-                      onChange={(e) =>
-                        updateRow(row.key, { start: e.target.value })
-                      }
+                      onChange={(start) => updateRow(row.key, { start })}
+                      placeholder="MM/YYYY"
                     />
-                    <input
+                    <FlexibleDateInput
                       className="member-form__col member-form__col--end"
                       value={row.end}
-                      onChange={(e) =>
-                        updateRow(row.key, { end: e.target.value })
-                      }
+                      onChange={(end) => updateRow(row.key, { end })}
                       placeholder="Present"
+                      title="MM/DD/YYYY, MM/YYYY, YYYY, or leave blank for Present"
                     />
                     <div className="member-form__col member-form__col--roles">
                       <MultiSelectDropdown
@@ -734,6 +752,19 @@ export default function MemberFormModal({
                       <button
                         type="button"
                         className={`member-form__pill${
+                          row.is_touring ? " member-form__pill--on" : ""
+                        }`}
+                        onClick={() =>
+                          updateRow(row.key, {
+                            is_touring: !row.is_touring,
+                          })
+                        }
+                      >
+                        Touring
+                      </button>
+                      <button
+                        type="button"
+                        className={`member-form__pill${
                           row.is_former ? " member-form__pill--on" : ""
                         }`}
                         onClick={() =>
@@ -767,7 +798,16 @@ export default function MemberFormModal({
                 disabled={saving}
                 onClick={() => void handleSave()}
               >
-                {saving ? "Saving…" : mode === "add" ? "Add member" : "Save"}
+                {saving ? (
+                  "Saving…"
+                ) : mode === "add" ? (
+                  <>
+                    <IconPlus className="member-form__add-icon" />
+                    Add member
+                  </>
+                ) : (
+                  "Save"
+                )}
               </button>
             </div>
           </div>

@@ -232,8 +232,10 @@ async def import_band_lineup(
     band.bnd_lineup_imported_at = _now()
     band.bnd_lineup_source = "musicbrainz"
     db.commit()
+    from app.artist_admin import sync_band_type_from_lineup
     from app.band_overview_cache import invalidate_overview_cache
 
+    sync_band_type_from_lineup(db, band.bnd_id)
     invalidate_overview_cache(band.bnd_id)
     return {"ok": True, "imported": imported, "imported_at": band.bnd_lineup_imported_at}
 

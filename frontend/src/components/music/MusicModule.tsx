@@ -99,7 +99,20 @@ import {
 } from "./artist/MiniAudioPlayer";
 import TourShowPage from "./artist/TourShowPage";
 import { useBeatPulse } from "../../useBeatPulse";
-import { IconAddArtist, IconDisc, IconHeadphones, IconLineup, IconPencil, IconStar, IconUniverse } from "../MenuIcons";
+import {
+  IconAddArtist,
+  IconCardBanner,
+  IconCardCover,
+  IconCardLandscape,
+  IconCardPortrait,
+  IconDisc,
+  IconHeadphones,
+  IconLineup,
+  IconList,
+  IconPencil,
+  IconStar,
+  IconUniverse,
+} from "../MenuIcons";
 import {
   isMobilePortraitLayout,
   useDeviceLayout,
@@ -337,6 +350,10 @@ export default function MusicModule({
   const [artistShell, setArtistShell] = useState<ArtistCard | null>(null);
   const loadArtistsGeneration = useRef(0);
   const loadAlbumsGeneration = useRef(0);
+  /** Cache artist-card pages so continent (etc.) re-clicks aren't refetched. */
+  const artistCardsCacheRef = useRef(
+    new Map<string, { items: ArtistCard[]; total: number }>()
+  );
   const isPhone = usePhoneLayout();
   const deviceLayout = useDeviceLayout();
   const portraitMenuChrome = isPhone;
@@ -616,6 +633,7 @@ export default function MusicModule({
       if (next === "albums" || next === "singles") {
         setAlbums([]);
         setAlbumTotal(0);
+        setAlbumsLoading(true);
         setAlbumLetters([]);
       }
     },
@@ -970,8 +988,6 @@ export default function MusicModule({
   const loadArtists = useCallback(async () => {
     const generation = ++loadArtistsGeneration.current;
     setError(null);
-    setArtists([]);
-    setArtistsLoading(true);
     const params = new URLSearchParams({
       page: String(artistPage),
       page_size: "48",
@@ -992,9 +1008,23 @@ export default function MusicModule({
     if (label.trim()) params.set("label", label.trim());
     if (producer.trim()) params.set("producer", producer.trim());
 
+    const cacheKey = params.toString();
+    const cached = artistCardsCacheRef.current.get(cacheKey);
+    if (cached) {
+      setArtists(cached.items);
+      setArtistTotal(cached.total);
+      setArtistsLoading(false);
+      return;
+    }
+
+    setArtistsLoading(true);
     try {
       const data = await fetchArtistCards(params);
       if (generation !== loadArtistsGeneration.current) return;
+      artistCardsCacheRef.current.set(cacheKey, {
+        items: data.items,
+        total: data.total,
+      });
       setArtists(data.items);
       setArtistTotal(data.total);
     } catch (e) {
@@ -1027,9 +1057,8 @@ export default function MusicModule({
   const loadAlbums = useCallback(async () => {
     const generation = ++loadAlbumsGeneration.current;
     setError(null);
-    // Drop stale cards immediately so letter / scope changes cannot open the
-    // previous page's release while the new list is in flight.
-    setAlbums([]);
+    // Keep previous cards visible while loading so scope/filter switches do not
+    // flash an empty grey tile grid.
     setAlbumsLoading(true);
     const params = new URLSearchParams({
       page: String(albumPage),
@@ -1060,20 +1089,25 @@ export default function MusicModule({
       setAlbums(data.items);
       setAlbumTotal(data.total);
       setAlbumLetters(data.letters ?? []);
-      setAlbumCategories(data.categories ?? []);
-      if (
-        data.categories?.length &&
-        albumCategory &&
-        !data.categories.includes(albumCategory)
-      ) {
-        setAlbumCategory(data.categories[0] ?? "");
-      } else if (
-        filterMode === "artists" &&
-        albumArtistId !== "" &&
-        data.categories?.length &&
-        !albumCategory
-      ) {
-        setAlbumCategory(data.categories[0] ?? "");
+      if (catalogScope === "singles") {
+        setAlbumCategories([]);
+        if (albumCategory) setAlbumCategory("");
+      } else {
+        setAlbumCategories(data.categories ?? []);
+        if (
+          data.categories?.length &&
+          albumCategory &&
+          !data.categories.includes(albumCategory)
+        ) {
+          setAlbumCategory(data.categories[0] ?? "");
+        } else if (
+          filterMode === "artists" &&
+          albumArtistId !== "" &&
+          data.categories?.length &&
+          !albumCategory
+        ) {
+          setAlbumCategory(data.categories[0] ?? "");
+        }
       }
     } catch (e) {
       if (generation !== loadAlbumsGeneration.current) return;
@@ -1366,7 +1400,7 @@ export default function MusicModule({
             },
             {
               id: "artists",
-              label: "ARTISTS",
+              label: "MUSIC",
               active: tab === "artists",
               onClick: () => onTab("artists"),
             },
@@ -1411,6 +1445,7 @@ export default function MusicModule({
                 />
               ) : null}
               {showArtistTools &&
+                !portraitMenuChrome &&
                 (catalogScope === "albums" || catalogScope === "singles" ? (
                   <ReleaseCardLayoutPicker
                     value={albumCardLayout}
@@ -1441,7 +1476,9 @@ export default function MusicModule({
                   </svg>
                 </button>
               )}
-              {tab === "collection" && collectionHasItems ? (
+              {tab === "collection" &&
+              collectionHasItems &&
+              !portraitMenuChrome ? (
                 <CollectionLayoutPicker
                   value={collectionView}
                   onChange={setCollectionViewPersisted}
@@ -1476,24 +1513,18 @@ export default function MusicModule({
                   />
                 </>
               ) : null}
-              {tab === "events" && portraitMenuChrome ? (
-                <EventsLayoutPicker
-                  value={eventsCardLayout}
-                  onChange={setEventsCardLayout}
-                />
-              ) : null}
-              {tab === "merch" && isAdmin ? (
+              {tab === "merch" && isAdmin && !portraitMenuChrome ? (
                 <button
                   type="button"
                   className="icon-btn merch-browse__edit-btn"
-                  title="MERCH categories"
-                  aria-label="Edit MERCH categories"
+                  title="Merch categories"
+                  aria-label="Edit Merch categories"
                   onClick={() => merchManageRef.current?.openCategories()}
                 >
                   <IconPencil />
                 </button>
               ) : null}
-              {showHomeWrapped ? (
+              {showHomeWrapped && !portraitMenuChrome ? (
                 <button
                   type="button"
                   className={`music-home-wrapped-btn${
@@ -1550,53 +1581,197 @@ export default function MusicModule({
                   collectionManageRef.current?.cancelClearMode()
                 }
                 menuChrome={
-                  portraitMenuChrome && (showArtistTools || tab === "events") ? (
+                  portraitMenuChrome &&
+                  (showHomeWrapped ||
+                    showArtistTools ||
+                    tab === "events" ||
+                    tab === "collection" ||
+                    (tab === "merch" && isAdmin)) ? (
                     <>
-                      {showArtistTools ? (
+                      {showHomeWrapped ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            handleCatalogScopeChange(
-                              catalogScope === "artists"
-                                ? "albums"
-                                : catalogScope === "albums"
-                                  ? "singles"
-                                  : "artists"
-                            )
-                          }
+                          className="music-home-wrapped-btn music-home-wrapped-btn--menu"
+                          title={`${wrappedYear} Wrapped`}
+                          aria-label={`${wrappedYear} Wrapped`}
+                          onClick={() => setWrappedOpen(true)}
                         >
-                          {catalogScope === "artists" ? (
-                            <IconAddArtist className="menu-item-icon" />
-                          ) : catalogScope === "singles" ? (
-                            <IconHeadphones className="menu-item-icon" />
+                          <IconHeadphones className="menu-item-icon" />
+                          {`${wrappedYear} Wrapped`}
+                        </button>
+                      ) : null}
+                      {showArtistTools ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                catalogScope === "albums" ||
+                                catalogScope === "singles"
+                              ) {
+                                const opts: ReleaseCardLayout[] = [
+                                  "cover",
+                                  "banner",
+                                  "list",
+                                ];
+                                const i = opts.indexOf(albumCardLayout);
+                                setAlbumCardLayoutPersisted(
+                                  opts[(i + 1) % opts.length]!
+                                );
+                              } else {
+                                const opts: CardOrientation[] = [
+                                  "banner",
+                                  "landscape",
+                                  "portrait",
+                                  "round",
+                                  "icons",
+                                  "list",
+                                ];
+                                const i = opts.indexOf(cardOrientation);
+                                onSetOrientation(
+                                  opts[(i + 1) % opts.length]!
+                                );
+                              }
+                            }}
+                          >
+                            {catalogScope === "albums" ||
+                            catalogScope === "singles" ? (
+                              albumCardLayout === "banner" ? (
+                                <IconCardBanner className="menu-item-icon" />
+                              ) : albumCardLayout === "list" ? (
+                                <IconList className="menu-item-icon" />
+                              ) : (
+                                <IconCardCover className="menu-item-icon" />
+                              )
+                            ) : cardOrientation === "portrait" ? (
+                              <IconCardPortrait className="menu-item-icon" />
+                            ) : cardOrientation === "landscape" ? (
+                              <IconCardLandscape className="menu-item-icon" />
+                            ) : cardOrientation === "list" ? (
+                              <IconList className="menu-item-icon" />
+                            ) : (
+                              <IconCardBanner className="menu-item-icon" />
+                            )}
+                            {catalogScope === "albums" ||
+                            catalogScope === "singles"
+                              ? `${albumCardLayout[0]!.toUpperCase()}${albumCardLayout.slice(1)} view`
+                              : `${cardOrientation[0]!.toUpperCase()}${cardOrientation.slice(1)} view`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCatalogScopeChange(
+                                catalogScope === "artists"
+                                  ? "albums"
+                                  : catalogScope === "albums"
+                                    ? "singles"
+                                    : "artists"
+                              )
+                            }
+                          >
+                            {catalogScope === "artists" ? (
+                              <IconAddArtist className="menu-item-icon" />
+                            ) : catalogScope === "singles" ? (
+                              <IconHeadphones className="menu-item-icon" />
+                            ) : (
+                              <IconDisc className="menu-item-icon" />
+                            )}
+                            {catalogScope === "artists"
+                              ? "Artists"
+                              : catalogScope === "singles"
+                                ? "Singles"
+                                : "Albums"}
+                          </button>
+                        </>
+                      ) : null}
+                      {tab === "collection" && collectionHasItems ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const opts: CollectionBrowseLayout[] = [
+                              "list",
+                              "cover",
+                              "banner",
+                            ];
+                            const cur =
+                              collectionView === "shelf"
+                                ? "list"
+                                : collectionView;
+                            const i = opts.indexOf(cur);
+                            setCollectionViewPersisted(
+                              opts[(i + 1) % opts.length]!
+                            );
+                          }}
+                        >
+                          {collectionView === "cover" ? (
+                            <IconCardCover className="menu-item-icon" />
+                          ) : collectionView === "banner" ? (
+                            <IconCardBanner className="menu-item-icon" />
                           ) : (
-                            <IconDisc className="menu-item-icon" />
+                            <IconList className="menu-item-icon" />
                           )}
-                          {catalogScope === "artists"
-                            ? "Artists"
-                            : catalogScope === "singles"
-                              ? "Singles"
-                              : "Albums"}
+                          {`${(collectionView === "shelf" ? "list" : collectionView)[0]!.toUpperCase()}${(collectionView === "shelf" ? "list" : collectionView).slice(1)} view`}
                         </button>
                       ) : null}
                       {tab === "events" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const opts = [
+                                "portrait",
+                                "landscape",
+                                "banner",
+                                "cover",
+                                "logos",
+                                "list",
+                              ] as const;
+                              const i = opts.indexOf(eventsCardLayout);
+                              setEventsCardLayout(
+                                opts[(i + 1) % opts.length]!
+                              );
+                            }}
+                          >
+                            {eventsCardLayout === "portrait" ? (
+                              <IconCardPortrait className="menu-item-icon" />
+                            ) : eventsCardLayout === "landscape" ? (
+                              <IconCardLandscape className="menu-item-icon" />
+                            ) : eventsCardLayout === "list" ? (
+                              <IconList className="menu-item-icon" />
+                            ) : (
+                              <IconCardBanner className="menu-item-icon" />
+                            )}
+                            {`${eventsCardLayout[0]!.toUpperCase()}${eventsCardLayout.slice(1)} view`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEventsFilters((prev) => ({
+                                ...prev,
+                                act: nextEventsAct(prev.act),
+                              }))
+                            }
+                          >
+                            {eventsFilters.act === "main" ? (
+                              <IconStar className="menu-item-icon" />
+                            ) : eventsFilters.act === "openers" ? (
+                              <IconLineup className="menu-item-icon" />
+                            ) : (
+                              <IconUniverse className="menu-item-icon" />
+                            )}
+                            {eventsActLabel(eventsFilters.act)}
+                          </button>
+                        </>
+                      ) : null}
+                      {tab === "merch" && isAdmin ? (
                         <button
                           type="button"
                           onClick={() =>
-                            setEventsFilters((prev) => ({
-                              ...prev,
-                              act: nextEventsAct(prev.act),
-                            }))
+                            merchManageRef.current?.openCategories()
                           }
                         >
-                          {eventsFilters.act === "main" ? (
-                            <IconStar className="menu-item-icon" />
-                          ) : eventsFilters.act === "openers" ? (
-                            <IconLineup className="menu-item-icon" />
-                          ) : (
-                            <IconUniverse className="menu-item-icon" />
-                          )}
-                          {eventsActLabel(eventsFilters.act)}
+                          <IconPencil className="menu-item-icon" />
+                          Merch categories
                         </button>
                       ) : null}
                     </>
@@ -2318,7 +2493,6 @@ export default function MusicModule({
         </div>
       ) : tab === "artists" ? (
         <ArtistBrowse
-          key={catalogScope}
           catalogScope={catalogScope}
           artists={artists}
           albums={albums}

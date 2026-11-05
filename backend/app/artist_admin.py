@@ -8,12 +8,28 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.lineup_instruments import ATTR_TO_INSTRUMENT_ID, map_mb_attributes
-from app.models import Artist, ArtistParticipation, Band
+from app.models import Artist, ArtistParticipation, ArtistType, Band
+from app.music_filters import _parse_ids
 
 PAR_OFFICIAL = 0
 PAR_ORIGINAL = 1
 PAR_TOURING = 2
 PAR_FORMER = 3
+
+# Seeded artist-type sizes (see seed_music.ARTIST_TYPES).
+SOLO_ARTIST_TYPE_ID = 1
+GROUP_SIZE_TYPE_IDS = {
+    2: 2,  # Duo
+    3: 3,  # Trio
+    4: 4,  # Quartet
+    5: 5,  # Quintet
+    6: 6,  # Sixtet
+    7: 7,  # Septet
+    8: 8,  # Octet
+    9: 9,  # Nonet
+    10: 10,  # Dectet
+}
+GROUP_LARGE_TYPE_ID = 11  # 10+
 
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -65,6 +81,202 @@ def participation_types_from_flags(
     if not ids:
         ids.append(PAR_OFFICIAL)
     return ";".join(str(i) for i in ids)
+
+
+def _is_official_active_participation(arp: ArtistParticipation) -> bool:
+    """Official + currently active (no end date). Touring-only does not count."""
+    if (arp.arp_end_dates or "").strip():
+        return False
+    type_ids = _parse_ids(arp.arp_fk_participation_types)
+    if PAR_OFFICIAL in type_ids:
+        return True
+    if not type_ids:
+        return True
+    return False
+
+
+def _has_touring_participation(db: Session, band_id: int) -> bool:
+    for arp in db.scalars(
+        select(ArtistParticipation).where(
+            ArtistParticipation.arp_fk_bands == band_id
+        )
+    ).all():
+        if PAR_TOURING in _parse_ids(arp.arp_fk_participation_types):
+            return True
+    return False
+
+
+def _is_band_mirror_artist(db: Session, artist: Artist, *, band_id: int) -> bool:
+    """True when the artist row is a band entity, not a person.
+
+    Catches related-project pollution (HIM/Agents/Daniel Lioneye ARPs on VV):
+    - art_code matches another Band's MBID
+    - display name matches another Band's name
+    - MusicBrainz group shape: year-only birth date and no gender
+    """
+    code = (artist.art_code or "").strip()
+    if code:
+        other = db.scalars(
+            select(Band).where(Band.bnd_code == code, Band.bnd_id != band_id)
+        ).first()
+        if other is not None:
+            return True
+
+    name = _display_name(artist.art_stage_name or artist.art_name).casefold()
+    if name:
+        named = db.scalars(
+            select(Band).where(
+                func.lower(Band.bnd_name) == name,
+                Band.bnd_id != band_id,
+            )
+        ).first()
+        if named is not None:
+            return True
+
+    birth = (artist.art_birth_date or "").strip()
+    gender = (artist.art_fk_genders or "").strip()
+    if len(birth) == 4 and birth.isdigit() and not gender:
+        return True
+
+    return False
+
+
+def _official_active_artist_ids(db: Session, band: Band) -> set[int]:
+    """Official-active person ids, including an implicit solo headliner by MBID.
+
+    Band-mirror artist rows (e.g. related projects stored as artists) are ignored.
+    """
+    ids: set[int] = set()
+    for arp in db.scalars(
+        select(ArtistParticipation).where(
+            ArtistParticipation.arp_fk_bands == band.bnd_id
+        )
+    ).all():
+        if not arp.arp_fk_artists:
+            continue
+        if not _is_official_active_participation(arp):
+            continue
+        artist = db.get(Artist, arp.arp_fk_artists)
+        if not artist or _is_band_mirror_artist(db, artist, band_id=band.bnd_id):
+            continue
+        ids.add(int(arp.arp_fk_artists))
+
+    code = (band.bnd_code or "").strip()
+    if not code:
+        return ids
+    head = db.scalars(select(Artist).where(Artist.art_code == code)).first()
+    if not head or head.art_id in ids:
+        return ids
+    if _is_band_mirror_artist(db, head, band_id=band.bnd_id):
+        return ids
+    arp = db.scalars(
+        select(ArtistParticipation).where(
+            ArtistParticipation.arp_fk_bands == band.bnd_id,
+            ArtistParticipation.arp_fk_artists == head.art_id,
+        )
+    ).first()
+    if arp and (arp.arp_end_dates or "").strip():
+        return ids
+    if arp and not _is_official_active_participation(arp):
+        # Explicit non-official / touring-only row for the headliner.
+        type_ids = _parse_ids(arp.arp_fk_participation_types)
+        if type_ids and PAR_OFFICIAL not in type_ids:
+            return ids
+    ids.add(head.art_id)
+    return ids
+
+
+def _artist_type_id_for_official_count(count: int) -> int:
+    if count <= 1:
+        return SOLO_ARTIST_TYPE_ID
+    if count in GROUP_SIZE_TYPE_IDS:
+        return GROUP_SIZE_TYPE_IDS[count]
+    return GROUP_LARGE_TYPE_ID
+
+
+def _ensure_official_arp_for_artist(
+    db: Session, band: Band, artist_id: int
+) -> None:
+    """Make sure a promoted band's headliner has an Official participation row."""
+    arp = db.scalars(
+        select(ArtistParticipation).where(
+            ArtistParticipation.arp_fk_bands == band.bnd_id,
+            ArtistParticipation.arp_fk_artists == artist_id,
+        )
+    ).first()
+    if arp:
+        type_ids = _parse_ids(arp.arp_fk_participation_types)
+        if PAR_OFFICIAL not in type_ids:
+            type_ids = [PAR_OFFICIAL, *type_ids]
+            arp.arp_fk_participation_types = ";".join(str(i) for i in type_ids)
+        if (arp.arp_end_dates or "").strip():
+            arp.arp_end_dates = None
+        return
+    db.add(
+        ArtistParticipation(
+            arp_id=_next_arp_id(db),
+            arp_fk_bands=band.bnd_id,
+            arp_fk_artists=artist_id,
+            arp_fk_participation_types=str(PAR_OFFICIAL),
+            arp_manual=1,
+        )
+    )
+
+
+def sync_band_type_from_lineup(db: Session, band_id: int) -> str | None:
+    """Persist Solo vs group artist type from Official-active membership.
+
+    Rules (locked):
+    - Count Official + currently active only (Founder+Official counts once).
+    - >= 2 → group (Duo/Trio/… by count)
+    - exactly 1 → Solo
+    - 0 Official-active but Touring exists → stay/become group (not Solo)
+    - 0 Official-active and no Touring → leave type unchanged
+
+    Returns ``\"solo\"``, ``\"group\"``, or ``None`` when unchanged / band missing.
+    """
+    band = db.get(Band, band_id)
+    if not band:
+        return None
+
+    official_ids = _official_active_artist_ids(db, band)
+    n = len(official_ids)
+    has_touring = _has_touring_participation(db, band_id)
+
+    if n == 0 and not has_touring:
+        return None
+
+    if n == 0 and has_touring:
+        # Stay band — use Duo as the minimum group size when promoting.
+        target_id = GROUP_SIZE_TYPE_IDS[2]
+        want = "group"
+    elif n == 1:
+        target_id = SOLO_ARTIST_TYPE_ID
+        want = "solo"
+    else:
+        target_id = _artist_type_id_for_official_count(n)
+        want = "group"
+        # Ensure implicit solo headliner becomes a real Official row.
+        code = (band.bnd_code or "").strip()
+        if code:
+            head = db.scalars(select(Artist).where(Artist.art_code == code)).first()
+            if head and head.art_id in official_ids:
+                _ensure_official_arp_for_artist(db, band, head.art_id)
+
+    # Keep type row valid if seed missing for some reason.
+    if not db.get(ArtistType, target_id):
+        return None
+
+    current = _parse_ids(band.bnd_fk_artisttypes)
+    changed = current != [target_id]
+    if changed:
+        band.bnd_fk_artisttypes = str(target_id)
+    db.commit()
+    if changed:
+        from app.band_overview_cache import invalidate_overview_cache
+
+        invalidate_overview_cache(band_id)
+    return want
 
 
 def save_artist_photo_file(
@@ -141,6 +353,7 @@ def patch_participation(
     is_official: bool | None = None,
     is_founding: bool | None = None,
     is_former: bool | None = None,
+    is_touring: bool | None = None,
 ) -> ArtistParticipation:
     if start is not None:
         arp.arp_start_dates = start.strip() or None
@@ -149,22 +362,30 @@ def patch_participation(
     if roles_text is not None:
         arp.arp_fk_instruments = roles_text_to_instrument_ids(db, roles_text)
 
-    if any(v is not None for v in (is_official, is_founding, is_former)):
-        from app.music_filters import _parse_ids
-
+    if any(
+        v is not None
+        for v in (is_official, is_founding, is_former, is_touring)
+    ):
         current = _parse_ids(arp.arp_fk_participation_types)
         off = is_official if is_official is not None else PAR_OFFICIAL in current
         found = is_founding if is_founding is not None else PAR_ORIGINAL in current
         former = is_former if is_former is not None else PAR_FORMER in current
+        touring = (
+            is_touring if is_touring is not None else PAR_TOURING in current
+        )
         arp.arp_fk_participation_types = participation_types_from_flags(
             is_official=off,
             is_founding=found,
             is_former=former,
+            is_touring=touring,
         )
 
     arp.arp_manual = 1
+    band_id = arp.arp_fk_bands
     db.commit()
     db.refresh(arp)
+    if band_id:
+        sync_band_type_from_lineup(db, band_id)
     return arp
 
 
@@ -219,12 +440,16 @@ def create_participation(
     db.add(arp)
     db.commit()
     db.refresh(arp)
+    sync_band_type_from_lineup(db, band.bnd_id)
     return arp
 
 
 def delete_participation(db: Session, arp: ArtistParticipation) -> None:
+    band_id = arp.arp_fk_bands
     db.execute(delete(ArtistParticipation).where(ArtistParticipation.arp_id == arp.arp_id))
     db.commit()
+    if band_id:
+        sync_band_type_from_lineup(db, band_id)
 
 
 def patch_band_about(

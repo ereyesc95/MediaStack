@@ -196,14 +196,7 @@ export default function MediaInlineSearch(props: Props) {
     setTracks([]);
   };
 
-  const placeholder =
-    props.mode === "catalog"
-      ? "Search catalog…"
-      : props.mode === "artist-releases"
-        ? "Search artist…"
-        : props.mode === "series-franchises"
-          ? "Search franchises…"
-          : "Search series…";
+  const placeholder = "Search";
 
   return (
     <div

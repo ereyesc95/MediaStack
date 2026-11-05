@@ -20,8 +20,8 @@ import {
   IconCardCover,
   IconCardLandscape,
   IconCardPortrait,
-  IconSearch,
 } from "../MenuIcons";
+import ExpandableFilterSearch from "../ExpandableFilterSearch";
 import ModalPortal from "../ModalPortal";
 import SearchableDropdown from "../SearchableDropdown";
 import GalleryViewerModal, {
@@ -184,17 +184,13 @@ export default function MerchBrowse({
             </button>
           ))}
         </div>
-        <div className="filter-subbar-search-wrap merch-browse__search">
-          <IconSearch className="filter-subbar-search-icon" aria-hidden />
-          <input
-            className="filter-subbar-search"
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search merch…"
-            aria-label="Search merch"
-          />
-        </div>
+        <ExpandableFilterSearch
+          className="merch-browse__search"
+          value={search}
+          onChange={setSearch}
+          placeholder="Search"
+          ariaLabel="Search merch"
+        />
       </div>
 
       {loading ? <p className="muted merch-browse__status">Loading merch…</p> : null}
@@ -209,8 +205,11 @@ export default function MerchBrowse({
         {filtered.map((item, idx) => {
           const canFlip = Boolean(item.has_back && item.back_url);
           const isFlipped = Boolean(flipped[item.id]);
-          const imgUrl =
-            isFlipped && item.back_url ? item.back_url : item.url;
+          const frontUrl = withMediaAccess(item.url) || item.url;
+          const backUrl =
+            item.back_url
+              ? withMediaAccess(item.back_url) || item.back_url
+              : null;
           const title = eventTitle(item);
           const dateLine = eventDateLabel(item);
           return (
@@ -233,12 +232,26 @@ export default function MerchBrowse({
                   }
                 }}
               >
-                <img
-                  src={withMediaAccess(imgUrl)}
-                  alt={item.label}
-                  loading="lazy"
-                  draggable={false}
-                />
+                <div className="merch-browse__card-flipper">
+                  <div className="merch-browse__card-face merch-browse__card-face--front">
+                    <img
+                      src={frontUrl}
+                      alt={item.label}
+                      loading="lazy"
+                      draggable={false}
+                    />
+                  </div>
+                  {canFlip && backUrl ? (
+                    <div className="merch-browse__card-face merch-browse__card-face--back">
+                      <img
+                        src={backUrl}
+                        alt=""
+                        loading="lazy"
+                        draggable={false}
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 <div className="merch-browse__card-hover">
                   <button
                     type="button"
@@ -279,12 +292,17 @@ export default function MerchBrowse({
                     className="merch-browse__flip"
                     title="Flip"
                     aria-label="Flip card"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                    }}
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       setFlipped((prev) => ({
                         ...prev,
                         [item.id]: !prev[item.id],
                       }));
+                      (e.currentTarget as HTMLButtonElement).blur();
                     }}
                   >
                     <FlipIcon className="merch-browse__flip-icon" />
@@ -452,7 +470,7 @@ function MerchCategoriesModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-panel-header">
-          <h3>MERCH categories</h3>
+          <h3>Merch categories</h3>
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>

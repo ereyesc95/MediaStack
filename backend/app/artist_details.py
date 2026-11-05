@@ -99,6 +99,7 @@ def build_artist_details(
 
     PAR_OFFICIAL = 0
     PAR_ORIGINAL = 1
+    PAR_TOURING = 2
     PAR_FORMER = 3
 
     def _membership_flags(arp: ArtistParticipation) -> dict:
@@ -106,6 +107,7 @@ def build_artist_details(
         return {
             "is_official": PAR_OFFICIAL in type_ids if type_ids else not arp.arp_end_dates,
             "is_founding": PAR_ORIGINAL in type_ids,
+            "is_touring": PAR_TOURING in type_ids,
             "is_former": PAR_FORMER in type_ids or bool(arp.arp_end_dates),
         }
 

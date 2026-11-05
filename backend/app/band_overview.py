@@ -279,10 +279,15 @@ def _build_lineup(db: Session, band: Band, media_root: Path | None) -> dict:
     founding_year = int(band_start) if band_start.isdigit() else None
     artist_dir = _artist_dir(media_root, band.bnd_name) if media_root else None
 
+    from app.artist_admin import _is_band_mirror_artist
+
     all_entries: list[dict] = []
     for arp in rows:
         artist = db.get(Artist, arp.arp_fk_artists) if arp.arp_fk_artists else None
         if not artist:
+            continue
+        # Related-project band rows must not appear as lineup members.
+        if _is_band_mirror_artist(db, artist, band_id=band.bnd_id):
             continue
         all_entries.append(
             _lineup_entry(
@@ -410,19 +415,10 @@ def _resolve_labels(db: Session, band_id: int) -> list[str]:
 
 
 def _is_band_entity_artist(db: Session, artist: Artist, *, solo_band_id: int) -> bool:
-    """True when the artist row mirrors another band (e.g. HIM), not a person."""
-    code = (artist.art_code or "").strip()
-    if not code:
-        return False
-    return (
-        db.scalars(
-            select(Band).where(
-                Band.bnd_code == code,
-                Band.bnd_id != solo_band_id,
-            )
-        ).first()
-        is not None
-    )
+    """True when the artist row mirrors a band entity (e.g. HIM), not a person."""
+    from app.artist_admin import _is_band_mirror_artist
+
+    return _is_band_mirror_artist(db, artist, band_id=solo_band_id)
 
 
 def _solo_performer(
