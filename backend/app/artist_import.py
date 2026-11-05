@@ -223,6 +223,7 @@ def _populate_band_metadata(db: Session, band: Band, data: dict) -> None:
     )
     life = data.get("life-span") or {}
     origin = data.get("begin-area") or data.get("area") or {}
+    entity_type = (data.get("type") or "").strip().casefold()
 
     band.bnd_name = name
     band.bnd_code = data.get("id") or band.bnd_code
@@ -231,11 +232,13 @@ def _populate_band_metadata(db: Session, band: Band, data: dict) -> None:
     country_id = _country_id(db, data)
     if country_id:
         band.bnd_fk_countries = str(country_id)
-    band.bnd_starting_dates = life.get("begin") or band.bnd_starting_dates
-    if life.get("end"):
-        band.bnd_ending_dates = life["end"]
-    elif life.get("ended") is False:
-        band.bnd_ending_dates = None
+    # Person life-span begin is birth date — never use it as band activity.
+    if entity_type != "person":
+        band.bnd_starting_dates = life.get("begin") or band.bnd_starting_dates
+        if life.get("end"):
+            band.bnd_ending_dates = life["end"]
+        elif life.get("ended") is False:
+            band.bnd_ending_dates = None
 
     artist_type_id = _artist_type_id(db, data)
     if artist_type_id:

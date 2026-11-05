@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   formatFlexibleDateInput,
+  maskFlexibleDateInput,
   parseFlexibleDate,
 } from "../formatDate";
 
@@ -15,16 +16,16 @@ type Props = {
   id?: string;
 };
 
-const HINT = "MM/DD/YYYY, MM/YYYY, or YYYY";
+const HINT = "YYYY/MM/DD, YYYY/MM, or YYYY";
 
 /**
- * Text date field that accepts partial dates and stores
- * YYYY | YYYY-MM | YYYY-MM-DD.
+ * Date field: digits + auto `/` only. Accepts YYYY / YYYY/MM / YYYY/MM/DD.
+ * Stores YYYY | YYYY-MM | YYYY-MM-DD.
  */
 export default function FlexibleDateInput({
   value,
   onChange,
-  placeholder = "MM/DD/YYYY",
+  placeholder = "YYYY/MM/DD",
   className = "",
   title = HINT,
   disabled,
@@ -39,9 +40,18 @@ export default function FlexibleDateInput({
   }, [value]);
 
   function commit(raw: string) {
-    const parsed = parseFlexibleDate(raw);
+    const masked = maskFlexibleDateInput(raw);
+    // Allow empty or complete segments only.
+    if (!masked) {
+      setInvalid(false);
+      setText("");
+      if (value) onChange("");
+      return;
+    }
+    const parsed = parseFlexibleDate(masked);
     if (parsed === null) {
       setInvalid(true);
+      setText(masked);
       return;
     }
     setInvalid(false);
@@ -62,8 +72,10 @@ export default function FlexibleDateInput({
       title={title}
       aria-invalid={invalid || undefined}
       aria-label={title}
+      maxLength={10}
       onChange={(e) => {
-        setText(e.target.value);
+        const next = maskFlexibleDateInput(e.target.value);
+        setText(next);
         if (invalid) setInvalid(false);
       }}
       onBlur={() => commit(text)}
@@ -72,7 +84,25 @@ export default function FlexibleDateInput({
           e.preventDefault();
           commit(text);
           (e.currentTarget as HTMLInputElement).blur();
+          return;
         }
+        // Block letters and other symbols; allow control/nav keys.
+        if (
+          e.key.length === 1 &&
+          !/[0-9/]/.test(e.key) &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey
+        ) {
+          e.preventDefault();
+        }
+      }}
+      onPaste={(e) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData("text");
+        const next = maskFlexibleDateInput(pasted);
+        setText(next);
+        if (invalid) setInvalid(false);
       }}
     />
   );

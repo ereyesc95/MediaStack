@@ -355,7 +355,7 @@ export default function MemberFormModal({
     const birthStored = parseFlexibleDate(birthDate);
     const deathStored = parseFlexibleDate(deathDate);
     if (birthStored === null || deathStored === null) {
-      setError("Use MM/DD/YYYY, MM/YYYY, or YYYY for birth/death dates");
+      setError("Use YYYY/MM/DD, YYYY/MM, or YYYY for birth/death dates");
       return;
     }
     const normalizedRows: ProjectRow[] = [];
@@ -363,7 +363,7 @@ export default function MemberFormModal({
       const startStored = parseFlexibleDate(row.start);
       const endStored = parseFlexibleDate(row.end);
       if (startStored === null || endStored === null) {
-        setError("Use MM/DD/YYYY, MM/YYYY, or YYYY for project dates");
+        setError("Use YYYY/MM/DD, YYYY/MM, or YYYY for project dates");
         return;
       }
       normalizedRows.push({
@@ -601,7 +601,7 @@ export default function MemberFormModal({
                     <FlexibleDateInput
                       value={birthDate}
                       onChange={setBirthDate}
-                      placeholder="MM/DD/YYYY"
+                      placeholder="YYYY/MM/DD"
                     />
                   </label>
                   <label>
@@ -609,7 +609,7 @@ export default function MemberFormModal({
                     <FlexibleDateInput
                       value={deathDate}
                       onChange={setDeathDate}
-                      placeholder="MM/DD/YYYY"
+                      placeholder="YYYY/MM/DD"
                     />
                   </label>
                 </div>
@@ -703,14 +703,14 @@ export default function MemberFormModal({
                       className="member-form__col member-form__col--start"
                       value={row.start}
                       onChange={(start) => updateRow(row.key, { start })}
-                      placeholder="MM/YYYY"
+                      placeholder="YYYY/MM/DD"
                     />
                     <FlexibleDateInput
                       className="member-form__col member-form__col--end"
                       value={row.end}
                       onChange={(end) => updateRow(row.key, { end })}
-                      placeholder="Present"
-                      title="MM/DD/YYYY, MM/YYYY, YYYY, or leave blank for Present"
+                      placeholder="YYYY/MM/DD"
+                      title="YYYY/MM/DD, YYYY/MM, YYYY, or leave blank for Present"
                     />
                     <div className="member-form__col member-form__col--roles">
                       <MultiSelectDropdown
@@ -720,6 +720,8 @@ export default function MemberFormModal({
                           updateRow(row.key, { role_ids })
                         }
                         placeholder="Instruments"
+                        portal
+                        visibleRows={5}
                       />
                     </div>
                     <div className="member-form__col member-form__col--membership member-form__membership">

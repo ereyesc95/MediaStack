@@ -131,6 +131,14 @@ def build_artist_details(
             label = instrument_label(db, iid)
             if label:
                 roles.append(label)
+        arp_start = (arp.arp_start_dates or "").strip() or None
+        arp_end = (arp.arp_end_dates or "").strip() or None
+        band_start = (band.bnd_starting_dates or "").split(";")[0].strip() or None
+        band_end = (band.bnd_ending_dates or "").split(";")[0].strip() or None
+        # Fall back to the project's activity when the ARP row has no years
+        # (common for solo/shared-MBID projects and incomplete imports).
+        start = arp_start or band_start
+        end = arp_end or band_end
         participations.append(
             {
                 "participation_id": arp.arp_id,
@@ -139,8 +147,8 @@ def build_artist_details(
                 "name": _display_name(band.bnd_name),
                 "mbid": band.bnd_code,
                 "in_library": in_lib,
-                "start": arp.arp_start_dates,
-                "end": arp.arp_end_dates,
+                "start": start,
+                "end": end,
                 "roles": roles,
                 "participation_types": arp.arp_fk_participation_types,
                 "urls": _external_urls_for_band(band),

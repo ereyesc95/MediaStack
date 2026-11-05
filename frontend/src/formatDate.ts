@@ -14,66 +14,73 @@ const MONTHS = [
 ];
 
 /**
- * Parse flexible user dates into storage form:
+ * Mask typed digits into yyyy / yyyy/mm / yyyy/mm/dd (auto `/`).
+ * Non-digits are stripped; max 8 digits.
+ */
+export function maskFlexibleDateInput(raw: string): string {
+  const digits = (raw ?? "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 4)}/${digits.slice(4)}`;
+  }
+  return `${digits.slice(0, 4)}/${digits.slice(4, 6)}/${digits.slice(6)}`;
+}
+
+/**
+ * Parse yyyy, yyyy/mm, or yyyy/mm/dd (also ISO YYYY-MM-DD) into storage:
  * YYYY | YYYY-MM | YYYY-MM-DD.
- * Accepts MM/DD/YYYY, MM/YYYY, YYYY, and ISO-like variants.
  * Empty / "Present" → "" ; unparseable → null.
  */
 export function parseFlexibleDate(raw: string | null | undefined): string | null {
   const t = (raw ?? "").trim();
   if (!t || /^present$/i.test(t)) return "";
 
-  if (/^\d{4}$/.test(t)) return t;
+  const masked = maskFlexibleDateInput(t);
+  if (/^\d{4}$/.test(masked)) return masked;
 
-  const iso = t.match(/^(\d{4})[.\-/](\d{1,2})(?:[.\-/](\d{1,2}))?$/);
-  if (iso) {
-    const y = iso[1]!;
-    const mNum = Number(iso[2]);
+  const parts = masked.split("/");
+  if (parts.length === 2 && parts[0]?.length === 4 && parts[1]?.length === 2) {
+    const y = parts[0];
+    const mNum = Number(parts[1]);
     if (mNum < 1 || mNum > 12) return null;
-    const m = String(mNum).padStart(2, "0");
-    if (iso[3] != null) {
-      const dNum = Number(iso[3]);
-      if (dNum < 1 || dNum > 31) return null;
-      return `${y}-${m}-${String(dNum).padStart(2, "0")}`;
-    }
-    return `${y}-${m}`;
+    return `${y}-${parts[1]}`;
+  }
+  if (
+    parts.length === 3 &&
+    parts[0]?.length === 4 &&
+    parts[1]?.length === 2 &&
+    parts[2]?.length === 2
+  ) {
+    const y = parts[0];
+    const mNum = Number(parts[1]);
+    const dNum = Number(parts[2]);
+    if (mNum < 1 || mNum > 12 || dNum < 1 || dNum > 31) return null;
+    return `${y}-${parts[1]}-${parts[2]}`;
   }
 
-  const parts = t.split(/[.\-/]/).filter(Boolean);
-  if (parts.length === 2) {
-    const [a, b] = parts;
-    if (!a || !b) return null;
-    // MM/YYYY
-    if (/^\d{1,2}$/.test(a) && /^\d{4}$/.test(b)) {
-      const mNum = Number(a);
+  // Already-stored ISO from API (hyphen separators).
+  const iso = t.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  if (iso) {
+    if (iso[3]) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    if (iso[2]) {
+      const mNum = Number(iso[2]);
       if (mNum < 1 || mNum > 12) return null;
-      return `${b}-${String(mNum).padStart(2, "0")}`;
+      return `${iso[1]}-${iso[2]}`;
     }
-    return null;
+    return iso[1]!;
   }
-  if (parts.length === 3) {
-    const [a, b, c] = parts;
-    if (!a || !b || !c) return null;
-    // MM/DD/YYYY
-    if (/^\d{1,2}$/.test(a) && /^\d{1,2}$/.test(b) && /^\d{4}$/.test(c)) {
-      const mNum = Number(a);
-      const dNum = Number(b);
-      if (mNum < 1 || mNum > 12 || dNum < 1 || dNum > 31) return null;
-      return `${c}-${String(mNum).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
-    }
-    return null;
-  }
+
   return null;
 }
 
-/** Display storage date as MM/DD/YYYY, MM/YYYY, or YYYY for editing. */
+/** Display storage date as yyyy/mm/dd, yyyy/mm, or yyyy for editing. */
 export function formatFlexibleDateInput(stored: string | null | undefined): string {
   const t = (stored ?? "").trim();
   if (!t) return "";
-  const m = t.match(/^(\d{4})(?:[.\-](\d{2})(?:[.\-](\d{2}))?)?$/);
-  if (!m) return t;
-  if (m[3]) return `${m[2]}/${m[3]}/${m[1]}`;
-  if (m[2]) return `${m[2]}/${m[1]}`;
+  const m = t.match(/^(\d{4})(?:[.\-/](\d{2})(?:[.\-/](\d{2}))?)?$/);
+  if (!m) return maskFlexibleDateInput(t);
+  if (m[3]) return `${m[1]}/${m[2]}/${m[3]}`;
+  if (m[2]) return `${m[1]}/${m[2]}`;
   return m[1]!;
 }
 

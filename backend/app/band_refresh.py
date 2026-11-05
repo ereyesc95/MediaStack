@@ -43,12 +43,21 @@ async def refresh_band_metadata(
         user_agent=settings.musicbrainz_user_agent,
     )
     life = data.get("life-span") or {}
-    band.bnd_starting_dates = life.get("begin") or band.bnd_starting_dates
-    end = life.get("end")
-    if end:
-        band.bnd_ending_dates = end
-    elif life.get("ended") is False:
-        band.bnd_ending_dates = None
+    entity_type = (data.get("type") or "").strip().casefold()
+    # Person life-span begin is birth date — never use it as band activity.
+    if entity_type != "person":
+        band.bnd_starting_dates = life.get("begin") or band.bnd_starting_dates
+        end = life.get("end")
+        if end:
+            band.bnd_ending_dates = end
+        elif life.get("ended") is False:
+            band.bnd_ending_dates = None
+    else:
+        # Clear a previously imported birth date mistaken for activity.
+        begin = (life.get("begin") or "").strip()
+        current = (band.bnd_starting_dates or "").strip()
+        if begin and current and current[:10] == begin[:10]:
+            band.bnd_starting_dates = None
 
     aliases = ";".join(
         a.get("name", "") for a in data.get("aliases", []) if a.get("name")
