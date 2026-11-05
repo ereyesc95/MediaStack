@@ -345,6 +345,26 @@ def enrich_catalog_with_artwork_home(
     return catalog
 
 
+def enrich_home_cards(
+    db: Session | None,
+    cards: list[dict],
+    *,
+    media_root: Path | None = None,
+    orientation: str = "portrait",
+    music_identity: bool = True,
+) -> list[dict]:
+    """Music/artwork enrich for a small home-pane set (not the full catalog)."""
+    if not cards:
+        return cards
+    mini: dict = {"franchises": cards}
+    if music_identity and db is not None:
+        enrich_catalog_with_music_identity(
+            db, mini, orientation=orientation, media_root=media_root
+        )
+    enrich_catalog_with_artwork_home(mini, media_root=media_root)
+    return list(mini.get("franchises") or cards)
+
+
 def apply_shared_artwork_to_card(
     card: dict,
     local_folder: Path,

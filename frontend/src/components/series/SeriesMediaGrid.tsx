@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
 import { stripUnofficialDisplaySuffix } from "../../unofficialFilter";
 import { usePhoneLayout } from "../../usePhoneLayout";
+import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
 import BillboardText from "../BillboardText";
 import { ChevronIcon } from "../music/release/releaseTrackPanelMeta";
 
@@ -319,7 +320,16 @@ export default function SeriesMediaGrid({
   }, [tapReveal, revealedId]);
 
   if (loading && !(items && items.length)) {
-    return <p className="muted artist-section-empty">Loading…</p>;
+    return (
+      <ArtistCardSkeletonGrid
+        orientation={
+          cardLayout === "banner" || cardLayout === "landscape"
+            ? "landscape"
+            : "portrait"
+        }
+        count={8}
+      />
+    );
   }
   if (!items.length) {
     return <p className="muted artist-section-empty">{emptyMessage}</p>;

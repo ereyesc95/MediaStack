@@ -306,6 +306,19 @@ def save_artist_photo_file(
     return _data_file_url(dest)
 
 
+_EDITABLE_URL_KEYS = ("wikipedia", "musicbrainz", "wikidata")
+
+
+def _parse_external_urls(raw: str | None) -> dict[str, str]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
 def patch_artist(
     db: Session,
     artist: Artist,
@@ -318,6 +331,7 @@ def patch_artist(
     birth_country_id: int | None = None,
     death_date: str | None = None,
     mbid: str | None = None,
+    urls: dict[str, str] | None = None,
 ) -> Artist:
     if name is not None:
         artist.art_name = name.strip() or artist.art_name
@@ -337,6 +351,17 @@ def patch_artist(
         artist.art_death_date = death_date.strip() or None
     if mbid is not None:
         artist.art_code = mbid.strip() or None
+    if urls is not None:
+        current = _parse_external_urls(artist.art_external_urls)
+        for key in _EDITABLE_URL_KEYS:
+            if key not in urls:
+                continue
+            val = (urls.get(key) or "").strip()
+            if val:
+                current[key] = val
+            else:
+                current.pop(key, None)
+        artist.art_external_urls = json.dumps(current) if current else None
     artist.art_source = artist.art_source or "manual"
     db.commit()
     db.refresh(artist)

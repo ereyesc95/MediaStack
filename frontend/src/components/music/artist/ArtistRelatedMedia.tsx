@@ -16,6 +16,7 @@ import type {
 import { moviesLeafFromFolderPath } from "../../../openMediaFromPath";
 import { usePhoneLayout } from "../../../usePhoneLayout";
 import ArtistCard from "../../ArtistCard";
+import ArtistCardSkeletonGrid from "../../ArtistCardSkeletonGrid";
 import ConfirmDialog from "../../ConfirmDialog";
 import ModalPortal from "../../ModalPortal";
 
@@ -59,6 +60,7 @@ function toCard(
   const portrait = entry.portrait_url || entry.cover_url || null;
   const landscape = entry.landscape_url || entry.banner_url || portrait;
   const banner = entry.banner_url || entry.landscape_url || portrait;
+  const logo = entry.logo_url || null;
   const photo =
     orient === "banner"
       ? banner
@@ -71,10 +73,10 @@ function toCard(
     id: 0,
     name: entry.title || "Untitled",
     photo_url: photo,
-    logo_url: entry.logo_url || null,
+    logo_url: logo,
     icon_url: null,
     era_year: year,
-    show_name_on_hover: true,
+    show_name_on_hover: !logo,
     starting_dates: entry.date_iso || null,
   };
 }
@@ -307,7 +309,7 @@ export default function ArtistRelatedMedia({
     <div className="artist-related">
       {openError ? <p className="error artist-related__empty">{openError}</p> : null}
       {loading && !payload ? (
-        <p className="muted artist-related__empty">Loading related media…</p>
+        <ArtistCardSkeletonGrid orientation={orient} count={8} />
       ) : error ? (
         <p className="muted artist-related__empty">{error}</p>
       ) : items.length === 0 ? (

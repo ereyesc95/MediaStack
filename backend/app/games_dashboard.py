@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.adult_content import filter_adult_cards
 from app.config import settings
+from app.franchise_identity import enrich_home_cards
 from app.games_index import build_games_catalog
 from app.models import Subgenre
+from app.module_catalog_cache import get_or_build_catalog
 from app.play_stats import subgenre_image_url
 from app.platform_assets import platform_card_urls
 from app.seed_games import GAMES_MEDIA_TYPE, ensure_games_genres
@@ -24,16 +26,18 @@ def build_games_dashboard(
     recent_game_ids: list[str] | None = None,
 ) -> dict:
     _ = user_id
-    from app.franchise_identity import enrich_catalog_with_artwork_home
     from app.games_catalog_meta import enrich_games_catalog
 
     media_root = Path(settings.media_root) if settings.media_root else None
     catalog = (
-        build_games_catalog(media_root)
+        get_or_build_catalog(
+            "games",
+            media_root=media_root,
+            builder=lambda: build_games_catalog(media_root),
+        )
         if media_root and media_root.is_dir()
         else {"franchises": [], "games": [], "platforms": []}
     )
-    catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
     adult_subs = set()
     if db is not None:
         from app.adult_content import adult_subgenre_names_from_db
@@ -132,11 +136,28 @@ def build_games_dashboard(
                 }
             )
 
+    top_franchises = sagas[:12] or [
+        f for f in franchises if not f.get("is_standalone")
+    ][:12]
+    top_franchises = enrich_home_cards(
+        db,
+        top_franchises,
+        media_root=media_root,
+        orientation="portrait",
+        music_identity=False,
+    )
+    top_games = enrich_home_cards(
+        db,
+        top_games,
+        media_root=media_root,
+        orientation="portrait",
+        music_identity=False,
+    )
+
     return {
         "platforms": platforms,
         "recent_games": recent[:12],
-        "top_franchises": sagas[:12]
-        or [f for f in franchises if not f.get("is_standalone")][:12],
+        "top_franchises": top_franchises,
         "top_games": top_games,
         "top_films": top_games,
         "top_series": top_games,

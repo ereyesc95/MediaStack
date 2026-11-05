@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAlbumCards,
   fetchArtistCards,
-  fetchCollection,
   fetchFilterOptions,
   fetchGlobalLiveShowsCard,
   fetchUserPlaylists,
@@ -40,6 +39,11 @@ import { getPhotosExclusiveReturn } from "../../photosExclusiveReturn";
 import { prefetchMediaItemOverview } from "../../mediaItemOverviewCache";
 import { moviesLeafFromFolderPath } from "../../openMediaFromPath";
 import { saveSeriesEntryReferrer } from "../../seriesRoute";
+import {
+  getCachedCollectionHasItems,
+  prefetchCollectionPresence,
+  setCachedCollectionHasItems,
+} from "../../collectionPresenceCache";
 import {
   getCachedMusicDashboard,
   prefetchMusicDashboard,
@@ -276,7 +280,13 @@ export default function MusicModule({
     },
     [userId]
   );
-  const [collectionHasItems, setCollectionHasItems] = useState(false);
+  const [collectionHasItems, setCollectionHasItems] = useState(
+    () => getCachedCollectionHasItems() ?? false
+  );
+  /** Hold COLLECTION out of the strip until known so it doesn't pop in late. */
+  const [collectionPresenceReady, setCollectionPresenceReady] = useState(
+    () => getCachedCollectionHasItems() != null
+  );
   const collectionManageRef = useRef<CollectionBrowseApi | null>(null);
   const pendingCollectionManual = useRef(false);
   const [collectionClearMode, setCollectionClearMode] = useState(false);
@@ -663,20 +673,27 @@ export default function MusicModule({
   useEffect(() => {
     if (!userId) {
       setCollectionHasItems(false);
+      setCollectionPresenceReady(true);
       return;
     }
     let cancelled = false;
-    const refresh = () => {
-      void fetchCollection({ page: 1, page_size: 1, view: "table" })
-        .then((res) => {
-          if (!cancelled) setCollectionHasItems((res.total ?? 0) > 0);
-        })
-        .catch(() => {
-          if (!cancelled) setCollectionHasItems(false);
-        });
+    const apply = (hasItems: boolean) => {
+      if (cancelled) return;
+      setCollectionHasItems(hasItems);
+      setCachedCollectionHasItems(hasItems);
+      setCollectionPresenceReady(true);
     };
-    refresh();
-    const onChanged = () => refresh();
+    const refresh = (force = false) => {
+      void prefetchCollectionPresence({ force }).then(apply);
+    };
+    // Cached value already painted with the other tabs; refresh in background.
+    if (getCachedCollectionHasItems() != null) {
+      setCollectionPresenceReady(true);
+      refresh(true);
+    } else {
+      refresh(false);
+    }
+    const onChanged = () => refresh(true);
     window.addEventListener("collection-changed", onChanged);
     return () => {
       cancelled = true;
@@ -851,8 +868,6 @@ export default function MusicModule({
       if (resolvedCountryId == null) return;
 
       loadArtistsGeneration.current += 1;
-      setArtists([]);
-      setArtistTotal(0);
       setArtistPage(1);
       setFilterMode("country");
       setCountryId(resolvedCountryId);
@@ -864,8 +879,6 @@ export default function MusicModule({
     }
     if (genreFilterId != null) {
       loadArtistsGeneration.current += 1;
-      setArtists([]);
-      setArtistTotal(0);
       setArtistPage(1);
       setFilterMode("genre");
       setSubgenreId(genreFilterId);
@@ -1141,10 +1154,8 @@ export default function MusicModule({
   useEffect(() => {
     if (tab !== "artists" || bandId) return;
     if (!filterReady || homeFilterPending) {
-      if (catalogScope === "artists") {
-        setArtists([]);
-        setArtistTotal(0);
-      }
+      // Keep prior cards in state; ArtistBrowse shows “choose a filter” instead
+      // of flashing an empty grid while the chrome updates.
       setError(null);
       return;
     }
@@ -1162,6 +1173,71 @@ export default function MusicModule({
     filterReady,
     homeFilterPending,
     syncTick,
+  ]);
+
+  // Warm continent pages in the background so pane clicks feel instant.
+  useEffect(() => {
+    if (tab !== "artists" || bandId) return;
+    if (catalogScope !== "artists") return;
+    if (filterMode !== "continent") return;
+    const continents = filterOptions?.continents;
+    if (!continents?.length) return;
+
+    let cancelled = false;
+    const warm = async () => {
+      for (const c of continents) {
+        if (cancelled) return;
+        const params = new URLSearchParams({
+          page: "1",
+          page_size: "48",
+          orientation: "landscape",
+          filter_mode: "continent",
+          continent_id: String(c.id),
+        });
+        if (search.trim()) params.set("search", search.trim());
+        const cacheKey = params.toString();
+        if (artistCardsCacheRef.current.has(cacheKey)) continue;
+        try {
+          const data = await fetchArtistCards(params);
+          if (cancelled) return;
+          artistCardsCacheRef.current.set(cacheKey, {
+            items: data.items,
+            total: data.total,
+          });
+        } catch {
+          /* prefetch is best-effort */
+        }
+      }
+    };
+
+    const ric = (
+      window as Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        cancelIdleCallback?: (id: number) => void;
+      }
+    ).requestIdleCallback;
+    const cic = (
+      window as Window & { cancelIdleCallback?: (id: number) => void }
+    ).cancelIdleCallback;
+    let idleId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    if (typeof ric === "function") {
+      idleId = ric(() => void warm(), { timeout: 1500 });
+    } else {
+      timeoutId = setTimeout(() => void warm(), 120);
+    }
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof cic === "function") cic(idleId);
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, [
+    tab,
+    bandId,
+    catalogScope,
+    filterMode,
+    filterOptions,
+    search,
   ]);
 
   useEffect(() => {
@@ -1391,48 +1467,53 @@ export default function MusicModule({
           media={mediaOptions.find((m) => m.kind === "music") ?? mediaOptions[0]}
           mediaOptions={mediaOptions}
           onSelectMedia={onSelectMedia}
-          tabs={[
-            {
-              id: "home",
-              label: "HOME",
-              active: tab === "home",
-              onClick: () => onTab("home"),
-            },
-            {
-              id: "artists",
-              label: "MUSIC",
-              active: tab === "artists",
-              onClick: () => onTab("artists"),
-            },
-            {
-              id: "playlists",
-              label: "PLAYLISTS",
-              active: tab === "playlists",
-              onClick: () => onTab("playlists"),
-            },
-            ...(collectionHasItems || tab === "collection"
+          tabsReady={collectionPresenceReady}
+          tabs={
+            collectionPresenceReady
               ? [
                   {
-                    id: "collection" as const,
-                    label: "COLLECTION",
-                    active: tab === "collection",
-                    onClick: () => onTab("collection"),
+                    id: "home",
+                    label: "HOME",
+                    active: tab === "home",
+                    onClick: () => onTab("home"),
+                  },
+                  {
+                    id: "artists",
+                    label: "MUSIC",
+                    active: tab === "artists",
+                    onClick: () => onTab("artists"),
+                  },
+                  {
+                    id: "playlists",
+                    label: "PLAYLISTS",
+                    active: tab === "playlists",
+                    onClick: () => onTab("playlists"),
+                  },
+                  ...(collectionHasItems || tab === "collection"
+                    ? [
+                        {
+                          id: "collection" as const,
+                          label: "COLLECTION",
+                          active: tab === "collection",
+                          onClick: () => onTab("collection"),
+                        },
+                      ]
+                    : []),
+                  {
+                    id: "events",
+                    label: "EVENTS",
+                    active: tab === "events",
+                    onClick: () => onTab("events"),
+                  },
+                  {
+                    id: "merch",
+                    label: "MERCH",
+                    active: tab === "merch",
+                    onClick: () => onTab("merch"),
                   },
                 ]
-              : []),
-            {
-              id: "events",
-              label: "EVENTS",
-              active: tab === "events",
-              onClick: () => onTab("events"),
-            },
-            {
-              id: "merch",
-              label: "MERCH",
-              active: tab === "merch",
-              onClick: () => onTab("merch"),
-            },
-          ]}
+              : []
+          }
           menu={
             <>
               {busy && (
@@ -2573,6 +2654,7 @@ export default function MusicModule({
               ? albumsLoading
               : artistsLoading
           }
+          filterReady={filterReady && !homeFilterPending}
         />
       ) : tab === "collection" ? (
         <CollectionBrowse

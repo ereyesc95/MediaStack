@@ -172,6 +172,8 @@ class PatchArtistBody(BaseModel):
     birth_country_id: int | None = None
     death_date: str | None = None
     mbid: str | None = None
+    # Member modal Links: wikipedia / musicbrainz / wikidata (empty clears)
+    urls: dict[str, str] | None = None
 
 
 class PatchParticipationBody(BaseModel):
@@ -1961,6 +1963,7 @@ def patch_artist_endpoint(
         birth_country_id=body.birth_country_id,
         death_date=body.death_date,
         mbid=body.mbid,
+        urls=body.urls,
     )
     return {"ok": True}
 

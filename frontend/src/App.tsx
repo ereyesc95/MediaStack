@@ -17,6 +17,11 @@ import {
   clearBooksDashboardCache,
   prefetchBooksDashboard,
 } from "./booksDashboardCache";
+import { prefetchCollectionPresence } from "./collectionPresenceCache";
+import {
+  clearGamesDashboardCache,
+  prefetchGamesDashboard,
+} from "./gamesDashboardCache";
 import {
   clearMoviesDashboardCache,
   prefetchMoviesDashboard,
@@ -311,9 +316,17 @@ export default function App() {
 
   useEffect(() => {
     if (mediaRootConfigured !== true || profile == null) return;
+    // Warm home panes in the background so first open isn't empty-chrome-only.
+    void prefetchMusicDashboard();
+    void prefetchSeriesDashboard();
+    void prefetchMoviesDashboard();
+    void prefetchBooksDashboard();
+    void prefetchGamesDashboard();
+    void prefetchCollectionPresence();
     void prefetchUniverses("movies");
     void prefetchUniverses("series");
     void prefetchUniverses("books");
+    void prefetchUniverses("games");
   }, [mediaRootConfigured, profile]);
 
   useEffect(() => {
@@ -486,10 +499,12 @@ export default function App() {
       clearSeriesDashboardCache();
       clearMoviesDashboardCache();
       clearBooksDashboardCache();
+      clearGamesDashboardCache();
       void prefetchMusicDashboard({ force: true });
       void prefetchSeriesDashboard({ force: true });
       void prefetchMoviesDashboard({ force: true });
       void prefetchBooksDashboard({ force: true });
+      void prefetchGamesDashboard({ force: true });
       setSyncTick((t) => t + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

@@ -146,9 +146,19 @@ export default function MemberFormModal({
   );
   const [deathDate, setDeathDate] = useState("");
   const [mbid, setMbid] = useState("");
+  const [wikipediaUrl, setWikipediaUrl] = useState("");
+  const [musicbrainzUrl, setMusicbrainzUrl] = useState("");
+  const [wikidataUrl, setWikidataUrl] = useState("");
+  const [expandedSection, setExpandedSection] = useState<
+    null | "links" | "projects"
+  >(null);
   const [projectRows, setProjectRows] = useState<ProjectRow[]>([
     emptyProjectRow(bandId, bandName, true),
   ]);
+
+  const toggleSection = (section: "links" | "projects") => {
+    setExpandedSection((cur) => (cur === section ? null : section));
+  };
 
   useEffect(() => {
     fetchFilterOptions()
@@ -207,22 +217,50 @@ export default function MemberFormModal({
         );
         setDeathDate(d.death_date ?? "");
         setMbid(d.mbid ?? "");
+        setWikipediaUrl(d.urls?.wikipedia ?? "");
+        setMusicbrainzUrl(d.urls?.musicbrainz ?? "");
+        setWikidataUrl(d.urls?.wikidata ?? "");
         if (d.photo_url) setPhotoPreview(d.photo_url);
 
-        const rows: ProjectRow[] = d.participations.map((p) => ({
-          key: `arp-${p.participation_id}`,
-          participation_id: p.participation_id,
-          band_id: p.band_db_id ?? p.band_id ?? bandId,
-          band_name: p.name,
-          start: p.start ?? "",
-          end: p.end ?? "",
-          role_ids: labelsToRoleIds(p.roles ?? [], instOpts),
-          is_official: p.is_official ?? true,
-          is_founding: p.is_founding ?? false,
-          is_former: p.is_former ?? false,
-          is_touring: p.is_touring ?? false,
-          is_current_band: (p.band_db_id ?? p.band_id) === bandId,
+        // Current-band stints live in band_memberships (participations
+        // intentionally omits the page band). Load those first so Official /
+        // Touring / Founder / Former match the lineup tab the member is on.
+        const currentMemberships =
+          d.band_memberships?.length
+            ? d.band_memberships
+            : d.band_membership
+              ? [d.band_membership]
+              : [];
+        const rows: ProjectRow[] = currentMemberships.map((m) => ({
+          key: `arp-${m.participation_id}`,
+          participation_id: m.participation_id,
+          band_id: bandId,
+          band_name: bandName,
+          start: m.start ?? "",
+          end: m.end ?? "",
+          role_ids: labelsToRoleIds(m.roles ?? [], instOpts),
+          is_official: m.is_official ?? false,
+          is_founding: m.is_founding ?? false,
+          is_former: m.is_former ?? false,
+          is_touring: m.is_touring ?? false,
+          is_current_band: true,
         }));
+        for (const p of d.participations) {
+          rows.push({
+            key: `arp-${p.participation_id ?? `rel-${p.band_db_id ?? p.band_id}`}`,
+            participation_id: p.participation_id,
+            band_id: p.band_db_id ?? p.band_id ?? 0,
+            band_name: p.name,
+            start: p.start ?? "",
+            end: p.end ?? "",
+            role_ids: labelsToRoleIds(p.roles ?? [], instOpts),
+            is_official: p.is_official ?? true,
+            is_founding: p.is_founding ?? false,
+            is_former: p.is_former ?? false,
+            is_touring: p.is_touring ?? false,
+            is_current_band: false,
+          });
+        }
         if (!rows.length) {
           rows.push(emptyProjectRow(bandId, bandName, true));
         }
@@ -269,10 +307,14 @@ export default function MemberFormModal({
     // Always put the resolved display name in the search field (replaces a pasted MBID)
     setStageName(m.name);
     setMbid(m.mbid);
+    setMusicbrainzUrl(`https://musicbrainz.org/artist/${m.mbid}`);
     try {
       const detail = await fetchMusicBrainzArtist(m.mbid);
       setStageName(detail.name || m.name);
       setMbid(detail.mbid || m.mbid);
+      if (detail.mbid) {
+        setMusicbrainzUrl(`https://musicbrainz.org/artist/${detail.mbid}`);
+      }
       const legal = (detail.legal_name || "").trim();
       if (legal) {
         setName(legal);
@@ -373,6 +415,12 @@ export default function MemberFormModal({
       });
     }
 
+    const linkUrls = {
+      wikipedia: wikipediaUrl.trim(),
+      musicbrainz: musicbrainzUrl.trim(),
+      wikidata: wikidataUrl.trim(),
+    };
+
     setSaving(true);
     setError(null);
     try {
@@ -415,6 +463,7 @@ export default function MemberFormModal({
           birth_country_id: birthCountryId ? Number(birthCountryId) : null,
           death_date: deathStored,
           mbid,
+          urls: linkUrls,
         });
         if (photoFile) {
           await uploadArtistPhoto(newArtistId, photoFile);
@@ -429,6 +478,7 @@ export default function MemberFormModal({
           birth_country_id: birthCountryId ? Number(birthCountryId) : null,
           death_date: deathStored,
           mbid,
+          urls: linkUrls,
         });
         if (photoFile) {
           await uploadArtistPhoto(artistId, photoFile);
@@ -527,9 +577,23 @@ export default function MemberFormModal({
               />
 
               <div className="member-form__identity-fields">
-                <label>
-                  Stage / display name
+                <label className="member-form__field-row">
+                  <span className="member-form__field-label">Stage name</span>
                   <div className="member-form__stage-row">
+                    <input
+                      value={stageName}
+                      onChange={(e) => {
+                        setStageName(e.target.value);
+                        if (mbMatches.length) setMbMatches([]);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleMbSearch();
+                        }
+                      }}
+                      placeholder="Name or MusicBrainz ID"
+                    />
                     <button
                       type="button"
                       className="member-form__mb-search"
@@ -546,20 +610,6 @@ export default function MemberFormModal({
                         <IconSearch className="member-form__mb-search-icon" />
                       )}
                     </button>
-                    <input
-                      value={stageName}
-                      onChange={(e) => {
-                        setStageName(e.target.value);
-                        if (mbMatches.length) setMbMatches([]);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleMbSearch();
-                        }
-                      }}
-                      placeholder="Name or MusicBrainz ID"
-                    />
                   </div>
                 </label>
                 {mbMatches.length > 0 && (
@@ -584,28 +634,29 @@ export default function MemberFormModal({
                     ))}
                   </ul>
                 )}
-                <label>
-                  Birth / legal name
+                <label className="member-form__field-row">
+                  <span className="member-form__field-label">Full name</span>
                   <input value={name} onChange={(e) => setName(e.target.value)} />
                 </label>
-                <label>
-                  Aliases (semicolon-separated)
+                <label className="member-form__field-row">
+                  <span className="member-form__field-label">Other names</span>
                   <input
                     value={aliases}
                     onChange={(e) => setAliases(e.target.value)}
+                    placeholder="Use ; to add more"
                   />
                 </label>
                 <div className="member-form__dates">
-                  <label>
-                    Birth date
+                  <label className="member-form__field-row">
+                    <span className="member-form__field-label">Birth date</span>
                     <FlexibleDateInput
                       value={birthDate}
                       onChange={setBirthDate}
                       placeholder="YYYY/MM/DD"
                     />
                   </label>
-                  <label>
-                    Death date
+                  <label className="member-form__field-row">
+                    <span className="member-form__field-label">Death date</span>
                     <FlexibleDateInput
                       value={deathDate}
                       onChange={setDeathDate}
@@ -613,8 +664,8 @@ export default function MemberFormModal({
                     />
                   </label>
                 </div>
-                <label className="member-form__birthplace-label">
-                  Birth place
+                <label className="member-form__field-row member-form__birthplace-label">
+                  <span className="member-form__field-label">Birth place</span>
                   <div className="member-form__birthplace-row">
                     <input
                       value={birthPlace}
@@ -632,10 +683,72 @@ export default function MemberFormModal({
               </div>
             </div>
 
-            <section className="member-form__projects">
+            <section
+              className={`member-form__links${
+                expandedSection === "links" ? " is-expanded" : ""
+              }`}
+            >
+              <button
+                type="button"
+                className="member-form__section-heading"
+                aria-expanded={expandedSection === "links"}
+                onClick={() => toggleSection("links")}
+              >
+                Links
+              </button>
+              <div className="member-form__section-collapse" inert={expandedSection !== "links" ? true : undefined}>
+                <div className="member-form__section-collapse-inner">
+                  <div className="member-form__section-body">
+                    <label className="member-form__field-row">
+                      <span className="member-form__field-label">Wikipedia</span>
+                      <input
+                        type="url"
+                        value={wikipediaUrl}
+                        onChange={(e) => setWikipediaUrl(e.target.value)}
+                        placeholder="https://en.wikipedia.org/wiki/…"
+                      />
+                    </label>
+                    <label className="member-form__field-row">
+                      <span className="member-form__field-label">MusicBrainz</span>
+                      <input
+                        type="url"
+                        value={musicbrainzUrl}
+                        onChange={(e) => setMusicbrainzUrl(e.target.value)}
+                        placeholder="https://musicbrainz.org/artist/…"
+                      />
+                    </label>
+                    <label className="member-form__field-row">
+                      <span className="member-form__field-label">Wikidata</span>
+                      <input
+                        type="url"
+                        value={wikidataUrl}
+                        onChange={(e) => setWikidataUrl(e.target.value)}
+                        placeholder="https://www.wikidata.org/wiki/…"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section
+              className={`member-form__projects${
+                expandedSection === "projects" ? " is-expanded" : ""
+              }`}
+            >
               <div className="member-form__projects-head">
-                <h4>Related projects</h4>
-                <div className="member-form__projects-actions">
+                <button
+                  type="button"
+                  className="member-form__section-heading"
+                  aria-expanded={expandedSection === "projects"}
+                  onClick={() => toggleSection("projects")}
+                >
+                  Related projects
+                </button>
+                <div
+                  className="member-form__projects-actions"
+                  inert={expandedSection !== "projects" ? true : undefined}
+                >
                   <button
                     type="button"
                     className="btn btn--small"
@@ -653,143 +766,150 @@ export default function MemberFormModal({
                 </div>
               </div>
 
-              <div className="member-form__project-table">
-                <div className="member-form__project-cols" aria-hidden>
-                  <span className="member-form__col member-form__col--project">
-                    Project
-                  </span>
-                  <span className="member-form__col member-form__col--start">
-                    Start
-                  </span>
-                  <span className="member-form__col member-form__col--end">
-                    End
-                  </span>
-                  <span className="member-form__col member-form__col--roles">
-                    Roles
-                  </span>
-                  <span className="member-form__col member-form__col--membership">
-                    Membership
-                  </span>
-                  <span className="member-form__col member-form__col--action" />
-                </div>
-                {projectRows.map((row) => (
-                  <div key={row.key} className="member-form__project-row">
-                    <div className="member-form__col member-form__col--project member-form__project-band">
-                      {row.is_current_band ? (
-                        <input value={row.band_name} readOnly />
-                      ) : (
-                        <SearchableDropdown
-                          options={
-                            row.band_id && row.band_name
-                              ? [
-                                  {
-                                    value: String(row.band_id),
-                                    label: row.band_name,
-                                  },
-                                ]
-                              : []
-                          }
-                          value={row.band_id ? String(row.band_id) : ""}
-                          onChange={(v) => {
-                            updateRow(row.key, { band_id: Number(v) });
-                          }}
-                          placeholder="Search band…"
-                          minQueryLength={1}
-                          onSearch={searchBands}
-                        />
-                      )}
-                    </div>
-                    <FlexibleDateInput
-                      className="member-form__col member-form__col--start"
-                      value={row.start}
-                      onChange={(start) => updateRow(row.key, { start })}
-                      placeholder="YYYY/MM/DD"
-                    />
-                    <FlexibleDateInput
-                      className="member-form__col member-form__col--end"
-                      value={row.end}
-                      onChange={(end) => updateRow(row.key, { end })}
-                      placeholder="YYYY/MM/DD"
-                      title="YYYY/MM/DD, YYYY/MM, YYYY, or leave blank for Present"
-                    />
-                    <div className="member-form__col member-form__col--roles">
-                      <MultiSelectDropdown
-                        options={instrumentOptions}
-                        values={row.role_ids}
-                        onChange={(role_ids) =>
-                          updateRow(row.key, { role_ids })
-                        }
-                        placeholder="Instruments"
-                        portal
-                        visibleRows={5}
-                      />
-                    </div>
-                    <div className="member-form__col member-form__col--membership member-form__membership">
-                      <button
-                        type="button"
-                        className={`member-form__pill${
-                          row.is_official ? " member-form__pill--on" : ""
-                        }`}
-                        onClick={() =>
-                          updateRow(row.key, {
-                            is_official: !row.is_official,
-                          })
-                        }
-                      >
-                        Official
-                      </button>
-                      <button
-                        type="button"
-                        className={`member-form__pill${
-                          row.is_founding ? " member-form__pill--on" : ""
-                        }`}
-                        onClick={() =>
-                          updateRow(row.key, {
-                            is_founding: !row.is_founding,
-                          })
-                        }
-                      >
-                        Founder
-                      </button>
-                      <button
-                        type="button"
-                        className={`member-form__pill${
-                          row.is_touring ? " member-form__pill--on" : ""
-                        }`}
-                        onClick={() =>
-                          updateRow(row.key, {
-                            is_touring: !row.is_touring,
-                          })
-                        }
-                      >
-                        Touring
-                      </button>
-                      <button
-                        type="button"
-                        className={`member-form__pill${
-                          row.is_former ? " member-form__pill--on" : ""
-                        }`}
-                        onClick={() =>
-                          updateRow(row.key, { is_former: !row.is_former })
-                        }
-                      >
-                        Former
-                      </button>
-                    </div>
-                    {projectRows.length > 1 ? (
-                      <button
-                        type="button"
-                        className="member-form__col member-form__col--action member-form__remove-row"
-                        onClick={() => removeRow(row.key)}
-                        aria-label="Remove row"
-                      >
-                        ×
-                      </button>
-                    ) : (
+              <div
+                className="member-form__section-collapse"
+                inert={expandedSection !== "projects" ? true : undefined}
+              >
+                <div className="member-form__section-collapse-inner">
+                  <div className="member-form__project-table">
+                    <div className="member-form__project-cols" aria-hidden>
+                      <span className="member-form__col member-form__col--project">
+                        Project
+                      </span>
+                      <span className="member-form__col member-form__col--start">
+                        Start
+                      </span>
+                      <span className="member-form__col member-form__col--end">
+                        End
+                      </span>
+                      <span className="member-form__col member-form__col--roles">
+                        Roles
+                      </span>
+                      <span className="member-form__col member-form__col--membership">
+                        Membership
+                      </span>
                       <span className="member-form__col member-form__col--action" />
-                    )}
+                    </div>
+                    {projectRows.map((row) => (
+                      <div key={row.key} className="member-form__project-row">
+                        <div className="member-form__col member-form__col--project member-form__project-band">
+                          {row.is_current_band ? (
+                            <input value={row.band_name} readOnly />
+                          ) : (
+                            <SearchableDropdown
+                              options={
+                                row.band_id && row.band_name
+                                  ? [
+                                      {
+                                        value: String(row.band_id),
+                                        label: row.band_name,
+                                      },
+                                    ]
+                                  : []
+                              }
+                              value={row.band_id ? String(row.band_id) : ""}
+                              onChange={(v) => {
+                                updateRow(row.key, { band_id: Number(v) });
+                              }}
+                              placeholder="Search band…"
+                              minQueryLength={1}
+                              onSearch={searchBands}
+                            />
+                          )}
+                        </div>
+                        <FlexibleDateInput
+                          className="member-form__col member-form__col--start"
+                          value={row.start}
+                          onChange={(start) => updateRow(row.key, { start })}
+                          placeholder="YYYY/MM/DD"
+                        />
+                        <FlexibleDateInput
+                          className="member-form__col member-form__col--end"
+                          value={row.end}
+                          onChange={(end) => updateRow(row.key, { end })}
+                          placeholder="YYYY/MM/DD"
+                          title="YYYY/MM/DD, YYYY/MM, YYYY, or leave blank for Present"
+                        />
+                        <div className="member-form__col member-form__col--roles">
+                          <MultiSelectDropdown
+                            options={instrumentOptions}
+                            values={row.role_ids}
+                            onChange={(role_ids) =>
+                              updateRow(row.key, { role_ids })
+                            }
+                            placeholder="Instruments"
+                            portal
+                            visibleRows={5}
+                          />
+                        </div>
+                        <div className="member-form__col member-form__col--membership member-form__membership">
+                          <button
+                            type="button"
+                            className={`member-form__pill${
+                              row.is_official ? " member-form__pill--on" : ""
+                            }`}
+                            onClick={() =>
+                              updateRow(row.key, {
+                                is_official: !row.is_official,
+                              })
+                            }
+                          >
+                            Official
+                          </button>
+                          <button
+                            type="button"
+                            className={`member-form__pill${
+                              row.is_founding ? " member-form__pill--on" : ""
+                            }`}
+                            onClick={() =>
+                              updateRow(row.key, {
+                                is_founding: !row.is_founding,
+                              })
+                            }
+                          >
+                            Founder
+                          </button>
+                          <button
+                            type="button"
+                            className={`member-form__pill${
+                              row.is_touring ? " member-form__pill--on" : ""
+                            }`}
+                            onClick={() =>
+                              updateRow(row.key, {
+                                is_touring: !row.is_touring,
+                              })
+                            }
+                          >
+                            Touring
+                          </button>
+                          <button
+                            type="button"
+                            className={`member-form__pill${
+                              row.is_former ? " member-form__pill--on" : ""
+                            }`}
+                            onClick={() =>
+                              updateRow(row.key, { is_former: !row.is_former })
+                            }
+                          >
+                            Former
+                          </button>
+                        </div>
+                        {projectRows.length > 1 ? (
+                          <button
+                            type="button"
+                            className="member-form__col member-form__col--action member-form__remove-row"
+                            onClick={() => removeRow(row.key)}
+                            aria-label="Remove row"
+                          >
+                            ×
+                          </button>
+                        ) : (
+                          <span className="member-form__col member-form__col--action" />
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </section>
 

@@ -21,7 +21,7 @@ import type {
 } from "../../types";
 import ArtistCard from "../ArtistCard";
 import CatalogAlbumCard from "./CatalogAlbumCard";
-import PlaylistBoot from "../PlaylistBoot";
+import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
 import ExpandableFilterSearch from "../ExpandableFilterSearch";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import { AUDIO_CATEGORY_META } from "./artist/ArtistAudio";
@@ -112,6 +112,8 @@ type Props = {
   filterLabel?: string;
   onClearFilter?: () => void;
   loading?: boolean;
+  /** False until continent/country/genre/etc. has a selected value. */
+  filterReady?: boolean;
 };
 
 export default function ArtistBrowse({
@@ -163,6 +165,7 @@ export default function ArtistBrowse({
   filterLabel,
   onClearFilter,
   loading,
+  filterReady = true,
 }: Props) {
   const isAlbums =
     catalogScope === "albums" || catalogScope === "singles";
@@ -819,13 +822,23 @@ export default function ArtistBrowse({
       </div>
 
       <div className="artist-browse-scroll">
-        {loading && !isAlbums && artists.length === 0 && (
-          <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+        {!isAlbums && !filterReady ? (
+          <div className="artist-browse-empty">
+            <p className="muted">Choose a filter value to browse.</p>
+          </div>
+        ) : null}
+        {filterReady && loading && !isAlbums && artists.length === 0 && (
+          <ArtistCardSkeletonGrid orientation={orientation} count={8} />
         )}
         {isAlbums ? (
           <>
             {loading && albums.length === 0 && (
-              <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+              <ArtistCardSkeletonGrid
+                orientation={
+                  albumCardLayout === "banner" ? "landscape" : "portrait"
+                }
+                count={8}
+              />
             )}
             {albums.length > 0 && (
               <div
@@ -833,7 +846,9 @@ export default function ArtistBrowse({
                   !listMode && albumCardLayout === "banner"
                     ? " media-release-grid--banner"
                     : ""
-                }${listMode ? " media-release-grid--list" : ""}`}
+                }${listMode ? " media-release-grid--list" : ""}${
+                  loading ? " is-loading" : ""
+                }`}
               >
                 {albums.map((a) => {
                   const cardKey =
@@ -865,11 +880,13 @@ export default function ArtistBrowse({
           </>
         ) : (
           <>
-            {artists.length > 0 && (
+            {filterReady && artists.length > 0 && (
               <div
                 className={`artist-grid artist-grid--${
                   listMode ? "list" : orientation
-                }${listMode ? " artist-grid--list" : ""}`}
+                }${listMode ? " artist-grid--list" : ""}${
+                  loading ? " is-loading" : ""
+                }`}
               >
                 {artists.map((a) => (
                   <ArtistCard
@@ -883,7 +900,7 @@ export default function ArtistBrowse({
                 ))}
               </div>
             )}
-            {!artists.length && !loading && (
+            {filterReady && !artists.length && !loading && (
               <div className="artist-browse-empty">
                 <p className="muted">No media found</p>
               </div>

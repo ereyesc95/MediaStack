@@ -46,8 +46,10 @@ import {
   IconCollection,
   IconCollectionAdded,
   IconImport,
+  IconMediaFiles,
   IconMediaGames,
   IconMediaMusic,
+  IconUpload,
 } from "./MenuIcons";
 import FranchiseLinksModal from "./FranchiseLinksModal";
 
@@ -63,6 +65,15 @@ type Props = {
   showManageArtists?: boolean;
   onManageCatalog?: () => void;
   manageCatalogLabel?: string;
+  /** Files module: Upload / Select files / Manage files under My files. */
+  showManageFiles?: boolean;
+  manageFilesLabel?: string;
+  onFilesUpload?: () => void;
+  onFilesSelectToggle?: () => void;
+  filesSelectActive?: boolean;
+  onFilesSelectAll?: () => void;
+  filesSelectAllLabel?: string;
+  onManageFiles?: () => void;
   /** Games admin: organize loose ROMs at a platform root. */
   onOrganizeLooseRoms?: () => void;
   onAddPlaylist?: () => void;
@@ -217,6 +228,14 @@ export default function AppMenu({
   showManageArtists,
   onManageCatalog,
   manageCatalogLabel = "Manage Catalog",
+  showManageFiles = false,
+  manageFilesLabel = "My files",
+  onFilesUpload,
+  onFilesSelectToggle,
+  filesSelectActive = false,
+  onFilesSelectAll,
+  filesSelectAllLabel = "Select all",
+  onManageFiles,
   onOrganizeLooseRoms,
   onAddPlaylist,
   showAddPlaylist,
@@ -323,10 +342,14 @@ export default function AppMenu({
   const [embeddedEditReleaseOpen, setEmbeddedEditReleaseOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
+  const [manageFilesOpen, setManageFilesOpen] = useState(false);
   const [manageEventOpen, setManageEventOpen] = useState(false);
   useEffect(() => {
     if (collectionClearMode) setManageCollectionOpen(true);
   }, [collectionClearMode]);
+  useEffect(() => {
+    if (filesSelectActive) setManageFilesOpen(true);
+  }, [filesSelectActive]);
   const [customOpen, setCustomOpen] = useState(false);
   const [franchiseLinksOpen, setFranchiseLinksOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
@@ -1247,7 +1270,7 @@ export default function AppMenu({
               My artists
             </button>
           )}
-          {isAdmin && onManageCatalog && (
+          {isAdmin && onManageCatalog && !showManageFiles && (
             <button
               type="button"
               onClick={() => {
@@ -1258,6 +1281,77 @@ export default function AppMenu({
               <IconManageArtists className="menu-item-icon" />
               {manageCatalogLabel}
             </button>
+          )}
+          {isAdmin && showManageFiles && (
+            <>
+              <button
+                type="button"
+                className="menu-item-with-sub"
+                onClick={() => setManageFilesOpen((o) => !o)}
+              >
+                <IconMediaFiles className="menu-item-icon" />
+                {manageFilesLabel}
+                <span className="menu-chevron">
+                  {manageFilesOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              {manageFilesOpen && (
+                <div className="app-menu-submenu">
+                  {onFilesUpload ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFilesUpload();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconUpload className="menu-item-icon" />
+                      Upload
+                    </button>
+                  ) : null}
+                  {onFilesSelectToggle ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFilesSelectToggle();
+                        setOpen(false);
+                      }}
+                    >
+                      {filesSelectActive ? (
+                        <IconCheck className="menu-item-icon" />
+                      ) : (
+                        <IconSquare className="menu-item-icon" />
+                      )}
+                      Select files
+                    </button>
+                  ) : null}
+                  {filesSelectActive && onFilesSelectAll ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFilesSelectAll();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconCheck className="menu-item-icon" />
+                      {filesSelectAllLabel}
+                    </button>
+                  ) : null}
+                  {onManageFiles ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onManageFiles();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconManageArtists className="menu-item-icon" />
+                      Manage files
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </>
           )}
           {isAdmin && onOrganizeLooseRoms && (
             <button

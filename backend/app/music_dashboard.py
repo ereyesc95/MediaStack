@@ -232,21 +232,21 @@ def build_dashboard(db: Session, user_id: int) -> dict:
         band = db.get(Band, aid)
         if not band:
             continue
-        # Round / home icons: stable-random Photo - * per account
-        card = resolve_artist_card(
-            band.bnd_name, orientation="round", user_id=user_id
+        # One resolve returns all orientations; cache across dashboard/catalog.
+        card = _resolve_artist_card_cached(band.bnd_name, user_id=user_id)
+        photo = (
+            card.square_url
+            or card.photo_url
+            or card.portrait_url
+            or card.landscape_url
         )
-        portrait = resolve_artist_card(
-            band.bnd_name, orientation="portrait", user_id=user_id
-        )
-        photo = card.photo_url or portrait.photo_url
         top_artists.append(
             {
                 "id": band.bnd_id,
                 "name": band.bnd_name,
                 "play_count": count,
                 "photo_url": photo,
-                "portrait_url": portrait.photo_url or photo,
+                "portrait_url": card.portrait_url or photo,
                 "logo_url": card.logo_url,
                 "icon_url": card.icon_url,
                 "show_name_on_hover": False,
@@ -577,6 +577,35 @@ def _parse_country_id(field: str | None) -> int | None:
         return None
 
 
+_ARTIST_CARD_ART_TTL = 180.0
+# user_id + band name → (monotonic_ts, ArtistCardAssets)
+_ARTIST_CARD_ART_CACHE: dict[str, tuple[float, object]] = {}
+
+
+def clear_artist_card_art_cache() -> None:
+    global _ARTIST_CARD_ART_CACHE
+    _ARTIST_CARD_ART_CACHE = {}
+
+
+def _resolve_artist_card_cached(name: str, *, user_id: int):
+    """Reuse gallery resolves across filter clicks (disk scan is the slow part)."""
+    key = f"{user_id}\0{(name or '').casefold()}"
+    now = time.monotonic()
+    hit = _ARTIST_CARD_ART_CACHE.get(key)
+    if hit and now - hit[0] < _ARTIST_CARD_ART_TTL:
+        return hit[1]
+    card = resolve_artist_card(name, orientation="landscape", user_id=user_id)
+    _ARTIST_CARD_ART_CACHE[key] = (now, card)
+    # Bound memory if someone browses a huge library through many filters.
+    if len(_ARTIST_CARD_ART_CACHE) > 4000:
+        oldest = sorted(_ARTIST_CARD_ART_CACHE.items(), key=lambda kv: kv[1][0])[
+            :1000
+        ]
+        for k, _ in oldest:
+            _ARTIST_CARD_ART_CACHE.pop(k, None)
+    return card
+
+
 def list_artist_cards(
     db: Session,
     *,
@@ -631,9 +660,7 @@ def list_artist_cards(
     items = []
     for b in page_rows:
         # Orientation-independent slide; client picks aspect from multi-URL fields.
-        card = resolve_artist_card(
-            b.bnd_name, orientation="landscape", user_id=user_id
-        )
+        card = _resolve_artist_card_cached(b.bnd_name, user_id=user_id)
         items.append(
             {
                 "id": b.bnd_id,

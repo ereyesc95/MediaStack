@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import Counter
 from datetime import datetime
 
@@ -192,14 +193,29 @@ def _current_lineup_count(db: Session, band_id: int) -> int:
     )
 
 
+_GENDER_BAND_TTL = 120.0
+_GENDER_BAND_CACHE: dict[str, tuple[float, set[int]]] = {}
+
+
+def clear_gender_band_cache() -> None:
+    global _GENDER_BAND_CACHE
+    _GENDER_BAND_CACHE = {}
+
+
 def _band_ids_for_gender(db: Session, gender_key: str) -> set[int]:
     key = gender_key.strip().lower()
+    now = time.monotonic()
+    hit = _GENDER_BAND_CACHE.get(key)
+    if hit and now - hit[0] < _GENDER_BAND_TTL:
+        return set(hit[1])
+
     matching = {
         a.art_id
         for a in db.scalars(select(Artist)).all()
         if _artist_matches_gender(a, key)
     }
     if not matching:
+        _GENDER_BAND_CACHE[key] = (now, set())
         return set()
 
     band_ids: set[int] = set()
@@ -216,6 +232,7 @@ def _band_ids_for_gender(db: Session, gender_key: str) -> set[int]:
         if not _participation_has_vocals(arp):
             continue
         band_ids.add(arp.arp_fk_bands)
+    _GENDER_BAND_CACHE[key] = (now, set(band_ids))
     return band_ids
 
 

@@ -9,12 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.franchise_identity import (
-    enrich_catalog_with_artwork_home,
-    enrich_catalog_with_music_identity,
-)
+from app.franchise_identity import enrich_home_cards
 from app.franchise_index import normalize_franchise_slug
 from app.models import Country, Reproduction
+from app.module_catalog_cache import get_or_build_catalog
 from app.movies_catalog_meta import movie_vibe_rows
 from app.movies_index import build_movies_catalog
 from app.profile_scope import rep_user_filter
@@ -50,16 +48,18 @@ def build_movies_dashboard(
 ) -> dict:
     media_root = Path(settings.media_root) if settings.media_root else None
     catalog = (
-        build_movies_catalog(media_root) if media_root else {"franchises": [], "films": []}
+        get_or_build_catalog(
+            "movies",
+            media_root=media_root,
+            builder=lambda: build_movies_catalog(media_root),
+        )
+        if media_root and media_root.is_dir()
+        else {"franchises": [], "films": []}
     )
     from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
     from app.movies_catalog_meta import enrich_movies_catalog
 
     catalog = enrich_movies_catalog(db, catalog)
-    catalog = enrich_catalog_with_music_identity(
-        db, catalog, orientation="portrait", media_root=media_root
-    )
-    catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
     adult_subs = adult_subgenre_names_from_db(db)
     franchises = filter_adult_cards(
         catalog.get("franchises") or [],
@@ -262,6 +262,13 @@ def build_movies_dashboard(
                 "play_count": count,
             }
         )
+
+    top_franchises = enrich_home_cards(
+        db, top_franchises, media_root=media_root, orientation="portrait"
+    )
+    top_series = enrich_home_cards(
+        db, top_series, media_root=media_root, orientation="portrait"
+    )
 
     return {
         "top_episodes": top_episodes,

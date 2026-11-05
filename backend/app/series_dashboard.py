@@ -9,12 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.franchise_identity import (
-    enrich_catalog_with_artwork_home,
-    enrich_catalog_with_music_identity,
-)
+from app.franchise_identity import enrich_home_cards
 from app.franchise_index import normalize_franchise_slug
 from app.models import Country, Reproduction, Series
+from app.module_catalog_cache import get_or_build_catalog
 from app.play_stats import subgenre_image_url
 from app.profile_scope import rep_user_filter
 from app.series_index import build_series_catalog
@@ -96,18 +94,23 @@ def build_series_dashboard(
     db: Session, user_id: int, *, nsfw_unlocked: bool = False
 ) -> dict:
     media_root = Path(settings.media_root) if settings.media_root else None
-    catalog = build_series_catalog(media_root) if media_root else {"franchises": []}
+    catalog = (
+        get_or_build_catalog(
+            "series",
+            media_root=media_root,
+            builder=lambda: build_series_catalog(media_root),
+        )
+        if media_root and media_root.is_dir()
+        else {"franchises": []}
+    )
     from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
     from app.series_catalog_meta import (
         enrich_catalog_metadata,
         filter_franchise_subseries_lists,
     )
 
+    # DB meta only here — music/artwork identity runs on the ~10 home cards later.
     catalog = enrich_catalog_metadata(db, catalog)
-    catalog = enrich_catalog_with_music_identity(
-        db, catalog, orientation="portrait", media_root=media_root
-    )
-    catalog = enrich_catalog_with_artwork_home(catalog, media_root=media_root)
     adult_subs = adult_subgenre_names_from_db(db)
     franchises = filter_adult_cards(
         catalog.get("franchises") or [],
@@ -403,6 +406,13 @@ def build_series_dashboard(
                 "play_count": count,
             }
         )
+
+    top_franchises = enrich_home_cards(
+        db, top_franchises, media_root=media_root, orientation="portrait"
+    )
+    top_series = enrich_home_cards(
+        db, top_series, media_root=media_root, orientation="portrait"
+    )
 
     return {
         "top_episodes": top_episodes,

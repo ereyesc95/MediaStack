@@ -1781,6 +1781,8 @@ export async function patchArtist(
     birth_country_id?: number | null;
     death_date?: string;
     mbid?: string;
+    /** Member Links: wikipedia / musicbrainz / wikidata (empty string clears). */
+    urls?: Record<string, string>;
   }
 ) {
   return request(`${API}/music/artists/${id}`, {

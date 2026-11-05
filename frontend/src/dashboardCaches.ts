@@ -1,4 +1,6 @@
 import { clearBooksDashboardCache } from "./booksDashboardCache";
+import { clearCollectionPresenceCache } from "./collectionPresenceCache";
+import { clearGamesDashboardCache } from "./gamesDashboardCache";
 import { clearMoviesDashboardCache } from "./moviesDashboardCache";
 import { clearMusicDashboardCache } from "./musicDashboardCache";
 import { clearSeriesDashboardCache } from "./seriesDashboardCache";
@@ -16,6 +18,8 @@ export function clearAllDashboardCaches(): void {
   clearSeriesDashboardCache();
   clearMoviesDashboardCache();
   clearBooksDashboardCache();
+  clearGamesDashboardCache();
+  clearCollectionPresenceCache();
   clearUniversesCache();
   clearRouteEntityCache();
   // Leaf / franchise About + exclusive galleries include NSFW-gated payloads —

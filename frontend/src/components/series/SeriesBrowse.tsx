@@ -18,7 +18,7 @@ import SearchableDropdown, {
   type DropdownOption,
 } from "../SearchableDropdown";
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
-import PlaylistBoot from "../PlaylistBoot";
+import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import { getStoredProfile } from "../../auth";
 import { filterAdultCards } from "../../adultContent";
@@ -1328,7 +1328,14 @@ export default function SeriesBrowse({
 
       <div className="artist-browse-scroll">
         {loading && filtered.length === 0 ? (
-          <PlaylistBoot className="playlist-boot--compact" label="Loading…" />
+          <ArtistCardSkeletonGrid
+            orientation={
+              orientation === "list" || orientation === "badge"
+                ? "portrait"
+                : orientation
+            }
+            count={8}
+          />
         ) : null}
         {!loading && !filterReady ? (
           <div className="artist-browse-empty">

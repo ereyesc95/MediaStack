@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchGamesCatalog,
-  fetchGamesDashboard,
   fetchGamesFilterOptions,
   regenerateGamesPlatformIcons,
   resolveBooksPath,
   resolveMoviesPath,
 } from "../../api";
+import {
+  getCachedGamesDashboard,
+  prefetchGamesDashboard,
+} from "../../gamesDashboardCache";
 import { getCachedUniverses, prefetchUniverses } from "../../universesCache";
 import {
   loadOwnershipIndex,
@@ -148,7 +151,9 @@ export default function GamesModule({
     () => (getCachedUniverses("games") || []).filter((u) => u.has_games)
   );
   const [developer, setDeveloper] = useState("");
-  const [dashboard, setDashboard] = useState<SeriesDashboard | null>(null);
+  const [dashboard, setDashboard] = useState<SeriesDashboard | null>(
+    () => getCachedGamesDashboard()
+  );
   const [dashLoading, setDashLoading] = useState(false);
   const [filterOptions, setFilterOptions] =
     useState<SeriesFilterOptions | null>(null);
@@ -243,55 +248,69 @@ export default function GamesModule({
       .finally(() => setCatalogLoading(false));
   }, []);
 
-  const loadDashboard = useCallback(() => {
-    setDashLoading(true);
-    void fetchGamesDashboard(getRecentGameIds())
+  const loadDashboard = useCallback((force = false) => {
+    const cached = !force ? getCachedGamesDashboard() : null;
+    if (cached) {
+      setDashboard(cached);
+      setDashLoading(false);
+    } else {
+      setDashLoading(true);
+    }
+    void prefetchGamesDashboard({
+      force,
+      recentIds: getRecentGameIds(),
+    })
       .then((d) => setDashboard(d))
-      .catch(() => setDashboard(null))
+      .catch(() => {
+        if (!cached) setDashboard(null);
+      })
       .finally(() => setDashLoading(false));
   }, []);
 
   useEffect(() => {
     clearMediaTheme(userId);
-    loadDashboard();
-    loadCatalog();
-    void Promise.all([fetchGamesFilterOptions(), fetchGamesCatalog()])
-      .then(([opts, catalog]) => {
-        const used = new Set(
-          (catalog.games || catalog.films || [])
-            .flatMap((g) => (g as { genre_names?: string[] }).genre_names || [])
-            .map((n) => String(n).trim().toLowerCase())
-            .filter(Boolean)
-        );
-        // Never fall back to all_subgenre_groups (full seed taxonomy).
-        const sourceGroups = opts.subgenre_groups || [];
-        const groups = used.size
-          ? sourceGroups
-              .map((group) => ({
-                ...group,
-                items: (group.items || []).filter((item) =>
-                  used.has(String(item.name || "").trim().toLowerCase())
-                ),
+    loadDashboard(syncTick > 0);
+    // Defer full catalog/filter work until Catalog is opened, except when we
+    // already need franchises for a deep link — keep prior light home path.
+    if (tab === "catalog" || franchiseId || gameId) {
+      loadCatalog();
+      void Promise.all([fetchGamesFilterOptions(), fetchGamesCatalog()])
+        .then(([opts, catalog]) => {
+          const used = new Set(
+            (catalog.games || catalog.films || [])
+              .flatMap((g) => (g as { genre_names?: string[] }).genre_names || [])
+              .map((n) => String(n).trim().toLowerCase())
+              .filter(Boolean)
+          );
+          const sourceGroups = opts.subgenre_groups || [];
+          const groups = used.size
+            ? sourceGroups
+                .map((group) => ({
+                  ...group,
+                  items: (group.items || []).filter((item) =>
+                    used.has(String(item.name || "").trim().toLowerCase())
+                  ),
+                }))
+                .filter((group) => (group.items || []).length > 0)
+            : sourceGroups;
+          setFilterOptions({
+            ...opts,
+            all_subgenre_groups: groups,
+            subgenre_groups: groups,
+            genres: groups.flatMap((g) =>
+              (g.items || []).map((item) => ({
+                id: item.id,
+                name: item.name || "",
               }))
-              .filter((group) => (group.items || []).length > 0)
-          : sourceGroups;
-        setFilterOptions({
-          ...opts,
-          all_subgenre_groups: groups,
-          subgenre_groups: groups,
-          genres: groups.flatMap((g) =>
-            (g.items || []).map((item) => ({
-              id: item.id,
-              name: item.name || "",
-            }))
-          ),
-        });
-      })
-      .catch(() => setFilterOptions(null));
-    void prefetchUniverses("games", { force: true }).then((u) => {
+            ),
+          });
+        })
+        .catch(() => setFilterOptions(null));
+    }
+    void prefetchUniverses("games").then((u) => {
       if (u) setUniverses(u.filter((uni) => Boolean(uni.has_games)));
     });
-  }, [loadCatalog, loadDashboard, syncTick, userId]);
+  }, [loadCatalog, loadDashboard, syncTick, userId, tab, franchiseId, gameId]);
 
   useEffect(() => {
     if (franchiseId || gameId) setTab("catalog");

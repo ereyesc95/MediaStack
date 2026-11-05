@@ -125,11 +125,6 @@ export default function ManageFilesModal({
             </button>
           </div>
 
-          <p className="muted manage-files-modal__hint">
-            Tabs map to folders under <code>Files/</code> on disk. Nested
-            folders are optional subfolders inside a tab.
-          </p>
-
           {error ? <p className="error">{error}</p> : null}
 
           <div className="manage-files-modal__section">
@@ -163,10 +158,7 @@ export default function ManageFilesModal({
           </div>
 
           <div className="manage-files-modal__section">
-            <h4>
-              Subfolder
-              {folder ? `: ${folder.label}` : " (select one in the bar)"}
-            </h4>
+            <h4>Subfolder{folder ? `: ${folder.label}` : ""}</h4>
             <div className="modal-actions-row">
               <button
                 type="button"
@@ -196,7 +188,7 @@ export default function ManageFilesModal({
           </div>
 
           {prompt ? (
-            <div className="manage-files-modal__prompt">
+            <div className="manage-files-modal__prompt artist-admin-form">
               <label>
                 Name
                 <input

@@ -53,14 +53,16 @@ function toArtistCard(it: SeriesRelatedShow): ArtistCardType {
       ? Number(it.date_iso.slice(0, 4)) || null
       : null;
   const cover = it.cover_url || it.poster_url || null;
+  const logo = it.logo_url || null;
+  const icon = it.icon_url || null;
   return {
     id: Number(it.id ?? it.tmdb_id ?? 0) || 0,
     name: it.title || it.name || "Untitled",
     photo_url: cover,
-    logo_url: null,
-    icon_url: null,
+    logo_url: logo,
+    icon_url: icon,
     era_year: year,
-    show_name_on_hover: true,
+    show_name_on_hover: !(logo || icon),
     starting_dates: it.date_iso || null,
   };
 }

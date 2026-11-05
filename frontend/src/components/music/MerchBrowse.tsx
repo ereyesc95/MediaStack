@@ -193,14 +193,25 @@ export default function MerchBrowse({
         />
       </div>
 
-      {loading ? <p className="muted merch-browse__status">Loading merch…</p> : null}
       {error ? <p className="error merch-browse__status">{error}</p> : null}
+      {loading && items.length === 0 ? (
+        <div
+          className={`merch-browse__grid merch-browse__grid--${orientation} merch-browse__grid--skeleton`}
+          aria-hidden
+        >
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="merch-browse__card merch-browse__card--skeleton" />
+          ))}
+        </div>
+      ) : null}
       {!loading && !error && filtered.length === 0 ? (
         <p className="muted merch-browse__status">No merch items yet.</p>
       ) : null}
 
       <div
-        className={`merch-browse__grid merch-browse__grid--${orientation}`}
+        className={`merch-browse__grid merch-browse__grid--${orientation}${
+          loading && items.length > 0 ? " is-loading" : ""
+        }`}
       >
         {filtered.map((item, idx) => {
           const canFlip = Boolean(item.has_back && item.back_url);

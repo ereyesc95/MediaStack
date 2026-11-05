@@ -14,7 +14,7 @@ import type {
   MediaTabItem,
   ReleaseCardLayout,
 } from "../../../types";
-import PlaylistBoot from "../../PlaylistBoot";
+import ArtistCardSkeletonGrid from "../../ArtistCardSkeletonGrid";
 import BillboardText from "../../BillboardText";
 import {
   filterByOfficial,
@@ -402,7 +402,16 @@ export default function ArtistMediaGrid({
   }, [category, showEditionBar, officialOnly]);
 
   if (loading && !data) {
-    return <PlaylistBoot className="playlist-boot--compact" label="Loading…" />;
+    return (
+      <ArtistCardSkeletonGrid
+        orientation={
+          cardLayout === "banner" || cardLayout === "landscape"
+            ? "landscape"
+            : "portrait"
+        }
+        count={8}
+      />
+    );
   }
   if (error) {
     return <p className="error artist-section-empty">{error}</p>;

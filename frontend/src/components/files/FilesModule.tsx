@@ -29,9 +29,14 @@ import AppMenu from "../AppMenu";
 import ConfirmDialog from "../ConfirmDialog";
 import ModalPortal from "../ModalPortal";
 import {
+  IconCopy,
   IconFileTags,
   IconList,
+  IconMore,
+  IconMove,
+  IconPencil,
   IconSearch,
+  IconTrash,
 } from "../MenuIcons";
 import ManageFilesModal from "./ManageFilesModal";
 
@@ -107,6 +112,8 @@ export default function FilesModule({
   const [deletePaths, setDeletePaths] = useState<string[]>([]);
   const [deleteNames, setDeleteNames] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [rowActionsId, setRowActionsId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchRootRef = useRef<HTMLDivElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -170,11 +177,25 @@ export default function FilesModule({
     setSearch("");
     setSearchOpen(false);
     setSelectedIds([]);
+    setSelectMode(false);
+    setRowActionsId(null);
   }, [activeTab]);
 
   useEffect(() => {
     setSelectedIds([]);
+    setRowActionsId(null);
   }, [nestedFilter, search]);
+
+  useEffect(() => {
+    if (!rowActionsId) return;
+    function onDoc(e: MouseEvent) {
+      const el = e.target as Element | null;
+      if (el?.closest?.(".files-module__row-actions")) return;
+      setRowActionsId(null);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [rowActionsId]);
 
   useEffect(() => {
     if (searchOpen) searchRef.current?.focus();
@@ -416,6 +437,15 @@ export default function FilesModule({
               )}
               {sortLabel}
             </button>
+            {isAdmin && activeTab ? (
+              <input
+                ref={uploadRef}
+                type="file"
+                multiple
+                className="sr-only"
+                onChange={(e) => void handleUpload(e.target.files)}
+              />
+            ) : null}
             <AppMenu
               isAdmin={isAdmin}
               onSwitchProfile={onSwitchProfile}
@@ -423,10 +453,31 @@ export default function FilesModule({
               onImport={onImport}
               onSync={onSync ?? (() => {})}
               onChooseSource={onChooseSource}
-              onManageCatalog={
-                isAdmin ? () => setManageOpen(true) : undefined
+              showManageFiles={isAdmin}
+              onFilesUpload={
+                activeTab ? () => uploadRef.current?.click() : undefined
               }
-              manageCatalogLabel="Manage Files"
+              onFilesSelectToggle={
+                activeTab
+                  ? () => {
+                      setSelectMode((prev) => {
+                        if (prev) setSelectedIds([]);
+                        return !prev;
+                      });
+                      setRowActionsId(null);
+                    }
+                  : undefined
+              }
+              filesSelectActive={selectMode}
+              onFilesSelectAll={
+                selectMode && filtered.length > 0
+                  ? toggleSelectAllVisible
+                  : undefined
+              }
+              filesSelectAllLabel={
+                allVisibleSelected ? "Clear selection" : "Select all"
+              }
+              onManageFiles={() => setManageOpen(true)}
             />
           </>
         }
@@ -462,79 +513,58 @@ export default function FilesModule({
         </div>
       ) : null}
 
+      {isAdmin && selectMode && selectedCount > 0 ? (
+        <div
+          className="filter-subbar filter-subbar--spread files-module__selection-bar"
+          role="toolbar"
+          aria-label="Selection"
+        >
+          <button
+            type="button"
+            className="files-module__sel-clear"
+            disabled={fileBusy}
+            onClick={() => setSelectedIds([])}
+          >
+            Clear
+            <span className="files-module__sel-dot" aria-hidden>
+              ·
+            </span>
+            <span className="files-module__sel-count" aria-live="polite">
+              {selectedCount} selected
+            </span>
+          </button>
+          <button
+            type="button"
+            disabled={fileBusy}
+            onClick={() => openTransfer(selectedIds, "move")}
+          >
+            MOVE
+          </button>
+          <button
+            type="button"
+            disabled={fileBusy}
+            onClick={() => openTransfer(selectedIds, "copy")}
+          >
+            COPY
+          </button>
+          <button
+            type="button"
+            disabled={fileBusy}
+            onClick={() => openDelete(selectedIds)}
+          >
+            DELETE
+          </button>
+        </div>
+      ) : null}
+
       <div className="files-module__body">
         {loading ? <p className="muted">Loading…</p> : null}
         {error ? <p className="error">{error}</p> : null}
         {!loading && !error && visibleTabs.length === 0 ? (
           <p className="muted files-module__empty">
             No folders yet. Add folders under Files/ on disk
-            {isAdmin ? " or use Manage Files." : "."}
+            {isAdmin ? " or use Manage files." : "."}
           </p>
-        ) : null}
-        {isAdmin && activeTab ? (
-          <div className="files-module__toolbar">
-            <input
-              ref={uploadRef}
-              type="file"
-              multiple
-              className="sr-only"
-              onChange={(e) => void handleUpload(e.target.files)}
-            />
-            <button
-              type="button"
-              className="btn"
-              disabled={fileBusy}
-              onClick={() => uploadRef.current?.click()}
-            >
-              {fileBusy ? "Working…" : "Upload"}
-            </button>
-            {filtered.length > 0 ? (
-              <button
-                type="button"
-                className="ghost"
-                disabled={fileBusy}
-                onClick={toggleSelectAllVisible}
-              >
-                {allVisibleSelected ? "Clear selection" : "Select all"}
-              </button>
-            ) : null}
-            {selectedCount > 0 ? (
-              <>
-                <span className="muted files-module__sel-count">
-                  {selectedCount} selected
-                </span>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={fileBusy}
-                  onClick={() => openTransfer(selectedIds, "move")}
-                >
-                  Move
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={fileBusy}
-                  onClick={() => openTransfer(selectedIds, "copy")}
-                >
-                  Copy
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={fileBusy}
-                  onClick={() => openDelete(selectedIds)}
-                >
-                  Delete
-                </button>
-              </>
-            ) : null}
-            {nestedFilter !== "all" ? (
-              <span className="muted files-module__upload-hint">
-                Upload → {nested.find((n) => n.id === nestedFilter)?.label || nestedFilter}
-              </span>
-            ) : null}
-          </div>
         ) : null}
         {!loading && !error && activeTab && filtered.length === 0 ? (
           <p className="muted files-module__empty">No files in this folder.</p>
@@ -543,12 +573,15 @@ export default function FilesModule({
           <ul className="files-module__list">
             {filtered.map((item) => {
               const checked = selectedIds.includes(item.id);
+              const actionsOpen = rowActionsId === item.id;
               return (
                 <li
                   key={item.id}
-                  className={`files-module__row${checked ? " is-selected" : ""}`}
+                  className={`files-module__row${
+                    checked ? " is-selected" : ""
+                  }${actionsOpen ? " is-actions-open" : ""}`}
                 >
-                  {isAdmin ? (
+                  {isAdmin && selectMode ? (
                     <label className="files-module__check">
                       <input
                         type="checkbox"
@@ -568,43 +601,77 @@ export default function FilesModule({
                     <span className="files-module__file-name">{item.name}</span>
                   </button>
                   {isAdmin ? (
-                    <div className="files-module__actions">
-                      <button
-                        type="button"
-                        className="ghost"
-                        disabled={fileBusy}
-                        onClick={() => {
-                          setModalError(null);
-                          setRenameTarget(item);
-                          setRenameValue(item.name);
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        disabled={fileBusy}
-                        onClick={() => openTransfer([item.id], "move")}
-                      >
-                        Move
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        disabled={fileBusy}
-                        onClick={() => openTransfer([item.id], "copy")}
-                      >
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        disabled={fileBusy}
-                        onClick={() => openDelete([item.id])}
-                      >
-                        Delete
-                      </button>
+                    <div className="files-module__row-actions">
+                      {actionsOpen ? (
+                        <>
+                          <button
+                            type="button"
+                            className="files-module__icon-btn"
+                            disabled={fileBusy}
+                            title="Rename"
+                            aria-label="Rename"
+                            onClick={() => {
+                              setModalError(null);
+                              setRenameTarget(item);
+                              setRenameValue(item.name);
+                              setRowActionsId(null);
+                            }}
+                          >
+                            <IconPencil />
+                          </button>
+                          <button
+                            type="button"
+                            className="files-module__icon-btn"
+                            disabled={fileBusy}
+                            title="Move"
+                            aria-label="Move"
+                            onClick={() => {
+                              openTransfer([item.id], "move");
+                              setRowActionsId(null);
+                            }}
+                          >
+                            <IconMove />
+                          </button>
+                          <button
+                            type="button"
+                            className="files-module__icon-btn"
+                            disabled={fileBusy}
+                            title="Copy"
+                            aria-label="Copy"
+                            onClick={() => {
+                              openTransfer([item.id], "copy");
+                              setRowActionsId(null);
+                            }}
+                          >
+                            <IconCopy />
+                          </button>
+                          <button
+                            type="button"
+                            className="files-module__icon-btn files-module__icon-btn--danger"
+                            disabled={fileBusy}
+                            title="Delete"
+                            aria-label="Delete"
+                            onClick={() => {
+                              openDelete([item.id]);
+                              setRowActionsId(null);
+                            }}
+                          >
+                            <IconTrash />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="files-module__icon-btn files-module__icon-btn--more"
+                          disabled={fileBusy}
+                          title="File actions"
+                          aria-label={`Actions for ${item.name}`}
+                          aria-expanded={false}
+                          onClick={() => setRowActionsId(item.id)}
+                        >
+                          <IconMore />
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </li>

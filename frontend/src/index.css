@@ -1236,6 +1236,15 @@ input {
   align-self: stretch;
 }
 
+.module-top-bar__tabs {
+  transition: opacity 0.16s ease;
+}
+
+.module-top-bar__tabs--pending {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .module-top-bar__center {
   align-items: center;
   min-width: 0;
@@ -4935,6 +4944,13 @@ input {
   gap: 0;
   background: transparent;
   width: 100%;
+  transition: opacity 0.18s ease;
+}
+
+.artist-grid.is-loading,
+.media-release-grid.is-loading {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .artist-grid--landscape {
@@ -6783,6 +6799,11 @@ input {
   --lineup-row-gap: 0;
 }
 
+.artist-page--mobile-portrait .artist-lineup-grid[data-count="1"] .artist-lineup-card {
+  /* Solo circle: span both columns so it centers instead of sitting in col 1 */
+  grid-column: 1 / -1;
+}
+
 .artist-page--mobile-portrait .artist-lineup-row {
   display: contents;
 }
@@ -7755,6 +7776,42 @@ input {
 .artist-related__empty {
   text-align: center;
   margin-top: 1rem;
+}
+
+.artist-card-skeleton-grid {
+  pointer-events: none;
+}
+
+.artist-card--skeleton {
+  min-height: 0;
+  border: none;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  animation: artist-card-skeleton-pulse 1.1s ease-in-out infinite;
+}
+
+.artist-card--skeleton.artist-card--portrait {
+  aspect-ratio: 2 / 3;
+}
+
+.artist-card--skeleton.artist-card--landscape,
+.artist-card--skeleton.artist-card--banner {
+  aspect-ratio: 16 / 9;
+}
+
+.artist-card--skeleton.artist-card--icons,
+.artist-card--skeleton.artist-card--round {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+@keyframes artist-card-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 .artist-related-card-wrap {
@@ -9438,6 +9495,8 @@ input {
   display: flex;
   align-items: stretch;
   gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .member-form__stage-row input {
@@ -9454,6 +9513,7 @@ input {
   min-height: 2.35rem;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 4px;
   background: color-mix(in srgb, var(--text) 8%, transparent);
   color: var(--text);
   cursor: pointer;
@@ -9479,7 +9539,7 @@ input {
 }
 
 .member-form__mb-matches {
-  margin: 0;
+  margin: 0 0 0 calc(5.75rem + 0.65rem);
   list-style: none;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
@@ -9510,7 +9570,7 @@ input {
 .member-form__dates {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  gap: 0.65rem 1rem;
 }
 
 .member-form input.is-invalid,
@@ -9529,7 +9589,6 @@ input {
 
 .member-form__projects-head h4 {
   margin: 0;
-  font-size: 0.95rem;
 }
 
 .member-form__projects-actions {
@@ -9547,10 +9606,105 @@ input {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.member-form__birthplace-label {
-  grid-column: 1 / -1;
+.member-form__section-heading {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.member-form__section-heading:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.member-form__section-heading:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.member-form__section-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+
+.member-form__links.is-expanded .member-form__section-collapse,
+.member-form__projects.is-expanded .member-form__section-collapse {
+  grid-template-rows: 1fr;
+}
+
+.member-form__section-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.member-form__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.45rem;
+}
+
+.member-form__links {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.15rem;
+  margin-bottom: 0.55rem;
+}
+
+.member-form__projects {
+  margin-top: 0.15rem;
+}
+
+.member-form__projects-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.member-form__projects.is-expanded .member-form__projects-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.member-form__projects .member-form__project-table {
+  padding-top: 0.35rem;
+}
+
+/* Beat `.artist-admin-form label` column stack — label left of field. */
+.artist-admin-form.member-form label.member-form__field-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.member-form__field-label {
+  flex: 0 0 5.75rem;
+  line-height: 1.2;
+}
+
+.artist-admin-form.member-form label.member-form__field-row > input,
+.artist-admin-form.member-form label.member-form__field-row > .member-form__stage-row,
+.artist-admin-form.member-form label.member-form__field-row > .member-form__birthplace-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin: 0;
 }
 
 .member-form__project-cols,
@@ -9588,8 +9742,7 @@ input {
 
 .member-form__project-cols {
   font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--text-muted);
   padding-bottom: 0.15rem;
   border-bottom: 1px solid var(--border);
@@ -9674,7 +9827,7 @@ input {
   align-self: center;
   width: 1.75rem;
   height: 1.75rem;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
@@ -31886,6 +32039,24 @@ button.lyrics-status-badge--icon-only {
   position: relative;
   margin: 0;
 }
+.merch-browse__card--skeleton {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  animation: artist-card-skeleton-pulse 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+.merch-browse__grid--square .merch-browse__card--skeleton {
+  aspect-ratio: 1 / 1;
+}
+.merch-browse__grid--portrait .merch-browse__card--skeleton {
+  aspect-ratio: 2 / 3;
+}
+.merch-browse__grid--landscape .merch-browse__card--skeleton {
+  aspect-ratio: 16 / 9;
+}
+.merch-browse__grid.is-loading {
+  opacity: 0.72;
+  transition: opacity 0.16s ease;
+}
 .merch-browse__card-media {
   appearance: none;
   border: 0;
@@ -33060,23 +33231,22 @@ button.lyrics-status-badge--icon-only {
 .files-module__tab-select select:focus {
   outline: none;
 }
-.files-module__nested-bar {
+.files-module__nested-bar,
+.files-module__selection-bar {
   flex-shrink: 0;
   background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
 }
 .files-module__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 0.85rem 1rem 1.25rem;
+  background: var(--bg);
 }
 .files-module__empty {
   margin: 1.5rem 0;
   text-align: center;
-}
-.manage-files-modal__hint {
-  margin: 0 0 0.85rem;
-  font-size: 0.9rem;
 }
 .manage-files-modal__section {
   margin-bottom: 1rem;
@@ -33090,14 +33260,29 @@ button.lyrics-status-badge--icon-only {
   padding-top: 0.75rem;
   border-top: 1px solid var(--border, rgba(127, 127, 127, 0.35));
 }
-.manage-files-modal__prompt label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 0.65rem;
+.files-module__selection-bar {
+  align-items: stretch;
 }
-.manage-files-modal__prompt input {
-  padding: 0.4rem 0.55rem;
+.files-module__selection-bar .files-module__sel-clear {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  letter-spacing: 0.04em;
+}
+.files-module__selection-bar .files-module__sel-dot {
+  color: var(--text-muted);
+  font-weight: 400;
+  opacity: 0.65;
+  line-height: 1;
+}
+.files-module__selection-bar .files-module__sel-count {
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  line-height: 1.2;
+  opacity: 0.9;
 }
 .files-module__list {
   list-style: none;
@@ -33121,23 +33306,13 @@ button.lyrics-status-badge--icon-only {
     column-count: 1;
   }
 }
-.files-module__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem 0.65rem;
-  margin-bottom: 0.65rem;
-}
-.files-module__sel-count,
-.files-module__upload-hint {
-  font-size: 0.85em;
-}
 .files-module__row {
   break-inside: avoid;
   display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.15rem 0;
+  min-height: 1.6rem;
 }
 .files-module__row.is-selected .files-module__file-name {
   color: var(--accent, #8cf);
@@ -33172,19 +33347,55 @@ button.lyrics-status-badge--icon-only {
 .files-module__file-name {
   word-break: break-word;
 }
-.files-module__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem;
+.files-module__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
   flex-shrink: 0;
+  min-height: 1.35rem;
 }
-.files-module__actions .ghost {
-  font-size: 0.72rem;
-  padding: 0.1rem 0.35rem;
-  opacity: 0.75;
+.files-module__icon-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.14s ease, color 0.14s ease, background 0.14s ease;
 }
-.files-module__actions .ghost:hover {
-  opacity: 1;
+.files-module__row:hover .files-module__icon-btn--more,
+.files-module__row:focus-within .files-module__icon-btn--more,
+.files-module__row.is-actions-open .files-module__icon-btn {
+  opacity: 0.45;
+  pointer-events: auto;
+}
+.files-module__row:hover .files-module__icon-btn--more:hover,
+.files-module__row.is-actions-open .files-module__icon-btn:hover,
+.files-module__row.is-actions-open .files-module__icon-btn:focus-visible {
+  opacity: 0.95;
+  color: var(--accent, #8cf);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.files-module__icon-btn--danger:hover,
+.files-module__icon-btn--danger:focus-visible {
+  color: color-mix(in srgb, #f66 80%, var(--text)) !important;
+}
+.files-module__icon-btn:disabled {
+  opacity: 0.25 !important;
+  pointer-events: none;
+}
+.files-module__icon-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 .franchise-links-modal {
   max-width: min(720px, 96vw);

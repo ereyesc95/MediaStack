@@ -26,6 +26,7 @@ import {
   useVirtualWindow,
 } from "./collectionHover";
 
+import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
 import VinylShelf from "./VinylShelf";
 
 type BrowseView = "list" | "cover" | "banner" | "shelf";
@@ -1790,13 +1791,16 @@ export default function CollectionBrowse({
         </div>
       ) : view === "shelf" ? (
         loading && items.length === 0 ? (
-          <p className="muted collection-browse__empty">Loading…</p>
+          <ArtistCardSkeletonGrid orientation="landscape" count={8} />
         ) : (
           <VinylShelf items={items} onOpen={navigateTitle} />
         )
       ) : view === "cover" || view === "banner" ? (
         loading && items.length === 0 ? (
-          <p className="muted collection-browse__empty">Loading…</p>
+          <ArtistCardSkeletonGrid
+            orientation={view === "banner" ? "landscape" : "portrait"}
+            count={8}
+          />
         ) : (
         <div
           className={`media-release-grid collection-cards${

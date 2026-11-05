@@ -2214,6 +2214,8 @@ export type SeriesRelatedShow = {
   date_iso?: string | null;
   poster_url?: string | null;
   cover_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
   overview?: string | null;
   manual?: boolean;
   hidden?: boolean;

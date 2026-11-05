@@ -3,8 +3,8 @@ import { fetchMusicEvents } from "../../api";
 import { formatTrackDate } from "../../formatDate";
 import { pushArtistRoute } from "../../musicRoute";
 import type { EventCard, EventsCardLayout } from "../../types";
+import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
 import BillboardText from "../BillboardText";
-import PlaylistBoot from "../PlaylistBoot";
 
 export type EventsActFilter = "all" | "main" | "openers";
 
@@ -631,9 +631,13 @@ export default function EventsBrowse({
       </div>
 
       {loading && !events ? (
-        <PlaylistBoot
-          className="playlist-boot--compact"
-          label="Loading events…"
+        <ArtistCardSkeletonGrid
+          orientation={
+            cardLayout === "banner" || cardLayout === "landscape"
+              ? "landscape"
+              : "portrait"
+          }
+          count={8}
         />
       ) : null}
       {error ? <p className="error events-browse__error">{error}</p> : null}

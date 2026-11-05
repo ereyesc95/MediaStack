@@ -41,6 +41,11 @@ type Props = {
   mediaOptions: MediaOption[];
   onSelectMedia: (opt: MediaOption) => void;
   tabs: Tab[];
+  /**
+   * When false, hide the tab strip until content-gated tabs (e.g. Collection)
+   * are known so they appear together instead of popping in late.
+   */
+  tabsReady?: boolean;
   /** When set, replaces the default tab buttons (e.g. overflow select). */
   center?: ReactNode;
   menu: React.ReactNode;
@@ -83,6 +88,7 @@ export default function ModuleTopBar({
   mediaOptions,
   onSelectMedia,
   tabs,
+  tabsReady = true,
   center,
   menu,
 }: Props) {
@@ -162,8 +168,9 @@ export default function ModuleTopBar({
         <nav
           className={`module-top-bar__tabs${
             iconTabs ? " module-top-bar__tabs--icons" : ""
-          }`}
+          }${tabsReady ? "" : " module-top-bar__tabs--pending"}`}
           aria-label="Module sections"
+          aria-busy={!tabsReady}
         >
           {tabs.map((t) => (
             <button
