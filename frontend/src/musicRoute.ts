@@ -415,14 +415,27 @@ export function pushArtistRoute(route: ArtistRoute, replace = false) {
 
 /** Music home (hub entry). Hub itself stays at `/`. */
 export const MUSIC_ROOT_PATH = "/music";
+export const MUSIC_COLLECTION_PATH = "/music/collection";
 
 export function parseMusicRootPath(pathname: string): boolean {
   return pathname === MUSIC_ROOT_PATH || pathname === `${MUSIC_ROOT_PATH}/`;
 }
 
+export function parseMusicCollectionPath(pathname: string): boolean {
+  return (
+    pathname === MUSIC_COLLECTION_PATH ||
+    pathname === `${MUSIC_COLLECTION_PATH}/`
+  );
+}
+
 export function pushMusicRootRoute(replace = false): void {
   if (replace) window.history.replaceState(null, "", MUSIC_ROOT_PATH);
   else window.history.pushState(null, "", MUSIC_ROOT_PATH);
+}
+
+export function pushMusicCollectionRoute(replace = false): void {
+  if (replace) window.history.replaceState(null, "", MUSIC_COLLECTION_PATH);
+  else window.history.pushState(null, "", MUSIC_COLLECTION_PATH);
 }
 
 export function userPlaylistPath(playlistId: number): string {

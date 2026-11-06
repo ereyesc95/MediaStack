@@ -44,6 +44,10 @@ import {
   pushHobbiesFranchisesRoute,
   type HobbiesHubTab,
 } from "../../hobbiesRoute";
+import {
+  getCachedCollectionTotal,
+  prefetchCollectionPresenceDetail,
+} from "../../collectionPresenceCache";
 import { withMediaAccess } from "../../mediaFileUrl";
 import type { MediaOption } from "../ModuleTopBar";
 import ModuleTopBar from "../ModuleTopBar";
@@ -109,6 +113,8 @@ function cellSortValue(it: HobbyItem, col: string): string | number {
 type Props = {
   mediaOptions: MediaOption[];
   onSelectMedia: (opt: MediaOption) => void;
+  /** Open MusicStack Collection when the Music hub card is clicked. */
+  onOpenMusicCollection?: () => void;
   collectionId?: number;
   /** Hub tab when not inside a collection (`/hobbies` vs `/hobbies/franchises`). */
   hubTab?: HobbiesHubTab;
@@ -256,6 +262,7 @@ function mergeUniqueOptions(...lists: string[][]): string[] {
 export default function HobbiesModule({
   mediaOptions,
   onSelectMedia,
+  onOpenMusicCollection,
   collectionId,
   hubTab = "home",
   busy,
@@ -271,6 +278,9 @@ export default function HobbiesModule({
     []
   );
   const [presets, setPresets] = useState<HobbyPreset[]>([]);
+  const [musicCollectionTotal, setMusicCollectionTotal] = useState<number>(
+    () => getCachedCollectionTotal() ?? 0
+  );
   const [loading, setLoading] = useState(true);
   const [openingPreset, setOpeningPreset] = useState<string | null>(null);
   const [hubError, setHubError] = useState<string | null>(null);
@@ -326,7 +336,14 @@ export default function HobbiesModule({
 
   type HubTile =
     | { kind: "preset"; key: string; label: string; preset: HobbyPreset; collection?: HobbyCollection }
-    | { kind: "collection"; key: string; label: string; collection: HobbyCollection };
+    | { kind: "collection"; key: string; label: string; collection: HobbyCollection }
+    | {
+        kind: "music";
+        key: string;
+        label: string;
+        coverUrl: string;
+        total: number;
+      };
 
   const hubTiles = useMemo(() => {
     const hidden = new Set(hiddenPrivatePresets);
@@ -352,11 +369,27 @@ export default function HobbiesModule({
         });
       }
     }
+    if (musicCollectionTotal > 0 && onOpenMusicCollection) {
+      tiles.push({
+        kind: "music",
+        key: "music-collection",
+        label: "Music",
+        coverUrl: "/api/assets/media/music",
+        total: musicCollectionTotal,
+      });
+    }
     tiles.sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
     );
     return tiles;
-  }, [presets, hiddenPrivatePresets, collections, byPreset]);
+  }, [
+    presets,
+    hiddenPrivatePresets,
+    collections,
+    byPreset,
+    musicCollectionTotal,
+    onOpenMusicCollection,
+  ]);
 
   function goHome() {
     pushHobbiesRootRoute();
@@ -420,6 +453,24 @@ export default function HobbiesModule({
       cancelled = true;
     };
   }, [nsfwUnlocked]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const apply = (total: number) => {
+      if (!cancelled) setMusicCollectionTotal(total);
+    };
+    void prefetchCollectionPresenceDetail().then((p) => apply(p.total));
+    const onChanged = () => {
+      void prefetchCollectionPresenceDetail({ force: true }).then((p) =>
+        apply(p.total)
+      );
+    };
+    window.addEventListener("collection-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("collection-changed", onChanged);
+    };
+  }, []);
 
   return (
     <div className="hobbies-module">
@@ -507,6 +558,37 @@ export default function HobbiesModule({
             {hubError ? <p className="error hobbies-hub__status">{hubError}</p> : null}
             <div className="hobbies-hub__grid">
               {hubTiles.map((tile) => {
+                if (tile.kind === "music") {
+                  const status = `${tile.total} item${
+                    tile.total === 1 ? "" : "s"
+                  }`;
+                  return (
+                    <button
+                      key={tile.key}
+                      type="button"
+                      className="hobbies-hub__card"
+                      title={tile.label}
+                      onClick={() => onOpenMusicCollection?.()}
+                      aria-label={`${tile.label}, ${status}`}
+                    >
+                      <span
+                        className="hobbies-hub__card-bg card-bg-layer"
+                        style={{
+                          backgroundImage: `url("${withMediaAccess(
+                            tile.coverUrl
+                          )}")`,
+                        }}
+                      />
+                      <span className="hobbies-hub__card-dim" />
+                      <span className="hobbies-hub__card-footer">
+                        <span className="hobbies-hub__card-name">
+                          {tile.label}
+                        </span>
+                        <span className="hobbies-hub__card-meta">{status}</span>
+                      </span>
+                    </button>
+                  );
+                }
                 if (tile.kind === "collection") {
                   const col = tile.collection;
                   const coverUrl = col.icon_url || null;

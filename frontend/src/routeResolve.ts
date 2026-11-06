@@ -35,7 +35,13 @@ import { parseGamesPath } from "./gamesRoute";
 import { parseFranchisePath, parseLegacyFranchiseHubPath } from "./franchiseRoute";
 import { getFranchiseHomeReferrer } from "./franchiseHome";
 import { parseMoviesPath } from "./moviesRoute";
-import { parseArtistPath, parseMusicRootPath, parsePlaylistsGridPath, parseUserPlaylistPath } from "./musicRoute";
+import {
+  parseArtistPath,
+  parseMusicCollectionPath,
+  parseMusicRootPath,
+  parsePlaylistsGridPath,
+  parseUserPlaylistPath,
+} from "./musicRoute";
 import { parseSeriesPath } from "./seriesRoute";
 import { parseUniversePath } from "./universeRoute";
 import {
@@ -425,6 +431,9 @@ export async function resolvePathToView(
   if (parsePlaylistsGridPath(pathname)) {
     return { view: { kind: "music", tab: "playlists" } };
   }
+  if (parseMusicCollectionPath(pathname)) {
+    return { view: { kind: "music", tab: "collection" } };
+  }
 
   const legacyFranchise = parseLegacyFranchiseHubPath(pathname, search);
   if (legacyFranchise) {
@@ -736,6 +745,9 @@ export function parsePathToViewSync(pathname: string, search = ""): View | null 
   }
   if (parsePlaylistsGridPath(pathname)) {
     return { kind: "music", tab: "playlists" };
+  }
+  if (parseMusicCollectionPath(pathname)) {
+    return { kind: "music", tab: "collection" };
   }
 
   const legacyFranchise = parseLegacyFranchiseHubPath(pathname, search);

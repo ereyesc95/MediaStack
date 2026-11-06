@@ -65,7 +65,7 @@ import SeriesModule from "./components/series/SeriesModule";
 
 import { applyProfilePreferences, getStoredOrientation, saveOrientation } from "./themes";
 import { applyStoredThemeOrKeepAdaptive, clearMediaTheme } from "./mediaTheme";
-import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushMusicRootRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
+import { parsePlaylistsGridPath, parseUserPlaylistPath, pushArtistRoute, pushMusicCollectionRoute, pushMusicRootRoute, pushPlaylistsGridRoute, saveReleaseReferrer } from "./musicRoute";
 import {
   pushMoviesCatalogRoute,
   pushMoviesRootRoute,
@@ -156,7 +156,10 @@ const MEDIA_OPTIONS: MediaOption[] = [
 function viewFromLocationPath(pathname: string): View {
   const path = (pathname || "/").split("?")[0].toLowerCase();
   if (path === "/" || path === "") return { kind: "hub" };
-  if (path.startsWith("/music")) return { kind: "music" };
+  if (path === "/music/collection" || path === "/music/collection/") {
+    return { kind: "music", tab: "collection" };
+  }
+  if (path.startsWith("/music")) return { kind: "music", tab: "home" };
   if (path.startsWith("/series")) return { kind: "series" };
   if (path.startsWith("/movies")) return { kind: "movies" };
   if (path.startsWith("/books")) return { kind: "books" };
@@ -866,6 +869,8 @@ export default function App() {
                 pushPlaylistsGridRoute();
               } else if (tab === "home") {
                 pushMusicRootRoute();
+              } else if (tab === "collection") {
+                pushMusicCollectionRoute();
               }
               openMusic({ tab, bandId: undefined, playlistId: undefined });
             }}
@@ -2269,6 +2274,11 @@ export default function App() {
             hubTab={view.collectionId != null ? undefined : view.tab || "home"}
             busy={busy}
             onSelectMedia={selectMedia}
+            onOpenMusicCollection={() => {
+              clearMediaTheme(profile?.user_id);
+              pushMusicCollectionRoute();
+              setView({ kind: "music", tab: "collection" });
+            }}
             onImport={handleImport}
             onSync={handleSync}
             onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}

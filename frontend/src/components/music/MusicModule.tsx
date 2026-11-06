@@ -43,6 +43,7 @@ import {
   getCachedCollectionHasItems,
   prefetchCollectionPresence,
   setCachedCollectionHasItems,
+  setCachedCollectionPresence,
 } from "../../collectionPresenceCache";
 import {
   getCachedMusicDashboard,
@@ -2662,7 +2663,14 @@ export default function MusicModule({
           view={collectionView}
           onViewChange={setCollectionViewPersisted}
           manageApiRef={collectionManageRef}
-          onInventoryChange={setCollectionHasItems}
+          onInventoryChange={(hasItems, total) => {
+            setCollectionHasItems(hasItems);
+            if (typeof total === "number") {
+              setCachedCollectionPresence(total);
+            } else {
+              setCachedCollectionHasItems(hasItems);
+            }
+          }}
           onClearModeChange={setCollectionClearMode}
           onOpenArtist={(id) => openArtist(id, null, "collection")}
           onOpenRelease={(bandId, releaseId, artist, title) =>

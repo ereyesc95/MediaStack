@@ -53,7 +53,7 @@ type Props = {
   view?: BrowseView;
   onViewChange?: (view: BrowseView) => void;
   manageApiRef?: MutableRefObject<CollectionBrowseApi | null>;
-  onInventoryChange?: (hasItems: boolean) => void;
+  onInventoryChange?: (hasItems: boolean, total?: number) => void;
   onClearModeChange?: (active: boolean) => void;
 };
 
@@ -778,8 +778,11 @@ export default function CollectionBrowse({
   const hasInventory = !loading && (inventoryTotal > 0 || items.length > 0 || total > 0);
 
   useEffect(() => {
-    onInventoryChange?.(hasInventory);
-  }, [hasInventory, onInventoryChange]);
+    onInventoryChange?.(
+      hasInventory,
+      Math.max(inventoryTotal, total, items.length)
+    );
+  }, [hasInventory, inventoryTotal, total, items.length, onInventoryChange]);
 
   const visibleRows = useMemo(() => {
     const normalized = normalizeTableRows(items);
