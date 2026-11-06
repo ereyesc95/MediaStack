@@ -1604,7 +1604,7 @@ export type View =
       overviewTab?: import("./gamesRoute").GamesOverviewTab;
       universeId?: number;
     }
-  | { kind: "photos" }
+  | { kind: "photos"; tab?: "home" | "gallery" | "exclusive" }
   | { kind: "files"; tabId?: string }
   | { kind: "hobbies"; collectionId?: number; tab?: "home" | "franchises" };
 

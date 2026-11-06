@@ -45,7 +45,7 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 | Soundtrack-bridge / franchise MUSIC | Done (`music_band_id` merge into Related) |
 | Games module UI | Done (shared SeriesFranchisePage / leaf chrome + quiz) |
 | Files module | Done (browse, Manage Files, rename/move/copy/delete, multi-select, upload) |
-| Hobbies module | Done (presets, Excel import/export, private collections) |
+| Hobbies module | Done (presets, Excel import/export, private collections; art under `Media/Hobbies/{Collection}/`) |
 
 ## Series / Movies / Books files
 

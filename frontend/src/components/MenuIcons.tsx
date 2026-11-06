@@ -421,20 +421,13 @@ export function IconMediaFiles({ className }: IconProps) {
 }
 
 /** HobbyStack module mark — marbles / cube, distinct from PhotoStack camera. */
+/** HobbyStack module mark — star. */
 export function IconMediaHobbies({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-      <circle
-        cx="8.2"
-        cy="11"
-        r="4.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
       <path
         fill="currentColor"
-        d="M14.2 6.4 19 9.1v5.6l-4.8 2.7-4.8-2.7V9.1l4.8-2.7zm0 1.85L11.1 9.9v3.9l3.1 1.75 3.1-1.75V9.9l-3.1-1.65z"
+        d="M12 2.5 14.9 9h6.6l-5.3 4 2 6.5L12 15.8 5.8 19.5l2-6.5L2.5 9h6.6L12 2.5z"
       />
     </svg>
   );

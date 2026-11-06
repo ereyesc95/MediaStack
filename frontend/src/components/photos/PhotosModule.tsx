@@ -45,6 +45,8 @@ type Props = {
   mediaOptions: MediaOption[];
   busy?: string;
   syncTick?: number;
+  /** Deep-link into a Photos top tab (from HobbyStack Linked collections). */
+  initialTab?: "home" | "gallery" | "exclusive";
   onImport: () => void;
   onSync: () => void;
   onChooseSource?: () => void;
@@ -316,6 +318,7 @@ export default function PhotosModule({
   mediaOptions,
   busy: _busy,
   syncTick,
+  initialTab = "home",
   onImport,
   onSync,
   onChooseSource,
@@ -334,7 +337,7 @@ export default function PhotosModule({
   const [hubSources, setHubSources] = useState<ExclusiveHubSource[]>([]);
   const [hubModules, setHubModules] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [viewTab, setViewTab] = useState<ViewTab>("home");
+  const [viewTab, setViewTab] = useState<ViewTab>(initialTab);
   const [galleryFolder, setGalleryFolder] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);

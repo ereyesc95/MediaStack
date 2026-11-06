@@ -20,6 +20,7 @@ from app.hobbies import (
     delete_items,
     ensure_collection_for_preset,
     field_catalog_payload,
+    folder_art_payload,
     get_collection,
     list_collections,
     list_field_options,
@@ -27,10 +28,12 @@ from app.hobbies import (
     list_hobby_themes,
     list_items,
     list_items_by_theme,
+    list_link_targets,
     list_presets,
     require_collection_access,
     save_uploaded_image,
     serialize_collection,
+    store_collection_art,
     store_icon_file,
     update_collection,
     upsert_item,
@@ -67,6 +70,9 @@ class CollectionCreateBody(BaseModel):
     meta: CollectionMetaBody | None = None
     pdf_enabled: bool = False
     allow_missing_item_conflicts: bool = False
+    linked: bool = False
+    link_module: str | None = None
+    link_tab: str | None = None
 
 
 class CollectionEnsureBody(BaseModel):
@@ -179,6 +185,49 @@ def hobbies_field_catalog(_user: User = Depends(get_current_user)):
     return field_catalog_payload()
 
 
+@router.get("/link-targets")
+def hobbies_link_targets(
+    _user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Other-module tabs that a Linked hobby collection can open."""
+    return {"modules": list_link_targets(nsfw_unlocked=nsfw_unlocked)}
+
+
+@router.get("/folder-art")
+def hobbies_folder_art(
+    name: str = Query(..., min_length=1),
+    _user: User = Depends(get_current_user),
+):
+    """Resolve Cover / Icon / Logo for Media/Hobbies/{name}/."""
+    return folder_art_payload(name)
+
+
+@router.post("/folder-art")
+async def hobbies_upload_folder_art(
+    name: str = Query(..., min_length=1),
+    kind: str = Query(
+        "cover", pattern="^(cover|icon|logo|landscape|banner|portrait)$"
+    ),
+    file: UploadFile = File(...),
+    _user: User = Depends(get_current_user),
+):
+    """Upload Cover/Icon/Logo under Media/Hobbies/{name}/ (creates folder)."""
+    title = name.strip()
+    if not title:
+        raise HTTPException(400, "Name is required")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file")
+    fname = file.filename or f"{kind}.png"
+    ext = "." + fname.rsplit(".", 1)[-1] if "." in fname else ".png"
+    try:
+        store_collection_art(title, data, ext, kind=kind)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e)) from e
+    return folder_art_payload(title)
+
+
 @router.get("/franchise-options")
 def hobbies_franchise_options(_user: User = Depends(get_current_user)):
     """Books/Games franchise folder names for Theme dropdowns."""
@@ -237,6 +286,16 @@ def hobbies_create_collection(
     try:
         preset = (body.preset or "custom").strip().casefold()
         meta = body.meta.model_dump() if body.meta is not None else None
+        if body.linked or preset == "linked":
+            return create_collection(
+                db,
+                user.usr_id,
+                name=body.name,
+                preset="linked",
+                linked=True,
+                link_module=body.link_module,
+                link_tab=body.link_tab,
+            )
         if preset in ("custom", "generic"):
             return create_custom_collection(
                 db,
@@ -425,25 +484,40 @@ def hobbies_delete_collection(
 
 
 @router.post("/collections/{collection_id}/icon")
-async def hobbies_upload_icon(
+@router.post("/collections/{collection_id}/art")
+async def hobbies_upload_art(
     collection_id: int,
     file: UploadFile = File(...),
+    kind: str = Query(
+        "cover", pattern="^(cover|icon|logo|landscape|banner|portrait)$"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
 ):
+    """Upload Cover.* / Icon.* / Logo.* under Media/Hobbies/{Collection}/."""
     row = _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
     data = await file.read()
     if not data:
         raise HTTPException(400, "Empty file")
-    name = file.filename or "icon.png"
+    name = file.filename or f"{kind}.png"
     ext = "." + name.rsplit(".", 1)[-1] if "." in name else ".png"
-    filename = store_icon_file(row.hbc_name, data, ext)
-    result = update_collection(
-        db, user.usr_id, collection_id, icon_path=filename
-    )
+    display = row.hbc_name
+    filename = store_collection_art(display, data, ext, kind=kind)
+    # Cover path is stored on the collection; icon/logo are folder-resolved.
+    if kind == "cover":
+        result = update_collection(
+            db, user.usr_id, collection_id, icon_path=filename
+        )
+    else:
+        result = serialize_collection(
+            row,
+            item_count=len(
+                list_items(db, user.usr_id, collection_id)
+            ),
+        )
     return result
 
 

@@ -231,6 +231,13 @@ def list_tabs(*, nsfw_unlocked: bool = False) -> list[dict]:
                 "nested_folders": nested,
             }
         )
+    # Exclusive always last in the Files topbar.
+    tabs.sort(
+        key=lambda t: (
+            1 if tab_is_exclusive(str(t.get("name") or "")) else 0,
+            str(t.get("name") or "").casefold(),
+        )
+    )
     return tabs
 
 

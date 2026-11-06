@@ -15,6 +15,7 @@ from app.paths import ASSETS_DIR, ensure_assets_dir
 PRESETS = (
     "generic",
     "custom",
+    "linked",
     "marbles",
     "puzzle",
     "cube",
@@ -42,10 +43,22 @@ PRESET_LABELS = {
     "fillable_album": "Albums",
     "generic": "General",
     "custom": "Custom",
+    "linked": "Linked",
 }
 
 # Named / freeform collections (many allowed per profile).
-MULTI_INSTANCE_PRESETS = frozenset({"custom", "generic"})
+MULTI_INSTANCE_PRESETS = frozenset({"custom", "generic", "linked"})
+
+# Modules that may be linked from HobbyStack (no Hobbies; no home-only deep links).
+_LINKABLE_MODULES = (
+    "music",
+    "series",
+    "movies",
+    "books",
+    "games",
+    "photos",
+    "files",
+)
 
 # Older hub labels → current (so existing rows pick up renames).
 _LEGACY_PRESET_NAMES: dict[str, frozenset[str]] = {
@@ -317,7 +330,7 @@ def resolve_album_pdf_url(
     *,
     index: list[tuple[int, str, str, str]] | None = None,
 ) -> str | None:
-    """Resolve album PDF via Theme (franchise) + year, then title, then year-only."""
+    """Books-library PDF via Theme (franchise) + year, then title, then year-only."""
     want_year = _parse_year(year)
     if want_year is None:
         return None
@@ -366,6 +379,31 @@ def resolve_album_pdf_url(
     year_hits = [h for h in hits if h[0] == want_year]
     rel = _pick(year_hits, require_title=True)
     return _books_pdf_media_url(rel) if rel else None
+
+
+def resolve_collection_pdf_url(
+    title: str | None,
+    year: int | str | None = None,
+    theme: str | None = None,
+    *,
+    collection_name: str | None = None,
+    index: list[tuple[int, str, str, str]] | None = None,
+) -> str | None:
+    """Prefer Media/Hobbies/{Collection}/{Stem}.pdf; fall back to Books scan."""
+    from app.hobby_assets import hobby_pdf_url
+
+    folder_key = (collection_name or title or "").strip()
+    file_stem = (title or collection_name or "").strip() or None
+    if folder_key:
+        local = hobby_pdf_url(folder_key, file_stem)
+        if local:
+            return local
+        # Also try collection-named PDF inside the folder.
+        if file_stem and file_stem.casefold() != folder_key.casefold():
+            local = hobby_pdf_url(folder_key, folder_key)
+            if local:
+                return local
+    return resolve_album_pdf_url(title, year, theme, index=index)
 
 
 def list_franchise_theme_options() -> list[str]:
@@ -464,11 +502,23 @@ def _dump_list(items: list[str] | None) -> str | None:
     return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
 
 
-def collectibles_dir() -> Path:
+def hobbies_assets_dir() -> Path:
+    """Media/Hobbies module root (legacy name kept for callers)."""
+    from app.hobby_assets import hobbies_module_dir
+
+    path = hobbies_module_dir()
+    if path:
+        return path
     ensure_assets_dir()
-    path = ASSETS_DIR / "collectibles"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    # Last resort when media root is unset — should not be used for new writes.
+    fallback = ASSETS_DIR / "hobbies"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+# Back-compat alias (old collectibles / assets/hobbies path).
+def collectibles_dir() -> Path:
+    return hobbies_assets_dir()
 
 
 def _safe_filename(name: str) -> str:
@@ -477,16 +527,106 @@ def _safe_filename(name: str) -> str:
 
 
 def icon_url(path: str | None) -> str | None:
+    """URL for a stored hobbies media-relative path, or None if missing."""
     if not path:
         return None
-    name = Path(path).name
-    return f"/api/assets/collectibles/{name}"
+    from app.config import settings
+    from urllib.parse import quote
+
+    root = Path(settings.media_root or "")
+    if not root.is_dir():
+        return None
+    rel = path.replace("\\", "/").lstrip("/")
+    cand = root / rel
+    if not cand.is_file():
+        # Bare filename fallback under Hobbies/*/
+        name = Path(rel).name
+        hobbies = root / "Hobbies"
+        if hobbies.is_dir():
+            try:
+                for folder in hobbies.iterdir():
+                    hit = folder / name
+                    if hit.is_file():
+                        cand = hit
+                        rel = hit.relative_to(root).as_posix()
+                        break
+            except OSError:
+                pass
+    if not cand.is_file():
+        return None
+    return f"/api/media/file?path={quote(rel, safe='/')}"
 
 
-def item_image_url(local_path: str | None, remote_url: str | None) -> str | None:
+def item_image_url(
+    local_path: str | None,
+    remote_url: str | None,
+    *,
+    collection_name: str | None = None,
+    item_title: str | None = None,
+) -> str | None:
+    if collection_name:
+        from app.hobby_assets import hobby_item_image_url
+
+        hit = hobby_item_image_url(
+            collection_name,
+            local_path,
+            item_title=item_title,
+        )
+        if hit:
+            return hit
     if local_path:
         return icon_url(local_path)
     return (remote_url or "").strip() or None
+
+
+def resolve_collection_folder_art(name: str) -> dict[str, str | None]:
+    """Cover / logo / icon URLs from Media/Hobbies/{Name}/."""
+    from app.hobby_assets import hobby_folder_urls
+
+    return hobby_folder_urls(name)
+
+
+def _pick_art(
+    *sources: dict[str, str | None], key: str, fallback: str | None = None
+) -> str | None:
+    for src in sources:
+        hit = src.get(key)
+        if hit:
+            return hit
+    return fallback
+
+
+def _collection_art_bundle(row: HobbyCollection) -> dict[str, str | None]:
+    """Resolve cover / logo / icon / scenic without falling back to module defaults."""
+    display = _display_collection_name(row)
+    by_name = resolve_collection_folder_art(display)
+    by_preset = resolve_collection_folder_art(row.hbc_preset)
+    # Also try preset label folder (e.g. "Cubes" for preset cubes).
+    by_label = resolve_collection_folder_art(
+        PRESET_LABELS.get(row.hbc_preset, row.hbc_preset)
+    )
+    stored = icon_url(row.hbc_icon_path)
+    cover = _pick_art(by_name, by_label, by_preset, key="cover_url", fallback=stored)
+    return {
+        "cover_url": cover,
+        "logo_url": _pick_art(by_name, by_label, by_preset, key="logo_url"),
+        "icon_url": _pick_art(by_name, by_label, by_preset, key="icon_url"),
+        "landscape_url": _pick_art(
+            by_name, by_label, by_preset, key="landscape_url", fallback=cover
+        ),
+        "banner_url": _pick_art(
+            by_name, by_label, by_preset, key="banner_url", fallback=cover
+        ),
+        "portrait_url": _pick_art(
+            by_name, by_label, by_preset, key="portrait_url", fallback=cover
+        ),
+    }
+
+
+def _collection_icon_url(row: HobbyCollection) -> str | None:
+    """Primary display art (cover preferred) — None when nothing on disk."""
+    art = _collection_art_bundle(row)
+    return art.get("cover_url") or art.get("icon_url") or art.get("logo_url")
 
 
 def collection_is_private(row: HobbyCollection) -> bool:
@@ -653,6 +793,18 @@ def field_catalog_payload() -> dict:
     }
 
 
+def _normalize_link(raw: object | None) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    module = str(raw.get("module") or "").strip().casefold()
+    tab = str(raw.get("tab") or "").strip()
+    if not module or module not in _LINKABLE_MODULES or not tab:
+        return None
+    if tab.casefold() in {"home", ""}:
+        return None
+    return {"module": module, "tab": tab}
+
+
 def _collection_meta(row: HobbyCollection) -> dict:
     meta = _parse_json_obj(getattr(row, "hbc_meta_json", None))
     missing = meta.get("missing")
@@ -676,6 +828,7 @@ def _collection_meta(row: HobbyCollection) -> dict:
         "duplicates": [str(x).strip() for x in duplicates if str(x).strip()],
         "shop_url": (str(meta.get("shop_url") or "").strip() or None),
         "tutorial_url": (str(meta.get("tutorial_url") or "").strip() or None),
+        "link": _normalize_link(meta.get("link")),
     }
 
 
@@ -716,6 +869,7 @@ def _ensure_items_list_catalog(
 
 
 def _dump_collection_meta(meta: dict) -> str | None:
+    link = _normalize_link(meta.get("link"))
     payload = {
         "year": meta.get("year"),
         "brand": meta.get("brand") or None,
@@ -725,6 +879,7 @@ def _dump_collection_meta(meta: dict) -> str | None:
         "duplicates": list(meta.get("duplicates") or []),
         "shop_url": meta.get("shop_url") or None,
         "tutorial_url": meta.get("tutorial_url") or None,
+        "link": link,
     }
     # Drop empty lists / None-only payload noise but keep structure.
     if not any(
@@ -737,6 +892,7 @@ def _dump_collection_meta(meta: dict) -> str | None:
             payload["duplicates"],
             payload["shop_url"],
             payload["tutorial_url"],
+            payload["link"],
         ]
     ):
         return None
@@ -845,11 +1001,13 @@ def serialize_collection(
         and missing_count == 0
     )
     pdf_url = None
+    display_name = _display_collection_name(row)
     if limited and "pdf_url" in raw_fields:
-        pdf_url = resolve_album_pdf_url(
-            _display_collection_name(row),
+        pdf_url = resolve_collection_pdf_url(
+            display_name,
             meta.get("year"),
             theme=meta.get("theme"),
+            collection_name=display_name,
         )
     # Columns never include limited meta keys while limited (pdf stays
     # as a stored toggle for the header, not a table column).
@@ -857,36 +1015,50 @@ def serialize_collection(
         fields = [f for f in raw_fields if f not in LIMITED_META_FIELD_KEYS]
     else:
         fields = raw_fields
+    art = _collection_art_bundle(row)
+    link = meta.get("link") if isinstance(meta.get("link"), dict) else None
+    linked = row.hbc_preset == "linked" or bool(link)
     return {
         "id": row.hbc_id,
         "name": _display_collection_name(row),
         "preset": row.hbc_preset,
         "preset_label": PRESET_LABELS.get(row.hbc_preset, row.hbc_preset),
-        "fields": fields,
+        "fields": fields if not linked else [],
         "field_labels": collection_field_labels(row),
-        "custom_fields": custom_defs,
+        "custom_fields": custom_defs if not linked else [],
         "is_custom": row.hbc_preset in MULTI_INSTANCE_PRESETS,
-        "icon_url": icon_url(row.hbc_icon_path)
-        or "/api/assets/media/hobbies",
+        "linked": linked,
+        "link_module": (link or {}).get("module") if linked else None,
+        "link_tab": (link or {}).get("tab") if linked else None,
+        # icon_url = primary display (cover preferred); mark_icon_url = icon mark
+        "icon_url": art.get("cover_url")
+        or art.get("icon_url")
+        or art.get("logo_url"),
+        "cover_url": art.get("cover_url"),
+        "logo_url": art.get("logo_url"),
+        "mark_icon_url": art.get("icon_url"),
+        "landscape_url": art.get("landscape_url"),
+        "banner_url": art.get("banner_url"),
+        "portrait_url": art.get("portrait_url"),
         "icon_path": row.hbc_icon_path,
         "private": collection_is_private(row),
-        "item_count": item_count,
-        "limited": limited,
-        "collection_total": collection_total,
-        "year": meta.get("year") if limited else None,
-        "brand": meta.get("brand") if limited else None,
-        "theme": meta.get("theme") if limited else None,
-        "items_list": items_list if limited else [],
-        "missing": missing if limited else [],
-        "duplicates": meta.get("duplicates") if limited else [],
-        "shop_url": meta.get("shop_url") if limited else None,
-        "tutorial_url": meta.get("tutorial_url") if limited else None,
-        "items_collected": items_collected if limited else None,
-        "missing_count": missing_count if limited else None,
-        "completion_pct": completion_pct if limited else None,
-        "pdf_url": pdf_url,
-        "pdf_enabled": bool(limited and "pdf_url" in raw_fields),
-        "is_complete": is_complete,
+        "item_count": item_count if not linked else 0,
+        "limited": limited if not linked else False,
+        "collection_total": collection_total if not linked else None,
+        "year": meta.get("year") if limited and not linked else None,
+        "brand": meta.get("brand") if limited and not linked else None,
+        "theme": meta.get("theme") if limited and not linked else None,
+        "items_list": items_list if limited and not linked else [],
+        "missing": missing if limited and not linked else [],
+        "duplicates": meta.get("duplicates") if limited and not linked else [],
+        "shop_url": meta.get("shop_url") if limited and not linked else None,
+        "tutorial_url": meta.get("tutorial_url") if limited and not linked else None,
+        "items_collected": items_collected if limited and not linked else None,
+        "missing_count": missing_count if limited and not linked else None,
+        "completion_pct": completion_pct if limited and not linked else None,
+        "pdf_url": pdf_url if not linked else None,
+        "pdf_enabled": bool(limited and not linked and "pdf_url" in raw_fields),
+        "is_complete": is_complete if not linked else False,
         "created_at": row.hbc_created_at,
         "updated_at": row.hbc_updated_at,
     }
@@ -897,6 +1069,7 @@ def serialize_item(
     preset: str,
     *,
     fields: list[str] | None = None,
+    collection_name: str | None = None,
 ) -> dict:
     missing = _json_list(row.hbi_missing_json)
     duplicates = _json_list(row.hbi_duplicates_json)
@@ -933,7 +1106,12 @@ def serialize_item(
         "duplicates": duplicates,
         "image_path": row.hbi_image_path,
         "image_url": row.hbi_image_url,
-        "image": item_image_url(row.hbi_image_path, row.hbi_image_url),
+        "image": item_image_url(
+            row.hbi_image_path,
+            row.hbi_image_url,
+            collection_name=collection_name,
+            item_title=row.hbi_title,
+        ),
         "shop_url": row.hbi_shop_url,
         "tutorial_url": row.hbi_tutorial_url,
         "notes": row.hbi_notes,
@@ -950,8 +1128,11 @@ def serialize_item(
         fields is None and preset == "fillable_album"
     ) or (fields is not None and "pdf_url" in fields)
     if want_pdf:
-        payload["pdf_url"] = resolve_album_pdf_url(
-            row.hbi_title, year, theme=row.hbi_theme
+        payload["pdf_url"] = resolve_collection_pdf_url(
+            row.hbi_title,
+            year,
+            theme=row.hbi_theme,
+            collection_name=collection_name,
         )
     return payload
 
@@ -1048,7 +1229,12 @@ def list_items_by_theme(
         if not effective or effective.casefold() != want:
             continue
         preset = str(coll.get("preset") or "generic")
-        ser = serialize_item(row, preset, fields=list(coll.get("fields") or []))
+        ser = serialize_item(
+            row,
+            preset,
+            fields=list(coll.get("fields") or []),
+            collection_name=str(coll.get("name") or ""),
+        )
         # Themes table never includes PDF / album-only computed fields.
         ser.pop("pdf_url", None)
         ser["collection_id"] = coll["id"]
@@ -1079,15 +1265,18 @@ def list_items_by_theme(
 
 def list_presets() -> list[dict]:
     """Specialty hub presets only (no General / Custom templates)."""
-    from app.hobby_assets import hobby_preset_urls
+    from app.hobby_assets import hobby_folder_urls
 
     out: list[dict] = []
     for p in HUB_PRESETS:
-        arts = hobby_preset_urls(p)
+        label = PRESET_LABELS[p]
+        arts = hobby_folder_urls(label)
+        if not any(arts.values()):
+            arts = hobby_folder_urls(p)
         out.append(
             {
                 "id": p,
-                "label": PRESET_LABELS[p],
+                "label": label,
                 "fields": list(PRESET_FIELDS[p]),
                 "cover_url": arts["cover_url"],
                 "logo_url": arts["logo_url"],
@@ -1247,20 +1436,39 @@ def create_collection(
     meta: dict | None = None,
     pdf_enabled: bool = False,
     allow_missing_item_conflicts: bool = False,
+    linked: bool = False,
+    link_module: str | None = None,
+    link_tab: str | None = None,
 ) -> dict:
     title = (name or "").strip()
     if not title:
         raise ValueError("Name is required")
     preset_key = (preset or "custom").strip().casefold()
+    link = _normalize_link(
+        {"module": link_module, "tab": link_tab}
+        if link_module or link_tab
+        else (meta or {}).get("link")
+        if isinstance(meta, dict)
+        else None
+    )
+    if linked or preset_key == "linked" or link:
+        preset_key = "linked"
+        if not link:
+            raise ValueError("Linked collections require a module tab target")
+        linked = True
     if preset_key not in PRESETS:
         raise ValueError("Unknown preset")
     if preset_key not in MULTI_INSTANCE_PRESETS:
         if get_collection_by_preset(db, user_id, preset_key):
             raise ValueError("A collection for this preset already exists")
-    custom_defs = _parse_custom_field_defs(
-        json.dumps(custom_fields or [], ensure_ascii=False)
+    custom_defs = (
+        []
+        if linked
+        else _parse_custom_field_defs(
+            json.dumps(custom_fields or [], ensure_ascii=False)
+        )
     )
-    limited_on = bool(limited)
+    limited_on = False if linked else bool(limited)
     total = _normalize_collection_total(collection_total) if limited_on else None
     meta_in = dict(meta or {})
     items_list = _normalize_tag_list(meta_in.get("items_list"))
@@ -1271,7 +1479,9 @@ def create_collection(
     if limited_on and not items_list and missing:
         items_list = list(missing)
     duplicates = _normalize_tag_list(meta_in.get("duplicates"))
-    if limited_on:
+    if linked:
+        field_keys: list[str] | None = []
+    elif limited_on:
         _validate_limited_meta(
             total=total,
             missing=missing,
@@ -1308,6 +1518,7 @@ def create_collection(
         "tutorial_url": (str(meta_in.get("tutorial_url") or "").strip() or None)
         if limited_on
         else None,
+        "link": link,
     }
     now = _now_iso()
     row = HobbyCollection(
@@ -1316,14 +1527,18 @@ def create_collection(
         hbc_preset=preset_key,
         hbc_icon_path=icon_path,
         hbc_fields_json=(
-            json.dumps(field_keys, ensure_ascii=False) if field_keys else None
+            json.dumps(field_keys, ensure_ascii=False) if field_keys is not None else None
         ),
         hbc_custom_fields_json=(
             json.dumps(custom_defs, ensure_ascii=False) if custom_defs else None
         ),
         hbc_limited=1 if limited_on else 0,
         hbc_collection_total=total if limited_on else None,
-        hbc_meta_json=_dump_collection_meta(meta_payload) if limited_on else None,
+        hbc_meta_json=(
+            _dump_collection_meta(meta_payload)
+            if limited_on or link
+            else None
+        ),
         hbc_created_at=now,
         hbc_updated_at=now,
     )
@@ -1333,6 +1548,12 @@ def create_collection(
         _seed_marble_styles(db, user_id, row.hbc_id)
     db.commit()
     db.refresh(row)
+    try:
+        from app.hobby_assets import ensure_collection_folder
+
+        ensure_collection_folder(_display_collection_name(row))
+    except Exception:
+        pass
     return serialize_collection(row, item_count=0)
 
 
@@ -1438,6 +1659,7 @@ def update_collection(
     row = get_collection(db, user_id, collection_id)
     if not row:
         return None
+    old_display = _display_collection_name(row)
     if name is not None:
         title = name.strip()
         if not title:
@@ -1450,17 +1672,26 @@ def update_collection(
     if private is not None:
         row.hbc_private = 1 if private else 0
 
-    limited_on = (
-        bool(limited) if limited is not None else _collection_is_limited(row)
+    is_linked = row.hbc_preset == "linked" or bool(
+        _normalize_link(_parse_json_obj(getattr(row, "hbc_meta_json", None)).get("link"))
     )
-    if limited is not None:
+    limited_on = (
+        False
+        if is_linked
+        else (bool(limited) if limited is not None else _collection_is_limited(row))
+    )
+    if limited is not None and not is_linked:
         row.hbc_limited = 1 if limited_on else 0
         if not limited_on:
             row.hbc_collection_total = None
-            row.hbc_meta_json = None
+            # Preserve link meta when clearing limited.
+            kept_link = _collection_meta(row).get("link")
+            row.hbc_meta_json = (
+                _dump_collection_meta({"link": kept_link}) if kept_link else None
+            )
 
     current_meta = _collection_meta(row)
-    if set_meta and meta is not None and limited_on:
+    if set_meta and meta is not None and limited_on and not is_linked:
         items_list = _normalize_tag_list(meta.get("items_list"))
         missing = _normalize_tag_list(meta.get("missing"))
         if not items_list and missing and "items_list" not in meta:
@@ -1507,7 +1738,16 @@ def update_collection(
         else ("pdf_url" in collection_field_keys(row))
     )
 
-    if set_fields or fields is not None or custom_fields is not None or limited is not None or pdf_enabled is not None:
+    if (
+        not is_linked
+        and (
+            set_fields
+            or fields is not None
+            or custom_fields is not None
+            or limited is not None
+            or pdf_enabled is not None
+        )
+    ):
         defs_in = (
             custom_fields
             if custom_fields is not None
@@ -1549,44 +1789,185 @@ def update_collection(
     row.hbc_updated_at = _now_iso()
     db.commit()
     db.refresh(row)
+    new_display = _display_collection_name(row)
+    if name is not None and old_display.casefold() != new_display.casefold():
+        try:
+            from app.hobby_assets import rename_collection_folder
+
+            rename_collection_folder(old_display, new_display)
+        except Exception:
+            pass
+    else:
+        try:
+            from app.hobby_assets import ensure_collection_folder
+
+            ensure_collection_folder(new_display)
+        except Exception:
+            pass
     n = len(
         db.scalars(select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)).all()
     )
     return serialize_collection(row, item_count=n)
 
 
+def list_link_targets(*, nsfw_unlocked: bool = False) -> list[dict]:
+    """Module tab targets for Linked hobby collections (no Hobbies / no Home)."""
+    modules: list[dict] = [
+        {
+            "module": "music",
+            "label": "Music",
+            "tabs": [
+                {"id": "artists", "label": "Artists"},
+                {"id": "collection", "label": "Collection"},
+                {"id": "events", "label": "Events"},
+                {"id": "playlists", "label": "Playlists"},
+                {"id": "merch", "label": "Merch"},
+            ],
+        },
+        {
+            "module": "series",
+            "label": "Series",
+            "tabs": [{"id": "catalog", "label": "Catalog"}],
+        },
+        {
+            "module": "movies",
+            "label": "Movies",
+            "tabs": [{"id": "catalog", "label": "Catalog"}],
+        },
+        {
+            "module": "books",
+            "label": "Books",
+            "tabs": [{"id": "catalog", "label": "Catalog"}],
+        },
+        {
+            "module": "games",
+            "label": "Games",
+            "tabs": [{"id": "catalog", "label": "Catalog"}],
+        },
+    ]
+    photo_tabs = [{"id": "gallery", "label": "Gallery"}]
+    if nsfw_unlocked:
+        photo_tabs.append({"id": "exclusive", "label": "Exclusive"})
+    modules.append(
+        {"module": "photos", "label": "Photos", "tabs": photo_tabs}
+    )
+    try:
+        from app.files_index import list_tabs
+
+        file_tabs = list_tabs(nsfw_unlocked=nsfw_unlocked)
+        modules.append(
+            {
+                "module": "files",
+                "label": "Files",
+                "tabs": [
+                    {
+                        "id": str(t.get("name") or ""),
+                        "label": str(t.get("label") or t.get("name") or ""),
+                    }
+                    for t in file_tabs
+                    if str(t.get("name") or "").strip()
+                ],
+            }
+        )
+    except Exception:
+        modules.append({"module": "files", "label": "Files", "tabs": []})
+    return modules
+
+
+def folder_art_payload(name: str) -> dict:
+    """Cover / icon / logo / scenic for Media/Hobbies/{Name}/ (creates nothing)."""
+    title = (name or "").strip()
+    arts = (
+        resolve_collection_folder_art(title)
+        if title
+        else {
+            "cover_url": None,
+            "logo_url": None,
+            "icon_url": None,
+            "landscape_url": None,
+            "banner_url": None,
+            "portrait_url": None,
+        }
+    )
+    cover = arts.get("cover_url")
+    return {
+        "name": title,
+        "cover_url": cover,
+        "logo_url": arts.get("logo_url"),
+        "mark_icon_url": arts.get("icon_url"),
+        "landscape_url": arts.get("landscape_url") or cover,
+        "banner_url": arts.get("banner_url") or cover,
+        "portrait_url": arts.get("portrait_url") or cover,
+        "icon_url": cover or arts.get("icon_url") or arts.get("logo_url"),
+    }
+
+
 def delete_collection(db: Session, user_id: int, collection_id: int) -> bool:
     row = get_collection(db, user_id, collection_id)
     if not row:
         return False
+    display = _display_collection_name(row)
+    is_linked = row.hbc_preset == "linked" or bool(
+        _normalize_link(
+            _parse_json_obj(getattr(row, "hbc_meta_json", None)).get("link")
+        )
+    )
     items = db.scalars(
         select(HobbyItem).where(HobbyItem.hbi_collection_id == collection_id)
     ).all()
     for it in items:
-        _delete_asset_file(it.hbi_image_path)
+        # Linked collections should not own item rows; if any exist, drop DB only.
+        if not is_linked:
+            _delete_asset_file(it.hbi_image_path)
         db.delete(it)
     opts = db.scalars(
         select(HobbyFieldOption).where(HobbyFieldOption.hfo_collection_id == collection_id)
     ).all()
     for opt in opts:
         db.delete(opt)
-    _delete_asset_file(row.hbc_icon_path)
+    if not is_linked:
+        _delete_asset_file(row.hbc_icon_path)
     db.delete(row)
     db.commit()
+    # Always remove Hobbies/{Name}/ art folder (linked = link+folder only;
+    # local = folder holds collection art + item images).
+    try:
+        from app.hobby_assets import delete_collection_folder
+
+        delete_collection_folder(display)
+    except Exception:
+        pass
     return True
 
 
 def _delete_asset_file(rel: str | None) -> None:
     if not rel:
         return
+    from app.config import settings
+
     path = Path(rel)
     if not path.is_file():
-        # stored as filename under collectibles
-        cand = collectibles_dir() / Path(rel).name
-        if cand.is_file():
+        root = Path(settings.media_root or "")
+        cand = root / rel.replace("\\", "/") if root.is_dir() else None
+        if cand and cand.is_file():
             path = cand
         else:
-            return
+            # Legacy bare filename under any Hobbies/{Collection}/
+            name = Path(rel).name
+            hobbies = root / "Hobbies" if root.is_dir() else None
+            found = None
+            if hobbies and hobbies.is_dir():
+                try:
+                    for folder in hobbies.iterdir():
+                        hit = folder / name
+                        if hit.is_file():
+                            found = hit
+                            break
+                except OSError:
+                    pass
+            if not found:
+                return
+            path = found
     try:
         path.unlink()
     except OSError:
@@ -1600,17 +1981,10 @@ def save_uploaded_image(
     data: bytes,
     ext: str,
 ) -> str:
-    """Write under assets/collectibles/; return stored filename."""
-    folder = collectibles_dir()
-    safe_coll = _safe_filename(collection_name)
-    safe_stem = _safe_filename(stem)
-    suffix = ext if ext.startswith(".") else f".{ext}"
-    if suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
-        suffix = ".png"
-    filename = f"{safe_coll} - {safe_stem}{suffix.lower()}"
-    dest = folder / filename
-    dest.write_bytes(data)
-    return filename
+    """Write Media/Hobbies/{Collection}/{Stem}.ext; return media-relative path."""
+    from app.hobby_assets import store_item_image_file
+
+    return store_item_image_file(collection_name, stem, data, ext)
 
 
 def list_items(
@@ -1658,12 +2032,19 @@ def list_items(
         if category_filter and (row.hbi_category or "").casefold() != category_filter.casefold():
             continue
         field_keys = collection_field_keys(coll)
-        ser = serialize_item(row, coll.hbc_preset, fields=field_keys)
+        coll_name = _display_collection_name(coll)
+        ser = serialize_item(
+            row,
+            coll.hbc_preset,
+            fields=field_keys,
+            collection_name=coll_name,
+        )
         if "pdf_url" in field_keys and pdf_index is not None:
-            ser["pdf_url"] = resolve_album_pdf_url(
+            ser["pdf_url"] = resolve_collection_pdf_url(
                 row.hbi_title,
                 getattr(row, "hbi_year", None),
                 theme=row.hbi_theme,
+                collection_name=coll_name,
                 index=pdf_index,
             )
         if qf:
@@ -2063,16 +2444,28 @@ def add_field_option(
     return list_field_options(db, user_id, collection_id, field_key)
 
 
+def store_collection_art(
+    collection_name: str,
+    data: bytes,
+    ext: str,
+    *,
+    kind: str = "cover",
+) -> str:
+    """Save Cover.* / Icon.* / Logo.* under Media/Hobbies/{Collection}/.
+
+    Returns media-root-relative path. Cover also writes folder.ico.
+    """
+    from app.hobby_assets import store_collection_art_file
+
+    return store_collection_art_file(collection_name, data, ext, kind=kind)
+
+
 def store_icon_file(collection_name: str, data: bytes, ext: str) -> str:
-    return save_uploaded_image(
-        collection_name="Icon",
-        stem=collection_name,
-        data=data,
-        ext=ext,
-    )
+    """Back-compat: collection thumbnail upload saves as Cover.*."""
+    return store_collection_art(collection_name, data, ext, kind="cover")
 
 
-def copy_local_path_into_collectibles(
+def copy_local_path_into_hobbies(
     src: Path, *, collection_name: str, stem: str
 ) -> str:
     if not src.is_file():
@@ -2084,3 +2477,7 @@ def copy_local_path_into_collectibles(
         data=data,
         ext=src.suffix or ".png",
     )
+
+
+# Back-compat alias
+copy_local_path_into_collectibles = copy_local_path_into_hobbies

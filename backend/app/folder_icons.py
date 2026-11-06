@@ -48,6 +48,7 @@ STRUCTURAL_ICON_STEMS: dict[str, str] = {
     "games": "Games",
     "photos": "Photos",
     "files": "Files",
+    "hobbies": "Hobbies",
 }
 
 MEDIA_MODULE_ROOTS = (
@@ -58,6 +59,7 @@ MEDIA_MODULE_ROOTS = (
     "Games",
     "Photos",
     "Files",
+    "Hobbies",
 )
 
 _DATE_PREFIX_RE = re.compile(
@@ -547,6 +549,10 @@ def resolve_source_image(folder: Path, root: Path | None = None) -> Path | None:
     # Games platform root: Games/{Platform}
     if module == "Games" and len(parts) == 2:
         return find_platform_icon(parts[1])
+
+    # Hobbies/{Collection}: Cover → Icon → Logo
+    if module == "Hobbies" and len(parts) == 2:
+        return find_first_image(folder, ["Cover", "Icon", "Logo"])
 
     # Format folders under a release (CD, LP, Disc N, …): [Artwork]/Cover - Front
     artwork = folder / "[Artwork]"

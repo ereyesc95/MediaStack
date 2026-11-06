@@ -55,6 +55,12 @@ async def lifespan(app: FastAPI):
         ensure_media_module_roots()
     except Exception:
         pass
+    try:
+        from app.hobby_assets import migrate_legacy_assets_hobbies
+
+        migrate_legacy_assets_hobbies()
+    except Exception:
+        pass
     yield
 
 

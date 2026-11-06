@@ -81,6 +81,7 @@ import { pushPhotosRootRoute } from "./photosRoute";
 import {
   parseFilesTabPath,
   pushFilesRootRoute,
+  pushFilesTabRoute,
 } from "./filesRoute";
 import {
   parseHobbiesCollectionPath,
@@ -2158,10 +2159,11 @@ export default function App() {
 
         {showApp && view.kind === "photos" && (
           <PhotosModule
-            key={`photos-${profile.user_id}`}
+            key={`photos-${profile.user_id}-${view.tab || "home"}`}
             mediaOptions={MEDIA_OPTIONS}
             busy={busy}
             syncTick={syncTick}
+            initialTab={view.tab || "home"}
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
@@ -2278,6 +2280,63 @@ export default function App() {
               clearMediaTheme(profile?.user_id);
               pushMusicCollectionRoute();
               setView({ kind: "music", tab: "collection" });
+            }}
+            onOpenLinkedTarget={(module, tab) => {
+              clearMediaTheme(profile?.user_id);
+              const mod = (module || "").toLowerCase();
+              const tabId = (tab || "").trim();
+              if (mod === "music") {
+                if (tabId === "collection") pushMusicCollectionRoute();
+                else if (tabId === "playlists") pushPlaylistsGridRoute();
+                else pushMusicRootRoute();
+                setView({
+                  kind: "music",
+                  tab: (tabId as import("./types").MusicTab) || "home",
+                });
+                return;
+              }
+              if (mod === "series") {
+                pushSeriesCatalogRoute();
+                setView({ kind: "series" });
+                return;
+              }
+              if (mod === "movies") {
+                pushMoviesCatalogRoute();
+                setView({ kind: "movies" });
+                return;
+              }
+              if (mod === "books") {
+                pushBooksCatalogRoute();
+                setView({ kind: "books" });
+                return;
+              }
+              if (mod === "games") {
+                pushGamesCatalogRoute();
+                setView({ kind: "games" });
+                return;
+              }
+              if (mod === "photos") {
+                pushPhotosRootRoute();
+                setView({
+                  kind: "photos",
+                  tab:
+                    tabId === "exclusive"
+                      ? "exclusive"
+                      : tabId === "gallery"
+                        ? "gallery"
+                        : "home",
+                });
+                return;
+              }
+              if (mod === "files") {
+                if (tabId) {
+                  pushFilesTabRoute(tabId);
+                  setView({ kind: "files", tabId });
+                } else {
+                  pushFilesRootRoute();
+                  setView({ kind: "files" });
+                }
+              }
             }}
             onImport={handleImport}
             onSync={handleSync}

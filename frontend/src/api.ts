@@ -4517,8 +4517,20 @@ export type HobbyCollection = {
   field_labels?: Record<string, string>;
   custom_fields?: HobbyCustomFieldDef[];
   is_custom?: boolean;
-  icon_url: string;
-  /** Relative asset path when a custom icon was uploaded; null/absent = default. */
+  /** Opens another module tab instead of a local item table. */
+  linked?: boolean;
+  link_module?: string | null;
+  link_tab?: string | null;
+  /** Primary display art (cover preferred). Null when nothing on disk. */
+  icon_url?: string | null;
+  cover_url?: string | null;
+  logo_url?: string | null;
+  /** `{Name} - icon` mark URL when present. */
+  mark_icon_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  portrait_url?: string | null;
+  /** Relative asset path when a cover was uploaded; null/absent = none. */
   icon_path?: string | null;
   item_count: number;
   /** Finite / limited set (vs evergrowing). */
@@ -4543,6 +4555,32 @@ export type HobbyCollection = {
   /** Whole collection hidden unless NSFW is unlocked. */
   private?: boolean;
 };
+
+export type HobbyLinkTargetTab = { id: string; label: string };
+export type HobbyLinkTargetModule = {
+  module: string;
+  label: string;
+  tabs: HobbyLinkTargetTab[];
+};
+
+export type HobbyFolderArt = {
+  name: string;
+  cover_url?: string | null;
+  logo_url?: string | null;
+  mark_icon_url?: string | null;
+  icon_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  portrait_url?: string | null;
+};
+
+export type HobbyArtKind =
+  | "cover"
+  | "icon"
+  | "logo"
+  | "landscape"
+  | "banner"
+  | "portrait";
 
 export type HobbyItem = {
   id: number;
@@ -4594,53 +4632,101 @@ export async function fetchHobbyFieldCatalog() {
 
 export async function createHobbyCustomCollection(body: {
   name: string;
-  fields: string[];
+  fields?: string[];
   custom_fields?: HobbyCustomFieldDef[];
   limited?: boolean;
   collection_total?: number | null;
   meta?: HobbyCollectionMeta | null;
   pdf_enabled?: boolean;
   allow_missing_item_conflicts?: boolean;
+  /** @deprecated prefer cover */
   icon?: File | null;
+  cover?: File | null;
+  markIcon?: File | null;
+  logo?: File | null;
+  landscape?: File | null;
+  banner?: File | null;
+  portrait?: File | null;
+  linked?: boolean;
+  link_module?: string | null;
+  link_tab?: string | null;
 }) {
-  const payload = {
-    name: body.name,
-    preset: "custom",
-    fields: body.fields,
-    custom_fields: body.custom_fields,
-    limited: Boolean(body.limited),
-    collection_total: body.limited ? body.collection_total ?? null : null,
-    meta: body.limited ? body.meta ?? null : null,
-    pdf_enabled: Boolean(body.limited && body.pdf_enabled),
-    allow_missing_item_conflicts: Boolean(body.allow_missing_item_conflicts),
-  };
-  if (!body.icon) {
-    return request<HobbyCollection>(`${API}/hobbies/collections`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  const cover = body.cover || body.icon || null;
+  const linked = Boolean(body.linked);
+  const payload = linked
+    ? {
+        name: body.name,
+        preset: "linked",
+        linked: true,
+        link_module: body.link_module || null,
+        link_tab: body.link_tab || null,
+      }
+    : {
+        name: body.name,
+        preset: "custom",
+        fields: body.fields || [],
+        custom_fields: body.custom_fields,
+        limited: Boolean(body.limited),
+        collection_total: body.limited ? body.collection_total ?? null : null,
+        meta: body.limited ? body.meta ?? null : null,
+        pdf_enabled: Boolean(body.limited && body.pdf_enabled),
+        allow_missing_item_conflicts: Boolean(
+          body.allow_missing_item_conflicts
+        ),
+      };
+  let saved = await request<HobbyCollection>(`${API}/hobbies/collections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (cover) {
+    saved = await uploadHobbyCollectionArt(saved.id, cover, "cover");
   }
-  // Query params for JSON; multipart for optional icon.
-  const qs = new URLSearchParams({ name: body.name });
-  qs.set("fields", JSON.stringify(body.fields));
-  if (body.custom_fields?.length) {
-    qs.set("custom_fields", JSON.stringify(body.custom_fields));
+  if (body.markIcon) {
+    saved = await uploadHobbyCollectionArt(saved.id, body.markIcon, "icon");
   }
-  if (body.limited) qs.set("limited", "true");
-  if (body.limited && body.collection_total != null && body.collection_total > 0) {
-    qs.set("collection_total", String(body.collection_total));
+  if (body.logo) {
+    saved = await uploadHobbyCollectionArt(saved.id, body.logo, "logo");
   }
-  if (body.limited && body.meta) {
-    qs.set("meta", JSON.stringify(body.meta));
+  if (body.landscape) {
+    saved = await uploadHobbyCollectionArt(
+      saved.id,
+      body.landscape,
+      "landscape"
+    );
   }
-  if (body.limited && body.pdf_enabled) qs.set("pdf_enabled", "true");
-  const fd = new FormData();
-  fd.append("icon", body.icon);
-  return request<HobbyCollection>(
-    `${API}/hobbies/collections/custom?${qs}`,
-    { method: "POST", body: fd }
+  if (body.banner) {
+    saved = await uploadHobbyCollectionArt(saved.id, body.banner, "banner");
+  }
+  if (body.portrait) {
+    saved = await uploadHobbyCollectionArt(saved.id, body.portrait, "portrait");
+  }
+  return saved;
+}
+
+export async function fetchHobbyLinkTargets() {
+  return request<{ modules: HobbyLinkTargetModule[] }>(
+    `${API}/hobbies/link-targets`
   );
+}
+
+export async function fetchHobbyFolderArt(name: string) {
+  const qs = new URLSearchParams({ name });
+  return request<HobbyFolderArt>(`${API}/hobbies/folder-art?${qs}`);
+}
+
+export async function uploadHobbyFolderArt(
+  name: string,
+  file: File,
+  kind: HobbyArtKind = "cover"
+) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const q = new URLSearchParams({ name, kind });
+  return request<HobbyFolderArt>(`${API}/hobbies/folder-art?${q}`, {
+    method: "POST",
+    body: fd,
+  });
 }
 
 export async function fetchHobbyFranchiseOptions() {
@@ -4719,12 +4805,24 @@ export async function deleteHobbyCollection(id: number) {
 }
 
 export async function uploadHobbyCollectionIcon(id: number, file: File) {
+  return uploadHobbyCollectionArt(id, file, "cover");
+}
+
+export async function uploadHobbyCollectionArt(
+  id: number,
+  file: File,
+  kind: HobbyArtKind = "cover"
+) {
   const fd = new FormData();
   fd.append("file", file);
-  return request<HobbyCollection>(`${API}/hobbies/collections/${id}/icon`, {
-    method: "POST",
-    body: fd,
-  });
+  const q = new URLSearchParams({ kind });
+  return request<HobbyCollection>(
+    `${API}/hobbies/collections/${id}/art?${q}`,
+    {
+      method: "POST",
+      body: fd,
+    }
+  );
 }
 
 export async function fetchHobbyItems(

@@ -35,7 +35,6 @@ NESTED_PREFIXES = (
     "universes",
     "universe",
     "platforms",
-    "collectibles",
     "hobbies",
 )
 DATA_FILE_PREFIXES = ("people", "links")

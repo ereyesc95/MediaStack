@@ -21,20 +21,25 @@ import {
   fetchHobbyCollections,
   fetchHobbyFieldCatalog,
   fetchHobbyFieldOptions,
+  fetchHobbyFolderArt,
   fetchHobbyFranchiseOptions,
   fetchHobbyItems,
+  fetchHobbyLinkTargets,
   fetchHobbyPresets,
   fetchHobbyThemeItems,
   fetchHobbyThemes,
   previewHobbyImport,
   updateHobbyCollection,
   updateHobbyItem,
-  uploadHobbyCollectionIcon,
+  uploadHobbyCollectionArt,
   uploadHobbyItemImage,
+  type HobbyArtKind,
   type HobbyCollection,
   type HobbyCustomFieldDef,
   type HobbyFieldCatalogEntry,
+  type HobbyFolderArt,
   type HobbyItem,
+  type HobbyLinkTargetModule,
   type HobbyPreset,
 } from "../../api";
 import { getStoredProfile } from "../../auth";
@@ -44,14 +49,17 @@ import {
   pushHobbiesFranchisesRoute,
   type HobbiesHubTab,
 } from "../../hobbiesRoute";
-import {
-  getCachedCollectionTotal,
-  prefetchCollectionPresenceDetail,
-} from "../../collectionPresenceCache";
+import { prefetchCollectionPresenceDetail } from "../../collectionPresenceCache";
 import { withMediaAccess } from "../../mediaFileUrl";
+import type { CardOrientation } from "../../types";
+import {
+  getStoredHobbiesOrientation,
+  saveHobbiesOrientation,
+} from "../../themes";
 import type { MediaOption } from "../ModuleTopBar";
 import ModuleTopBar from "../ModuleTopBar";
 import AppMenu from "../AppMenu";
+import CardOrientationPicker from "../CardOrientationPicker";
 import ModalPortal from "../ModalPortal";
 import ConfirmDialog from "../ConfirmDialog";
 import GalleryViewerModal, {
@@ -63,6 +71,87 @@ import {
   IconStar,
   IconTrash,
 } from "../MenuIcons";
+
+/** Module default art — treat as “no artwork” for empty placeholders. */
+function isHobbyPlaceholderArt(url: string | null | undefined): boolean {
+  if (!url) return true;
+  const bare = url.split("?")[0] || "";
+  return (
+    bare.endsWith("/api/assets/media/hobbies") ||
+    bare.endsWith("/api/assets/media/music")
+  );
+}
+
+function hobbyRealArtUrl(url: string | null | undefined): string | null {
+  return !isHobbyPlaceholderArt(url) ? url || null : null;
+}
+
+/** Icon mark + wordmark for title / hub hover (cover stays separate). */
+function hobbyBrandArt(opts: {
+  mark_icon_url?: string | null;
+  logo_url?: string | null;
+  icon_url?: string | null;
+}): { mark: string | null; logo: string | null } {
+  return {
+    mark: hobbyRealArtUrl(opts.mark_icon_url || opts.icon_url),
+    logo: hobbyRealArtUrl(opts.logo_url),
+  };
+}
+
+type HobbyArtUrls = {
+  cover_url?: string | null;
+  landscape_url?: string | null;
+  banner_url?: string | null;
+  portrait_url?: string | null;
+};
+
+/** Card face URL by orientation; Cover is the universal fallback. */
+function pickHobbyHubCover(
+  arts: HobbyArtUrls,
+  orientation: CardOrientation
+): string | null {
+  const cover = hobbyRealArtUrl(arts.cover_url);
+  const landscape = hobbyRealArtUrl(arts.landscape_url) || cover;
+  const banner = hobbyRealArtUrl(arts.banner_url) || cover;
+  const portrait = hobbyRealArtUrl(arts.portrait_url) || cover;
+  switch (orientation) {
+    case "landscape":
+      return landscape || banner || portrait || cover;
+    case "portrait":
+      return portrait || cover || landscape;
+    case "banner":
+      return banner || landscape || cover;
+    case "round":
+      return cover;
+    case "icons":
+      return null;
+    case "list":
+      return cover || landscape || portrait;
+    default:
+      return cover;
+  }
+}
+
+async function uploadHobbyArts(
+  collectionId: number,
+  files: Partial<Record<HobbyArtKind, File | null>>
+): Promise<HobbyCollection | null> {
+  let last: HobbyCollection | null = null;
+  const order: HobbyArtKind[] = [
+    "cover",
+    "icon",
+    "logo",
+    "landscape",
+    "banner",
+    "portrait",
+  ];
+  for (const kind of order) {
+    const file = files[kind];
+    if (!file) continue;
+    last = await uploadHobbyCollectionArt(collectionId, file, kind);
+  }
+  return last;
+}
 
 type HobbyCollectionMenu = {
   onAdd: () => void;
@@ -115,6 +204,8 @@ type Props = {
   onSelectMedia: (opt: MediaOption) => void;
   /** Open MusicStack Collection when the Music hub card is clicked. */
   onOpenMusicCollection?: () => void;
+  /** Open a Linked collection target (module + tab). */
+  onOpenLinkedTarget?: (module: string, tab: string) => void;
   collectionId?: number;
   /** Hub tab when not inside a collection (`/hobbies` vs `/hobbies/franchises`). */
   hubTab?: HobbiesHubTab;
@@ -126,6 +217,20 @@ type Props = {
   onSync?: () => void;
   onChooseSource?: () => void;
 };
+
+type HubIdentityTarget =
+  | { kind: "collection"; collection: HobbyCollection }
+  | {
+      kind: "preset";
+      preset: HobbyPreset;
+      collection?: HobbyCollection;
+    }
+  | {
+      kind: "music";
+      folderName: string;
+      label: string;
+      total: number;
+    };
 
 const THEMES_TABLE_COLS = [
   "title",
@@ -263,6 +368,7 @@ export default function HobbiesModule({
   mediaOptions,
   onSelectMedia,
   onOpenMusicCollection,
+  onOpenLinkedTarget,
   collectionId,
   hubTab = "home",
   busy,
@@ -278,8 +384,9 @@ export default function HobbiesModule({
     []
   );
   const [presets, setPresets] = useState<HobbyPreset[]>([]);
-  const [musicCollectionTotal, setMusicCollectionTotal] = useState<number>(
-    () => getCachedCollectionTotal() ?? 0
+  const [musicCollectionTotal, setMusicCollectionTotal] = useState(0);
+  const [musicFolderArt, setMusicFolderArt] = useState<HobbyFolderArt | null>(
+    null
   );
   const [loading, setLoading] = useState(true);
   const [openingPreset, setOpeningPreset] = useState<string | null>(null);
@@ -296,7 +403,20 @@ export default function HobbiesModule({
   const [editorFocusField, setEditorFocusField] = useState<string | null>(
     null
   );
-  const nsfwUnlocked = Boolean(getStoredProfile()?.nsfw_unlocked);
+  const [identityTarget, setIdentityTarget] =
+    useState<HubIdentityTarget | null>(null);
+  const profile = getStoredProfile();
+  const nsfwUnlocked = Boolean(profile?.nsfw_unlocked);
+  const [cardOrientation, setCardOrientation] = useState<CardOrientation>(() =>
+    profile?.user_id != null
+      ? getStoredHobbiesOrientation(profile.user_id)
+      : "round"
+  );
+
+  function setHubOrientation(next: CardOrientation) {
+    setCardOrientation(next);
+    if (profile?.user_id != null) saveHobbiesOrientation(profile.user_id, next);
+  }
 
   function openCollectionEditor(
     target: "new" | HobbyCollection,
@@ -342,15 +462,31 @@ export default function HobbiesModule({
         key: string;
         label: string;
         coverUrl: string;
+        landscapeUrl: string;
+        bannerUrl: string;
+        portraitUrl: string;
+        markIconUrl: string;
+        logoUrl: string;
         total: number;
       };
+
+  const linkedMusicCollection = useMemo(
+    () =>
+      collections.find(
+        (c) =>
+          c.linked &&
+          (c.link_module || "").toLowerCase() === "music" &&
+          (c.link_tab || "").toLowerCase() === "collection"
+      ) ?? null,
+    [collections]
+  );
 
   const hubTiles = useMemo(() => {
     const hidden = new Set(hiddenPrivatePresets);
     const tiles: HubTile[] = [];
     for (const p of presets) {
       if (hidden.has(p.id)) continue;
-      if (p.id === "generic" || p.id === "custom") continue;
+      if (p.id === "generic" || p.id === "custom" || p.id === "linked") continue;
       tiles.push({
         kind: "preset",
         key: `preset:${p.id}`,
@@ -360,7 +496,13 @@ export default function HobbiesModule({
       });
     }
     for (const c of collections) {
-      if (c.preset === "custom" || c.preset === "generic" || c.is_custom) {
+      if (
+        c.preset === "custom" ||
+        c.preset === "generic" ||
+        c.preset === "linked" ||
+        c.is_custom ||
+        c.linked
+      ) {
         tiles.push({
           kind: "collection",
           key: `col:${c.id}`,
@@ -369,12 +511,21 @@ export default function HobbiesModule({
         });
       }
     }
-    if (musicCollectionTotal > 0 && onOpenMusicCollection) {
+    if (
+      musicCollectionTotal > 0 &&
+      onOpenMusicCollection &&
+      !linkedMusicCollection
+    ) {
       tiles.push({
         kind: "music",
         key: "music-collection",
         label: "Music",
-        coverUrl: "/api/assets/media/music",
+        coverUrl: hobbyRealArtUrl(musicFolderArt?.cover_url) || "",
+        landscapeUrl: hobbyRealArtUrl(musicFolderArt?.landscape_url) || "",
+        bannerUrl: hobbyRealArtUrl(musicFolderArt?.banner_url) || "",
+        portraitUrl: hobbyRealArtUrl(musicFolderArt?.portrait_url) || "",
+        markIconUrl: hobbyRealArtUrl(musicFolderArt?.mark_icon_url) || "",
+        logoUrl: hobbyRealArtUrl(musicFolderArt?.logo_url) || "",
         total: musicCollectionTotal,
       });
     }
@@ -389,7 +540,20 @@ export default function HobbiesModule({
     byPreset,
     musicCollectionTotal,
     onOpenMusicCollection,
+    linkedMusicCollection,
+    musicFolderArt,
   ]);
+
+  function openLinkedCollection(col: HobbyCollection) {
+    const mod = (col.link_module || "").trim();
+    const tab = (col.link_tab || "").trim();
+    if (!mod || !tab) return;
+    if (mod === "music" && tab === "collection" && onOpenMusicCollection) {
+      onOpenMusicCollection();
+      return;
+    }
+    onOpenLinkedTarget?.(mod, tab);
+  }
 
   function goHome() {
     pushHobbiesRootRoute();
@@ -439,41 +603,62 @@ export default function HobbiesModule({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void Promise.all([fetchHobbyCollections(), fetchHobbyPresets()])
-      .then(([cols, pr]) => {
+    // Wait for hobby tiles + Music presence together so the grid paints once.
+    void Promise.all([
+      fetchHobbyCollections(),
+      fetchHobbyPresets(),
+      prefetchCollectionPresenceDetail(),
+      fetchHobbyFolderArt("Music").catch(() => null),
+    ])
+      .then(([cols, pr, music, musicArt]) => {
         if (cancelled) return;
         setCollections(cols.collections || []);
         setHiddenPrivatePresets(cols.hidden_private_presets || []);
         setPresets(pr.presets || []);
+        setMusicCollectionTotal(music.total);
+        setMusicFolderArt(musicArt);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setHubError(e instanceof Error ? e.message : String(e));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [nsfwUnlocked]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const apply = (total: number) => {
-      if (!cancelled) setMusicCollectionTotal(total);
-    };
-    void prefetchCollectionPresenceDetail().then((p) => apply(p.total));
     const onChanged = () => {
-      void prefetchCollectionPresenceDetail({ force: true }).then((p) =>
-        apply(p.total)
-      );
+      void prefetchCollectionPresenceDetail({ force: true }).then((p) => {
+        if (!cancelled) setMusicCollectionTotal(p.total);
+      });
     };
     window.addEventListener("collection-changed", onChanged);
     return () => {
       cancelled = true;
       window.removeEventListener("collection-changed", onChanged);
     };
-  }, []);
+  }, [nsfwUnlocked]);
+
+  const activeBgUrl =
+    active != null
+      ? hobbyRealArtUrl(active.landscape_url) ||
+        hobbyRealArtUrl(active.cover_url)
+      : null;
 
   return (
-    <div className="hobbies-module">
+    <div
+      className={`hobbies-module${activeBgUrl ? " hobbies-module--has-bg" : ""}`}
+    >
+      {activeBgUrl ? (
+        <div className="hobbies-module__bg-stack" aria-hidden>
+          <div
+            className="hobbies-module__bg"
+            style={{
+              backgroundImage: `url("${withMediaAccess(activeBgUrl)}")`,
+            }}
+          />
+        </div>
+      ) : null}
+      <div className="hobbies-module__chrome">
       <ModuleTopBar
         media={
           mediaOptions.find((m) => m.kind === "hobbies") ?? {
@@ -511,6 +696,12 @@ export default function HobbiesModule({
         menu={
           <>
             {busy ? <span className="status-bar module-top-bar__status">{busy}</span> : null}
+            {activeId == null && activeHubTab === "home" ? (
+              <CardOrientationPicker
+                value={cardOrientation}
+                onChange={setHubOrientation}
+              />
+            ) : null}
             <AppMenu
               isAdmin={isAdmin}
               onSwitchProfile={onSwitchProfile}
@@ -525,7 +716,11 @@ export default function HobbiesModule({
               }
               onEditHobbyCollection={
                 active
-                  ? () => openCollectionEditor(active)
+                  ? () =>
+                      setIdentityTarget({
+                        kind: "collection",
+                        collection: active,
+                      })
                   : undefined
               }
               showManageCollection={Boolean(collectionMenu)}
@@ -556,104 +751,81 @@ export default function HobbiesModule({
           <div className="hobbies-hub">
             {loading ? <p className="muted hobbies-hub__status">Loading…</p> : null}
             {hubError ? <p className="error hobbies-hub__status">{hubError}</p> : null}
-            <div className="hobbies-hub__grid">
+            {!loading ? (
+            <div
+              className={`hobbies-hub__grid hobbies-hub__grid--${cardOrientation}${
+                cardOrientation === "list" ? " hobbies-hub__grid--list" : ""
+              }`}
+            >
               {hubTiles.map((tile) => {
                 if (tile.kind === "music") {
-                  const status = `${tile.total} item${
-                    tile.total === 1 ? "" : "s"
-                  }`;
                   return (
-                    <button
+                    <HobbyHubCard
                       key={tile.key}
-                      type="button"
-                      className="hobbies-hub__card"
-                      title={tile.label}
-                      onClick={() => onOpenMusicCollection?.()}
-                      aria-label={`${tile.label}, ${status}`}
-                    >
-                      <span
-                        className="hobbies-hub__card-bg card-bg-layer"
-                        style={{
-                          backgroundImage: `url("${withMediaAccess(
-                            tile.coverUrl
-                          )}")`,
-                        }}
-                      />
-                      <span className="hobbies-hub__card-dim" />
-                      <span className="hobbies-hub__card-footer">
-                        <span className="hobbies-hub__card-name">
-                          {tile.label}
-                        </span>
-                        <span className="hobbies-hub__card-meta">{status}</span>
-                      </span>
-                    </button>
+                      label={tile.label}
+                      status={`${tile.total} item${tile.total === 1 ? "" : "s"}`}
+                      orientation={cardOrientation}
+                      arts={{
+                        cover_url: tile.coverUrl,
+                        landscape_url: tile.landscapeUrl,
+                        banner_url: tile.bannerUrl,
+                        portrait_url: tile.portraitUrl,
+                      }}
+                      brand={hobbyBrandArt({
+                        mark_icon_url: tile.markIconUrl,
+                        logo_url: tile.logoUrl,
+                      })}
+                      onOpen={() => onOpenMusicCollection?.()}
+                      onEdit={() =>
+                        setIdentityTarget({
+                          kind: "music",
+                          folderName: "Music",
+                          label: tile.label,
+                          total: tile.total,
+                        })
+                      }
+                    />
                   );
                 }
                 if (tile.kind === "collection") {
                   const col = tile.collection;
-                  const coverUrl = col.icon_url || null;
-                  const status =
-                    col.item_count === 0
+                  const isLinked = Boolean(col.linked);
+                  const status = isLinked
+                    ? "Linked"
+                    : col.item_count === 0
                       ? "Empty"
                       : `${col.item_count} item${
                           col.item_count === 1 ? "" : "s"
                         }`;
                   return (
-                    <button
+                    <HobbyHubCard
                       key={tile.key}
-                      type="button"
-                      className="hobbies-hub__card"
-                      title={tile.label}
-                      onClick={() => openCollection(col.id)}
-                      aria-label={`${tile.label}, ${status}`}
-                    >
-                      <span
-                        className="hobbies-hub__card-bg card-bg-layer"
-                        style={
-                          coverUrl
-                            ? {
-                                backgroundImage: `url("${withMediaAccess(
-                                  coverUrl
-                                )}")`,
-                              }
-                            : undefined
-                        }
-                      />
-                      <span className="hobbies-hub__card-dim" />
-                      <span className="hobbies-hub__card-footer">
-                        {coverUrl ? (
-                          <img
-                            src={withMediaAccess(coverUrl)}
-                            alt=""
-                            className="hobbies-hub__card-logo"
-                          />
-                        ) : (
-                          <span className="hobbies-hub__card-name">
-                            {tile.label}
-                          </span>
-                        )}
-                        <span className="hobbies-hub__card-meta">
-                          {status}
-                          {col.is_complete ? (
-                            <span
-                              className="hobbies-collection__complete-star"
-                              title="Collection complete"
-                              aria-label="Collection complete"
-                            >
-                              <IconStar />
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </button>
+                      label={tile.label}
+                      status={status}
+                      orientation={cardOrientation}
+                      arts={col}
+                      brand={hobbyBrandArt({
+                        mark_icon_url: col.mark_icon_url,
+                        logo_url: col.logo_url,
+                      })}
+                      complete={Boolean(col.is_complete)}
+                      onOpen={() =>
+                        isLinked
+                          ? openLinkedCollection(col)
+                          : openCollection(col.id)
+                      }
+                      onEdit={() =>
+                        setIdentityTarget({
+                          kind: "collection",
+                          collection: col,
+                        })
+                      }
+                    />
                   );
                 }
                 const p = tile.preset;
                 const col = tile.collection;
                 const busyTile = openingPreset === p.id;
-                const coverUrl = p.cover_url || null;
-                const hoverLogo =
-                  col?.icon_url || p.logo_url || p.icon_url || null;
                 const status = busyTile
                   ? "Opening…"
                   : !col
@@ -664,67 +836,62 @@ export default function HobbiesModule({
                           col.item_count === 1 ? "" : "s"
                         }`;
                 return (
-                  <button
+                  <HobbyHubCard
                     key={tile.key}
-                    type="button"
-                    className="hobbies-hub__card"
-                    title={tile.label}
+                    label={tile.label}
+                    status={status}
+                    orientation={cardOrientation}
+                    arts={{
+                      cover_url: col?.cover_url || p.cover_url,
+                      landscape_url: col?.landscape_url,
+                      banner_url: col?.banner_url,
+                      portrait_url: col?.portrait_url,
+                    }}
+                    brand={hobbyBrandArt({
+                      mark_icon_url: col?.mark_icon_url || p.icon_url,
+                      logo_url: col?.logo_url || p.logo_url,
+                    })}
+                    complete={Boolean(col?.is_complete)}
                     disabled={busyTile || openingPreset != null}
-                    onClick={() => void openPreset(p.id)}
-                    aria-label={`${tile.label}, ${status}`}
-                  >
-                    <span
-                      className="hobbies-hub__card-bg card-bg-layer"
-                      style={
-                        coverUrl
-                          ? {
-                              backgroundImage: `url("${withMediaAccess(
-                                coverUrl
-                              )}")`,
-                            }
-                          : undefined
-                      }
-                    />
-                    <span className="hobbies-hub__card-dim" />
-                    <span className="hobbies-hub__card-footer">
-                      {hoverLogo ? (
-                        <img
-                          src={withMediaAccess(hoverLogo)}
-                          alt=""
-                          className="hobbies-hub__card-logo"
-                        />
-                      ) : (
-                        <span className="hobbies-hub__card-name">
-                          {tile.label}
-                        </span>
-                      )}
-                      <span className="hobbies-hub__card-meta">
-                        {status}
-                        {col?.is_complete ? (
-                          <span
-                            className="hobbies-collection__complete-star"
-                            title="Collection complete"
-                            aria-label="Collection complete"
-                          >
-                            <IconStar />
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </button>
+                    onOpen={() => void openPreset(p.id)}
+                    onEdit={() =>
+                      setIdentityTarget({
+                        kind: "preset",
+                        preset: p,
+                        collection: col,
+                      })
+                    }
+                  />
                 );
               })}
             </div>
+            ) : null}
           </div>
         ) : active ? (
+          active.linked ? (
+            <p className="muted">
+              This is a linked collection.{" "}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => openLinkedCollection(active)}
+              >
+                Open target
+              </button>
+            </p>
+          ) : (
           <HobbyCollectionView
             collection={active}
             isAdmin={isAdmin}
             nsfwUnlocked={nsfwUnlocked}
             onRegisterMenu={setCollectionMenu}
-            onEditCollection={(focusField) =>
-              openCollectionEditor(active, focusField ?? null)
-            }
+            onEditCollection={(focusField) => {
+              if (focusField) {
+                openCollectionEditor(active, focusField);
+                return;
+              }
+              setIdentityTarget({ kind: "collection", collection: active });
+            }}
             onChanged={() => void reloadCollections()}
             onDeleted={() => {
               const deletedId = activeId;
@@ -736,9 +903,11 @@ export default function HobbiesModule({
               });
             }}
           />
+          )
         ) : (
           <p className="muted">Collection not found.</p>
         )}
+      </div>
       </div>
       {editorOpen != null ? (
         <HobbyCollectionEditorModal
@@ -754,7 +923,42 @@ export default function HobbiesModule({
             setEditorOpen(null);
             setEditorFocusField(null);
             await reloadCollections();
+            if (wasCreate && col?.linked) {
+              openLinkedCollection(col);
+              return;
+            }
             if (wasCreate && col?.id) openCollection(col.id);
+          }}
+        />
+      ) : null}
+      {identityTarget != null ? (
+        <HobbyIdentityModal
+          target={identityTarget}
+          onClose={() => setIdentityTarget(null)}
+          onSaved={async () => {
+            setIdentityTarget(null);
+            await reloadCollections();
+            const art = await fetchHobbyFolderArt("Music").catch(() => null);
+            setMusicFolderArt(art);
+          }}
+          onDeleted={async () => {
+            const target = identityTarget;
+            const deletedId =
+              target.kind === "collection"
+                ? target.collection.id
+                : target.kind === "preset"
+                  ? target.collection?.id
+                  : undefined;
+            setIdentityTarget(null);
+            await reloadCollections();
+            const art = await fetchHobbyFolderArt("Music").catch(() => null);
+            setMusicFolderArt(art);
+            if (deletedId != null && pinnedId === deletedId) {
+              setPinnedId(undefined);
+            }
+            if (activeId != null && deletedId === activeId) {
+              goHome();
+            }
           }}
         />
       ) : null}
@@ -781,6 +985,482 @@ function applyComputedFieldDeps(
   return next;
 }
 
+function HobbyHubCard({
+  label,
+  status,
+  orientation,
+  arts,
+  brand,
+  complete = false,
+  disabled = false,
+  onOpen,
+  onEdit,
+}: {
+  label: string;
+  status: string;
+  orientation: CardOrientation;
+  arts: HobbyArtUrls;
+  brand: { mark: string | null; logo: string | null };
+  complete?: boolean;
+  disabled?: boolean;
+  onOpen: () => void;
+  onEdit: () => void;
+}) {
+  const coverUrl = pickHobbyHubCover(arts, orientation);
+  const isList = orientation === "list";
+  const isIcons = orientation === "icons";
+  const showName = !brand.mark && !brand.logo;
+  return (
+    <div
+      className={`hobbies-hub__card-wrap hobbies-hub__card-wrap--${orientation}`}
+    >
+      <button
+        type="button"
+        className={`hobbies-hub__card hobbies-hub__card--${orientation}`}
+        title={label}
+        disabled={disabled}
+        onClick={onOpen}
+        aria-label={`${label}, ${status}`}
+      >
+        {!isIcons ? (
+          <span
+            className="hobbies-hub__card-bg card-bg-layer"
+            style={
+              coverUrl
+                ? {
+                    backgroundImage: `url("${withMediaAccess(coverUrl)}")`,
+                  }
+                : undefined
+            }
+          />
+        ) : (
+          <span className="hobbies-hub__card-bg hobbies-hub__card-bg--icons" />
+        )}
+        <span className="hobbies-hub__card-dim" />
+        <span className="hobbies-hub__card-footer">
+          {isList && coverUrl ? (
+            <span
+              className="hobbies-hub__card-list-thumb"
+              style={{
+                backgroundImage: `url("${withMediaAccess(coverUrl)}")`,
+              }}
+            />
+          ) : null}
+          <span className="hobbies-hub__card-brand">
+            {brand.mark ? (
+              <img
+                src={withMediaAccess(brand.mark)}
+                alt=""
+                className="hobbies-hub__card-mark"
+              />
+            ) : null}
+            {brand.logo ? (
+              <img
+                src={withMediaAccess(brand.logo)}
+                alt=""
+                className="hobbies-hub__card-logo"
+              />
+            ) : null}
+            {showName || isList ? (
+              <span className="hobbies-hub__card-name">{label}</span>
+            ) : null}
+          </span>
+          <span className="hobbies-hub__card-meta">
+            {status}
+            {complete ? (
+              <span
+                className="hobbies-collection__complete-star"
+                title="Collection complete"
+                aria-label="Collection complete"
+              >
+                <IconStar />
+              </span>
+            ) : null}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="hobbies-hub__card-edit"
+        title="Edit collection"
+        aria-label={`Edit ${label}`}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+      >
+        <IconPencil />
+      </button>
+    </div>
+  );
+}
+
+function ArtPickButton({
+  label,
+  previewUrl,
+  file,
+  onPick,
+}: {
+  label: string;
+  previewUrl: string | null;
+  file: File | null;
+  onPick: (file: File | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const shown = objectUrl || previewUrl;
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+      />
+      <button
+        type="button"
+        className={`hobbies-collection-editor__icon${
+          shown ? " hobbies-collection-editor__icon--filled" : ""
+        }`}
+        onClick={() => inputRef.current?.click()}
+        aria-label={shown ? `Change ${label}` : `Add ${label}`}
+      >
+        {shown ? (
+          <>
+            <img src={shown} alt="" />
+            <span className="hobbies-collection-editor__icon-overlay" aria-hidden>
+              Change
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="hobbies-collection-editor__icon-plus" aria-hidden>
+              +
+            </span>
+            <span className="hobbies-collection-editor__icon-caption">
+              Add {label}
+            </span>
+          </>
+        )}
+      </button>
+    </>
+  );
+}
+
+function HobbyIdentityModal({
+  target,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  target: HubIdentityTarget;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+  onDeleted?: () => void | Promise<void>;
+}) {
+  const existingCollection =
+    target.kind === "collection"
+      ? target.collection
+      : target.kind === "preset"
+        ? target.collection ?? null
+        : null;
+  const [deletableId, setDeletableId] = useState<number | null>(
+    existingCollection?.id ?? null
+  );
+  const initialName =
+    target.kind === "collection"
+      ? target.collection.name
+      : target.kind === "preset"
+        ? target.collection?.name || target.preset.label
+        : target.label;
+  const seedArts = ((): HobbyArtUrls & {
+    mark?: string | null;
+    logo?: string | null;
+  } => {
+    if (target.kind === "collection") {
+      return {
+        cover_url: target.collection.cover_url,
+        landscape_url: target.collection.landscape_url,
+        banner_url: target.collection.banner_url,
+        portrait_url: target.collection.portrait_url,
+        mark: target.collection.mark_icon_url,
+        logo: target.collection.logo_url,
+      };
+    }
+    if (target.kind === "preset") {
+      return {
+        cover_url: target.collection?.cover_url || target.preset.cover_url,
+        landscape_url: target.collection?.landscape_url,
+        banner_url: target.collection?.banner_url,
+        portrait_url: target.collection?.portrait_url,
+        mark: target.collection?.mark_icon_url || target.preset.icon_url,
+        logo: target.collection?.logo_url || target.preset.logo_url,
+      };
+    }
+    return {};
+  })();
+
+  const [name, setName] = useState(initialName);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [landscapeFile, setLandscapeFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
+  const [previews, setPreviews] = useState({
+    cover: hobbyRealArtUrl(seedArts.cover_url),
+    icon: hobbyRealArtUrl(seedArts.mark),
+    logo: hobbyRealArtUrl(seedArts.logo),
+    landscape: hobbyRealArtUrl(seedArts.landscape_url),
+    banner: hobbyRealArtUrl(seedArts.banner_url),
+    portrait: hobbyRealArtUrl(seedArts.portrait_url),
+  });
+  const [busy, setBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (target.kind !== "music") return;
+    let cancelled = false;
+    void Promise.all([
+      fetchHobbyFolderArt(target.folderName).catch(() => null),
+      fetchHobbyCollections().catch(() => null),
+    ]).then(([art, cols]) => {
+      if (cancelled) return;
+      if (art) {
+        setPreviews({
+          cover: hobbyRealArtUrl(art.cover_url),
+          icon: hobbyRealArtUrl(art.mark_icon_url),
+          logo: hobbyRealArtUrl(art.logo_url),
+          landscape: hobbyRealArtUrl(art.landscape_url),
+          banner: hobbyRealArtUrl(art.banner_url),
+          portrait: hobbyRealArtUrl(art.portrait_url),
+        });
+      }
+      const hit = cols?.collections.find(
+        (c) =>
+          c.linked &&
+          (c.link_module || "").toLowerCase() === "music" &&
+          (c.link_tab || "").toLowerCase() === "collection"
+      );
+      setDeletableId(hit?.id ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [target]);
+
+  async function resolveCollectionId(): Promise<number> {
+    if (target.kind === "collection") return target.collection.id;
+    if (target.kind === "preset") {
+      if (target.collection) return target.collection.id;
+      const created = await ensureHobbyCollection(target.preset.id);
+      return created.id;
+    }
+    const cols = await fetchHobbyCollections();
+    const hit = cols.collections.find(
+      (c) =>
+        c.linked &&
+        (c.link_module || "").toLowerCase() === "music" &&
+        (c.link_tab || "").toLowerCase() === "collection"
+    );
+    if (hit) return hit.id;
+    const created = await createHobbyCustomCollection({
+      name: name.trim() || "Music",
+      linked: true,
+      link_module: "music",
+      link_tab: "collection",
+    });
+    return created.id;
+  }
+
+  async function save() {
+    const title = name.trim();
+    if (!title) {
+      setError("Name is required");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await resolveCollectionId();
+      const current =
+        target.kind === "collection"
+          ? target.collection
+          : target.kind === "preset"
+            ? target.collection
+            : null;
+      if (!current || title !== current.name) {
+        await updateHobbyCollection(id, { name: title });
+      }
+      await uploadHobbyArts(id, {
+        cover: coverFile,
+        icon: iconFile,
+        logo: logoFile,
+        landscape: landscapeFile,
+        banner: bannerFile,
+        portrait: portraitFile,
+      });
+      await onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    setDeleteBusy(true);
+    setError(null);
+    try {
+      if (deletableId == null) {
+        setError("Nothing to delete yet");
+        return;
+      }
+      await deleteHobbyCollection(deletableId);
+      await onDeleted?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleteBusy(false);
+      setDeleteOpen(false);
+    }
+  }
+
+  const deleteBlurb =
+    existingCollection?.linked || target.kind === "music"
+      ? "Remove this linked collection card and its HobbyStack art folder. Linked module data is not deleted."
+      : "Delete this collection, its items, and the HobbyStack art folder.";
+  const canDelete = deletableId != null;
+
+  return (
+    <ModalPortal onClose={onClose}>
+      <div
+        className="modal-panel artist-admin-modal hobbies-collection-editor"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-panel-header">
+          <h3>Edit collection</h3>
+          <button type="button" className="modal-close-x" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        {error ? <p className="error">{error}</p> : null}
+        <div className="artist-admin-form">
+          <div className="hobbies-collection-editor__art-row">
+            <ArtPickButton
+              label="cover"
+              previewUrl={
+                previews.cover ? withMediaAccess(previews.cover) : null
+              }
+              file={coverFile}
+              onPick={setCoverFile}
+            />
+            <ArtPickButton
+              label="icon"
+              previewUrl={
+                previews.icon ? withMediaAccess(previews.icon) : null
+              }
+              file={iconFile}
+              onPick={setIconFile}
+            />
+            <ArtPickButton
+              label="logo"
+              previewUrl={
+                previews.logo ? withMediaAccess(previews.logo) : null
+              }
+              file={logoFile}
+              onPick={setLogoFile}
+            />
+            <ArtPickButton
+              label="background"
+              previewUrl={
+                previews.landscape ? withMediaAccess(previews.landscape) : null
+              }
+              file={landscapeFile}
+              onPick={setLandscapeFile}
+            />
+            <ArtPickButton
+              label="banner"
+              previewUrl={
+                previews.banner ? withMediaAccess(previews.banner) : null
+              }
+              file={bannerFile}
+              onPick={setBannerFile}
+            />
+            <ArtPickButton
+              label="portrait"
+              previewUrl={
+                previews.portrait ? withMediaAccess(previews.portrait) : null
+              }
+              file={portraitFile}
+              onPick={setPortraitFile}
+            />
+          </div>
+          <div className="hobbies-collection-editor__name-row">
+            <input
+              className="hobbies-collection-editor__name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name of collection"
+              aria-label="Name of collection"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="modal-actions-row">
+          {canDelete ? (
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={busy || deleteBusy}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete
+            </button>
+          ) : (
+            <span className="modal-actions__spacer" />
+          )}
+          <span className="modal-actions__spacer" />
+          <button
+            type="button"
+            className="btn"
+            disabled={busy || deleteBusy}
+            onClick={() => void save()}
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+      {deleteOpen ? (
+        <ConfirmDialog
+          title="Delete collection?"
+          message={deleteBlurb}
+          confirmLabel={deleteBusy ? "Deleting…" : "Delete"}
+          destructive
+          busy={deleteBusy}
+          onClose={() => {
+            if (!deleteBusy) setDeleteOpen(false);
+          }}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
+    </ModalPortal>
+  );
+}
+
 function HobbyCollectionEditorModal({
   mode,
   collection,
@@ -796,6 +1476,16 @@ function HobbyCollectionEditorModal({
 }) {
   const [catalog, setCatalog] = useState<HobbyFieldCatalogEntry[]>([]);
   const [name, setName] = useState(collection?.name || "");
+  const [modeKind, setModeKind] = useState<"local" | "linked">(() =>
+    collection?.linked ? "linked" : "local"
+  );
+  const [linkModules, setLinkModules] = useState<HobbyLinkTargetModule[]>([]);
+  const [linkTargetsError, setLinkTargetsError] = useState<string | null>(null);
+  const [linkTargetsLoading, setLinkTargetsLoading] = useState(false);
+  const [linkModule, setLinkModule] = useState(
+    () => collection?.link_module || ""
+  );
+  const [linkTab, setLinkTab] = useState(() => collection?.link_tab || "");
   const [limited, setLimited] = useState(() => Boolean(collection?.limited));
   const [metaYear, setMetaYear] = useState(() =>
     collection?.year != null ? String(collection.year) : ""
@@ -846,14 +1536,18 @@ function HobbyCollectionEditorModal({
     () => collection?.custom_fields || []
   );
   const [newCustomLabel, setNewCustomLabel] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [iconFile, setIconFile] = useState<File | null>(null);
-  const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [landscapeFile, setLandscapeFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [franchiseOptions, setFranchiseOptions] = useState<string[]>([]);
   const [franchiseOpen, setFranchiseOpen] = useState(false);
-  const iconRef = useRef<HTMLInputElement>(null);
   const preLimitedSelectedRef = useRef<Set<string> | null>(null);
+  const linkedMode = modeKind === "linked";
 
   useEffect(() => {
     let cancelled = false;
@@ -874,6 +1568,74 @@ function HobbyCollectionEditorModal({
       cancelled = true;
     };
   }, [mode, collection]);
+
+  useEffect(() => {
+    if (!linkedMode) return;
+    let cancelled = false;
+    const applyModules = (modsIn: HobbyLinkTargetModule[]) => {
+      const mods = modsIn.filter(
+        (m) => Array.isArray(m.tabs) && m.tabs.length > 0
+      );
+      setLinkModules(mods);
+      setLinkModule((prevMod) => {
+        const nextMod =
+          prevMod && mods.some((m) => m.module === prevMod)
+            ? prevMod
+            : mods[0]?.module || "";
+        const mod = mods.find((m) => m.module === nextMod) || mods[0];
+        setLinkTab((prevTab) => {
+          if (!mod) return "";
+          if (prevTab && mod.tabs.some((t) => t.id === prevTab)) return prevTab;
+          return mod.tabs[0]?.id || "";
+        });
+        return nextMod;
+      });
+    };
+    /** Offline/static fallback if /link-targets is unavailable. */
+    const fallback: HobbyLinkTargetModule[] = [
+      {
+        module: "music",
+        label: "Music",
+        tabs: [
+          { id: "artists", label: "Artists" },
+          { id: "collection", label: "Collection" },
+          { id: "events", label: "Events" },
+          { id: "playlists", label: "Playlists" },
+          { id: "merch", label: "Merch" },
+        ],
+      },
+      { module: "series", label: "Series", tabs: [{ id: "catalog", label: "Catalog" }] },
+      { module: "movies", label: "Movies", tabs: [{ id: "catalog", label: "Catalog" }] },
+      { module: "books", label: "Books", tabs: [{ id: "catalog", label: "Catalog" }] },
+      { module: "games", label: "Games", tabs: [{ id: "catalog", label: "Catalog" }] },
+      {
+        module: "photos",
+        label: "Photos",
+        tabs: [
+          { id: "gallery", label: "Gallery" },
+          { id: "exclusive", label: "Exclusive" },
+        ],
+      },
+    ];
+    setLinkTargetsLoading(true);
+    setLinkTargetsError(null);
+    void fetchHobbyLinkTargets()
+      .then((data) => {
+        if (cancelled) return;
+        applyModules(data.modules || fallback);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        applyModules(fallback);
+        setLinkTargetsError(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLinkTargetsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedMode]);
 
   useEffect(() => {
     if (!limited) {
@@ -954,16 +1716,6 @@ function HobbyCollectionEditorModal({
     }
   }
 
-  useEffect(() => {
-    if (!iconFile) {
-      setIconPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(iconFile);
-    setIconPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [iconFile]);
-
   function toggleField(key: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -1000,6 +1752,50 @@ function HobbyCollectionEditorModal({
     const title = name.trim();
     if (!title) {
       setError("Name is required");
+      return;
+    }
+    if (linkedMode) {
+      if (!linkModule || !linkTab) {
+        setError("Select a module tab to link");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        let saved: HobbyCollection;
+        if (mode === "create") {
+          saved = await createHobbyCustomCollection({
+            name: title,
+            linked: true,
+            link_module: linkModule,
+            link_tab: linkTab,
+            cover: coverFile,
+            markIcon: iconFile,
+            logo: logoFile,
+            landscape: landscapeFile,
+            banner: bannerFile,
+            portrait: portraitFile,
+          });
+        } else if (collection) {
+          saved = await updateHobbyCollection(collection.id, { name: title });
+          saved =
+            (await uploadHobbyArts(collection.id, {
+              cover: coverFile,
+              icon: iconFile,
+              logo: logoFile,
+              landscape: landscapeFile,
+              banner: bannerFile,
+              portrait: portraitFile,
+            })) || saved;
+        } else {
+          throw new Error("Missing collection");
+        }
+        await onSaved(saved);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     let totalValue: number | null = null;
@@ -1073,7 +1869,12 @@ function HobbyCollectionEditorModal({
           meta,
           pdf_enabled: pdfEnabled,
           allow_missing_item_conflicts: allowMissingConflicts,
-          icon: iconFile,
+          cover: coverFile,
+          markIcon: iconFile,
+          logo: logoFile,
+          landscape: landscapeFile,
+          banner: bannerFile,
+          portrait: portraitFile,
         });
       } else if (collection) {
         saved = await updateHobbyCollection(collection.id, {
@@ -1089,9 +1890,15 @@ function HobbyCollectionEditorModal({
           pdf_enabled: pdfEnabled,
           allow_missing_item_conflicts: allowMissingConflicts,
         });
-        if (iconFile) {
-          saved = await uploadHobbyCollectionIcon(collection.id, iconFile);
-        }
+        saved =
+          (await uploadHobbyArts(collection.id, {
+            cover: coverFile,
+            icon: iconFile,
+            logo: logoFile,
+            landscape: landscapeFile,
+            banner: bannerFile,
+            portrait: portraitFile,
+          })) || saved;
       } else {
         throw new Error("Missing collection");
       }
@@ -1116,11 +1923,12 @@ function HobbyCollectionEditorModal({
     }
   }
 
-  const existingIcon =
-    !iconPreview && collection?.icon_path && collection.icon_url
-      ? withMediaAccess(collection.icon_url)
-      : null;
-  const shownIcon = iconPreview || existingIcon;
+  const existingCover = hobbyRealArtUrl(collection?.cover_url);
+  const existingMark = hobbyRealArtUrl(collection?.mark_icon_url);
+  const existingLogo = hobbyRealArtUrl(collection?.logo_url);
+  const existingLandscape = hobbyRealArtUrl(collection?.landscape_url);
+  const existingBanner = hobbyRealArtUrl(collection?.banner_url);
+  const existingPortrait = hobbyRealArtUrl(collection?.portrait_url);
 
   return (
     <ModalPortal onClose={onClose}>
@@ -1130,6 +1938,31 @@ function HobbyCollectionEditorModal({
       >
         <div className="modal-panel-header">
           <h3>{mode === "create" ? "New collection" : "Edit collection"}</h3>
+          {mode === "create" ? (
+            <div
+              className="hobbies-collection-editor__kind-toggle"
+              role="group"
+              aria-label="Collection type"
+            >
+              <button
+                type="button"
+                className={modeKind === "local" ? "is-active" : undefined}
+                onClick={() => setModeKind("local")}
+              >
+                Local
+              </button>
+              <button
+                type="button"
+                className={modeKind === "linked" ? "is-active" : undefined}
+                onClick={() => {
+                  setModeKind("linked");
+                  setLimitedOn(false);
+                }}
+              >
+                Linked
+              </button>
+            </div>
+          ) : null}
           <button type="button" className="modal-close-x" onClick={onClose}>
             ×
           </button>
@@ -1137,61 +1970,164 @@ function HobbyCollectionEditorModal({
         {error ? <p className="error">{error}</p> : null}
         <div className="artist-admin-form">
           <div className="hobbies-collection-editor__identity">
-            <input
-              ref={iconRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => setIconFile(e.target.files?.[0] ?? null)}
-            />
-            <button
-              type="button"
-              className={`hobbies-collection-editor__icon${
-                shownIcon ? " hobbies-collection-editor__icon--filled" : ""
-              }`}
-              onClick={() => iconRef.current?.click()}
-              aria-label={shownIcon ? "Change image" : "Add image"}
-            >
-              {shownIcon ? (
-                <>
-                  <img src={shownIcon} alt="" />
-                  <span className="hobbies-collection-editor__icon-overlay" aria-hidden>
-                    Change
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="hobbies-collection-editor__icon-plus" aria-hidden>
-                    +
-                  </span>
-                  <span className="hobbies-collection-editor__icon-caption">
-                    Add image
-                  </span>
-                </>
-              )}
-            </button>
-            <input
-              className="hobbies-collection-editor__name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name of collection"
-              aria-label="Name of collection"
-              autoFocus
-            />
-            <label className="ms-checkbox hobbies-collection-editor__limited-check">
-              <input
-                type="checkbox"
-                checked={limited}
-                onChange={(e) => setLimitedOn(e.target.checked)}
+            <div className="hobbies-collection-editor__art-row">
+              <ArtPickButton
+                label="cover"
+                previewUrl={
+                  existingCover ? withMediaAccess(existingCover) : null
+                }
+                file={coverFile}
+                onPick={setCoverFile}
               />
-              <span className="ms-checkbox__box" aria-hidden="true" />
-              <span className="ms-checkbox__label hobbies-collection-editor__limited-label">
-                <span>Limited</span>
-                <span>collection</span>
-              </span>
-            </label>
+              <ArtPickButton
+                label="icon"
+                previewUrl={
+                  existingMark ? withMediaAccess(existingMark) : null
+                }
+                file={iconFile}
+                onPick={setIconFile}
+              />
+              <ArtPickButton
+                label="logo"
+                previewUrl={
+                  existingLogo ? withMediaAccess(existingLogo) : null
+                }
+                file={logoFile}
+                onPick={setLogoFile}
+              />
+              <ArtPickButton
+                label="background"
+                previewUrl={
+                  existingLandscape
+                    ? withMediaAccess(existingLandscape)
+                    : null
+                }
+                file={landscapeFile}
+                onPick={setLandscapeFile}
+              />
+              <ArtPickButton
+                label="banner"
+                previewUrl={
+                  existingBanner ? withMediaAccess(existingBanner) : null
+                }
+                file={bannerFile}
+                onPick={setBannerFile}
+              />
+              <ArtPickButton
+                label="portrait"
+                previewUrl={
+                  existingPortrait ? withMediaAccess(existingPortrait) : null
+                }
+                file={portraitFile}
+                onPick={setPortraitFile}
+              />
+            </div>
+            <div className="hobbies-collection-editor__name-row">
+              <input
+                className="hobbies-collection-editor__name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name of collection"
+                aria-label="Name of collection"
+                autoFocus
+              />
+              {!linkedMode ? (
+                <label className="ms-checkbox hobbies-collection-editor__limited-check">
+                  <input
+                    type="checkbox"
+                    checked={limited}
+                    onChange={(e) => setLimitedOn(e.target.checked)}
+                  />
+                  <span className="ms-checkbox__box" aria-hidden="true" />
+                  <span className="ms-checkbox__label hobbies-collection-editor__limited-label">
+                    <span>Limited</span>
+                    <span>collection</span>
+                  </span>
+                </label>
+              ) : null}
+            </div>
           </div>
-          {limited ? (
+          {linkedMode ? (
+            <fieldset className="hobbies-collection-editor__fields hobbies-collection-editor__link-targets">
+              <legend>Link target</legend>
+              {linkTargetsLoading ? (
+                <p className="muted">Loading targets…</p>
+              ) : null}
+              {linkTargetsError ? (
+                <p className="error">{linkTargetsError}</p>
+              ) : null}
+              {!linkTargetsLoading &&
+              !linkTargetsError &&
+              linkModules.length === 0 ? (
+                <p className="muted">No linkable module tabs found.</p>
+              ) : null}
+              <div className="hobbies-collection-editor__link-list">
+                {linkModules.map((mod) => {
+                  const single = mod.tabs.length === 1;
+                  if (single) {
+                    const tab = mod.tabs[0];
+                    const active =
+                      linkModule === mod.module && linkTab === tab.id;
+                    return (
+                      <label
+                        key={mod.module}
+                        className={`hobbies-collection-editor__link-option${
+                          active ? " is-active" : ""
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="hobby-link-target"
+                          checked={active}
+                          onChange={() => {
+                            setLinkModule(mod.module);
+                            setLinkTab(tab.id);
+                          }}
+                        />
+                        <span>{mod.label}</span>
+                      </label>
+                    );
+                  }
+                  return (
+                    <div
+                      key={mod.module}
+                      className="hobbies-collection-editor__link-group"
+                    >
+                      <div className="hobbies-collection-editor__link-group-label">
+                        {mod.label}
+                      </div>
+                      <div className="hobbies-collection-editor__link-group-tabs">
+                        {mod.tabs.map((tab) => {
+                          const active =
+                            linkModule === mod.module && linkTab === tab.id;
+                          return (
+                            <label
+                              key={`${mod.module}:${tab.id}`}
+                              className={`hobbies-collection-editor__link-option${
+                                active ? " is-active" : ""
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="hobby-link-target"
+                                checked={active}
+                                onChange={() => {
+                                  setLinkModule(mod.module);
+                                  setLinkTab(tab.id);
+                                }}
+                              />
+                              <span>{tab.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ) : null}
+          {!linkedMode && limited ? (
             <div className="hobbies-collection-editor__meta">
               <div className="hobbies-item-modal__row">
                 <label>
@@ -1352,76 +2288,78 @@ function HobbyCollectionEditorModal({
               </div>
             </div>
           ) : null}
-          <fieldset className="hobbies-collection-editor__fields">
-            <legend>Columns</legend>
-            <div className="hobbies-collection-editor__grid">
-              {sortedCatalog.map((f) => {
-                if (
-                  limited &&
-                  (LIMITED_META_KEYS.has(f.key) ||
-                    f.key === "items_collected" ||
-                    f.key === "completion_pct")
-                ) {
-                  return null;
-                }
-                return (
-                <label
-                  key={f.key}
-                  className="ms-checkbox hobbies-collection-editor__check"
-                >
+          {!linkedMode ? (
+            <fieldset className="hobbies-collection-editor__fields">
+              <legend>Columns</legend>
+              <div className="hobbies-collection-editor__grid">
+                {sortedCatalog.map((f) => {
+                  if (
+                    limited &&
+                    (LIMITED_META_KEYS.has(f.key) ||
+                      f.key === "items_collected" ||
+                      f.key === "completion_pct")
+                  ) {
+                    return null;
+                  }
+                  return (
+                  <label
+                    key={f.key}
+                    className="ms-checkbox hobbies-collection-editor__check"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(f.key)}
+                      onChange={() => toggleField(f.key)}
+                    />
+                    <span className="ms-checkbox__box" aria-hidden="true" />
+                    <span className="ms-checkbox__label">
+                      {FIELD_LABELS[f.key] || f.label}
+                      {f.computed && !limited ? " (auto)" : ""}
+                    </span>
+                  </label>
+                );
+                })}
+                {customFields.map((f) => (
+                  <label
+                    key={f.key}
+                    className="ms-checkbox hobbies-collection-editor__check"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(f.key)}
+                      onChange={() => toggleField(f.key)}
+                    />
+                    <span className="ms-checkbox__box" aria-hidden="true" />
+                    <span className="ms-checkbox__label">{f.label}</span>
+                  </label>
+                ))}
+                <div className="hobbies-collection-editor__add-custom">
                   <input
-                    type="checkbox"
-                    checked={selected.has(f.key)}
-                    onChange={() => toggleField(f.key)}
+                    value={newCustomLabel}
+                    onChange={(e) => setNewCustomLabel(e.target.value)}
+                    placeholder="New column"
+                    aria-label="New column name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCustomColumn();
+                      }
+                    }}
                   />
-                  <span className="ms-checkbox__box" aria-hidden="true" />
-                  <span className="ms-checkbox__label">
-                    {FIELD_LABELS[f.key] || f.label}
-                    {f.computed && !limited ? " (auto)" : ""}
-                  </span>
-                </label>
-              );
-              })}
-              {customFields.map((f) => (
-                <label
-                  key={f.key}
-                  className="ms-checkbox hobbies-collection-editor__check"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(f.key)}
-                    onChange={() => toggleField(f.key)}
-                  />
-                  <span className="ms-checkbox__box" aria-hidden="true" />
-                  <span className="ms-checkbox__label">{f.label}</span>
-                </label>
-              ))}
-              <div className="hobbies-collection-editor__add-custom">
-                <input
-                  value={newCustomLabel}
-                  onChange={(e) => setNewCustomLabel(e.target.value)}
-                  placeholder="New column"
-                  aria-label="New column name"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addCustomColumn();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="hobbies-collection-editor__add-btn"
-                  onClick={addCustomColumn}
-                  disabled={!newCustomLabel.trim()}
-                  title="Add column"
-                  aria-label="Add column"
-                >
-                  ✓
-                </button>
+                  <button
+                    type="button"
+                    className="hobbies-collection-editor__add-btn"
+                    onClick={addCustomColumn}
+                    disabled={!newCustomLabel.trim()}
+                    title="Add column"
+                    aria-label="Add column"
+                  >
+                    ✓
+                  </button>
+                </div>
               </div>
-            </div>
-          </fieldset>
+            </fieldset>
+          ) : null}
         </div>
         <div className="modal-actions-row">
           <span className="modal-actions__spacer" />
@@ -1744,8 +2682,13 @@ function HobbyCollectionView({
     y: number;
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const iconRef = useRef<HTMLInputElement>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
   const showPrivateToggle = isAdmin && nsfwUnlocked;
+  const coverSrc = hobbyRealArtUrl(collection.cover_url);
+  const titleBrand = hobbyBrandArt({
+    mark_icon_url: collection.mark_icon_url,
+    logo_url: collection.logo_url,
+  });
 
   const fields = collection.fields;
   const fieldLabels = collection.field_labels || null;
@@ -1936,28 +2879,35 @@ function HobbyCollectionView({
           <button
             type="button"
             className="hobbies-collection__icon-btn"
-            title="Change icon"
-            onClick={() => iconRef.current?.click()}
+            title="Change cover"
+            onClick={() => coverRef.current?.click()}
           >
-            <img
-              src={withMediaAccess(collection.icon_url)}
-              alt=""
-              className="hobbies-collection__icon"
-            />
+            {coverSrc ? (
+              <img
+                src={withMediaAccess(coverSrc)}
+                alt=""
+                className="hobbies-collection__icon"
+              />
+            ) : (
+              <span
+                className="hobbies-collection__icon hobbies-collection__icon--empty"
+                aria-hidden
+              />
+            )}
             <span className="hobbies-collection__icon-edit" aria-hidden>
               <IconPencil />
             </span>
           </button>
           <input
-            ref={iconRef}
+            ref={coverRef}
             type="file"
             accept="image/*"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
-              void uploadHobbyCollectionIcon(collection.id, file).then(() =>
-                onChanged()
+              void uploadHobbyCollectionArt(collection.id, file, "cover").then(
+                () => onChanged()
               );
               e.target.value = "";
             }}
@@ -1991,21 +2941,56 @@ function HobbyCollectionView({
             }}
           />
           <div className="hobbies-collection__title-block">
-            <h2 className="hobbies-collection__title">
-              {collection.name}
-              {collection.is_complete ? (
-                <span
-                  className="hobbies-collection__complete-star"
-                  title="Collection complete"
-                  aria-label="Collection complete"
+            <div className="hobbies-collection__title-row">
+              <h2 className="hobbies-collection__title">
+                {titleBrand.mark ? (
+                  <img
+                    src={withMediaAccess(titleBrand.mark)}
+                    alt=""
+                    className="hobbies-collection__title-mark"
+                  />
+                ) : null}
+                {titleBrand.logo ? (
+                  <img
+                    src={withMediaAccess(titleBrand.logo)}
+                    alt={collection.name}
+                    className="hobbies-collection__title-logo"
+                  />
+                ) : (
+                  <span className="hobbies-collection__title-text">
+                    {collection.name}
+                  </span>
+                )}
+                {collection.is_complete ? (
+                  <span
+                    className="hobbies-collection__complete-star"
+                    title="Collection complete"
+                    aria-label="Collection complete"
+                  >
+                    <IconStar />
+                  </span>
+                ) : null}
+                {collection.private ? (
+                  <span className="hobbies-collection__private-badge">
+                    Private
+                  </span>
+                ) : null}
+              </h2>
+              <div className="hobbies-collection__title-art" aria-label="Edit collection">
+                <button
+                  type="button"
+                  className="hobbies-collection__title-art-btn"
+                  title="Edit collection"
+                  aria-label="Edit collection"
+                  onClick={(e) => {
+                    onEditCollection();
+                    (e.currentTarget as HTMLButtonElement).blur();
+                  }}
                 >
-                  <IconStar />
-                </span>
-              ) : null}
-              {collection.private ? (
-                <span className="hobbies-collection__private-badge">Private</span>
-              ) : null}
-            </h2>
+                  <IconPencil />
+                </button>
+              </div>
+            </div>
             {collection.limited ? (
               <div className="hobbies-collection__info-strip">
                 {collection.theme ? <span>{collection.theme}</span> : null}
@@ -2437,7 +3422,7 @@ function renderCell(
       return (
         <span
           className="hobbies-collection__ext-link hobbies-collection__ext-link--disabled"
-          title="PDF not found in Books"
+          title="PDF not found"
           aria-label="PDF not found"
           aria-disabled="true"
         >

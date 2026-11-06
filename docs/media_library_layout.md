@@ -15,10 +15,26 @@ Media/
 ├── Series/{Letter}/{Franchise}/   ← TV / franchise hub (optional subseries)
 ├── Books/{Letter}/{Work}/         ← publications (manga volumes, editions)
 ├── Games/{Platform}/{Letter}/{Franchise}/   ← platform-first, then franchise
-└── Files/{Tab}/[Nested]/…        ← misc documents (FileStack; not franchises)
+├── Files/{Tab}/[Nested]/…        ← misc documents (FileStack; not franchises)
+└── Hobbies/{Collection}/          ← HobbyStack collections (DB + on-disk art)
 ```
 
-Hobbies are **profile DB collections** (not under `Media/`); presets use `assets/hobbies/`.
+HobbyStack **collections** are profile DB rows; on-disk art lives under `Hobbies/{Collection}/` (sibling of Music/Movies/…). Creating a collection creates that folder (+ `desktop.ini`). Files inside:
+
+| File | Role |
+|------|------|
+| `Cover.*` | Square hub tile + universal fallback for other orientations; also drives `folder.ico` |
+| `Icon.*` | Collection mark (title + hub hover / Icons layout) |
+| `Logo.*` | Wordmark (replaces title text when set) |
+| `Landscape.*` | Page background when the collection tab is open (blurred/darkened); also landscape hub cards |
+| `Banner.*` | Banner hub card art (falls back to Cover) |
+| `Portrait.*` | Portrait hub card art (falls back to Cover) |
+| `{Item}.*` | Per-item images / PDFs (no collection-name prefix) |
+| `desktop.ini` / `folder.ico` | Explorer customization (module root uses `assets/icons/Hobbies.png`) |
+
+**Local vs Linked:** New collections default to **Local** (item table + optional Limited meta/columns). **Linked** collections are hub tiles only — they store Cover/Icon/Logo under `Hobbies/{Name}/` and open another module tab (Music Collection, Series Catalog, Files/{Tab}, etc.). Home tabs and the Hobbies module are not linkable. Editing a hub card (hover pencil) updates name + art; saving art for the synthetic Music tile creates a Linked Music → Music/Collection row and ensures `Hobbies/Music/`.
+
+PDF links prefer `Hobbies/{Collection}/{Stem}.pdf`, then fall back to a Books library match by Theme/year when present.
 
 | Tier | Rule |
 |------|------|

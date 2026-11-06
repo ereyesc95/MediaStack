@@ -210,6 +210,25 @@ export function orientationKey(userId: number) {
   return `music-card-orientation:${userId}`;
 }
 
+export function hobbiesOrientationKey(userId: number) {
+  return `hobbies-card-orientation:${userId}`;
+}
+
+export function getStoredHobbiesOrientation(
+  userId: number,
+  fallback: CardOrientation = "round"
+): CardOrientation {
+  const raw = localStorage.getItem(hobbiesOrientationKey(userId));
+  if (raw && CARD_ORIENTATIONS.includes(raw as CardOrientation) && raw !== "badge") {
+    return raw as CardOrientation;
+  }
+  return fallback;
+}
+
+export function saveHobbiesOrientation(userId: number, value: CardOrientation) {
+  localStorage.setItem(hobbiesOrientationKey(userId), value);
+}
+
 const CARD_ORIENTATIONS: CardOrientation[] = [
   "landscape",
   "portrait",
