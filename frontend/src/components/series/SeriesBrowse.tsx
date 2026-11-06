@@ -4,8 +4,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { launchGame } from "../../api";
 import { formatTrackDate } from "../../formatDate";
+import { playGameClient } from "../../gamesMobile";
 import type {
   CardOrientation,
   SeriesFilterMode,
@@ -62,6 +62,9 @@ export type SeriesCatalogCard = {
   open_label?: string | null;
   /** Games: launch target id when Play game is clicked. */
   launch_game_id?: string | null;
+  open_mode?: string | null;
+  open_url?: string | null;
+  rom_bytes?: number | null;
   folder_path?: string | null;
   owned?: boolean;
   signed?: boolean;
@@ -903,6 +906,21 @@ export default function SeriesBrowse({
                   ? s.id
                   : f.id
                 : null,
+            open_mode:
+              unitNoun === "game"
+                ? (f as SeriesFranchiseCard & { open_mode?: string | null })
+                    .open_mode || null
+                : null,
+            open_url:
+              unitNoun === "game"
+                ? (f as SeriesFranchiseCard & { open_url?: string | null })
+                    .open_url || null
+                : null,
+            rom_bytes:
+              unitNoun === "game"
+                ? (f as SeriesFranchiseCard & { rom_bytes?: number | null })
+                    .rom_bytes ?? null
+                : null,
           });
         }
       }
@@ -1461,17 +1479,25 @@ export default function SeriesBrowse({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              void launchGame(card.launch_game_id!).catch(
-                                () => undefined
-                              );
+                              void playGameClient({
+                                gameId: card.launch_game_id!,
+                                openMode: card.open_mode,
+                                openUrl: card.open_url,
+                                romBytes: card.rom_bytes,
+                                title: card.name,
+                              }).catch(() => undefined);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                void launchGame(card.launch_game_id!).catch(
-                                  () => undefined
-                                );
+                                void playGameClient({
+                                  gameId: card.launch_game_id!,
+                                  openMode: card.open_mode,
+                                  openUrl: card.open_url,
+                                  romBytes: card.rom_bytes,
+                                  title: card.name,
+                                }).catch(() => undefined);
                               }
                             }}
                           >

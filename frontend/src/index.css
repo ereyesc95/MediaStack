@@ -20342,7 +20342,10 @@ button.lyrics-status-badge--icon-only {
 
 .series-film-play-actions__primary {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 0.45rem;
   width: 100%;
 }
 

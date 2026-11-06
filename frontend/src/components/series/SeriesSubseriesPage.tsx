@@ -47,7 +47,6 @@ import {
   lookupUniverse,
   refreshMoviesFilmMetadata,
   refreshGamesGameMetadata,
-  launchGame,
   refreshSeriesMetadata,
   rescanSeriesLocalData,
   addLeafAudio,
@@ -62,6 +61,11 @@ import {
 } from "../../api";
 import { getStoredProfile } from "../../auth";
 import { isAdultGenreName } from "../../adultContent";
+import {
+  gameHasMobileAllowedPlatform,
+  isGamesMobileGated,
+  playGameClient,
+} from "../../gamesMobile";
 import OfficialUnofficialBar from "../OfficialUnofficialBar";
 import {
   filterByOfficial,
@@ -1114,7 +1118,18 @@ export default function SeriesSubseriesPage({
           }));
         }
 
-        setOverview(gameOv);
+        setOverview({
+          ...gameOv,
+          rom_bytes:
+            (gameDetail as { rom_bytes?: number | null }).rom_bytes ??
+            (gameOv as { rom_bytes?: number | null }).rom_bytes,
+          rom_filename:
+            (gameDetail as { rom_filename?: string | null }).rom_filename ??
+            (gameOv as { rom_filename?: string | null }).rom_filename,
+          open_mode:
+            (gameDetail as { open_mode?: string | null }).open_mode ??
+            (gameOv as { open_mode?: string | null }).open_mode,
+        } as SeriesOverview);
         setCard(found);
         setDetail(folder);
         setSiblings(list);
@@ -3506,9 +3521,16 @@ export default function SeriesSubseriesPage({
   /** Leaf game More Games: prefer siblings from overview (instant) over media scan. */
   const moreGameCards = useMemo((): SeriesMediaCard[] => {
     if (!isGame) return gameCards;
-    if (gameCards.length > 0) return gameCards;
+    const gateMobile = isGamesMobileGated(layout);
+    const allow = (platform: string | null | undefined) =>
+      !gateMobile || gameHasMobileAllowedPlatform({ platform });
+    const fromScan = gameCards.filter((g) => allow(g.platform));
+    if (gameCards.length > 0) return fromScan;
     return siblings
       .filter((s) => s.id !== subseriesId)
+      .filter((s) =>
+        allow((s as { platform?: string | null }).platform)
+      )
       .map((s) => {
         const openUrl =
           (s as { open_url?: string | null }).open_url || null;
@@ -3538,7 +3560,7 @@ export default function SeriesSubseriesPage({
           open_label: hasRom ? "Play game" : null,
         };
       });
-  }, [isGame, gameCards, siblings, subseriesId]);
+  }, [isGame, gameCards, siblings, subseriesId, layout]);
 
   const gamePlatforms = useMemo(() => {
     const set = new Set<string>();
@@ -4125,19 +4147,35 @@ export default function SeriesSubseriesPage({
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const playGame = () => {
-    const url = filmOpenUrl?.trim();
-    if (url && /^https?:\/\//i.test(url)) {
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    void launchGame(subseriesId)
-      .then((res) => {
-        if (res?.open_mode === "web" && res.url) {
-          window.open(res.url, "_blank", "noopener,noreferrer");
-        }
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  const gameRomBytes =
+    (overview as { rom_bytes?: number | null } | null)?.rom_bytes ??
+    (detail as { rom_bytes?: number | null } | null)?.rom_bytes ??
+    null;
+  const gameRomFilename =
+    (overview as { rom_filename?: string | null } | null)?.rom_filename ??
+    (detail as { rom_filename?: string | null } | null)?.rom_filename ??
+    null;
+  const gameOpenMode =
+    (overview as { open_mode?: string | null } | null)?.open_mode ||
+    (detail as { open_mode?: string | null } | null)?.open_mode ||
+    (filmOpenUrl && /^https?:\/\//i.test(filmOpenUrl.trim()) ? "web" : null);
+  const mobileGamesPlay = isGame && isGamesMobileGated(layout);
+  const showLaunchOnPc =
+    mobileGamesPlay &&
+    canPlayGame &&
+    gameOpenMode !== "web" &&
+    !/^https?:\/\//i.test((filmOpenUrl || "").trim());
+
+  const playGame = (opts?: { launchOnPc?: boolean }) => {
+    void playGameClient({
+      gameId: subseriesId,
+      openMode: gameOpenMode,
+      openUrl: filmOpenUrl,
+      romBytes: gameRomBytes,
+      romFilename: gameRomFilename,
+      title: card?.title || overview?.title || undefined,
+      launchOnPc: opts?.launchOnPc,
+    }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
   };
 
   const openTrailerEditor = () => {
@@ -5819,12 +5857,21 @@ export default function SeriesSubseriesPage({
                           <button
                             type="button"
                             className="series-film-play-actions__btn series-film-play-actions__btn--primary"
-                            onClick={playGame}
+                            onClick={() => playGame()}
                           >
                             <IconMediaGames className="series-film-play-actions__btn-icon" />
-                            Play game
+                            {mobileGamesPlay ? "Play on device" : "Play game"}
                           </button>
                         )}
+                        {showLaunchOnPc ? (
+                          <button
+                            type="button"
+                            className="series-film-play-actions__btn"
+                            onClick={() => playGame({ launchOnPc: true })}
+                          >
+                            Launch on PC
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                     {filmExtraItems.length > 0 ||

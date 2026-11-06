@@ -53,7 +53,12 @@ import {
   readStoredLanguage,
   writeStoredLanguage,
 } from "../../languageLogos";
+import {
+  gameHasMobileAllowedPlatform,
+  isGamesMobileGated,
+} from "../../gamesMobile";
 import { sortGamePlatforms } from "../../seriesGamePlatforms";
+import { resolveDeviceLayout } from "../../usePhoneLayout";
 import {
   readFranchiseOverviewCache as readOverviewCache,
   writeFranchiseOverviewCache as writeOverviewCache,
@@ -1505,36 +1510,46 @@ export default function SeriesFranchisePage({
         data?.subseries ||
         [];
       if (data) {
+        const gateMobile = isGamesMobileGated(resolveDeviceLayout());
         setGameCards(
-          films.map((f) => {
-            const game = f as MoviesFilmCard & {
-              portrait_url?: string | null;
-              landscape_url?: string | null;
-              banner_url?: string | null;
-              open_url?: string | null;
-              open_mode?: "tab" | "local" | null;
-              open_label?: string | null;
-              platform?: string | null;
-              has_rom?: boolean;
-            };
-            return {
-              id: game.id,
-              title: game.title,
-              cover_url: game.cover_url,
-              portrait_url: game.portrait_url || game.cover_url,
-              landscape_url: game.landscape_url || null,
-              banner_url: game.banner_url || game.landscape_url || null,
-              logo_url: game.logo_url ?? null,
-              date_label: game.display_date || game.date_iso,
-              path: game.folder_path,
-              open_url: game.open_url || null,
-              open_mode: game.open_mode || (game.open_url ? ("local" as const) : null),
-              open_label: game.has_rom || game.open_url ? "Play game" : null,
-              meta: game.platform || undefined,
-              platform: game.platform || undefined,
-              official: game.official,
-            };
-          })
+          films
+            .map((f) => {
+              const game = f as MoviesFilmCard & {
+                portrait_url?: string | null;
+                landscape_url?: string | null;
+                banner_url?: string | null;
+                open_url?: string | null;
+                open_mode?: "tab" | "local" | null;
+                open_label?: string | null;
+                platform?: string | null;
+                has_rom?: boolean;
+              };
+              return {
+                id: game.id,
+                title: game.title,
+                cover_url: game.cover_url,
+                portrait_url: game.portrait_url || game.cover_url,
+                landscape_url: game.landscape_url || null,
+                banner_url: game.banner_url || game.landscape_url || null,
+                logo_url: game.logo_url ?? null,
+                date_label: game.display_date || game.date_iso,
+                path: game.folder_path,
+                open_url: game.open_url || null,
+                open_mode:
+                  game.open_mode ||
+                  (game.open_url ? ("local" as const) : null),
+                open_label:
+                  game.has_rom || game.open_url ? "Play game" : null,
+                meta: game.platform || undefined,
+                platform: game.platform || undefined,
+                official: game.official,
+              };
+            })
+            .filter(
+              (g) =>
+                !gateMobile ||
+                gameHasMobileAllowedPlatform({ platform: g.platform })
+            )
         );
         setGameLoading(false);
       }

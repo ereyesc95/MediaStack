@@ -466,6 +466,8 @@ def build_game_overview(
         "icon_url": detail.get("icon_url"),
         "badge_url": detail.get("badge_url"),
         "launch_path": detail.get("launch_path"),
+        "rom_bytes": detail.get("rom_bytes"),
+        "rom_filename": detail.get("rom_filename"),
         "web_url": web_url or None,
         "open_url": open_url,
         "open_mode": open_mode,

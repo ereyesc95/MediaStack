@@ -98,6 +98,35 @@ _PORTAL_DIRS = frozenset(
 )
 
 _PLATFORM_CF = {p.casefold(): p for p in GAME_PLATFORMS}
+# Short disk folder names → canonical GAME_PLATFORMS entry.
+_PLATFORM_ALIASES: dict[str, str] = {
+    "nes": "Nintendo Entertainment System",
+    "snes": "Super Nintendo",
+    "n64": "Nintendo 64",
+    "gb": "Game Boy",
+    "gbc": "Game Boy Color",
+    "gba": "Game Boy Advance",
+    "genesis": "Sega Genesis",
+    "megadrive": "Sega Genesis",
+    "mega drive": "Sega Genesis",
+    "master system": "Sega Master System",
+    "c64": "Commodore 64",
+    "web": "Browser",
+    "mame": "Arcade",
+    "ps1": "PlayStation",
+    "psx": "PlayStation",
+    "ps2": "PlayStation 2",
+    "ps3": "PlayStation 3",
+    "ps4": "PlayStation 4",
+    "ps5": "PlayStation 5",
+    "switch": "Nintendo Switch",
+    "wii": "Nintendo Wii",
+    "wii u": "Nintendo Wii U",
+    "3ds": "Nintendo 3DS",
+    "nds": "Nintendo DS",
+    "psp": "PlayStation Portable",
+    "vita": "PlayStation Vita",
+}
 
 
 def _is_meta_dir(name: str) -> bool:
@@ -131,7 +160,13 @@ def _names_match(a: str, b: str) -> bool:
 
 
 def _normalize_platform_name(name: str) -> str:
-    hit = _PLATFORM_CF.get((name or "").strip().casefold())
+    key = (name or "").strip().casefold()
+    if not key:
+        return ""
+    alias = _PLATFORM_ALIASES.get(key)
+    if alias:
+        return alias
+    hit = _PLATFORM_CF.get(key)
     return hit or (name or "").strip()
 
 
@@ -282,6 +317,14 @@ def _game_card_from_dir(
         launch = None
     logo_url, icon_url = find_logo_file(game_dir, media_root)
     launch_rel = safe_relative(launch, media_root) if launch else None
+    rom_bytes: int | None = None
+    rom_filename: str | None = None
+    if launch is not None:
+        try:
+            rom_bytes = int(launch.stat().st_size)
+        except OSError:
+            rom_bytes = None
+        rom_filename = launch.name
     # Genres / developers / publishers come from game_leaves DB metadata
     # (enriched in catalog routes) — never from local about.json sidecars.
     genre_names: list[str] = []
@@ -326,6 +369,8 @@ def _game_card_from_dir(
         "badge_url": find_badge_file(game_dir, media_root),
         "has_rom": has_rom,
         "launch_path": launch_rel,
+        "rom_bytes": rom_bytes,
+        "rom_filename": rom_filename,
         "web_url": web_url,
         "open_url": open_url,
         "open_mode": open_mode,

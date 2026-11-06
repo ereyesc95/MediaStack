@@ -799,9 +799,48 @@ def games_franchise_gallery(
     return payload
 
 
+@router.get("/games/{game_id}/rom")
+def games_rom_download(
+    game_id: str,
+    _user: User = Depends(get_current_user),
+):
+    """Auth'd ROM download for on-device RetroArch / Files handoff."""
+    from fastapi.responses import FileResponse
+
+    detail = build_game_detail(game_id)
+    if not detail:
+        raise HTTPException(404, "Game not found")
+    if detail.get("open_mode") == "web":
+        raise HTTPException(400, "Web games have no ROM file")
+    launch_path = detail.get("launch_path")
+    if not launch_path:
+        raise HTTPException(404, "No launchable game file found")
+    root = settings.media_root
+    if not root:
+        raise HTTPException(400, "Set MYSTACK_MEDIA_ROOT")
+    media_root = Path(root).resolve()
+    cleaned = str(launch_path).replace("\\", "/").lstrip("/")
+    if ".." in cleaned.split("/"):
+        raise HTTPException(400, "Invalid path")
+    target = (media_root / cleaned).resolve()
+    try:
+        target.relative_to(media_root)
+    except ValueError as exc:
+        raise HTTPException(400, "Path escapes media root") from exc
+    if not target.is_file():
+        raise HTTPException(404, "File not found")
+    filename = detail.get("rom_filename") or target.name
+    return FileResponse(
+        target,
+        filename=str(filename),
+        media_type="application/octet-stream",
+        content_disposition_type="attachment",
+    )
+
+
 @router.post("/games/{game_id}/launch")
 def games_launch(game_id: str):
-    """Open the primary ROM/ISO, or return a Web game URL for the client."""
+    """Open the primary ROM/ISO on the server host, or return a Web game URL."""
     detail = build_game_detail(game_id)
     if not detail:
         raise HTTPException(404, "Game not found")
@@ -810,10 +849,22 @@ def games_launch(game_id: str):
             "ok": True,
             "open_mode": "web",
             "url": detail["open_url"],
+            "platform": detail.get("platform"),
+            "rom_bytes": detail.get("rom_bytes"),
+            "rom_filename": detail.get("rom_filename"),
         }
     launch_path = detail.get("launch_path")
     if not launch_path:
         raise HTTPException(404, "No launchable game file found")
     from app.routers.media import open_local_media
 
-    return open_local_media(path=launch_path)
+    result = open_local_media(path=launch_path)
+    if isinstance(result, dict):
+        result = {
+            **result,
+            "open_mode": "local",
+            "platform": detail.get("platform"),
+            "rom_bytes": detail.get("rom_bytes"),
+            "rom_filename": detail.get("rom_filename"),
+        }
+    return result

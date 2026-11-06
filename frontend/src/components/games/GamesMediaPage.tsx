@@ -4,7 +4,6 @@ import {
   fetchGamesFranchiseOverview,
   fetchGamesGameAudio,
   fetchGamesGameOverview,
-  launchGame,
   refreshGamesFranchiseMetadata,
   refreshGamesGameMetadata,
   resolveBooksPath,
@@ -12,7 +11,9 @@ import {
   resolveMoviesPath,
   type FranchiseQuizCatalogItem,
 } from "../../api";
+import { isGamesMobileGated, playGameClient } from "../../gamesMobile";
 import { pushRecentGameId } from "../../gamesRecent";
+import { useDeviceLayout } from "../../usePhoneLayout";
 import type { GamesOverviewTab, GamesSection } from "../../gamesRoute";
 import { saveReleaseReferrer } from "../../musicRoute";
 import type { CardOrientation, MoviesFilmCard } from "../../types";
@@ -89,6 +90,8 @@ export default function GamesMediaPage({
   onOpenArtist,
 }: Props) {
   const isLeaf = Boolean(gameId);
+  const deviceLayout = useDeviceLayout();
+  const mobileGated = isGamesMobileGated(deviceLayout);
   const [data, setData] = useState<Ov | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -276,27 +279,20 @@ export default function GamesMediaPage({
     { id: "quiz", label: "QUIZ", show: !isLeaf },
   ];
 
-  async function onLaunch() {
+  async function onLaunch(opts?: { launchOnPc?: boolean }) {
     if (!launchPath || !gameId) return;
     setLaunching(true);
     try {
-      if (openMode === "web") {
-        window.open(launchPath, "_blank", "noopener,noreferrer");
-        return;
-      }
-      const res = await launchGame(gameId);
-      if (
-        res &&
-        typeof res === "object" &&
-        (res as { open_mode?: string }).open_mode === "web" &&
-        (res as { url?: string }).url
-      ) {
-        window.open(
-          (res as { url: string }).url,
-          "_blank",
-          "noopener,noreferrer"
-        );
-      }
+      await playGameClient({
+        gameId,
+        openMode,
+        openUrl: launchPath,
+        romBytes: (data as { rom_bytes?: number | null } | null)?.rom_bytes,
+        romFilename:
+          (data as { rom_filename?: string | null } | null)?.rom_filename,
+        title: String(title || ""),
+        launchOnPc: opts?.launchOnPc,
+      });
     } finally {
       setLaunching(false);
     }
@@ -538,17 +534,34 @@ export default function GamesMediaPage({
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Launch
+                    Play game
                   </a>
                 ) : (
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    disabled={launching}
-                    onClick={() => void onLaunch()}
-                  >
-                    {launching ? "Launching…" : "Launch"}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      disabled={launching}
+                      onClick={() => void onLaunch()}
+                    >
+                      {launching
+                        ? "Launching…"
+                        : mobileGated
+                          ? "Play on device"
+                          : "Play game"}
+                    </button>
+                    {mobileGated ? (
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        disabled={launching}
+                        onClick={() => void onLaunch({ launchOnPc: true })}
+                        style={{ marginLeft: "0.5rem" }}
+                      >
+                        Launch on PC
+                      </button>
+                    ) : null}
+                  </>
                 )
               ) : null}
               {!isLeaf && (data as { primary_game_id?: string })?.primary_game_id ? (

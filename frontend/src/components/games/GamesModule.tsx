@@ -58,6 +58,13 @@ import SeriesBrowse, {
 import SeriesSubseriesPage, {
   type SeriesCatalogBrowseTarget,
 } from "../series/SeriesSubseriesPage";
+import {
+  filterMobileAllowedPlatforms,
+  gameHasMobileAllowedPlatform,
+  isGamesMobileGated,
+  isMobileAllowedPlatform,
+} from "../../gamesMobile";
+import { useDeviceLayout } from "../../usePhoneLayout";
 import GamesHome from "./GamesHome";
 import GamesFranchisePage from "./GamesFranchisePage";
 import GamesPlatformFilter from "./GamesPlatformFilter";
@@ -171,6 +178,8 @@ export default function GamesModule({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<string | null>(null);
   const [ownership, setOwnership] = useState<OwnershipIndex | null>(null);
+  const deviceLayout = useDeviceLayout();
+  const mobileGated = isGamesMobileGated(deviceLayout);
 
   useEffect(() => {
     if (!userId) {
@@ -200,10 +209,41 @@ export default function GamesModule({
     };
   }, [userId, syncTick]);
 
-  const ownedGames = useMemo(
-    () => markLeafCards(games, ownership),
-    [games, ownership]
+  const visiblePlatforms = useMemo(
+    () => (mobileGated ? filterMobileAllowedPlatforms(platforms) : platforms),
+    [mobileGated, platforms]
   );
+
+  const visibleGames = useMemo(() => {
+    if (!mobileGated) return games;
+    return games.filter((g) =>
+      gameHasMobileAllowedPlatform({
+        platform: (g as { platform?: string }).platform,
+        platforms: (g as { platforms?: string[] }).platforms,
+      })
+    );
+  }, [games, mobileGated]);
+
+  const visibleFranchises = useMemo(() => {
+    if (!mobileGated) return franchises;
+    return franchises.filter((f) => {
+      const plats = (f as { platforms?: string[] }).platforms || [];
+      if (plats.some((p) => isMobileAllowedPlatform(p))) return true;
+      return visibleGames.some((g) => g.work_id === f.id);
+    });
+  }, [franchises, mobileGated, visibleGames]);
+
+  const ownedGames = useMemo(
+    () => markLeafCards(visibleGames, ownership),
+    [visibleGames, ownership]
+  );
+
+  useEffect(() => {
+    if (!mobileGated || !platformFilter) return;
+    if (!isMobileAllowedPlatform(platformFilter)) {
+      setPlatformFilter(visiblePlatforms[0]?.name || null);
+    }
+  }, [mobileGated, platformFilter, visiblePlatforms]);
 
   const gamesFilterModes = useMemo(() => {
     const modes = [...FILTER_MODES];
@@ -404,12 +444,12 @@ export default function GamesModule({
 
   const browseFranchises = useMemo((): SeriesFranchiseCard[] => {
     const filteredFranchises = platformFilter
-      ? franchises.filter((f) =>
+      ? visibleFranchises.filter((f) =>
           ((f as { platforms?: string[] }).platforms || []).some(
             (p) => p.toLowerCase() === platformFilter.toLowerCase()
           )
         )
-      : franchises;
+      : visibleFranchises;
 
     if (catalogScope === "franchises") {
       return filteredFranchises
@@ -499,6 +539,9 @@ export default function GamesModule({
             )
               ? "web"
               : null),
+          rom_bytes: (g as { rom_bytes?: number | null }).rom_bytes ?? null,
+          rom_filename:
+            (g as { rom_filename?: string | null }).rom_filename ?? null,
           has_rom: Boolean((g as { has_rom?: boolean }).has_rom),
           open_label:
             (g as { has_rom?: boolean }).has_rom ||
@@ -524,12 +567,128 @@ export default function GamesModule({
       });
     }
     return filteredFranchises;
-  }, [catalogScope, franchises, ownedGames, platformFilter]);
+  }, [catalogScope, visibleFranchises, ownedGames, platformFilter]);
+
+  const gatedGameUnavailable = useMemo(() => {
+    if (!mobileGated || !gameId) return false;
+    if (!games.length && catalogLoading) return false;
+    const game = games.find((item) => item.id === gameId);
+    if (!game) return false;
+    return !gameHasMobileAllowedPlatform({
+      platform: (game as { platform?: string }).platform,
+      platforms: (game as { platforms?: string[] }).platforms,
+    });
+  }, [mobileGated, gameId, games, catalogLoading]);
+
+  const homeDashboard = useMemo(() => {
+    if (!dashboard || !mobileGated) return dashboard;
+    const dashExtra = dashboard as SeriesDashboard & {
+      top_games?: MoviesFilmCard[];
+    };
+    const rawTop: MoviesFilmCard[] = Array.isArray(dashExtra.top_games)
+      ? dashExtra.top_games
+      : Array.isArray(dashboard.top_series)
+        ? (dashboard.top_series as unknown as MoviesFilmCard[])
+        : [];
+    const topGames = rawTop.filter((g) =>
+      gameHasMobileAllowedPlatform({
+        platform: (g as { platform?: string }).platform,
+        platforms: (g as { platforms?: string[] }).platforms,
+      })
+    );
+    const topFranchises = (dashboard.top_franchises || []).filter((f) => {
+      const plats = (f as { platforms?: string[] }).platforms || [];
+      if (plats.some((p) => isMobileAllowedPlatform(p))) return true;
+      return topGames.some((g) => g.work_id === f.id);
+    });
+    return {
+      ...dashboard,
+      top_franchises: topFranchises,
+      top_games: topGames,
+      platforms: filterMobileAllowedPlatforms(
+        ((dashboard as { platforms?: SeriesFranchiseCard[] }).platforms ||
+          []) as SeriesFranchiseCard[]
+      ),
+    };
+  }, [dashboard, mobileGated]);
 
   if (franchiseId) {
     if (gameId) {
-      const workCard = franchises.find((f) => f.id === franchiseId);
+      const workCard = visibleFranchises.find((f) => f.id === franchiseId)
+        || franchises.find((f) => f.id === franchiseId);
       const game = games.find((item) => item.id === gameId);
+      if (gatedGameUnavailable) {
+        return (
+          <div className="music-module">
+            <ModuleTopBar
+              media={
+                mediaOptions.find((m) => m.kind === "games") ?? {
+                  id: 600,
+                  kind: "games",
+                  label: "Games",
+                }
+              }
+              mediaOptions={mediaOptions}
+              onSelectMedia={onSelectMedia}
+              tabs={[
+                {
+                  id: "back",
+                  label: "GAMES",
+                  active: false,
+                  onClick: () => {
+                    pushGamesCatalogRoute();
+                    onNavigate({
+                      franchiseId: undefined,
+                      gameId: undefined,
+                      section: undefined,
+                      overviewTab: undefined,
+                      universeId: undefined,
+                    });
+                    setTab("catalog");
+                  },
+                },
+              ]}
+              menu={
+                <AppMenu
+                  isAdmin={isAdmin}
+                  onImport={onImport}
+                  onSync={onSync}
+                  onChooseSource={onChooseSource}
+                  onSwitchProfile={onSwitchProfile}
+                  onEditProfile={onEditProfile}
+                />
+              }
+            />
+            <div className="artist-browse-empty" style={{ padding: "2rem 1.25rem" }}>
+              <p>
+                {game?.title || "This game"} is not available on this device.
+              </p>
+              <p className="muted">
+                Mobile play is limited to RetroArch-friendly platforms and
+                Browser / Flash. Open this title on a PC or large tablet, or use
+                Launch on PC from an allowed game.
+              </p>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  pushGamesCatalogRoute();
+                  onNavigate({
+                    franchiseId: undefined,
+                    gameId: undefined,
+                    section: undefined,
+                    overviewTab: undefined,
+                    universeId: undefined,
+                  });
+                  setTab("catalog");
+                }}
+              >
+                Back to Games
+              </button>
+            </div>
+          </div>
+        );
+      }
       return (
         <SeriesSubseriesPage
           variant="game"
@@ -865,7 +1024,7 @@ export default function GamesModule({
               <>
                 {catalogScope === "platforms" ? (
                   <GamesPlatformFilter
-                    platforms={platforms}
+                    platforms={visiblePlatforms}
                     value={platformFilter}
                     onChange={(name) => {
                       setPlatformFilter(name);
@@ -881,7 +1040,10 @@ export default function GamesModule({
                     if (next === "platforms") {
                       setFilterMode("name");
                       // Default to first platform — not ALL (which dumps every game).
-                      const first = platforms[0]?.name || platforms[0]?.id || null;
+                      const first =
+                        visiblePlatforms[0]?.name ||
+                        visiblePlatforms[0]?.id ||
+                        null;
                       setPlatformFilter(first);
                       setLetter("A");
                     } else {
@@ -945,10 +1107,10 @@ export default function GamesModule({
       {tab === "home" ? (
         <div className="music-module__body music-module__body--home">
           <GamesHome
-            data={dashboard}
+            data={homeDashboard}
             loading={dashLoading}
             universes={universes}
-            platforms={platforms}
+            platforms={visiblePlatforms}
             onPlatform={(_platformId, platformName) => {
               setTab("catalog");
               pushGamesCatalogRoute();
@@ -988,11 +1150,20 @@ export default function GamesModule({
       ) : (
         <SeriesBrowse
           franchises={browseFranchises}
-          platforms={platforms}
+          platforms={visiblePlatforms}
           universes={universes}
           orientation={cardOrientation}
           filterMode={filterMode}
-          filterOptions={filterOptions}
+          filterOptions={
+            mobileGated && filterOptions
+              ? {
+                  ...filterOptions,
+                  platforms: (filterOptions.platforms || []).filter((p) =>
+                    isMobileAllowedPlatform(p.name)
+                  ),
+                }
+              : filterOptions
+          }
           catalogScope={
             catalogScope === "platforms" && platformFilter
               ? "shows"

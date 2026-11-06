@@ -5091,9 +5091,40 @@ export async function launchGame(gameId: string) {
     path?: string;
     open_mode?: string;
     url?: string;
+    platform?: string;
+    rom_bytes?: number | null;
+    rom_filename?: string | null;
   }>(`${API}/games/games/${encodeURIComponent(gameId)}/launch`, {
     method: "POST",
   });
+}
+
+/** Auth'd ROM download for mobile RetroArch / Files handoff. */
+export async function downloadGameRom(
+  gameId: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+  const res = await fetch(
+    `${API}/games/games/${encodeURIComponent(gameId)}/rom`,
+    { headers }
+  );
+  await throwIfNotOk(res);
+  const blob = await res.blob();
+  let filename = "game.rom";
+  const cd = res.headers.get("Content-Disposition") || "";
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  const plain = /filename="?([^";]+)"?/i.exec(cd);
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      filename = star[1];
+    }
+  } else if (plain?.[1]) {
+    filename = plain[1];
+  }
+  return { blob, filename };
 }
 
 export async function fetchGamesFranchiseAudio(workId: string) {
