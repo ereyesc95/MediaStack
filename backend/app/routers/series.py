@@ -14,46 +14,71 @@ router = APIRouter(prefix="/api/series", tags=["series"])
 def series_catalog(
     db: Session = Depends(get_db),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    letter: str = Query(""),
+    search: str = Query(""),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=200),
 ):
     """Filesystem catalog: Series/{Letter}/{Franchise}/ (+ DB filter metadata)."""
+    from pathlib import Path
+
     from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
+    from app.catalog_paging import apply_catalog_paging
+    from app.config import settings
+    from app.franchise_identity import (
+        enrich_catalog_with_artwork_home,
+        enrich_catalog_with_music_identity,
+    )
+    from app.module_catalog_cache import (
+        get_cached_enriched_catalog,
+        get_or_build_catalog,
+        store_enriched_catalog,
+    )
     from app.series_catalog_meta import (
         enrich_catalog_metadata,
         filter_franchise_subseries_lists,
     )
     from app.series_index import build_series_catalog
 
-    from app.franchise_identity import (
-        enrich_catalog_with_artwork_home,
-        enrich_catalog_with_music_identity,
-    )
-
-    from pathlib import Path
-
-    from app.config import settings
-    from app.module_catalog_cache import get_or_build_catalog
-
     root = Path(settings.media_root or "")
-    fs_catalog = get_or_build_catalog(
-        "series", media_root=root, builder=build_series_catalog
+    cached = get_cached_enriched_catalog(
+        "series", media_root=root, nsfw_unlocked=nsfw_unlocked
     )
-    catalog = enrich_catalog_metadata(db, fs_catalog)
-    catalog = enrich_catalog_with_music_identity(
-        db, catalog, orientation="portrait"
+    if cached is not None:
+        catalog = cached
+    else:
+        fs_catalog = get_or_build_catalog(
+            "series", media_root=root, builder=build_series_catalog
+        )
+        catalog = enrich_catalog_metadata(db, fs_catalog)
+        catalog = enrich_catalog_with_music_identity(
+            db, catalog, orientation="portrait"
+        )
+        catalog = enrich_catalog_with_artwork_home(catalog)
+        adult_subs = adult_subgenre_names_from_db(db)
+        catalog["franchises"] = filter_adult_cards(
+            catalog.get("franchises") or [],
+            nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
+        )
+        catalog["franchises"] = filter_franchise_subseries_lists(
+            catalog.get("franchises") or [],
+            nsfw_unlocked=nsfw_unlocked,
+            extra_adult_subgenres=adult_subs,
+        )
+        store_enriched_catalog(
+            "series",
+            media_root=root,
+            nsfw_unlocked=nsfw_unlocked,
+            payload=catalog,
+        )
+    return apply_catalog_paging(
+        catalog,
+        letter=letter or None,
+        search=search or None,
+        page=page,
+        page_size=page_size,
     )
-    catalog = enrich_catalog_with_artwork_home(catalog)
-    adult_subs = adult_subgenre_names_from_db(db)
-    catalog["franchises"] = filter_adult_cards(
-        catalog.get("franchises") or [],
-        nsfw_unlocked=nsfw_unlocked,
-        extra_adult_subgenres=adult_subs,
-    )
-    catalog["franchises"] = filter_franchise_subseries_lists(
-        catalog.get("franchises") or [],
-        nsfw_unlocked=nsfw_unlocked,
-        extra_adult_subgenres=adult_subs,
-    )
-    return catalog
 
 
 @router.get("/filters/options")
@@ -193,7 +218,15 @@ def series_filter_options(
         country_groups = []
     continents = continents_for_country_ids(db, used_country_ids)
 
-    catalog = build_series_catalog()
+    from pathlib import Path
+
+    from app.config import settings
+    from app.module_catalog_cache import get_or_build_catalog
+
+    root = Path(settings.media_root or "")
+    catalog = get_or_build_catalog(
+        "series", media_root=root, builder=build_series_catalog
+    )
     decades: set[int] = set()
     for f in catalog.get("franchises") or []:
         for s in f.get("subseries") or []:

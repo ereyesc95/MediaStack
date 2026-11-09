@@ -19,6 +19,7 @@ import SearchableDropdown, {
 } from "../SearchableDropdown";
 import { DEFAULT_DISC_URL } from "../music/release/releaseTrackPanelMeta";
 import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
+import LazyCardCover from "../LazyCardCover";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import { getStoredProfile } from "../../auth";
 import { filterAdultCards } from "../../adultContent";
@@ -126,6 +127,8 @@ type Props = {
   unitNoun?: "season" | "film" | "book" | "game";
   /** Optional platform cards when catalogScope is "platforms" (Games). */
   platforms?: SeriesFranchiseCard[];
+  /** Server-provided letters when the franchise list is letter-paged. */
+  catalogLetters?: string[];
   /** Override filter tabs (e.g. Films scope hides END DATE, renames START). */
   filterModes?: { id: SeriesFilterMode; label: string }[];
   loading?: boolean;
@@ -158,6 +161,7 @@ export default function SeriesBrowse({
   franchises,
   universes = [],
   platforms = [],
+  catalogLetters,
   orientation,
   filterMode,
   filterOptions,
@@ -263,6 +267,17 @@ export default function SeriesBrowse({
   }, [catalogMetaPool, filterOptions]);
 
   const availableLetters = useMemo(() => {
+    if (
+      catalogLetters?.length &&
+      (catalogScope === "franchises" || catalogScope === "shows")
+    ) {
+      const set = new Set(
+        catalogLetters.map((l) => (l === "#" ? HASH : l.toUpperCase()))
+      );
+      const letters = LETTERS.filter((l) => set.has(l));
+      if (set.has(HASH)) letters.push(HASH);
+      return letters;
+    }
     const set = new Set<string>();
     const add = (raw: string) => {
       const L = (raw || "").trim().charAt(0).toUpperCase();
@@ -285,7 +300,7 @@ export default function SeriesBrowse({
     const letters = LETTERS.filter((l) => set.has(l));
     if (set.has(HASH)) letters.push(HASH);
     return letters;
-  }, [catalogScope, franchises, universes, platforms]);
+  }, [catalogScope, franchises, universes, platforms, catalogLetters]);
 
   const visibleFilterModes = useMemo(() => {
     // While options are still loading, keep the active mode visible so pending
@@ -1433,14 +1448,11 @@ export default function SeriesBrowse({
                   onClick={() => handleCardClick(card)}
                   title={card.name}
                 >
-                  <span
-                    className="artist-card-bg card-bg-layer"
-                    style={
-                      isLogoMode
-                        ? undefined
-                        : { backgroundImage: `url("${cover}")` }
-                    }
-                  />
+                  {isLogoMode ? (
+                    <span className="artist-card-bg card-bg-layer" />
+                  ) : (
+                    <LazyCardCover url={cover} />
+                  )}
                   <span className="artist-card-dim" />
                   {card.owned || card.signed ? (
                     <span className="artist-card-ownership" aria-hidden>

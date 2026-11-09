@@ -235,7 +235,10 @@ def media_file(
         raise HTTPException(403, "Invalid path")
     if not target.is_file():
         raise HTTPException(404, "File not found")
-    return FileResponse(target)
+    return FileResponse(
+        target,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.get("/data/file")

@@ -3,6 +3,7 @@ import {
   deleteExclusiveLink,
   fetchExclusiveHub,
   fetchExclusiveLinks,
+  fetchPhotoYear,
   fetchPhotoYears,
   resolveArtistName,
   resolveBooksPath,
@@ -392,6 +393,20 @@ export default function PhotosModule({
       .finally(() => setYearsReady(true));
   }, []);
 
+  const loadYearItems = useCallback((year: string) => {
+    void fetchPhotoYear(year)
+      .then((bucket) => {
+        setYears((prev) => {
+          const idx = prev.findIndex((y) => y.year === year);
+          if (idx < 0) return [...prev, bucket];
+          const next = prev.slice();
+          next[idx] = { ...prev[idx], ...bucket };
+          return next;
+        });
+      })
+      .catch(() => undefined);
+  }, []);
+
   const loadHub = useCallback(() => {
     void fetchExclusiveHub()
       .then((data) => {
@@ -457,6 +472,13 @@ export default function PhotosModule({
       setGalleryFolder(yearBuckets[0].year);
     }
   }, [viewTab, galleryFolder, yearBuckets]);
+
+  useEffect(() => {
+    if (viewTab !== "gallery" || !galleryFolder) return;
+    const bucket = years.find((y) => y.year === galleryFolder);
+    if (bucket && (bucket.items?.length || 0) > 0) return;
+    loadYearItems(galleryFolder);
+  }, [viewTab, galleryFolder, years, loadYearItems]);
 
   const moduleSources = useMemo(
     () => hubSources.filter((s) => s.module === exclusiveModule),
@@ -615,12 +637,14 @@ export default function PhotosModule({
     const map = new Map<string, string[]>();
     for (const y of homeYearCards) {
       const urls: string[] = [];
+      const cover = y.cover_url ? mediaSrc(y.cover_url) : null;
+      if (cover && mediaType !== "videos") urls.push(cover);
       for (const it of y.items || []) {
         if (it.kind === "video") continue;
         if (mediaType === "videos") continue;
         if (mediaType === "photos" && it.kind === "video") continue;
         const src = mediaSrc(it.thumb_url || it.url);
-        if (src) urls.push(src);
+        if (src && !urls.includes(src)) urls.push(src);
         if (urls.length >= HOME_PREVIEW_MAX) break;
       }
       if (!urls.length && mediaType !== "photos") {

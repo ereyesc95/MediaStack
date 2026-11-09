@@ -597,6 +597,8 @@ export type PhotosYearBucket = {
     kind?: string;
     subfolder?: string;
   }[];
+  item_count?: number;
+  cover_url?: string | null;
   subfolders?: string[];
   has_images?: boolean;
   has_videos?: boolean;
@@ -608,6 +610,10 @@ export async function fetchPhotoYears(): Promise<{
   exclusive_available?: boolean;
 }> {
   return request(`${API}/photos/years`);
+}
+
+export async function fetchPhotoYear(year: string): Promise<PhotosYearBucket> {
+  return request(`${API}/photos/years/${encodeURIComponent(year)}`);
 }
 
 export type ExclusiveHubLink = {
@@ -2535,12 +2541,25 @@ export async function setMediaRoot(path: string): Promise<{
   });
 }
 
-export async function fetchMoviesCatalog() {
+export async function fetchMoviesCatalog(params?: {
+  letter?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.letter) q.set("letter", params.letter);
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.page_size) q.set("page_size", String(params.page_size));
+  const qs = q.toString();
   return request<{
     franchises: import("./types").SeriesFranchiseCard[];
     films: import("./types").MoviesFilmCard[];
     scanned_at: string | null;
-  }>(`${API}/movies/catalog`);
+    letters?: string[];
+    total?: number;
+  }>(`${API}/movies/catalog${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchMoviesDashboard() {
@@ -2555,13 +2574,26 @@ export async function fetchMoviesDashboard() {
   >(`${API}/movies/dashboard`);
 }
 
-export async function fetchBooksCatalog() {
+export async function fetchBooksCatalog(params?: {
+  letter?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.letter) q.set("letter", params.letter);
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.page_size) q.set("page_size", String(params.page_size));
+  const qs = q.toString();
   return request<{
     franchises: import("./types").SeriesFranchiseCard[];
     books?: import("./types").MoviesFilmCard[];
     films?: import("./types").MoviesFilmCard[];
     scanned_at: string | null;
-  }>(`${API}/books/catalog`);
+    letters?: string[];
+    total?: number;
+  }>(`${API}/books/catalog${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchBooksDashboard() {
@@ -3223,8 +3255,21 @@ export async function unlinkMoviesUniverseMember(
   return unlinkUniverseMember(universeId, "movies", workSlug);
 }
 
-export async function fetchSeriesCatalog() {
-  return request<SeriesCatalogPayload>(`${API}/series/catalog`);
+export async function fetchSeriesCatalog(params?: {
+  letter?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.letter) q.set("letter", params.letter);
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.page_size) q.set("page_size", String(params.page_size));
+  const qs = q.toString();
+  return request<SeriesCatalogPayload>(
+    `${API}/series/catalog${qs ? `?${qs}` : ""}`
+  );
 }
 
 export async function fetchSeriesDashboard() {
@@ -5006,14 +5051,27 @@ export async function commitHobbyImport(
 
 /* ---- Games ---- */
 
-export async function fetchGamesCatalog() {
+export async function fetchGamesCatalog(params?: {
+  letter?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.letter) q.set("letter", params.letter);
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.page_size) q.set("page_size", String(params.page_size));
+  const qs = q.toString();
   return request<{
     franchises: import("./types").SeriesFranchiseCard[];
     games?: import("./types").MoviesFilmCard[];
     films?: import("./types").MoviesFilmCard[];
     platforms?: import("./types").SeriesFranchiseCard[];
     scanned_at: string | null;
-  }>(`${API}/games/catalog`);
+    letters?: string[];
+    total?: number;
+  }>(`${API}/games/catalog${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchGamesDashboard(recentIds: string[] = []) {

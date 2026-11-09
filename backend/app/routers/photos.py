@@ -53,9 +53,13 @@ def _item_from_file(
     }
 
 
-def _scan_year_dir(yd: Path, root: Path) -> dict | None:
+def _scan_year_dir(yd: Path, root: Path, *, include_items: bool = True) -> dict | None:
     items: list[dict] = []
     subfolder_names: list[str] = []
+    has_images = False
+    has_videos = False
+    item_count = 0
+    cover_url: str | None = None
     try:
         entries = sorted(yd.iterdir(), key=lambda p: p.name.casefold())
     except OSError:
@@ -63,7 +67,16 @@ def _scan_year_dir(yd: Path, root: Path) -> dict | None:
     for entry in entries:
         if entry.is_file():
             it = _item_from_file(entry, yd.name, "General", root)
-            if it:
+            if not it:
+                continue
+            item_count += 1
+            if it["kind"] == "image":
+                has_images = True
+                if cover_url is None:
+                    cover_url = it.get("thumb_url") or it.get("url")
+            else:
+                has_videos = True
+            if include_items:
                 items.append(it)
         elif entry.is_dir() and not entry.name.startswith("."):
             subfolder_names.append(entry.name)
@@ -73,9 +86,18 @@ def _scan_year_dir(yd: Path, root: Path) -> dict | None:
                 nested = []
             for f in nested:
                 it = _item_from_file(f, yd.name, entry.name, root)
-                if it:
+                if not it:
+                    continue
+                item_count += 1
+                if it["kind"] == "image":
+                    has_images = True
+                    if cover_url is None:
+                        cover_url = it.get("thumb_url") or it.get("url")
+                else:
+                    has_videos = True
+                if include_items:
                     items.append(it)
-    if not items:
+    if item_count <= 0:
         return None
     tabs: list[str] = []
     if subfolder_names:
@@ -83,10 +105,12 @@ def _scan_year_dir(yd: Path, root: Path) -> dict | None:
         tabs.extend(sorted(subfolder_names, key=lambda s: s.casefold()))
     return {
         "year": yd.name,
-        "items": items,
+        "items": items if include_items else [],
+        "item_count": item_count,
+        "cover_url": cover_url,
         "subfolders": tabs,
-        "has_images": any(i["kind"] == "image" for i in items),
-        "has_videos": any(i["kind"] == "video" for i in items),
+        "has_images": has_images,
+        "has_videos": has_videos,
         "is_exclusive": False,
     }
 
@@ -131,6 +155,15 @@ def _scan_exclusive(exclusive: Path, root: Path) -> dict | None:
     return {
         "year": EXCLUSIVE_YEAR,
         "items": items,
+        "item_count": len(items),
+        "cover_url": next(
+            (
+                i.get("thumb_url") or i.get("url")
+                for i in items
+                if i.get("kind") == "image"
+            ),
+            None,
+        ),
         "subfolders": sorted(person_names, key=lambda s: s.casefold()),
         "has_images": any(i["kind"] == "image" for i in items),
         "has_videos": any(i["kind"] == "video" for i in items),
@@ -179,7 +212,8 @@ def list_photo_years(
         }
 
     for yd in year_dirs:
-        bucket = _scan_year_dir(yd, root)
+        # Summary only — full items load via /years/{year}.
+        bucket = _scan_year_dir(yd, root, include_items=False)
         if bucket:
             years.append(bucket)
 
@@ -194,6 +228,39 @@ def list_photo_years(
         exclusive_available = bool(hub.get("available"))
 
     return {"years": years, "exclusive_available": exclusive_available}
+
+
+@router.get("/years/{year}")
+def photo_year_detail(
+    year: str,
+    _user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Full item list for one Photos year folder (or Exclusive)."""
+    root = Path(settings.media_root or "")
+    photos = root / "Photos"
+    if not photos.is_dir():
+        raise HTTPException(404, "Photos root missing")
+    safe = (year or "").strip()
+    if not safe or "/" in safe or "\\" in safe or ".." in safe:
+        raise HTTPException(400, "Invalid year")
+    if safe.casefold() == EXCLUSIVE_YEAR.casefold():
+        if not nsfw_unlocked:
+            raise HTTPException(403, "NSFW unlock required")
+        exclusive = photos / EXCLUSIVE_YEAR
+        bucket = _scan_exclusive(exclusive, root) if exclusive.is_dir() else None
+        if not bucket:
+            raise HTTPException(404, "Exclusive folder empty")
+        return bucket
+    if not safe.isdigit():
+        raise HTTPException(400, "Invalid year")
+    yd = photos / safe
+    if not yd.is_dir():
+        raise HTTPException(404, "Year not found")
+    bucket = _scan_year_dir(yd, root, include_items=True)
+    if not bucket:
+        raise HTTPException(404, "Year empty")
+    return bucket
 
 
 @router.get("/exclusive-hub")

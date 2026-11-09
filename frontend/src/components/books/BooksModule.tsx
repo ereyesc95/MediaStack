@@ -187,6 +187,7 @@ export default function BooksModule({
 
   const [tab, setTab] = useState<BooksTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
+  const [catalogLetters, setCatalogLetters] = useState<string[]>([]);
   const [films, setFilms] = useState<BooksBookCard[]>([]);
   const [dashLoading, setDashLoading] = useState(
     () => !getCachedBooksDashboard()
@@ -311,17 +312,19 @@ export default function BooksModule({
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
-    void fetchBooksCatalog()
+    const letterScoped = filterMode === "name" && Boolean(letter);
+    void fetchBooksCatalog(letterScoped ? { letter } : undefined)
       .then((res) => {
         setFranchises(res.franchises || []);
         setFilms(res.books || res.films || []);
+        if (res.letters?.length) setCatalogLetters(res.letters);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
     void fetchBooksFilterOptions()
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
-  }, []);
+  }, [filterMode, letter]);
 
   useEffect(() => {
     if (tab !== "home" || franchiseId) return;
@@ -1289,6 +1292,7 @@ export default function BooksModule({
         <SeriesBrowse
           franchises={browseFranchises}
           universes={universes}
+          catalogLetters={catalogLetters}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}

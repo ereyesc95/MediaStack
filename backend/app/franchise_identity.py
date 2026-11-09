@@ -103,29 +103,92 @@ def find_music_artist_dir(
     return _artist_dir(root, name)
 
 
+def band_row_lookup(db: Session) -> dict[str, Band]:
+    """Slug / casefold-name → Band for O(1) catalog enrich."""
+    by_key: dict[str, Band] = {}
+    for band in db.scalars(select(Band)).all():
+        name = band.bnd_name or ""
+        slug = normalize_franchise_slug(name)
+        if slug and slug not in by_key:
+            by_key[slug] = band
+        folded = name.casefold()
+        if folded and folded not in by_key:
+            by_key[folded] = band
+    return by_key
+
+
+def music_artist_slug_index(media_root: Path | None = None) -> set[str]:
+    """Normalized Music/{Letter}/{Artist} folder names (one shallow scan)."""
+    root = _media_root(media_root)
+    out: set[str] = set()
+    if not root:
+        return out
+    music = root / "Music"
+    if not music.is_dir():
+        return out
+    try:
+        letters = list(music.iterdir())
+    except OSError:
+        return out
+    for letter in letters:
+        if not letter.is_dir() or letter.name.startswith("."):
+            continue
+        try:
+            artists = list(letter.iterdir())
+        except OSError:
+            continue
+        for artist in artists:
+            if not artist.is_dir() or artist.name.startswith("."):
+                continue
+            slug = normalize_franchise_slug(artist.name)
+            if slug:
+                out.add(slug)
+            folded = artist.name.casefold()
+            if folded:
+                out.add(folded)
+    return out
+
+
 def find_music_band_for_franchise(
-    db: Session, franchise_name: str, *, media_root: Path | None = None
+    db: Session,
+    franchise_name: str,
+    *,
+    media_root: Path | None = None,
+    lookup: dict[str, Band] | None = None,
+    music_slugs: set[str] | None = None,
 ) -> Band | None:
     """Band whose folder name matches the franchise and exists under Music/."""
     want = normalize_franchise_slug(franchise_name)
-    if not want:
+    folded = (franchise_name or "").casefold()
+    if not want and not folded:
         return None
-    root = _media_root(media_root)
-    for band in db.scalars(select(Band)).all():
-        name = band.bnd_name or ""
-        if normalize_franchise_slug(name) != want:
-            continue
-        if root and not find_music_artist_dir(name, root):
-            continue
+    table = lookup if lookup is not None else band_row_lookup(db)
+    band = (want and table.get(want)) or (folded and table.get(folded)) or None
+    if not band:
+        return None
+    if music_slugs is not None:
+        bslug = normalize_franchise_slug(band.bnd_name or "")
+        if bslug not in music_slugs and (band.bnd_name or "").casefold() not in music_slugs:
+            return None
         return band
-    # Folder-only match (band not imported yet) — still treat as music identity
-    # when a Music artist folder exists with that name.
-    return None
+    root = _media_root(media_root)
+    if root and not find_music_artist_dir(band.bnd_name or "", root):
+        return None
+    return band
 
 
 def music_folder_exists_for_name(
-    franchise_name: str, media_root: Path | None = None
+    franchise_name: str,
+    media_root: Path | None = None,
+    *,
+    music_slugs: set[str] | None = None,
 ) -> bool:
+    want = normalize_franchise_slug(franchise_name)
+    folded = (franchise_name or "").casefold()
+    if music_slugs is not None:
+        return bool(
+            (want and want in music_slugs) or (folded and folded in music_slugs)
+        )
     return bool(find_music_artist_dir(franchise_name, media_root))
 
 
@@ -296,15 +359,23 @@ def enrich_catalog_with_music_identity(
     """Mark franchises that also exist as Music artists; reuse artist card images."""
     root = _media_root(media_root)
     franchises = catalog.get("franchises") or []
+    if not franchises:
+        return catalog
+    music_slugs = music_artist_slug_index(root)
+    if not music_slugs:
+        return catalog
+    bands = band_row_lookup(db)
     for card in franchises:
         if not isinstance(card, dict):
             continue
         name = (card.get("name") or "").strip()
         if not name:
             continue
-        if not music_folder_exists_for_name(name, root):
+        if not music_folder_exists_for_name(name, root, music_slugs=music_slugs):
             continue
-        band = find_music_band_for_franchise(db, name, media_root=root)
+        band = find_music_band_for_franchise(
+            db, name, media_root=root, lookup=bands, music_slugs=music_slugs
+        )
         if band:
             card["music_band_id"] = band.bnd_id
         else:
@@ -325,6 +396,7 @@ def enrich_catalog_with_artwork_home(
     """Stamp ``artwork_home_module`` so UIs can route to the franchise's art home."""
     root = _media_root(media_root)
     franchises = catalog.get("franchises") or []
+    # Prefetch explicit homes once (avoid N SessionLocal opens via lru alone).
     for card in franchises:
         if not isinstance(card, dict):
             continue

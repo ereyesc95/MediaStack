@@ -83,39 +83,65 @@ def list_movies(
 def movies_catalog(
     db: Session = Depends(get_db),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    letter: str = Query(""),
+    search: str = Query(""),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=200),
 ):
     try:
         from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
-        from app.movies_catalog_meta import enrich_movies_catalog
-
+        from app.catalog_paging import apply_catalog_paging
         from app.franchise_identity import (
             enrich_catalog_with_artwork_home,
             enrich_catalog_with_music_identity,
         )
-
-        from app.module_catalog_cache import get_or_build_catalog
+        from app.module_catalog_cache import (
+            get_cached_enriched_catalog,
+            get_or_build_catalog,
+            store_enriched_catalog,
+        )
+        from app.movies_catalog_meta import enrich_movies_catalog
 
         root = Path(settings.media_root or "")
-        fs_catalog = get_or_build_catalog(
-            "movies", media_root=root, builder=build_movies_catalog
+        cached = get_cached_enriched_catalog(
+            "movies", media_root=root, nsfw_unlocked=nsfw_unlocked
         )
-        catalog = enrich_movies_catalog(db, fs_catalog)
-        catalog = enrich_catalog_with_music_identity(
-            db, catalog, orientation="portrait"
+        if cached is not None:
+            catalog = cached
+        else:
+            fs_catalog = get_or_build_catalog(
+                "movies", media_root=root, builder=build_movies_catalog
+            )
+            catalog = enrich_movies_catalog(db, fs_catalog)
+            catalog = enrich_catalog_with_music_identity(
+                db, catalog, orientation="portrait"
+            )
+            catalog = enrich_catalog_with_artwork_home(catalog)
+            adult_subs = adult_subgenre_names_from_db(db)
+            catalog["franchises"] = filter_adult_cards(
+                catalog.get("franchises") or [],
+                nsfw_unlocked=nsfw_unlocked,
+                extra_adult_subgenres=adult_subs,
+            )
+            catalog["films"] = filter_adult_cards(
+                catalog.get("films") or [],
+                nsfw_unlocked=nsfw_unlocked,
+                extra_adult_subgenres=adult_subs,
+            )
+            store_enriched_catalog(
+                "movies",
+                media_root=root,
+                nsfw_unlocked=nsfw_unlocked,
+                payload=catalog,
+            )
+        return apply_catalog_paging(
+            catalog,
+            list_keys=("franchises", "films"),
+            letter=letter or None,
+            search=search or None,
+            page=page,
+            page_size=page_size,
         )
-        catalog = enrich_catalog_with_artwork_home(catalog)
-        adult_subs = adult_subgenre_names_from_db(db)
-        catalog["franchises"] = filter_adult_cards(
-            catalog.get("franchises") or [],
-            nsfw_unlocked=nsfw_unlocked,
-            extra_adult_subgenres=adult_subs,
-        )
-        catalog["films"] = filter_adult_cards(
-            catalog.get("films") or [],
-            nsfw_unlocked=nsfw_unlocked,
-            extra_adult_subgenres=adult_subs,
-        )
-        return catalog
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
 

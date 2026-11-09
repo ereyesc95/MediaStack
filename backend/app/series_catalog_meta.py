@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Country, Genre, Series, Subgenre
-from app.series_refresh import find_series_row
+from app.series_refresh import find_series_row, series_row_lookup
 
 
 def _split_semi(raw: str | None) -> list[str]:
@@ -112,12 +112,13 @@ def enrich_catalog_metadata(db: Session, catalog: dict) -> dict:
             iso_to_country[iso] = c
 
     sub_by_id, sub_by_name, parent_by_id = _genre_lookups(db)
+    series_by_key = series_row_lookup(db)
 
     for card in franchises:
         if not isinstance(card, dict):
             continue
         name = card.get("name") or ""
-        row = find_series_row(db, name) if name else None
+        row = find_series_row(db, name, lookup=series_by_key) if name else None
         if not row:
             card.setdefault("country_iso", None)
             card.setdefault("country_id", None)

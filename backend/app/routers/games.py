@@ -91,42 +91,72 @@ async def games_rom_organize(
 def games_catalog(
     db: Session = Depends(get_db),
     nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+    letter: str = Query(""),
+    search: str = Query(""),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=200),
 ):
     try:
+        from pathlib import Path
+
         from app.adult_content import adult_subgenre_names_from_db, filter_adult_cards
+        from app.catalog_paging import apply_catalog_paging
+        from app.config import settings
         from app.franchise_identity import (
             enrich_catalog_with_artwork_home,
             enrich_catalog_with_music_identity,
         )
-
         from app.games_catalog_meta import enrich_games_catalog
-
-        from pathlib import Path
-
-        from app.config import settings
-        from app.module_catalog_cache import get_or_build_catalog
+        from app.module_catalog_cache import (
+            get_cached_enriched_catalog,
+            get_or_build_catalog,
+            store_enriched_catalog,
+        )
 
         root = Path(settings.media_root or "")
-        catalog = get_or_build_catalog(
-            "games", media_root=root, builder=build_games_catalog
+        cached = get_cached_enriched_catalog(
+            "games", media_root=root, nsfw_unlocked=nsfw_unlocked
         )
-        catalog = enrich_catalog_with_music_identity(
-            db, catalog, orientation="portrait"
+        if cached is not None:
+            catalog = cached
+        else:
+            catalog = get_or_build_catalog(
+                "games", media_root=root, builder=build_games_catalog
+            )
+            catalog = enrich_catalog_with_music_identity(
+                db, catalog, orientation="portrait"
+            )
+            catalog = enrich_catalog_with_artwork_home(catalog)
+            catalog = enrich_games_catalog(db, catalog)
+            adult_subs = adult_subgenre_names_from_db(db)
+            catalog["franchises"] = filter_adult_cards(
+                catalog.get("franchises") or [],
+                nsfw_unlocked=nsfw_unlocked,
+                extra_adult_subgenres=adult_subs,
+            )
+            catalog["games"] = filter_adult_cards(
+                catalog.get("games") or [],
+                nsfw_unlocked=nsfw_unlocked,
+                extra_adult_subgenres=adult_subs,
+            )
+            catalog["films"] = catalog["games"]
+            store_enriched_catalog(
+                "games",
+                media_root=root,
+                nsfw_unlocked=nsfw_unlocked,
+                payload=catalog,
+            )
+        catalog = apply_catalog_paging(
+            catalog,
+            list_keys=("franchises", "games", "films"),
+            letter=letter or None,
+            search=search or None,
+            page=page,
+            page_size=page_size,
         )
-        catalog = enrich_catalog_with_artwork_home(catalog)
-        catalog = enrich_games_catalog(db, catalog)
-        adult_subs = adult_subgenre_names_from_db(db)
-        catalog["franchises"] = filter_adult_cards(
-            catalog.get("franchises") or [],
-            nsfw_unlocked=nsfw_unlocked,
-            extra_adult_subgenres=adult_subs,
-        )
-        catalog["games"] = filter_adult_cards(
-            catalog.get("games") or [],
-            nsfw_unlocked=nsfw_unlocked,
-            extra_adult_subgenres=adult_subs,
-        )
-        catalog["films"] = catalog["games"]
+        # Keep films alias aligned after paging.
+        if "games" in catalog:
+            catalog["films"] = catalog["games"]
         return catalog
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -179,9 +209,19 @@ def games_filter_options(
         all_subgenre_groups, nsfw_unlocked=nsfw_unlocked
     )
 
-    from app.games_catalog_meta import enrich_games_catalog
+    from pathlib import Path
 
-    catalog = enrich_games_catalog(db, build_games_catalog())
+    from app.config import settings
+    from app.games_catalog_meta import enrich_games_catalog
+    from app.module_catalog_cache import get_or_build_catalog
+
+    root = Path(settings.media_root or "")
+    catalog = enrich_games_catalog(
+        db,
+        get_or_build_catalog(
+            "games", media_root=root, builder=build_games_catalog
+        ),
+    )
     games = filter_adult_cards(
         catalog.get("games") or [], nsfw_unlocked=nsfw_unlocked
     )
@@ -681,7 +721,18 @@ def games_game_detail(
     if not detail:
         raise HTTPException(404, "Game not found")
     if not nsfw_unlocked:
-        catalog = enrich_games_catalog(db, build_games_catalog())
+        from pathlib import Path
+
+        from app.config import settings
+        from app.module_catalog_cache import get_or_build_catalog
+
+        root = Path(settings.media_root or "")
+        catalog = enrich_games_catalog(
+            db,
+            get_or_build_catalog(
+                "games", media_root=root, builder=build_games_catalog
+            ),
+        )
         extra = adult_subgenre_names_from_db(db)
         hit = None
         gid = game_id.casefold()
@@ -726,7 +777,18 @@ def games_game_overview(
         raise HTTPException(404, "Game not found")
     adult_subs = adult_subgenre_names_from_db(db)
     if not nsfw_unlocked:
-        catalog = enrich_games_catalog(db, build_games_catalog())
+        from pathlib import Path
+
+        from app.config import settings
+        from app.module_catalog_cache import get_or_build_catalog
+
+        root = Path(settings.media_root or "")
+        catalog = enrich_games_catalog(
+            db,
+            get_or_build_catalog(
+                "games", media_root=root, builder=build_games_catalog
+            ),
+        )
         hit = None
         gid = game_id.casefold()
         for g in catalog.get("games") or []:

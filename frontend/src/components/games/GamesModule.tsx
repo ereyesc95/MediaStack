@@ -152,6 +152,7 @@ export default function GamesModule({
   const [catalogScope, setCatalogScope] =
     useState<SeriesCatalogScope>("shows");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
+  const [catalogLetters, setCatalogLetters] = useState<string[]>([]);
   const [games, setGames] = useState<MoviesFilmCard[]>([]);
   const [platforms, setPlatforms] = useState<SeriesFranchiseCard[]>([]);
   const [universes, setUniverses] = useState<Universe[]>(
@@ -267,10 +268,12 @@ export default function GamesModule({
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
-    void fetchGamesCatalog()
+    const letterScoped = filterMode === "name" && Boolean(letter);
+    void fetchGamesCatalog(letterScoped ? { letter } : undefined)
       .then((c) => {
         setFranchises(c.franchises || []);
         setGames(c.games || c.films || []);
+        if (c.letters?.length) setCatalogLetters(c.letters);
         setPlatforms(
           (c.platforms || []).map((p) => ({
             ...p,
@@ -286,7 +289,7 @@ export default function GamesModule({
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
-  }, []);
+  }, [filterMode, letter]);
 
   const loadDashboard = useCallback((force = false) => {
     const cached = !force ? getCachedGamesDashboard() : null;
@@ -314,37 +317,9 @@ export default function GamesModule({
     // already need franchises for a deep link — keep prior light home path.
     if (tab === "catalog" || franchiseId || gameId) {
       loadCatalog();
-      void Promise.all([fetchGamesFilterOptions(), fetchGamesCatalog()])
-        .then(([opts, catalog]) => {
-          const used = new Set(
-            (catalog.games || catalog.films || [])
-              .flatMap((g) => (g as { genre_names?: string[] }).genre_names || [])
-              .map((n) => String(n).trim().toLowerCase())
-              .filter(Boolean)
-          );
-          const sourceGroups = opts.subgenre_groups || [];
-          const groups = used.size
-            ? sourceGroups
-                .map((group) => ({
-                  ...group,
-                  items: (group.items || []).filter((item) =>
-                    used.has(String(item.name || "").trim().toLowerCase())
-                  ),
-                }))
-                .filter((group) => (group.items || []).length > 0)
-            : sourceGroups;
-          setFilterOptions({
-            ...opts,
-            all_subgenre_groups: groups,
-            subgenre_groups: groups,
-            genres: groups.flatMap((g) =>
-              (g.items || []).map((item) => ({
-                id: item.id,
-                name: item.name || "",
-              }))
-            ),
-          });
-        })
+      // Filter options already include used-genre trimming server-side.
+      void fetchGamesFilterOptions()
+        .then(setFilterOptions)
         .catch(() => setFilterOptions(null));
     }
     void prefetchUniverses("games").then((u) => {
@@ -1152,6 +1127,7 @@ export default function GamesModule({
           franchises={browseFranchises}
           platforms={visiblePlatforms}
           universes={universes}
+          catalogLetters={catalogLetters}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={

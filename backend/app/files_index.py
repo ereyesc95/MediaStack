@@ -207,6 +207,30 @@ def unique_dest(dest: Path) -> Path:
         n += 1
 
 
+def _count_files_under(path: Path) -> int:
+    """Shallow file count (tab root + one nested level) without building entries."""
+    total = 0
+    try:
+        children = list(path.iterdir())
+    except OSError:
+        return 0
+    for child in children:
+        if _skip_entry(child):
+            continue
+        if child.is_file():
+            total += 1
+            continue
+        if not child.is_dir():
+            continue
+        try:
+            for f in child.iterdir():
+                if f.is_file() and not _skip_entry(f):
+                    total += 1
+        except OSError:
+            continue
+    return total
+
+
 def list_tabs(*, nsfw_unlocked: bool = False) -> list[dict]:
     root = files_root()
     tabs: list[dict] = []
@@ -220,14 +244,13 @@ def list_tabs(*, nsfw_unlocked: bool = False) -> list[dict]:
     for folder in entries:
         if tab_is_exclusive(folder.name) and not nsfw_unlocked:
             continue
-        files = list_files_in_tab(folder.name)
         nested = list_nested_folders(folder.name)
         tabs.append(
             {
                 "id": folder.name,
                 "name": folder.name,
                 "label": tab_label(folder.name),
-                "file_count": len(files),
+                "file_count": _count_files_under(folder),
                 "nested_folders": nested,
             }
         )

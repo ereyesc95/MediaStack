@@ -193,6 +193,7 @@ export default function MoviesModule({
 
   const [tab, setTab] = useState<MoviesTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
+  const [catalogLetters, setCatalogLetters] = useState<string[]>([]);
   const [films, setFilms] = useState<MoviesFilmCard[]>([]);
   const [dashLoading, setDashLoading] = useState(
     () => !getCachedMoviesDashboard()
@@ -316,17 +317,19 @@ export default function MoviesModule({
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);
-    void fetchMoviesCatalog()
+    const letterScoped = filterMode === "name" && Boolean(letter);
+    void fetchMoviesCatalog(letterScoped ? { letter } : undefined)
       .then((res) => {
         setFranchises(res.franchises || []);
         setFilms(res.films || []);
+        if (res.letters?.length) setCatalogLetters(res.letters);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
     void fetchMoviesFilterOptions()
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
-  }, []);
+  }, [filterMode, letter]);
 
   useEffect(() => {
     // Catalog is heavy — only load when browsing catalog or a franchise.
@@ -1375,6 +1378,7 @@ export default function MoviesModule({
         <SeriesBrowse
           franchises={browseFranchises}
           universes={universes}
+          catalogLetters={catalogLetters}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}

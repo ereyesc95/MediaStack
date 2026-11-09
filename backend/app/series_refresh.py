@@ -29,13 +29,36 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def find_series_row(db: Session, franchise_name: str) -> Series | None:
-    want = normalize_franchise_slug(franchise_name)
-    rows = db.scalars(select(Series)).all()
-    for row in rows:
+def series_row_lookup(db: Session) -> dict[str, Series]:
+    """Build slug + casefold-name maps for O(1) franchise → Series row lookup.
+
+    Prefer this over repeated ``find_series_row`` when enriching catalogs.
+    """
+    by_key: dict[str, Series] = {}
+    for row in db.scalars(select(Series)).all():
         name = row.ser_name or ""
-        if normalize_franchise_slug(name) == want or name.casefold() == franchise_name.casefold():
-            return row
+        slug = normalize_franchise_slug(name)
+        if slug and slug not in by_key:
+            by_key[slug] = row
+        folded = name.casefold()
+        if folded and folded not in by_key:
+            by_key[folded] = row
+    return by_key
+
+
+def find_series_row(
+    db: Session,
+    franchise_name: str,
+    *,
+    lookup: dict[str, Series] | None = None,
+) -> Series | None:
+    want = normalize_franchise_slug(franchise_name)
+    folded = (franchise_name or "").casefold()
+    table = lookup if lookup is not None else series_row_lookup(db)
+    if want and want in table:
+        return table[want]
+    if folded and folded in table:
+        return table[folded]
     return None
 
 

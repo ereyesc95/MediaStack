@@ -202,6 +202,7 @@ export default function SeriesModule({
     return "home";
   });
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
+  const [catalogLetters, setCatalogLetters] = useState<string[]>([]);
   const [dashboard, setDashboard] = useState<SeriesDashboard | null>(
     () => getCachedSeriesDashboard()
   );
@@ -335,14 +336,23 @@ export default function SeriesModule({
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchSeriesCatalog();
+      // Name+letter is the common path — page that letter server-side.
+      // Other filter modes need the full enriched set (warm cache keeps this cheap).
+      const letterScoped = filterMode === "name" && Boolean(letter);
+      const data = await fetchSeriesCatalog(
+        letterScoped ? { letter } : undefined
+      );
       setFranchises(data.franchises);
+      const letters = (data as { letters?: string[] }).letters;
+      if (Array.isArray(letters) && letters.length) {
+        setCatalogLetters(letters);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterMode, letter]);
 
   const loadDashboard = useCallback(async (force = false) => {
     const cached = force ? null : getCachedSeriesDashboard();
@@ -1346,6 +1356,7 @@ export default function SeriesModule({
         <SeriesBrowse
           franchises={ownedFranchises}
           universes={universes}
+          catalogLetters={catalogLetters}
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}
