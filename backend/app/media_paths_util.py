@@ -144,15 +144,33 @@ def resolve_media_entry(entry: Path, *, media_root: Path | None = None) -> Path 
     if entry.suffix.casefold() == ".lnk":
         target = read_windows_lnk_target(entry)
         if target:
+            candidates: list[Path] = [target]
+            # Legacy Music/…/Audio/Albums/… → Music/…/Albums/…
+            parts = list(Path(str(target).replace("\\", "/")).parts)
             try:
-                resolved = target.resolve()
-            except OSError:
-                resolved = target
-            if resolved.is_dir():
-                return resolved
-            parent = resolved.parent
-            if parent.is_dir():
-                return parent
+                i = next(
+                    idx
+                    for idx, part in enumerate(parts)
+                    if part.casefold() == "music"
+                )
+                # …/Music/{Letter}/{Artist}/Audio/{Category}/…
+                if (
+                    i + 4 < len(parts)
+                    and parts[i + 3].casefold() == "audio"
+                ):
+                    candidates.append(Path(*parts[: i + 3], *parts[i + 4 :]))
+            except StopIteration:
+                pass
+            for cand in candidates:
+                try:
+                    resolved = cand.resolve()
+                except OSError:
+                    resolved = cand
+                if resolved.is_dir():
+                    return resolved
+                parent = resolved.parent
+                if parent.is_dir():
+                    return parent
 
     rel = read_path_sidecar(entry)
     if rel:

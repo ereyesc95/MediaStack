@@ -207,10 +207,27 @@ type Props = {
   isAdmin?: boolean;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
-  onBackToSeries?: (franchiseId: string, subseriesId?: string) => void;
-  onBackToMovies?: (franchiseId: string) => void;
-  onBackToBooks?: (franchiseId: string, bookId?: string) => void;
-  onBackToGames?: (franchiseId: string, gameId?: string) => void;
+  onBackToSeries?: (
+    franchiseId: string,
+    subseriesId?: string,
+    restore?: { tab?: "home" | "catalog"; letter?: string }
+  ) => void;
+  onBackToMovies?: (
+    franchiseId: string,
+    restore?: { tab?: "home" | "catalog"; letter?: string },
+    filmId?: string,
+    filmTitle?: string
+  ) => void;
+  onBackToBooks?: (
+    franchiseId: string,
+    restore?: { tab?: "home" | "catalog"; letter?: string },
+    bookId?: string
+  ) => void;
+  onBackToGames?: (
+    franchiseId: string,
+    restore?: { tab?: "home" | "catalog"; letter?: string },
+    gameId?: string
+  ) => void;
   onBackToHome?: () => void;
   onBackToCatalog?: () => void;
   onBackToCollection?: () => void;
@@ -1185,23 +1202,31 @@ export default function ReleasePage({
     getArtistEntryReferrer()?.backLabel === "COLLECTION";
   const collectionReferrer = isCollectionEntry;
   const seriesReferrer =
-    releaseReferrer?.source === "series" && releaseReferrer.franchiseId
-      ? releaseReferrer
-      : null;
+    releaseReferrer?.source === "series" ? releaseReferrer : null;
   const moviesReferrer =
-    releaseReferrer?.source === "movies" && releaseReferrer.franchiseId
-      ? releaseReferrer
-      : null;
+    releaseReferrer?.source === "movies" ? releaseReferrer : null;
   const booksReferrer =
-    releaseReferrer?.source === "books" && releaseReferrer.franchiseId
-      ? releaseReferrer
-      : null;
+    releaseReferrer?.source === "books" ? releaseReferrer : null;
   const gamesReferrer =
-    releaseReferrer?.source === "games" && releaseReferrer.franchiseId
+    releaseReferrer?.source === "games" ? releaseReferrer : null;
+  const moduleHomeReferrer =
+    (seriesReferrer || moviesReferrer || booksReferrer || gamesReferrer) &&
+    !(
+      seriesReferrer?.franchiseId ||
+      moviesReferrer?.franchiseId ||
+      booksReferrer?.franchiseId ||
+      gamesReferrer?.franchiseId
+    )
       ? releaseReferrer
       : null;
   const franchiseReferrer =
-    seriesReferrer || moviesReferrer || booksReferrer || gamesReferrer;
+    !moduleHomeReferrer &&
+    (seriesReferrer?.franchiseId ||
+      moviesReferrer?.franchiseId ||
+      booksReferrer?.franchiseId ||
+      gamesReferrer?.franchiseId)
+      ? seriesReferrer || moviesReferrer || booksReferrer || gamesReferrer
+      : null;
   const artistReferrer =
     releaseReferrer?.source === "artist" ? releaseReferrer : null;
   const referrerOverview = releaseReferrer
@@ -1213,8 +1238,20 @@ export default function ReleasePage({
   const franchiseBackLabel = (
     franchiseReferrer?.franchiseName || "Franchise"
   ).toUpperCase();
+  const moduleHomeBackLabel =
+    moduleHomeReferrer?.source === "series"
+      ? "SERIES"
+      : moduleHomeReferrer?.source === "movies"
+        ? "MOVIES"
+        : moduleHomeReferrer?.source === "books"
+          ? "BOOKS"
+          : moduleHomeReferrer?.source === "games"
+            ? "GAMES"
+            : null;
   const backLabel = homeReferrer
     ? "HOME"
+    : moduleHomeBackLabel
+      ? moduleHomeBackLabel
     : collectionReferrer
       ? "COLLECTION"
       : catalogReferrer
@@ -1237,6 +1274,8 @@ export default function ReleasePage({
         : (data?.artist_name ?? "Artist");
   const backAriaLabel = homeReferrer
     ? "Back to Home"
+    : moduleHomeBackLabel
+      ? `Back to ${moduleHomeBackLabel}`
     : collectionReferrer
       ? "Back to Collection"
       : catalogReferrer
@@ -1269,20 +1308,44 @@ export default function ReleasePage({
       onBackToCatalog?.();
       return;
     }
-    if (ref?.source === "series" && ref.franchiseId) {
-      onBackToSeries?.(ref.franchiseId, ref.subseriesId);
+    if (ref?.source === "series") {
+      // Empty franchiseId → Series home/catalog (module bubble / linked card).
+      onBackToSeries?.(
+        ref.franchiseId || "",
+        ref.subseriesId,
+        !ref.franchiseId
+          ? { tab: ref.fromTab || "home", letter: ref.catalogLetter }
+          : undefined
+      );
       return;
     }
-    if (ref?.source === "movies" && ref.franchiseId) {
-      onBackToMovies?.(ref.franchiseId);
+    if (ref?.source === "movies") {
+      onBackToMovies?.(
+        ref.franchiseId || "",
+        !ref.franchiseId
+          ? { tab: ref.fromTab || "home", letter: ref.catalogLetter }
+          : undefined
+      );
       return;
     }
-    if (ref?.source === "books" && ref.franchiseId) {
-      onBackToBooks?.(ref.franchiseId, ref.subseriesId);
+    if (ref?.source === "books") {
+      onBackToBooks?.(
+        ref.franchiseId || "",
+        !ref.franchiseId
+          ? { tab: ref.fromTab || "home", letter: ref.catalogLetter }
+          : undefined,
+        ref.subseriesId
+      );
       return;
     }
-    if (ref?.source === "games" && ref.franchiseId) {
-      onBackToGames?.(ref.franchiseId, ref.subseriesId);
+    if (ref?.source === "games") {
+      onBackToGames?.(
+        ref.franchiseId || "",
+        !ref.franchiseId
+          ? { tab: ref.fromTab || "home", letter: ref.catalogLetter }
+          : undefined,
+        ref.subseriesId
+      );
       return;
     }
     if (ref && ref.bandId !== bandId) {

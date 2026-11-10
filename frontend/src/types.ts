@@ -162,6 +162,8 @@ export type DashboardTrack = {
   path: string | null;
   release: string | null;
   cover_url?: string | null;
+  navigate_band_id?: number | null;
+  navigate_release_id?: string | null;
 };
 
 export type DashboardRelease = {

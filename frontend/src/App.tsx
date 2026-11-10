@@ -1278,9 +1278,25 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onBackToGames={(franchiseId, _restore, gameId) => {
+            onBackToGames={(franchiseId, restore, gameId) => {
               if (!franchiseId) {
-                pushGamesRootRoute();
+                if (restore?.tab === "home") {
+                  pushGamesRootRoute();
+                  setView({
+                    kind: "games",
+                    franchiseId: undefined,
+                    gameId: undefined,
+                    section: "overview",
+                    overviewTab: "about",
+                  });
+                  return;
+                }
+                setPendingCatalogBrowse({
+                  module: "games",
+                  mode: "name",
+                  letter: restore?.letter || "A",
+                });
+                pushGamesCatalogRoute();
                 setView({
                   kind: "games",
                   franchiseId: undefined,
@@ -1526,17 +1542,17 @@ export default function App() {
               });
             }}
             onOpenMusicRelease={(bandId, releaseId, seriesCtx) => {
-              if (seriesCtx?.franchiseId) {
-                saveReleaseReferrer({
-                  bandId,
-                  section: "audio",
-                  source: "series",
-                  franchiseId: seriesCtx.franchiseId,
-                  subseriesId: seriesCtx.subseriesId,
-                  franchiseName: seriesCtx.franchiseName,
-                  franchiseIconUrl: seriesCtx.franchiseIconUrl,
-                });
-              }
+              saveReleaseReferrer({
+                bandId,
+                section: "audio",
+                source: "series",
+                franchiseId: seriesCtx?.franchiseId,
+                subseriesId: seriesCtx?.subseriesId,
+                franchiseName: seriesCtx?.franchiseName,
+                franchiseIconUrl: seriesCtx?.franchiseIconUrl,
+                fromTab: seriesCtx?.fromTab,
+                catalogLetter: seriesCtx?.catalogLetter,
+              });
               pushArtistRoute({
                 bandId,
                 section: "audio",
@@ -1814,15 +1830,17 @@ export default function App() {
                 universeId,
               });
             }}
-            onOpenMusicRelease={(bandId, releaseId) => {
-              if (view.franchiseId) {
-                saveReleaseReferrer({
-                  bandId,
-                  section: "audio",
-                  source: "movies",
-                  franchiseId: view.franchiseId,
-                });
-              }
+            onOpenMusicRelease={(bandId, releaseId, ctx) => {
+              saveReleaseReferrer({
+                bandId,
+                section: "audio",
+                source: "movies",
+                franchiseId: ctx?.franchiseId ?? view.franchiseId,
+                fromTab: ctx?.fromTab,
+                catalogLetter: ctx?.catalogLetter,
+                franchiseName: ctx?.franchiseName,
+                franchiseIconUrl: ctx?.franchiseIconUrl,
+              });
               pushArtistRoute({
                 bandId,
                 section: "audio",
@@ -1995,16 +2013,18 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
-            onOpenMusicRelease={(bandId, releaseId) => {
-              if (view.franchiseId) {
-                saveReleaseReferrer({
-                  bandId,
-                  section: "audio",
-                  source: "books",
-                  franchiseId: view.franchiseId,
-                  subseriesId: view.bookId,
-                });
-              }
+            onOpenMusicRelease={(bandId, releaseId, ctx) => {
+              saveReleaseReferrer({
+                bandId,
+                section: "audio",
+                source: "books",
+                franchiseId: ctx?.franchiseId ?? view.franchiseId,
+                subseriesId: ctx?.subseriesId ?? view.bookId,
+                fromTab: ctx?.fromTab,
+                catalogLetter: ctx?.catalogLetter,
+                franchiseName: ctx?.franchiseName,
+                franchiseIconUrl: ctx?.franchiseIconUrl,
+              });
               pushArtistRoute({
                 bandId,
                 section: "audio",
@@ -2108,16 +2128,18 @@ export default function App() {
                 overviewTab: "about",
               });
             }}
-            onOpenMusicRelease={(bandId, releaseId) => {
-              if (view.franchiseId) {
-                saveReleaseReferrer({
-                  bandId,
-                  section: "audio",
-                  source: "games",
-                  franchiseId: view.franchiseId,
-                  subseriesId: view.gameId,
-                });
-              }
+            onOpenMusicRelease={(bandId, releaseId, ctx) => {
+              saveReleaseReferrer({
+                bandId,
+                section: "audio",
+                source: "games",
+                franchiseId: ctx?.franchiseId ?? view.franchiseId,
+                subseriesId: ctx?.subseriesId ?? view.gameId,
+                fromTab: ctx?.fromTab,
+                catalogLetter: ctx?.catalogLetter,
+                franchiseName: ctx?.franchiseName,
+                franchiseIconUrl: ctx?.franchiseIconUrl,
+              });
               pushArtistRoute({
                 bandId,
                 section: "audio",

@@ -17,11 +17,16 @@ import {
   type OwnershipIndex,
 } from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
+import { takePendingCatalogBrowse } from "../../mediaEntry";
 import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
   defaultSectionForSource,
   saveArtistEntryReferrer,
 } from "../../artistEntry";
+import {
+  moduleHomePlaybackClassNames,
+  PlaybackCoverAtmosphere,
+} from "../../usePlaybackCoverBg";
 import {
   pushGamesCatalogRoute,
   pushGamesRootRoute,
@@ -50,6 +55,7 @@ import CardOrientationPicker from "../CardOrientationPicker";
 import ManageCatalogModal from "../ManageCatalogModal";
 import OrganizeLooseRomsModal from "./OrganizeLooseRomsModal";
 import { IconMediaGames } from "../MenuIcons";
+import ModuleHomeAudioPlayer from "../ModuleHomeAudioPlayer";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
@@ -110,7 +116,18 @@ type Props = {
   onOpenSeriesFranchise?: (franchiseId: string, subseriesId?: string) => void;
   onOpenMoviesFranchise?: (franchiseId: string, filmId?: string) => void;
   onOpenBooksFranchise?: (franchiseId: string, bookId?: string) => void;
-  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenMusicRelease?: (
+    bandId: number,
+    releaseId: string,
+    ctx?: {
+      franchiseId?: string;
+      subseriesId?: string;
+      franchiseName?: string;
+      franchiseIconUrl?: string | null;
+      fromTab?: "home" | "catalog";
+      catalogLetter?: string;
+    }
+  ) => void;
   onOpenArtist?: (bandId: number, artistSection?: string) => void;
   onOpenUniverse?: (universeId: number) => void;
   onBackToPhotos?: () => void;
@@ -144,6 +161,9 @@ export default function GamesModule({
   onOpenUniverse,
   onBackToPhotos,
 }: Props) {
+  const [homeAudioPlaying, setHomeAudioPlaying] = useState(false);
+  const [homeAudioHasSrc, setHomeAudioHasSrc] = useState(false);
+  const [homeAudioCover, setHomeAudioCover] = useState<string | null>(null);
   const [tab, setTab] = useState<GamesTab>(
     franchiseId || gameId ? "catalog" : "home"
   );
@@ -330,6 +350,16 @@ export default function GamesModule({
   useEffect(() => {
     if (franchiseId || gameId) setTab("catalog");
   }, [franchiseId, gameId]);
+
+  useEffect(() => {
+    const pending = takePendingCatalogBrowse("games");
+    if (!pending) return;
+    setTab("catalog");
+    setFilterMode(pending.mode === "genre" ? "genre" : "name");
+    if (pending.letter) setLetter(pending.letter);
+    pushGamesCatalogRoute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot pending browse
+  }, []);
 
   const openFranchise = useCallback(
     (
@@ -954,8 +984,33 @@ export default function GamesModule({
     );
   }
 
+  const showHomePlaybackBg = Boolean(homeAudioPlaying && homeAudioCover);
+  const openMusicRelease = (bandId: number, releaseId: string) => {
+    if (!onOpenMusicRelease) return;
+    onOpenMusicRelease(bandId, releaseId, {
+      franchiseId: franchiseId || undefined,
+      subseriesId: gameId,
+      fromTab: !franchiseId ? tab : undefined,
+      catalogLetter:
+        !franchiseId && tab === "catalog" ? letter || "A" : undefined,
+    });
+  };
+
   return (
-    <div className="music-module">
+    <div
+      className={`music-module${moduleHomePlaybackClassNames({
+        showPlaybackBg: showHomePlaybackBg,
+        hasSrc: homeAudioHasSrc,
+        playing: homeAudioPlaying,
+      })}`}
+    >
+      {showHomePlaybackBg || homeAudioPlaying || homeAudioHasSrc ? (
+        <PlaybackCoverAtmosphere
+          playing={homeAudioPlaying}
+          hasSrc={homeAudioHasSrc}
+          coverUrl={homeAudioCover}
+        />
+      ) : null}
       <ModuleTopBar
         media={
           mediaOptions.find((m) => m.kind === "games") ?? {
@@ -1042,6 +1097,29 @@ export default function GamesModule({
                 />
               </>
             ) : null}
+            <ModuleHomeAudioPlayer
+              module="games"
+              userId={userId}
+              onPlayingChange={setHomeAudioPlaying}
+              onCoverChange={setHomeAudioCover}
+              onHasSrcChange={setHomeAudioHasSrc}
+              onOpenMusicRelease={openMusicRelease}
+              onOpenMusicArtist={
+                onOpenArtist
+                  ? (bandId) => {
+                      saveArtistEntryReferrer({
+                        source: "games",
+                        section: defaultSectionForSource("games"),
+                        fromTab: tab,
+                        catalogLetter:
+                          tab === "catalog" ? letter || "A" : undefined,
+                        backLabel: "GAMES",
+                      });
+                      onOpenArtist(bandId, "overview");
+                    }
+                  : undefined
+              }
+            />
             <AppMenu
               onImport={onImport}
               onSync={onSync}

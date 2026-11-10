@@ -2035,7 +2035,9 @@ input {
   display: flex;
   align-items: stretch;
   gap: 0.75rem;
-  background: var(--bg-elevated);
+  /* Soft glass so home playback / module backdrops show through. */
+  background: color-mix(in srgb, var(--bg-elevated) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border, #ffffff22) 55%, transparent);
   border-radius: var(--radius);
   padding: 0.6rem 0.75rem;
   flex: 1;
@@ -2044,6 +2046,8 @@ input {
   transform-origin: center center;
   transition: transform 0.2s ease;
   will-change: transform;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* Home panes: inactive siblings ease out slightly while one is hovered. */
@@ -25540,6 +25544,44 @@ button.lyrics-status-badge--icon-only {
   object-fit: cover;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+button.series-audio-player__cover-btn {
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+button.series-audio-player__cover-btn img {
+  display: block;
+}
+
+button.series-audio-player__artist-link {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+button.series-audio-player__artist-link:hover {
+  color: var(--accent);
 }
 
 .series-audio-player__now div {

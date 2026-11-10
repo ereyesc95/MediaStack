@@ -207,6 +207,9 @@ def build_dashboard(db: Session, user_id: int) -> dict:
         cover_url = (
             cover_url_for_track_path(r.rep_path, media_root) if media_root else None
         )
+        nav_release_id, nav_band_id = _navigate_ids_for_play_path(
+            db, r.rep_path, media_root
+        )
         top_tracks.append(
             {
                 "id": r.rep_id,
@@ -219,6 +222,8 @@ def build_dashboard(db: Session, user_id: int) -> dict:
                 "path": r.rep_path,
                 "release": r.rep_release,
                 "cover_url": cover_url,
+                "navigate_band_id": nav_band_id or r.rep_artist_id,
+                "navigate_release_id": nav_release_id,
             }
         )
 
@@ -315,6 +320,33 @@ def _normalize_legacy_audio_rel(release_rel: str) -> str:
     ):
         return "/".join(parts[:3] + parts[4:])
     return release_rel.replace("\\", "/")
+
+
+def _navigate_ids_for_play_path(
+    db: Session,
+    play_path: str | None,
+    media_root: Path | None,
+) -> tuple[str | None, int | None]:
+    """Resolve Music release + band ids from a reproduction / stream path."""
+    if not play_path or not media_root:
+        return None, None
+    from app.band_library import resolve_track_file_path
+    from app.media_index import (
+        _band_id_from_content_path,
+        _release_dir_from_content_folder,
+    )
+    from app.media_paths_util import safe_relative
+
+    file_path = resolve_track_file_path(play_path, media_root)
+    if not file_path:
+        return None, None
+    release_dir = _release_dir_from_content_folder(file_path.parent)
+    rel = safe_relative(release_dir, media_root)
+    if not rel:
+        return None, None
+    nav_id = release_id_from_path(rel.replace("\\", "/"))
+    band_id = _band_id_from_content_path(db, media_root, release_dir)
+    return nav_id, band_id
 
 
 def _resolve_dashboard_release_ids(

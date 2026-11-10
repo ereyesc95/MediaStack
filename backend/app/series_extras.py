@@ -612,6 +612,10 @@ def collect_audio_tracks_from_folders(
                         or card_artist
                         or "Various Artists"
                     )
+                    nav_band = (card or {}).get("navigate_band_id")
+                    nav_release = (card or {}).get("navigate_release_id") or (
+                        card or {}
+                    ).get("id")
                     tracks.append(
                         {
                             "id": f"trk_{hashlib.sha256(rel.encode()).hexdigest()[:12]}",
@@ -620,6 +624,9 @@ def collect_audio_tracks_from_folders(
                             "play_url": play_url,
                             "cover_url": cover,
                             "artist": artist,
+                            "navigate_band_id": nav_band,
+                            "navigate_release_id": nav_release,
+                            "release_title": (card or {}).get("title") or name,
                         }
                     )
     return tracks

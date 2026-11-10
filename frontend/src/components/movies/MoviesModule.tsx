@@ -50,6 +50,10 @@ import {
   type MoviesOverviewTab,
   type MoviesSection,
 } from "../../moviesRoute";
+import {
+  moduleHomePlaybackClassNames,
+  PlaybackCoverAtmosphere,
+} from "../../usePlaybackCoverBg";
 import type {
   CardOrientation,
   MoviesFilmCard,
@@ -67,7 +71,8 @@ import {
 import AppMenu from "../AppMenu";
 import ManageCatalogModal from "../ManageCatalogModal";
 import CardOrientationPicker from "../CardOrientationPicker";
-import { IconUniverse } from "../MenuIcons";
+import { IconMediaMusic, IconUniverse } from "../MenuIcons";
+import ModuleHomeAudioPlayer from "../ModuleHomeAudioPlayer";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "../series/CatalogScopeToggle";
 import SeriesBrowse, {
@@ -145,7 +150,17 @@ type Props = {
     section?: string,
     universeId?: number
   ) => void;
-  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenMusicRelease?: (
+    bandId: number,
+    releaseId: string,
+    ctx?: {
+      franchiseId?: string;
+      franchiseName?: string;
+      franchiseIconUrl?: string | null;
+      fromTab?: "home" | "catalog";
+      catalogLetter?: string;
+    }
+  ) => void;
   onOpenArtist?: (
     bandId: number,
     section?: import("../../types").ArtistSection
@@ -190,6 +205,10 @@ export default function MoviesModule({
   const portraitMenuChrome =
     isMobilePortraitLayout(deviceLayout) ||
     deviceLayout === "tablet-portrait";
+  const [homeAudioOpen, setHomeAudioOpen] = useState(false);
+  const [homeAudioPlaying, setHomeAudioPlaying] = useState(false);
+  const [homeAudioHasSrc, setHomeAudioHasSrc] = useState(false);
+  const [homeAudioCover, setHomeAudioCover] = useState<string | null>(null);
 
   const [tab, setTab] = useState<MoviesTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
@@ -1168,13 +1187,33 @@ export default function MoviesModule({
     );
   }
 
+  const showHomePlaybackBg = Boolean(homeAudioPlaying && homeAudioCover);
+  const openMusicRelease = (bandId: number, releaseId: string) => {
+    if (!onOpenMusicRelease) return;
+    onOpenMusicRelease(bandId, releaseId, {
+      franchiseId: franchiseId || undefined,
+      fromTab: !franchiseId ? tab : undefined,
+      catalogLetter:
+        !franchiseId && tab === "catalog" ? letter || "A" : undefined,
+    });
+  };
+
   return (
     <div
-      className={`series-module${
-        moduleBackdrop ? " music-module--backdrop" : ""
-      }`}
+      className={`series-module${moduleHomePlaybackClassNames({
+        backdrop: moduleBackdrop && !showHomePlaybackBg,
+        showPlaybackBg: showHomePlaybackBg,
+        hasSrc: homeAudioHasSrc,
+        playing: homeAudioPlaying,
+      })}`}
     >
-      {moduleBackdrop ? (
+      {showHomePlaybackBg || homeAudioPlaying || homeAudioHasSrc ? (
+        <PlaybackCoverAtmosphere
+          playing={homeAudioPlaying}
+          hasSrc={homeAudioHasSrc}
+          coverUrl={homeAudioCover}
+        />
+      ) : moduleBackdrop ? (
         <div className="music-module__backdrop" aria-hidden>
           {backgroundIso ? (
             <span
@@ -1240,6 +1279,32 @@ export default function MoviesModule({
                 includeBadge
               />
             ) : null}
+            <ModuleHomeAudioPlayer
+              module="movies"
+              userId={userId}
+              hideToggle={portraitMenuChrome}
+              open={homeAudioOpen}
+              onOpenChange={setHomeAudioOpen}
+              onPlayingChange={setHomeAudioPlaying}
+              onCoverChange={setHomeAudioCover}
+              onHasSrcChange={setHomeAudioHasSrc}
+              onOpenMusicRelease={openMusicRelease}
+              onOpenMusicArtist={
+                onOpenArtist
+                  ? (bandId) => {
+                      saveArtistEntryReferrer({
+                        source: "movies",
+                        section: defaultSectionForSource("movies"),
+                        fromTab: tab,
+                        catalogLetter:
+                          tab === "catalog" ? letter || "A" : undefined,
+                        backLabel: "MOVIES",
+                      });
+                      onOpenArtist(bandId, "overview");
+                    }
+                  : undefined
+              }
+            />
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1255,31 +1320,43 @@ export default function MoviesModule({
               }
               manageCatalogLabel="My movies"
               menuChrome={
-                portraitMenuChrome && tab === "catalog" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const order: SeriesCatalogScope[] =
-                        universes.length > 0
-                          ? ["franchises", "shows", "universes"]
-                          : ["franchises", "shows"];
-                      const current =
-                        catalogScope === "universes" && universes.length === 0
-                          ? "franchises"
-                          : catalogScope;
-                      const i = Math.max(0, order.indexOf(current));
-                      setCatalogScope(order[(i + 1) % order.length]!);
-                    }}
-                  >
-                    {catalogScope === "universes" ? (
-                      <IconUniverse className="menu-item-icon" />
+                portraitMenuChrome ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setHomeAudioOpen((v) => !v)}
+                    >
+                      <IconMediaMusic className="menu-item-icon" />
+                      {homeAudioOpen ? "Hide music" : "Play music"}
+                    </button>
+                    {tab === "catalog" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const order: SeriesCatalogScope[] =
+                            universes.length > 0
+                              ? ["franchises", "shows", "universes"]
+                              : ["franchises", "shows"];
+                          const current =
+                            catalogScope === "universes" &&
+                            universes.length === 0
+                              ? "franchises"
+                              : catalogScope;
+                          const i = Math.max(0, order.indexOf(current));
+                          setCatalogScope(order[(i + 1) % order.length]!);
+                        }}
+                      >
+                        {catalogScope === "universes" ? (
+                          <IconUniverse className="menu-item-icon" />
+                        ) : null}
+                        {catalogScope === "franchises"
+                          ? "Groups"
+                          : catalogScope === "universes"
+                            ? "Universes"
+                            : "Films"}
+                      </button>
                     ) : null}
-                    {catalogScope === "franchises"
-                      ? "Groups"
-                      : catalogScope === "universes"
-                        ? "Universes"
-                        : "Films"}
-                  </button>
+                  </>
                 ) : null
               }
             />

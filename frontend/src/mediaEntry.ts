@@ -115,7 +115,7 @@ export function setPendingCatalogBrowse(next: PendingCatalogBrowse): void {
 
 /** Consume a one-shot catalog filter jump (universe/franchise pill clicks). */
 export function takePendingCatalogBrowse(
-  module: "series" | "movies" | "books"
+  module: "series" | "movies" | "books" | "games"
 ): PendingCatalogBrowse | null {
   if (!pendingCatalogBrowse || pendingCatalogBrowse.module !== module) {
     return null;

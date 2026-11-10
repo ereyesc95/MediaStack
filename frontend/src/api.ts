@@ -3770,6 +3770,42 @@ export async function fetchSeriesOpeningsEndings(franchiseId: string) {
   );
 }
 
+export type ModuleHomeAudioTrack = {
+  id: string;
+  title: string;
+  play_url?: string;
+  play_path?: string | null;
+  cover_url?: string | null;
+  artist?: string | null;
+  navigate_band_id?: number | null;
+  navigate_release_id?: string | null;
+  release_title?: string | null;
+};
+
+export async function fetchSeriesHomeAudioPool() {
+  return request<{ tracks: ModuleHomeAudioTrack[]; count: number }>(
+    `${API}/series/home-audio-pool`
+  );
+}
+
+export async function fetchMoviesHomeAudioPool() {
+  return request<{ tracks: ModuleHomeAudioTrack[]; count: number }>(
+    `${API}/movies/home-audio-pool`
+  );
+}
+
+export async function fetchBooksHomeAudioPool() {
+  return request<{ tracks: ModuleHomeAudioTrack[]; count: number }>(
+    `${API}/books/home-audio-pool`
+  );
+}
+
+export async function fetchGamesHomeAudioPool() {
+  return request<{ tracks: ModuleHomeAudioTrack[]; count: number }>(
+    `${API}/games/home-audio-pool`
+  );
+}
+
 export async function fetchSeriesPlayerTracks(franchiseId: string) {
   return request<{
     tracks: {
@@ -3779,6 +3815,8 @@ export async function fetchSeriesPlayerTracks(franchiseId: string) {
       cover_url?: string | null;
       artist?: string | null;
       release_title?: string | null;
+      navigate_band_id?: number | null;
+      navigate_release_id?: string | null;
     }[];
     count: number;
   }>(

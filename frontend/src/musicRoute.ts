@@ -122,6 +122,9 @@ export type ReleaseReferrer = {
   subseriesId?: string;
   franchiseName?: string;
   franchiseIconUrl?: string | null;
+  /** Module Home vs Catalog when opened from Series/Movies/Books/Games chrome. */
+  fromTab?: "home" | "catalog";
+  catalogLetter?: string;
 };
 
 export function saveReleaseReferrer(ref: ReleaseReferrer) {

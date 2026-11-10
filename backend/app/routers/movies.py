@@ -211,6 +211,21 @@ def movies_resolve_path(path: str = Query(..., min_length=1)):
     return hit
 
 
+@router.get("/home-audio-pool")
+def movies_home_audio_pool(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Up to 10 random soundtrack tracks from Movies Audio/.lnk shortcuts."""
+    from app.module_home_audio import build_module_home_audio_pool
+
+    tracks = build_module_home_audio_pool(
+        "movies", db, nsfw_unlocked=nsfw_unlocked
+    )
+    return {"tracks": tracks, "count": len(tracks)}
+
+
 @router.get("/dashboard")
 def movies_dashboard(
     db: Session = Depends(get_db),

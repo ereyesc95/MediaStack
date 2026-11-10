@@ -46,6 +46,10 @@ import {
   parseSeriesCatalogPath,
   parseSeriesRootPath,
 } from "../../seriesRoute";
+import {
+  moduleHomePlaybackClassNames,
+  PlaybackCoverAtmosphere,
+} from "../../usePlaybackCoverBg";
 import type {
   CardOrientation,
   SeriesDashboard,
@@ -64,7 +68,8 @@ import AddToUniverseModal from "../AddToUniverseModal";
 import AppMenu from "../AppMenu";
 import ManageCatalogModal from "../ManageCatalogModal";
 import CardOrientationPicker from "../CardOrientationPicker";
-import { IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
+import { IconMediaMusic, IconMediaSeries, IconSeriesScope, IconUniverse } from "../MenuIcons";
+import ModuleHomeAudioPlayer from "../ModuleHomeAudioPlayer";
 import ModuleTopBar, { type MediaOption } from "../ModuleTopBar";
 import CatalogScopeToggle from "./CatalogScopeToggle";
 import SeriesBrowse from "./SeriesBrowse";
@@ -113,10 +118,12 @@ type Props = {
     bandId: number,
     releaseId: string,
     seriesCtx?: {
-      franchiseId: string;
+      franchiseId?: string;
       subseriesId?: string;
       franchiseName?: string;
       franchiseIconUrl?: string | null;
+      fromTab?: "home" | "catalog";
+      catalogLetter?: string;
     }
   ) => void;
   onOpenArtist?: (
@@ -331,6 +338,10 @@ export default function SeriesModule({
   const portraitMenuChrome =
     isMobilePortraitLayout(deviceLayout) ||
     deviceLayout === "tablet-portrait";
+  const [homeAudioOpen, setHomeAudioOpen] = useState(false);
+  const [homeAudioPlaying, setHomeAudioPlaying] = useState(false);
+  const [homeAudioHasSrc, setHomeAudioHasSrc] = useState(false);
+  const [homeAudioCover, setHomeAudioCover] = useState<string | null>(null);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -797,16 +808,15 @@ export default function SeriesModule({
 
   const openMusicRelease = (bandId: number, releaseId: string) => {
     if (!onOpenMusicRelease) return;
-    if (franchiseId) {
-      onOpenMusicRelease(bandId, releaseId, {
-        franchiseId,
-        subseriesId,
-        franchiseName: franchiseShell?.name,
-        franchiseIconUrl: franchiseShell?.icon_url,
-      });
-      return;
-    }
-    onOpenMusicRelease(bandId, releaseId);
+    onOpenMusicRelease(bandId, releaseId, {
+      franchiseId: franchiseId || undefined,
+      subseriesId,
+      franchiseName: franchiseShell?.name,
+      franchiseIconUrl: franchiseShell?.icon_url,
+      fromTab: !franchiseId ? tab : undefined,
+      catalogLetter:
+        !franchiseId && tab === "catalog" ? letter || "A" : undefined,
+    });
   };
 
   if (!showModuleChrome && franchiseId && subseriesId) {
@@ -1166,13 +1176,24 @@ export default function SeriesModule({
     );
   }
 
+  const showHomePlaybackBg = Boolean(homeAudioPlaying && homeAudioCover);
+
   return (
     <div
-      className={`series-module${
-        moduleBackdrop ? " music-module--backdrop" : ""
-      }`}
+      className={`series-module${moduleHomePlaybackClassNames({
+        backdrop: moduleBackdrop && !showHomePlaybackBg,
+        showPlaybackBg: showHomePlaybackBg,
+        hasSrc: homeAudioHasSrc,
+        playing: homeAudioPlaying,
+      })}`}
     >
-      {moduleBackdrop ? (
+      {showHomePlaybackBg || homeAudioPlaying || homeAudioHasSrc ? (
+        <PlaybackCoverAtmosphere
+          playing={homeAudioPlaying}
+          hasSrc={homeAudioHasSrc}
+          coverUrl={homeAudioCover}
+        />
+      ) : moduleBackdrop ? (
         <div className="music-module__backdrop" aria-hidden>
           {backgroundIso ? (
             <span
@@ -1242,6 +1263,36 @@ export default function SeriesModule({
                 includeBadge
               />
             ) : null}
+            {showModuleChrome ? (
+              <ModuleHomeAudioPlayer
+                module="series"
+                userId={userId}
+                hideToggle={portraitMenuChrome}
+                open={homeAudioOpen}
+                onOpenChange={setHomeAudioOpen}
+                onPlayingChange={setHomeAudioPlaying}
+                onCoverChange={setHomeAudioCover}
+                onHasSrcChange={setHomeAudioHasSrc}
+                onOpenMusicRelease={(bandId, releaseId) =>
+                  openMusicRelease(bandId, releaseId)
+                }
+                onOpenMusicArtist={
+                  onOpenArtist
+                    ? (bandId) => {
+                        saveArtistEntryReferrer({
+                          source: "series",
+                          section: defaultSectionForSource("series"),
+                          fromTab: tab,
+                          catalogLetter:
+                            tab === "catalog" ? letter || "A" : undefined,
+                          backLabel: "SERIES",
+                        });
+                        onOpenArtist(bandId, "overview");
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
             <AppMenu
               onImport={onImport}
               onSync={onSync}
@@ -1257,37 +1308,53 @@ export default function SeriesModule({
               }
               manageCatalogLabel="My series"
               menuChrome={
-                portraitMenuChrome && tab === "catalog" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const order: Array<"franchises" | "shows" | "universes"> =
-                        universes.length > 0
-                          ? ["franchises", "shows", "universes"]
-                          : ["franchises", "shows"];
-                      const current: "franchises" | "shows" | "universes" =
-                        catalogScope === "universes" && universes.length > 0
-                          ? "universes"
-                          : catalogScope === "shows"
-                            ? "shows"
-                            : "franchises";
-                      const i = Math.max(0, order.indexOf(current));
-                      setCatalogScope(order[(i + 1) % order.length]!);
-                    }}
-                  >
-                    {catalogScope === "franchises" ? (
-                      <IconSeriesScope className="menu-item-icon" />
-                    ) : catalogScope === "universes" ? (
-                      <IconUniverse className="menu-item-icon" />
-                    ) : (
-                      <IconMediaSeries className="menu-item-icon" />
-                    )}
-                    {catalogScope === "franchises"
-                      ? "Franchises"
-                      : catalogScope === "universes"
-                        ? "Universes"
-                        : "Shows"}
-                  </button>
+                portraitMenuChrome &&
+                (showModuleChrome || tab === "catalog") ? (
+                  <>
+                    {showModuleChrome ? (
+                      <button
+                        type="button"
+                        onClick={() => setHomeAudioOpen((v) => !v)}
+                      >
+                        <IconMediaMusic className="menu-item-icon" />
+                        {homeAudioOpen ? "Hide music" : "Play music"}
+                      </button>
+                    ) : null}
+                    {tab === "catalog" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const order: Array<
+                            "franchises" | "shows" | "universes"
+                          > =
+                            universes.length > 0
+                              ? ["franchises", "shows", "universes"]
+                              : ["franchises", "shows"];
+                          const current: "franchises" | "shows" | "universes" =
+                            catalogScope === "universes" && universes.length > 0
+                              ? "universes"
+                              : catalogScope === "shows"
+                                ? "shows"
+                                : "franchises";
+                          const i = Math.max(0, order.indexOf(current));
+                          setCatalogScope(order[(i + 1) % order.length]!);
+                        }}
+                      >
+                        {catalogScope === "franchises" ? (
+                          <IconSeriesScope className="menu-item-icon" />
+                        ) : catalogScope === "universes" ? (
+                          <IconUniverse className="menu-item-icon" />
+                        ) : (
+                          <IconMediaSeries className="menu-item-icon" />
+                        )}
+                        {catalogScope === "franchises"
+                          ? "Franchises"
+                          : catalogScope === "universes"
+                            ? "Universes"
+                            : "Shows"}
+                      </button>
+                    ) : null}
+                  </>
                 ) : null
               }
             />

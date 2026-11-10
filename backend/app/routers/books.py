@@ -267,6 +267,21 @@ def books_resolve(path: str = Query(..., min_length=1)):
     return hit
 
 
+@router.get("/home-audio-pool")
+def books_home_audio_pool(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    nsfw_unlocked: bool = Depends(get_nsfw_unlocked),
+):
+    """Up to 10 random soundtrack tracks from Books Audio/.lnk shortcuts."""
+    from app.module_home_audio import build_module_home_audio_pool
+
+    tracks = build_module_home_audio_pool(
+        "books", db, nsfw_unlocked=nsfw_unlocked
+    )
+    return {"tracks": tracks, "count": len(tracks)}
+
+
 @router.get("/dashboard")
 def books_dashboard(
     db: Session = Depends(get_db),
