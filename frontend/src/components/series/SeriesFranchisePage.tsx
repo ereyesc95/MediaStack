@@ -2362,6 +2362,8 @@ export default function SeriesFranchisePage({
                 open={playerOpen}
                 onOpenChange={setPlayerOpen}
                 hideToggle={mobilePortrait}
+                onOpenMusicRelease={goToEmbeddedReleasePage}
+                onOpenMusicArtist={onOpenArtist}
               />
             ) : null}
             {franchiseSearchItems.length > 0 && onOpenFranchise ? (

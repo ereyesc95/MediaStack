@@ -42,6 +42,8 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   /** Hide the top-bar music note toggle (e.g. when control lives in the menu). */
   hideToggle?: boolean;
+  onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
+  onOpenMusicArtist?: (bandId: number) => void;
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -77,6 +79,8 @@ export default function SeriesAudioPlayer({
   open: openProp,
   onOpenChange,
   hideToggle = false,
+  onOpenMusicRelease,
+  onOpenMusicArtist,
 }: Props) {
   const audio = useSharedMiniAudio();
   const sharedMeta = useSharedPlaybackMeta();
@@ -251,6 +255,12 @@ export default function SeriesAudioPlayer({
     sharedMeta.artist || now?.artist,
     displayTitle
   );
+  const navBandId = sharedMeta.bandId ?? now?.navigate_band_id ?? null;
+  const navReleaseId = sharedMeta.releaseId ?? now?.navigate_release_id ?? null;
+  const canOpenRelease = Boolean(
+    navBandId && navReleaseId && onOpenMusicRelease
+  );
+  const canOpenArtist = Boolean(navBandId && onOpenMusicArtist);
 
   const dockBody =
     loading ? (
@@ -260,10 +270,46 @@ export default function SeriesAudioPlayer({
     ) : (
       <>
         <div className="series-audio-player__now">
-          {displayCover ? <img src={displayCover} alt="" /> : null}
+          {displayCover ? (
+            canOpenRelease ? (
+              <button
+                type="button"
+                className="series-audio-player__cover-btn"
+                title="Go to release"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenMusicRelease?.(Number(navBandId), String(navReleaseId));
+                }}
+              >
+                <img src={displayCover} alt="" />
+              </button>
+            ) : (
+              <img src={displayCover} alt="" />
+            )
+          ) : null}
           <div>
             <strong>{displayTitle}</strong>
-            {nowArtist ? <span className="muted">{nowArtist}</span> : null}
+            {nowArtist ? (
+              canOpenArtist ? (
+                <button
+                  type="button"
+                  className="series-audio-player__artist-link"
+                  title="Go to artist"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenMusicArtist?.(Number(navBandId));
+                  }}
+                >
+                  {nowArtist}
+                </button>
+              ) : (
+                <span className="muted">{nowArtist}</span>
+              )
+            ) : null}
           </div>
         </div>
         <MiniAudioPlayerControls

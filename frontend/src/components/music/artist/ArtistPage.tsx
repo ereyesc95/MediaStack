@@ -1293,6 +1293,17 @@ export default function ArtistPage({
                 onOpenReleaseNavigate &&
                   (navReleaseId || nowTrack?.album_folder)
               );
+              const artistLabel = (
+                (nowTrack as { artist_name?: string | null } | undefined)
+                  ?.artist_name ||
+                data?.name ||
+                shell?.name ||
+                albumLabel ||
+                ""
+              )
+                .replace(/■/g, ",")
+                .trim();
+              const canOpenArtist = Boolean(navBandId && onOpenArtist);
               const openNowRelease = () => {
                 if (!onOpenReleaseNavigate) return;
                 void (async () => {
@@ -1307,7 +1318,23 @@ export default function ArtistPage({
                 <>
                   <div className="series-audio-player__now">
                     {nowTrack?.cover_url ? (
-                      <img src={nowTrack.cover_url} alt="" />
+                      canOpenRelease ? (
+                        <button
+                          type="button"
+                          className="series-audio-player__cover-btn"
+                          title="Go to release"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openNowRelease();
+                          }}
+                        >
+                          <img src={nowTrack.cover_url} alt="" />
+                        </button>
+                      ) : (
+                        <img src={nowTrack.cover_url} alt="" />
+                      )
                     ) : null}
                     <div>
                       <strong>
@@ -1315,23 +1342,23 @@ export default function ArtistPage({
                           ? trackMainTitle(nowTrack.title)
                           : "Now playing"}
                       </strong>
-                      {albumLabel ? (
-                        canOpenRelease ? (
+                      {artistLabel ? (
+                        canOpenArtist ? (
                           <button
                             type="button"
-                            className="muted series-audio-player__album-link"
-                            title="Go to release"
+                            className="series-audio-player__artist-link"
+                            title="Go to artist"
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              openNowRelease();
+                              onOpenArtist(Number(navBandId));
                             }}
                           >
-                            {albumLabel}
+                            {artistLabel}
                           </button>
                         ) : (
-                          <span className="muted">{albumLabel}</span>
+                          <span className="muted">{artistLabel}</span>
                         )
                       ) : null}
                     </div>

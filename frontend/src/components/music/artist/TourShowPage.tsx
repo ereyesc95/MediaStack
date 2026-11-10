@@ -1654,12 +1654,68 @@ function SetlistTabPanel({
                 <div className="series-audio-player__dock">
                   <div className="series-audio-player__now">
                     {panelCoverStill ? (
-                      <img src={panelCoverStill} alt="" />
+                      (() => {
+                        const bubbleReleaseId =
+                          panelArt?.release_id ||
+                          nowPlaying?.navigate_release_id ||
+                          null;
+                        const bubbleBandId =
+                          nowPlaying?.navigate_band_id ?? bandId;
+                        const canOpenRelease = Boolean(
+                          bubbleReleaseId && onOpenRelease
+                        );
+                        return canOpenRelease ? (
+                          <button
+                            type="button"
+                            className="series-audio-player__cover-btn"
+                            title="Go to release"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onOpenRelease?.(
+                                String(bubbleReleaseId),
+                                bubbleBandId
+                              );
+                            }}
+                          >
+                            <img src={panelCoverStill} alt="" />
+                          </button>
+                        ) : (
+                          <img src={panelCoverStill} alt="" />
+                        );
+                      })()
                     ) : null}
                     <div>
                       <strong>{panelTitle || "Now playing"}</strong>
-                      {panelAlbum ? (
-                        <span className="muted">{panelAlbum}</span>
+                      {artistName || panelAlbum ? (
+                        onOpenArtist ? (
+                          <button
+                            type="button"
+                            className="series-audio-player__artist-link"
+                            title="Go to artist"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onOpenArtist(
+                                nowPlaying?.navigate_band_id ?? bandId
+                              );
+                            }}
+                          >
+                            {(artistName || panelAlbum || "").replace(
+                              /■/g,
+                              ","
+                            )}
+                          </button>
+                        ) : (
+                          <span className="muted">
+                            {(artistName || panelAlbum || "").replace(
+                              /■/g,
+                              ","
+                            )}
+                          </span>
+                        )
                       ) : null}
                     </div>
                   </div>

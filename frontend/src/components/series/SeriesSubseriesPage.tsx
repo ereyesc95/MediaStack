@@ -4674,6 +4674,8 @@ export default function SeriesSubseriesPage({
                   onPlayingChange={setSeriesPlaying}
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
+                  onOpenMusicRelease={goToEmbeddedReleasePage}
+                  onOpenMusicArtist={onOpenArtist}
                 />
               ) : (
                 <SeriesAudioPlayer
@@ -4686,6 +4688,8 @@ export default function SeriesSubseriesPage({
                   open={playerOpen}
                   onOpenChange={setPlayerOpen}
                   hideToggle
+                  onOpenMusicRelease={goToEmbeddedReleasePage}
+                  onOpenMusicArtist={onOpenArtist}
                 />
               )
             ) : null}
