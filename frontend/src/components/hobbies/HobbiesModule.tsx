@@ -1309,7 +1309,10 @@ function HobbyIdentityModal({
         cover: coverFile,
         icon: iconFile,
         logo: logoFile,
-        landscape: landscapeFile,
+        landscape:
+          existingCollection?.linked || target.kind === "music"
+            ? null
+            : landscapeFile,
         banner: bannerFile,
         portrait: portraitFile,
       });
@@ -1339,10 +1342,11 @@ function HobbyIdentityModal({
     }
   }
 
-  const deleteBlurb =
-    existingCollection?.linked || target.kind === "music"
-      ? "Remove this linked collection card and its HobbyStack art folder. Linked module data is not deleted."
-      : "Delete this collection, its items, and the HobbyStack art folder.";
+  const isLinkedIdentity =
+    Boolean(existingCollection?.linked) || target.kind === "music";
+  const deleteBlurb = isLinkedIdentity
+    ? "Remove this linked collection card and its HobbyStack art folder. Linked module data is not deleted."
+    : "Delete this collection, its items, and the HobbyStack art folder.";
   const canDelete = deletableId != null;
 
   return (
@@ -1384,14 +1388,18 @@ function HobbyIdentityModal({
               file={logoFile}
               onPick={setLogoFile}
             />
-            <ArtPickButton
-              label="background"
-              previewUrl={
-                previews.landscape ? withMediaAccess(previews.landscape) : null
-              }
-              file={landscapeFile}
-              onPick={setLandscapeFile}
-            />
+            {!isLinkedIdentity ? (
+              <ArtPickButton
+                label="background"
+                previewUrl={
+                  previews.landscape
+                    ? withMediaAccess(previews.landscape)
+                    : null
+                }
+                file={landscapeFile}
+                onPick={setLandscapeFile}
+              />
+            ) : null}
             <ArtPickButton
               label="banner"
               previewUrl={
@@ -1772,7 +1780,6 @@ function HobbyCollectionEditorModal({
             cover: coverFile,
             markIcon: iconFile,
             logo: logoFile,
-            landscape: landscapeFile,
             banner: bannerFile,
             portrait: portraitFile,
           });
@@ -1783,7 +1790,7 @@ function HobbyCollectionEditorModal({
               cover: coverFile,
               icon: iconFile,
               logo: logoFile,
-              landscape: landscapeFile,
+              landscape: null,
               banner: bannerFile,
               portrait: portraitFile,
             })) || saved;
@@ -1995,16 +2002,18 @@ function HobbyCollectionEditorModal({
                 file={logoFile}
                 onPick={setLogoFile}
               />
-              <ArtPickButton
-                label="background"
-                previewUrl={
-                  existingLandscape
-                    ? withMediaAccess(existingLandscape)
-                    : null
-                }
-                file={landscapeFile}
-                onPick={setLandscapeFile}
-              />
+              {!linkedMode ? (
+                <ArtPickButton
+                  label="background"
+                  previewUrl={
+                    existingLandscape
+                      ? withMediaAccess(existingLandscape)
+                      : null
+                  }
+                  file={landscapeFile}
+                  onPick={setLandscapeFile}
+                />
+              ) : null}
               <ArtPickButton
                 label="banner"
                 previewUrl={
