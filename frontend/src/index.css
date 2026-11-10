@@ -1371,15 +1371,16 @@ input {
 }
 
 .music-module--beat-ready .media-beat-fx {
-  opacity: 0.55;
+  opacity: calc(0.12 + var(--beat-strength, 0) * 0.92);
+  transition: opacity 0.45s ease-out;
 }
 
 .music-module--beat-ready.music-module--playing .media-beat-fx {
-  opacity: 1;
+  transition: opacity 0.38s ease-in;
 }
 
-.music-module--beat-ready .dash-track-art,
-.music-module--beat-ready.music-module--playing .dash-track-art {
+.music-module--beat-ready .dash-track.active .dash-track-art {
+  transform: scale(calc(1 + var(--beat-pulse, 0) * 0.04));
   transition: transform 0.12s ease-out;
 }
 
@@ -6596,12 +6597,19 @@ input {
 }
 
 .music-module--backdrop .module-top-bar__menu .card-orientation-toggle,
-.music-module--backdrop .module-top-bar__menu .artist-page__player-restore {
+.music-module--backdrop .module-top-bar__menu .artist-page__player-restore,
+.music-module--backdrop .module-top-bar__menu .series-audio-player__toggle {
   color: color-mix(in srgb, var(--accent) 78%, #f0f8ff);
 }
 
 .music-module--backdrop .module-top-bar__menu .card-orientation-toggle:hover,
-.music-module--backdrop .module-top-bar__menu .artist-page__player-restore:hover {
+.music-module--backdrop .module-top-bar__menu .artist-page__player-restore:hover,
+.music-module--backdrop .module-top-bar__menu .series-audio-player__toggle:hover,
+.music-module--backdrop .module-top-bar__menu .series-audio-player.is-open .series-audio-player__toggle {
+  color: var(--accent);
+}
+
+.music-module--backdrop .module-top-bar__menu .series-audio-player__toggle--live {
   color: var(--accent);
 }
 
