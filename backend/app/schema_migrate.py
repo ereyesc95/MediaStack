@@ -726,6 +726,7 @@ def migrate_schema(eng: Engine) -> None:
                         "hbiTutorialUrl" TEXT,
                         "hbiNotes" TEXT,
                         "hbiExtraJson" TEXT,
+                        "hbiPrivate" INTEGER NOT NULL DEFAULT 0,
                         "hbiCreatedAt" TEXT,
                         "hbiUpdatedAt" TEXT
                     )
@@ -760,6 +761,13 @@ def migrate_schema(eng: Engine) -> None:
                     text(
                         'ALTER TABLE hobby_items '
                         'ADD COLUMN "hbiExtraJson" TEXT'
+                    )
+                )
+            if "hbiPrivate" not in hbi_cols:
+                conn.execute(
+                    text(
+                        'ALTER TABLE hobby_items '
+                        'ADD COLUMN "hbiPrivate" INTEGER NOT NULL DEFAULT 0'
                     )
                 )
 

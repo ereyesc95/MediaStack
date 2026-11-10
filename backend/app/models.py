@@ -929,6 +929,8 @@ class HobbyItem(Base):
     hbi_notes: Mapped[str | None] = mapped_column("hbiNotes", Text)
     # Values for custom_* columns: { "custom_abc": "text" }.
     hbi_extra_json: Mapped[str | None] = mapped_column("hbiExtraJson", Text)
+    # Hidden unless session NSFW is unlocked (same gate as private collections).
+    hbi_private: Mapped[bool] = mapped_column("hbiPrivate", Integer, default=0)
     hbi_created_at: Mapped[str | None] = mapped_column("hbiCreatedAt", Text)
     hbi_updated_at: Mapped[str | None] = mapped_column("hbiUpdatedAt", Text)
 

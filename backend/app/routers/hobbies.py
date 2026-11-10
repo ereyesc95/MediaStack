@@ -22,6 +22,7 @@ from app.hobbies import (
     field_catalog_payload,
     folder_art_payload,
     get_collection,
+    item_is_private,
     list_collections,
     list_field_options,
     list_franchise_theme_options,
@@ -116,6 +117,37 @@ def _accessible_collection(
         raise HTTPException(404, "Collection not found") from exc
 
 
+def _accessible_item(
+    db: Session,
+    user: User,
+    collection_id: int,
+    item_id: int,
+    *,
+    nsfw_unlocked: bool,
+) -> HobbyItem:
+    row = db.get(HobbyItem, item_id)
+    if (
+        not row
+        or row.hbi_user_id != user.usr_id
+        or row.hbi_collection_id != collection_id
+    ):
+        raise HTTPException(404, "Item not found")
+    if item_is_private(row) and not nsfw_unlocked:
+        raise HTTPException(404, "Item not found")
+    return row
+
+
+def _assert_can_set_item_private(
+    user: User, *, nsfw_unlocked: bool, private: bool | None
+) -> None:
+    if private is None:
+        return
+    if not is_admin_role(user.usr_role_id):
+        raise HTTPException(403, "Admin profile required")
+    if not nsfw_unlocked:
+        raise HTTPException(403, "NSFW unlock required")
+
+
 class ItemBody(BaseModel):
     model_config = {"extra": "allow"}
 
@@ -138,6 +170,7 @@ class ItemBody(BaseModel):
     tutorial_url: str | None = None
     notes: str | None = None
     extra: dict | None = None
+    private: bool | None = None
 
 
 class QtyBody(BaseModel):
@@ -417,7 +450,9 @@ def hobbies_get_collection(
     row = _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
-    items = list_items(db, user.usr_id, collection_id)
+    items = list_items(
+        db, user.usr_id, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     return serialize_collection(row, item_count=len(items))
 
 
@@ -515,7 +550,12 @@ async def hobbies_upload_art(
         result = serialize_collection(
             row,
             item_count=len(
-                list_items(db, user.usr_id, collection_id)
+                list_items(
+                    db,
+                    user.usr_id,
+                    collection_id,
+                    nsfw_unlocked=nsfw_unlocked,
+                )
             ),
         )
     return result
@@ -552,6 +592,7 @@ def hobbies_list_items(
             category_filter=category,
             sort=sort,
             order=order,
+            nsfw_unlocked=nsfw_unlocked,
         )
     }
 
@@ -566,6 +607,9 @@ def hobbies_create_item(
 ):
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
+    _assert_can_set_item_private(
+        user, nsfw_unlocked=nsfw_unlocked, private=body.private
     )
     try:
         return upsert_item(
@@ -586,6 +630,16 @@ def hobbies_update_item(
 ):
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
+    _accessible_item(
+        db,
+        user,
+        collection_id,
+        item_id,
+        nsfw_unlocked=nsfw_unlocked,
+    )
+    _assert_can_set_item_private(
+        user, nsfw_unlocked=nsfw_unlocked, private=body.private
     )
     try:
         return upsert_item(
@@ -610,6 +664,13 @@ def hobbies_adjust_qty(
 ):
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
+    _accessible_item(
+        db,
+        user,
+        collection_id,
+        item_id,
+        nsfw_unlocked=nsfw_unlocked,
     )
     try:
         if body.quantity is not None:
@@ -639,6 +700,13 @@ def hobbies_delete_item(
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
+    _accessible_item(
+        db,
+        user,
+        collection_id,
+        item_id,
+        nsfw_unlocked=nsfw_unlocked,
+    )
     result = delete_item(
         db,
         user.usr_id,
@@ -663,11 +731,23 @@ def hobbies_delete_batch(
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
+    allowed: list[int] = []
+    for iid in body.ids:
+        row = db.get(HobbyItem, iid)
+        if (
+            not row
+            or row.hbi_user_id != user.usr_id
+            or row.hbi_collection_id != collection_id
+        ):
+            continue
+        if item_is_private(row) and not nsfw_unlocked:
+            continue
+        allowed.append(iid)
     n = delete_items(
         db,
         user.usr_id,
         collection_id,
-        body.ids,
+        allowed,
         restore_missing=restore_missing,
     )
     return {"ok": True, "deleted": n}
@@ -685,9 +765,13 @@ async def hobbies_upload_item_image(
     coll = _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
-    row = db.get(HobbyItem, item_id)
-    if not row or row.hbi_user_id != user.usr_id or row.hbi_collection_id != collection_id:
-        raise HTTPException(404, "Item not found")
+    row = _accessible_item(
+        db,
+        user,
+        collection_id,
+        item_id,
+        nsfw_unlocked=nsfw_unlocked,
+    )
     data = await file.read()
     if not data:
         raise HTTPException(400, "Empty file")
@@ -756,7 +840,9 @@ def hobbies_export(
     _accessible_collection(
         db, user, collection_id, nsfw_unlocked=nsfw_unlocked
     )
-    data = export_hobbies_xlsx(db, user.usr_id, collection_id)
+    data = export_hobbies_xlsx(
+        db, user.usr_id, collection_id, nsfw_unlocked=nsfw_unlocked
+    )
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

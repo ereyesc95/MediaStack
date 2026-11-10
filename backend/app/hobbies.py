@@ -633,6 +633,10 @@ def collection_is_private(row: HobbyCollection) -> bool:
     return bool(getattr(row, "hbc_private", False))
 
 
+def item_is_private(row: HobbyItem) -> bool:
+    return bool(getattr(row, "hbi_private", False))
+
+
 def _display_collection_name(row: HobbyCollection) -> str:
     """Prefer current preset label when the stored name is a known legacy default."""
     if row.hbc_preset in MULTI_INSTANCE_PRESETS:
@@ -1116,6 +1120,7 @@ def serialize_item(
         "tutorial_url": row.hbi_tutorial_url,
         "notes": row.hbi_notes,
         "extra": extras,
+        "private": item_is_private(row),
         "pdf_url": None,
         "preset": preset,
         "created_at": row.hbi_created_at,
@@ -1190,6 +1195,8 @@ def list_hobby_themes(
         )
     ).all()
     for row in rows:
+        if item_is_private(row) and not nsfw_unlocked:
+            continue
         coll = by_id.get(int(row.hbi_collection_id))
         theme = _item_effective_theme(row, coll)
         if theme:
@@ -1222,6 +1229,8 @@ def list_items_by_theme(
     ).all()
     out: list[dict] = []
     for row in rows:
+        if item_is_private(row) and not nsfw_unlocked:
+            continue
         coll = by_id.get(int(row.hbi_collection_id))
         if not coll:
             continue
@@ -1304,14 +1313,21 @@ def list_collections(
         items = db.scalars(
             select(HobbyItem).where(HobbyItem.hbi_collection_id == row.hbc_id)
         ).all()
-        titles = [
+        visible = [
+            it
+            for it in items
+            if nsfw_unlocked or not item_is_private(it)
+        ]
+        # Heal limited catalog from all titles so private rows are not dropped
+        # when browsing with NSFW locked; counts only reflect visible items.
+        titles_all = [
             (it.hbi_title or "").strip()
             for it in items
             if (it.hbi_title or "").strip()
         ]
         meta_before = _collection_meta(row)
         payload = serialize_collection(
-            row, item_count=len(items), item_titles=titles
+            row, item_count=len(visible), item_titles=titles_all
         )
         # Persist healed / expanded Items list for limited collections.
         if _collection_is_limited(row) and payload.get("items_list"):
@@ -1621,12 +1637,15 @@ def ensure_collection_for_preset(
     if existing:
         if collection_is_private(existing) and not nsfw_unlocked:
             raise PermissionError("Private collection")
-        n = len(
-            db.scalars(
-                select(HobbyItem).where(
-                    HobbyItem.hbi_collection_id == existing.hbc_id
-                )
-            ).all()
+        items = db.scalars(
+            select(HobbyItem).where(
+                HobbyItem.hbi_collection_id == existing.hbc_id
+            )
+        ).all()
+        n = sum(
+            1
+            for it in items
+            if nsfw_unlocked or not item_is_private(it)
         )
         return serialize_collection(existing, item_count=n)
     return create_collection(
@@ -2000,6 +2019,7 @@ def list_items(
     category_filter: str | None = None,
     sort: str = "title",
     order: str = "asc",
+    nsfw_unlocked: bool = False,
 ) -> list[dict]:
     coll = get_collection(db, user_id, collection_id)
     if not coll:
@@ -2021,6 +2041,8 @@ def list_items(
         )
     out: list[dict] = []
     for row in rows:
+        if item_is_private(row) and not nsfw_unlocked:
+            continue
         if type_filter and (row.hbi_type or "").casefold() != type_filter.casefold():
             continue
         if size_filter and (row.hbi_size or "").casefold() != size_filter.casefold():
@@ -2164,6 +2186,7 @@ def upsert_item(
             hbi_collection_id=collection_id,
             hbi_user_id=user_id,
             hbi_quantity=max(qty_i, 1),
+            hbi_private=0,
             hbi_created_at=now,
             hbi_updated_at=now,
         )
@@ -2205,6 +2228,8 @@ def upsert_item(
         row.hbi_missing_json = _dump_list(body.get("missing") or [])
     if "duplicates" in body:
         row.hbi_duplicates_json = _dump_list(body.get("duplicates") or [])
+    if "private" in body:
+        row.hbi_private = 1 if body.get("private") else 0
 
     # Custom text columns → hbi_extra_json
     custom_defs = _parse_custom_field_defs(

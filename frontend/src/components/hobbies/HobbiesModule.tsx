@@ -3320,6 +3320,7 @@ function HobbyCollectionView({
           collection={collection}
           item={editItem === "new" ? null : editItem}
           focusField={editFocusField}
+          showPrivateToggle={showPrivateToggle}
           onClose={() => {
             setEditItem(null);
             setEditFocusField(null);
@@ -3540,12 +3541,14 @@ function HobbyItemModal({
   collection,
   item,
   focusField = null,
+  showPrivateToggle = false,
   onClose,
   onSaved,
 }: {
   collection: HobbyCollection;
   item: HobbyItem | null;
   focusField?: string | null;
+  showPrivateToggle?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -3621,6 +3624,8 @@ function HobbyItemModal({
       shop_url: item?.shop_url ?? "",
       tutorial_url: item?.tutorial_url ?? "",
       notes: item?.notes ?? "",
+      // New items default unchecked; edit keeps saved flag.
+      private: Boolean(item?.private),
     };
     for (const f of collection.fields) {
       if (f.startsWith("custom_")) {
@@ -3736,6 +3741,9 @@ function HobbyItemModal({
         if (f in form) body[f] = form[f] || null;
       }
       if ("image_url" in form) body.image_url = form.image_url || null;
+      if (showPrivateToggle) {
+        body.private = Boolean(form.private);
+      }
 
       let saved: HobbyItem;
       if (item) {
@@ -3956,6 +3964,17 @@ function HobbyItemModal({
             }
             return controls[0];
           })}
+          {showPrivateToggle ? (
+            <label className="ms-checkbox hobbies-collection-editor__check">
+              <input
+                type="checkbox"
+                checked={Boolean(form.private)}
+                onChange={(e) => setField("private", e.target.checked)}
+              />
+              <span className="ms-checkbox__box" aria-hidden="true" />
+              <span className="ms-checkbox__label">Private</span>
+            </label>
+          ) : null}
         </div>
         <div className="modal-actions-row">
           <span className="modal-actions__spacer" />

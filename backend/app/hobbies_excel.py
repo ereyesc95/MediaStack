@@ -97,8 +97,21 @@ def _cell(row: dict, *keys: str) -> str | None:
     return None
 
 
-def export_hobbies_xlsx(db: Session, user_id: int, collection_id: int) -> bytes:
-    items = list_items(db, user_id, collection_id, sort="title", order="asc")
+def export_hobbies_xlsx(
+    db: Session,
+    user_id: int,
+    collection_id: int,
+    *,
+    nsfw_unlocked: bool = False,
+) -> bytes:
+    items = list_items(
+        db,
+        user_id,
+        collection_id,
+        sort="title",
+        order="asc",
+        nsfw_unlocked=nsfw_unlocked,
+    )
     wb = Workbook()
     ws = wb.active
     ws.title = "Items"

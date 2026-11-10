@@ -4660,6 +4660,8 @@ export type HobbyItem = {
   collection_name?: string | null;
   collection_preset?: string | null;
   preset?: string;
+  /** Hidden unless session NSFW is unlocked (admin-set). */
+  private?: boolean;
   deleted?: boolean;
 };
 
