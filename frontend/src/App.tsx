@@ -6,7 +6,6 @@ import {
   fetchSession,
   importSql,
   regenerateMediaModuleIcons,
-  rescanSeriesLocalData,
   syncFolders,
 } from "./api";
 import {
@@ -528,22 +527,6 @@ export default function App() {
     }
   }
 
-  async function handleRebuildRelatedIndex() {
-    setBusy("Rebuilding related index…");
-    try {
-      const result = await rescanSeriesLocalData(true);
-      const n = result.franchise_count ?? 0;
-      setBusy(`Related index rebuilt · ${n} franchise${n === 1 ? "" : "s"}`);
-      window.setTimeout(() => setBusy(""), 3500);
-      setSyncTick((t) => t + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy("");
-    }
-  }
-
-
-
   const openMusic = useCallback((patch: Partial<Extract<View, { kind: "music" }>>) => {
 
     setView((v) =>
@@ -697,9 +680,6 @@ export default function App() {
     <AppMenu
       onImport={handleImport}
       onSync={handleSync}
-      onRebuildRelatedIndex={
-        isAdmin ? () => void handleRebuildRelatedIndex() : undefined
-      }
       {...adminSetupMenuProps}
       onRegenerateModuleIcons={
         isAdmin ? () => setModuleIconsConfirmOpen(true) : undefined

@@ -152,8 +152,6 @@ type Props = {
   /** Label for onAddToUniverse (default: Add to Universe). */
   addToUniverseLabel?: string;
   onRescanLibrary?: () => void;
-  /** Admin: rebuild Related-media franchise index from disk. */
-  onRebuildRelatedIndex?: () => void;
   /** Admin: generate Explorer folder.ico from covers/assets. */
   onGenerateFolderIcons?: () => void;
   /** Admin: write/sync desktop.ini under this artist/franchise. */
@@ -297,7 +295,6 @@ export default function AppMenu({
   onAddToUniverse,
   addToUniverseLabel = "Add to Universe",
   onRescanLibrary,
-  onRebuildRelatedIndex,
   onGenerateFolderIcons,
   onEnsureDesktopIni,
   onRefreshLineup,
@@ -1790,22 +1787,6 @@ export default function AppMenu({
                   >
                     <IconSync className="menu-item-icon" />
                     Sync folders
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      if (onRebuildRelatedIndex) {
-                        onRebuildRelatedIndex();
-                        return;
-                      }
-                      void import("../api").then(({ rescanSeriesLocalData }) =>
-                        rescanSeriesLocalData(true)
-                      );
-                    }}
-                  >
-                    <IconSync className="menu-item-icon" />
-                    Rebuild related index
                   </button>
                   {onGenerateFolderIcons && (
                     <button
