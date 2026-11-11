@@ -43,7 +43,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("Spotify", "spotify"),
         fields=("key", "secret"),
         doc_url="https://developer.spotify.com/dashboard",
-        description="Playlist import / OAuth (Client ID + Client Secret).",
+        description="Playlist import",
     ),
     ServiceSpec(
         id="tmdb",
@@ -51,7 +51,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("TMDb", "TMDB", "tmdb"),
         fields=("key",),
         doc_url="https://www.themoviedb.org/settings/api",
-        description="Series and Movies metadata.",
+        description="Series & Movies",
     ),
     ServiceSpec(
         id="igdb",
@@ -59,7 +59,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("IGDB", "igdb", "Twitch", "twitch"),
         fields=("key", "secret"),
         doc_url="https://api-docs.igdb.com/",
-        description="Games metadata (Twitch Client ID + Secret).",
+        description="Games metadata",
     ),
     ServiceSpec(
         id="setlistfm",
@@ -67,7 +67,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("Setlist.fm", "SetlistFM", "setlistfm"),
         fields=("key",),
         doc_url="https://api.setlist.fm/docs/1.0/index.html",
-        description="Tour setlists.",
+        description="Tour setlists",
     ),
     ServiceSpec(
         id="lastfm",
@@ -75,7 +75,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("Last.fm", "LastFM", "lastfm"),
         fields=("key",),
         doc_url="https://www.last.fm/api/account/create",
-        description="Similar artists and related lookups.",
+        description="Similar artists",
     ),
     ServiceSpec(
         id="google_books",
@@ -83,7 +83,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=("Google Books", "GoogleBooks", "google_books", "googlebooks"),
         fields=("key",),
         doc_url="https://developers.google.com/books/docs/v1/using",
-        description="Books catalog search / enrichment.",
+        description="Books search",
     ),
     ServiceSpec(
         id="musicbrainz",
@@ -91,7 +91,7 @@ SERVICES: tuple[ServiceSpec, ...] = (
         api_names=(),
         fields=("user_agent",),
         doc_url="https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting",
-        description="User-Agent string required for MusicBrainz requests.",
+        description="API User-Agent",
     ),
 )
 
@@ -213,6 +213,77 @@ def _service_status(db: Session, spec: ServiceSpec) -> dict[str, Any]:
 
 def list_api_credentials(db: Session) -> list[dict[str, Any]]:
     return [_service_status(db, spec) for spec in SERVICES]
+
+
+def _service_plaintext(db: Session, spec: ServiceSpec) -> dict[str, str]:
+    """Return unmasked credential values for admin export."""
+    out: dict[str, str] = {}
+    if spec.id == "spotify":
+        cid, sec = get_spotify_credentials(db)
+        if cid:
+            out["key"] = cid
+        if sec:
+            out["secret"] = sec
+    elif spec.id == "igdb":
+        cid, sec = get_igdb_credentials(db)
+        if cid:
+            out["key"] = cid
+        if sec:
+            out["secret"] = sec
+    elif spec.id == "tmdb":
+        key = get_tmdb_key(db)
+        if key:
+            out["key"] = key
+    elif spec.id == "setlistfm":
+        key = get_setlistfm_key(db)
+        if key:
+            out["key"] = key
+    elif spec.id == "lastfm":
+        key = get_lastfm_key(db)
+        if key:
+            out["key"] = key
+    elif spec.id == "google_books":
+        key = get_google_books_key(db)
+        if key:
+            out["key"] = key
+    elif spec.id == "musicbrainz":
+        saved = get_saved_musicbrainz_user_agent()
+        effective = saved or (settings.musicbrainz_user_agent or "").strip()
+        if effective:
+            out["user_agent"] = effective
+    return out
+
+
+def export_api_credentials_text(db: Session) -> str:
+    """Plain-text dump of all configured API credentials (admin export)."""
+    lines = [
+        "MyStack API credentials",
+        "Keep this file private.",
+        "",
+    ]
+    labels = {
+        "key": "key",
+        "secret": "secret",
+        "user_agent": "user_agent",
+    }
+    for spec in SERVICES:
+        values = _service_plaintext(db, spec)
+        lines.append(f"[{spec.name}]")
+        if not values:
+            lines.append("(not configured)")
+        else:
+            for field in spec.fields:
+                label = labels.get(field, field)
+                if field == "key" and spec.id in ("spotify", "igdb"):
+                    label = "client_id"
+                if field == "secret" and spec.id in ("spotify", "igdb"):
+                    label = "client_secret"
+                if field == "key" and spec.id not in ("spotify", "igdb"):
+                    label = "api_key"
+                raw = values.get(field, "")
+                lines.append(f"{label}={raw}" if raw else f"{label}=")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def get_service(service_id: str) -> ServiceSpec | None:

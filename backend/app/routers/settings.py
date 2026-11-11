@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api_credentials import (
     clear_api_credentials,
+    export_api_credentials_text,
     list_api_credentials,
     save_api_credentials,
 )
@@ -194,6 +195,17 @@ def api_credentials_list(
     _admin: User = Depends(require_admin),
 ):
     return {"services": list_api_credentials(db)}
+
+
+@router.get("/api-credentials/export")
+def api_credentials_export(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    return {
+        "filename": "mystack-api-credentials.txt",
+        "text": export_api_credentials_text(db),
+    }
 
 
 @router.put("/api-credentials/{service_id}")

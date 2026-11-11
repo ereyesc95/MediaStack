@@ -4,6 +4,7 @@ import {
   setAppMenuOpen,
   subscribeCloseAppMenu,
 } from "../appMenuChrome";
+import { usePhoneLayout } from "../usePhoneLayout";
 import { useMenuPresence } from "../useMenuPresence";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme, isMediaPageThemeSessionActive } from "../mediaTheme";
 import {
@@ -337,6 +338,7 @@ export default function AppMenu({
     onApiCredentialsProp ?? adminSetup.onApiCredentials;
   const onAdminAppSettings =
     onAdminAppSettingsProp ?? adminSetup.onAdminAppSettings;
+  const isPhone = usePhoneLayout();
   const showAdaptiveTheme =
     adaptiveThemeActive ?? artistThemeActive;
   const [open, setOpen] = useState(false);
@@ -1717,7 +1719,7 @@ export default function AppMenu({
               )}
             </div>
           )}
-          {isAdmin && (
+          {isAdmin && !isPhone && (
             <>
               <button
                 type="button"

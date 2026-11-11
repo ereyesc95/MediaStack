@@ -516,6 +516,39 @@ export function IconDownload({ className }: IconProps) {
   );
 }
 
+export function IconDoc({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L18.5 9H15zM8 13h8v1.5H8V13zm0 3h8v1.5H8V16zm0-6h5v1.5H8V10z"
+      />
+    </svg>
+  );
+}
+
+export function IconEye({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
+      />
+    </svg>
+  );
+}
+
+export function IconEyeOff({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12 6a9.77 9.77 0 0 1 8.82 5.5 9.56 9.56 0 0 1-2.34 3.21l1.42 1.42A11.6 11.6 0 0 0 23 11.5C21.27 7.61 17 4.5 12 4.5c-1.4 0-2.73.25-3.96.7l1.57 1.57c.77-.18 1.57-.27 2.39-.27zM2.71 3.29 1.29 4.71l3.05 3.05A11.7 11.7 0 0 0 1 11.5C2.73 15.39 7 18.5 12 18.5c1.52 0 2.97-.28 4.3-.78l3.99 3.99 1.41-1.41L2.71 3.29zM12 16.5c-3.03 0-5.74-1.62-7.39-4.2a9.4 9.4 0 0 1 2.52-2.74l1.6 1.6A5 5 0 0 0 12 17a4.96 4.96 0 0 0 3.34-1.28l1.5 1.5c-1.4.82-3.06 1.28-4.84 1.28zm.7-6.91 2.71 2.71c.05-.19.09-.39.09-.6a3 3 0 0 0-2.8-2.11z"
+      />
+    </svg>
+  );
+}
+
 export function IconTrackData({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18" aria-hidden>

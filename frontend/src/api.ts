@@ -2499,6 +2499,13 @@ export async function fetchApiCredentials(): Promise<{
   return request(`${API}/settings/api-credentials`);
 }
 
+export async function exportApiCredentials(): Promise<{
+  filename: string;
+  text: string;
+}> {
+  return request(`${API}/settings/api-credentials/export`);
+}
+
 export async function saveApiCredential(
   serviceId: string,
   body: { key?: string; secret?: string; user_agent?: string }
