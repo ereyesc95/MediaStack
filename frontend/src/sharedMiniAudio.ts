@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resumeBeatAudioContext } from "./beatAudioGraph";
+import {
+  clearNowPlaying,
+  mediaSessionOwnsElement,
+  setMediaSessionHandlers,
+  setNowPlaying,
+  type MediaLoadOptions,
+  type MediaSessionHandlers,
+  type NowPlayingInfo,
+} from "./mediaSession";
 
 export type SharedPlaybackMeta = {
   path: string | null;
@@ -77,16 +86,53 @@ export function useSharedMiniAudio() {
   const [duration, setDuration] = useState(0);
   const autoPlayRef = useRef(false);
   const srcRef = useRef<string | null>(sharedEl?.getAttribute("src") || null);
+  const sessionHandlersRef = useRef<MediaSessionHandlers>({});
 
   useEffect(() => {
     audioRef.current = getSharedAudioElement();
   }, []);
 
+  const publishSession = useCallback(
+    (media: NowPlayingInfo | null | undefined, el: HTMLAudioElement | null) => {
+      if (!media?.title?.trim() || !el) return;
+      setNowPlaying(media, {
+        element: el,
+        handlers: {
+          play: () => void el.play().catch(() => {}),
+          pause: () => el.pause(),
+          seekTo: (seconds) => {
+            el.currentTime = seconds;
+          },
+          ...sessionHandlersRef.current,
+        },
+      });
+    },
+    []
+  );
+
+  const setSessionHandlers = useCallback((next: MediaSessionHandlers | null) => {
+    sessionHandlersRef.current = next ? { ...next } : {};
+    const el = getSharedAudioElement();
+    setMediaSessionHandlers({
+      play: () => void el?.play().catch(() => {}),
+      pause: () => el?.pause(),
+      seekTo: (seconds) => {
+        if (el) el.currentTime = seconds;
+      },
+      ...sessionHandlersRef.current,
+    });
+  }, []);
+
   const loadSrc = useCallback(
-    (url: string | null, autoPlay = false, options?: { restart?: boolean }) => {
+    (url: string | null, autoPlay = false, options?: MediaLoadOptions) => {
       const el = getSharedAudioElement();
       audioRef.current = el;
       if (!el) return;
+      if (options?.sessionHandlers !== undefined) {
+        sessionHandlersRef.current = options.sessionHandlers
+          ? { ...options.sessionHandlers }
+          : {};
+      }
       if (!url) {
         autoPlayRef.current = false;
         srcRef.current = null;
@@ -94,6 +140,7 @@ export function useSharedMiniAudio() {
         setPlaying(false);
         setProgress(0);
         setDuration(0);
+        if (mediaSessionOwnsElement(el)) clearNowPlaying();
         el.pause();
         el.removeAttribute("src");
         el.load();
@@ -104,6 +151,7 @@ export function useSharedMiniAudio() {
           el.currentTime = 0;
           setProgress(0);
         }
+        if (options?.media) publishSession(options.media, el);
         if (autoPlay) void el.play().catch(() => {});
         return;
       }
@@ -113,12 +161,13 @@ export function useSharedMiniAudio() {
       // Avoid el.load() before play — breaks mobile Safari autoplay gesture.
       resumeBeatAudioContext();
       el.src = url;
+      if (options?.media) publishSession(options.media, el);
       if (autoPlay) {
         autoPlayRef.current = false;
         void el.play().catch(() => {});
       }
     },
-    []
+    [publishSession]
   );
 
   useEffect(() => {
@@ -186,5 +235,6 @@ export function useSharedMiniAudio() {
     seek,
     loadSrc,
     clear,
+    setSessionHandlers,
   };
 }

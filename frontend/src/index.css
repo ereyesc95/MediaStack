@@ -2050,9 +2050,12 @@ input {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Home panes: inactive siblings ease out slightly while one is hovered. */
+/* Home panes: inactive siblings ease out slightly while one is hovered.
+   Skip while data-suppress-dash-hover is set (cleared on real pointer move). */
 @media (hover: hover) and (pointer: fine) {
-  .music-dashboard:has(> .dash-row:hover) > .dash-row:not(:hover) {
+  html:not([data-suppress-dash-hover])
+    .music-dashboard:has(> .dash-row:hover)
+    > .dash-row:not(:hover) {
     transform: scale(0.985);
   }
 }
@@ -11287,6 +11290,66 @@ button.media-release-card--banner {
   line-height: 1.2;
 }
 
+.local-video-player {
+  position: relative;
+  width: min(96vw, 64rem);
+  max-height: 96vh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: #0a0a0a;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.55);
+}
+
+.local-video-player__close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.45rem;
+  z-index: 3;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f2f2f2;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.local-video-player__close:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.local-video-player__video {
+  width: 100%;
+  max-height: min(82vh, 40rem);
+  background: #000;
+  display: block;
+}
+
+.local-video-player__meta {
+  padding: 0.75rem 1rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.local-video-player__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.local-video-player__artist {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(245, 245, 245, 0.7);
+}
+
 .gallery-viewer {
   position: relative;
   /* Narrower shell so prev/next sit closer; taller so portrait pages scale up. */
@@ -15157,15 +15220,59 @@ button.media-release-card--banner {
   line-height: 1.3;
 }
 
+/* Idle left panel: size to content so the panel scrolls (same as --track). */
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: start;
+  width: 100%;
+  min-height: min-content;
+  min-width: 0;
+  flex: none;
+  gap: 0.35rem;
+  overflow: visible;
+  padding-bottom: 0.65rem;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked)
+  .release-page__panel-content
+  > .ms-disclosure.is-open {
+  flex: 0 0 auto;
+  min-height: min-content;
+  height: auto;
+  align-self: stretch;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked)
+  .release-page__panel-content
+  > .ms-disclosure.is-open
+  > .ms-disclosure__inner {
+  height: auto;
+  min-height: min-content;
+}
+
 .release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-meta {
+  flex: 0 1 auto;
+  min-height: 0;
   overflow: visible;
   justify-content: flex-start;
   gap: 0.25rem;
+  width: 100%;
 }
 
 .release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-fit,
 .release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-fit-inner {
+  flex: 0 0 auto;
   overflow: visible;
+  width: 100%;
+}
+
+.release-page--mobile-landscape:not(.release-page--stacked) .release-page__panel-bottom {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  margin-top: 0.25rem;
+  width: 100%;
 }
 
 .release-page--mobile-landscape .release-page__top {
@@ -15188,11 +15295,6 @@ button.media-release-card--banner {
 .release-page--mobile-landscape .release-page__back {
   font-size: 0.68rem;
   padding: 0.15rem 0;
-}
-
-.release-page--mobile-landscape .release-page__panel-content {
-  overflow: visible;
-  padding-bottom: 0.65rem;
 }
 
 .release-page--mobile-landscape .release-page__art-stage {
@@ -26543,12 +26645,16 @@ button.series-audio-player__artist-link:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Match .release-page__bg so light canvases stay readable behind UI. */
+  filter: blur(20px) brightness(0.38);
+  transform: scale(1.06);
 }
 
 .release-page__bg-canvas-shade {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: none;
 }
 
 .release-page--canvas .release-page__bg {
@@ -31925,6 +32031,52 @@ button.series-audio-player__artist-link:hover {
   gap: 0.35rem 0.5rem;
   padding: 0.35rem 0.5rem;
   box-sizing: border-box;
+}
+.live-shows-tracklist__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0 0 0.35rem;
+}
+.live-shows-tracklist__section-head .release-tracklist__edition-title.series-season-block__header {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.live-shows-tracklist__go-event {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, rgba(255, 255, 255, 0.62));
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.live-shows-tracklist__section-head:hover .live-shows-tracklist__go-event,
+.live-shows-tracklist__section-head:focus-within .live-shows-tracklist__go-event,
+.live-shows-tracklist__section-head.is-open .live-shows-tracklist__go-event,
+.live-shows-tracklist__go-event:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.live-shows-tracklist__go-event:hover,
+.live-shows-tracklist__go-event:focus-visible {
+  color: var(--text, #f2f2f2);
+}
+@media (hover: none) {
+  .live-shows-tracklist__section-head--event .live-shows-tracklist__go-event {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .live-shows-tracklist--all-tracks .live-shows-tracklist__header-row .user-playlist-tracklist__header-btn:nth-child(3),
 .live-shows-tracklist--all-tracks .live-shows-tracklist__header-row .user-playlist-tracklist__header-btn:nth-child(4),

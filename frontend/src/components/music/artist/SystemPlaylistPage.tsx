@@ -148,6 +148,12 @@ type Props = {
   onOpenPlaylist: (key: string) => void;
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
+  onOpenShow?: (target: {
+    bandId: number;
+    tourSlug: string;
+    showSlug: string;
+    bandName?: string | null;
+  }) => void;
   onOpenCatalogSubgenre?: (subgenreId: number, subgenreName?: string) => void;
   onImport: () => void;
   onSync: () => void;
@@ -319,6 +325,7 @@ export default function SystemPlaylistPage({
   onOpenPlaylist,
   onOpenRelease,
   onOpenArtist,
+  onOpenShow,
   onOpenCatalogSubgenre,
   onImport,
   onSync,
@@ -992,7 +999,14 @@ export default function SystemPlaylistPage({
       const source = tracks.find((t) => t.play_path === target.play_path);
       setPlayingPath(target.play_path!);
       setNowPlayingTitle(target.title);
-      miniAudio.loadSrc(musicStreamUrl(target.play_path!), true);
+      miniAudio.loadSrc(musicStreamUrl(target.play_path!), true, {
+        media: {
+          title: target.title,
+          artist: source?.artist_name ?? overview?.name ?? null,
+          album: source?.album_title ?? null,
+          artworkUrl: source?.cover_url ?? null,
+        },
+      });
       const artArgs = artArgsForTrack(source);
       void resolvePlaybackArt(
         artArgs.path || target.play_path!,
@@ -1009,7 +1023,17 @@ export default function SystemPlaylistPage({
         setError(e instanceof Error ? e.message : String(e));
       });
     },
-    [artArgsForTrack, bandId, isUserPlaylist, miniAudio, playingPath, resolvePlaybackArt, slug, tracks]
+    [
+      artArgsForTrack,
+      bandId,
+      isUserPlaylist,
+      miniAudio,
+      overview?.name,
+      playingPath,
+      resolvePlaybackArt,
+      slug,
+      tracks,
+    ]
   );
 
   const handlePlayTrack = useCallback(
@@ -1050,7 +1074,16 @@ export default function SystemPlaylistPage({
       }
       const restart =
         !isUserPlaylist && slug === "setlists" && playingPath === path && !sameSetlistPlayback;
-      miniAudio.loadSrc(musicStreamUrl(path), true, { restart });
+      miniAudio.loadSrc(musicStreamUrl(path), true, {
+        restart,
+        media: {
+          title,
+          artist: source?.artist_name ?? overview?.name ?? null,
+          album: source?.album_title ?? null,
+          artworkUrl:
+            fallbackArt.cover_url ?? source?.cover_url ?? null,
+        },
+      });
       const artArgs = artArgsForTrack(source);
       void resolvePlaybackArt(
         artArgs.path || path,
@@ -1084,6 +1117,7 @@ export default function SystemPlaylistPage({
       bandId,
       isUserPlaylist,
       miniAudio,
+      overview?.name,
       panelActionTrack?.navigate_release_id,
       playingPath,
       resolvePlaybackArt,
@@ -1093,6 +1127,14 @@ export default function SystemPlaylistPage({
       trackFallbackArt,
     ]
   );
+
+  useEffect(() => {
+    miniAudio.setSessionHandlers({
+      previous: () => playAdjacentTrack("prev"),
+      next: () => playAdjacentTrack("next"),
+    });
+    return () => miniAudio.setSessionHandlers(null);
+  }, [miniAudio, playAdjacentTrack]);
 
   useEffect(() => {
     if (!playingPath) return;
@@ -2374,6 +2416,7 @@ export default function SystemPlaylistPage({
                 catalogLiveShows={isGlobalLiveShows}
                 onOpenRelease={onOpenRelease}
                 onOpenArtist={onOpenArtist}
+                onOpenShow={isLiveShowsPlaylist ? onOpenShow : undefined}
                 originalTrackNumbers={originalTrackNumbers}
                 sortKey={trackSort.key}
                 sortDesc={trackSort.desc}

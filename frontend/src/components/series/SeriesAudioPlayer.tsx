@@ -141,7 +141,13 @@ export default function SeriesAudioPlayer({
         artist: t.artist ?? null,
         source: "series-player",
       });
-      audio.loadSrc(t.play_url, true);
+      audio.loadSrc(t.play_url, true, {
+        media: {
+          title: t.title || "Track",
+          artist: t.artist ?? null,
+          artworkUrl: t.cover_url ?? null,
+        },
+      });
     },
     [audio]
   );
@@ -213,6 +219,14 @@ export default function SeriesAudioPlayer({
     const prev = (cur - 1 + q.length) % q.length;
     playAt(prev, q);
   }, [playAt, indexForSharedPath]);
+
+  useEffect(() => {
+    audio.setSessionHandlers({
+      previous: () => playPrev(),
+      next: () => playNext(),
+    });
+    return () => audio.setSessionHandlers(null);
+  }, [audio, playNext, playPrev]);
 
   const scopeKey = gameId
     ? `game:${gameId}`

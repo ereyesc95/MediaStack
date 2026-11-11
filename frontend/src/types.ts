@@ -969,6 +969,15 @@ export type ArtistPlaylistSection = {
   title: string;
   date_iso?: string | null;
   display_date?: string | null;
+  tour_title?: string | null;
+  tour_slug?: string | null;
+  show_slug?: string | null;
+  show_key?: string | null;
+  show_id?: number | null;
+  band_id?: number | null;
+  band_name?: string | null;
+  city?: string | null;
+  venue?: string | null;
   tracks: ArtistPlaylistTrack[];
 };
 

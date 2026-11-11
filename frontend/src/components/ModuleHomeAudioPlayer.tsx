@@ -182,7 +182,14 @@ export default function ModuleHomeAudioPlayer({
       const cover = t.cover_url ?? null;
       coverRef.current = cover;
       onCoverChange?.(cover);
-      audio.loadSrc(url, true);
+      audio.loadSrc(url, true, {
+        media: {
+          title: trackMainTitle(t.title) || t.title || "Track",
+          artist: t.artist ?? null,
+          album: t.release_title ?? null,
+          artworkUrl: cover,
+        },
+      });
       setPlaybackPlaying(true);
       applyPlaybackThemeFromCover(cover, userId);
     },
@@ -202,6 +209,14 @@ export default function ModuleHomeAudioPlayer({
     const prev = (indexRef.current - 1 + q.length) % q.length;
     playAt(prev, q);
   }, [playAt]);
+
+  useEffect(() => {
+    audio.setSessionHandlers({
+      previous: () => playPrev(),
+      next: () => playNext(),
+    });
+    return () => audio.setSessionHandlers(null);
+  }, [audio, playNext, playPrev]);
 
   useEffect(() => {
     const el = audio.audioRef.current;

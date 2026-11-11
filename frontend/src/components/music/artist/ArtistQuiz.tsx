@@ -453,9 +453,15 @@ export default function ArtistQuiz({
   }, []);
 
   const playSnippet = useCallback(
-    (path: string) => {
+    (path: string, title?: string | null, coverUrl?: string | null) => {
       playRequestRef.current += 1;
-      quizAudio.loadSrc(musicStreamUrl(path), true);
+      quizAudio.loadSrc(musicStreamUrl(path), true, {
+        media: {
+          title: title || "Quiz track",
+          artist: "Quiz",
+          artworkUrl: coverUrl ?? null,
+        },
+      });
       void playTrack({ path, artist_id: bandId, record: false }).catch(() => {
         /* ignore */
       });
@@ -789,7 +795,13 @@ export default function ArtistQuiz({
     } else {
       startTimer(null);
       const q = songQuestions[0];
-      if (q) void playSnippet(q.play_path);
+      if (q) {
+        const cover =
+          q.choices.find((c) => c.title === q.correct_title)?.cover_url ??
+          q.choices[0]?.cover_url ??
+          null;
+        void playSnippet(q.play_path, q.correct_title, cover);
+      }
     }
   };
 
@@ -839,7 +851,12 @@ export default function ArtistQuiz({
         const nextQ = questions[nextRound];
         if (nextQ) {
           stopQuizAudio();
-          void playSnippet(nextQ.play_path);
+          const cover =
+            nextQ.choices.find((c) => c.title === nextQ.correct_title)
+              ?.cover_url ??
+            nextQ.choices[0]?.cover_url ??
+            null;
+          void playSnippet(nextQ.play_path, nextQ.correct_title, cover);
         }
       }, SONG_ROUND_DELAY_MS);
     },

@@ -134,6 +134,12 @@ type Props = {
   liveShowsViewMode?: "by-show" | "by-artist" | "all-tracks";
   onOpenRelease?: (bandId: number, releaseId: string) => void;
   onOpenArtist?: (bandId: number) => void;
+  onOpenShow?: (target: {
+    bandId: number;
+    tourSlug: string;
+    showSlug: string;
+    bandName?: string | null;
+  }) => void;
   sortKey?: PlaylistTrackSortKey;
   sortDesc?: boolean;
   onSortChange?: (key: PlaylistTrackSortKey, desc: boolean) => void;
@@ -510,6 +516,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
       liveShowsViewMode = "by-show",
       onOpenRelease,
       onOpenArtist,
+      onOpenShow,
       sortKey = "original",
       sortDesc = false,
       onSortChange,
@@ -833,7 +840,12 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
         track.video_url ??
         track.youtube_url;
       if (!url) return;
-      openTrackVideo(url, onPausePlayback);
+      openTrackVideo(url, onPausePlayback, {
+        title: trackMainTitle(track.title) || track.title,
+        artist: track.artist_name || artistName || null,
+        album: track.album_title || null,
+        artworkUrl: track.cover_url || null,
+      });
     };
 
     const toggleColumnSort = (key: PlaylistTrackSortKey) => {
@@ -933,15 +945,29 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
               const durationLabel = formatTrackDuration(track);
               const youtubeQuery = track.youtube_query ?? null;
               const videos = unavailable ? [] : trackYoutubeVideos(track);
-              const youtubeBtn =
-                videos.length > 0 ? (
-                  <TrackYoutubeButton videos={videos} onBeforeOpen={onPausePlayback} />
-                ) : null;
-              const artistName =
+              const rowArtistName =
                 track.snapshot?.artist?.trim() ||
                 track.artist_name?.trim() ||
                 "";
-              const artistCol = artistName ? formatArtistFeat(artistName) : "—";
+              const youtubeBtn =
+                videos.length > 0 ? (
+                  <TrackYoutubeButton
+                    videos={videos}
+                    onBeforeOpen={onPausePlayback}
+                    media={{
+                      title: trackMainTitle(track.title) || track.title,
+                      artist: rowArtistName || artistName || null,
+                      album:
+                        track.album_title?.trim() ||
+                        liveFileReleaseTitle(track) ||
+                        null,
+                      artworkUrl: track.cover_url || null,
+                    }}
+                  />
+                ) : null;
+              const artistCol = rowArtistName
+                ? formatArtistFeat(rowArtistName)
+                : "—";
               const releaseTitle =
                 track.album_title?.trim() || liveFileReleaseTitle(track) || "";
               const releaseCol = releaseTitle || "—";
@@ -987,7 +1013,7 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 </span>
               );
               const artistCell =
-                artistBandId && onOpenArtist && artistName ? (
+                artistBandId && onOpenArtist && rowArtistName ? (
                   <button
                     type="button"
                     className="live-shows-tracklist__link"
@@ -1196,6 +1222,12 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
                 <TrackYoutubeButton
                   videos={videos}
                   onBeforeOpen={onPausePlayback}
+                  media={{
+                    title: trackMainTitle(track.title) || track.title,
+                    artist: track.artist_name || artistName || null,
+                    album: track.album_title || null,
+                    artworkUrl: track.cover_url || null,
+                  }}
                 />
               ) : null;
             const titleBlock =
@@ -1518,40 +1550,82 @@ const SystemPlaylistTracklist = forwardRef<SystemPlaylistTracklistHandle, Props>
           {useLiveShowsColumns ? columnHeader : null}
           {sections.map((section) => {
           const open = expandedSectionId === section.id;
+          const eventBandId =
+            typeof section.band_id === "number" && section.band_id > 0
+              ? section.band_id
+              : bandId > 0
+                ? bandId
+                : null;
+          const eventTourSlug = section.tour_slug?.trim() || null;
+          const eventShowSlug = section.show_slug?.trim() || null;
+          const canGoToEvent =
+            Boolean(
+              liveShowsMode &&
+                liveShowsViewMode === "by-show" &&
+                onOpenShow &&
+                eventBandId &&
+                eventTourSlug &&
+                eventShowSlug
+            );
           return (
           <section key={section.id} className="release-tracklist__edition-block live-story-tracklist__section">
-            <button
-              type="button"
-              className={`release-tracklist__edition-title series-season-block__header${
+            <div
+              className={`live-shows-tracklist__section-head${
                 open ? " is-open" : ""
-              }`}
-              onClick={() =>
-                setExpandedSectionId((prev) =>
-                  prev === section.id ? null : section.id
-                )
-              }
-              aria-expanded={open}
+              }${canGoToEvent ? " live-shows-tracklist__section-head--event" : ""}`}
             >
-              <span className="release-tracklist__edition-name">
-                {liveShowsMode && liveShowsViewMode === "by-artist" ? (
-                  <>
-                    {section.title}
-                    <span className="live-shows-tracklist__artist-count">
-                      {" "}
-                      · {section.tracks.length}{" "}
-                      {section.tracks.length === 1 ? "track" : "tracks"}
-                    </span>
-                  </>
-                ) : (
-                  section.title
-                )}
-              </span>
-              {section.display_date ? (
-                <span className="release-tracklist__title-suffix release-tracklist__edition-date">
-                  {section.display_date}
+              <button
+                type="button"
+                className={`release-tracklist__edition-title series-season-block__header${
+                  open ? " is-open" : ""
+                }`}
+                onClick={() =>
+                  setExpandedSectionId((prev) =>
+                    prev === section.id ? null : section.id
+                  )
+                }
+                aria-expanded={open}
+              >
+                <span className="release-tracklist__edition-name">
+                  {liveShowsMode && liveShowsViewMode === "by-artist" ? (
+                    <>
+                      {section.title}
+                      <span className="live-shows-tracklist__artist-count">
+                        {" "}
+                        · {section.tracks.length}{" "}
+                        {section.tracks.length === 1 ? "track" : "tracks"}
+                      </span>
+                    </>
+                  ) : (
+                    section.title
+                  )}
                 </span>
+                {section.display_date ? (
+                  <span className="release-tracklist__title-suffix release-tracklist__edition-date">
+                    {section.display_date}
+                  </span>
+                ) : null}
+              </button>
+              {canGoToEvent ? (
+                <button
+                  type="button"
+                  className="live-shows-tracklist__go-event"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!eventBandId || !eventTourSlug || !eventShowSlug) return;
+                    onOpenShow?.({
+                      bandId: eventBandId,
+                      tourSlug: eventTourSlug,
+                      showSlug: eventShowSlug,
+                      bandName: section.band_name ?? null,
+                    });
+                  }}
+                >
+                  Go to event
+                </button>
               ) : null}
-            </button>
+            </div>
             <MsDisclosure open={open}>
             <ol
               className={`release-tracklist__tracks live-story-tracklist__tracks${

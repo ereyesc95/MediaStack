@@ -23,6 +23,7 @@ import {
 import { musicStreamUrl } from "../../../musicStreamUrl";
 import { formatShowTabDate, formatTrackDate } from "../../../formatDate";
 import { isVideoMediaUrl } from "../../../isVideoMediaUrl";
+import { openTrackVideo } from "../../../utils/videoMedia";
 import { useBeatPulse } from "../../../useBeatPulse";
 import type {
   ReleaseEdition,
@@ -567,9 +568,11 @@ function youtubeThumbUrl(url: string): string | null {
 function TourShowMediaSection({
   items,
   empty,
+  artistName,
 }: {
   items: TourShowMediaItem[];
   empty: string;
+  artistName?: string | null;
 }) {
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -620,7 +623,14 @@ function TourShowMediaSection({
                   return;
                 }
                 if (item.kind === "file" || item.kind === "video") {
-                  window.open(item.url, "_blank", "noopener,noreferrer");
+                  if (isLocalVideo) {
+                    openTrackVideo(item.url, undefined, {
+                      title: item.label || "Video",
+                      artist: artistName ?? null,
+                    });
+                  } else {
+                    window.open(item.url, "_blank", "noopener,noreferrer");
+                  }
                 }
               }}
               title={item.label}
@@ -1068,7 +1078,14 @@ function SetlistTabPanel({
         release_date:
           (track as { release_date?: string | null })?.release_date ?? null,
       });
-      miniAudio.loadSrc(musicStreamUrl(path), true);
+      miniAudio.loadSrc(musicStreamUrl(path), true, {
+        media: {
+          title,
+          artist: artistName ?? null,
+          album: track?.album_title ?? null,
+          artworkUrl: track?.cover_url || coverUrl || null,
+        },
+      });
       void playTrack({ path, artist_id: bandId, title }).catch(() => {
         /* history/stats only */
       });
@@ -1107,7 +1124,7 @@ function SetlistTabPanel({
           });
       }
     },
-    [bandId, coverUrl, miniAudio, playable, playingPath]
+    [artistName, bandId, coverUrl, miniAudio, playable, playingPath]
   );
 
   const playAdjacentTrack = useCallback(
@@ -1124,6 +1141,14 @@ function SetlistTabPanel({
     },
     [handlePlay, playable, playingPath]
   );
+
+  useEffect(() => {
+    miniAudio.setSessionHandlers({
+      previous: () => playAdjacentTrack("prev"),
+      next: () => playAdjacentTrack("next"),
+    });
+    return () => miniAudio.setSessionHandlers(null);
+  }, [miniAudio, playAdjacentTrack]);
 
   useEffect(() => {
     const el = miniAudio.audioRef.current;
@@ -2688,13 +2713,25 @@ export default function TourShowPage({
           ) : null}
 
           {activeTab === "promo" ? (
-            <TourShowMediaSection items={detail.promo} empty="No promo media." />
+            <TourShowMediaSection
+              items={detail.promo}
+              empty="No promo media."
+              artistName={artistName}
+            />
           ) : null}
           {activeTab === "gallery" ? (
-            <TourShowMediaSection items={detail.gallery} empty="No gallery media." />
+            <TourShowMediaSection
+              items={detail.gallery}
+              empty="No gallery media."
+              artistName={artistName}
+            />
           ) : null}
           {activeTab === "souvenirs" ? (
-            <TourShowMediaSection items={detail.souvenirs} empty="No souvenirs." />
+            <TourShowMediaSection
+              items={detail.souvenirs}
+              empty="No souvenirs."
+              artistName={artistName}
+            />
           ) : null}
           <SetlistTabPanel
             key={activeShowSlug || "setlist"}

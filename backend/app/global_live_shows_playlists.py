@@ -18,6 +18,7 @@ from app.live_shows_playlists import (
 )
 from app.models import Band, Tour, TourShow, TourShowSetlist
 from app.system_playlists import playlist_cover_url
+from app.tours_index import show_slug, tour_slug
 
 
 def build_global_live_shows_card(db: Session) -> dict | None:
@@ -87,7 +88,14 @@ def build_global_live_shows_detail(
                     "date_iso": s.tsh_date_iso,
                     "display_date": occurrence.get("display_date"),
                     "tour_title": tour_title,
+                    "tour_slug": (
+                        tour_slug(tour.tur_date_iso, tour.tur_title) if tour else None
+                    ),
+                    "show_slug": show_slug(s.tsh_date_iso, s.tsh_city, s.tsh_venue),
                     "show_key": show_key,
+                    "show_id": s.tsh_id,
+                    "band_id": band.bnd_id,
+                    "band_name": artist or None,
                     "city": s.tsh_city,
                     "venue": s.tsh_venue,
                     "tracks": [],
@@ -99,6 +107,17 @@ def build_global_live_shows_detail(
                     sec["label"] = title
                 if not sec.get("tour_title") and tour_title:
                     sec["tour_title"] = tour_title
+                if not sec.get("tour_slug") and tour:
+                    sec["tour_slug"] = tour_slug(tour.tur_date_iso, tour.tur_title)
+                if not sec.get("show_slug"):
+                    sec["show_slug"] = show_slug(
+                        s.tsh_date_iso, s.tsh_city, s.tsh_venue
+                    )
+                if not sec.get("band_id"):
+                    sec["band_id"] = band.bnd_id
+                    sec["band_name"] = artist or None
+                if not sec.get("show_id"):
+                    sec["show_id"] = s.tsh_id
 
             sec = section_by_key[show_key]
             for raw in raw_list:

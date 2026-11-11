@@ -48,6 +48,23 @@ def _library_most_played_paths(db: Session, user_id: int) -> list[tuple[str, int
     return path_counts.most_common(LIBRARY_MOST_PLAYED_LIMIT)
 
 
+def _library_most_played_existing_paths(
+    db: Session,
+    media_root: Path,
+    *,
+    user_id: int,
+) -> list[tuple[str, int]]:
+    """Ranked Most Played paths that still resolve to a file on disk."""
+    out: list[tuple[str, int]] = []
+    for path, count in _library_most_played_paths(db, user_id):
+        candidate = media_root / Path(path.replace("/", "\\"))
+        if not candidate.is_file():
+            candidate = media_root / Path(path)
+        if candidate.is_file():
+            out.append((path, count))
+    return out
+
+
 def build_library_most_played_tracks(
     db: Session,
     media_root: Path,
@@ -57,7 +74,7 @@ def build_library_most_played_tracks(
     from app.playlist_tracks import enrich_playlist_tracks
     from app.profile_scope import rep_user_filter
 
-    ranked = _library_most_played_paths(db, user_id)
+    ranked = _library_most_played_existing_paths(db, media_root, user_id=user_id)
     if not ranked:
         return []
 
@@ -1004,8 +1021,12 @@ def list_user_playlists(db: Session, *, user_id: int, is_admin: bool) -> list[di
     for p in rows:
         custom_cover = resolve_playlist_cover_url(p)
         if _is_library_most_played(p):
-            # Lightweight list payload — do not rebuild/enrich the full track list here.
-            track_count = len(_library_most_played_paths(db, user_id)) if media_root else 0
+            # Match the playlist page: only count paths that still exist on disk.
+            track_count = (
+                len(_library_most_played_existing_paths(db, media_root, user_id=user_id))
+                if media_root
+                else 0
+            )
             cover = custom_cover or LIBRARY_MOST_PLAYED_DEFAULT_COVER
         else:
             from app.playlist_snapshot import is_snapshot_playlist

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ModalPortal from "../../ModalPortal";
+import { clearNowPlaying, setNowPlaying } from "../../../mediaSession";
 
 export type GalleryViewerItem = {
   id: string;
@@ -41,6 +42,7 @@ export default function GalleryViewerModal({
   const hasMany = items.length > 1;
   const thumbsRef = useRef<HTMLDivElement | null>(null);
   const activeThumbRef = useRef<HTMLButtonElement | null>(null);
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const jumpRef = useRef(false);
   const prevIndexRef = useRef(index);
   const [overflows, setOverflows] = useState(false);
@@ -85,6 +87,42 @@ export default function GalleryViewerModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [index, items.length, onClose]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    const isPlayable =
+      item?.mediaType === "video" || item?.mediaType === "audio";
+    if (!item || !isPlayable) {
+      clearNowPlaying();
+      return;
+    }
+    const publish = (mediaEl: HTMLMediaElement | null) => {
+      if (!mediaEl) return;
+      setNowPlaying(
+        {
+          title: item.caption || (item.mediaType === "video" ? "Video" : "Audio"),
+          artist: item.subcaption || null,
+          artworkUrl: null,
+        },
+        {
+          element: mediaEl,
+          handlers: {
+            play: () => void mediaEl.play().catch(() => {}),
+            pause: () => mediaEl.pause(),
+            previous: hasMany ? () => step(-1) : undefined,
+            next: hasMany ? () => step(1) : undefined,
+            seekTo: (seconds) => {
+              mediaEl.currentTime = seconds;
+            },
+          },
+        }
+      );
+    };
+    publish(el);
+    return () => clearNowPlaying();
+    // step closes over index; re-bind when item changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id, item?.mediaType, item?.caption, item?.subcaption, hasMany, index]);
 
   // Measure whether thumbs overflow the row (before enabling loop dupes).
   useLayoutEffect(() => {
@@ -169,6 +207,40 @@ export default function GalleryViewerModal({
 
   if (!item) return null;
 
+  const bindMediaRef = (el: HTMLVideoElement | HTMLAudioElement | null) => {
+    mediaRef.current = el;
+    if (!el) return;
+    setNowPlaying(
+      {
+        title: item.caption || (item.mediaType === "video" ? "Video" : "Audio"),
+        artist: item.subcaption || null,
+        artworkUrl: null,
+      },
+      {
+        element: el,
+        handlers: {
+          play: () => void el.play().catch(() => {}),
+          pause: () => el.pause(),
+          previous: hasMany
+            ? () => {
+                const next = (index - 1 + items.length) % items.length;
+                onIndexChange(next);
+              }
+            : undefined,
+          next: hasMany
+            ? () => {
+                const next = (index + 1) % items.length;
+                onIndexChange(next);
+              }
+            : undefined,
+          seekTo: (seconds) => {
+            el.currentTime = seconds;
+          },
+        },
+      }
+    );
+  };
+
   return (
     <ModalPortal onClose={onClose}>
       <div className="gallery-viewer" onMouseDown={(e) => e.stopPropagation()}>
@@ -194,6 +266,7 @@ export default function GalleryViewerModal({
           {item.mediaType === "video" ? (
             <video
               key={item.id}
+              ref={bindMediaRef}
               src={item.url}
               className="gallery-viewer__img gallery-viewer__video"
               controls
@@ -205,6 +278,7 @@ export default function GalleryViewerModal({
             <div className="gallery-viewer__audio-wrap">
               <audio
                 key={item.id}
+                ref={bindMediaRef}
                 src={item.url}
                 className="gallery-viewer__audio"
                 controls

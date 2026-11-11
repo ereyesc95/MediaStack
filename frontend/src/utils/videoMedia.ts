@@ -55,12 +55,52 @@ export function formatVideoDateIso(raw: string | null | undefined): string {
   return normalizeVideoDateInput(raw);
 }
 
-export function openTrackVideo(url: string, onBeforeOpen?: () => void): void {
+export type LocalVideoRequest = {
+  url: string;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  artworkUrl?: string | null;
+};
+
+type LocalVideoOpener = ((req: LocalVideoRequest) => void) | null;
+
+let localVideoOpener: LocalVideoOpener = null;
+
+export function setLocalVideoOpener(handler: LocalVideoOpener): void {
+  localVideoOpener = handler;
+}
+
+export function getLocalVideoOpener(): LocalVideoOpener {
+  return localVideoOpener;
+}
+
+export function openTrackVideo(
+  url: string,
+  onBeforeOpen?: () => void,
+  meta?: Omit<LocalVideoRequest, "url"> | null
+): void {
   onBeforeOpen?.();
   const trimmed = url.trim();
   if (!trimmed) return;
   if (youtubeVideoId(trimmed) || trimmed.includes("youtube.com") || trimmed.includes("youtu.be")) {
     openYoutubeFullscreen(trimmed);
+    return;
+  }
+  const isLocalApi =
+    trimmed.startsWith("/api/") ||
+    trimmed.includes("/api/media/file") ||
+    (!/^https?:\/\//i.test(trimmed) && !trimmed.startsWith("blob:"));
+  if (isLocalApi && localVideoOpener) {
+    localVideoOpener({
+      url: trimmed.startsWith("/") || /^https?:\/\//i.test(trimmed)
+        ? trimmed
+        : localVideoOpenUrl(trimmed),
+      title: meta?.title,
+      artist: meta?.artist,
+      album: meta?.album,
+      artworkUrl: meta?.artworkUrl,
+    });
     return;
   }
   window.open(trimmed, "_blank", "noopener,noreferrer");

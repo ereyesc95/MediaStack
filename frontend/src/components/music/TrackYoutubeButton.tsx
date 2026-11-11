@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TrackYoutubeVideo } from "../../types";
+import type { NowPlayingInfo } from "../../mediaSession";
 import {
   openTrackVideo,
   trackYoutubeVideos,
@@ -14,12 +15,15 @@ type Props = {
   videos: TrackYoutubeVideo[];
   className?: string;
   onBeforeOpen?: () => void;
+  /** Metadata for local in-app video (Media Session / player chrome). */
+  media?: Omit<NowPlayingInfo, "title"> & { title?: string | null };
 };
 
 export default function TrackYoutubeButton({
   videos,
   className,
   onBeforeOpen,
+  media,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
@@ -59,7 +63,12 @@ export default function TrackYoutubeButton({
 
   const openUrl = (video: TrackYoutubeVideo) => {
     setOpen(false);
-    openTrackVideo(videoOpenUrl(video), onBeforeOpen);
+    openTrackVideo(videoOpenUrl(video), onBeforeOpen, {
+      title: media?.title || video.label || "Video",
+      artist: media?.artist ?? null,
+      album: media?.album ?? null,
+      artworkUrl: media?.artworkUrl ?? null,
+    });
   };
 
   return (

@@ -265,7 +265,14 @@ export default function SeriesOpeningsEndingsPage({
       indexRef.current = i;
       setActiveId(t.id);
       if (t.cover_url) setCoverUrl(t.cover_url);
-      audio.loadSrc(url, true);
+      audio.loadSrc(url, true, {
+        media: {
+          title: trackMainTitle(t.title) || t.title || "Track",
+          artist: t.artist ?? null,
+          album: t.album ?? null,
+          artworkUrl: t.cover_url ?? null,
+        },
+      });
     },
     [audio, tracks]
   );
@@ -279,6 +286,14 @@ export default function SeriesOpeningsEndingsPage({
     if (!tracks.length) return;
     playAt((indexRef.current - 1 + tracks.length) % tracks.length);
   }, [playAt, tracks.length]);
+
+  useEffect(() => {
+    audio.setSessionHandlers({
+      previous: () => playPrev(),
+      next: () => playNext(),
+    });
+    return () => audio.setSessionHandlers(null);
+  }, [audio, playNext, playPrev]);
 
   useEffect(() => {
     const el = audio.audioRef.current;
@@ -953,7 +968,20 @@ export default function SeriesOpeningsEndingsPage({
                               onClick={() => {
                                 audio.loadSrc(
                                   `/api/media/file?path=${encodeURIComponent(v.play_path)}`,
-                                  true
+                                  true,
+                                  {
+                                    media: {
+                                      title:
+                                        trackMainTitle(v.title) ||
+                                        v.title ||
+                                        "Track",
+                                      artist:
+                                        tracks[indexRef.current]?.artist ??
+                                        null,
+                                      album: v.album_title ?? null,
+                                      artworkUrl: v.cover_url ?? null,
+                                    },
+                                  }
                                 );
                               }}
                             >

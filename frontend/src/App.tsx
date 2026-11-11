@@ -52,6 +52,8 @@ import ProfilePickerModal from "./components/ProfilePickerModal";
 
 import HubPage from "./components/HubPage";
 
+import { suppressDashHoverUntilPointerMove } from "./components/DashHoverTitle";
+import LocalVideoPlayerHost from "./components/LocalVideoPlayer";
 import type { MediaOption } from "./components/ModuleTopBar";
 
 import MusicModule from "./components/music/MusicModule";
@@ -550,6 +552,8 @@ export default function App() {
 
   function selectMedia(opt: MediaOption) {
     clearMediaTheme(profile?.user_id);
+    // Cursor often sits over the first home pane after the media menu closes.
+    suppressDashHoverUntilPointerMove();
 
     if (opt.kind === "music") {
       pushMusicRootRoute();
@@ -2372,6 +2376,8 @@ export default function App() {
         )}
 
       </main>
+
+      <LocalVideoPlayerHost />
 
     </div>
     </MediaSwitchProvider>

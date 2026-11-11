@@ -6,6 +6,55 @@ import {
 } from "react";
 import BillboardText from "./BillboardText";
 
+const SUPPRESS_ATTR = "data-suppress-dash-hover";
+/** Ignore click/select jitter; only a real cursor move re-enables pane hover. */
+const SUPPRESS_MOVE_PX = 6;
+
+let suppressMoveHandler: ((e: PointerEvent) => void) | null = null;
+let suppressOriginX = 0;
+let suppressOriginY = 0;
+let suppressOriginSet = false;
+
+function clearDashHoverSuppress(): void {
+  if (typeof document !== "undefined") {
+    document.documentElement.removeAttribute(SUPPRESS_ATTR);
+  }
+  if (suppressMoveHandler) {
+    window.removeEventListener("pointermove", suppressMoveHandler);
+    suppressMoveHandler = null;
+  }
+  suppressOriginSet = false;
+}
+
+/**
+ * Keep home-pane sibling hover shrink off until the pointer actually moves.
+ * Used after module switches where the cursor can land on the first pane
+ * without the user intending to hover it.
+ */
+export function suppressDashHoverUntilPointerMove(): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+
+  clearDashHoverSuppress();
+  root.setAttribute(SUPPRESS_ATTR, "");
+  suppressOriginSet = false;
+
+  suppressMoveHandler = (e: PointerEvent) => {
+    if (!suppressOriginSet) {
+      suppressOriginX = e.clientX;
+      suppressOriginY = e.clientY;
+      suppressOriginSet = true;
+      return;
+    }
+    const dx = e.clientX - suppressOriginX;
+    const dy = e.clientY - suppressOriginY;
+    if (dx * dx + dy * dy < SUPPRESS_MOVE_PX * SUPPRESS_MOVE_PX) return;
+    clearDashHoverSuppress();
+  };
+
+  window.addEventListener("pointermove", suppressMoveHandler, { passive: true });
+}
+
 export function useCoarsePointer(): boolean {
   const [coarse, setCoarse] = useState(false);
   useEffect(() => {

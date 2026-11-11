@@ -1275,6 +1275,15 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                                     <TrackYoutubeButton
                                       videos={videos}
                                       onBeforeOpen={onPausePlayback}
+                                      media={{
+                                        title: trackMainTitle(track.title) || track.title,
+                                        artist: artistName,
+                                        album: releaseTitle || parts.title || null,
+                                        artworkUrl:
+                                          track.cover_url ??
+                                          editionArt.cover_url ??
+                                          null,
+                                      }}
                                     />
                                   </span>
                                   {track.duration ? (
@@ -1375,6 +1384,13 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                           <TrackYoutubeButton
                             videos={videos}
                             onBeforeOpen={onPausePlayback}
+                            media={{
+                              title: trackMainTitle(track.title) || track.title,
+                              artist: artistName,
+                              album: releaseTitle || parts.title || null,
+                              artworkUrl:
+                                track.cover_url ?? editionArt.cover_url ?? null,
+                            }}
                           />
                         </span>
                         {track.duration ? (
@@ -1489,9 +1505,10 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                   key={v.play_path}
                   className={active ? "release-tracklist__row active" : "release-tracklist__row"}
                 >
+                  <span className="release-tracklist__num">{i + 1}</span>
                   <button
                     type="button"
-                    className="release-tracklist__play"
+                    className="release-tracklist__title-play"
                     onClick={() => {
                       const source = versionSourceFromItem(
                         v,
@@ -1512,12 +1529,16 @@ const ReleaseTracklist = forwardRef<ReleaseTracklistHandle, Props>(function Rele
                       }
                     }}
                   >
-                    <span className="release-tracklist__num">{i + 1}</span>
                     <ReleaseTrackTitle title={v.title} billboard={stacked} />
-                    {v.duration && (
-                      <span className="release-tracklist__duration">{v.duration}</span>
-                    )}
                   </button>
+                  {v.duration ? (
+                    <span className="release-tracklist__duration">{v.duration}</span>
+                  ) : (
+                    <span
+                      className="release-tracklist__duration release-tracklist__duration--empty"
+                      aria-hidden
+                    />
+                  )}
                 </li>
               );
             })}

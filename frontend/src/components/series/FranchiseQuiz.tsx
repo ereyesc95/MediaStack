@@ -284,7 +284,16 @@ export default function FranchiseQuiz({
   };
 
   const playQuestion = (question: FranchiseQuizSoundQuestion) => {
-    audio.loadSrc(musicStreamUrl(question.play_path), true);
+    const correct =
+      question.choices.find((c) => c.id === question.correct_id) ??
+      question.choices[0];
+    audio.loadSrc(musicStreamUrl(question.play_path), true, {
+      media: {
+        title: correct?.title || "Quiz track",
+        artist: "Quiz",
+        artworkUrl: correct?.cover_url ?? null,
+      },
+    });
     void playTrack({
       path: question.play_path,
       record: false,

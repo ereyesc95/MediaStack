@@ -349,6 +349,7 @@ export default function ArtistPage({
     seek,
     loadSrc,
     clear,
+    setSessionHandlers,
   } = useMiniAudio();
   const [refreshBio, setRefreshBio] = useState(false);
   const [busy, setBusy] = useState("");
@@ -928,13 +929,34 @@ export default function ArtistPage({
       setPlayingPath(path);
       const track = playableTracks.find((t) => t.play_path === path);
       setPlaybackPlaying(true);
-      loadSrc(musicStreamUrl(path), true);
+      loadSrc(musicStreamUrl(path), true, {
+        media: {
+          title,
+          artist:
+            (track as { artist_name?: string | null } | undefined)?.artist_name ||
+            data?.name ||
+            null,
+          album: (track as { album_folder?: string | null } | undefined)
+            ?.album_folder,
+          artworkUrl: track?.cover_url ?? null,
+        },
+      });
       applyPlaybackThemeFromCover(track?.cover_url ?? null, userId);
       void playTrack({ path, artist_id: bandId, title }).catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
       });
     },
-    [bandId, loadSrc, playingPath, audioSrc, playing, toggle, playableTracks, userId]
+    [
+      bandId,
+      data?.name,
+      loadSrc,
+      playingPath,
+      audioSrc,
+      playing,
+      toggle,
+      playableTracks,
+      userId,
+    ]
   );
 
   const stepTrack = useCallback(
@@ -950,6 +972,14 @@ export default function ArtistPage({
     },
     [playableTracks, playingPath, handlePlay]
   );
+
+  useEffect(() => {
+    setSessionHandlers({
+      previous: () => stepTrack(-1),
+      next: () => stepTrack(1),
+    });
+    return () => setSessionHandlers(null);
+  }, [setSessionHandlers, stepTrack]);
 
   useEffect(() => {
     const el = audioRef.current;

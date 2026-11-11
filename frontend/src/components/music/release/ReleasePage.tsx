@@ -103,6 +103,7 @@ import {
   useSharedMiniAudio,
   useSharedPlaybackMeta,
 } from "../../../sharedMiniAudio";
+import { setNowPlaying } from "../../../mediaSession";
 import MediaBeatFx from "../MediaBeatFx";
 import MediaBeatFrame from "../MediaBeatFrame";
 import { useBeatPulse } from "../../../useBeatPulse";
@@ -949,19 +950,28 @@ export default function ReleasePage({
   ]);
 
   useLayoutEffect(() => {
-    if (stacked || mobileLandscape || embedded) return;
-    const meta = panelMetaRef.current;
     const fit = panelFitRef.current;
     const inner = panelFitInnerRef.current;
+    const clearFitScale = () => {
+      inner?.style.removeProperty("transform");
+      inner?.style.removeProperty("transformOrigin");
+      fit?.style.removeProperty("height");
+    };
+
+    // Mobile landscape scrolls the panel; do not scale-fit (leaves leftover transforms).
+    if (stacked || mobileLandscape || embedded) {
+      clearFitScale();
+      return;
+    }
+
+    const meta = panelMetaRef.current;
     const credits = panelCreditsRef.current;
     const label = panelLabelRef.current;
     const bottom = panelBottomRef.current;
     if (!meta || !fit || !inner) return;
 
     const measure = () => {
-      inner.style.removeProperty("transform");
-      inner.style.removeProperty("transformOrigin");
-      fit.style.height = "";
+      clearFitScale();
 
       const bottomHeight = bottom?.offsetHeight ?? 0;
       const creditsHeight = credits?.offsetHeight ?? 0;
@@ -987,7 +997,10 @@ export default function ReleasePage({
     if (credits) ro.observe(credits);
     if (label) ro.observe(label);
     if (bottom) ro.observe(bottom);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      clearFitScale();
+    };
   }, [
     stacked,
     mobileLandscape,
@@ -1803,7 +1816,15 @@ export default function ReleasePage({
         return;
       }
       // Start audio first while still inside the tap gesture (mobile autoplay).
-      miniAudio.loadSrc(musicStreamUrl(path), true);
+      miniAudio.loadSrc(musicStreamUrl(path), true, {
+        media: {
+          title,
+          artist: data?.artist_name ?? null,
+          album: data?.title ?? null,
+          artworkUrl:
+            _art?.cover_url ?? data?.cover_url ?? null,
+        },
+      });
 
       setPlayingPath(path);
       setNowPlayingTitle(title);
@@ -1961,6 +1982,37 @@ export default function ReleasePage({
     el.addEventListener("ended", onEnded);
     return () => el.removeEventListener("ended", onEnded);
   }, [miniAudio.audioRef, playAdjacentTrack, playingPath, repeatOne]);
+
+  useEffect(() => {
+    miniAudio.setSessionHandlers({
+      previous: () => playAdjacentTrack("prev"),
+      next: () => playAdjacentTrack("next"),
+    });
+    return () => miniAudio.setSessionHandlers(null);
+  }, [miniAudio, playAdjacentTrack]);
+
+  useEffect(() => {
+    if (!playingPath || !nowPlayingTitle || !miniAudio.src) return;
+    const el = miniAudio.audioRef.current;
+    setNowPlaying(
+      {
+        title: nowPlayingTitle,
+        artist: data?.artist_name ?? null,
+        album: data?.title ?? null,
+        artworkUrl: playbackArt?.cover_url ?? data?.cover_url ?? null,
+      },
+      { element: el }
+    );
+  }, [
+    data?.artist_name,
+    data?.cover_url,
+    data?.title,
+    miniAudio.audioRef,
+    miniAudio.src,
+    nowPlayingTitle,
+    playbackArt?.cover_url,
+    playingPath,
+  ]);
 
   useEffect(() => {
     if (!playingPath) return;
@@ -2506,7 +2558,7 @@ export default function ReleasePage({
                     ))}
                   </p>
                 )}
-                {bannerLayout && panelActionTrack ? (
+                {bannerLayout && tab === "tracklist" && panelActionTrack ? (
                   <div className="release-page__track-actions release-page__track-actions--in-info">
                     {showLyricsAction && (
                       <button

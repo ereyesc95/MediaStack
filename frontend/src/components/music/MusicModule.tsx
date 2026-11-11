@@ -529,9 +529,14 @@ export default function MusicModule({
     clearArtistEntryReferrer();
     if (ret.kind === "catalog-live-shows") {
       onReleaseNavigate?.(undefined, undefined);
+      onTourNavigate?.({
+        tourSlug: undefined,
+        showSlug: undefined,
+        showTab: undefined,
+      });
       onBand(undefined);
       setCatalogLiveShowsOpen(true);
-      onTab(ret.backLabel === "EVENTS" ? "events" : "playlists");
+      onTab(liveShowsReturnTab === "events" ? "events" : "playlists");
       return true;
     }
     if (ret.kind === "user-playlist" && ret.userPlaylistId != null) {
@@ -544,6 +549,11 @@ export default function MusicModule({
     }
     if (ret.kind === "artist-playlist" && ret.bandId != null && ret.slug) {
       onReleaseNavigate?.(undefined, undefined);
+      onTourNavigate?.({
+        tourSlug: undefined,
+        showSlug: undefined,
+        showTab: undefined,
+      });
       pushArtistRoute({
         bandId: ret.bandId,
         section: "audio",
@@ -581,6 +591,7 @@ export default function MusicModule({
     return false;
   }, [
     artistOverviewTab,
+    liveShowsReturnTab,
     onBand,
     onPlaylist,
     onPlaylistNavigate,
@@ -1370,8 +1381,22 @@ export default function MusicModule({
         void handlePlay(track.path, track.artist_id, track.title);
       }
     },
+    // handlePlay is a stable function declaration in this component body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [homeTracks, homePlayingPath]
   );
+
+  useEffect(() => {
+    if (bandId) {
+      homeAudio.setSessionHandlers(null);
+      return;
+    }
+    homeAudio.setSessionHandlers({
+      previous: () => stepHomeTrack(-1),
+      next: () => stepHomeTrack(1),
+    });
+    return () => homeAudio.setSessionHandlers(null);
+  }, [bandId, homeAudio, stepHomeTrack]);
 
   function handlePlay(
     path: string,
@@ -1393,7 +1418,19 @@ export default function MusicModule({
       }
       // Start stream inside the tap gesture — await playTrack breaks mobile autoplay.
       setHomePlayingPath(path);
-      homeAudio.loadSrc(musicStreamUrl(path), true);
+      const homeTrack = homeTracks.find((t) => t.path === path);
+      homeAudio.loadSrc(musicStreamUrl(path), true, {
+        media: {
+          title: title || homeTrack?.title || "Track",
+          artist: homeTrack?.artist_name ?? null,
+          album: homeTrack?.release ?? null,
+          artworkUrl: resolveHomeTrackCover(path) ?? homeTrack?.cover_url ?? null,
+        },
+        sessionHandlers: {
+          previous: () => stepHomeTrack(-1),
+          next: () => stepHomeTrack(1),
+        },
+      });
       setPlaybackPlaying(true);
       if (!bandId) {
         applyPlaybackThemeFromCover(
@@ -2194,6 +2231,39 @@ export default function MusicModule({
               backLabel: "LIVE SHOWS",
             });
           }}
+          onOpenShow={({ bandId: showBandId, tourSlug: nextTour, showSlug: nextShow, bandName }) => {
+            savePlaylistReturn({
+              kind: "catalog-live-shows",
+              backLabel: "LIVE SHOWS",
+            });
+            tourEntryRef.current = "artist";
+            setCatalogLiveShowsOpen(false);
+            primeArtistShell(showBandId, {
+              id: showBandId,
+              name: bandName || "Artist",
+              photo_url: null,
+              logo_url: null,
+              logo_collapsed_url: null,
+              icon_url: null,
+              era_year: null,
+              show_name_on_hover: true,
+            });
+            pushArtistRoute({
+              bandId: showBandId,
+              artistName: bandName || undefined,
+              section: "tours",
+              overviewTab: "about",
+              tourSlug: nextTour,
+              showSlug: nextShow,
+              showTab: "overview",
+            });
+            onBand(showBandId, "tours");
+            onTourNavigate?.({
+              tourSlug: nextTour,
+              showSlug: nextShow,
+              showTab: "overview",
+            });
+          }}
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource ?? (() => {})}
@@ -2375,6 +2445,44 @@ export default function MusicModule({
               });
             }
           }}
+          onOpenShow={({ bandId: showBandId, tourSlug: nextTour, showSlug: nextShow, bandName }) => {
+            if (bandId && playlistSlug) {
+              savePlaylistReturn({
+                kind: "artist-playlist",
+                bandId,
+                slug: playlistSlug,
+                backLabel: playlistSlug === "live-shows" ? "LIVE SHOWS" : "PLAYLISTS",
+              });
+            }
+            tourEntryRef.current = "artist";
+            if (bandName) {
+              primeArtistShell(showBandId, {
+                id: showBandId,
+                name: bandName,
+                photo_url: null,
+                logo_url: null,
+                logo_collapsed_url: null,
+                icon_url: null,
+                era_year: null,
+                show_name_on_hover: true,
+              });
+            }
+            pushArtistRoute({
+              bandId: showBandId,
+              artistName: bandName || artistShell?.name || undefined,
+              section: "tours",
+              overviewTab: artistOverviewTab,
+              tourSlug: nextTour,
+              showSlug: nextShow,
+              showTab: "overview",
+            });
+            onBand(showBandId, "tours");
+            onTourNavigate?.({
+              tourSlug: nextTour,
+              showSlug: nextShow,
+              showTab: "overview",
+            });
+          }}
           onImport={onImport}
           onSync={onSync}
           onChooseSource={onChooseSource ?? (() => {})}
@@ -2391,13 +2499,15 @@ export default function MusicModule({
           isAdmin={isAdmin}
           standalone
           backLabel={
-            tourEntryRef.current === "events"
+            getPlaylistReturn()?.backLabel ||
+            (tourEntryRef.current === "events"
               ? "EVENTS"
               : tourEntryRef.current === "merch"
                 ? "MERCH"
-                : "TOURS"
+                : "TOURS")
           }
           onBack={() => {
+            if (restorePlaylistReturn()) return;
             if (tourEntryRef.current === "events" || tourEntryRef.current === "merch") {
               clearMediaTheme(userId);
               onTourNavigate?.({
