@@ -57,6 +57,21 @@ def _listing_sig_cached(media_root: Path, module: str) -> str:
     return listing
 
 
+def _payload_looks_empty(payload: dict) -> bool:
+    franchises = payload.get("franchises")
+    return not isinstance(franchises, list) or len(franchises) == 0
+
+
+def _listing_implies_content(listing: str) -> bool:
+    """True when the membership fingerprint is not an empty-tree marker."""
+    # Format is ``{count}:{hash}`` from fingerprint_paths / module_listing_sig.
+    head = (listing or "").split(":", 1)[0].strip()
+    try:
+        return int(head) > 0
+    except ValueError:
+        return bool(listing) and listing != "0:"
+
+
 def get_or_build_catalog(
     module: str,
     *,
@@ -75,7 +90,16 @@ def get_or_build_catalog(
     if not force:
         mem = _raw_payload_mem.get(mod)
         if mem and mem[0] == listing and isinstance(mem[1], dict):
-            return mem[1]
+            # Reject poisoned empty caches left by in-place letter/page mutation.
+            if not (
+                _payload_looks_empty(mem[1]) and _listing_implies_content(listing)
+            ):
+                # Always copy — callers (catalog paging, NSFW filters, enrich)
+                # mutate the dict/lists in place and must not poison the cache.
+                return copy.deepcopy(mem[1])
+            _raw_payload_mem.pop(mod, None)
+            for ek in [k for k in _enriched_mem if k.startswith(f"{mod}:")]:
+                _enriched_mem.pop(ek, None)
 
     if not force and path.is_file():
         try:
@@ -87,8 +111,12 @@ def get_or_build_catalog(
                 and isinstance(raw.get("payload"), dict)
             ):
                 payload = raw["payload"]
-                _raw_payload_mem[mod] = (listing, payload)
-                return payload
+                if not (
+                    _payload_looks_empty(payload)
+                    and _listing_implies_content(listing)
+                ):
+                    _raw_payload_mem[mod] = (listing, payload)
+                    return copy.deepcopy(payload)
         except (json.JSONDecodeError, OSError, TypeError):
             pass
 
@@ -108,7 +136,7 @@ def get_or_build_catalog(
         )
     except OSError:
         pass
-    return payload
+    return copy.deepcopy(payload)
 
 
 def enriched_catalog_cache_key(module: str, *, nsfw_unlocked: bool) -> str:
@@ -135,6 +163,13 @@ def get_cached_enriched_catalog(
         return None
     current = _listing_sig_cached(media_root, mod)
     if listing != current:
+        _enriched_mem.pop(key, None)
+        return None
+    if (
+        isinstance(payload, dict)
+        and _payload_looks_empty(payload)
+        and _listing_implies_content(current)
+    ):
         _enriched_mem.pop(key, None)
         return None
     return copy.deepcopy(payload)

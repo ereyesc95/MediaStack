@@ -323,8 +323,12 @@ def series_dashboard(
             db, user.usr_id, nsfw_unlocked=nsfw_unlocked
         )
     except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("series dashboard failed")
         return {
             "top_episodes": [],
+            "top_franchises": [],
             "top_series": [],
             "top_genres": [],
             "top_countries": [],

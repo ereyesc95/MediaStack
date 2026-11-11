@@ -72,24 +72,29 @@ def apply_catalog_paging(
     page: int | None = None,
     page_size: int | None = None,
 ) -> dict:
-    """Filter/page primary list keys; stamp letters/total metadata."""
+    """Filter/page primary list keys; stamp letters/total metadata.
+
+    Returns a shallow-copied catalog so letter/page slicing cannot mutate a
+    shared module catalog cache entry.
+    """
+    out = dict(catalog)
     primary = list_keys[0] if list_keys else "franchises"
     primary_items = [
-        it for it in (catalog.get(primary) or []) if isinstance(it, dict)
+        it for it in (out.get(primary) or []) if isinstance(it, dict)
     ]
     letters = collect_letters(primary_items)
 
     filtered = filter_items(primary_items, letter=letter, search=search)
     paged, total = paginate_items(filtered, page=page, page_size=page_size)
-    catalog[primary] = paged
-    catalog["letters"] = letters
-    catalog["total"] = total
-    catalog["page"] = page or 1
-    catalog["page_size"] = page_size or total or 0
+    out[primary] = paged
+    out["letters"] = letters
+    out["total"] = total
+    out["page"] = page or 1
+    out["page_size"] = page_size or total or 0
 
     # Keep secondary lists in sync when letter/search applied (films/games/books).
     for key in list_keys[1:]:
-        secondary = [it for it in (catalog.get(key) or []) if isinstance(it, dict)]
+        secondary = [it for it in (out.get(key) or []) if isinstance(it, dict)]
         if not secondary:
             continue
         sec = filter_items(secondary, letter=letter, search=search)
@@ -97,9 +102,9 @@ def apply_catalog_paging(
             # Secondary lists (flat films/games) are often browsed independently;
             # still apply the same letter/search, but do not force franchise page size
             # unless the caller only has one key.
-            catalog[key] = sec
-            catalog[f"{key}_total"] = len(sec)
+            out[key] = sec
+            out[f"{key}_total"] = len(sec)
         else:
-            catalog[key] = sec
+            out[key] = sec
 
-    return catalog
+    return out

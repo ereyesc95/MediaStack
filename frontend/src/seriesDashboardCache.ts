@@ -20,13 +20,9 @@ function remember(data: SeriesDashboard): SeriesDashboard {
 }
 
 function dashboardHasItems(data: SeriesDashboard): boolean {
-  return Boolean(
-    data.top_franchises?.length ||
-      data.top_series?.length ||
-      data.top_genres?.length ||
-      data.top_countries?.length ||
-      data.top_episodes?.length
-  );
+  // Genres/countries can come from DB even when the Series/ catalog is empty
+  // (or a poisoned cache). Only treat show panes as a real home payload.
+  return Boolean(data.top_franchises?.length || data.top_series?.length);
 }
 
 function rememberIfPopulated(data: SeriesDashboard): SeriesDashboard {

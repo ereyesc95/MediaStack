@@ -10,6 +10,7 @@ import { EMPTY_SERIES_DASHBOARD, type SeriesDashboard } from "./types";
 type MoviesDash = SeriesDashboard & {
   franchise_count?: number;
   film_count?: number;
+  top_films?: unknown[];
 };
 
 const NAMESPACE = "movies-dashboard";
@@ -24,13 +25,12 @@ function remember(data: MoviesDash): MoviesDash {
   return data;
 }
 
-function dashboardHasItems(data: SeriesDashboard): boolean {
+function dashboardHasItems(data: MoviesDash): boolean {
+  // Genres/countries can exist from DB without a Movies/ catalog hit.
   return Boolean(
     data.top_franchises?.length ||
       data.top_series?.length ||
-      data.top_genres?.length ||
-      data.top_countries?.length ||
-      data.top_episodes?.length
+      data.top_films?.length
   );
 }
 

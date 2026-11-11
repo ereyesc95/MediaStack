@@ -31,11 +31,11 @@ function remember(data: GamesDashboard): GamesDashboard {
 }
 
 function dashboardHasItems(data: GamesDashboard): boolean {
+  // Genres alone can exist without a Games/ catalog hit.
   return Boolean(
     data.top_franchises?.length ||
       data.top_games?.length ||
       data.top_series?.length ||
-      data.top_genres?.length ||
       data.platforms?.length ||
       data.recent_games?.length
   );
