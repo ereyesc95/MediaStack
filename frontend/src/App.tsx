@@ -42,10 +42,13 @@ import {
   saveProfile,
   type ProfileUser,
 } from "./auth";
+import { AdminSetupProvider } from "./adminSetupContext";
 
 import AppMenu from "./components/AppMenu";
 import ConfirmDialog from "./components/ConfirmDialog";
 import HubBrand from "./components/HubBrand";
+import AdminAppSettingsModal from "./components/AdminAppSettingsModal";
+import ApiCredentialsModal from "./components/ApiCredentialsModal";
 import MediaSourceModal from "./components/MediaSourceModal";
 import ProfileEditModal from "./components/ProfileEditModal";
 import ProfilePickerModal from "./components/ProfilePickerModal";
@@ -220,9 +223,11 @@ export default function App() {
     readCachedMediaRootConfigured
   );
 
-  const [sourceModal, setSourceModal] = useState<"welcome" | "settings" | null>(
-    null
-  );
+  const [sourceModal, setSourceModal] = useState<
+    "welcome" | "settings" | "create" | null
+  >(null);
+  const [apiCredentialsOpen, setApiCredentialsOpen] = useState(false);
+  const [adminAppSettingsOpen, setAdminAppSettingsOpen] = useState(false);
 
   const [profile, setProfile] = useState<ProfileUser | null | undefined>(() => {
     if (typeof window === "undefined") return undefined;
@@ -435,6 +440,11 @@ export default function App() {
     setSourceModal(null);
     setError(null);
     if (path) setBusy("");
+    clearAllDashboardCaches();
+    if (window.location.pathname !== "/" && window.location.pathname !== "") {
+      window.history.pushState(null, "", "/");
+    }
+    setView({ kind: "hub" });
   }
 
 
@@ -669,6 +679,20 @@ export default function App() {
   const profileReady = profile != null && profile !== undefined;
   const showProfilePicker = profile === null || switchingProfile;
 
+  const adminSetupMenuProps = isAdmin
+    ? {
+        onChooseSource: () => setSourceModal("settings"),
+        onCreateLibrary: () => setSourceModal("create"),
+        onApiCredentials: () => setApiCredentialsOpen(true),
+        onAdminAppSettings: () => setAdminAppSettingsOpen(true),
+      }
+    : {
+        onChooseSource: undefined as (() => void) | undefined,
+        onCreateLibrary: undefined as (() => void) | undefined,
+        onApiCredentials: undefined as (() => void) | undefined,
+        onAdminAppSettings: undefined as (() => void) | undefined,
+      };
+
   const hubMenu = (
     <AppMenu
       onImport={handleImport}
@@ -676,7 +700,7 @@ export default function App() {
       onRebuildRelatedIndex={
         isAdmin ? () => void handleRebuildRelatedIndex() : undefined
       }
-      onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+      {...adminSetupMenuProps}
       onRegenerateModuleIcons={
         isAdmin ? () => setModuleIconsConfirmOpen(true) : undefined
       }
@@ -698,6 +722,7 @@ export default function App() {
   const showSourceModal =
     profileReady &&
     (sourceModal === "settings" ||
+      sourceModal === "create" ||
       (sourceModal === "welcome" && !mediaRootConfigured));
 
   const mediaSwitchValue = useMemo(
@@ -719,6 +744,7 @@ export default function App() {
 
   return (
     <MediaSwitchProvider value={mediaSwitchValue}>
+    <AdminSetupProvider value={adminSetupMenuProps}>
     <div className={`app ${view.kind === "hub" ? "app--hub" : "app--module-view"}`}>
 
       {booting && (
@@ -756,17 +782,31 @@ export default function App() {
 
       {showSourceModal && (
         <MediaSourceModal
-          required={sourceModal !== "settings"}
+          required={sourceModal === "welcome"}
           canConfigure={isAdmin}
+          initialMode={sourceModal === "create" ? "create" : "choose"}
+          title={
+            sourceModal === "create"
+              ? "Create media library"
+              : sourceModal === "settings"
+                ? "Choose source folder"
+                : undefined
+          }
           onDone={handleSourceChosen}
           onClose={
-            sourceModal === "settings"
-              ? () => setSourceModal(null)
-              : undefined
+            sourceModal === "welcome" ? undefined : () => setSourceModal(null)
           }
           onSwitchProfile={handleSwitchProfile}
         />
       )}
+
+      {apiCredentialsOpen && isAdmin ? (
+        <ApiCredentialsModal onClose={() => setApiCredentialsOpen(false)} />
+      ) : null}
+
+      {adminAppSettingsOpen && isAdmin ? (
+        <AdminAppSettingsModal onClose={() => setAdminAppSettingsOpen(false)} />
+      ) : null}
 
       {moduleIconsConfirmOpen && (
         <ConfirmDialog
@@ -1116,7 +1156,7 @@ export default function App() {
 
             onSelectMedia={selectMedia}
 
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
@@ -1346,9 +1386,7 @@ export default function App() {
             userId={profile?.user_id}
             onImport={handleImport}
             onSync={handleSync}
-            onChooseSource={
-              isAdmin ? () => setSourceModal("settings") : undefined
-            }
+            {...adminSetupMenuProps}
             onSwitchProfile={handleSwitchProfile}
             onEditProfile={
               profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
@@ -1492,7 +1530,7 @@ export default function App() {
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
@@ -1733,7 +1771,7 @@ export default function App() {
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
@@ -1895,7 +1933,7 @@ export default function App() {
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
@@ -2058,7 +2096,7 @@ export default function App() {
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             userId={profile?.user_id}
             onSwitchProfile={handleSwitchProfile}
@@ -2193,7 +2231,7 @@ export default function App() {
             onImport={handleImport}
             onSync={handleSync}
             onSelectMedia={selectMedia}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             onSwitchProfile={handleSwitchProfile}
             onEditProfile={
@@ -2285,7 +2323,7 @@ export default function App() {
             onSelectMedia={selectMedia}
             onImport={handleImport}
             onSync={handleSync}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             onSwitchProfile={handleSwitchProfile}
             onEditProfile={
@@ -2366,7 +2404,7 @@ export default function App() {
             }}
             onImport={handleImport}
             onSync={handleSync}
-            onChooseSource={isAdmin ? () => setSourceModal("settings") : undefined}
+            {...adminSetupMenuProps}
             isAdmin={isAdmin}
             onSwitchProfile={handleSwitchProfile}
             onEditProfile={
@@ -2380,6 +2418,7 @@ export default function App() {
       <LocalVideoPlayerHost />
 
     </div>
+    </AdminSetupProvider>
     </MediaSwitchProvider>
 
   );

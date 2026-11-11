@@ -11,11 +11,11 @@ Modern reimplementation of **MediaBinger** — a personal media library and play
 | Module   | Status |
 |----------|--------|
 | **Music** | Mature — artist pages, releases, tracklists, playback, lyrics, file tags, quizzes, playlists, gallery, **physical Collection** (incl. vinyl **shelf**), Video/Library/Series tabs, **Tours**, Home **streaks / Wrapped** |
-| **Series** | Mature — franchise/show pages, cast/staff, episodes, related media, MUSIC soundtrack-bridge, quiz, NSFW gating, slug URLs |
-| **Movies** | Mature — works/films, cast, More Movies, related, MUSIC bridge, quiz, NSFW per-film genres, slug URLs |
-| **Books** | Mature — works/volumes, types, More Books, related, quiz, signed → Gallery nudge, NSFW gating, slug URLs |
+| **Series** | Mature — franchise/show pages, cast/staff, episodes, related media, MUSIC soundtrack-bridge, quiz, slug URLs |
+| **Movies** | Mature — works/films, cast, More Movies, related, MUSIC bridge, quiz, slug URLs |
+| **Books** | Mature — works/volumes, types, More Books, related, quiz, signed → Gallery nudge, slug URLs |
 | **Games** | Mature — franchise/leaf chrome shared with Series, related, MUSIC bridge, quiz |
-| **Universes** | Mature — shared hubs across series/movies/books with SFW filtering |
+| **Universes** | Mature — shared hubs across series/movies/books |
 | **Files** | Mature — tab browse, Manage Files, rename/move/copy/delete, multi-select, upload |
 | **Hobbies** | Mature — presets, Excel import/export, private collections |
 
@@ -563,7 +563,6 @@ Opening a music **Video** card that lives under `Movies/…` resolves the folder
 - **Staff roles** — canonical list in DB (`staff_roles`, seeded on startup): each role is **Original**, **Dub**, or **Hybrid**. Staff rows filter by selected language; the same person merges into one circle with roles comma-separated (A–Z). Suggest API: `GET /api/series/staff-roles`.
 - **Distributed by** — left panel uses Studio / Dub Studio / Publisher from staff when present (language-aware); falls back to about-field publishers.
 - **More Series / More Movies / More Books** — sibling leaves of the same franchise, sorted by release date.
-- **NSFW / Adult** — profiles without NSFW unlocked hide Adult parent genres and adult subgenres (including DB taxonomy under Adult). Film genres are resolved **per film** so one Adult-tagged title does not hide the whole franchise.
 - **Artist Series tab** — opens the Series module for `Series/…` folders (not the video media-item page).
 - **Back navigation** — franchise → leaf returns to the franchise hub; Best Series / Best Movies opened from Home return to Home.
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useAdminSetup } from "../adminSetupContext";
 import {
   setAppMenuOpen,
   subscribeCloseAppMenu,
@@ -51,7 +52,6 @@ import {
   IconMediaMusic,
   IconUpload,
 } from "./MenuIcons";
-import FranchiseLinksModal from "./FranchiseLinksModal";
 
 type Props = {
   onImport?: () => void;
@@ -116,6 +116,12 @@ type Props = {
   userId?: number;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
+  /** Admin Setup: create ``Media`` + module roots under a parent folder. */
+  onCreateLibrary?: () => void;
+  /** Admin Setup: manage third-party API keys. */
+  onApiCredentials?: () => void;
+  /** Admin Setup: profiles, passwords, and app URLs. */
+  onAdminAppSettings?: () => void;
   onRefreshMetadata?: () => void;
   /** Label for onRefreshMetadata (default: Metadata). Artist page uses "Artist". */
   refreshMetadataLabel?: string;
@@ -271,6 +277,9 @@ export default function AppMenu({
   userId,
   onSwitchProfile,
   onEditProfile,
+  onCreateLibrary: onCreateLibraryProp,
+  onApiCredentials: onApiCredentialsProp,
+  onAdminAppSettings: onAdminAppSettingsProp,
   onRefreshMetadata,
   refreshMetadataLabel = "Metadata",
   onUpdateProviderFolders,
@@ -324,6 +333,13 @@ export default function AppMenu({
   onRefreshTourSetlist,
 }: Props) {
   void _refreshLocalFlat;
+  const adminSetup = useAdminSetup();
+  const onCreateLibrary =
+    onCreateLibraryProp ?? adminSetup.onCreateLibrary;
+  const onApiCredentials =
+    onApiCredentialsProp ?? adminSetup.onApiCredentials;
+  const onAdminAppSettings =
+    onAdminAppSettingsProp ?? adminSetup.onAdminAppSettings;
   const showAdaptiveTheme =
     adaptiveThemeActive ?? artistThemeActive;
   const [open, setOpen] = useState(false);
@@ -351,7 +367,6 @@ export default function AppMenu({
     if (filesSelectActive) setManageFilesOpen(true);
   }, [filesSelectActive]);
   const [customOpen, setCustomOpen] = useState(false);
-  const [franchiseLinksOpen, setFranchiseLinksOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
   const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
   const ref = useRef<HTMLDivElement>(null);
@@ -1730,6 +1745,42 @@ export default function AppMenu({
                       Choose source
                     </button>
                   )}
+                  {onCreateLibrary && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCreateLibrary();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconFolder className="menu-item-icon" />
+                      Create library
+                    </button>
+                  )}
+                  {onApiCredentials && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onApiCredentials();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconSettings className="menu-item-icon" />
+                      API credentials
+                    </button>
+                  )}
+                  {onAdminAppSettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAdminAppSettings();
+                        setOpen(false);
+                      }}
+                    >
+                      <IconEditProfile className="menu-item-icon" />
+                      Profiles and URLs
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1755,16 +1806,6 @@ export default function AppMenu({
                   >
                     <IconSync className="menu-item-icon" />
                     Rebuild related index
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFranchiseLinksOpen(true);
-                      setOpen(false);
-                    }}
-                  >
-                    <IconCards className="menu-item-icon" />
-                    Aliases & overrides…
                   </button>
                   {onGenerateFolderIcons && (
                     <button
@@ -1844,9 +1885,6 @@ export default function AppMenu({
             </button>
           )}
         </div>
-      ) : null}
-      {franchiseLinksOpen && isAdmin ? (
-        <FranchiseLinksModal onClose={() => setFranchiseLinksOpen(false)} />
       ) : null}
     </div>
   );

@@ -2438,7 +2438,11 @@ export type AppSettings = {
   media_root_configured: boolean;
   media_root_chosen: boolean;
   media_server_url: string;
+  public_url?: string;
+  suggested_library_parent?: string;
   database_url: string;
+  admin_password_custom?: boolean;
+  admin_nsfw_password_custom?: boolean;
 };
 
 export async function fetchAppSettings(): Promise<AppSettings> {
@@ -2454,6 +2458,123 @@ export async function pickMediaRoot(): Promise<{
     { method: "POST" },
     300_000
   );
+}
+
+export async function pickCreateLibrary(): Promise<{
+  media_root: string;
+  media_root_configured: boolean;
+}> {
+  return request(
+    `${API}/settings/pick-create-library`,
+    { method: "POST" },
+    300_000
+  );
+}
+
+export async function createMediaLibrary(parentPath: string): Promise<{
+  media_root: string;
+  media_root_configured: boolean;
+}> {
+  return request(`${API}/settings/create-library`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ parent_path: parentPath }),
+  });
+}
+
+export type ApiCredentialService = {
+  id: string;
+  name: string;
+  description: string;
+  doc_url: string;
+  fields: Array<"key" | "secret" | "user_agent">;
+  configured: boolean;
+  source: string;
+  hints: Record<string, string | null | undefined>;
+};
+
+export async function fetchApiCredentials(): Promise<{
+  services: ApiCredentialService[];
+}> {
+  return request(`${API}/settings/api-credentials`);
+}
+
+export async function saveApiCredential(
+  serviceId: string,
+  body: { key?: string; secret?: string; user_agent?: string }
+): Promise<{ service: ApiCredentialService }> {
+  return request(`${API}/settings/api-credentials/${encodeURIComponent(serviceId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function clearApiCredential(
+  serviceId: string
+): Promise<{ service: ApiCredentialService }> {
+  return request(
+    `${API}/settings/api-credentials/${encodeURIComponent(serviceId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export type AdminSecurityPayload = {
+  profiles: Array<{
+    user_id: number;
+    username: string;
+    is_admin: boolean;
+    avatar?: string | null;
+  }>;
+  admin_password_custom: boolean;
+  admin_nsfw_password_custom: boolean;
+  public_url: string;
+  media_server_url: string;
+};
+
+export async function fetchAdminSecurity(): Promise<AdminSecurityPayload> {
+  return request(`${API}/settings/admin-security`);
+}
+
+export async function saveAdminPasswords(body: {
+  admin_password?: string | null;
+  admin_nsfw_password?: string | null;
+}): Promise<{
+  admin_password_set: boolean;
+  admin_nsfw_password_set: boolean;
+}> {
+  return request(`${API}/settings/admin-passwords`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function saveAppUrls(body: {
+  public_url?: string | null;
+  media_server_url?: string | null;
+}): Promise<{
+  public_url: string;
+  public_url_saved: boolean;
+  media_server_url: string;
+  media_server_url_saved: boolean;
+}> {
+  return request(`${API}/settings/app-urls`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function renameGuestProfile(
+  userId: number,
+  displayName: string
+): Promise<{ user_id: number; username: string; is_admin: boolean }> {
+  return request(`${API}/settings/profiles/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  });
 }
 
 /** Admin: native multi-folder picker → create leaf Audio/*.lnk to Music releases. */

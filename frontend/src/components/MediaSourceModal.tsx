@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { pickMediaRoot, setMediaRoot } from "../api";
+import { useEffect, useState } from "react";
+import {
+  createMediaLibrary,
+  fetchAppSettings,
+  pickCreateLibrary,
+  pickMediaRoot,
+  setMediaRoot,
+} from "../api";
 
 type Props = {
   required?: boolean;
@@ -8,6 +14,8 @@ type Props = {
   onDone: (path: string) => void;
   onClose?: () => void;
   onSwitchProfile?: () => void;
+  /** When true, open directly on the create-library panel. */
+  initialMode?: "choose" | "create";
 };
 
 export default function MediaSourceModal({
@@ -17,14 +25,41 @@ export default function MediaSourceModal({
   onDone,
   onClose,
   onSwitchProfile,
+  initialMode = "choose",
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState("");
+  const [mode, setMode] = useState<"choose" | "create">(initialMode);
+  const [suggestedParent, setSuggestedParent] = useState("");
 
-  const heading = title ?? (required ? "Welcome to MyStack" : "Choose source folder");
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
-  async function handlePick() {
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAppSettings()
+      .then((s) => {
+        if (!cancelled) {
+          setSuggestedParent(s.suggested_library_parent || "");
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const heading =
+    title ??
+    (required
+      ? "Welcome to MyStack"
+      : mode === "create"
+        ? "Create media library"
+        : "Choose source folder");
+
+  async function handlePickExisting() {
     setError(null);
     setBusy(true);
     try {
@@ -37,13 +72,41 @@ export default function MediaSourceModal({
     }
   }
 
-  async function handleManual() {
+  async function handleManualExisting() {
     const path = manualPath.trim();
     if (!path) return;
     setError(null);
     setBusy(true);
     try {
       const res = await setMediaRoot(path);
+      onDone(res.media_root);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePickCreate() {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await pickCreateLibrary();
+      onDone(res.media_root);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateAtParent(parent: string) {
+    const path = parent.trim();
+    if (!path) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await createMediaLibrary(path);
       onDone(res.media_root);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -88,37 +151,107 @@ export default function MediaSourceModal({
               </button>
             )}
           </>
+        ) : mode === "create" ? (
+          <>
+            <p className="muted">
+              Pick a parent folder. MyStack creates <code>Media</code> and the
+              module folders inside it.
+            </p>
+            {suggestedParent ? (
+              <button
+                type="button"
+                className="btn btn--primary welcome-pick-btn"
+                onClick={() => void handleCreateAtParent(suggestedParent)}
+                disabled={busy}
+              >
+                {busy
+                  ? "Creating…"
+                  : `Create in Documents (${suggestedParent})`}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={`btn welcome-pick-btn${suggestedParent ? "" : " btn--primary"}`}
+              onClick={() => void handlePickCreate()}
+              disabled={busy}
+            >
+              {busy ? "Waiting for folder…" : "Browse for parent folder…"}
+            </button>
+            <p className="muted welcome-or">or paste a parent path</p>
+            <div className="modal-search-row">
+              <input
+                value={manualPath}
+                onChange={(e) => setManualPath(e.target.value)}
+                placeholder={suggestedParent || "C:\\Users\\you\\Documents"}
+                disabled={busy}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && void handleCreateAtParent(manualPath)
+                }
+              />
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void handleCreateAtParent(manualPath)}
+                disabled={busy || !manualPath.trim()}
+              >
+                Create
+              </button>
+            </div>
+            <button
+              type="button"
+              className="btn welcome-secondary-btn"
+              onClick={() => {
+                setError(null);
+                setManualPath("");
+                setMode("choose");
+              }}
+              disabled={busy}
+            >
+              Use an existing library instead
+            </button>
+          </>
         ) : (
           <>
             {required ? (
-              <p className="muted">Choose your media folder.</p>
-            ) : (
               <p className="muted">
-                Select a new source folder for your media library. Gallery images, audio
-                paths, and folder sync all use this location.
+                Choose an existing library, or create a new one.
               </p>
+            ) : (
+              <p className="muted">Point MyStack at your media library folder.</p>
             )}
             <button
               type="button"
               className="btn btn--primary welcome-pick-btn"
-              onClick={handlePick}
+              onClick={() => void handlePickExisting()}
               disabled={busy}
             >
-              {busy ? "Waiting for folder…" : "Browse…"}
+              {busy ? "Waiting for folder…" : "Browse existing…"}
             </button>
-            <p className="muted welcome-or">or paste a path</p>
+            <button
+              type="button"
+              className="btn welcome-pick-btn"
+              onClick={() => {
+                setError(null);
+                setManualPath("");
+                setMode("create");
+              }}
+              disabled={busy}
+            >
+              Create new library
+            </button>
+            <p className="muted welcome-or">or paste an existing Media path</p>
             <div className="modal-search-row">
               <input
                 value={manualPath}
                 onChange={(e) => setManualPath(e.target.value)}
                 placeholder="C:\Media"
                 disabled={busy}
-                onKeyDown={(e) => e.key === "Enter" && handleManual()}
+                onKeyDown={(e) => e.key === "Enter" && void handleManualExisting()}
               />
               <button
                 type="button"
                 className="btn"
-                onClick={handleManual}
+                onClick={() => void handleManualExisting()}
                 disabled={busy || !manualPath.trim()}
               >
                 Use path

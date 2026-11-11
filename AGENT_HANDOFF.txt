@@ -130,7 +130,6 @@ MediaStack/
       media_paths_util.py resolve_media_entry (symlink, .path, .lnk)
       tours_index.py / events_index.py
       series_index.py / movies_index.py / books_index.py / games_index.py
-      adult_content.py   NSFW filtering
       staff_roles.py
       services/          tmdb, musicbrainz, setlistfm, sync_folders, lyrics, …
   frontend/
@@ -170,7 +169,6 @@ Routing:
 
 Profiles / admin:
   Multi-profile support; admin password gates write/tag/fetch tools.
-  NSFW gating (admin NSFW password separate).
 
 Playback:
   Mini audio player shared across release / playlist / event setlist pages.
@@ -325,11 +323,11 @@ Helpers:
 Done / mature:
   Music Audio, Video, Library, Gallery, Collection, playlists, lyrics, tags, quizzes
   Tours / EVENTS / show pages / setlists / Live shows playlists
-  Series, Movies, Books modules (franchise + leaf, cast, related, NSFW)
-  Universes hubs + SFW filter
+  Series, Movies, Books modules (franchise + leaf, cast, related)
+  Universes hubs
   Human-readable URL slugs (legacy still resolves)
   Staff roles Original/Dub/Hybrid
-  Per-film NSFW genres
+  Per-film genres
   franchise_index Phase 1–2: scan/save/load + GET /api/media/related
 
 Placeholders / next:
@@ -509,7 +507,6 @@ Release overview fields       → release_overview.py + releaseOverviewCache.ts
 Event setlist playing UI      → TourShowPage.tsx + index.css (tour-show-page__setlist*)
 Franchise related             → franchise_index.py + docs/franchise_index.md
 Series/Movies leaf pages      → components/series/* + *_index.py
-NSFW                          → adult_content.py
 Slug URLs                     → routeSlug.ts, routeResolve.ts, *Route.ts
 
 

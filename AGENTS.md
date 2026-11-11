@@ -36,11 +36,11 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 | Music Audio / Video / Library / Tours | Done (Tours: dedicated show pages, EVENTS layouts/filters, Live shows) |
 | Physical Collection | Done (list / cover / banner / **shelf** vinyl spines) |
 | Listening streaks + Wrapped | Done (`listening_day_plays` + Music Home strip) |
-| Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, NSFW, quiz) |
-| Universes | Done (multi-module hubs + SFW filter) |
+| Series / Movies / Books modules | Done (franchise + leaf pages, cast, related, quiz) |
+| Universes | Done (multi-module hubs) |
 | Human-readable URL slugs | Done (dual-parse legacy + slug; year disambiguation on title collision) |
 | Staff roles (Original / Dub / Hybrid) | Done (`staff_roles` + `/api/series/staff-roles`) |
-| Per-film NSFW genres | Done (`movies_catalog_meta` leaf genres) |
+| Per-film genres | Done (`movies_catalog_meta` leaf genres) |
 | `backend/app/franchise_index.py` | Done through Phase 5 (aliases/overrides DB + admin UI) |
 | Soundtrack-bridge / franchise MUSIC | Done (`music_band_id` merge into Related) |
 | Games module UI | Done (shared SeriesFranchisePage / leaf chrome + quiz) |
@@ -53,7 +53,6 @@ Contains HIM + Various Artists music, letter-tier Movies/Series/Books/Games scaf
 |------|------|
 | `backend/app/series_index.py` / `movies_index.py` / `books_index.py` | Catalog + leaf detail |
 | `backend/app/staff_roles.py` | Canonical staff role seed + visibility types |
-| `backend/app/adult_content.py` | NSFW card filtering |
 | `frontend/src/routeSlug.ts` / `routeResolve.ts` / `franchiseRoute.ts` | Slug URL helpers |
 | `frontend/src/*Route.ts` | Module path parse/build |
 | `frontend/src/components/series/*` | Shared franchise/leaf UI (also used by Movies/Books) |
