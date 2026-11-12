@@ -4636,11 +4636,153 @@ input {
   margin-top: 0.55rem;
 }
 
+.modal-backdrop--profiles {
+  background: #050505;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: hidden;
+}
+
 .modal-panel--profiles {
   width: min(640px, 92vw);
   text-align: center;
   padding-top: 1.35rem;
   position: relative;
+  z-index: 2;
+  background: color-mix(in srgb, var(--bg-elevated, #161616) 88%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+/* Welcome ambient photocard rain / drift (behind profile picker). */
+.welcome-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.welcome-ambient--ready {
+  opacity: 1;
+}
+
+.welcome-ambient--paused .welcome-ambient__card {
+  animation-play-state: paused;
+}
+
+.welcome-ambient__card {
+  position: absolute;
+  top: 0;
+  left: calc(var(--welcome-lane) * 100%);
+  width: var(--welcome-size);
+  transform: translate3d(-50%, -120%, 0);
+  transform-style: preserve-3d;
+  perspective: 900px;
+  opacity: 0.32;
+  will-change: transform;
+}
+
+.welcome-ambient__card--depth-0 {
+  opacity: 0.18;
+  z-index: 0;
+}
+
+.welcome-ambient__card--depth-1 {
+  opacity: 0.28;
+  z-index: 1;
+}
+
+.welcome-ambient__card--depth-2 {
+  opacity: 0.4;
+  z-index: 2;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
+}
+
+.welcome-ambient--portrait .welcome-ambient__card {
+  animation: welcome-ambient-fall var(--welcome-duration) linear var(--welcome-delay)
+    infinite;
+}
+
+.welcome-ambient--landscape .welcome-ambient__card {
+  top: calc(8% + var(--welcome-lane) * 72%);
+  left: 0;
+  animation: welcome-ambient-drift var(--welcome-duration) linear var(--welcome-delay)
+    infinite;
+}
+
+@keyframes welcome-ambient-fall {
+  from {
+    transform: translate3d(-50%, -30vh, 0);
+  }
+  to {
+    transform: translate3d(-50%, 115vh, 0);
+  }
+}
+
+@keyframes welcome-ambient-drift {
+  from {
+    transform: translate3d(-40vw, -50%, 0);
+  }
+  to {
+    transform: translate3d(120vw, -50%, 0);
+  }
+}
+
+.welcome-ambient__scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.welcome-ambient__card--landscape .welcome-ambient__scene {
+  aspect-ratio: 3 / 2;
+}
+
+.welcome-ambient__card--flipped.welcome-ambient__card--portrait .welcome-ambient__scene {
+  transform: rotateY(180deg);
+}
+
+.welcome-ambient__card--flipped.welcome-ambient__card--landscape .welcome-ambient__scene {
+  transform: rotateX(180deg);
+}
+
+.welcome-ambient__face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: #111;
+}
+
+.welcome-ambient__face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.welcome-ambient__face--back {
+  transform: rotateY(180deg);
+}
+
+.welcome-ambient__card--landscape .welcome-ambient__face--back {
+  transform: rotateX(180deg);
+}
+
+.welcome-ambient__card--flipped .welcome-ambient__face--front {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-ambient {
+    display: none;
+  }
 }
 
 .profile-picker-back {

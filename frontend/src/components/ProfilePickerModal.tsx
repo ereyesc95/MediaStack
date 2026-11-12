@@ -5,6 +5,7 @@ import AdminPasswordModal from "./AdminPasswordModal";
 import PlaylistBoot from "./PlaylistBoot";
 import ProfileAvatar, { ProfileWelcomeLogo } from "./ProfileAvatar";
 import ProfileEditModal from "./ProfileEditModal";
+import WelcomeAmbient from "./WelcomeAmbient";
 
 type Props = {
   onSelected: (user: ProfileUser, token: string) => void;
@@ -105,7 +106,8 @@ export default function ProfilePickerModal({
 
   return (
     <>
-      <div className="modal-backdrop">
+      <div className="modal-backdrop modal-backdrop--profiles">
+        <WelcomeAmbient />
         <div
           className="modal-panel modal-panel--profiles"
           onClick={(e) => e.stopPropagation()}

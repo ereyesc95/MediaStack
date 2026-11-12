@@ -31,6 +31,7 @@ from app.routers import (
     spotify,
     sync,
     universes,
+    welcome,
 )
 
 RECORDSTACK_PORTS = [
@@ -95,6 +96,7 @@ app.include_router(sync.router)
 app.include_router(media.router)
 app.include_router(folder_icons.router)
 app.include_router(settings_router.router)
+app.include_router(welcome.router)
 
 
 @app.get("/api/health")

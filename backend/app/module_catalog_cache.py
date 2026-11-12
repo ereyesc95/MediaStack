@@ -202,6 +202,12 @@ def invalidate_module_catalog(module: str | None = None) -> None:
         clear_adult_content_caches()
     except Exception:
         pass
+    try:
+        from app.welcome_ambient import invalidate_welcome_ambient_cache
+
+        invalidate_welcome_ambient_cache()
+    except Exception:
+        pass
     if module:
         mod = module.strip().casefold()
         path = _cache_path(mod)

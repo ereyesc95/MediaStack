@@ -128,6 +128,29 @@ export async function fetchProfiles(): Promise<ProfileUser[]> {
   return request(`${API}/auth/profiles`);
 }
 
+export type WelcomeAmbientPhotocard = {
+  id: string;
+  orientation: "portrait" | "landscape";
+  module?: string | null;
+  front_url: string;
+  back_url: string;
+};
+
+export async function fetchWelcomeAmbientPhotocards(
+  orientation: "portrait" | "landscape",
+  limit = 32
+): Promise<{
+  orientation: "portrait" | "landscape";
+  total: number;
+  items: WelcomeAmbientPhotocard[];
+}> {
+  return request(
+    `${API}/welcome/ambient-photocards?orientation=${encodeURIComponent(
+      orientation
+    )}&limit=${limit}`
+  );
+}
+
 export async function selectProfile(
   userId: number,
   password?: string
