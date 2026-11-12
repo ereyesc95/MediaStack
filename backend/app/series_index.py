@@ -734,25 +734,25 @@ def _list_subseries(folder: Path, media_root: Path) -> list[dict]:
         cover = _series_folder_cover(child, media_root)
         landscape = _series_folder_landscape(child, media_root)
         banner = _series_folder_banner(child, media_root)
-        subseries.append(
-            {
-                "id": child.name,
-                "title": title or parse_folder_bracket_tags(child.name)[0],
-                "date_iso": date_iso,
-                "display_date": format_display_date(date_iso),
-                "folder_path": child.relative_to(media_root).as_posix(),
-                "cover_url": cover,
-                "portrait_url": cover,
-                "landscape_url": landscape,
-                "banner_url": banner or landscape,
-                "logo_url": logo,
-                "icon_url": icon,
-                "badge_url": find_badge_file(child, media_root),
-                "season_count": season_count,
-                "has_gallery": _has_gallery(child),
-                "official": not is_unofficial_folder(child.name),
-            }
-        )
+        sub = {
+            "id": child.name,
+            "title": title or parse_folder_bracket_tags(child.name)[0],
+            "date_iso": date_iso,
+            "display_date": format_display_date(date_iso),
+            "folder_path": child.relative_to(media_root).as_posix(),
+            "cover_url": cover,
+            "portrait_url": cover,
+            "landscape_url": landscape,
+            "banner_url": banner or landscape,
+            "logo_url": logo,
+            "icon_url": icon,
+            "badge_url": find_badge_file(child, media_root),
+            "season_count": season_count,
+            "has_gallery": _has_gallery(child),
+            "official": not is_unofficial_folder(child.name),
+        }
+        _apply_first_episode_play(sub, child, media_root)
+        subseries.append(sub)
     return subseries
 
 
@@ -839,6 +839,51 @@ def _list_episodes(season_dir: Path, media_root: Path) -> list[dict]:
     return episodes
 
 
+def _first_episode_play(
+    folder: Path, media_root: Path
+) -> dict[str, str | None] | None:
+    """Open fields for the first playable episode under a show/franchise folder."""
+    seasons = _list_seasons(folder, media_root)
+    if not seasons:
+        return None
+    dated = [s for s in seasons if s.get("date_iso") and s.get("folder_path")]
+    season = (
+        min(dated, key=lambda s: str(s.get("date_iso") or "9999"))
+        if dated
+        else next((s for s in seasons if s.get("folder_path")), None)
+    )
+    if not season:
+        return None
+    season_dir = media_root / str(season["folder_path"]).replace("\\", "/")
+    if not season_dir.is_dir():
+        return None
+    episodes = _list_episodes(season_dir, media_root)
+    if not episodes:
+        return None
+    ep = episodes[0]
+    open_url = (ep.get("open_url") or "").strip() or None
+    if not open_url:
+        return None
+    num = ep.get("number")
+    label = f"Play episode {num}" if num is not None else "Play episode 1"
+    return {
+        "open_url": open_url,
+        "open_mode": "local",
+        "open_label": label,
+    }
+
+
+def _apply_first_episode_play(
+    card: dict, folder: Path, media_root: Path
+) -> dict:
+    play = _first_episode_play(folder, media_root)
+    if play:
+        card["open_url"] = play.get("open_url")
+        card["open_mode"] = play.get("open_mode")
+        card["open_label"] = play.get("open_label")
+    return card
+
+
 def _earliest_season_date(
     seasons: list[dict],
 ) -> tuple[str | None, str | None]:
@@ -867,7 +912,7 @@ def _synthetic_standalone_show(
         or franchise_dir.name.casefold()
     )
     logo_url, icon_url = find_logo_file(franchise_dir, media_root)
-    return {
+    card = {
         "id": fid,
         "title": franchise_dir.name,
         "date_iso": date_iso,
@@ -884,6 +929,7 @@ def _synthetic_standalone_show(
         "has_gallery": _has_gallery(franchise_dir),
         "is_standalone": True,
     }
+    return _apply_first_episode_play(card, franchise_dir, media_root)
 
 
 def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
@@ -968,6 +1014,9 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
                 "has_gallery": s.get("has_gallery"),
                 "is_standalone": s.get("is_standalone"),
                 "official": s.get("official", True),
+                "open_url": s.get("open_url"),
+                "open_mode": s.get("open_mode"),
+                "open_label": s.get("open_label"),
             }
             for s in subseries
         ],
@@ -979,6 +1028,22 @@ def _franchise_card(franchise_dir: Path, letter: str, media_root: Path) -> dict:
         ),
         "subseries_count": 0 if is_standalone else len(subseries),
     }
+    # Franchise catalog card: first playable episode (root seasons or earliest show).
+    _apply_first_episode_play(card, franchise_dir, media_root)
+    if not card.get("open_url"):
+        dated_subs = [s for s in subseries if s.get("open_url")]
+        pick = None
+        if dated_subs:
+            with_dates = [s for s in dated_subs if s.get("date_iso")]
+            pick = (
+                min(with_dates, key=lambda s: str(s.get("date_iso") or "9999"))
+                if with_dates
+                else dated_subs[0]
+            )
+        if pick:
+            card["open_url"] = pick.get("open_url")
+            card["open_mode"] = pick.get("open_mode")
+            card["open_label"] = pick.get("open_label")
     try:
         from app.franchise_identity import apply_shared_artwork_to_card
 

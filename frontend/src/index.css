@@ -2409,8 +2409,8 @@ input {
   font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   text-align: center;
   color: aliceblue;
   text-shadow: 0 1px 6px #000;
@@ -11107,10 +11107,8 @@ button.media-release-card--banner {
 }
 
 .media-release-card__open-file-label {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.14em;
-  text-decoration-skip-ink: auto;
+  text-decoration: none;
+  text-transform: none;
 }
 
 .media-release-card__open-file .release-page__chevron {
@@ -11120,8 +11118,10 @@ button.media-release-card--banner {
   display: block;
 }
 
-.media-release-card__open-file:hover {
+.media-release-card__open-file:hover,
+.media-release-card__open-file:focus-visible {
   opacity: 0.9;
+  text-decoration: none;
 }
 
 .media-release-card__banner-date-row {

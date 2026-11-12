@@ -546,6 +546,7 @@ export default function MoviesModule({
           writers?: string[];
           open_url?: string | null;
           open_label?: string | null;
+          open_mode?: "tab" | "local" | null;
           owned?: boolean;
           signed?: boolean;
         };
@@ -554,6 +555,11 @@ export default function MoviesModule({
           return ch && ch >= "A" && ch <= "Z" ? ch : "#";
         })();
         const openUrl = enriched.open_url ?? null;
+        const openMode =
+          enriched.open_mode || (openUrl ? ("local" as const) : null);
+        const openLabel = openUrl
+          ? enriched.open_label || "Play video"
+          : enriched.open_label || null;
         return {
           id: film.id,
           name: film.title,
@@ -573,7 +579,8 @@ export default function MoviesModule({
           publishers: enriched.publishers ?? [],
           writers: enriched.writers ?? [],
           open_url: openUrl,
-          open_label: openUrl ? "Play movie" : enriched.open_label || null,
+          open_mode: openMode,
+          open_label: openLabel,
           owned: Boolean(enriched.owned),
           signed: Boolean(enriched.signed),
           subseries: [
@@ -586,7 +593,8 @@ export default function MoviesModule({
               cover_url: film.cover_url,
               season_count: 1,
               open_url: openUrl,
-              open_label: openUrl ? "Play movie" : null,
+              open_mode: openMode,
+              open_label: openLabel,
               owned: Boolean(enriched.owned),
               signed: Boolean(enriched.signed),
             },

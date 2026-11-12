@@ -429,10 +429,14 @@ def enrich_catalog_with_artwork_home(
     *,
     media_root: Path | None = None,
 ) -> dict:
-    """Stamp ``artwork_home_module`` so UIs can route to the franchise's art home."""
+    """Stamp ``artwork_home_module`` and overlay Cover/Logo from that home.
+
+    Catalog FS cache may still hold local ``Gallery/Covers`` URLs from before
+    the home ``[Artwork]`` existed — always re-apply home art so Series/Movies/
+    Books cards match Games (or whichever module owns ``[Artwork]``).
+    """
     root = _media_root(media_root)
     franchises = catalog.get("franchises") or []
-    # Prefetch explicit homes once (avoid N SessionLocal opens via lru alone).
     for card in franchises:
         if not isinstance(card, dict):
             continue
@@ -442,13 +446,26 @@ def enrich_catalog_with_artwork_home(
         name = (card.get("name") or "").strip()
         if not name:
             continue
-        explicit = explicit_franchise_home(name)
-        if explicit:
-            card["artwork_home_module"] = explicit
-            continue
-        home = find_artwork_home(name, root)
+        home = find_artwork_home(name, root) if root else None
         if home:
             card["artwork_home_module"] = home[0]
+        else:
+            explicit = explicit_franchise_home(name)
+            if explicit:
+                card["artwork_home_module"] = explicit
+        if not root:
+            continue
+        fp = (card.get("folder_path") or "").replace("\\", "/").strip()
+        local = (root / fp) if fp else root
+        try:
+            apply_shared_artwork_to_card(
+                card,
+                local if local.is_dir() else root,
+                root,
+                franchise_name=name,
+            )
+        except Exception:
+            pass
     catalog["franchises"] = franchises
     return catalog
 

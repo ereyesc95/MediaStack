@@ -19,7 +19,7 @@ from app.franchise_index import (
     related_for_path,
     save_franchise_index,
 )
-from app.series_artwork import build_local_eras
+from app.series_artwork import build_franchise_home_eras, build_local_eras
 from app.series_languages import language_options_for_franchise
 from app.series_overview import _enrich_related_cards
 from app.universes import (
@@ -232,7 +232,9 @@ def build_work_overview(
     folder_path = detail.get("folder_path") or ""
     books = detail.get("books") or detail.get("films") or []
 
-    local_eras = build_local_eras(work_dir, root)
+    local_eras = build_franchise_home_eras(
+        work_dir, root, franchise_name=detail.get("name") or work_id
+    )
     has_gallery = bool(local_eras)
     try:
         from app.series_index import _has_gallery

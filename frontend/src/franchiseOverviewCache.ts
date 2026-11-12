@@ -6,7 +6,7 @@ import {
   writeSessionEntry,
 } from "./sessionCache";
 
-const NAMESPACE = "franchise-overview-v8";
+const NAMESPACE = "franchise-overview-v9";
 const MAX_ENTRIES = 48;
 const overviewCache = new Map<string, SeriesOverview>();
 

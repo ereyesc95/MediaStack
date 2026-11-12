@@ -24,6 +24,7 @@ from app.media_index import format_display_date
 from app.media_tabs_index import _folder_cover
 from app.models import Band, Country, Series
 from app.series_artwork import (
+    build_franchise_home_eras,
     build_local_eras,
     ensure_artwork_cached,
     find_character_photo,
@@ -852,9 +853,26 @@ def build_series_overview(
             or ([row.ser_backdrop_url] if row.ser_backdrop_url else []),
             franchise_name=name,
         )
-    local_eras = build_local_eras(franchise_dir, root)
+    local_eras = build_franchise_home_eras(
+        franchise_dir, root, franchise_name=name
+    )
 
-    logo_url, icon_url = _list_brand_assets(franchise_dir, root)
+    brand_dir = franchise_dir
+    try:
+        from app.franchise_identity import find_artwork_home
+
+        art_home = find_artwork_home(name, root)
+        if (
+            art_home
+            and art_home[0] != "music"
+            and art_home[1].resolve() != franchise_dir.resolve()
+        ):
+            brand_dir = art_home[1]
+    except OSError:
+        brand_dir = franchise_dir
+    logo_url, icon_url = _list_brand_assets(brand_dir, root)
+    if not logo_url and not icon_url and brand_dir != franchise_dir:
+        logo_url, icon_url = _list_brand_assets(franchise_dir, root)
     if local_eras and (logo_url or icon_url):
         local_eras[0] = {
             **local_eras[0],
@@ -1016,6 +1034,9 @@ def build_series_overview(
                 "season_count": s.get("season_count") or 0,
                 "has_gallery": s.get("has_gallery"),
                 "official": s.get("official", True),
+                "open_url": s.get("open_url"),
+                "open_mode": s.get("open_mode"),
+                "open_label": s.get("open_label"),
             }
         )
 

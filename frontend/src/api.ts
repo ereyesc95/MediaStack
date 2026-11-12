@@ -3853,6 +3853,10 @@ export async function fetchSeriesFranchiseShows(franchiseId: string) {
       folder_path?: string;
       season_count?: number;
       episode_count?: number;
+      open_url?: string | null;
+      open_mode?: "tab" | "local" | null;
+      open_label?: string | null;
+      official?: boolean;
     }[];
   }>(`${API}/series/franchises/${encodeURIComponent(franchiseId)}/media/series`);
 }

@@ -54,7 +54,6 @@ def series_catalog(
         catalog = enrich_catalog_with_music_identity(
             db, catalog, orientation="portrait"
         )
-        catalog = enrich_catalog_with_artwork_home(catalog)
         adult_subs = adult_subgenre_names_from_db(db)
         catalog["franchises"] = filter_adult_cards(
             catalog.get("franchises") or [],
@@ -72,6 +71,8 @@ def series_catalog(
             nsfw_unlocked=nsfw_unlocked,
             payload=catalog,
         )
+    # Always overlay artwork-home covers (FS/enriched cache may predate [Artwork]).
+    catalog = enrich_catalog_with_artwork_home(catalog)
     return apply_catalog_paging(
         catalog,
         letter=letter or None,

@@ -181,7 +181,13 @@ def build_work_overview(
     eras = []
     if primary_dir:
         try:
-            eras = build_local_eras(primary_dir, root, orientation=orientation)
+            from app.series_artwork import build_franchise_home_eras
+
+            eras = build_franchise_home_eras(
+                primary_dir,
+                root,
+                franchise_name=detail.get("name") or work_id,
+            )
         except Exception:
             eras = []
 

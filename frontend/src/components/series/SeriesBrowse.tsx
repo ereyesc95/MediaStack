@@ -6,6 +6,8 @@ import {
 } from "react";
 import { formatTrackDate } from "../../formatDate";
 import { playGameClient } from "../../gamesMobile";
+import { openCatalogVideo } from "../../openCatalogVideo";
+import { usePlayVideosPreference } from "../../playVideosPreference";
 import type {
   CardOrientation,
   SeriesFilterMode,
@@ -196,6 +198,7 @@ export default function SeriesBrowse({
   onOpenUniverse,
 }: Props) {
   const isPhone = usePhoneLayout();
+  const { playLocally } = usePlayVideosPreference();
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [platformMenuOpen, setPlatformMenuOpen] = useState(false);
   const listMode = orientation === "list";
@@ -889,32 +892,35 @@ export default function SeriesBrowse({
             owned: leafOwned,
             signed: leafSigned,
             meta: showMeta(s, unitNoun),
-            open_label:
-              unitNoun === "game" &&
-              Boolean(
-                (f as SeriesFranchiseCard & { has_rom?: boolean }).has_rom ||
-                  (f as SeriesFranchiseCard & { open_url?: string | null })
-                    .open_url
-              )
-                ? "Play game"
-                : unitNoun === "film" &&
-                    Boolean(
-                      (f as SeriesFranchiseCard & { open_url?: string | null })
-                        .open_url ||
-                        (
-                          s as {
-                            open_url?: string | null;
-                            open_label?: string | null;
-                          }
-                        ).open_url ||
-                        (
-                          s as {
-                            open_label?: string | null;
-                          }
-                        ).open_label
-                    )
-                  ? "Play movie"
-                  : null,
+            open_label: (() => {
+              const leaf = s as {
+                open_url?: string | null;
+                open_label?: string | null;
+              };
+              const root = f as SeriesFranchiseCard & {
+                has_rom?: boolean;
+                open_url?: string | null;
+                open_label?: string | null;
+              };
+              if (unitNoun === "game") {
+                return root.has_rom || root.open_url || leaf.open_url
+                  ? "Play game"
+                  : null;
+              }
+              if (unitNoun === "film") {
+                return leaf.open_url || root.open_url || leaf.open_label
+                  ? leaf.open_label || root.open_label || "Play video"
+                  : null;
+              }
+              if (unitNoun === "season") {
+                return leaf.open_url || leaf.open_label
+                  ? leaf.open_label || "Play episode 1"
+                  : root.open_url || root.open_label
+                    ? root.open_label || "Play episode 1"
+                    : null;
+              }
+              return null;
+            })(),
             launch_game_id:
               unitNoun === "game"
                 ? f.subseries.length > 0
@@ -922,15 +928,17 @@ export default function SeriesBrowse({
                   : f.id
                 : null,
             open_mode:
-              unitNoun === "game"
-                ? (f as SeriesFranchiseCard & { open_mode?: string | null })
-                    .open_mode || null
-                : null,
+              (
+                s as { open_mode?: string | null }
+              ).open_mode ||
+              (f as SeriesFranchiseCard & { open_mode?: string | null })
+                .open_mode ||
+              null,
             open_url:
-              unitNoun === "game"
-                ? (f as SeriesFranchiseCard & { open_url?: string | null })
-                    .open_url || null
-                : null,
+              (s as { open_url?: string | null }).open_url ||
+              (f as SeriesFranchiseCard & { open_url?: string | null })
+                .open_url ||
+              null,
             rom_bytes:
               unitNoun === "game"
                 ? (f as SeriesFranchiseCard & { rom_bytes?: number | null })
@@ -988,8 +996,30 @@ export default function SeriesBrowse({
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
       );
     }
-    return list.map(
-      (f): SeriesCatalogCard => ({
+    return list.map((f): SeriesCatalogCard => {
+      const root = f as SeriesFranchiseCard & {
+        open_url?: string | null;
+        open_label?: string | null;
+        open_mode?: string | null;
+        has_rom?: boolean;
+      };
+      let openLabel: string | null = null;
+      let openUrl: string | null = root.open_url || null;
+      if (unitNoun === "game") {
+        openLabel =
+          root.has_rom || root.open_url
+            ? root.open_label || "Play game"
+            : null;
+      } else if (unitNoun === "film") {
+        openLabel = openUrl
+          ? root.open_label || "Play video"
+          : null;
+      } else if (unitNoun === "season") {
+        openLabel = openUrl
+          ? root.open_label || "Play episode 1"
+          : null;
+      }
+      return {
         key: f.id,
         franchiseId: f.id,
         name: f.name,
@@ -1003,8 +1033,12 @@ export default function SeriesBrowse({
         badge_url: f.badge_url,
         date_iso: null,
         meta: franchiseMeta(f, unitNoun),
-      })
-    );
+        open_label: openLabel,
+        open_url: openUrl,
+        open_mode: root.open_mode || null,
+        launch_game_id: unitNoun === "game" ? f.id : null,
+      };
+    });
   }, [
     filterReady,
     catalogScope,
@@ -1421,13 +1455,37 @@ export default function SeriesBrowse({
                 card.display_date ||
                 formatTrackDate(card.date_iso) ||
                 null;
-              const playLabel =
-                card.open_label === "Play game" || card.open_label === "Launch"
-                  ? "Play game"
-                  : card.open_label === "Play movie" ||
-                      card.open_label === "Play video"
-                    ? "Play movie"
-                    : card.open_label || null;
+              const playLabel = (() => {
+                const raw = (card.open_label || "").trim();
+                if (!raw) return null;
+                const lower = raw.toLowerCase();
+                if (lower === "play game" || lower === "launch") return "Play game";
+                if (lower === "play movie" || lower === "play video")
+                  return "Play video";
+                if (lower.startsWith("play episode")) return raw;
+                return raw;
+              })();
+              const canPlay =
+                Boolean(playLabel) &&
+                (Boolean(card.launch_game_id) || Boolean(card.open_url));
+              const runPlay = () => {
+                if (card.launch_game_id) {
+                  void playGameClient({
+                    gameId: card.launch_game_id,
+                    openMode: card.open_mode,
+                    openUrl: card.open_url,
+                    romBytes: card.rom_bytes,
+                    title: card.name,
+                  }).catch(() => undefined);
+                  return;
+                }
+                if (card.open_url) {
+                  void openCatalogVideo({
+                    openUrl: card.open_url,
+                    playLocally,
+                  });
+                }
+              };
               return (
                 <button
                   key={card.key}
@@ -1483,7 +1541,7 @@ export default function SeriesBrowse({
                         {showDate && dateLabel ? (
                           <span className="artist-card-date">{dateLabel}</span>
                         ) : null}
-                        {card.launch_game_id ? (
+                        {canPlay ? (
                           <span
                             role="button"
                             tabIndex={0}
@@ -1491,25 +1549,13 @@ export default function SeriesBrowse({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              void playGameClient({
-                                gameId: card.launch_game_id!,
-                                openMode: card.open_mode,
-                                openUrl: card.open_url,
-                                romBytes: card.rom_bytes,
-                                title: card.name,
-                              }).catch(() => undefined);
+                              runPlay();
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                void playGameClient({
-                                  gameId: card.launch_game_id!,
-                                  openMode: card.open_mode,
-                                  openUrl: card.open_url,
-                                  romBytes: card.rom_bytes,
-                                  title: card.name,
-                                }).catch(() => undefined);
+                                runPlay();
                               }
                             }}
                           >

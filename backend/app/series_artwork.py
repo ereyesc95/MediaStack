@@ -248,12 +248,93 @@ def ensure_artwork_cached(
     }
 
 
+def _eras_from_catalog_stems(
+    folder: Path, media_root: Path
+) -> list[dict]:
+    """Single-era fallback from ``Cover - Front/Portrait/Landscape/Banner``.
+
+    Games ``[Artwork]`` often has only ``Cover - Front`` (no Portrait-named
+    files). ``build_local_eras`` would then be empty and incorrectly fall back
+    to another module's ``Gallery/Covers``.
+    """
+    from app.artwork_stems import resolve_catalog_cover_file, resolve_catalog_wide_file
+    from app.gallery import _media_url
+    from app.series_paths import cover_search_dirs
+
+    dirs = cover_search_dirs(folder)
+    if not dirs:
+        return []
+    cover = resolve_catalog_cover_file(*dirs)
+    wide = resolve_catalog_wide_file(*dirs)
+    p_url = _media_url(cover, media_root) if cover else None
+    w_url = _media_url(wide, media_root) if wide else None
+    if not p_url and not w_url:
+        return []
+    return [
+        {
+            "orientation": "portrait" if p_url else "landscape",
+            "portrait_url": p_url,
+            "landscape_url": w_url,
+            "banner_url": w_url,
+            "slide_url": p_url or w_url,
+            "icon_url": None,
+            "logo_url": None,
+            "year": None,
+        }
+    ]
+
+
+def build_franchise_home_eras(
+    local_folder: Path,
+    media_root: Path,
+    *,
+    franchise_name: str | None = None,
+) -> list[dict]:
+    """Eras for franchise About / theme — prefer cross-module artwork home.
+
+    When Games (or another module) owns franchise ``[Artwork]``, Series/Movies/
+    Books must not fall back to local ``Gallery/Covers`` for the left panel and
+    background carousel.
+    """
+    from app.franchise_identity import find_artwork_home
+
+    name = (franchise_name or local_folder.name or "").strip()
+    if name:
+        home = find_artwork_home(name, media_root)
+        if home and home[0] != "music":
+            _module, home_dir = home
+            try:
+                if home_dir.resolve() != local_folder.resolve():
+                    eras = build_local_eras(home_dir, media_root)
+                    if eras:
+                        return eras
+                    # Home owns art even when only Cover - Front/Album exists.
+                    synthesized = _eras_from_catalog_stems(home_dir, media_root)
+                    if synthesized:
+                        return synthesized
+                    # Empty home [Artwork] — still do not use foreign Gallery/Covers.
+                    return []
+            except OSError:
+                pass
+    return build_local_eras(local_folder, media_root)
+
+
 def build_local_eras(franchise_dir: Path, media_root: Path) -> list[dict]:
     """Portrait for desktop carousel; landscape/banner for stacked overview heroes."""
     eras: list[dict] = []
     portraits = list_portrait_files(franchise_dir)
     landscapes = list_landscape_files(franchise_dir)
     banners = list_banner_files(franchise_dir)
+    # ``Cover - Front`` / ``Cover - Album`` are catalog stems, not *portrait* names.
+    # Without this, Games [Artwork] with Front+Landscape yields landscape-only eras.
+    if not portraits:
+        from app.artwork_stems import resolve_catalog_cover_file
+        from app.series_paths import cover_search_dirs
+
+        dirs = cover_search_dirs(franchise_dir)
+        cover = resolve_catalog_cover_file(*dirs) if dirs else None
+        if cover and cover not in landscapes and cover not in banners:
+            portraits = [cover]
     # Pair by index when possible
     n = max(
         len(portraits),

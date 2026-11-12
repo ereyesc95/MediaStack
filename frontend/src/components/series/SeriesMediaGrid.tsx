@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import type { ReleaseCardLayout } from "../../types";
 import { openCatalogVideo } from "../../openCatalogVideo";
 import { usePlayVideosPreference } from "../../playVideosPreference";
@@ -56,14 +62,6 @@ function openInTab(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-async function openLocal(url: string) {
-  try {
-    await fetch(url, { method: "POST" });
-  } catch {
-    /* ignore */
-  }
-}
-
 function SeriesMediaCardView({
   item,
   cardLayout,
@@ -92,14 +90,9 @@ function SeriesMediaCardView({
   // Phone tap-reveal needs a click target even when there is no navigation handler.
   const interactive = Boolean(onOpen) || tapReveal;
 
-  const handleOpenFile = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const runOpenFile = () => {
     if (!openUrl) return;
-    if (item.open_mode === "local") {
-      void openLocal(openUrl);
-      return;
-    }
+    // External http(s) (remote stream / web game) — always a new tab.
     if (
       item.open_mode === "web" ||
       (/^https?:\/\//i.test(openUrl) && !openUrl.includes("/api/media/"))
@@ -107,7 +100,22 @@ function SeriesMediaCardView({
       openInTab(openUrl);
       return;
     }
+    // Local file /api/media/file URLs: respect play-videos-locally (same as leaf).
+    // Do not POST the stream URL — that silently fails for open_mode "local".
     void openCatalogVideo({ openUrl, playLocally });
+  };
+
+  const handleOpenFile = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    runOpenFile();
+  };
+
+  const handleOpenFileKey = (e: KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    e.stopPropagation();
+    runOpenFile();
   };
 
   const handleClick = () => {
@@ -118,20 +126,23 @@ function SeriesMediaCardView({
     onOpen?.(item);
   };
 
+  // Span + role=button: must not nest a <button> inside the card <button>.
   const openFileControl =
     openUrl && openLabel ? (
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={0}
         className="media-release-card__open-file"
         onMouseDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
         }}
         onClick={handleOpenFile}
+        onKeyDown={handleOpenFileKey}
       >
         <span className="media-release-card__open-file-label">{openLabel}</span>
         <ChevronIcon direction="right" />
-      </button>
+      </span>
     ) : null;
 
   if (cardLayout === "banner") {

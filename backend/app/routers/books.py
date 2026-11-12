@@ -115,7 +115,6 @@ def books_catalog(
             catalog = enrich_catalog_with_music_identity(
                 db, catalog, orientation="portrait"
             )
-            catalog = enrich_catalog_with_artwork_home(catalog)
             adult_subs = adult_subgenre_names_from_db(db)
             catalog["franchises"] = filter_adult_cards(
                 catalog.get("franchises") or [],
@@ -139,6 +138,7 @@ def books_catalog(
                 nsfw_unlocked=nsfw_unlocked,
                 payload=catalog,
             )
+        catalog = enrich_catalog_with_artwork_home(catalog)
         keys = ("franchises", "films")
         if "books" in catalog:
             keys = ("franchises", "films", "books")

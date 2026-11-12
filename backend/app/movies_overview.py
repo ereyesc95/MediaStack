@@ -35,7 +35,11 @@ from app.universes import (
     franchise_universe_bundle,
     universes_for_leaf,
 )
-from app.series_artwork import build_local_eras, ensure_artwork_cached
+from app.series_artwork import (
+    build_franchise_home_eras,
+    build_local_eras,
+    ensure_artwork_cached,
+)
 from app.series_overview import _enrich_cast_member, _enrich_related_cards, _stamp_creator_via
 from app.series_paths import find_logo_file, gallery_sections
 
@@ -315,7 +319,7 @@ def build_work_overview(
             or ([meta["backdrop_url"]] if meta.get("backdrop_url") else []),
             franchise_name=name,
         )
-    local_eras = build_local_eras(work_dir, root)
+    local_eras = build_franchise_home_eras(work_dir, root, franchise_name=name)
     from app.language_logos import resolve_language_logos
 
     child_dirs: list = []
@@ -430,6 +434,11 @@ def build_work_overview(
             "folder_path": f.get("folder_path"),
             "season_count": f.get("version_count") or 0,
             "official": f.get("official", True),
+            "has_video": f.get("has_video"),
+            "open_url": f.get("open_url") or f.get("file_url"),
+            "open_mode": f.get("open_mode"),
+            "open_label": f.get("open_label")
+            or ("Play video" if f.get("open_url") or f.get("file_url") else None),
         }
         for f in films
     ]

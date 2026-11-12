@@ -1071,7 +1071,7 @@ export default function SeriesFranchisePage({
             open_url: film.open_url || film.file_url || null,
             open_mode:
               film.open_mode ||
-              (film.open_url || film.file_url ? ("tab" as const) : null),
+              (film.open_url || film.file_url ? ("local" as const) : null),
             open_label:
               film.open_label ||
               (film.open_url || film.file_url
@@ -1116,8 +1116,10 @@ export default function SeriesFranchisePage({
           logo_url: (m.logo_url as string | null) || null,
           open_url: (m.open_url as string | null) || null,
           open_mode: ((m.open_mode as "tab" | "local" | null) ||
-            (m.open_url ? "tab" : null)) as "tab" | "local" | null,
-          open_label: "Play video",
+            (m.open_url ? ("local" as const) : null)) as "tab" | "local" | null,
+          open_label:
+            (m.open_label as string | null) ||
+            ((m.open_url as string | null) ? "Play video" : null),
           date_label:
             (m.display_date as string | null) ||
             (m.date_iso as string | null) ||
@@ -1162,8 +1164,14 @@ export default function SeriesFranchisePage({
                 | "tab"
                 | "local"
                 | null) ||
-              ((m as { open_url?: string | null }).open_url ? "tab" : null),
-            open_label: "Play video",
+              ((m as { open_url?: string | null }).open_url
+                ? ("local" as const)
+                : null),
+            open_label:
+              (m as { open_label?: string | null }).open_label ||
+              ((m as { open_url?: string | null }).open_url
+                ? "Play video"
+                : null),
             date_label: m.display_date || m.date_iso,
             path: m.path,
             meta:
@@ -1273,24 +1281,36 @@ export default function SeriesFranchisePage({
     // loading flash. Avoid `seriesShows` array identity in deps (|| [] flicker).
     if (isMovies && sharedSeries && seriesShowsKey) {
       setShowCards(
-        seriesShows.map((s) => ({
-          id: s.id,
-          title: s.title,
-          cover_url: s.cover_url,
-          portrait_url: s.portrait_url || s.cover_url,
-          landscape_url: s.landscape_url ?? null,
-          logo_url: s.logo_url ?? null,
-          badge_url: s.badge_url ?? null,
-          banner_url:
-            s.banner_url || s.landscape_url || s.cover_url || null,
-          date_label:
-            s.display_date ||
-            (s.season_count
-              ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
-              : s.date_iso) ||
-            null,
-          official: s.official,
-        }))
+        seriesShows.map((s) => {
+          const leaf = s as typeof s & {
+            open_url?: string | null;
+            open_mode?: "tab" | "local" | null;
+            open_label?: string | null;
+          };
+          return {
+            id: s.id,
+            title: s.title,
+            cover_url: s.cover_url,
+            portrait_url: s.portrait_url || s.cover_url,
+            landscape_url: s.landscape_url ?? null,
+            logo_url: s.logo_url ?? null,
+            badge_url: s.badge_url ?? null,
+            banner_url:
+              s.banner_url || s.landscape_url || s.cover_url || null,
+            date_label:
+              s.display_date ||
+              (s.season_count
+                ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
+                : s.date_iso) ||
+              null,
+            official: s.official,
+            open_url: leaf.open_url || null,
+            open_mode: leaf.open_mode || (leaf.open_url ? "local" : null),
+            open_label:
+              leaf.open_label ||
+              (leaf.open_url ? "Play episode 1" : null),
+          };
+        })
       );
       setShowLoading(false);
       return;
@@ -1300,24 +1320,36 @@ export default function SeriesFranchisePage({
     // overview via /media/series.
     if (!isMovies && !isBooks && data?.subseries?.length) {
       setShowCards(
-        data.subseries.map((s) => ({
-          id: s.id,
-          title: s.title,
-          cover_url: s.cover_url,
-          portrait_url: s.portrait_url || s.cover_url,
-          landscape_url: s.landscape_url ?? null,
-          logo_url: s.logo_url ?? null,
-          badge_url: s.badge_url ?? null,
-          banner_url:
-            s.banner_url || s.landscape_url || s.cover_url || null,
-          date_label:
-            s.display_date ||
-            (s.season_count
-              ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
-              : s.date_iso) ||
-            null,
-          official: s.official,
-        }))
+        data.subseries.map((s) => {
+          const leaf = s as typeof s & {
+            open_url?: string | null;
+            open_mode?: "tab" | "local" | null;
+            open_label?: string | null;
+          };
+          return {
+            id: s.id,
+            title: s.title,
+            cover_url: s.cover_url,
+            portrait_url: s.portrait_url || s.cover_url,
+            landscape_url: s.landscape_url ?? null,
+            logo_url: s.logo_url ?? null,
+            badge_url: s.badge_url ?? null,
+            banner_url:
+              s.banner_url || s.landscape_url || s.cover_url || null,
+            date_label:
+              s.display_date ||
+              (s.season_count
+                ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
+                : s.date_iso) ||
+              null,
+            official: s.official,
+            open_url: leaf.open_url || null,
+            open_mode: leaf.open_mode || (leaf.open_url ? "local" : null),
+            open_label:
+              leaf.open_label ||
+              (leaf.open_url ? "Play episode 1" : null),
+          };
+        })
       );
       setShowLoading(false);
       return;
@@ -1368,30 +1400,42 @@ export default function SeriesFranchisePage({
       .then((payload) => {
         if (cancelled) return;
         setShowCards(
-          (payload.items || []).map((s) => ({
-            id: s.id,
-            title: s.title,
-            cover_url: s.cover_url,
-            portrait_url:
-              (s as { portrait_url?: string | null }).portrait_url ||
-              s.cover_url,
-            landscape_url:
-              (s as { landscape_url?: string | null }).landscape_url || null,
-            logo_url: (s as { logo_url?: string | null }).logo_url || null,
-            badge_url: (s as { badge_url?: string | null }).badge_url || null,
-            banner_url:
-              (s as { banner_url?: string | null }).banner_url ||
-              (s as { landscape_url?: string | null }).landscape_url ||
-              s.cover_url ||
-              null,
-            date_label:
-              s.display_date ||
-              (s.season_count
-                ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
-                : s.date_iso) ||
-              null,
-            official: (s as { official?: boolean }).official,
-          }))
+          (payload.items || []).map((s) => {
+            const leaf = s as typeof s & {
+              open_url?: string | null;
+              open_mode?: "tab" | "local" | null;
+              open_label?: string | null;
+            };
+            return {
+              id: s.id,
+              title: s.title,
+              cover_url: s.cover_url,
+              portrait_url:
+                (s as { portrait_url?: string | null }).portrait_url ||
+                s.cover_url,
+              landscape_url:
+                (s as { landscape_url?: string | null }).landscape_url || null,
+              logo_url: (s as { logo_url?: string | null }).logo_url || null,
+              badge_url: (s as { badge_url?: string | null }).badge_url || null,
+              banner_url:
+                (s as { banner_url?: string | null }).banner_url ||
+                (s as { landscape_url?: string | null }).landscape_url ||
+                s.cover_url ||
+                null,
+              date_label:
+                s.display_date ||
+                (s.season_count
+                  ? `${s.season_count} season${s.season_count === 1 ? "" : "s"}`
+                  : s.date_iso) ||
+                null,
+              official: (s as { official?: boolean }).official,
+              open_url: leaf.open_url || null,
+              open_mode: leaf.open_mode || (leaf.open_url ? "local" : null),
+              open_label:
+                leaf.open_label ||
+                (leaf.open_url ? "Play episode 1" : null),
+            };
+          })
         );
       })
       .catch(() => {
@@ -2190,11 +2234,11 @@ export default function SeriesFranchisePage({
     }
     const url = item.open_url?.trim();
     if (!url) return;
-    if (item.open_mode === "local") {
-      void fetch(url, { method: "POST" }).catch(() => {});
-      return;
-    }
     if (isBooks || isGames) {
+      if (item.open_mode === "local" || item.open_mode === "web") {
+        void openCatalogVideo({ openUrl: url, playLocally });
+        return;
+      }
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }

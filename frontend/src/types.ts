@@ -1828,6 +1828,9 @@ export type SeriesSubseriesCard = {
   owned?: boolean;
   /** Books only: signed copy (implies owned). */
   signed?: boolean;
+  open_url?: string | null;
+  open_mode?: "tab" | "local" | "web" | null;
+  open_label?: string | null;
 };
 
 export type SeriesSeasonCard = {
@@ -1913,6 +1916,11 @@ export type SeriesFranchiseCard = {
   /** Per-profile physical ownership when this card is a leaf (shows scope). */
   owned?: boolean;
   signed?: boolean;
+  open_url?: string | null;
+  open_mode?: "tab" | "local" | "web" | null;
+  open_label?: string | null;
+  /** Games: local ROM/exe available for Play game. */
+  has_rom?: boolean;
 };
 
 export type SeriesFranchiseDetail = SeriesFranchiseCard & {
