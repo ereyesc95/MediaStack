@@ -1,6 +1,9 @@
 """Adult / NSFW genre classification for catalog visibility."""
 from __future__ import annotations
 
+import time
+from pathlib import Path
+
 # Parent genres whose entire subgenre tree is adult-only.
 ADULT_PARENT_GENRES = frozenset(
     {
@@ -96,11 +99,68 @@ def card_has_adult_genres(
     return False
 
 
+# Short-lived memos so franchise overview / related filters do not rebuild the
+# full Series/Movies catalog on every HTTP hit (was ~2s+ each and stacked into
+# 30s client timeouts → "Application not running").
+_SFW_TTL_SEC = 60.0
+_ADULT_SUBS_TTL_SEC = 120.0
+_adult_subs_mem: tuple[float, frozenset[str]] | None = None
+_sfw_series_mem: tuple[float, str, frozenset[str]] | None = None
+_sfw_movies_mem: tuple[float, str, frozenset[str]] | None = None
+
+
+def clear_adult_content_caches() -> None:
+    """Drop SFW / adult-subgenre memos (call when catalogs invalidate)."""
+    global _adult_subs_mem, _sfw_series_mem, _sfw_movies_mem
+    _adult_subs_mem = None
+    _sfw_series_mem = None
+    _sfw_movies_mem = None
+
+
+def _media_root() -> Path:
+    from app.config import settings
+
+    return Path(settings.media_root or "")
+
+
+def _enriched_series_catalog(db) -> dict:
+    from app.module_catalog_cache import get_or_build_catalog
+    from app.series_catalog_meta import enrich_catalog_metadata
+    from app.series_index import build_series_catalog
+
+    root = _media_root()
+    raw = get_or_build_catalog(
+        "series",
+        media_root=root,
+        builder=lambda: build_series_catalog(root),
+    )
+    return enrich_catalog_metadata(db, raw)
+
+
+def _enriched_movies_catalog(db) -> dict:
+    from app.module_catalog_cache import get_or_build_catalog
+    from app.movies_catalog_meta import enrich_movies_catalog
+    from app.movies_index import build_movies_catalog
+
+    root = _media_root()
+    raw = get_or_build_catalog(
+        "movies",
+        media_root=root,
+        builder=lambda: build_movies_catalog(root),
+    )
+    return enrich_movies_catalog(db, raw)
+
+
 def adult_subgenre_names_from_db(db) -> set[str]:
     """Subgenre display names whose parent genre is Adult / Adult Print."""
+    global _adult_subs_mem
     from sqlalchemy import select
 
     from app.models import Genre, Subgenre
+
+    now = time.monotonic()
+    if _adult_subs_mem and (now - _adult_subs_mem[0]) < _ADULT_SUBS_TTL_SEC:
+        return set(_adult_subs_mem[1])
 
     parent_ids = {
         g.gen_id
@@ -108,21 +168,33 @@ def adult_subgenre_names_from_db(db) -> set[str]:
         if g.gen_id and is_adult_parent_genre_name(g.gen_name)
     }
     if not parent_ids:
+        _adult_subs_mem = (now, frozenset())
         return set()
     out: set[str] = set()
     for s in db.scalars(select(Subgenre)).all():
         if s.sgn_genre_id in parent_ids and (s.sgn_name or "").strip():
             out.add(s.sgn_name.strip())
+    _adult_subs_mem = (now, frozenset(out))
     return out
 
 
 def sfw_series_franchise_ids(db) -> set[str]:
     """Series catalog franchise ids visible when NSFW is locked."""
+    global _sfw_series_mem
     from app.franchise_index import normalize_franchise_slug
-    from app.series_catalog_meta import enrich_catalog_metadata
-    from app.series_index import build_series_catalog
+    from app.module_catalog_cache import _listing_sig_cached
 
-    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    root = _media_root()
+    listing = _listing_sig_cached(root, "series") if root.is_dir() else "0:"
+    now = time.monotonic()
+    if (
+        _sfw_series_mem
+        and _sfw_series_mem[1] == listing
+        and (now - _sfw_series_mem[0]) < _SFW_TTL_SEC
+    ):
+        return set(_sfw_series_mem[2])
+
+    catalog = _enriched_series_catalog(db)
     kept = filter_adult_cards(
         catalog.get("franchises") or [],
         nsfw_unlocked=False,
@@ -140,7 +212,9 @@ def sfw_series_franchise_ids(db) -> set[str]:
         if name:
             out.add(name.casefold())
             out.add(normalize_franchise_slug(name) or name.casefold())
-    return {x for x in out if x}
+    frozen = frozenset(x for x in out if x)
+    _sfw_series_mem = (now, listing, frozen)
+    return set(frozen)
 
 
 def series_leaf_is_adult(
@@ -151,9 +225,6 @@ def series_leaf_is_adult(
     folder_path: str | None = None,
 ) -> bool:
     """True when a series subseries/leaf has adult genres (NSFW lock should 404)."""
-    from app.series_catalog_meta import enrich_catalog_metadata
-    from app.series_index import build_series_catalog
-
     fid = (franchise_id or "").strip()
     lid = (leaf_id or "").strip()
     if not lid and folder_path:
@@ -166,7 +237,7 @@ def series_leaf_is_adult(
     if not fid or not lid:
         return False
 
-    catalog = enrich_catalog_metadata(db, build_series_catalog())
+    catalog = _enriched_series_catalog(db)
     extra = adult_subgenre_names_from_db(db)
     lid_cf = lid.casefold()
     fid_cf = fid.casefold()
@@ -225,20 +296,31 @@ def series_franchise_is_sfw(db, franchise_slug: str, *, sfw_ids: set[str] | None
 
 def sfw_movie_work_ids(db) -> set[str]:
     """Movie work / film ids visible when NSFW is locked."""
+    global _sfw_movies_mem
     from app.franchise_index import normalize_franchise_slug
-    from app.movies_catalog_meta import enrich_movies_catalog
-    from app.movies_index import build_movies_catalog
+    from app.module_catalog_cache import _listing_sig_cached
 
-    catalog = enrich_movies_catalog(db, build_movies_catalog())
+    root = _media_root()
+    listing = _listing_sig_cached(root, "movies") if root.is_dir() else "0:"
+    now = time.monotonic()
+    if (
+        _sfw_movies_mem
+        and _sfw_movies_mem[1] == listing
+        and (now - _sfw_movies_mem[0]) < _SFW_TTL_SEC
+    ):
+        return set(_sfw_movies_mem[2])
+
+    catalog = _enriched_movies_catalog(db)
+    extra = adult_subgenre_names_from_db(db)
     kept_works = filter_adult_cards(
         catalog.get("franchises") or [],
         nsfw_unlocked=False,
-        extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        extra_adult_subgenres=extra,
     )
     kept_films = filter_adult_cards(
         catalog.get("films") or [],
         nsfw_unlocked=False,
-        extra_adult_subgenres=adult_subgenre_names_from_db(db),
+        extra_adult_subgenres=extra,
     )
     out: set[str] = set()
     for card in list(kept_works) + list(kept_films):
@@ -250,7 +332,9 @@ def sfw_movie_work_ids(db) -> set[str]:
                 continue
             out.add(raw.casefold())
             out.add(normalize_franchise_slug(raw) or raw.casefold())
-    return {x for x in out if x}
+    frozen = frozenset(x for x in out if x)
+    _sfw_movies_mem = (now, listing, frozen)
+    return set(frozen)
 
 
 def movie_work_is_sfw(db, work_slug: str, *, sfw_ids: set[str] | None = None) -> bool:
@@ -276,10 +360,8 @@ def filter_adult_movie_leaf_cards(
     """Drop adult film leaves using per-film genres (not work-level SFW)."""
     if nsfw_unlocked or not cards:
         return cards
-    from app.movies_catalog_meta import enrich_movies_catalog
-    from app.movies_index import build_movies_catalog
 
-    catalog = enrich_movies_catalog(db, build_movies_catalog())
+    catalog = _enriched_movies_catalog(db)
     by_id = {
         str(f.get("id") or "").casefold(): f
         for f in (catalog.get("films") or [])

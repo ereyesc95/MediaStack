@@ -428,6 +428,11 @@ def _list_games_under_franchise(
                     letter=letter,
                 )
             )
+    return _sort_game_cards(games)
+
+
+def _sort_game_cards(games: list[dict]) -> list[dict]:
+    """Chronological by folder date, then title, then platform (stable for UI strips)."""
     games.sort(
         key=lambda g: (
             g.get("date_iso") or "9999",
@@ -557,6 +562,9 @@ def build_games_catalog(media_root: Path | None = None) -> dict:
             if gid and gid not in seen:
                 existing_games.append(g)
                 seen.add(gid)
+        # Re-sort after cross-platform merge — discovery order is platform A–Z,
+        # not release date (e.g. N64 Mario 64 before NES Mario Bros.).
+        _sort_game_cards(existing_games)
         plats = list(existing.get("platforms") or [])
         if platform and platform not in plats:
             plats.append(platform)

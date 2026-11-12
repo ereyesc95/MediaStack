@@ -1,7 +1,7 @@
 {
   "index_version": 3,
-  "scanned_at": "2026-11-12T17:15:15.975323+00:00",
-  "disk_listing": "229:e1331974dc8a6bf36d75ab06",
+  "scanned_at": "2026-11-12T18:04:05.514910+00:00",
+  "disk_listing": "230:c1c958820a9b5534d96ba890",
   "franchises": {
     "courage test film": {
       "display_name": "Courage Test Film",
@@ -785,6 +785,16 @@
           "date_iso": "1996-06-23",
           "letter": "S",
           "platform": "Nintendo 64",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Entertainment System/S/Super Mario/1983.09.09. Mario Bros",
+          "title": "Mario Bros",
+          "date_iso": "1983-09-09",
+          "letter": "S",
+          "platform": "Nintendo Entertainment System",
           "subseries": null,
           "franchise_display": "Super Mario"
         },

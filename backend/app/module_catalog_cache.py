@@ -196,6 +196,12 @@ def store_enriched_catalog(
 
 def invalidate_module_catalog(module: str | None = None) -> None:
     global _listing_sig_mem, _raw_payload_mem, _enriched_mem
+    try:
+        from app.adult_content import clear_adult_content_caches
+
+        clear_adult_content_caches()
+    except Exception:
+        pass
     if module:
         mod = module.strip().casefold()
         path = _cache_path(mod)
