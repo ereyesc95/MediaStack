@@ -359,25 +359,14 @@ def organize_platform_roms(
             franchise = item.get("franchise")
             if franchise:
                 exists = _franchise_exists_elsewhere(root, franchise)
-                if not exists and not (work_dir / "[Artwork]").is_dir():
+                from app.games_franchise_artwork import find_games_artwork_dir
+
+                if not exists and find_games_artwork_dir(franchise, root) is None:
                     # Mark Games as franchise home when franchise is new.
                     from app.franchise_identity import set_explicit_franchise_home
 
                     set_explicit_franchise_home(db, franchise, "games")
                     new_franchise_homes.append(franchise)
-                    (work_dir).mkdir(parents=True, exist_ok=True)
-                    artwork = work_dir / "[Artwork]"
-                    artwork.mkdir(parents=True, exist_ok=True)
-                    from app.folder_icons import (
-                        cleanup_franchise_artwork_dir,
-                        decorate_folder,
-                        write_desktop_ini,
-                    )
-
-                    write_desktop_ini(artwork)
-                    cleanup_franchise_artwork_dir(artwork)
-                    decorate_folder(work_dir)
-                    decorate_folder(artwork)
 
             work_dir.mkdir(parents=True, exist_ok=True)
             from app.folder_icons import decorate_folder, write_desktop_ini
@@ -447,6 +436,25 @@ def organize_platform_roms(
         db.commit()
     except Exception:
         db.rollback()
+
+    # One [Artwork] per Games-home franchise, on the earliest game's platform.
+    from app.franchise_identity import explicit_franchise_home
+    from app.games_franchise_artwork import ensure_games_franchise_artwork
+
+    touched = {
+        str(row.get("franchise") or "").strip()
+        for row in organized
+        if row.get("franchise")
+    }
+    for fname in sorted(touched | set(new_franchise_homes)):
+        if not fname:
+            continue
+        if fname not in new_franchise_homes and explicit_franchise_home(fname) != "games":
+            continue
+        try:
+            ensure_games_franchise_artwork(fname, root)
+        except Exception as exc:
+            errors.append(f"{fname}: artwork home ensure failed ({exc})")
 
     return {
         "platform": platform_dir.name,

@@ -208,8 +208,8 @@ This file is optional. You can delete it at any time; MyStack never reads it.
 
 GAMES LAYOUT
 ------------
-Games/{{Letter}}/{{Franchise}}/{{Platform}}/{{YYYY.MM.DD}}. {{Game}}/
-Each platform gets its own folder under the franchise.
+Games/{{Platform}}/{{Letter}}/{{Franchise}}/{{YYYY.MM.DD}}. {{Game}}/
+The same franchise name may appear under several platforms; the catalog merges them.
 Do not create Movies, Series, Books or Audio portal folders here.
 
 Each game leaf may contain:
@@ -220,8 +220,10 @@ Each game leaf may contain:
   ROM/ or Disc/ (optional local dumps)
   Audio/ (shortcuts to Music releases when applicable)
 
-The franchise root contains [Artwork]/ (Cover - Portrait / Landscape only)
-only when Games is its franchise home. Standalone titles have no [Artwork].
+When Games is the franchise home there is exactly one [Artwork]/
+(Cover - Portrait / Landscape only) under the platform folder of the earliest
+dated game, e.g. Games/NES/S/Super Mario/[Artwork]/. Manage Catalog moves it
+when an earlier game is added. Standalone titles have no franchise [Artwork].
 Do not create about.json sidecars — title metadata lives in the MyStack database.
 
 Game folders use a date prefix when known:

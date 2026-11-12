@@ -39,6 +39,52 @@ def _ensure_index(root: Path):
     return ensure_franchise_index(root)
 
 
+def _sibling_about_overview(
+    db: Session,
+    *,
+    work_name: str,
+    work_slug: str,
+    artwork_home_module: str | None,
+    orientation: str,
+) -> dict | None:
+    """Pull About art/bio from Series/Movies so Books matches other entry modules."""
+    order: list[str] = []
+    home = (artwork_home_module or "").casefold()
+    if home in {"series", "movies"}:
+        order.append(home)
+    for mod in ("series", "movies"):
+        if mod not in order:
+            order.append(mod)
+    for mod in order:
+        try:
+            if mod == "series":
+                from app.series_overview import build_series_overview
+
+                ov = build_series_overview(
+                    db, work_slug, orientation=orientation
+                ) or build_series_overview(
+                    db, work_name, orientation=orientation
+                )
+            else:
+                from app.movies_overview import build_work_overview as build_movies_ov
+
+                ov = build_movies_ov(
+                    db, work_slug, orientation=orientation
+                ) or build_movies_ov(db, work_name, orientation=orientation)
+        except Exception:
+            ov = None
+        if not ov or not isinstance(ov, dict):
+            continue
+        if (
+            ov.get("bio")
+            or ov.get("eras")
+            or ov.get("cover_url")
+            or ov.get("portrait_url")
+        ):
+            return ov
+    return None
+
+
 def _related_for_work(root: Path, folder_path: str, work_name: str = ""):
     """Resolve related media; rebuild index once if the first pass is empty."""
     index = _ensure_index(root)
@@ -310,30 +356,61 @@ def build_work_overview(
         ]
     )
 
+    artwork_home_module = (
+        find_artwork_home(detail.get("name") or work_dir.name, root)
+        or (None, None)
+    )[0]
+    donor = _sibling_about_overview(
+        db,
+        work_name=detail.get("name") or work_dir.name,
+        work_slug=slug,
+        artwork_home_module=artwork_home_module,
+        orientation=orientation,
+    )
+    if donor:
+        if not bio:
+            bio = donor.get("bio")
+        if not local_eras:
+            local_eras = list(donor.get("eras") or [])
+        if not authors:
+            authors = list(
+                donor.get("writers") or donor.get("authors") or []
+            )
+        if not has_gallery and (
+            donor.get("eras") or (donor.get("media") or {}).get("has_gallery")
+        ):
+            has_gallery = True
+            media["has_gallery"] = True
+
     return {
         "id": detail["id"],
         "name": detail.get("name"),
         "letter": detail.get("letter"),
         "slug": slug,
         "folder_path": folder_path,
-        "cover_url": detail.get("cover_url"),
-        "portrait_url": detail.get("portrait_url"),
-        "landscape_url": detail.get("landscape_url"),
-        "banner_url": detail.get("banner_url"),
-        "logo_url": detail.get("logo_url"),
-        "icon_url": detail.get("icon_url"),
+        "cover_url": detail.get("cover_url") or (donor or {}).get("cover_url"),
+        "portrait_url": detail.get("portrait_url")
+        or (donor or {}).get("portrait_url"),
+        "landscape_url": detail.get("landscape_url")
+        or (donor or {}).get("landscape_url"),
+        "banner_url": detail.get("banner_url") or (donor or {}).get("banner_url"),
+        "logo_url": detail.get("logo_url") or (donor or {}).get("logo_url"),
+        "icon_url": detail.get("icon_url") or (donor or {}).get("icon_url"),
         "bio": bio,
         "writers": authors,
         "authors": authors,
-        "aliases": [],
-        "languages": [],
-        "language_options": [],
-        "origin_language": None,
-        "activity_periods": book_activity,
-        "genres": [],
-        "publishers": [],
+        "aliases": list((donor or {}).get("aliases") or []),
+        "country": (donor or {}).get("country"),
+        "languages": list((donor or {}).get("languages") or []),
+        "language_options": list((donor or {}).get("language_options") or []),
+        "origin_language": (donor or {}).get("origin_language"),
+        "activity_periods": book_activity
+        or list((donor or {}).get("activity_periods") or []),
+        "genres": list((donor or {}).get("genres") or []),
+        "publishers": list((donor or {}).get("publishers") or []),
         "eras": local_eras,
-        "cast": {"characters": [], "staff": [], "animated": [], "people": []},
+        "cast": (donor or {}).get("cast")
+        or {"characters": [], "staff": [], "animated": [], "people": []},
         "subseries": books_as_subseries,
         "films": books,
         "books": books,
@@ -341,7 +418,7 @@ def build_work_overview(
         "media": media,
         "related": related,
         "music_band_id": music_band.bnd_id if music_band else None,
-        "links": links_payload,
+        "links": (donor or {}).get("links") or links_payload,
         "universes": universes,
         "universe": universe,
         "universe_cards": merged_universe_cards or universe_cards,
@@ -350,10 +427,7 @@ def build_work_overview(
         "primary_book_id": detail.get("primary_book_id"),
         "primary_film_id": detail.get("primary_book_id"),
         "orientation": orientation,
-        "artwork_home_module": (
-            find_artwork_home(detail.get("name") or work_dir.name, root)
-            or (None, None)
-        )[0],
+        "artwork_home_module": artwork_home_module,
     }
 
 
@@ -445,7 +519,8 @@ def build_book_overview(
         "has_movies": bool(related_movies),
         "has_library": False,
         "has_books": True,
-        "has_games": bool(related_games),
+        # Leaf GAMES tab only when leaf-matched cards exist (frontend scan).
+        "has_games": False,
         "has_gallery": bool(local_eras) or bool(detail.get("has_gallery")),
     }
 

@@ -152,9 +152,13 @@ const PLATFORM_ALIASES: Record<string, string> = {
   macos: "Mac",
   "mac os": "Mac",
   web: "Browser",
+  "web browser": "Browser",
   "web game": "Browser",
   "web games": "Browser",
   browser: "Browser",
+  html5: "Browser",
+  flash: "Flash",
+  "adobe flash": "Flash",
   "xbox series x": "Xbox Series",
   "xbox series s": "Xbox Series",
   "xbox series x|s": "Xbox Series",
@@ -220,12 +224,16 @@ function canonicalizePlatform(
     const bareExact = options.find((opt) => opt.toLowerCase() === bare);
     if (bareExact) return bareExact;
   }
-  // Containment match against known options (longest first)
+  // Whole-word containment (longest first). Keeps Browser ≠ Flash: "web browser"
+  // must not also match Flash, and short names must not substring-collide.
   const sorted = [...options].sort((a, b) => b.length - a.length);
+  const hay = bare || lower;
   for (const opt of sorted) {
     const ol = opt.toLowerCase();
-    if (lower === ol || bare === ol) return opt;
-    if (lower.includes(ol) || ol.includes(bare || lower)) return opt;
+    if (hay === ol) return opt;
+    const escaped = ol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const asWord = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`);
+    if (asWord.test(hay) || asWord.test(lower)) return opt;
   }
   return titleCasePlatform(trimmed);
 }
@@ -1511,9 +1519,13 @@ export default function ManageCatalogModal({
                 disabled={saving}
                 onChange={setNestedSeries}
               >
-                {nestedSeries
-                  ? "This franchise has multiple series"
-                  : "This franchise has only 1 series"}
+                {module === "movies"
+                  ? nestedSeries
+                    ? "This franchise has multiple movies"
+                    : "This franchise has only 1 movie"
+                  : nestedSeries
+                    ? "This franchise has multiple series"
+                    : "This franchise has only 1 series"}
               </Checkbox>
             ) : null}
 

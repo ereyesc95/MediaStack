@@ -1,7 +1,7 @@
 {
   "index_version": 3,
-  "scanned_at": "2026-11-11T22:17:24.967971+00:00",
-  "disk_listing": "214:0eef7ac8b5e2ce35e7d39b4b",
+  "scanned_at": "2026-11-12T17:15:15.975323+00:00",
+  "disk_listing": "229:e1331974dc8a6bf36d75ab06",
   "franchises": {
     "courage test film": {
       "display_name": "Courage Test Film",
@@ -713,6 +713,113 @@
         }
       ]
     },
+    "super mario": {
+      "display_name": "Super Mario",
+      "slug": "super mario",
+      "letter": "S",
+      "entries": [
+        {
+          "kind": "movie",
+          "path": "Movies/S/Super Mario/2023.04.05. The Super Mario Bros. Movie",
+          "title": "The Super Mario Bros. Movie",
+          "date_iso": "2023-04-05",
+          "letter": "S",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "movie",
+          "path": "Movies/S/Super Mario/2026.04.01. The Super Mario Galaxy Movie",
+          "title": "The Super Mario Galaxy Movie",
+          "date_iso": "2026-04-01",
+          "letter": "S",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "series",
+          "path": "Series/S/Super Mario",
+          "title": "Super Mario",
+          "date_iso": "1990-09-08",
+          "letter": "S",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "series",
+          "path": "Series/S/Super Mario/1990.09.08. The Adventures of Super Mario Bros. 3",
+          "title": "The Adventures of Super Mario Bros. 3",
+          "date_iso": "1990-09-08",
+          "letter": "S",
+          "platform": null,
+          "subseries": "The Adventures of Super Mario Bros. 3",
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "series",
+          "path": "Series/S/Super Mario/1991.09.14. Super Mario World",
+          "title": "Super Mario World",
+          "date_iso": "1991-09-14",
+          "letter": "S",
+          "platform": null,
+          "subseries": "Super Mario World",
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "book",
+          "path": "Books/S/Super Mario/2018.10.23. Super Mario Encyclopedia - The Official Guide to the First 30 Years",
+          "title": "Super Mario Encyclopedia - The Official Guide to the First 30 Years",
+          "date_iso": "2018-10-23",
+          "letter": "S",
+          "platform": null,
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo 64/S/Super Mario/1996.06.23. Super Mario 64",
+          "title": "Super Mario 64",
+          "date_iso": "1996-06-23",
+          "letter": "S",
+          "platform": "Nintendo 64",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Entertainment System/S/Super Mario/1988.10.23. Super Mario Bros. 3",
+          "title": "Super Mario Bros. 3",
+          "date_iso": "1988-10-23",
+          "letter": "S",
+          "platform": "Nintendo Entertainment System",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Wii/S/Super Mario/2007.11.01. Super Mario Galaxy",
+          "title": "Super Mario Galaxy",
+          "date_iso": "2007-11-01",
+          "letter": "S",
+          "platform": "Nintendo Wii",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        },
+        {
+          "kind": "game",
+          "path": "Games/Nintendo Wii/S/Super Mario/2010.05.23. Super Mario Galaxy 2",
+          "title": "Super Mario Galaxy 2",
+          "date_iso": "2010-05-23",
+          "letter": "S",
+          "platform": "Nintendo Wii",
+          "subseries": null,
+          "franchise_display": "Super Mario"
+        }
+      ]
+    },
     "courage the cowardly dog": {
       "display_name": "Courage the Cowardly Dog",
       "slug": "courage the cowardly dog",
@@ -879,63 +986,6 @@
           "platform": null,
           "subseries": null,
           "franchise_display": "High Fidelity"
-        }
-      ]
-    },
-    "super mario": {
-      "display_name": "Super Mario",
-      "slug": "super mario",
-      "letter": "S",
-      "entries": [
-        {
-          "kind": "book",
-          "path": "Books/S/Super Mario/2018.10.23. Super Mario Encyclopedia - The Official Guide to the First 30 Years",
-          "title": "Super Mario Encyclopedia - The Official Guide to the First 30 Years",
-          "date_iso": "2018-10-23",
-          "letter": "S",
-          "platform": null,
-          "subseries": null,
-          "franchise_display": "Super Mario"
-        },
-        {
-          "kind": "game",
-          "path": "Games/Nintendo 64/S/Super Mario/1996.06.23. Super Mario 64",
-          "title": "Super Mario 64",
-          "date_iso": "1996-06-23",
-          "letter": "S",
-          "platform": "Nintendo 64",
-          "subseries": null,
-          "franchise_display": "Super Mario"
-        },
-        {
-          "kind": "game",
-          "path": "Games/Nintendo Entertainment System/S/Super Mario/1988.10.23. Super Mario Bros. 3",
-          "title": "Super Mario Bros. 3",
-          "date_iso": "1988-10-23",
-          "letter": "S",
-          "platform": "Nintendo Entertainment System",
-          "subseries": null,
-          "franchise_display": "Super Mario"
-        },
-        {
-          "kind": "game",
-          "path": "Games/Nintendo Wii/S/Super Mario/2007.11.01. Super Mario Galaxy",
-          "title": "Super Mario Galaxy",
-          "date_iso": "2007-11-01",
-          "letter": "S",
-          "platform": "Nintendo Wii",
-          "subseries": null,
-          "franchise_display": "Super Mario"
-        },
-        {
-          "kind": "game",
-          "path": "Games/Nintendo Wii/S/Super Mario/2010.05.23. Super Mario Galaxy 2",
-          "title": "Super Mario Galaxy 2",
-          "date_iso": "2010-05-23",
-          "letter": "S",
-          "platform": "Nintendo Wii",
-          "subseries": null,
-          "franchise_display": "Super Mario"
         }
       ]
     },

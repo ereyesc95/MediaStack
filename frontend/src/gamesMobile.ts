@@ -49,7 +49,10 @@ const PLATFORM_ALIASES: Record<string, string> = {
   "commodore 64": "Commodore 64",
   browser: "Browser",
   web: "Browser",
+  "web browser": "Browser",
+  html5: "Browser",
   flash: "Flash",
+  "adobe flash": "Flash",
   // Future expands the user mentioned — ready when folders appear:
   atari: "Atari",
   "atari 2600": "Atari 2600",

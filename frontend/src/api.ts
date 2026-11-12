@@ -2707,6 +2707,8 @@ export async function fetchMoviesCatalog(params?: {
     films: import("./types").MoviesFilmCard[];
     scanned_at: string | null;
     letters?: string[];
+    /** A–Z from film titles (Films catalog scope). */
+    films_letters?: string[];
     total?: number;
   }>(`${API}/movies/catalog${qs ? `?${qs}` : ""}`);
 }

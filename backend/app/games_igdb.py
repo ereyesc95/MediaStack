@@ -5,12 +5,14 @@ from app.franchise_index import GAME_PLATFORMS, normalize_franchise_slug
 from app.services.igdb import get_game as igdb_get_game, search_games
 
 # Our folder platform → IGDB platform.name aliases (casefold match / substring).
+# Browser and Flash stay distinct: never share aliases (Manage Catalog must not
+# scaffold the same title under both from a single "Web browser" IGDB hit).
 _IGDB_PLATFORM_ALIASES: dict[str, tuple[str, ...]] = {
     "Amiga": ("amiga",),
     "Arcade": ("arcade",),
     "Browser": ("web browser", "browser", "html5", "web"),
     "Commodore 64": ("commodore c64/128", "commodore 64", "c64"),
-    "Flash": ("flash", "web browser", "browser"),
+    "Flash": ("flash", "adobe flash"),
     "Game Boy": ("game boy",),
     "Game Boy Advance": ("game boy advance", "gba"),
     "Game Boy Color": ("game boy color", "gbc"),

@@ -90,6 +90,62 @@ def _has_gallery(folder: Path) -> bool:
         return False
 
 
+def _sibling_about_overview(
+    db: Session | None,
+    *,
+    work_name: str,
+    work_slug: str,
+    artwork_home_module: str | None,
+    orientation: str,
+) -> dict | None:
+    """Pull About art/bio from Series/Movies/Books so Games matches entry module."""
+    if db is None:
+        return None
+    order: list[str] = []
+    home = (artwork_home_module or "").casefold()
+    if home in {"series", "movies", "books"}:
+        order.append(home)
+    for mod in ("series", "movies", "books"):
+        if mod not in order:
+            order.append(mod)
+    for mod in order:
+        try:
+            if mod == "series":
+                from app.series_overview import build_series_overview
+
+                ov = build_series_overview(
+                    db, work_slug, orientation=orientation
+                ) or build_series_overview(
+                    db, work_name, orientation=orientation
+                )
+            elif mod == "movies":
+                from app.movies_overview import build_work_overview as build_movies_ov
+
+                ov = build_movies_ov(
+                    db, work_slug, orientation=orientation
+                ) or build_movies_ov(db, work_name, orientation=orientation)
+            else:
+                from app.books_overview import build_work_overview as build_books_ov
+
+                ov = build_books_ov(
+                    db, work_slug, orientation=orientation
+                ) or build_books_ov(db, work_name, orientation=orientation)
+        except Exception:
+            ov = None
+        if not ov or not isinstance(ov, dict):
+            continue
+        if (
+            ov.get("bio")
+            or ov.get("eras")
+            or ov.get("cover_url")
+            or ov.get("portrait_url")
+            or (ov.get("cast") or {}).get("characters")
+            or (ov.get("cast") or {}).get("staff")
+        ):
+            return ov
+    return None
+
+
 def build_work_overview(
     work_id: str,
     db: Session | None = None,
@@ -223,6 +279,61 @@ def build_work_overview(
         or normalize_franchise_slug(detail.get("name") or "")
         or ""
     )
+    work_name = detail.get("name") or work_id
+    donor = _sibling_about_overview(
+        db,
+        work_name=work_name,
+        work_slug=slug,
+        artwork_home_module=artwork_home_module,
+        orientation=orientation,
+    )
+    # Prefer sibling About art/bio when Games folder has none — same franchise
+    # page regardless of entry module (tab order / bottom cards still Games).
+    if donor:
+        if not bio:
+            bio = donor.get("bio")
+        if not eras:
+            eras = list(donor.get("eras") or [])
+        if not developers:
+            developers = list(
+                donor.get("writers")
+                or donor.get("authors")
+                or donor.get("developers")
+                or []
+            )
+        if not publishers:
+            publishers = list(donor.get("publishers") or [])
+        if not has_gallery and (
+            donor.get("eras") or (donor.get("media") or {}).get("has_gallery")
+        ):
+            has_gallery = True
+
+    cover_url = detail.get("cover_url") or (donor or {}).get("cover_url")
+    portrait_url = detail.get("portrait_url") or (donor or {}).get("portrait_url")
+    landscape_url = detail.get("landscape_url") or (donor or {}).get(
+        "landscape_url"
+    )
+    banner_url = detail.get("banner_url") or (donor or {}).get("banner_url")
+    logo_url = detail.get("logo_url") or (donor or {}).get("logo_url")
+    icon_url = detail.get("icon_url") or (donor or {}).get("icon_url")
+    badge_url = detail.get("badge_url") or (donor or {}).get("badge_url")
+    cast = (donor or {}).get("cast") or {
+        "characters": [],
+        "staff": [],
+        "people": [],
+    }
+    links = (donor or {}).get("links") or {"categories": []}
+    genres = list((donor or {}).get("genres") or [])
+    aliases = list((donor or {}).get("aliases") or [])
+    activity_periods = list((donor or {}).get("activity_periods") or [])
+    country = (donor or {}).get("country")
+    languages = list((donor or {}).get("languages") or [])
+    language_options = list((donor or {}).get("language_options") or [])
+    origin_language = (donor or {}).get("origin_language")
+    if donor and not creator:
+        creator = list((donor.get("related") or {}).get("creator") or [])
+    if donor and not similar:
+        similar = list((donor.get("related") or {}).get("similar") or [])
 
     return {
         "id": detail.get("id"),
@@ -231,21 +342,25 @@ def build_work_overview(
         "slug": slug,
         "folder_path": folder_path,
         "platforms": detail.get("platforms") or [],
-        "cover_url": detail.get("cover_url"),
-        "portrait_url": detail.get("portrait_url"),
-        "landscape_url": detail.get("landscape_url"),
-        "banner_url": detail.get("banner_url"),
-        "logo_url": detail.get("logo_url"),
-        "icon_url": detail.get("icon_url"),
-        "badge_url": detail.get("badge_url"),
+        "cover_url": cover_url,
+        "portrait_url": portrait_url,
+        "landscape_url": landscape_url,
+        "banner_url": banner_url,
+        "logo_url": logo_url,
+        "icon_url": icon_url,
+        "badge_url": badge_url,
         "bio": bio,
         "writers": developers,
-        "aliases": [],
-        "activity_periods": [],
-        "genres": [],
+        "aliases": aliases,
+        "country": country,
+        "languages": languages,
+        "language_options": language_options,
+        "origin_language": origin_language,
+        "activity_periods": activity_periods,
+        "genres": genres,
         "publishers": publishers,
-        "cast": {"characters": [], "staff": [], "people": []},
-        "links": {"categories": []},
+        "cast": cast,
+        "links": links,
         "media": {
             "has_audio": has_audio,
             "has_music": bool(related_music),
@@ -288,8 +403,8 @@ def build_work_overview(
         "has_library": has_books,
         "eras": eras,
         "about": {
-            "overview": about_disk.get("overview"),
-            "studio": about_disk.get("studio"),
+            "overview": bio or about_disk.get("overview"),
+            "studio": about_disk.get("studio") or (donor or {}).get("studio"),
             "publisher": about_disk.get("publisher"),
             "developers": developers,
             "publishers": publishers,

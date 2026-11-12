@@ -911,8 +911,10 @@ def build_film_overview(
             "has_music": bool(related_music),
             "has_series": bool(related_disk.get("series")),
             "has_movies": False,
+            # Leaf tabs gate on leaf-linked cards only; franchise related games
+            # belong on the franchise page, not an empty film GAMES tab.
             "has_library": bool(related_disk.get("books")),
-            "has_games": bool(related_disk.get("games")),
+            "has_games": False,
             "has_gallery": bool(gallery.get("items")) or bool(local_eras),
         },
         "links": links_payload,

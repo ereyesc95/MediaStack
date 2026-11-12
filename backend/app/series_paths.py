@@ -94,18 +94,22 @@ def find_episodes_root(folder: Path) -> Path:
 
 
 def cover_search_dirs(folder: Path) -> list[Path]:
-    """Dirs to resolve Cover - Portrait / Front / Landscape / Banner art."""
+    """Dirs to resolve Cover - Portrait / Front / Landscape / Banner art.
+
+    Franchise / leaf priority: ``[Artwork]`` first, then ``Gallery/Covers``,
+    then bare ``Gallery/``.
+    """
     out: list[Path] = []
-    covers = find_covers_dir(folder)
-    if covers:
-        out.append(covers)
-    # Artist books often store covers directly under Gallery/ (no Covers/).
-    gal = find_gallery_root(folder)
-    if gal and gal not in out:
-        out.append(gal)
     legacy = find_artwork_legacy(folder)
     if legacy and legacy not in out:
         out.append(legacy)
+    gal = find_gallery_root(folder)
+    if gal:
+        covers = _child_named(gal, COVERS_NAMES)
+        if covers and covers not in out:
+            out.append(covers)
+        if gal not in out:
+            out.append(gal)
     return out
 
 

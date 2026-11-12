@@ -93,8 +93,11 @@ def apply_catalog_paging(
     out["page_size"] = page_size or total or 0
 
     # Keep secondary lists in sync when letter/search applied (films/games/books).
+    # Stamp per-list letters from the unfiltered secondary so Films/Games/Books
+    # catalog scopes can show title letters (T…) instead of work letters (S…).
     for key in list_keys[1:]:
         secondary = [it for it in (out.get(key) or []) if isinstance(it, dict)]
+        out[f"{key}_letters"] = collect_letters(secondary)
         if not secondary:
             continue
         sec = filter_items(secondary, letter=letter, search=search)

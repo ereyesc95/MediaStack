@@ -18,6 +18,7 @@ import {
 } from "../../artistEntry";
 import {
   artworkHomeModule,
+  getFranchiseHomeReferrer,
   isArtworkHomeElsewhere,
   preferredSectionForSource,
   saveFranchiseHomeReferrer,
@@ -213,6 +214,7 @@ export default function MoviesModule({
   const [tab, setTab] = useState<MoviesTab>("home");
   const [franchises, setFranchises] = useState<SeriesFranchiseCard[]>([]);
   const [catalogLetters, setCatalogLetters] = useState<string[]>([]);
+  const [filmLetters, setFilmLetters] = useState<string[]>([]);
   const [films, setFilms] = useState<MoviesFilmCard[]>([]);
   const [dashLoading, setDashLoading] = useState(
     () => !getCachedMoviesDashboard()
@@ -342,6 +344,21 @@ export default function MoviesModule({
         setFranchises(res.franchises || []);
         setFilms(res.films || []);
         if (res.letters?.length) setCatalogLetters(res.letters);
+        if (res.films_letters?.length) {
+          setFilmLetters(res.films_letters);
+        } else if (!letterScoped && (res.films || []).length) {
+          // Fallback: derive title letters from the flat film list.
+          const set = new Set<string>();
+          for (const f of res.films || []) {
+            const ch = (f.title || "").trim().charAt(0).toUpperCase();
+            set.add(ch && ch >= "A" && ch <= "Z" ? ch : "#");
+          }
+          setFilmLetters(
+            [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].filter((c) => set.has(c)).concat(
+              set.has("#") ? ["#"] : []
+            )
+          );
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setCatalogLoading(false));
@@ -1104,6 +1121,15 @@ export default function MoviesModule({
             : shouldReturnToPhotosExclusive()
               ? "EXCLUSIVE"
               : (() => {
+                const homeRef = getFranchiseHomeReferrer();
+                if (
+                  homeRef?.backLabel &&
+                  homeRef.source !== "movies" &&
+                  (!homeRef.franchiseId ||
+                    homeRef.franchiseId === franchiseId)
+                ) {
+                  return homeRef.backLabel;
+                }
                 const ref = getSeriesEntryReferrer();
                 if (ref?.kind === "books" && (ref.title || ref.franchiseId)) {
                   return (ref.title || "BOOKS").toLocaleUpperCase();
@@ -1455,7 +1481,11 @@ export default function MoviesModule({
         <SeriesBrowse
           franchises={browseFranchises}
           universes={universes}
-          catalogLetters={catalogLetters}
+          catalogLetters={
+            catalogScope === "shows" && filmLetters.length
+              ? filmLetters
+              : catalogLetters
+          }
           orientation={cardOrientation}
           filterMode={filterMode}
           filterOptions={filterOptions}

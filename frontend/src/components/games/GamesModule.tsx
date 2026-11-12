@@ -943,6 +943,7 @@ export default function GamesModule({
           });
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onOpenMoviesFranchise={onOpenMoviesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
         onOpenMoviesPath={(path) => {
           void resolveMoviesPath(path)

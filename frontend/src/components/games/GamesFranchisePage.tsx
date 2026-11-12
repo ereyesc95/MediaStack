@@ -28,6 +28,11 @@ type Props = {
     subseriesId?: string,
     universeId?: number
   ) => void;
+  onOpenMoviesFranchise?: (
+    franchiseId: string,
+    filmId?: string,
+    universeId?: number
+  ) => void;
   onOpenMusicRelease?: (bandId: number, releaseId: string) => void;
   onOpenMoviesPath?: (path: string) => void;
   onOpenBooksPath?: (path: string) => void;
@@ -59,6 +64,7 @@ export default function GamesFranchisePage({
   backLabel,
   onNavigate,
   onOpenSeriesFranchise,
+  onOpenMoviesFranchise,
   onOpenMusicRelease,
   onOpenMoviesPath,
   onOpenBooksPath,
@@ -108,6 +114,7 @@ export default function GamesFranchisePage({
           onNavigate(next);
         }}
         onOpenSeriesFranchise={onOpenSeriesFranchise}
+        onOpenMoviesFranchise={onOpenMoviesFranchise}
         onOpenMusicRelease={onOpenMusicRelease}
         onOpenMoviesPath={onOpenMoviesPath}
         onOpenBooksPath={onOpenBooksPath}

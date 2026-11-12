@@ -802,7 +802,9 @@ async def search_catalog_import(
                 "artwork_urls": h.get("artwork_urls") or [],
                 "screenshot_urls": h.get("screenshot_urls") or [],
                 "overview": h.get("overview"),
-                "platforms": h.get("platforms") or [],
+                "platforms": _canonicalize_igdb_platforms(
+                    h.get("platforms") or []
+                ),
                 "kind": "game",
             }
             for h in hits
@@ -853,7 +855,9 @@ async def preview_catalog_import(
         game = await igdb_get_game(provider_id)
         if not game:
             raise HTTPException(404, "IGDB game not found")
-        game_platforms = list(game.get("platforms") or [])
+        game_platforms = _canonicalize_igdb_platforms(
+            game.get("platforms") or []
+        )
         return {
             "franchise_name": game.get("name") or body.get("title") or "Untitled",
             "items": [
@@ -1114,12 +1118,55 @@ def update_catalog_folders(
     }
 
 
+# IGDB / short names → GAME_PLATFORMS. Browser and Flash stay separate.
+_PLATFORM_NAME_ALIASES: dict[str, str] = {
+    "web": "Browser",
+    "web browser": "Browser",
+    "web game": "Browser",
+    "web games": "Browser",
+    "browser": "Browser",
+    "html5": "Browser",
+    "flash": "Flash",
+    "adobe flash": "Flash",
+}
+
+
 def _canonicalize_platform_name(raw: str) -> str:
     text = str(raw or "").strip()
     if not text:
         return ""
+    key = text.casefold()
+    alias = _PLATFORM_NAME_ALIASES.get(key)
+    if alias:
+        return alias
+    # Strip parenthetical suffixes: "Nintendo Entertainment System (NES)"
+    bare = re.sub(r"\s*\([^)]*\)\s*", " ", key).strip()
+    if bare and bare != key:
+        alias = _PLATFORM_NAME_ALIASES.get(bare)
+        if alias:
+            return alias
     platform_cf = {p.casefold(): p for p in GAME_PLATFORMS}
-    return platform_cf.get(text.casefold()) or _safe_name(text, fallback="")
+    if key in platform_cf:
+        return platform_cf[key]
+    if bare in platform_cf:
+        return platform_cf[bare]
+    return _safe_name(text, fallback="")
+
+
+def _canonicalize_igdb_platforms(raw: list | None) -> list[str]:
+    """Map IGDB platform names to distinct catalog folders (Browser ≠ Flash)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        name = _canonicalize_platform_name(str(item or ""))
+        key = name.casefold()
+        if not name or key not in {p.casefold() for p in GAME_PLATFORMS}:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(name)
+    return out
 
 
 def _resolve_game_platforms(body: dict) -> list[str]:
@@ -1362,9 +1409,10 @@ async def create_catalog_import(
             decorate_folder(franchise_dir)
         else:
             decorate_folder(franchise_dir)
-        # Franchise home [Artwork]: covers only (no Branding/Covers/Exclusive/Gallery).
+        # Non-Games franchise home [Artwork]: covers only. Games uses a single
+        # [Artwork] on the earliest game's platform folder (ensured after loop).
         home_here = make_home and (not home_module or home_module == module)
-        if home_here and not franchise_existed:
+        if module != "games" and home_here and not franchise_existed:
             from app.folder_icons import cleanup_franchise_artwork_dir
 
             artwork = franchise_dir / "[Artwork]"
@@ -1382,7 +1430,7 @@ async def create_catalog_import(
             decorate_folder(artwork)
             cleanup_franchise_artwork_dir(artwork)
             decorate_folder(franchise_dir)
-        elif home_here:
+        elif module != "games" and home_here:
             # Existing franchise home — strip any empty mistrees under [Artwork].
             from app.folder_icons import cleanup_franchise_artwork_dir
 
@@ -1690,6 +1738,41 @@ async def create_catalog_import(
 
         # Refresh franchise-root ico after leaves / [Artwork] covers exist.
         decorate_folder(franchise_dir)
+
+    # Games home: exactly one [Artwork] under the earliest game's platform
+    # franchise folder (move/replace if an older platform already had one).
+    if module == "games" and belongs_to_franchise:
+        from app.franchise_identity import explicit_franchise_home
+        from app.games_franchise_artwork import ensure_games_franchise_artwork
+
+        games_is_home = (make_home and home_module == "games") or (
+            explicit_franchise_home(franchise_name) == "games"
+        )
+        if games_is_home:
+            from app.folder_icons import cleanup_franchise_artwork_dir, decorate_folder
+
+            artwork = ensure_games_franchise_artwork(franchise_name, root)
+            if artwork is not None:
+                had_portrait = any(
+                    artwork.glob("Cover - Portrait.*")
+                ) or any(artwork.glob("Cover - Front.*"))
+                had_landscape = any(
+                    artwork.glob("Cover - Landscape.*")
+                ) or any(artwork.glob("Cover - Banner.*"))
+                if not had_portrait:
+                    await _download_primary(
+                        first_item.get("poster_url"),
+                        artwork / "Cover - Portrait",
+                    )
+                if not had_landscape:
+                    await _download_primary(
+                        first_item.get("backdrop_url")
+                        or (first_item.get("landscape_urls") or [None])[0],
+                        artwork / "Cover - Landscape",
+                    )
+                cleanup_franchise_artwork_dir(artwork)
+                decorate_folder(artwork)
+                decorate_folder(artwork.parent)
 
     # Cross-module Include: scaffold related Movies under Series (or reverse).
     if related_module and related_items:

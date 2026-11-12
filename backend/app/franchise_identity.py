@@ -23,6 +23,7 @@ MODULE_ROOTS: tuple[tuple[str, str], ...] = (
     ("series", "Series"),
     ("movies", "Movies"),
     ("books", "Books"),
+    ("games", "Games"),
 )
 FRANCHISE_HOME_KEY_PREFIX = "franchise_home:"
 
@@ -248,13 +249,30 @@ def merge_music_band_into_related(
     return out
 
 
+def _module_franchise_dir(
+    module: str, folder: str, safe: str, root: Path
+) -> Path | None:
+    if module == "music":
+        return find_music_artist_dir(safe, root)
+    if module == "games":
+        from app.games_franchise_artwork import (
+            earliest_games_franchise_dir,
+            find_games_artwork_dir,
+        )
+
+        return find_games_artwork_dir(safe, root) or earliest_games_franchise_dir(
+            safe, root
+        )
+    return franchise_letter_dir(root, folder, safe)
+
+
 def preferred_artwork_owner(
     franchise_name: str, media_root: Path | None = None
 ) -> tuple[str, Path] | None:
     """Canonical module folder that should own franchise-level ``[Artwork]``.
 
     An explicit AppSetting wins; otherwise priority is structural:
-    Music artist folder first, then Series, then Movies, then Books.
+    Music → Series → Movies → Books → Games.
     """
     root = _media_root(media_root)
     safe = _display_folder_name(franchise_name)
@@ -265,40 +283,58 @@ def preferred_artwork_owner(
         MODULE_ROOTS, key=lambda pair: 0 if pair[0] == explicit else 1
     )
     for module, folder in ordered_roots:
-        if module == "music":
-            d = find_music_artist_dir(safe, root)
-        else:
-            d = franchise_letter_dir(root, folder, safe)
+        d = _module_franchise_dir(module, folder, safe, root)
         if d:
             return module, d
     return None
 
 
+def _folder_has_artwork_bucket(folder: Path) -> bool:
+    """True when the franchise folder has a franchise-level ``[Artwork]`` dir."""
+    art = find_artwork_legacy(folder)
+    return bool(art and art.is_dir())
+
+
 def find_artwork_home(
     franchise_name: str, media_root: Path | None = None
 ) -> tuple[str, Path] | None:
-    """Locate the single franchise-level ``[Artwork]`` across media modules.
+    """Locate the franchise visual home across media modules.
 
-    The module that owns ``[Artwork]`` is the visual home for that franchise.
+    Prefers an explicit home, then the first module (Music → Series → Movies →
+    Books → Games) that has franchise-level ``[Artwork]``. Gallery/Covers is
+    never used to decide home — only as a cover-resolution fallback elsewhere.
     """
     root = _media_root(media_root)
     safe = _display_folder_name(franchise_name)
     if not root or not safe:
         return None
+    explicit = explicit_franchise_home(safe)
     preferred = preferred_artwork_owner(safe, root)
     ordered: list[tuple[str, Path]] = []
     if preferred:
         ordered.append(preferred)
     for module, folder in MODULE_ROOTS:
-        d = find_music_artist_dir(safe, root) if module == "music" else franchise_letter_dir(root, folder, safe)
+        d = _module_franchise_dir(module, folder, safe, root)
         if not d:
             continue
         pair = (module, d)
         if pair not in ordered:
             ordered.append(pair)
+    # Explicit Games home: return the earliest / artwork-bearing Games folder
+    # even when [Artwork] is still empty (Manage Catalog will ensure it).
+    if explicit == "games":
+        for module, d in ordered:
+            if module == "games":
+                return module, d
     for module, d in ordered:
-        art = find_artwork_legacy(d)
-        if art and art.is_dir():
+        if module == "games":
+            from app.games_franchise_artwork import find_games_artwork_dir
+
+            art_owner = find_games_artwork_dir(safe, root)
+            if art_owner:
+                return "games", art_owner
+            continue
+        if _folder_has_artwork_bucket(d):
             return module, d
     return None
 

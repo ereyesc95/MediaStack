@@ -3726,20 +3726,24 @@ export default function SeriesSubseriesPage({
       (card?.season_count ?? 0) > 0);
   const siblingMovieCount = siblings.filter((s) => s.id !== subseriesId).length;
 
-  // Prefer live cards; fall back to overview.related so tabs appear as soon as
-  // overview lands (no empty-tab flash — related implies real paths).
+  // Prefer live cards. Franchise-level related.* must not force leaf tabs —
+  // those often list sibling-module paths that filterCardsForSubseries drops,
+  // leaving an empty "No … yet" pane.
   const relatedSeriesCount = overview?.related?.series?.length ?? 0;
   const relatedMovieCount = overview?.related?.movies?.length ?? 0;
   const relatedBookCount = overview?.related?.books?.length ?? 0;
-  const relatedGameCount = overview?.related?.games?.length ?? 0;
   const hasSeries = isBook
     ? seriesCards.length > 0
     : isGame
       ? seriesCards.length > 0 ||
-        relatedSeriesCount > 0 ||
-        Boolean(overview?.media?.has_series) ||
-        Boolean((overview as { has_series?: boolean } | null)?.has_series)
-      : seriesCards.length > 0 || relatedSeriesCount > 0;
+        (!mediaReady &&
+          (relatedSeriesCount > 0 ||
+            Boolean(overview?.media?.has_series) ||
+            Boolean(
+              (overview as { has_series?: boolean } | null)?.has_series
+            )))
+      : seriesCards.length > 0 ||
+        (!mediaReady && relatedSeriesCount > 0);
   // Series leaves: only show Movies/Books tabs when leaf-matched cards exist
   // (franchise-level related counts alone caused empty-tab flash).
   const hasMovies = isBook
@@ -3748,24 +3752,25 @@ export default function SeriesSubseriesPage({
       ? siblingMovieCount > 0
       : isGame
         ? movieCards.length > 0 ||
-          relatedMovieCount > 0 ||
-          Boolean(overview?.media?.has_movies) ||
-          Boolean((overview as { has_movies?: boolean } | null)?.has_movies)
+          (!mediaReady &&
+            (relatedMovieCount > 0 ||
+              Boolean(overview?.media?.has_movies) ||
+              Boolean(
+                (overview as { has_movies?: boolean } | null)?.has_movies
+              )))
         : movieCards.length > 0;
   const hasMoreBooks =
     siblingMovieCount > 0 ||
     libraryCards.length > 0 ||
-    relatedBookCount > 0;
-  // Audio tab: prefer live cards; fall back to leaf has_audio so the tab
-  // appears with Gallery/Movies as soon as overview/detail lands (not after
-  // the slower Audio/.lnk scan). Do not use franchise-level music-band flags.
+    (!mediaReady && relatedBookCount > 0);
+  // Audio: live cards win. Before the Audio/.lnk scan finishes, allow a
+  // leaf-folder has_audio flag only — never franchise music-band flags.
   const leafHasAudioFlag = Boolean(
     detail?.has_audio ||
-      (isBook || isGame || (isFilm && !isBook)
-        ? overview?.media?.has_audio
-        : false)
+      ((isBook || isGame || isFilm) && overview?.media?.has_audio)
   );
-  const hasAudio = audioCards.length > 0 || leafHasAudioFlag;
+  const hasAudio =
+    audioCards.length > 0 || (!mediaReady && leafHasAudioFlag);
   /** Top-bar player: only when we have real release cards (not empty Audio/ stubs). */
   const showAudioPlayer = audioCards.length > 0;
   const hasLibrary = isFilm
@@ -3773,19 +3778,22 @@ export default function SeriesSubseriesPage({
     : isBook
       ? hasMoreBooks
       : isGame
-        ? libraryCards.length > 0 || relatedBookCount > 0
+        ? libraryCards.length > 0 ||
+          (!mediaReady && relatedBookCount > 0)
         : libraryCards.length > 0;
+  // Games tab on film/series/book leaves: only when leaf-matched cards exist.
   const hasGames = isBook
     ? gameCards.length > 0
     : isGame
       ? moreGameCards.length > 0 ||
         siblings.some((s) => s.id !== subseriesId) ||
-        Boolean(
-          overview?.media?.has_games ||
-            (overview as { has_games?: boolean } | null)?.has_games ||
-            (detail as { has_games?: boolean } | null)?.has_games
-        )
-      : gameCards.length > 0 || relatedGameCount > 0;
+        (!mediaReady &&
+          Boolean(
+            overview?.media?.has_games ||
+              (overview as { has_games?: boolean } | null)?.has_games ||
+              (detail as { has_games?: boolean } | null)?.has_games
+          ))
+      : gameCards.length > 0;
   const hasGalleryFlag = Boolean(
     detail?.has_gallery ||
       card?.has_gallery ||
@@ -4022,6 +4030,7 @@ export default function SeriesSubseriesPage({
     filmVersions.length,
     showFilmVideosTab,
     quizAvailability,
+    mediaReady,
     overview?.media?.has_games,
     overview?.media?.has_gallery,
   ]);

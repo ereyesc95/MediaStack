@@ -372,19 +372,30 @@ export default function SeriesFranchisePage({
   );
   const homeReferrer = useMemo(() => {
     const ref = getFranchiseHomeReferrer();
-    if (!ref || ref.home !== "series") return null;
+    if (!ref) return null;
+    const currentHome = isGames
+      ? "games"
+      : isBooks
+        ? "books"
+        : isMoviesOnly
+          ? "movies"
+          : "series";
+    // Only honor referrer while viewing the artwork-home module it named
+    // (Games→Movies keeps GAMES tab order on the Movies franchise page).
+    if (ref.home !== currentHome) return null;
     const rid = String(ref.franchiseId || "").trim().toLowerCase();
     const cur = String(franchiseId || "").trim().toLowerCase();
     if (rid && cur && rid !== cur) return null;
     return ref;
-  }, [franchiseId]);
+  }, [franchiseId, isBooks, isGames, isMoviesOnly]);
   const navSections = useMemo(() => {
     if (isGames) return GAMES_SECTIONS;
     if (isBooks) return BOOKS_SECTIONS;
-    if (isMoviesOnly) return MOVIES_SECTIONS;
+    // Entry module wins over host module (e.g. Games→Movies artwork home).
     if (homeReferrer?.source === "games") return GAMES_SECTIONS;
     if (homeReferrer?.source === "movies") return MOVIES_SECTIONS;
     if (homeReferrer?.source === "books") return SERIES_FROM_BOOKS_SECTIONS;
+    if (isMoviesOnly) return MOVIES_SECTIONS;
     return SERIES_SECTIONS;
   }, [isGames, isBooks, isMoviesOnly, homeReferrer]);
   const [loading, setLoading] = useState(() => !readOverviewCache(cacheKey));
@@ -395,36 +406,62 @@ export default function SeriesFranchisePage({
     artworkHomeRedirected.current = false;
   }, [franchiseId, module]);
 
-  // Movies/Books/Games franchise URL whose [Artwork] lives under Series → series URL
+  // Franchise URL whose art/bio lives under another module → open that home
+  // (tab order still follows entry source via franchise home referrer).
   useEffect(() => {
     if (artworkHomeRedirected.current) return;
-    if (!data || !onOpenSeriesFranchise) return;
+    if (!data) return;
     if (!isMoviesOnly && !isBooks && !isGames) return;
     const home = String(
       (data as SeriesOverview & { artwork_home_module?: string | null })
         .artwork_home_module || ""
     ).toLowerCase();
-    if (home !== "series") return;
-    artworkHomeRedirected.current = true;
-    const source = isGames ? "games" : isBooks ? "books" : "movies";
+    const current = isGames
+      ? "games"
+      : isBooks
+        ? "books"
+        : isMoviesOnly
+          ? "movies"
+          : "series";
+    if (!home || home === current) return;
+    const source = current as "games" | "books" | "movies";
     const prev = getFranchiseHomeReferrer();
-    saveFranchiseHomeReferrer({
-      source,
-      home: "series",
-      fromTab: prev?.fromTab,
-      catalogLetter: prev?.catalogLetter,
-      franchiseId,
-      franchiseName: data.name,
-      preferredSection: preferredSectionForSource(source),
-      backLabel: isGames ? "GAMES" : isBooks ? "BOOKS" : "MOVIES",
-    });
-    onOpenSeriesFranchise(franchiseId);
+    if (home === "series" && onOpenSeriesFranchise) {
+      artworkHomeRedirected.current = true;
+      saveFranchiseHomeReferrer({
+        source,
+        home: "series",
+        fromTab: prev?.fromTab,
+        catalogLetter: prev?.catalogLetter,
+        franchiseId,
+        franchiseName: data.name,
+        preferredSection: preferredSectionForSource(source),
+        backLabel: isGames ? "GAMES" : isBooks ? "BOOKS" : "MOVIES",
+      });
+      onOpenSeriesFranchise(franchiseId);
+      return;
+    }
+    if (home === "movies" && onOpenMoviesFranchise && (isGames || isBooks)) {
+      artworkHomeRedirected.current = true;
+      saveFranchiseHomeReferrer({
+        source,
+        home: "movies",
+        fromTab: prev?.fromTab,
+        catalogLetter: prev?.catalogLetter,
+        franchiseId,
+        franchiseName: data.name,
+        preferredSection: preferredSectionForSource(source),
+        backLabel: isGames ? "GAMES" : "BOOKS",
+      });
+      onOpenMoviesFranchise(franchiseId);
+    }
   }, [
     data,
     franchiseId,
     isBooks,
     isGames,
     isMoviesOnly,
+    onOpenMoviesFranchise,
     onOpenSeriesFranchise,
   ]);
 
@@ -1750,6 +1787,7 @@ export default function SeriesFranchisePage({
       }
       if (s.flag === "has_games") {
         if (gameCards.length > 0) return true;
+        if (homeReferrer?.source === "games") return true;
         return (related?.games?.length || 0) > 0 || Boolean(media.has_games);
       }
       if (s.flag === "has_gallery") {
