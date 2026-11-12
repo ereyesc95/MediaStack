@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { ReleaseCardLayout } from "../../types";
+import { openCatalogVideo } from "../../openCatalogVideo";
+import { usePlayVideosPreference } from "../../playVideosPreference";
 import { stripUnofficialDisplaySuffix } from "../../unofficialFilter";
 import { usePhoneLayout } from "../../usePhoneLayout";
 import ArtistCardSkeletonGrid from "../ArtistCardSkeletonGrid";
@@ -79,6 +81,7 @@ function SeriesMediaCardView({
   revealed: boolean;
   onReveal: () => void;
 }) {
+  const { playLocally } = usePlayVideosPreference();
   const title = stripUnofficialDisplaySuffix(item.title);
   const cover = item.portrait_url || item.landscape_url || item.cover_url || null;
   const bannerBg =
@@ -95,9 +98,16 @@ function SeriesMediaCardView({
     if (!openUrl) return;
     if (item.open_mode === "local") {
       void openLocal(openUrl);
-    } else {
-      openInTab(openUrl);
+      return;
     }
+    if (
+      item.open_mode === "web" ||
+      (/^https?:\/\//i.test(openUrl) && !openUrl.includes("/api/media/"))
+    ) {
+      openInTab(openUrl);
+      return;
+    }
+    void openCatalogVideo({ openUrl, playLocally });
   };
 
   const handleClick = () => {

@@ -91,6 +91,8 @@ import {
   getStoredReleaseCardLayout,
   saveReleaseCardLayout,
 } from "../../themes";
+import { openCatalogVideo } from "../../openCatalogVideo";
+import { usePlayVideosPreference } from "../../playVideosPreference";
 import {
   isMobilePortraitLayout,
   isStackedArtistLayout,
@@ -345,6 +347,7 @@ export default function SeriesFranchisePage({
   const isMoviesOnly = module === "movies";
   const isMovies = isMoviesOnly || isBooks || isGames; // work-module UI
   const layout = useDeviceLayout();
+  const { playLocally } = usePlayVideosPreference();
   const stacked = isStackedArtistLayout(layout);
   const mobilePortrait = isMobilePortraitLayout(layout);
   const cacheKey = `${
@@ -2151,9 +2154,13 @@ export default function SeriesFranchisePage({
     if (!url) return;
     if (item.open_mode === "local") {
       void fetch(url, { method: "POST" }).catch(() => {});
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
+      return;
     }
+    if (isBooks || isGames) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    void openCatalogVideo({ openUrl: url, playLocally });
   };
 
   const openQuizCatalogItem = (item: FranchiseQuizCatalogItem) => {

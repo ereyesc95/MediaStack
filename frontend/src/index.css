@@ -11834,6 +11834,17 @@ button.media-release-card--banner {
   padding: 0.45rem 1rem;
   font-size: 0.82rem;
   color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-menu-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent, var(--ms-accent, #c9a227));
+  cursor: pointer;
 }
 
 .app-menu-checkbox--sub {

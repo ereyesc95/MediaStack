@@ -2443,10 +2443,31 @@ export type AppSettings = {
   database_url: string;
   admin_password_custom?: boolean;
   admin_nsfw_password_custom?: boolean;
+  /** Global Movies/Series: open with OS player (default true). */
+  play_videos_locally?: boolean;
 };
 
 export async function fetchAppSettings(): Promise<AppSettings> {
   return request(`${API}/settings`);
+}
+
+export async function savePlayVideosLocally(
+  enabled: boolean
+): Promise<{ play_videos_locally: boolean }> {
+  return request(`${API}/settings/play-videos-locally`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function openLocalMediaFile(
+  path: string
+): Promise<{ ok: boolean; path: string }> {
+  return request(
+    `${API}/media/open-local?path=${encodeURIComponent(path)}`,
+    { method: "POST" }
+  );
 }
 
 export async function pickMediaRoot(): Promise<{

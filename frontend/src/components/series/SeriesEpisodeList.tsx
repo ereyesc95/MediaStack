@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SeriesEpisodeItem } from "../../types";
 import { formatTrackDate } from "../../formatDate";
+import { openCatalogVideo } from "../../openCatalogVideo";
+import { usePlayVideosPreference } from "../../playVideosPreference";
 
 type Props = {
   episodes: SeriesEpisodeItem[];
@@ -22,12 +24,6 @@ type Props = {
 
 const MAX_TAGS = 3;
 
-function openEpisode(ep: SeriesEpisodeItem) {
-  const url = ep.open_url?.trim();
-  if (!url) return;
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 function tagKey(t: string) {
   return t.trim().toLowerCase();
 }
@@ -44,9 +40,18 @@ export default function SeriesEpisodeList({
   isAdmin = false,
   onTagsChange,
 }: Props) {
+  const { playLocally } = usePlayVideosPreference();
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function openEpisode(ep: SeriesEpisodeItem) {
+    void openCatalogVideo({
+      openUrl: ep.open_url,
+      playPath: ep.play_path,
+      playLocally,
+    });
+  }
 
   useEffect(() => {
     if (addingFor) {

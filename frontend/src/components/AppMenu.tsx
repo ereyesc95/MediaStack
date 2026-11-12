@@ -4,6 +4,7 @@ import {
   setAppMenuOpen,
   subscribeCloseAppMenu,
 } from "../appMenuChrome";
+import { usePlayVideosPreference } from "../playVideosPreference";
 import { usePhoneLayout } from "../usePhoneLayout";
 import { useMenuPresence } from "../useMenuPresence";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme, isMediaPageThemeSessionActive } from "../mediaTheme";
@@ -338,6 +339,7 @@ export default function AppMenu({
     onApiCredentialsProp ?? adminSetup.onApiCredentials;
   const onAdminAppSettings =
     onAdminAppSettingsProp ?? adminSetup.onAdminAppSettings;
+  const playVideos = usePlayVideosPreference();
   const isPhone = usePhoneLayout();
   const showAdaptiveTheme =
     adaptiveThemeActive ?? artistThemeActive;
@@ -1732,6 +1734,21 @@ export default function AppMenu({
               </button>
               {settingsOpen && (
                 <div className="app-menu-submenu">
+                  {playVideos.showMenuToggle ? (
+                    <label className="app-menu-checkbox app-menu-checkbox--sub">
+                      <input
+                        type="checkbox"
+                        checked={playVideos.playLocallyPreferred}
+                        disabled={playVideos.busy}
+                        onChange={(e) => {
+                          void playVideos.setPlayLocally(e.target.checked);
+                        }}
+                      />
+                      {playVideos.playLocallyPreferred
+                        ? "Play videos locally"
+                        : "Play videos in web"}
+                    </label>
+                  ) : null}
                   {onChooseSource && (
                     <button
                       type="button"

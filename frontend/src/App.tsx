@@ -42,6 +42,7 @@ import {
   type ProfileUser,
 } from "./auth";
 import { AdminSetupProvider } from "./adminSetupContext";
+import { PlayVideosProvider } from "./playVideosPreference";
 
 import AppMenu from "./components/AppMenu";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -227,6 +228,7 @@ export default function App() {
   >(null);
   const [apiCredentialsOpen, setApiCredentialsOpen] = useState(false);
   const [adminAppSettingsOpen, setAdminAppSettingsOpen] = useState(false);
+  const [playVideosLocally, setPlayVideosLocally] = useState(true);
 
   const [profile, setProfile] = useState<ProfileUser | null | undefined>(() => {
     if (typeof window === "undefined") return undefined;
@@ -305,6 +307,9 @@ export default function App() {
         const s = await fetchAppSettings();
         setMediaRootConfigured(s.media_root_configured);
         rememberMediaRootConfigured(s.media_root_configured);
+        if (typeof s.play_videos_locally === "boolean") {
+          setPlayVideosLocally(s.play_videos_locally);
+        }
         if (!s.media_root_chosen) {
           setSourceModal("welcome");
         }
@@ -725,6 +730,11 @@ export default function App() {
   return (
     <MediaSwitchProvider value={mediaSwitchValue}>
     <AdminSetupProvider value={adminSetupMenuProps}>
+    <PlayVideosProvider
+      initialPlayLocally={playVideosLocally}
+      isAdmin={isAdmin}
+      menuModuleActive={view.kind === "movies" || view.kind === "series"}
+    >
     <div className={`app ${view.kind === "hub" ? "app--hub" : "app--module-view"}`}>
 
       {booting && (
@@ -2398,6 +2408,7 @@ export default function App() {
       <LocalVideoPlayerHost />
 
     </div>
+    </PlayVideosProvider>
     </AdminSetupProvider>
     </MediaSwitchProvider>
 

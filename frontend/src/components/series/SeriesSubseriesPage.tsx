@@ -66,6 +66,8 @@ import {
   isGamesMobileGated,
   playGameClient,
 } from "../../gamesMobile";
+import { openCatalogVideo } from "../../openCatalogVideo";
+import { usePlayVideosPreference } from "../../playVideosPreference";
 import OfficialUnofficialBar from "../OfficialUnofficialBar";
 import {
   filterByOfficial,
@@ -800,6 +802,7 @@ export default function SeriesSubseriesPage({
   onNavigate,
 }: Props) {
   const layout = useDeviceLayout();
+  const { playLocally } = usePlayVideosPreference();
   const mobilePortrait = isMobilePortraitLayout(layout);
   const mobileLandscape = isMobileLandscapeLayout(layout);
   const tabletLayout = isTabletLayout(layout);
@@ -4144,7 +4147,11 @@ export default function SeriesSubseriesPage({
   };
 
   const playFilmInTab = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (isBook || isGame) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    void openCatalogVideo({ openUrl: url, playLocally });
   };
 
   const gameRomBytes =
@@ -4445,9 +4452,13 @@ export default function SeriesSubseriesPage({
     if (!url) return;
     if (item.open_mode === "local") {
       void fetch(url, { method: "POST" }).catch(() => {});
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
+      return;
     }
+    if (isBook || isGame) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    void openCatalogVideo({ openUrl: url, playLocally });
   };
 
   useEffect(() => {

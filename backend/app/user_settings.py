@@ -188,6 +188,21 @@ def save_musicbrainz_user_agent(value: str) -> str:
     return _set_str("musicbrainz_user_agent", value)
 
 
+def get_play_videos_locally() -> bool:
+    """Global Movies/Series preference: open with OS player (default True)."""
+    raw = load_user_settings().get("play_videos_locally")
+    if raw is None:
+        return True
+    return bool(raw)
+
+
+def save_play_videos_locally(enabled: bool) -> bool:
+    data = load_user_settings()
+    data["play_videos_locally"] = bool(enabled)
+    save_user_settings(data)
+    return bool(enabled)
+
+
 def apply_saved_media_root(settings) -> None:
     """User-picked path overrides .env when present."""
     saved = get_saved_media_root()

@@ -26,6 +26,7 @@ from app.user_settings import (
     DEFAULT_MEMBER_PHOTO_REFRESH_DAYS,
     create_media_library,
     get_member_photo_refresh_days,
+    get_play_videos_locally,
     get_saved_admin_nsfw_password,
     get_saved_admin_password,
     get_saved_media_root,
@@ -36,6 +37,7 @@ from app.user_settings import (
     save_media_root,
     save_media_server_url,
     save_member_photo_refresh_days,
+    save_play_videos_locally,
     save_public_url,
     suggested_library_parent,
 )
@@ -75,6 +77,10 @@ class GuestProfileBody(BaseModel):
     display_name: str
 
 
+class PlayVideosLocallyBody(BaseModel):
+    enabled: bool
+
+
 @router.get("")
 def get_settings():
     saved = get_saved_media_root()
@@ -95,7 +101,17 @@ def get_settings():
         else settings.database_url,
         "admin_password_custom": bool(get_saved_admin_password()),
         "admin_nsfw_password_custom": bool(get_saved_admin_nsfw_password()),
+        "play_videos_locally": get_play_videos_locally(),
     }
+
+
+@router.put("/play-videos-locally")
+def put_play_videos_locally(
+    body: PlayVideosLocallyBody,
+    _admin: User = Depends(require_admin),
+):
+    enabled = save_play_videos_locally(bool(body.enabled))
+    return {"play_videos_locally": enabled}
 
 
 @router.post("/member-photo-refresh-days")
