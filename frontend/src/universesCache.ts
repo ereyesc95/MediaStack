@@ -42,6 +42,23 @@ export function clearUniversesCache(): void {
   }
 }
 
+const CHANGED_EVENT = "mystack:universes-changed";
+
+/** Clear cached lists and notify open modules to refetch home/catalog universes. */
+export function notifyUniversesChanged(): void {
+  clearUniversesCache();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CHANGED_EVENT));
+  }
+}
+
+export function subscribeUniversesChanged(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = () => onChange();
+  window.addEventListener(CHANGED_EVENT, handler);
+  return () => window.removeEventListener(CHANGED_EVENT, handler);
+}
+
 export function prefetchUniverses(
   module: "movies" | "series" | "books" | "games" | "all" = "all",
   opts?: { force?: boolean }

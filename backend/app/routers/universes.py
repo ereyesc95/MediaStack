@@ -87,16 +87,20 @@ def api_lookup_universe(
         universes_for_leaf,
     )
 
+    from app.universes import universes_for_franchise_scope
+
     if leaf_id:
+        # Leaf scope: explicit leaf rows + franchise sync coverage.
         many = universes_for_leaf(db, module, slug, leaf_id)  # type: ignore[arg-type]
     else:
-        many = universes_for_franchise(db, module, slug)  # type: ignore[arg-type]
+        # Franchise scope: only whole-franchise membership (sync or all leaves).
+        # Partial leaf-only memberships must not block franchise add / show as member.
+        many = universes_for_franchise_scope(db, module, slug)  # type: ignore[arg-type]
     data = many[0] if many else None
     synced = []
-    if not leaf_id and data:
-        for u in many:
-            if franchise_has_sync(db, module, slug, u["id"]):  # type: ignore[arg-type]
-                synced.append(u["id"])
+    for u in many:
+        if franchise_has_sync(db, module, slug, u["id"]):  # type: ignore[arg-type]
+            synced.append(u["id"])
     return {
         "universe": data,
         "universes": many,

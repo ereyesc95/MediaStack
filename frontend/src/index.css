@@ -10214,6 +10214,17 @@ input {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
 }
 
+/* Portaled above modal overflow:clip so the list is fully visible. */
+.add-universe-modal__dropdown--portal {
+  position: fixed;
+  left: auto;
+  right: auto;
+  top: auto;
+  /* Above .modal-backdrop (500) and stacked modals (510). */
+  z-index: 620;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
 .add-universe-modal__dropdown-item {
   width: 100%;
   display: flex;
@@ -10301,6 +10312,98 @@ input {
   font-size: inherit;
   color: var(--text-muted);
   opacity: 0.85;
+}
+
+.add-universe-modal__art-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 480px) {
+  .add-universe-modal__art-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.art-pick-square {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 3.75rem;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.25rem;
+  border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.art-pick-square:hover:not(:disabled),
+.art-pick-square:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text);
+}
+
+.art-pick-square:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.art-pick-square--filled {
+  border-style: solid;
+  padding: 0;
+}
+
+.art-pick-square img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.art-pick-square__plus {
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.art-pick-square__caption {
+  font-size: 0.62rem;
+  line-height: 1.1;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.art-pick-square__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.art-pick-square--filled:hover .art-pick-square__overlay,
+.art-pick-square--filled:focus-visible .art-pick-square__overlay {
+  opacity: 1;
 }
 
 .add-universe-modal__file {

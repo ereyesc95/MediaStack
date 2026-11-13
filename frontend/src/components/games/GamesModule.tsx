@@ -10,7 +10,11 @@ import {
   getCachedGamesDashboard,
   prefetchGamesDashboard,
 } from "../../gamesDashboardCache";
-import { getCachedUniverses, prefetchUniverses } from "../../universesCache";
+import {
+  getCachedUniverses,
+  prefetchUniverses,
+  subscribeUniversesChanged,
+} from "../../universesCache";
 import {
   loadOwnershipIndex,
   markLeafCards,
@@ -350,6 +354,16 @@ export default function GamesModule({
   useEffect(() => {
     if (franchiseId || gameId) setTab("catalog");
   }, [franchiseId, gameId]);
+
+  useEffect(
+    () =>
+      subscribeUniversesChanged(() => {
+        void prefetchUniverses("games", { force: true }).then((u) => {
+          setUniverses(u.filter((uni) => Boolean(uni.has_games)));
+        });
+      }),
+    []
+  );
 
   useEffect(() => {
     const pending = takePendingCatalogBrowse("games");

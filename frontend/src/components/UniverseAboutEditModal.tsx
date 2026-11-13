@@ -4,7 +4,9 @@ import {
   pullUniverseTmdbPortrait,
   uploadUniverseArt,
 } from "../api";
+import { withMediaAccess } from "../mediaFileUrl";
 import type { Universe } from "../types";
+import ArtPickSquare from "./ArtPickSquare";
 import ModalPortal from "./ModalPortal";
 
 type Props = {
@@ -15,7 +17,10 @@ type Props = {
 
 const ART_KINDS = ["Portrait", "Landscape", "Banner", "Logo"] as const;
 
-function artHint(u: Universe, kind: (typeof ART_KINDS)[number]) {
+function artUrl(
+  u: Universe,
+  kind: (typeof ART_KINDS)[number]
+): string | null {
   const url =
     kind === "Portrait"
       ? u.portrait_url || u.cover_url
@@ -24,9 +29,7 @@ function artHint(u: Universe, kind: (typeof ART_KINDS)[number]) {
         : kind === "Banner"
           ? u.banner_url
           : u.logo_url;
-  return url
-    ? `Current ${kind.toLowerCase()} on file — choose to replace`
-    : "Choose image…";
+  return url ? withMediaAccess(url) : null;
 }
 
 export default function UniverseAboutEditModal({
@@ -129,28 +132,27 @@ export default function UniverseAboutEditModal({
               placeholder="Optional"
             />
           </label>
-          {ART_KINDS.map((kind) => (
-            <label key={kind} className="artist-admin-form__inline">
-              <span className="artist-admin-form__inline-label">{kind}</span>
-              <span className="artist-admin-form__inline-field add-universe-modal__file">
-                <span className="add-universe-modal__file-label">
-                  {artFiles[kind]?.name || artHint(current, kind)}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="add-universe-modal__file-input"
-                  disabled={busy}
-                  onChange={(e) =>
-                    setArtFiles((prev) => ({
-                      ...prev,
-                      [kind]: e.target.files?.[0] ?? null,
-                    }))
-                  }
-                />
-              </span>
-            </label>
-          ))}
+          <div
+            className="add-universe-modal__art-row"
+            role="group"
+            aria-label="Universe artwork"
+          >
+            {ART_KINDS.map((kind) => (
+              <ArtPickSquare
+                key={kind}
+                label={kind.toLowerCase()}
+                previewUrl={artUrl(current, kind)}
+                file={artFiles[kind] ?? null}
+                disabled={busy}
+                onPick={(file) =>
+                  setArtFiles((prev) => ({
+                    ...prev,
+                    [kind]: file,
+                  }))
+                }
+              />
+            ))}
+          </div>
           {error ? <p className="error">{error}</p> : null}
         </div>
         <div className="modal-panel-actions modal-panel-actions--end add-universe-modal__actions">

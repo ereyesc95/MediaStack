@@ -9,6 +9,7 @@ import {
 import {
   getCachedUniverses,
   prefetchUniverses,
+  subscribeUniversesChanged,
 } from "../../universesCache";
 import {
   defaultSectionForSource,
@@ -386,6 +387,14 @@ export default function SeriesModule({
       setDashLoading(false);
     }
   }, []);
+
+  useEffect(
+    () =>
+      subscribeUniversesChanged(() => {
+        void prefetchUniverses("series", { force: true }).then(setUniverses);
+      }),
+    []
+  );
 
   const loadFilters = useCallback(async () => {
     try {

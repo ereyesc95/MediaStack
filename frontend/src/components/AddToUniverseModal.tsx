@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   createUniverse,
   fetchUniverses,
@@ -9,7 +17,10 @@ import {
   unlinkUniverseMember,
   uploadUniverseArt,
 } from "../api";
+import { withMediaAccess } from "../mediaFileUrl";
 import type { Universe } from "../types";
+import { notifyUniversesChanged } from "../universesCache";
+import ArtPickSquare from "./ArtPickSquare";
 import { IconEditRelease } from "./MenuIcons";
 import ModalPortal from "./ModalPortal";
 
@@ -45,8 +56,11 @@ function calmErrorMessage(err: unknown): string {
   return trimmed;
 }
 
-function artHint(u: Universe | null | undefined, kind: (typeof ART_KINDS)[number]) {
-  if (!u) return "Choose image…";
+function artUrl(
+  u: Universe | null | undefined,
+  kind: (typeof ART_KINDS)[number]
+): string | null {
+  if (!u) return null;
   const url =
     kind === "Portrait"
       ? u.portrait_url || u.cover_url
@@ -55,7 +69,7 @@ function artHint(u: Universe | null | undefined, kind: (typeof ART_KINDS)[number
         : kind === "Banner"
           ? u.banner_url
           : u.logo_url;
-  return url ? `Current ${kind.toLowerCase()} on file — choose to replace` : "Choose image…";
+  return url ? withMediaAccess(url) : null;
 }
 
 function formatMembershipNames(list: Universe[]): string {
@@ -89,7 +103,9 @@ export default function AddToUniverseModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openList, setOpenList] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [listStyle, setListStyle] = useState<CSSProperties>({});
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const selectedUniverse = useMemo(
     () => universes.find((u) => u.id === selectedId) ?? null,
@@ -136,23 +152,57 @@ export default function AddToUniverseModal({
     };
   }, [module, franchiseId, leafId]);
 
-  useEffect(() => {
-    if (!openList) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (listRef.current && t && !listRef.current.contains(t)) {
-        setOpenList(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [openList]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return universes;
     return universes.filter((u) => u.name.toLowerCase().includes(q));
   }, [universes, query]);
+
+  useLayoutEffect(() => {
+    if (!openList || !pickerRef.current) return;
+    const update = () => {
+      const rect = pickerRef.current!.getBoundingClientRect();
+      const listH = Math.min(14 * 16, Math.max(160, window.innerHeight * 0.4));
+      const spaceBelow = window.innerHeight - rect.bottom - 8;
+      const spaceAbove = rect.top - 8;
+      const openUp = spaceBelow < listH && spaceAbove > spaceBelow;
+      const maxH = Math.min(
+        listH,
+        Math.max(120, openUp ? spaceAbove : spaceBelow)
+      );
+      setListStyle({
+        position: "fixed",
+        left: rect.left,
+        width: rect.width,
+        zIndex: 620,
+        maxHeight: maxH,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [openList, filtered.length, query]);
+
+  useEffect(() => {
+    if (!openList) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (pickerRef.current?.contains(t) || listRef.current?.contains(t)) {
+        return;
+      }
+      setOpenList(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [openList]);
 
   const backToPick = () => {
     setMode("pick");
@@ -191,6 +241,7 @@ export default function AddToUniverseModal({
     setError(null);
     try {
       await linkUniverseMember(universeId, module, franchiseId, leafId);
+      notifyUniversesChanged();
       onSaved();
       onClose();
     } catch (e) {
@@ -214,6 +265,7 @@ export default function AddToUniverseModal({
         if (file) await uploadUniverseArt(created.id, kind, file);
       }
       await linkUniverseMember(created.id, module, franchiseId, leafId);
+      notifyUniversesChanged();
       onSaved();
       onClose();
     } catch (e) {
@@ -263,6 +315,7 @@ export default function AddToUniverseModal({
         franchiseId,
         leafId
       );
+      notifyUniversesChanged();
       onSaved();
       onClose();
     } catch (e) {
@@ -364,7 +417,7 @@ export default function AddToUniverseModal({
             <label className="artist-admin-form__inline">
               <span className="artist-admin-form__inline-label">Universe</span>
               <div
-                ref={listRef}
+                ref={pickerRef}
                 className="artist-admin-form__inline-field add-universe-modal__picker"
               >
                 <div className="add-universe-modal__picker-row">
@@ -393,41 +446,52 @@ export default function AddToUniverseModal({
                     </button>
                   ) : null}
                 </div>
-                {openList ? (
-                  <ul className="add-universe-modal__dropdown" role="listbox">
-                    {filtered.map((u) => {
-                      const member = memberships.some((m) => m.id === u.id);
-                      return (
-                        <li key={u.id}>
+                {openList
+                  ? createPortal(
+                      <ul
+                        ref={listRef}
+                        className="add-universe-modal__dropdown add-universe-modal__dropdown--portal"
+                        role="listbox"
+                        style={listStyle}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {filtered.map((u) => {
+                          const member = memberships.some((m) => m.id === u.id);
+                          return (
+                            <li key={u.id}>
+                              <button
+                                type="button"
+                                className="add-universe-modal__dropdown-item"
+                                onClick={() => {
+                                  setSelectedId(u.id);
+                                  setQuery(u.name);
+                                  setOpenList(false);
+                                }}
+                              >
+                                <span>
+                                  {u.name}
+                                  {member ? " · member" : ""}
+                                </span>
+                                <span className="muted">
+                                  ({u.member_count ?? 0})
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                        <li>
                           <button
                             type="button"
-                            className="add-universe-modal__dropdown-item"
-                            onClick={() => {
-                              setSelectedId(u.id);
-                              setQuery(u.name);
-                              setOpenList(false);
-                            }}
+                            className="add-universe-modal__dropdown-item add-universe-modal__dropdown-item--create"
+                            onClick={startCreate}
                           >
-                            <span>
-                              {u.name}
-                              {member ? " · member" : ""}
-                            </span>
-                            <span className="muted">({u.member_count ?? 0})</span>
+                            + Create universe…
                           </button>
                         </li>
-                      );
-                    })}
-                    <li>
-                      <button
-                        type="button"
-                        className="add-universe-modal__dropdown-item add-universe-modal__dropdown-item--create"
-                        onClick={startCreate}
-                      >
-                        + Create universe…
-                      </button>
-                    </li>
-                  </ul>
-                ) : null}
+                      </ul>,
+                      document.body
+                    )
+                  : null}
               </div>
             </label>
           </div>
@@ -454,28 +518,27 @@ export default function AddToUniverseModal({
                 placeholder="Optional"
               />
             </label>
-            {ART_KINDS.map((kind) => (
-              <label key={kind} className="artist-admin-form__inline">
-                <span className="artist-admin-form__inline-label">{kind}</span>
-                <span className="artist-admin-form__inline-field add-universe-modal__file">
-                  <span className="add-universe-modal__file-label">
-                    {artFiles[kind]?.name || artHint(formUniverse, kind)}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="add-universe-modal__file-input"
-                    disabled={busy}
-                    onChange={(e) =>
-                      setArtFiles((prev) => ({
-                        ...prev,
-                        [kind]: e.target.files?.[0] ?? null,
-                      }))
-                    }
-                  />
-                </span>
-              </label>
-            ))}
+            <div
+              className="add-universe-modal__art-row"
+              role="group"
+              aria-label="Universe artwork"
+            >
+              {ART_KINDS.map((kind) => (
+                <ArtPickSquare
+                  key={kind}
+                  label={kind.toLowerCase()}
+                  previewUrl={artUrl(formUniverse, kind)}
+                  file={artFiles[kind] ?? null}
+                  disabled={busy}
+                  onPick={(file) =>
+                    setArtFiles((prev) => ({
+                      ...prev,
+                      [kind]: file,
+                    }))
+                  }
+                />
+              ))}
+            </div>
             <button
               type="button"
               className="btn btn--small add-universe-modal__back"

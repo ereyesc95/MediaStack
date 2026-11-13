@@ -11,6 +11,7 @@ import { getStoredProfile } from "../../auth";
 import {
   getCachedUniverses,
   prefetchUniverses,
+  subscribeUniversesChanged,
 } from "../../universesCache";
 import {
   defaultSectionForSource,
@@ -335,6 +336,14 @@ export default function MoviesModule({
       cancelled = true;
     };
   }, [syncTick]);
+
+  useEffect(
+    () =>
+      subscribeUniversesChanged(() => {
+        void prefetchUniverses("movies", { force: true }).then(setUniverses);
+      }),
+    []
+  );
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);

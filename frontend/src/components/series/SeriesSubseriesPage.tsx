@@ -7242,14 +7242,22 @@ export default function SeriesSubseriesPage({
 
       {addUniverseOpen && isAdmin ? (
         <AddToUniverseModal
-          module={isFilm ? "movies" : "series"}
+          module={
+            isGame ? "games" : isBook ? "books" : isFilm ? "movies" : "series"
+          }
           franchiseId={franchiseId}
           leafId={subseriesId}
           leafLabel={title || subseriesId}
           onClose={() => setAddUniverseOpen(false)}
           onSaved={() => {
             void lookupUniverse(
-              isFilm ? "movies" : "series",
+              isGame
+                ? "games"
+                : isBook
+                  ? "books"
+                  : isFilm
+                    ? "movies"
+                    : "series",
               franchiseId,
               subseriesId
             )

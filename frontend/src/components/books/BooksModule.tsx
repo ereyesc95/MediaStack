@@ -9,6 +9,7 @@ import {
 import {
   getCachedUniverses,
   prefetchUniverses,
+  subscribeUniversesChanged,
 } from "../../universesCache";
 import {
   defaultSectionForSource,
@@ -334,6 +335,14 @@ export default function BooksModule({
       cancelled = true;
     };
   }, [syncTick]);
+
+  useEffect(
+    () =>
+      subscribeUniversesChanged(() => {
+        void prefetchUniverses("books", { force: true }).then(setUniverses);
+      }),
+    []
+  );
 
   const loadCatalog = useCallback(() => {
     setCatalogLoading(true);

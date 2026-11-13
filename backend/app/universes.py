@@ -280,6 +280,14 @@ def _serialize_universe(
                         from app.movies_index import build_work_detail
 
                         detail = build_work_detail(m.ume_slug)
+                    elif m.ume_module == "books":
+                        from app.books_index import build_work_detail as build_books_work
+
+                        detail = build_books_work(m.ume_slug)
+                    elif m.ume_module == "games":
+                        from app.games_index import build_work_detail as build_games_work
+
+                        detail = build_games_work(m.ume_slug)
                     else:
                         from app.series_index import build_franchise_detail
 
@@ -677,6 +685,75 @@ def franchise_has_sync(
     )
 
 
+def _franchise_leaf_ids(module: ModuleKind, franchise_slug: str) -> list[str]:
+    norm = _norm_slug(franchise_slug)
+    cards = _leaf_cards_for_member(module, norm)
+    ids = [str(c.get("leaf_id") or c.get("id") or "").strip() for c in cards]
+    return [lid for lid in ids if lid]
+
+
+def franchise_fully_covered(
+    db: Session, module: ModuleKind, franchise_slug: str, universe_id: int
+) -> bool:
+    """True when every known leaf of the franchise is already a member."""
+    leaf_ids = _franchise_leaf_ids(module, franchise_slug)
+    if not leaf_ids:
+        return False
+    norm = _norm_slug(franchise_slug)
+    members = list(
+        db.scalars(
+            select(UniverseMember).where(
+                UniverseMember.ume_universe_id == universe_id,
+                UniverseMember.ume_module == module,
+                UniverseMember.ume_slug == norm,
+            )
+        ).all()
+    )
+    have = {
+        (m.ume_leaf_id or "").strip().casefold()
+        for m in members
+        if (m.ume_leaf_id or "").strip()
+    }
+    return all(lid.casefold() in have for lid in leaf_ids)
+
+
+def _maybe_promote_franchise_sync(
+    db: Session,
+    *,
+    universe_id: int,
+    module: ModuleKind,
+    franchise_slug: str,
+) -> None:
+    """If every leaf is in the universe, record a franchise sync rule."""
+    if franchise_has_sync(db, module, franchise_slug, universe_id):
+        return
+    if not franchise_fully_covered(db, module, franchise_slug, universe_id):
+        return
+    _ensure_sync_rule(
+        db,
+        universe_id=universe_id,
+        module=module,
+        franchise_slug=franchise_slug,
+        commit=True,
+    )
+
+
+def universes_for_franchise_scope(
+    db: Session, module: ModuleKind, slug: str
+) -> list[dict]:
+    """Universes where the whole franchise belongs (sync rule or every leaf)."""
+    apply_franchise_syncs(db, module, slug)
+    many = universes_for_franchise(db, module, slug)
+    out: list[dict] = []
+    for u in many:
+        uid = int(u["id"])
+        if franchise_has_sync(db, module, slug, uid) or franchise_fully_covered(
+            db, module, slug, uid
+        ):
+            out.append(u)
+    return out
+
+
 def franchise_universe_bundle(
     db: Session,
     module: ModuleKind,
@@ -739,13 +816,17 @@ def link_franchise(
     leaf_id: str | None = None,
 ) -> dict:
     """Link a franchise (bulk + sync) or a single leaf when leaf_id is set."""
-    if module not in ("movies", "series"):
-        raise ValueError("module must be movies or series")
+    if module not in ("movies", "series", "books", "games"):
+        raise ValueError("module must be movies, series, books, or games")
     u = db.get(Universe, universe_id)
     if not u:
         raise ValueError("Universe not found")
     norm = _norm_slug(slug)
     if leaf_id:
+        # Whole franchise already in this universe → leaf is already covered.
+        if franchise_has_sync(db, module, norm, universe_id):
+            apply_franchise_syncs(db, module, norm)
+            return _serialize_universe(db, u)
         _ensure_leaf_member(
             db,
             universe_id=universe_id,
@@ -754,6 +835,12 @@ def link_franchise(
             leaf_id=leaf_id,
             source=source,
             commit=True,
+        )
+        _maybe_promote_franchise_sync(
+            db,
+            universe_id=universe_id,
+            module=module,
+            franchise_slug=norm,
         )
         return _serialize_universe(db, u)
 
@@ -1107,7 +1194,7 @@ def expand_universe_cards(db: Session, universe_id: int) -> list[dict]:
     cards: list[dict] = []
     seen: set[tuple] = set()
     for m in members:
-        if m.ume_module not in ("movies", "series"):
+        if m.ume_module not in ("movies", "series", "books", "games"):
             continue
         module = m.ume_module  # type: ignore[assignment]
         leaf_id = (m.ume_leaf_id or "").strip()
