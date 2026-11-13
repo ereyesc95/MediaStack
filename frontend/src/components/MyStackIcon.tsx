@@ -1,5 +1,7 @@
 import {
-  MYSTACK_PATHS,
+  MYSTACK_BOTTOM_PATH,
+  MYSTACK_MIDDLE_PATH,
+  MYSTACK_TOP_PATH,
   MYSTACK_TRANSFORM,
   MYSTACK_VIEW_BOX,
 } from "../mystackMark";
@@ -9,7 +11,10 @@ type Props = {
   size?: number;
 };
 
-/** MyStack mark from assets/icons/MyStack.svg — uses currentColor. */
+/**
+ * MyStack mark from assets/icons/MyStack.svg.
+ * Top diamond + bottom line use theme accent; middle band uses currentColor.
+ */
 export default function MyStackIcon({ className, size = 16 }: Props) {
   return (
     <svg
@@ -18,12 +23,24 @@ export default function MyStackIcon({ className, size = 16 }: Props) {
       width={size}
       height={size}
       aria-hidden
-      fill="currentColor"
+      fill="none"
     >
       <g transform={MYSTACK_TRANSFORM}>
-        {MYSTACK_PATHS.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
+        <path
+          className="mystack-icon__accent"
+          fill="var(--accent)"
+          d={MYSTACK_TOP_PATH}
+        />
+        <path
+          className="mystack-icon__body"
+          fill="currentColor"
+          d={MYSTACK_MIDDLE_PATH}
+        />
+        <path
+          className="mystack-icon__accent"
+          fill="var(--accent)"
+          d={MYSTACK_BOTTOM_PATH}
+        />
       </g>
     </svg>
   );

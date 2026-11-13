@@ -1,3 +1,4 @@
+import { getStoredProfile } from "./auth";
 import { updateFavicon } from "./favicon";
 import type { CardOrientation, ReleaseCardLayout } from "./types";
 
@@ -44,52 +45,97 @@ const CUSTOM_KEY = "custom-theme-colors";
 const ARTIST_KEY = "artist-theme-colors";
 const ADAPTIVE_KEY = "adaptive-media-theme";
 
-function themeKey(userId?: number) {
-  return userId ? `theme:${userId}` : "theme";
+/**
+ * Admin uses one user_id for both passwords; NSFW unlock gets its own theme
+ * bucket (`theme:{id}:nsfw`) so mystack vs mystacknsfw keep independent picks.
+ */
+function resolveNsfwThemeScope(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): boolean {
+  if (nsfwUnlocked != null) return Boolean(nsfwUnlocked);
+  if (userId == null) return false;
+  const profile = getStoredProfile();
+  return Boolean(profile && profile.user_id === userId && profile.nsfw_unlocked);
 }
 
-function adaptiveKey(userId?: number) {
-  return userId ? `${ADAPTIVE_KEY}:${userId}` : ADAPTIVE_KEY;
+function storageUserId(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): string | undefined {
+  if (userId == null) return undefined;
+  return resolveNsfwThemeScope(userId, nsfwUnlocked)
+    ? `${userId}:nsfw`
+    : String(userId);
+}
+
+function themeKey(userId?: number, nsfwUnlocked?: boolean) {
+  const id = storageUserId(userId, nsfwUnlocked);
+  return id ? `theme:${id}` : "theme";
+}
+
+function adaptiveKey(userId?: number, nsfwUnlocked?: boolean) {
+  const id = storageUserId(userId, nsfwUnlocked);
+  return id ? `${ADAPTIVE_KEY}:${id}` : ADAPTIVE_KEY;
 }
 
 /** Whether media pages should use Adaptive. `null` = default on (sample art). */
-export function getAdaptiveMediaPref(userId?: number): boolean | null {
-  const raw = localStorage.getItem(adaptiveKey(userId));
+export function getAdaptiveMediaPref(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): boolean | null {
+  const raw = localStorage.getItem(adaptiveKey(userId, nsfwUnlocked));
   if (raw === "1") return true;
   if (raw === "0") return false;
   return null;
 }
 
-export function setAdaptiveMediaPref(on: boolean, userId?: number) {
-  localStorage.setItem(adaptiveKey(userId), on ? "1" : "0");
+export function setAdaptiveMediaPref(
+  on: boolean,
+  userId?: number,
+  nsfwUnlocked?: boolean
+) {
+  localStorage.setItem(adaptiveKey(userId, nsfwUnlocked), on ? "1" : "0");
 }
 
-function customKey(userId?: number) {
-  return userId ? `custom-theme-colors:${userId}` : CUSTOM_KEY;
+function customKey(userId?: number, nsfwUnlocked?: boolean) {
+  const id = storageUserId(userId, nsfwUnlocked);
+  return id ? `custom-theme-colors:${id}` : CUSTOM_KEY;
 }
 
-export function getStoredTheme(userId?: number): ThemeId {
-  const raw = localStorage.getItem(themeKey(userId));
+export function getStoredTheme(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): ThemeId {
+  const raw = localStorage.getItem(themeKey(userId, nsfwUnlocked));
   if (raw === "artist" || raw === "album") {
     // Legacy: Adaptive was written as the user theme and overwrote Custom.
-    setAdaptiveMediaPref(true, userId);
-    const inferred: ThemeId = localStorage.getItem(customKey(userId))
+    setAdaptiveMediaPref(true, userId, nsfwUnlocked);
+    const inferred: ThemeId = localStorage.getItem(
+      customKey(userId, nsfwUnlocked)
+    )
       ? "custom"
       : "dark";
-    localStorage.setItem(themeKey(userId), inferred);
+    localStorage.setItem(themeKey(userId, nsfwUnlocked), inferred);
     return inferred;
   }
   if (raw && THEMES.some((t) => t.id === raw)) return raw as ThemeId;
   return "dark";
 }
 
-export function readPersistedTheme(userId?: number): ThemeId {
-  return getStoredTheme(userId);
+export function readPersistedTheme(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): ThemeId {
+  return getStoredTheme(userId, nsfwUnlocked);
 }
 
-export function getCustomColors(userId?: number): CustomThemeColors {
+export function getCustomColors(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): CustomThemeColors {
   try {
-    const raw = localStorage.getItem(customKey(userId));
+    const raw = localStorage.getItem(customKey(userId, nsfwUnlocked));
     if (raw) return { ...DEFAULT_CUSTOM, ...JSON.parse(raw) };
   } catch {
     /* ignore */
@@ -97,17 +143,25 @@ export function getCustomColors(userId?: number): CustomThemeColors {
   return { ...DEFAULT_CUSTOM };
 }
 
-export function saveCustomColors(colors: CustomThemeColors, userId?: number) {
-  localStorage.setItem(customKey(userId), JSON.stringify(colors));
+export function saveCustomColors(
+  colors: CustomThemeColors,
+  userId?: number,
+  nsfwUnlocked?: boolean
+) {
+  localStorage.setItem(customKey(userId, nsfwUnlocked), JSON.stringify(colors));
 }
 
-function artistKey(userId?: number) {
-  return userId ? `artist-theme-colors:${userId}` : ARTIST_KEY;
+function artistKey(userId?: number, nsfwUnlocked?: boolean) {
+  const id = storageUserId(userId, nsfwUnlocked);
+  return id ? `artist-theme-colors:${id}` : ARTIST_KEY;
 }
 
-export function getArtistThemeColors(userId?: number): CustomThemeColors | null {
+export function getArtistThemeColors(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): CustomThemeColors | null {
   try {
-    const raw = localStorage.getItem(artistKey(userId));
+    const raw = localStorage.getItem(artistKey(userId, nsfwUnlocked));
     if (raw) return { ...DEFAULT_CUSTOM, ...JSON.parse(raw) };
   } catch {
     /* ignore */
@@ -115,12 +169,19 @@ export function getArtistThemeColors(userId?: number): CustomThemeColors | null 
   return null;
 }
 
-export function saveArtistThemeColors(colors: CustomThemeColors, userId?: number) {
-  localStorage.setItem(artistKey(userId), JSON.stringify(colors));
+export function saveArtistThemeColors(
+  colors: CustomThemeColors,
+  userId?: number,
+  nsfwUnlocked?: boolean
+) {
+  localStorage.setItem(artistKey(userId, nsfwUnlocked), JSON.stringify(colors));
 }
 
-export function hasArtistTheme(userId?: number): boolean {
-  return getArtistThemeColors(userId) !== null;
+export function hasArtistTheme(
+  userId?: number,
+  nsfwUnlocked?: boolean
+): boolean {
+  return getArtistThemeColors(userId, nsfwUnlocked) !== null;
 }
 
 function accentForeground(hex: string): string {
@@ -173,18 +234,24 @@ export function readDomTheme(): ThemeId {
   return "dark";
 }
 
-export function applyTheme(id: ThemeId, userId?: number) {
+export function applyTheme(
+  id: ThemeId,
+  userId?: number,
+  nsfwUnlocked?: boolean
+) {
   const attr =
     id === "custom" ? "custom" : id === "artist" || id === "album" ? id : id;
   document.documentElement.setAttribute("data-theme", attr);
   // Adaptive is page-local — never store it as the user's home theme.
   if (id !== "artist" && id !== "album") {
-    localStorage.setItem(themeKey(userId), id);
+    localStorage.setItem(themeKey(userId, nsfwUnlocked), id);
   }
   if (id === "custom") {
-    applyThemeColors(getCustomColors(userId));
+    applyThemeColors(getCustomColors(userId, nsfwUnlocked));
   } else if (id === "artist" || id === "album") {
-    applyThemeColors(getArtistThemeColors(userId) ?? DEFAULT_CUSTOM);
+    applyThemeColors(
+      getArtistThemeColors(userId, nsfwUnlocked) ?? DEFAULT_CUSTOM
+    );
   } else {
     clearCustomCss();
     document.documentElement.style.removeProperty("--beat-accent");
@@ -194,15 +261,19 @@ export function applyTheme(id: ThemeId, userId?: number) {
 }
 
 /** Persist theme choice without updating CSS (used during active playback). */
-export function persistThemeChoice(id: ThemeId, userId?: number) {
+export function persistThemeChoice(
+  id: ThemeId,
+  userId?: number,
+  nsfwUnlocked?: boolean
+) {
   if (id === "artist" || id === "album") {
-    setAdaptiveMediaPref(true, userId);
+    setAdaptiveMediaPref(true, userId, nsfwUnlocked);
     updateFavicon();
     return;
   }
   // Store the home/global theme. Do not disable Adaptive for media pages —
   // that only happens when the user pins a fixed theme while on a media page.
-  localStorage.setItem(themeKey(userId), id);
+  localStorage.setItem(themeKey(userId, nsfwUnlocked), id);
   updateFavicon();
 }
 
@@ -295,6 +366,9 @@ export function saveCollectionLayout(
   localStorage.setItem(collectionLayoutKey(userId), value);
 }
 
-export function applyProfilePreferences(userId: number) {
-  applyTheme(getStoredTheme(userId), userId);
+export function applyProfilePreferences(
+  userId: number,
+  nsfwUnlocked?: boolean
+) {
+  applyTheme(getStoredTheme(userId, nsfwUnlocked), userId, nsfwUnlocked);
 }

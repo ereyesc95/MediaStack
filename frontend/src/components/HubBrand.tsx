@@ -1,15 +1,12 @@
 import MyStackIcon from "./MyStackIcon";
-
-type Props = {
-  stackName?: string;
-};
+import MyStackWordmark from "./MyStackWordmark";
 
 /** Decorative hub header branding — not interactive. */
-export default function HubBrand({ stackName = "MyStack" }: Props) {
+export default function HubBrand() {
   return (
     <div className="hub-brand" aria-hidden>
       <MyStackIcon className="hub-brand__icon" size={16} />
-      <span className="hub-brand__label">{stackName}</span>
+      <MyStackWordmark className="hub-brand__wordmark" height={18} />
     </div>
   );
 }

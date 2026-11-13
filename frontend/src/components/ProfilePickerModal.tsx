@@ -3,6 +3,7 @@ import { fetchProfiles, selectProfile } from "../api";
 import type { ProfileUser } from "../auth";
 import AdminPasswordModal from "./AdminPasswordModal";
 import { IconPencil } from "./MenuIcons";
+import MyStackWordmark from "./MyStackWordmark";
 import PlaylistBoot from "./PlaylistBoot";
 import ProfileAvatar, { ProfileWelcomeLogo } from "./ProfileAvatar";
 import ProfileEditModal from "./ProfileEditModal";
@@ -11,14 +12,17 @@ import WelcomeAmbient from "./WelcomeAmbient";
 type Props = {
   onSelected: (user: ProfileUser, token: string) => void;
   highlightUserId?: number | null;
-  /** Shown after “Switch profile” so the user can cancel without picking. */
+  /** Shown after “Close …” so the user can cancel without picking. */
   onBack?: () => void;
+  /** Active profile name for the switch-flow back control. */
+  backProfileName?: string | null;
 };
 
 export default function ProfilePickerModal({
   onSelected,
   highlightUserId = null,
   onBack,
+  backProfileName = null,
 }: Props) {
   const [profiles, setProfiles] = useState<ProfileUser[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -128,7 +132,7 @@ export default function ProfilePickerModal({
           }`}
         >
           <ProfileWelcomeLogo />
-          <span className="profile-picker-brand__name">MyStack</span>
+          <MyStackWordmark className="profile-picker-brand__wordmark" height={26} />
         </header>
 
         {onBack ? (
@@ -136,6 +140,11 @@ export default function ProfilePickerModal({
             type="button"
             className="artist-page__catalog-back profile-picker-back"
             onClick={onBack}
+            aria-label={
+              backProfileName?.trim()
+                ? `Back to ${backProfileName.trim()}`
+                : "Back"
+            }
           >
             <svg
               className="artist-page__catalog-chevron"
@@ -151,7 +160,11 @@ export default function ProfilePickerModal({
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="artist-page__catalog-label">Back</span>
+            <span className="artist-page__catalog-label">
+              {backProfileName?.trim()
+                ? `Back to ${backProfileName.trim()}`
+                : "Back"}
+            </span>
           </button>
         ) : null}
 

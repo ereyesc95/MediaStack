@@ -6,6 +6,7 @@ import {
   pickMediaRoot,
   setMediaRoot,
 } from "../api";
+import { getStoredProfile } from "../auth";
 
 type Props = {
   required?: boolean;
@@ -27,6 +28,10 @@ export default function MediaSourceModal({
   onSwitchProfile,
   initialMode = "choose",
 }: Props) {
+  const switchProfileLabel = (() => {
+    const name = (getStoredProfile()?.username ?? "").trim();
+    return name ? `Close ${name}` : "Close";
+  })();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualPath, setManualPath] = useState("");
@@ -147,7 +152,7 @@ export default function MediaSourceModal({
                 className="btn btn--primary welcome-pick-btn"
                 onClick={onSwitchProfile}
               >
-                Switch profile
+                {switchProfileLabel}
               </button>
             )}
           </>

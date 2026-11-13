@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { updateProfile, uploadProfileAvatar } from "../api";
 import type { ProfileUser } from "../auth";
-import ProfileAvatar, { PROFILE_ICON_OPTIONS } from "./ProfileAvatar";
+import AdminPasswordModal from "./AdminPasswordModal";
+import ProfileAvatar, { profileIconOptions } from "./ProfileAvatar";
+import ThemeColorPicker from "./ThemeColorPicker";
 
 /** Preset colors + trailing custom "+" picker; sized to share the icon row width. */
 const COLOR_OPTIONS = [
@@ -41,31 +43,55 @@ export default function ProfileEditModal({
   const [avatar, setAvatar] = useState(profile.avatar ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adminPwOpen, setAdminPwOpen] = useState(false);
+  const [adminPwError, setAdminPwError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const colorRef = useRef<HTMLInputElement>(null);
 
   const customActive = isCustomColor(avatar);
+  const customColorValue =
+    avatar?.startsWith("#") ? avatar : "#64748b";
   const displayName = lockName || profile.is_admin ? "Admin" : name;
   const isAdmin = lockName || profile.is_admin;
+  const iconOptions = profileIconOptions(isAdmin);
 
-  async function save() {
+  async function save(password?: string) {
     setBusy(true);
     setError(null);
+    setAdminPwError(null);
     try {
       const updated = await updateProfile(
         {
           display_name: isAdmin ? "Admin" : name.trim(),
           avatar,
+          ...(isAdmin && password ? { password } : {}),
         },
         profile.user_id
       );
+      setAdminPwOpen(false);
       onSaved(updated);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save profile");
+      const msg = e instanceof Error ? e.message : "Could not save profile";
+      if (isAdmin && /password/i.test(msg)) {
+        setAdminPwError("Incorrect admin password");
+        setAdminPwOpen(true);
+      } else {
+        setError(msg);
+        setAdminPwOpen(false);
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  function requestSave() {
+    if (busy) return;
+    if (isAdmin) {
+      setAdminPwError(null);
+      setAdminPwOpen(true);
+      return;
+    }
+    void save();
   }
 
   async function handlePhoto(file: File | null) {
@@ -134,11 +160,11 @@ export default function ProfileEditModal({
               </label>
             ) : null}
             <div className="profile-edit-emoji-grid" role="group" aria-label="Avatar icons">
-              {PROFILE_ICON_OPTIONS.map(({ id, label, Icon }) => (
+              {iconOptions.map(({ id, label, Icon }) => (
                 <button
                   key={id}
                   type="button"
-                  className={`profile-edit-pick${avatar === id ? " active" : ""}`}
+                  className={`profile-edit-pick${avatar === id || (isAdmin && id === "icon:admin" && !avatar) ? " active" : ""}`}
                   onClick={() => setAvatar(id)}
                   disabled={busy}
                   aria-label={label}
@@ -160,30 +186,25 @@ export default function ProfileEditModal({
                   aria-label={`Color ${c}`}
                 />
               ))}
-              <button
-                type="button"
-                className={`profile-edit-color profile-edit-color--custom${
+              <ThemeColorPicker
+                label="Pick custom color"
+                value={customColorValue}
+                onChange={setAvatar}
+                disabled={busy}
+                swatchClassName={`profile-edit-color profile-edit-color--custom${
                   customActive ? " active" : ""
                 }`}
-                style={
-                  customActive && avatar ? { background: avatar } : undefined
+                swatchContent={
+                  customActive ? (
+                    <span
+                      className="profile-edit-color__fill"
+                      style={{ background: customColorValue }}
+                      aria-hidden
+                    />
+                  ) : (
+                    "+"
+                  )
                 }
-                onClick={() => colorRef.current?.click()}
-                disabled={busy}
-                aria-label="Pick custom color"
-                title="Custom color"
-              >
-                +
-              </button>
-              <input
-                ref={colorRef}
-                type="color"
-                className="profile-edit-color-input"
-                value={avatar?.startsWith("#") ? avatar : "#64748b"}
-                onChange={(e) => setAvatar(e.target.value)}
-                disabled={busy}
-                tabIndex={-1}
-                aria-hidden
               />
             </div>
           </div>
@@ -200,7 +221,7 @@ export default function ProfileEditModal({
           <button
             type="button"
             className="btn btn--primary"
-            onClick={save}
+            onClick={requestSave}
             disabled={
               busy || (!(lockName || profile.is_admin) && !name.trim())
             }
@@ -209,6 +230,22 @@ export default function ProfileEditModal({
           </button>
         </div>
       </div>
+
+      {adminPwOpen ? (
+        <AdminPasswordModal
+          layer={2}
+          busy={busy}
+          error={adminPwError}
+          onCancel={() => {
+            if (busy) return;
+            setAdminPwOpen(false);
+            setAdminPwError(null);
+          }}
+          onSubmit={(password) => {
+            void save(password);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

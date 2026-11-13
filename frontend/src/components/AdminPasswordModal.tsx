@@ -7,11 +7,13 @@ type Props = {
   onCancel: () => void;
   busy?: boolean;
   error?: string | null;
+  /** Stack above an open edit modal (z-index layer 2). */
+  layer?: 1 | 2;
 };
 
 export default function AdminPasswordModal(props: Props) {
   return (
-    <ModalPortal onClose={props.onCancel}>
+    <ModalPortal onClose={props.onCancel} layer={props.layer ?? 1}>
       <AdminPasswordPanel {...props} />
     </ModalPortal>
   );

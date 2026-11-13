@@ -4,10 +4,12 @@ import {
   setAppMenuOpen,
   subscribeCloseAppMenu,
 } from "../appMenuChrome";
+import { getStoredProfile } from "../auth";
 import { usePlayVideosPreference } from "../playVideosPreference";
 import { usePhoneLayout } from "../usePhoneLayout";
 import { useMenuPresence } from "../useMenuPresence";
 import { applySavedArtistTheme, pinArtistPageTheme, notifyUserThemePickDuringPlayback, notifyUserThemePickWhilePaused, isPlaybackSessionActive, isPlaybackPlaying, getMenuActiveTheme, isMediaPageThemeSessionActive } from "../mediaTheme";
+import ThemeColorPicker from "./ThemeColorPicker";
 import {
   THEMES,
   applyTheme,
@@ -39,7 +41,7 @@ import {
   IconPencil,
   IconPlus,
   IconSettings,
-  IconSwitchProfile,
+  IconExit,
   IconSync,
   IconTheme,
   IconTrackData,
@@ -116,6 +118,10 @@ type Props = {
   onReimportCsv?: () => void;
   isAdmin?: boolean;
   userId?: number;
+  /** Admin NSFW session — themes are stored separately from the locked Admin login. */
+  nsfwUnlocked?: boolean;
+  /** Active profile display name for the close-profile menu item. */
+  profileName?: string | null;
   onSwitchProfile?: () => void;
   onEditProfile?: () => void;
   /** Admin Setup: create ``Media`` + module roots under a parent folder. */
@@ -275,6 +281,8 @@ export default function AppMenu({
   onReimportCsv,
   isAdmin = false,
   userId,
+  nsfwUnlocked = false,
+  profileName = null,
   onSwitchProfile,
   onEditProfile,
   onCreateLibrary: onCreateLibraryProp,
@@ -343,6 +351,11 @@ export default function AppMenu({
   const isPhone = usePhoneLayout();
   const showAdaptiveTheme =
     adaptiveThemeActive ?? artistThemeActive;
+  const switchProfileLabel = (() => {
+    const name =
+      (profileName ?? getStoredProfile()?.username ?? "").trim() || null;
+    return name ? `Close ${name}` : "Close";
+  })();
   const [open, setOpen] = useState(false);
   const { present: menuPresent, visible: menuVisible } = useMenuPresence(open);
   useEffect(() => {
@@ -351,7 +364,6 @@ export default function AppMenu({
       if (open) setAppMenuOpen(false);
     };
   }, [open]);
-  useEffect(() => subscribeCloseAppMenu(() => setOpen(false)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [artistDataOpen, setArtistDataOpen] = useState(false);
   const [editDataOpen, setEditDataOpen] = useState(false);
@@ -361,21 +373,45 @@ export default function AppMenu({
   const [manageCollectionOpen, setManageCollectionOpen] = useState(false);
   const [manageFilesOpen, setManageFilesOpen] = useState(false);
   const [manageEventOpen, setManageEventOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+
+  function collapseAllSubmenus() {
+    setSettingsOpen(false);
+    setArtistDataOpen(false);
+    setEditDataOpen(false);
+    setTrackDataOpen(false);
+    setEmbeddedEditReleaseOpen(false);
+    setThemeOpen(false);
+    setCustomOpen(false);
+    setManageCollectionOpen(false);
+    setManageFilesOpen(false);
+    setManageEventOpen(false);
+  }
+
+  function closeMenu() {
+    setOpen(false);
+    collapseAllSubmenus();
+  }
+
+  useEffect(() => subscribeCloseAppMenu(closeMenu), []);
   useEffect(() => {
     if (collectionClearMode) setManageCollectionOpen(true);
   }, [collectionClearMode]);
   useEffect(() => {
     if (filesSelectActive) setManageFilesOpen(true);
   }, [filesSelectActive]);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<ThemeId>(() => getMenuActiveTheme(userId));
-  const [custom, setCustom] = useState<CustomThemeColors>(() => getCustomColors(userId));
+  const [activeTheme, setActiveTheme] = useState<ThemeId>(() =>
+    getMenuActiveTheme(userId)
+  );
+  const [custom, setCustom] = useState<CustomThemeColors>(() =>
+    getCustomColors(userId)
+  );
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setCustom(getCustomColors(userId));
     setActiveTheme(getMenuActiveTheme(userId));
-  }, [userId]);
+  }, [userId, nsfwUnlocked]);
 
   useEffect(() => {
     const sync = () => setActiveTheme(getMenuActiveTheme(userId));
@@ -387,18 +423,21 @@ export default function AppMenu({
       window.removeEventListener("artist-theme-updated", sync);
       window.removeEventListener("playback-cover-applied", sync);
     };
-  }, [userId]);
+  }, [userId, nsfwUnlocked]);
 
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSettingsOpen(false);
-        setArtistDataOpen(false);
-        setEditDataOpen(false);
-        setTrackDataOpen(false);
-        setThemeOpen(false);
-        setCustomOpen(false);
+      const t = e.target as Node | null;
+      if (!t) return;
+      // Portaled theme color popover lives on document.body.
+      if (
+        t instanceof Element &&
+        t.closest(".theme-color-picker__pop")
+      ) {
+        return;
+      }
+      if (ref.current && !ref.current.contains(t)) {
+        closeMenu();
       }
     }
     document.addEventListener("mousedown", close);
@@ -413,7 +452,7 @@ export default function AppMenu({
     if (isPlaybackSessionActive() && isPlaybackPlaying()) {
       if (notifyUserThemePickDuringPlayback(id, userId)) {
         setActiveTheme(id);
-        if (id === "custom") setCustomOpen(true);
+        if (id === "custom") setCustomOpen((open) => !open);
         return;
       }
     }
@@ -421,6 +460,11 @@ export default function AppMenu({
       notifyUserThemePickWhilePaused(id, userId);
     }
     if (id === "custom") {
+      // Second click on Custom collapses the color pickers; first selects + expands.
+      if (activeTheme === "custom" && customOpen) {
+        setCustomOpen(false);
+        return;
+      }
       setCustomOpen(true);
       persistThemeChoice("custom", userId);
       applyTheme("custom", userId);
@@ -464,6 +508,7 @@ export default function AppMenu({
         setEditDataOpen(false);
         setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
+        setCustomOpen(false);
         setSettingsOpen(false);
       }
       return next;
@@ -478,6 +523,7 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
+        setCustomOpen(false);
         setSettingsOpen(false);
       }
       return next;
@@ -492,6 +538,7 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
+        setCustomOpen(false);
         setSettingsOpen(false);
       }
       return next;
@@ -507,6 +554,8 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setEmbeddedEditReleaseOpen(false);
         setSettingsOpen(false);
+      } else {
+        setCustomOpen(false);
       }
       return next;
     });
@@ -521,6 +570,7 @@ export default function AppMenu({
         setTrackDataOpen(false);
         setEmbeddedEditReleaseOpen(false);
         setThemeOpen(false);
+        setCustomOpen(false);
       }
       return next;
     });
@@ -880,7 +930,12 @@ export default function AppMenu({
         type="button"
         className="app-menu-trigger"
         aria-label="Menu"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => {
+            if (o) collapseAllSubmenus();
+            return !o;
+          });
+        }}
       >
         <span />
         <span />
@@ -1708,14 +1763,14 @@ export default function AppMenu({
               {customOpen && (
                 <div className="custom-theme-panel">
                   {CUSTOM_FIELDS.map((f) => (
-                    <label key={f.key} className="custom-theme-row">
-                      <span>{f.label}</span>
-                      <input
-                        type="color"
+                    <div key={f.key} className="custom-theme-row">
+                      <span className="custom-theme-row__label">{f.label}</span>
+                      <ThemeColorPicker
+                        label={f.label}
                         value={custom[f.key]}
-                        onChange={(e) => updateCustom(f.key, e.target.value)}
+                        onChange={(hex) => updateCustom(f.key, hex)}
                       />
-                    </label>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1875,13 +1930,14 @@ export default function AppMenu({
             <button
               type="button"
               className="menu-item-switch-profile"
+              aria-label={switchProfileLabel}
               onClick={() => {
                 onSwitchProfile();
                 setOpen(false);
               }}
             >
-              <IconSwitchProfile className="menu-item-icon" />
-              Switch profile
+              <IconExit className="menu-item-icon" />
+              {switchProfileLabel}
             </button>
           )}
         </div>

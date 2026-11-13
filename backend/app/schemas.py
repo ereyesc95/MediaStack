@@ -156,6 +156,8 @@ class SelectProfileRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = None
     avatar: str | None = None
+    # Required when updating the Admin profile slot.
+    password: str | None = None
 
 
 class SessionOut(BaseModel):

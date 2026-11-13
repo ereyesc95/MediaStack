@@ -107,6 +107,13 @@ def _validate_guest_avatar(value: str | None) -> str | None:
     raise HTTPException(400, "Invalid avatar value")
 
 
+def _require_admin_password(password: str | None) -> None:
+    pwd = (password or "").strip()
+    allowed = {settings.admin_password, settings.admin_nsfw_password}
+    if pwd not in allowed:
+        raise HTTPException(403, "Incorrect admin password")
+
+
 def _apply_profile_update(
     user: User,
     *,
@@ -179,6 +186,8 @@ def update_profile_slot(
     user = get_profile_user(db, user_id)
     if not user:
         raise HTTPException(404, "Profile not found")
+    if user.usr_id == ADMIN_USER_ID:
+        _require_admin_password(body.password)
     fields = body.model_dump(exclude_unset=True)
     _apply_profile_update(
         user,
@@ -212,6 +221,8 @@ def update_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if user.usr_id == ADMIN_USER_ID:
+        _require_admin_password(body.password)
     fields = body.model_dump(exclude_unset=True)
     _apply_profile_update(
         user,

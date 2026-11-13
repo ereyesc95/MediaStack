@@ -163,3 +163,17 @@ export const PROFILE_ICON_OPTIONS: {
   { id: "icon:universe", label: "Universe", Icon: IconUniverse },
   { id: "icon:heart", label: "Heart", Icon: IconHeart },
 ];
+
+/** Guest picks include Heart; Admin edit replaces Heart with the Admin shield. */
+export function profileIconOptions(forAdmin = false): {
+  id: string;
+  label: string;
+  Icon: IconComp;
+}[] {
+  if (!forAdmin) return PROFILE_ICON_OPTIONS;
+  return PROFILE_ICON_OPTIONS.map((opt) =>
+    opt.id === "icon:heart"
+      ? { id: "icon:admin", label: "Admin", Icon: IconAdmin }
+      : opt
+  );
+}

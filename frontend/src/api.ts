@@ -166,6 +166,8 @@ export async function updateProfile(
   body: {
     display_name?: string;
     avatar?: string | null;
+    /** Required when saving the Admin profile. */
+    password?: string;
   },
   userId?: number
 ): Promise<ProfileUser> {

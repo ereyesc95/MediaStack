@@ -405,9 +405,10 @@ export default function App() {
   function handleProfileSelected(user: ProfileUser, token: string) {
     setSwitchingProfile(false);
     clearAllDashboardCaches();
-    applyProfilePreferences(user.user_id);
-    setCardOrientation(getStoredOrientation(user.user_id));
+    // Persist session first so theme scope can read nsfw_unlocked for Admin.
     saveProfile(user, token);
+    applyProfilePreferences(user.user_id, user.nsfw_unlocked);
+    setCardOrientation(getStoredOrientation(user.user_id));
     setProfile(user);
     setHighlightProfileId(null);
     if (parsePlaylistsGridPath(window.location.pathname)) {
@@ -691,6 +692,8 @@ export default function App() {
       }
       isAdmin={isAdmin}
       userId={profile?.user_id}
+      nsfwUnlocked={Boolean(profile?.nsfw_unlocked)}
+      profileName={profile?.username}
       onSwitchProfile={handleSwitchProfile}
       onEditProfile={
         profile && !isAdmin ? () => setEditProfileOpen(true) : undefined
@@ -747,6 +750,7 @@ export default function App() {
         <ProfilePickerModal
           onSelected={handleProfileSelected}
           highlightUserId={highlightProfileId}
+          backProfileName={switchingProfile ? profile?.username : null}
           onBack={
             switchingProfile
               ? () => {
