@@ -4,6 +4,7 @@ import {
   fetchGamesFranchiseOverview,
   fetchGamesGameAudio,
   fetchGamesGameOverview,
+  lookupUniverse,
   refreshGamesFranchiseMetadata,
   refreshGamesGameMetadata,
   resolveBooksPath,
@@ -101,8 +102,33 @@ export default function GamesMediaPage({
   const [audioCards, setAudioCards] = useState<SeriesMediaCard[]>([]);
   const [audioLoading, setAudioLoading] = useState(false);
   const [universeOpen, setUniverseOpen] = useState(false);
+  const [inUniverse, setInUniverse] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const refreshedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setInUniverse(false);
+      return;
+    }
+    let cancelled = false;
+    void lookupUniverse("games", franchiseId, isLeaf ? gameId : null)
+      .then((res) => {
+        if (cancelled) return;
+        const many = res.universes?.length
+          ? res.universes
+          : res.universe
+            ? [res.universe]
+            : [];
+        setInUniverse(many.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setInUniverse(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, franchiseId, gameId, isLeaf, reloadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -458,7 +484,9 @@ export default function GamesMediaPage({
             onAddToUniverse={
               isAdmin ? () => setUniverseOpen(true) : undefined
             }
-            addToUniverseLabel="Add to universe"
+            addToUniverseLabel={
+              inUniverse ? "Edit in universe" : "Add to universe"
+            }
           />
         ) : null}
       </header>

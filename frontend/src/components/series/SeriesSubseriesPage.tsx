@@ -833,6 +833,8 @@ export default function SeriesSubseriesPage({
   const [universeInfo, setUniverseInfo] = useState<Universe | null>(null);
   const [universeCards, setUniverseCards] = useState<UniverseCard[]>([]);
   const [leafUniverses, setLeafUniverses] = useState<Universe[]>([]);
+  /** Once true, empty leafUniverses wins over stale overview/universeInfo. */
+  const [leafUniversesReady, setLeafUniversesReady] = useState(false);
   const [addUniverseOpen, setAddUniverseOpen] = useState(false);
   const [overview, setOverview] = useState<SeriesOverview | null>(
     () => initialCached?.overview ?? null
@@ -1965,6 +1967,7 @@ export default function SeriesSubseriesPage({
 
   useEffect(() => {
     let cancelled = false;
+    setLeafUniversesReady(false);
     const module = isGame ? "games" : isBook ? "books" : isFilm ? "movies" : "series";
     void lookupUniverse(module, franchiseId, subseriesId)
       .then((res) => {
@@ -1975,9 +1978,13 @@ export default function SeriesSubseriesPage({
             ? [res.universe]
             : [];
         setLeafUniverses(many);
+        setLeafUniversesReady(true);
       })
       .catch(() => {
-        if (!cancelled) setLeafUniverses([]);
+        if (!cancelled) {
+          setLeafUniverses([]);
+          setLeafUniversesReady(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -4037,11 +4044,17 @@ export default function SeriesSubseriesPage({
 
   /** Leaf pages get Related when there is anything to show (universes / talent / similar). */
   const leafUniverseMemberships = useMemo(() => {
+    if (leafUniversesReady) return leafUniverses;
     if (leafUniverses.length) return leafUniverses;
     if (overview?.universes?.length) return overview.universes;
     if (overview?.universe) return [overview.universe];
     return [] as Universe[];
-  }, [leafUniverses, overview?.universes, overview?.universe]);
+  }, [
+    leafUniversesReady,
+    leafUniverses,
+    overview?.universes,
+    overview?.universe,
+  ]);
 
   const relatedUniverseRows = useMemo(() => {
     return leafUniverseMemberships
@@ -4745,6 +4758,11 @@ export default function SeriesSubseriesPage({
               editDataFlat
               onAddToUniverse={
                 isAdmin ? () => setAddUniverseOpen(true) : undefined
+              }
+              addToUniverseLabel={
+                leafUniverseMemberships.length > 0
+                  ? "Edit in universe"
+                  : "Add to universe"
               }
               menuChrome={
                 stacked && (showMediaLayoutPicker || showAudioPlayer) ? (
@@ -5691,16 +5709,7 @@ export default function SeriesSubseriesPage({
                     );
                   })()}
                   {(() => {
-                    const memberships =
-                      leafUniverses.length > 0
-                        ? leafUniverses
-                        : overview?.universes?.length
-                          ? overview.universes
-                          : overview?.universe
-                            ? [overview.universe]
-                            : universeInfo
-                              ? [universeInfo]
-                              : [];
+                    const memberships = leafUniverseMemberships;
                     if (!memberships.length) return null;
                     const plural = memberships.length > 1;
                     return (
@@ -7261,16 +7270,31 @@ export default function SeriesSubseriesPage({
               franchiseId,
               subseriesId
             )
-              .then((res) =>
-                setLeafUniverses(
-                  res.universes?.length
-                    ? res.universes
-                    : res.universe
-                      ? [res.universe]
-                      : []
-                )
-              )
-              .catch(() => {});
+              .then((res) => {
+                const many = res.universes?.length
+                  ? res.universes
+                  : res.universe
+                    ? [res.universe]
+                    : [];
+                setLeafUniverses(many);
+                setLeafUniversesReady(true);
+                setOverview((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        universes: many,
+                        universe: many[0] ?? null,
+                      }
+                    : prev
+                );
+                setUniverseInfo((prev) =>
+                  prev && !many.some((u) => u.id === prev.id) ? null : prev
+                );
+              })
+              .catch(() => {
+                setLeafUniverses([]);
+                setLeafUniversesReady(true);
+              });
             deleteCachedLeafPage(
               cacheKey(isFilm, franchiseId, subseriesId, isBook, isGame)
             );

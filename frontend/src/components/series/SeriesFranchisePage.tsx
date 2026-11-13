@@ -38,6 +38,7 @@ import {
   fetchFranchiseFolderIconStatus,
   ensureFranchiseDesktopIni,
   generateFranchiseFolderIcons,
+  lookupUniverse,
   type CatalogImportModule,
   type FranchiseQuizAvailability,
   type FranchiseQuizCatalogItem,
@@ -346,6 +347,13 @@ export default function SeriesFranchisePage({
   const isGames = module === "games";
   const isMoviesOnly = module === "movies";
   const isMovies = isMoviesOnly || isBooks || isGames; // work-module UI
+  const universeModule = isGames
+    ? "games"
+    : isBooks
+      ? "books"
+      : isMoviesOnly
+        ? "movies"
+        : "series";
   const layout = useDeviceLayout();
   const { playLocally } = usePlayVideosPreference();
   const stacked = isStackedArtistLayout(layout);
@@ -353,6 +361,7 @@ export default function SeriesFranchisePage({
   const cacheKey = `${
     isGames ? "games" : isBooks ? "books" : isMoviesOnly ? "movies" : "series"
   }:${franchiseId}`;
+  const [franchiseInUniverse, setFranchiseInUniverse] = useState(false);
   const [data, setData] = useState<SeriesOverview | null>(
     () => readOverviewCache(cacheKey)
   );
@@ -614,6 +623,30 @@ export default function SeriesFranchisePage({
       loadGenRef.current += 1;
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!isAdmin || !onAddToUniverse) {
+      setFranchiseInUniverse(false);
+      return;
+    }
+    let cancelled = false;
+    void lookupUniverse(universeModule, franchiseId)
+      .then((res) => {
+        if (cancelled) return;
+        const many = res.universes?.length
+          ? res.universes
+          : res.universe
+            ? [res.universe]
+            : [];
+        setFranchiseInUniverse(many.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setFranchiseInUniverse(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, onAddToUniverse, universeModule, franchiseId, data?.id]);
 
   useEffect(() => {
     setPlayerOpen(false);
@@ -2554,7 +2587,9 @@ export default function SeriesFranchisePage({
               onAddToUniverse={
                 isAdmin ? onAddToUniverse : undefined
               }
-              addToUniverseLabel="Add to universe"
+              addToUniverseLabel={
+                franchiseInUniverse ? "Edit in universe" : "Add to universe"
+              }
               onRefreshMetadata={
                 isAdmin && section === "overview" && overviewTab === "about"
                   ? () => void handleRefreshMetadata()

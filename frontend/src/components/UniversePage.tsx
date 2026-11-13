@@ -419,18 +419,32 @@ export default function UniversePage({
   function openSubseries(sub: SeriesSubseriesCard) {
     const franchiseId = sub.franchise_id || sub.id;
     if (!franchiseId) return;
+    const isFranchiseMini = (sub.kind || "") === "franchise";
+    const leafId = sub.leaf_id || (!isFranchiseMini ? sub.id : undefined);
     if (sub.module === "series") {
-      if (onOpenSeriesFranchise) onOpenSeriesFranchise(franchiseId);
-      else onOpenSeriesLeaf(franchiseId, franchiseId);
+      if (isFranchiseMini || !leafId) {
+        if (onOpenSeriesFranchise) onOpenSeriesFranchise(franchiseId);
+        else onOpenSeriesLeaf(franchiseId, franchiseId);
+        return;
+      }
+      onOpenSeriesLeaf(franchiseId, leafId);
       return;
     }
     if (sub.module === "books") {
-      if (onOpenBooksFranchise) onOpenBooksFranchise(franchiseId);
-      else onOpenBooksLeaf(franchiseId, franchiseId);
+      if (isFranchiseMini || !leafId) {
+        if (onOpenBooksFranchise) onOpenBooksFranchise(franchiseId);
+        else onOpenBooksLeaf(franchiseId, franchiseId);
+        return;
+      }
+      onOpenBooksLeaf(franchiseId, leafId);
       return;
     }
-    if (onOpenMoviesFranchise) onOpenMoviesFranchise(franchiseId);
-    else onOpenMoviesLeaf(franchiseId, franchiseId);
+    if (isFranchiseMini || !leafId) {
+      if (onOpenMoviesFranchise) onOpenMoviesFranchise(franchiseId);
+      else onOpenMoviesLeaf(franchiseId, franchiseId);
+      return;
+    }
+    onOpenMoviesLeaf(franchiseId, leafId);
   }
 
   function onUniverseSaved(next: Universe) {

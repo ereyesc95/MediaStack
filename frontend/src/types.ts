@@ -1817,8 +1817,12 @@ export type SeriesSubseriesCard = {
   season_count: number;
   has_gallery?: boolean;
   /** Present on universe hub carousel miniatures. */
-  module?: "movies" | "series" | "books";
+  module?: "movies" | "series" | "books" | "games";
   franchise_id?: string;
+  /** Leaf id when miniature is a film/show/book/game rather than a franchise. */
+  leaf_id?: string;
+  /** franchise = whole-franchise member; otherwise a leaf miniature. */
+  kind?: string;
   /** False when on-disk folder has [Unofficial]. */
   official?: boolean;
   hub_title?: string | null;

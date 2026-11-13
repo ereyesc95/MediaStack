@@ -233,6 +233,7 @@ export default function SeriesModule({
     () => getCachedUniverses("series") ?? []
   );
   const [addUniverseOpen, setAddUniverseOpen] = useState(false);
+  const [universeReloadKey, setUniverseReloadKey] = useState(0);
   const [franchiseShell, setFranchiseShell] =
     useState<SeriesFranchiseShell | null>(null);
   const [search, setSearch] = useState("");
@@ -1038,6 +1039,7 @@ export default function SeriesModule({
     return (
       <div className="series-module">
         <SeriesFranchisePage
+          key={`series-franchise-${franchiseId}-${universeReloadKey}`}
           franchiseId={franchiseId}
           subseriesId={subseriesId}
           seasonId={seasonId}
@@ -1092,13 +1094,8 @@ export default function SeriesModule({
                   return entrySource === "home" ? "HOME" : "CATALOG";
                 })()
           }
-          menuExtra={
-            isAdmin ? (
-              <button type="button" onClick={() => setAddUniverseOpen(true)}>
-                <IconUniverse className="menu-item-icon" />
-                Add to universe
-              </button>
-            ) : null
+          onAddToUniverse={
+            isAdmin ? () => setAddUniverseOpen(true) : undefined
           }
           onOpenFranchise={(id) => {
             if (tryOpenMusicArtistFromFranchise(id, "catalog")) return;
@@ -1177,7 +1174,7 @@ export default function SeriesModule({
             onClose={() => setAddUniverseOpen(false)}
             onSaved={() => {
               setAddUniverseOpen(false);
-              /* overview reload via franchise remount key not needed — modal closes */
+              setUniverseReloadKey((k) => k + 1);
             }}
           />
         ) : null}

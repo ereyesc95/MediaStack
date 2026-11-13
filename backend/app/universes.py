@@ -717,27 +717,6 @@ def franchise_fully_covered(
     return all(lid.casefold() in have for lid in leaf_ids)
 
 
-def _maybe_promote_franchise_sync(
-    db: Session,
-    *,
-    universe_id: int,
-    module: ModuleKind,
-    franchise_slug: str,
-) -> None:
-    """If every leaf is in the universe, record a franchise sync rule."""
-    if franchise_has_sync(db, module, franchise_slug, universe_id):
-        return
-    if not franchise_fully_covered(db, module, franchise_slug, universe_id):
-        return
-    _ensure_sync_rule(
-        db,
-        universe_id=universe_id,
-        module=module,
-        franchise_slug=franchise_slug,
-        commit=True,
-    )
-
-
 def universes_for_franchise_scope(
     db: Session, module: ModuleKind, slug: str
 ) -> list[dict]:
@@ -823,10 +802,12 @@ def link_franchise(
         raise ValueError("Universe not found")
     norm = _norm_slug(slug)
     if leaf_id:
-        # Whole franchise already in this universe → leaf is already covered.
+        # Whole franchise already synced into this universe → leaf is covered.
         if franchise_has_sync(db, module, norm, universe_id):
             apply_franchise_syncs(db, module, norm)
             return _serialize_universe(db, u)
+        # Leaf-only: never create a franchise sync here. Sync is only created
+        # from an explicit franchise-page add (leaf_id omitted below).
         _ensure_leaf_member(
             db,
             universe_id=universe_id,
@@ -835,12 +816,6 @@ def link_franchise(
             leaf_id=leaf_id,
             source=source,
             commit=True,
-        )
-        _maybe_promote_franchise_sync(
-            db,
-            universe_id=universe_id,
-            module=module,
-            franchise_slug=norm,
         )
         return _serialize_universe(db, u)
 
@@ -1512,112 +1487,190 @@ def _hub_generated_bio(
     return body
 
 
-def _franchise_hub_miniatures(db: Session, cards: list[dict]) -> list[dict]:
-    """One carousel card per franchise (not per leaf)."""
+def _franchise_miniature_card(
+    db: Session, module: ModuleKind, slug: str, leaves: list[dict]
+) -> dict:
+    """Single franchise/work card for overview miniatures (whole-franchise member)."""
     from app.models import MovieWork
 
+    leaves_sorted = sorted(
+        leaves,
+        key=lambda c: (
+            str(c.get("date_iso") or "9999"),
+            (c.get("title") or c.get("name") or "").casefold(),
+        ),
+    )
+    first = leaves_sorted[0] if leaves_sorted else {}
+    title = slug.replace("-", " ").title()
+    cover = None
+    logo = None
+    folder = ""
+
+    if module == "movies":
+        row = db.scalar(select(MovieWork).where(MovieWork.mwk_slug == slug))
+        if row and row.mwk_name:
+            title = row.mwk_name
+        try:
+            from app.movies_index import build_work_detail
+
+            detail = build_work_detail(slug)
+            if detail:
+                title = detail.get("name") or title
+                cover = (
+                    detail.get("portrait_url")
+                    or detail.get("cover_url")
+                    or cover
+                )
+                logo = detail.get("logo_url") or logo
+                folder = detail.get("folder_path") or folder
+        except Exception:
+            pass
+    elif module == "books":
+        try:
+            from app.books_index import build_work_detail as build_books_work
+
+            detail = build_books_work(slug)
+            if detail:
+                title = detail.get("name") or title
+                cover = (
+                    detail.get("portrait_url")
+                    or detail.get("cover_url")
+                    or cover
+                )
+                logo = detail.get("logo_url") or logo
+                folder = detail.get("folder_path") or folder
+        except Exception:
+            pass
+    elif module == "games":
+        try:
+            from app.games_index import build_work_detail as build_games_work
+
+            detail = build_games_work(slug)
+            if detail:
+                title = detail.get("name") or title
+                cover = (
+                    detail.get("portrait_url")
+                    or detail.get("cover_url")
+                    or cover
+                )
+                logo = detail.get("logo_url") or logo
+                folder = detail.get("folder_path") or folder
+        except Exception:
+            pass
+    else:
+        try:
+            from app.series_index import build_franchise_detail
+
+            detail = build_franchise_detail(slug)
+            if detail:
+                title = detail.get("name") or title
+                cover = (
+                    detail.get("portrait_url")
+                    or detail.get("cover_url")
+                    or cover
+                )
+                logo = detail.get("logo_url") or logo
+                folder = detail.get("folder_path") or folder
+        except Exception:
+            pass
+
+    if not cover:
+        for leaf in leaves_sorted:
+            cover = (
+                leaf.get("portrait_url")
+                or leaf.get("cover_url")
+                or leaf.get("landscape_url")
+            )
+            if cover:
+                break
+    if not logo:
+        for leaf in leaves_sorted:
+            if leaf.get("logo_url"):
+                logo = leaf.get("logo_url")
+                break
+    if not folder:
+        folder = first.get("folder_path") or ""
+
+    date_iso = first.get("date_iso")
+    display = first.get("display_date")
+    y0, y1 = _years_from_isos([leaf.get("date_iso") for leaf in leaves_sorted])
+    if y0 and y1 and y0 != y1:
+        display = f"{y0}–{y1}"
+    elif y0:
+        display = y0
+
+    return {
+        "id": slug,
+        "title": title,
+        "date_iso": date_iso,
+        "display_date": display,
+        "folder_path": folder or "",
+        "cover_url": cover,
+        "portrait_url": cover,
+        "logo_url": logo,
+        "season_count": len(leaves_sorted),
+        "module": module,
+        "franchise_id": slug,
+        "kind": "franchise",
+    }
+
+
+def _leaf_miniature_card(leaf: dict, module: ModuleKind, slug: str) -> dict:
+    """One overview miniature for a leaf member (film / show / book / game)."""
+    lid = str(leaf.get("leaf_id") or leaf.get("id") or "").strip() or slug
+    cover = (
+        leaf.get("portrait_url")
+        or leaf.get("cover_url")
+        or leaf.get("landscape_url")
+    )
+    return {
+        "id": lid,
+        "title": leaf.get("title") or leaf.get("name") or lid,
+        "date_iso": leaf.get("date_iso"),
+        "display_date": leaf.get("display_date"),
+        "folder_path": leaf.get("folder_path") or "",
+        "cover_url": cover,
+        "portrait_url": leaf.get("portrait_url") or cover,
+        "landscape_url": leaf.get("landscape_url"),
+        "banner_url": leaf.get("banner_url"),
+        "logo_url": leaf.get("logo_url"),
+        "season_count": 1,
+        "module": module,
+        "franchise_id": slug,
+        "leaf_id": lid,
+        "kind": leaf.get("kind")
+        or (
+            "film"
+            if module == "movies"
+            else "book"
+            if module == "books"
+            else "game"
+            if module == "games"
+            else "subseries"
+        ),
+    }
+
+
+def _hub_overview_miniatures(
+    db: Session, universe_id: int, cards: list[dict]
+) -> list[dict]:
+    """Overview miniatures: leaf cards for leaf members; franchise card when synced."""
     groups: dict[tuple[str, str], list[dict]] = {}
     for c in cards:
         module = c.get("module")
         slug = (c.get("franchise_id") or "").strip()
-        if module not in ("movies", "series") or not slug:
+        if module not in ("movies", "series", "books", "games") or not slug:
             continue
         groups.setdefault((module, slug), []).append(c)
 
     out: list[dict] = []
     for (module, slug), leaves in groups.items():
-        leaves_sorted = sorted(
-            leaves,
-            key=lambda c: (
-                str(c.get("date_iso") or "9999"),
-                (c.get("title") or c.get("name") or "").casefold(),
-            ),
-        )
-        first = leaves_sorted[0]
-        last = leaves_sorted[-1]
-        title = slug.replace("-", " ").title()
-        cover = None
-        logo = None
-        folder = ""
-
-        if module == "movies":
-            row = db.scalar(select(MovieWork).where(MovieWork.mwk_slug == slug))
-            if row and row.mwk_name:
-                title = row.mwk_name
-            try:
-                from app.movies_index import build_work_detail
-
-                detail = build_work_detail(slug)
-                if detail:
-                    title = detail.get("name") or title
-                    cover = (
-                        detail.get("portrait_url")
-                        or detail.get("cover_url")
-                        or cover
-                    )
-                    logo = detail.get("logo_url") or logo
-                    folder = detail.get("folder_path") or folder
-            except Exception:
-                pass
-        else:
-            try:
-                from app.series_index import build_franchise_detail
-
-                detail = build_franchise_detail(slug)
-                if detail:
-                    title = detail.get("name") or title
-                    cover = (
-                        detail.get("portrait_url")
-                        or detail.get("cover_url")
-                        or cover
-                    )
-                    logo = detail.get("logo_url") or logo
-                    folder = detail.get("folder_path") or folder
-            except Exception:
-                pass
-
-        if not cover:
-            for leaf in leaves_sorted:
-                cover = (
-                    leaf.get("portrait_url")
-                    or leaf.get("cover_url")
-                    or leaf.get("landscape_url")
-                )
-                if cover:
-                    break
-        if not logo:
-            for leaf in leaves_sorted:
-                if leaf.get("logo_url"):
-                    logo = leaf.get("logo_url")
-                    break
-        if not folder:
-            folder = first.get("folder_path") or ""
-
-        date_iso = first.get("date_iso")
-        display = first.get("display_date")
-        y0, y1 = _years_from_isos(
-            [leaf.get("date_iso") for leaf in leaves_sorted]
-        )
-        if y0 and y1 and y0 != y1:
-            display = f"{y0}–{y1}"
-        elif y0:
-            display = y0
-
-        out.append(
-            {
-                "id": slug,
-                "title": title,
-                "date_iso": date_iso,
-                "display_date": display,
-                "folder_path": folder or "",
-                "cover_url": cover,
-                "logo_url": logo,
-                "season_count": len(leaves_sorted),
-                "module": module,
-                "franchise_id": slug,
-                "kind": "franchise",
-            }
-        )
+        mod: ModuleKind = module  # type: ignore[assignment]
+        if franchise_has_sync(db, mod, slug, universe_id):
+            out.append(_franchise_miniature_card(db, mod, slug, leaves))
+            continue
+        for leaf in leaves:
+            out.append(_leaf_miniature_card(leaf, mod, slug))
 
     out.sort(
         key=lambda c: (
@@ -1785,7 +1838,7 @@ def build_universe_hub(
     media["has_books"] = bool(books)
     media["has_library"] = bool(books)
 
-    franchise_cards = _franchise_hub_miniatures(db, cards)
+    franchise_cards = _hub_overview_miniatures(db, universe_id, cards)
     franchise_names = [
         str(c.get("title") or "").strip()
         for c in franchise_cards
