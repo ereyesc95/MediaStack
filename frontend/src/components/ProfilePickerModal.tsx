@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { fetchProfiles, selectProfile } from "../api";
 import type { ProfileUser } from "../auth";
 import AdminPasswordModal from "./AdminPasswordModal";
+import { IconPencil } from "./MenuIcons";
 import PlaylistBoot from "./PlaylistBoot";
 import ProfileAvatar, { ProfileWelcomeLogo } from "./ProfileAvatar";
 import ProfileEditModal from "./ProfileEditModal";
@@ -87,12 +88,20 @@ export default function ProfilePickerModal({
   }
 
   function handlePick(p: ProfileUser) {
+    if (busy !== null) return;
     if (p.is_admin) {
       setError(null);
       setAdminPwOpen(true);
       return;
     }
     pick(p.user_id);
+  }
+
+  function handleTileKey(e: KeyboardEvent, p: ProfileUser) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handlePick(p);
+    }
   }
 
   function handleProfileSaved(user: ProfileUser) {
@@ -106,77 +115,102 @@ export default function ProfilePickerModal({
 
   return (
     <>
-      <div className="modal-backdrop modal-backdrop--profiles">
+      <div
+        className={`modal-backdrop modal-backdrop--profiles${
+          onBack ? " modal-backdrop--profiles-switch" : ""
+        }`}
+      >
         <WelcomeAmbient />
-        <div
-          className="modal-panel modal-panel--profiles"
-          onClick={(e) => e.stopPropagation()}
+
+        <header
+          className={`profile-picker-brand${
+            onBack ? " profile-picker-brand--switch" : ""
+          }`}
         >
-          {onBack ? (
-            <button
-              type="button"
-              className="artist-page__catalog-back profile-picker-back"
-              onClick={onBack}
+          <ProfileWelcomeLogo />
+          <span className="profile-picker-brand__name">MyStack</span>
+        </header>
+
+        {onBack ? (
+          <button
+            type="button"
+            className="artist-page__catalog-back profile-picker-back"
+            onClick={onBack}
+          >
+            <svg
+              className="artist-page__catalog-chevron"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <svg
-                className="artist-page__catalog-chevron"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  d="M15 18l-6-6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="artist-page__catalog-label">Back</span>
-            </button>
-          ) : null}
-          <h3 className="profile-picker-welcome">
-            <ProfileWelcomeLogo />
-            <span>Welcome to MyStack</span>
-          </h3>
+              <path
+                d="M15 18l-6-6 6-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="artist-page__catalog-label">Back</span>
+          </button>
+        ) : null}
+
+        <div className="profile-picker-stage">
           <ul className="profile-picker-list">
-            {profiles.map((p) => (
-              <li key={p.user_id} className="profile-picker-item">
-                <button
-                  type="button"
-                  className={`profile-picker-btn${
-                    highlightUserId === p.user_id
-                      ? " profile-picker-btn--active"
-                      : ""
-                  }`}
-                  disabled={busy !== null}
-                  onClick={() => handlePick(p)}
+            {[...profiles]
+              .sort((a, b) => Number(a.is_admin) - Number(b.is_admin))
+              .map((p, i) => {
+              const label = p.is_admin ? "Admin" : p.username;
+              return (
+                <li
+                  key={p.user_id}
+                  className="profile-picker-item"
+                  style={{ ["--profile-i" as string]: i }}
                 >
-                  <ProfileAvatar
-                    userId={p.user_id}
-                    name={p.is_admin ? "Admin" : p.username}
-                    avatar={p.avatar}
-                    isAdmin={p.is_admin}
-                    className="profile-picker-avatar"
-                  />
-                  <span className="profile-picker-name">
-                    {p.is_admin ? "Admin" : p.username}
-                  </span>
-                  {busy === p.user_id && (
-                    <span className="profile-picker-busy">…</span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="profile-picker-edit"
-                  aria-label={`Edit ${p.is_admin ? "Admin" : p.username}`}
-                  disabled={busy !== null}
-                  onClick={() => setEditProfile(p)}
-                >
-                  ✎
-                </button>
-              </li>
-            ))}
+                  <div
+                    role="button"
+                    tabIndex={busy !== null ? -1 : 0}
+                    className={`profile-picker-tile${
+                      highlightUserId === p.user_id
+                        ? " profile-picker-tile--active"
+                        : ""
+                    }${busy !== null ? " profile-picker-tile--disabled" : ""}`}
+                    onClick={() => handlePick(p)}
+                    onKeyDown={(e) => handleTileKey(e, p)}
+                    aria-label={label}
+                  >
+                    <div className="profile-picker-avatar-wrap">
+                      <ProfileAvatar
+                        userId={p.user_id}
+                        name={label}
+                        avatar={p.avatar}
+                        isAdmin={p.is_admin}
+                        className="profile-picker-avatar"
+                      />
+                    </div>
+                    <span className="profile-picker-name-row">
+                      <span className="profile-picker-name">{label}</span>
+                      <button
+                        type="button"
+                        className="profile-picker-edit"
+                        aria-label={`Edit ${label}`}
+                        disabled={busy !== null}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditProfile(p);
+                        }}
+                      >
+                        <IconPencil className="profile-picker-edit__icon" />
+                      </button>
+                    </span>
+                    {busy === p.user_id ? (
+                      <span className="profile-picker-busy">…</span>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           {error && !adminPwOpen && <p className="error-inline">{error}</p>}
           {!profiles.length && !error && (

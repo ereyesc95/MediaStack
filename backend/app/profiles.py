@@ -12,10 +12,10 @@ ADMIN_USER_ID = 1
 ADMIN_DISPLAY_NAME = "Admin"
 
 PROFILE_SLOTS: tuple[dict[str, str | int], ...] = (
-    {"id": 1, "name": "Admin", "role_id": ADMIN_ROLE_ID},
     {"id": 2, "name": "Guest 1", "role_id": GUEST_ROLE_ID},
     {"id": 3, "name": "Guest 2", "role_id": GUEST_ROLE_ID},
     {"id": 4, "name": "Guest 3", "role_id": GUEST_ROLE_ID},
+    {"id": 1, "name": "Admin", "role_id": ADMIN_ROLE_ID},
 )
 
 

@@ -110,9 +110,17 @@ html[data-phone] .series-franchise__back-label {
   scrollbar-color: color-mix(in srgb, var(--scrollbar-thumb) 42%, transparent) transparent;
 }
 
-body {
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
-  min-height: 100vh;
+}
+
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 *::-webkit-scrollbar {
@@ -180,7 +188,32 @@ input {
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+/* Hub must fit the visible phone viewport (URL bar included) — no page scroll. */
+.app--hub {
+  height: 100svh;
+  max-height: 100svh;
+}
+
+.app--hub .main--hub {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app--hub .hub-panes.hub-panes--grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
   overflow: hidden;
 }
 
@@ -271,6 +304,7 @@ input {
   padding: 0;
   overflow: hidden;
   background: #0d0f14;
+  min-height: 0;
 }
 
 .main--module {
@@ -1036,10 +1070,45 @@ input {
     flex-direction: column;
   }
 
+  /* Keep 2×4 so all 8 modules stay on-screen — no vertical scroll. */
   .hub-panes--grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-    overflow-y: auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .hub-pane-label {
+    font-size: clamp(0.68rem, 2.6vw, 0.92rem);
+    letter-spacing: 0.12em;
+    padding: 0.28rem 0.4rem;
+  }
+}
+
+/* Phone: fit all 8 panes in the visible viewport (portrait + landscape). */
+@media (max-width: 900px) {
+  .app--hub {
+    height: 100svh;
+    max-height: 100svh;
+  }
+
+  .hub-panes--grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .hub-pane-label {
+    font-size: clamp(0.62rem, 2.4vw, 0.85rem);
+    letter-spacing: 0.1em;
+    padding: 0.15rem 0.3rem;
+  }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+  .hub-pane-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    padding: 0.15rem 0.25rem;
   }
 }
 
@@ -4643,21 +4712,106 @@ input {
   overflow: hidden;
 }
 
-.modal-panel--profiles {
-  width: min(640px, 92vw);
-  text-align: center;
-  padding-top: 1.35rem;
-  position: relative;
+/* Same pace as logo pulse, but dimmer so it stays behind the tiles. */
+.modal-backdrop--profiles::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 45%,
+    color-mix(in srgb, var(--accent, #c9a227) 14%, transparent) 0%,
+    transparent 70%
+  );
+  animation: welcome-bg-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes welcome-bg-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Soft edge vignette — cards dissolve at the frame; center stays clear for tiles. */
+.modal-backdrop--profiles::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   z-index: 2;
-  background: color-mix(in srgb, var(--bg-elevated, #161616) 88%, transparent);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 58% 52% at 50% 52%,
+      transparent 0%,
+      transparent 42%,
+      rgba(0, 0, 0, 0.45) 72%,
+      #050505 100%
+    ),
+    linear-gradient(
+      to bottom,
+      #050505 0%,
+      transparent 12%,
+      transparent 88%,
+      #050505 100%
+    ),
+    linear-gradient(
+      to right,
+      #050505 0%,
+      transparent 10%,
+      transparent 90%,
+      #050505 100%
+    );
+}
+
+.profile-picker-brand {
+  position: absolute;
+  top: 1.1rem;
+  left: 1.25rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  pointer-events: none;
+}
+
+/* Switch-profile flow: free top-left for Back; brand moves bottom-right. */
+.profile-picker-brand--switch {
+  top: auto;
+  left: auto;
+  right: 1.25rem;
+  bottom: 1.15rem;
+}
+
+.profile-picker-brand__name {
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  line-height: 1;
+}
+
+.profile-picker-stage {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(640px, 94vw);
+  margin: 0 auto;
+  text-align: center;
 }
 
 /* Welcome ambient photocard rain / drift (behind profile picker). */
 .welcome-ambient {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
@@ -4677,44 +4831,50 @@ input {
   top: 0;
   left: calc(var(--welcome-lane) * 100%);
   width: var(--welcome-size);
-  transform: translate3d(-50%, -120%, 0);
+  transform: translate3d(-50%, -45vh, 0);
   transform-style: preserve-3d;
   perspective: 900px;
-  opacity: 0.32;
+  opacity: 1;
   will-change: transform;
+  pointer-events: auto;
+  cursor: default;
+  border: none;
+  padding: 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .welcome-ambient__card--depth-0 {
-  opacity: 0.18;
   z-index: 0;
+  filter: brightness(0.42);
 }
 
 .welcome-ambient__card--depth-1 {
-  opacity: 0.28;
   z-index: 1;
+  filter: brightness(0.68);
 }
 
 .welcome-ambient__card--depth-2 {
-  opacity: 0.4;
   z-index: 2;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
+  filter: brightness(1) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
 }
 
 .welcome-ambient--portrait .welcome-ambient__card {
   animation: welcome-ambient-fall var(--welcome-duration) linear var(--welcome-delay)
-    infinite;
+    infinite backwards;
 }
 
 .welcome-ambient--landscape .welcome-ambient__card {
   top: calc(8% + var(--welcome-lane) * 72%);
   left: 0;
+  transform: translate3d(-45vw, -50%, 0);
   animation: welcome-ambient-drift var(--welcome-duration) linear var(--welcome-delay)
-    infinite;
+    infinite backwards;
 }
 
 @keyframes welcome-ambient-fall {
   from {
-    transform: translate3d(-50%, -30vh, 0);
+    transform: translate3d(-50%, -45vh, 0);
   }
   to {
     transform: translate3d(-50%, 115vh, 0);
@@ -4723,7 +4883,7 @@ input {
 
 @keyframes welcome-ambient-drift {
   from {
-    transform: translate3d(-40vw, -50%, 0);
+    transform: translate3d(-45vw, -50%, 0);
   }
   to {
     transform: translate3d(120vw, -50%, 0);
@@ -4732,42 +4892,42 @@ input {
 
 .welcome-ambient__scene {
   position: relative;
+  display: grid;
   width: 100%;
-  aspect-ratio: 2 / 3;
   transform-style: preserve-3d;
-  transition: transform 0.7s cubic-bezier(0.4, 0.2, 0.2, 1);
-}
-
-.welcome-ambient__card--landscape .welcome-ambient__scene {
-  aspect-ratio: 3 / 2;
-}
-
-.welcome-ambient__card--flipped.welcome-ambient__card--portrait .welcome-ambient__scene {
-  transform: rotateY(180deg);
-}
-
-.welcome-ambient__card--flipped.welcome-ambient__card--landscape .welcome-ambient__scene {
-  transform: rotateX(180deg);
+  transition-property: transform;
+  transition-duration: 0.7s;
+  transition-timing-function: cubic-bezier(0.4, 0.2, 0.2, 1);
+  border-radius: 0.55rem;
+  /* Size comes from the front image — no forced aspect / letterboxing. */
 }
 
 .welcome-ambient__face {
-  position: absolute;
-  inset: 0;
+  grid-area: 1 / 1;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: 0.55rem;
   overflow: hidden;
-  background: #111;
+  background: #0a0a0a;
+  line-height: 0;
 }
 
-.welcome-ambient__face img {
+.welcome-ambient__face--front {
+  position: relative;
+  width: 100%;
+}
+
+.welcome-ambient__face--front img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
 }
 
 .welcome-ambient__face--back {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
   transform: rotateY(180deg);
 }
 
@@ -4775,8 +4935,11 @@ input {
   transform: rotateX(180deg);
 }
 
-.welcome-ambient__card--flipped .welcome-ambient__face--front {
-  opacity: 0.85;
+.welcome-ambient__face--back img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4787,19 +4950,9 @@ input {
 
 .profile-picker-back {
   position: absolute;
-  top: 0.75rem;
-  left: 0.9rem;
-}
-
-.profile-picker-welcome {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.7rem;
-  margin: 0.15rem 0 0.35rem;
-  font-size: 1.35rem;
-  font-weight: 600;
-  line-height: 1.2;
+  top: 1.05rem;
+  left: 1.15rem;
+  z-index: 3;
 }
 
 .profile-picker-welcome__logo {
@@ -4828,69 +4981,132 @@ input {
   }
 }
 
+@keyframes profile-picker-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .profile-picker-list {
   list-style: none;
-  margin: 1.25rem 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(7.25rem, 1fr));
+  gap: 0.65rem 0.75rem;
+  width: 100%;
+  max-width: 34rem;
 }
 
 .profile-picker-item {
   position: relative;
+  opacity: 0;
+  animation: profile-picker-tile-in 0.45s ease forwards;
+  animation-delay: calc(var(--profile-i, 0) * 0.12s + 0.18s);
+}
+
+.profile-picker-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.2rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.profile-picker-tile:hover,
+.profile-picker-tile:focus-visible {
+  outline: none;
+  background: transparent;
+}
+
+.profile-picker-tile--active {
+  background: transparent;
+}
+
+.profile-picker-tile--disabled {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.profile-picker-avatar-wrap {
+  position: relative;
+  width: 6.75rem;
+  height: 6.75rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-picker-name-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Match avatar width so the pencil lines up with the photo’s right edge. */
+  width: 6.75rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .profile-picker-edit {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  background: var(--bg-elevated);
+  background: none;
+  padding: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  line-height: 1;
   color: var(--text-muted);
-  width: 1.65rem;
-  height: 1.65rem;
-  border-radius: 50%;
-  font-size: 0.85rem;
+  text-shadow: none;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, color 0.15s;
   box-shadow: none;
 }
 
-.profile-picker-item:hover .profile-picker-edit,
+.profile-picker-edit__icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  display: block;
+}
+
+@media (hover: hover) {
+  .profile-picker-item:hover .profile-picker-edit,
+  .profile-picker-edit:focus-visible {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .profile-picker-edit {
+    opacity: 0.7;
+  }
+
+  .profile-picker-edit:focus-visible {
+    opacity: 1;
+  }
+}
+
+.profile-picker-edit:hover,
 .profile-picker-edit:focus-visible {
-  opacity: 1;
-}
-
-.profile-picker-edit:hover {
   color: var(--text);
-}
-
-.profile-picker-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 1rem 0.75rem;
-  border: 2px solid transparent;
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
-}
-
-.profile-picker-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--bg-hover);
-  transform: scale(1.03);
-}
-
-.profile-picker-btn--active {
-  border-color: var(--accent);
-  background: var(--bg-hover);
 }
 
 .profile-avatar {
@@ -4909,9 +5125,22 @@ input {
   box-shadow: none;
 }
 
-.profile-picker-avatar {
-  width: 4.5rem;
-  height: 4.5rem;
+.profile-picker-avatar,
+.profile-picker-avatar.profile-avatar {
+  width: 6.75rem;
+  height: 6.75rem;
+  border-radius: 0;
+  border-color: transparent;
+  transition: transform 0.28s ease;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Zoom content inside the fixed avatar frame (wrap clips overflow). */
+.profile-picker-tile:hover .profile-picker-avatar,
+.profile-picker-tile:focus-visible .profile-picker-avatar,
+.profile-picker-tile--active .profile-picker-avatar {
+  transform: scale(1.12);
 }
 
 .profile-avatar--admin {
@@ -4953,18 +5182,56 @@ input {
   border-color: transparent;
 }
 
-.profile-picker-btn--active .profile-avatar {
-  border-color: var(--accent);
-}
-
 .profile-picker-name {
-  font-size: 0.9rem;
+  display: block;
+  max-width: calc(100% - 1.1rem);
+  font-size: 0.95rem;
   font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-picker-busy {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+/* Phone portrait: exactly 2 profile tiles per row. */
+@media (max-width: 480px) and (orientation: portrait) {
+  .profile-picker-stage {
+    width: min(22rem, 92vw);
+  }
+
+  .profile-picker-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 100%;
+    gap: 0.85rem 0.75rem;
+  }
+
+  .profile-picker-avatar-wrap {
+    width: 6.25rem;
+    height: 6.25rem;
+  }
+
+  .profile-picker-avatar,
+  .profile-picker-avatar.profile-avatar {
+    width: 6.25rem;
+    height: 6.25rem;
+  }
+
+  .profile-picker-name-row {
+    width: 6.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-picker-item {
+    opacity: 1;
+    animation: none;
+  }
 }
 
 .menu-item-switch-profile {
@@ -5043,7 +5310,10 @@ input {
 
 .modal-panel--profile-edit {
   width: min(560px, 94vw);
+  max-width: calc(100vw - 1.25rem);
   padding: 1.15rem 1.35rem 1.25rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .modal-panel--profile-edit .modal-panel-header {
@@ -5269,6 +5539,80 @@ input {
 .profile-edit-upload {
   width: 100%;
   margin-bottom: 0.5rem;
+}
+
+/* Phone / narrow: stack edit layout so icon+color rows wrap — no sideways scroll. */
+@media (max-width: 560px) {
+  .modal-panel--profile-edit {
+    width: min(100vw - 1.25rem, 94vw);
+    max-width: calc(100vw - 1.25rem);
+    max-height: min(92dvh, 92vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 1rem 1rem 1.1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .profile-edit-layout {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .profile-edit-preview {
+    flex-basis: 6.5rem;
+    width: 6.5rem;
+    height: 6.5rem;
+    align-self: center;
+    margin-inline: auto;
+  }
+
+  .profile-edit-picks {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profile-edit-field--inline {
+    flex-wrap: wrap;
+    gap: 0.45rem 0.65rem;
+  }
+
+  .profile-edit-field--inline input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profile-edit-emoji-grid,
+  .profile-edit-color-grid {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.15rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profile-edit-pick {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: 2.05rem;
+    height: 2.05rem;
+    padding: 0;
+  }
+
+  .profile-edit-pick__icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .profile-edit-color {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: 1.45rem;
+    height: 1.45rem;
+  }
 }
 
 .welcome-pick-btn {

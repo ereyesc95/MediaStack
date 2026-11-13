@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import {
   fetchWelcomeAmbientPhotocards,
   type WelcomeAmbientPhotocard,
 } from "../api";
 
 const STORAGE_KEY = "mystack.welcomeAmbient";
+const FLIP_MS = 700;
 
 type Mode = "portrait" | "landscape";
 
@@ -18,6 +27,7 @@ type Particle = {
   delaySec: number;
   flipEverySec: number;
   flipDelaySec: number;
+  startFlipped: boolean;
 };
 
 function nextMode(prev: Mode | null): Mode {
@@ -73,19 +83,22 @@ function buildParticles(
           : depth === 1
             ? 112
             : 84;
+    // Positive delays only — cards enter from off-screen, never spawn mid-view.
+    const delaySec = 0.35 + i * (0.55 + Math.random() * 0.65) + Math.random() * 2.2;
     out.push({
       key: `${card.id}-${i}`,
       card,
       depth,
       size,
-      lane: Math.random(),
+      lane: 0.06 + Math.random() * 0.88,
       durationSec:
         mode === "portrait"
           ? 18 + Math.random() * 16 + depth * 4
           : 22 + Math.random() * 18 + depth * 5,
-      delaySec: -Math.random() * 20,
+      delaySec,
       flipEverySec: 7 + Math.random() * 6,
-      flipDelaySec: 2 + Math.random() * 8,
+      flipDelaySec: delaySec + 3 + Math.random() * 6,
+      startFlipped: Math.random() < 0.45,
     });
   }
   return out;
@@ -98,14 +111,27 @@ function AmbientCard({
   particle: Particle;
   mode: Mode;
 }) {
-  const [flipped, setFlipped] = useState(false);
+  // Accumulate degrees so flips continue forward (tap = one continuous +360).
+  const [turnDeg, setTurnDeg] = useState(particle.startFlipped ? 180 : 0);
+  const [spinMs, setSpinMs] = useState(FLIP_MS);
+  const tapBusyRef = useRef(false);
+  const autoPausedUntilRef = useRef(0);
+
+  const stepFlip = () => {
+    setSpinMs(FLIP_MS);
+    setTurnDeg((d) => d + 180);
+  };
 
   useEffect(() => {
     let intervalId: number | undefined;
     const start = window.setTimeout(() => {
-      setFlipped((v) => !v);
+      if (Date.now() >= autoPausedUntilRef.current) {
+        stepFlip();
+      }
       intervalId = window.setInterval(() => {
-        setFlipped((v) => !v);
+        if (Date.now() < autoPausedUntilRef.current) return;
+        if (tapBusyRef.current) return;
+        stepFlip();
       }, particle.flipEverySec * 1000);
     }, particle.flipDelaySec * 1000);
     return () => {
@@ -114,27 +140,62 @@ function AmbientCard({
     };
   }, [particle.flipDelaySec, particle.flipEverySec, particle.key]);
 
+  const runFullSpin = () => {
+    if (tapBusyRef.current) return;
+    tapBusyRef.current = true;
+    const duration = FLIP_MS * 2;
+    autoPausedUntilRef.current = Date.now() + duration + 120;
+    // Single +360 with longer transition = continuous full turn (no mid pause).
+    setSpinMs(duration);
+    setTurnDeg((d) => d + 360);
+    window.setTimeout(() => {
+      tapBusyRef.current = false;
+      setSpinMs(FLIP_MS);
+    }, duration);
+  };
+
+  const onActivate = (e: MouseEvent | KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    runFullSpin();
+  };
+
   const style = {
     ["--welcome-lane" as string]: String(particle.lane),
     ["--welcome-size" as string]: `${particle.size}px`,
     ["--welcome-duration" as string]: `${particle.durationSec}s`,
     ["--welcome-delay" as string]: `${particle.delaySec}s`,
+    zIndex: particle.depth,
+  } as CSSProperties;
+
+  // Landscape uses negative rotateX so the card flips downward.
+  const sceneStyle = {
+    transform:
+      mode === "portrait"
+        ? `rotateY(${turnDeg}deg)`
+        : `rotateX(${-turnDeg}deg)`,
+    transitionDuration: `${spinMs}ms`,
   } as CSSProperties;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={[
         "welcome-ambient__card",
         `welcome-ambient__card--${mode}`,
         `welcome-ambient__card--depth-${particle.depth}`,
-        flipped ? "welcome-ambient__card--flipped" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       style={style}
-      aria-hidden
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onActivate(e);
+      }}
+      aria-label="Flip photocard"
     >
-      <div className="welcome-ambient__scene">
+      <div className="welcome-ambient__scene" style={sceneStyle}>
         <div className="welcome-ambient__face welcome-ambient__face--front">
           <img src={particle.card.front_url} alt="" draggable={false} />
         </div>
@@ -231,7 +292,6 @@ export default function WelcomeAmbient() {
       ]
         .filter(Boolean)
         .join(" ")}
-      aria-hidden
     >
       {particles.map((p) => (
         <AmbientCard key={p.key} particle={p} mode={mode} />
