@@ -159,6 +159,8 @@ type Props = {
   onAddToUniverse?: () => void;
   /** Label for onAddToUniverse (default: Add to Universe). */
   addToUniverseLabel?: string;
+  /** Admin: delete an empty universe (Edit data). */
+  onDeleteUniverse?: () => void;
   onRescanLibrary?: () => void;
   /** Admin: generate Explorer folder.ico from covers/assets. */
   onGenerateFolderIcons?: () => void;
@@ -304,6 +306,7 @@ export default function AppMenu({
   refreshLocalFlat: _refreshLocalFlat = false,
   onAddToUniverse,
   addToUniverseLabel = "Add to Universe",
+  onDeleteUniverse,
   onRescanLibrary,
   onGenerateFolderIcons,
   onEnsureDesktopIni,
@@ -609,6 +612,7 @@ export default function AppMenu({
     editDataFlat &&
     isAdmin &&
     (onAddToUniverse ||
+      onDeleteUniverse ||
       onEditAbout ||
       onAddAudio ||
       onAddExternalRelease ||
@@ -821,6 +825,18 @@ export default function AppMenu({
             >
               <IconUniverse className="menu-item-icon" />
               {addToUniverseLabel}
+            </button>
+          )}
+          {onDeleteUniverse && (
+            <button
+              type="button"
+              onClick={() => {
+                onDeleteUniverse();
+                setOpen(false);
+              }}
+            >
+              <IconTrash className="menu-item-icon" />
+              Delete universe
             </button>
           )}
           {onEditAbout && (

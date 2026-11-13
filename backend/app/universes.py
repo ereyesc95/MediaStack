@@ -961,6 +961,45 @@ def update_universe_overview(
     return update_universe(db, universe_id, overview=overview, set_overview=True)
 
 
+def _delete_universe_art_files(universe_name: str) -> None:
+    root = _media_root()
+    for kind in ART_KINDS:
+        path = _art_file(universe_name, kind, root)
+        if not path:
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+
+def delete_universe(db: Session, universe_id: int) -> None:
+    """Delete an empty universe (no media members). Raises ValueError if not empty."""
+    u = db.get(Universe, universe_id)
+    if not u:
+        raise ValueError("Universe not found")
+    members = _member_rows(db, universe_id)
+    if members:
+        raise ValueError(
+            "Remove all media from this universe before deleting it."
+        )
+    sync_rows = list(
+        db.scalars(
+            select(UniverseFranchiseSync).where(
+                UniverseFranchiseSync.ufs_universe_id == universe_id
+            )
+        ).all()
+    )
+    for row in sync_rows:
+        db.delete(row)
+    name = u.uni_name
+    db.delete(u)
+    db.commit()
+    _delete_universe_art_files(name)
+    clear_universe_card_caches()
+    _expand_cards_cache.pop(universe_id, None)
+
+
 def update_universe(
     db: Session,
     universe_id: int,

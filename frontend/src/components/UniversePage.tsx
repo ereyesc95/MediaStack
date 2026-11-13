@@ -5,7 +5,12 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { fetchUniverseHub, pullUniverseTmdbPortrait } from "../api";
+import {
+  deleteUniverse,
+  fetchUniverseHub,
+  pullUniverseTmdbPortrait,
+} from "../api";
+import { notifyUniversesChanged } from "../universesCache";
 import {
   applyMediaTheme,
   beginArtistPageSession,
@@ -37,6 +42,7 @@ import {
 } from "../usePhoneLayout";
 import { getStoredReleaseCardLayout, saveReleaseCardLayout } from "../themes";
 import AppMenu from "./AppMenu";
+import ConfirmDialog from "./ConfirmDialog";
 import TopBarTitle from "./TopBarTitle";
 import OfficialUnofficialBar from "./OfficialUnofficialBar";
 import {
@@ -183,6 +189,9 @@ export default function UniversePage({
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [metadataFetching, setMetadataFetching] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [eraIndex, setEraIndex] = useState(0);
@@ -236,6 +245,16 @@ export default function UniversePage({
   const universe = hub?.universe;
   const overview = hub?.overview;
   const title = universe?.name || overview?.name || "Universe";
+  const universeIsEmpty = useMemo(() => {
+    if (!hub || !universe) return false;
+    const counted = universe.member_count;
+    if (typeof counted === "number") return counted === 0;
+    const mediaCount =
+      (hub.movies?.length || 0) +
+      (hub.series?.length || 0) +
+      (hub.books?.length || 0);
+    return mediaCount === 0;
+  }, [hub, universe]);
 
   const displayLogoUrl = useMemo(() => {
     if (!overview) return universe?.logo_url || null;
@@ -536,6 +555,14 @@ export default function UniversePage({
                 isAdmin ? () => setAddMemberOpen(true) : undefined
               }
               addToUniverseLabel="Add member"
+              onDeleteUniverse={
+                isAdmin && universeIsEmpty
+                  ? () => {
+                      setDeleteError(null);
+                      setDeleteOpen(true);
+                    }
+                  : undefined
+              }
               onEditAbout={isAdmin ? () => setEditOpen(true) : undefined}
               onRefreshMetadata={
                 isAdmin
@@ -737,6 +764,40 @@ export default function UniversePage({
           ]}
           onClose={() => setAddMemberOpen(false)}
           onSaved={() => void load()}
+        />
+      ) : null}
+
+      {deleteOpen ? (
+        <ConfirmDialog
+          title="Delete universe?"
+          message={`Delete “${title}”? This can’t be undone.`}
+          confirmLabel={deleteBusy ? "Deleting…" : "Delete"}
+          destructive
+          busy={deleteBusy}
+          error={deleteError}
+          onClose={() => {
+            if (!deleteBusy) {
+              setDeleteOpen(false);
+              setDeleteError(null);
+            }
+          }}
+          onConfirm={() => {
+            if (deleteBusy) return;
+            setDeleteBusy(true);
+            setDeleteError(null);
+            void deleteUniverse(universeId)
+              .then(() => {
+                notifyUniversesChanged();
+                setDeleteOpen(false);
+                onBack();
+              })
+              .catch((e) => {
+                setDeleteError(
+                  e instanceof Error ? e.message : String(e)
+                );
+              })
+              .finally(() => setDeleteBusy(false));
+          }}
         />
       ) : null}
     </div>

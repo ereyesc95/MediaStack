@@ -12,6 +12,7 @@ from app.universes import (
     ART_KINDS,
     build_universe_hub,
     create_universe,
+    delete_universe,
     expand_universe_cards,
     get_universe,
     landing_franchise,
@@ -144,6 +145,22 @@ def api_patch_universe(
     if not row:
         raise HTTPException(404, "Universe not found")
     return get_universe(db, universe_id)
+
+
+@router.delete("/{universe_id}")
+def api_delete_universe(
+    universe_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+):
+    try:
+        delete_universe(db, universe_id)
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "Universe not found":
+            raise HTTPException(404, msg) from exc
+        raise HTTPException(400, msg) from exc
+    return {"ok": True}
 
 
 @router.get("/{universe_id}/cards")

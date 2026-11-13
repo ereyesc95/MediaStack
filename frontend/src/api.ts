@@ -3309,6 +3309,12 @@ export async function createUniverse(body: {
   });
 }
 
+export async function deleteUniverse(universeId: number) {
+  return request<{ ok: boolean }>(`${API}/universes/${universeId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function patchUniverseOverview(
   universeId: number,
   overview: string | null
