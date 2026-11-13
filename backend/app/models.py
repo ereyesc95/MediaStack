@@ -335,7 +335,11 @@ class MovieWork(Base):
 
 
 class Universe(Base):
-    """Shared soft grouping across Movies and Series franchises (DB + optional local art)."""
+    """Shared soft grouping across Movies and Series franchises.
+
+    Art columns store media-root-relative paths to existing files under Media/
+    (no dedicated Universes copy folder).
+    """
 
     __tablename__ = "universes"
 
@@ -343,6 +347,10 @@ class Universe(Base):
     uni_name: Mapped[str] = mapped_column(Text)
     uni_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     uni_overview: Mapped[str | None] = mapped_column(Text)
+    uni_portrait_path: Mapped[str | None] = mapped_column(Text)
+    uni_landscape_path: Mapped[str | None] = mapped_column(Text)
+    uni_banner_path: Mapped[str | None] = mapped_column(Text)
+    uni_logo_path: Mapped[str | None] = mapped_column(Text)
     uni_created_at: Mapped[str | None] = mapped_column(Text)
     uni_updated_at: Mapped[str | None] = mapped_column(Text)
 

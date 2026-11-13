@@ -3301,6 +3301,10 @@ export async function lookupUniverse(
 export async function createUniverse(body: {
   name: string;
   overview?: string | null;
+  portrait_path?: string | null;
+  landscape_path?: string | null;
+  banner_path?: string | null;
+  logo_path?: string | null;
 }) {
   return request<import("./types").Universe>(`${API}/universes`, {
     method: "POST",
@@ -3324,7 +3328,14 @@ export async function patchUniverseOverview(
 
 export async function patchUniverse(
   universeId: number,
-  body: { name?: string; overview?: string | null }
+  body: {
+    name?: string;
+    overview?: string | null;
+    portrait_path?: string | null;
+    landscape_path?: string | null;
+    banner_path?: string | null;
+    logo_path?: string | null;
+  }
 ) {
   return request<import("./types").Universe>(`${API}/universes/${universeId}`, {
     method: "PATCH",
@@ -3385,27 +3396,43 @@ export async function unlinkUniverseMember(
   );
 }
 
+export async function pickUniverseMediaImage(
+  kind?: "Portrait" | "Landscape" | "Banner" | "Logo"
+) {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  return request<{
+    cancelled: boolean;
+    path: string | null;
+    url: string | null;
+  }>(`${API}/universes/pick-media-image${q}`, { method: "POST" }, 300_000);
+}
+
+export async function setUniverseArtPath(
+  universeId: number,
+  kind: "Portrait" | "Landscape" | "Banner" | "Logo",
+  path: string | null
+) {
+  return request<
+    import("./types").Universe & { uploaded?: string; path?: string | null }
+  >(`${API}/universes/${universeId}/art`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, path }),
+  });
+}
+
+/** @deprecated Prefer setUniverseArtPath / pickUniverseMediaImage */
 export async function uploadUniverseArt(
   universeId: number,
   kind: "Portrait" | "Landscape" | "Banner" | "Logo",
   file: File
 ) {
-  const form = new FormData();
-  form.append("kind", kind);
-  form.append("file", file);
-  const headers = new Headers();
-  for (const [k, v] of Object.entries(authHeaders())) {
-    headers.set(k, v);
+  void file;
+  const picked = await pickUniverseMediaImage(kind);
+  if (picked.cancelled || !picked.path) {
+    throw new Error("No image selected");
   }
-  const res = await fetch(`${API}/universes/${universeId}/art`, {
-    method: "POST",
-    headers,
-    body: form,
-  });
-  await throwIfNotOk(res);
-  return res.json() as Promise<
-    import("./types").Universe & { uploaded?: string; url?: string }
-  >;
+  return setUniverseArtPath(universeId, kind, picked.path);
 }
 
 export async function pullUniverseTmdbPortrait(universeId: number) {

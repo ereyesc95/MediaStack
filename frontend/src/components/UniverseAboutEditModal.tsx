@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
   patchUniverse,
+  pickUniverseMediaImage,
   pullUniverseTmdbPortrait,
-  uploadUniverseArt,
 } from "../api";
 import { withMediaAccess } from "../mediaFileUrl";
 import type { Universe } from "../types";
@@ -39,12 +39,31 @@ export default function UniverseAboutEditModal({
 }: Props) {
   const [name, setName] = useState(universe.name || "");
   const [overview, setOverview] = useState(universe.overview || "");
-  const [artFiles, setArtFiles] = useState<
-    Partial<Record<(typeof ART_KINDS)[number], File | null>>
+  const [artPicks, setArtPicks] = useState<
+    Partial<
+      Record<(typeof ART_KINDS)[number], { path: string; url: string | null }>
+    >
   >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState(universe);
+
+  async function browseArt(kind: (typeof ART_KINDS)[number]) {
+    setBusy(true);
+    setError(null);
+    try {
+      const picked = await pickUniverseMediaImage(kind);
+      if (picked.cancelled || !picked.path) return;
+      setArtPicks((prev) => ({
+        ...prev,
+        [kind]: { path: picked.path!, url: picked.url },
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
     const trimmed = name.trim();
@@ -55,16 +74,18 @@ export default function UniverseAboutEditModal({
     setBusy(true);
     setError(null);
     try {
-      let next = await patchUniverse(universe.id, {
+      const next = await patchUniverse(universe.id, {
         name: trimmed,
         overview: overview.trim() || null,
+        ...(artPicks.Portrait
+          ? { portrait_path: artPicks.Portrait.path }
+          : {}),
+        ...(artPicks.Landscape
+          ? { landscape_path: artPicks.Landscape.path }
+          : {}),
+        ...(artPicks.Banner ? { banner_path: artPicks.Banner.path } : {}),
+        ...(artPicks.Logo ? { logo_path: artPicks.Logo.path } : {}),
       });
-      for (const kind of ART_KINDS) {
-        const file = artFiles[kind];
-        if (file) {
-          next = await uploadUniverseArt(universe.id, kind, file);
-        }
-      }
       setCurrent(next);
       onSaved(next);
       onClose();
@@ -82,6 +103,10 @@ export default function UniverseAboutEditModal({
       const next = await pullUniverseTmdbPortrait(universe.id);
       setCurrent(next);
       onSaved(next);
+      setArtPicks((prev) => {
+        const { Portrait: _drop, ...rest } = prev;
+        return rest;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -141,15 +166,13 @@ export default function UniverseAboutEditModal({
               <ArtPickSquare
                 key={kind}
                 label={kind.toLowerCase()}
-                previewUrl={artUrl(current, kind)}
-                file={artFiles[kind] ?? null}
-                disabled={busy}
-                onPick={(file) =>
-                  setArtFiles((prev) => ({
-                    ...prev,
-                    [kind]: file,
-                  }))
+                previewUrl={
+                  artPicks[kind]?.url
+                    ? withMediaAccess(artPicks[kind]!.url!)
+                    : artUrl(current, kind)
                 }
+                disabled={busy}
+                onBrowseMedia={() => void browseArt(kind)}
               />
             ))}
           </div>

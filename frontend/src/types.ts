@@ -1663,6 +1663,11 @@ export type Universe = {
   banner_url?: string | null;
   logo_url?: string | null;
   cover_url?: string | null;
+  /** Media-root-relative paths stored in DB. */
+  portrait_path?: string | null;
+  landscape_path?: string | null;
+  banner_path?: string | null;
+  logo_path?: string | null;
   member_count?: number;
   members?: UniverseMember[] | null;
   parent_module?: string;

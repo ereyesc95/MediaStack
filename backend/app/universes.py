@@ -16,6 +16,18 @@ from app.models import Universe, UniverseFranchiseSync, UniverseMember
 
 ModuleKind = Literal["movies", "series", "books", "games"]
 ART_KINDS = ("Portrait", "Landscape", "Banner", "Logo")
+ART_KIND_TO_ATTR = {
+    "Portrait": "uni_portrait_path",
+    "Landscape": "uni_landscape_path",
+    "Banner": "uni_banner_path",
+    "Logo": "uni_logo_path",
+}
+ART_KIND_TO_URL_KEY = {
+    "Portrait": "portrait_url",
+    "Landscape": "landscape_url",
+    "Banner": "banner_url",
+    "Logo": "logo_url",
+}
 
 
 def _now() -> str:
@@ -36,75 +48,60 @@ def _media_root() -> Path | None:
     return root if root and root.is_dir() else None
 
 
-def universes_dir(media_root: Path | None = None) -> Path | None:
+def media_relative_path(path: str | Path, media_root: Path | None = None) -> str:
+    """Normalize ``path`` to a posix path relative to the media root.
+
+    Accepts an absolute path under Media/ or an already media-relative path.
+    Raises ValueError if the file is missing or outside Media/.
+    """
+    root = media_root or _media_root()
+    if not root:
+        raise ValueError("Media root not configured")
+    root_res = root.resolve()
+    raw = Path(str(path).strip().replace("\\", "/"))
+    if raw.is_absolute():
+        candidates = [raw]
+    else:
+        candidates = [root / raw, raw]
+    resolved: Path | None = None
+    for cand in candidates:
+        try:
+            hit = cand.resolve(strict=True)
+        except OSError:
+            continue
+        if hit.is_file():
+            resolved = hit
+            break
+    if resolved is None:
+        raise ValueError("Image file not found")
+    if resolved.suffix.lower() not in IMAGE_EXTS:
+        raise ValueError("File must be an image")
+    try:
+        rel = resolved.relative_to(root_res)
+    except ValueError as exc:
+        raise ValueError("Image must be inside your Media folder") from exc
+    return rel.as_posix()
+
+
+def resolve_media_rel(rel: str | None, media_root: Path | None = None) -> Path | None:
+    """Resolve a media-relative path to an absolute file if it still exists."""
+    if not rel or not str(rel).strip():
+        return None
     root = media_root or _media_root()
     if not root:
         return None
-    return root / "Universes"
-
-
-def _universe_art_dirs(media_root: Path | None = None) -> list[Path]:
-    """Candidate folders for universe artwork."""
-    dirs: list[Path] = []
-    root = media_root or _media_root()
-    if root:
-        dirs.append(root / "Universes")
-        dirs.append(root / "universes")
-        dirs.append(root / "assets" / "universes")
-        dirs.append(root / "Assets" / "Universes")
-    # Project assets (repo-local), if present
+    candidate = (root / str(rel).replace("\\", "/")).resolve()
     try:
-        from app.paths import PROJECT_ROOT
-
-        dirs.append(PROJECT_ROOT / "assets" / "universes")
-        dirs.append(PROJECT_ROOT / "Assets" / "Universes")
-        dirs.append(PROJECT_ROOT / "data" / "assets" / "universes")
-    except Exception:
-        pass
-    out: list[Path] = []
-    seen: set[str] = set()
-    for d in dirs:
-        key = str(d).casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        if d.is_dir():
-            out.append(d)
-    return out
-
-
-def _art_file(universe_name: str, kind: str, media_root: Path | None = None) -> Path | None:
-    """Resolve art file for a universe.
-
-    Accepts legacy `{Name} - {Kind}.*` and newer `universe_{kind}.*` /
-    `{slug}_{kind}.*` stems under Media/Universes or assets/universes.
-    """
-    folders = _universe_art_dirs(media_root)
-    if not folders:
+        candidate.relative_to(root.resolve())
+    except ValueError:
         return None
-    kind_l = (kind or "").casefold().strip()
-    name = (universe_name or "").strip()
-    slug = _slugify(name)
-    stems = {
-        f"{name} - {kind}".casefold(),
-        f"universe_{kind_l}",
-        f"{slug}_{kind_l}",
-        f"{slug}-{kind_l}",
-        f"{name.casefold()}_{kind_l}",
-    }
-    try:
-        for folder in folders:
-            for p in folder.iterdir():
-                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
-                    continue
-                if p.stem.casefold() in stems:
-                    return p
-    except OSError:
-        return None
+    if candidate.is_file() and candidate.suffix.lower() in IMAGE_EXTS:
+        return candidate
     return None
 
 
 def resolve_universe_art(universe: Universe, media_root: Path | None = None) -> dict:
+    """Build art URLs from DB-stored media-relative paths only."""
     root = media_root or _media_root()
     out = {
         "portrait_url": None,
@@ -112,134 +109,130 @@ def resolve_universe_art(universe: Universe, media_root: Path | None = None) -> 
         "banner_url": None,
         "logo_url": None,
         "cover_url": None,
+        "portrait_path": getattr(universe, "uni_portrait_path", None),
+        "landscape_path": getattr(universe, "uni_landscape_path", None),
+        "banner_path": getattr(universe, "uni_banner_path", None),
+        "logo_path": getattr(universe, "uni_logo_path", None),
     }
-    name = universe.uni_name
-    for kind, key in (
-        ("Portrait", "portrait_url"),
-        ("Landscape", "landscape_url"),
-        ("Banner", "banner_url"),
-        ("Logo", "logo_url"),
-    ):
-        f = _art_file(name, kind, root)
+    if not root:
+        return out
+    for kind, url_key in ART_KIND_TO_URL_KEY.items():
+        attr = ART_KIND_TO_ATTR[kind]
+        rel = getattr(universe, attr, None)
+        f = resolve_media_rel(rel, root)
         if f:
-            under_media = False
-            if root:
-                try:
-                    f.resolve().relative_to(root.resolve())
-                    under_media = True
-                except ValueError:
-                    under_media = False
-            out[key] = _media_url(f, root) if under_media and root else _file_url(f)
+            out[url_key] = _media_url(f, root)
     out["cover_url"] = (
         out["portrait_url"] or out["landscape_url"] or out["banner_url"] or out["logo_url"]
     )
     return out
 
 
-def _art_url(path: Path, media_root: Path | None = None) -> str | None:
-    root = media_root or _media_root()
-    under_media = False
-    if root:
-        try:
-            path.resolve().relative_to(root.resolve())
-            under_media = True
-        except ValueError:
-            under_media = False
-    return _media_url(path, root) if under_media and root else _file_url(path)
+def pick_media_image_path(*, title: str = "Choose universe image") -> dict:
+    """Native file dialog under Media/; returns relative path + media URL."""
+    from app.folder_picker import pick_image_file
+
+    root = _media_root()
+    if not root:
+        raise ValueError("Media root not configured")
+    chosen = pick_image_file(title=title, initial_dir=str(root))
+    if not chosen:
+        return {"cancelled": True, "path": None, "url": None}
+    rel = media_relative_path(chosen, root)
+    abs_path = resolve_media_rel(rel, root)
+    return {
+        "cancelled": False,
+        "path": rel,
+        "url": _media_url(abs_path, root) if abs_path else None,
+    }
+
+
+def set_universe_art_path(
+    db: Session,
+    universe_id: int,
+    *,
+    kind: str,
+    path: str | None,
+) -> Universe:
+    """Store (or clear) a media-relative art path on the universe row."""
+    if kind not in ART_KINDS:
+        raise ValueError(f"kind must be one of {ART_KINDS}")
+    u = db.get(Universe, universe_id)
+    if not u:
+        raise ValueError("Universe not found")
+    attr = ART_KIND_TO_ATTR[kind]
+    if path is None or not str(path).strip():
+        setattr(u, attr, None)
+    else:
+        setattr(u, attr, media_relative_path(path))
+    u.uni_updated_at = _now()
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def apply_universe_art_paths(
+    db: Session,
+    universe: Universe,
+    *,
+    portrait_path: str | None = None,
+    landscape_path: str | None = None,
+    banner_path: str | None = None,
+    logo_path: str | None = None,
+    set_portrait: bool = False,
+    set_landscape: bool = False,
+    set_banner: bool = False,
+    set_logo: bool = False,
+) -> Universe:
+    """Apply optional art path fields (unset flags leave existing values)."""
+    mapping = (
+        ("Portrait", portrait_path, set_portrait),
+        ("Landscape", landscape_path, set_landscape),
+        ("Banner", banner_path, set_banner),
+        ("Logo", logo_path, set_logo),
+    )
+    changed = False
+    for kind, value, do_set in mapping:
+        if not do_set:
+            continue
+        attr = ART_KIND_TO_ATTR[kind]
+        if value is None or not str(value).strip():
+            setattr(universe, attr, None)
+        else:
+            setattr(universe, attr, media_relative_path(value))
+        changed = True
+    if changed:
+        universe.uni_updated_at = _now()
+        db.commit()
+        db.refresh(universe)
+    return universe
 
 
 def list_universe_gallery(
     universe: Universe, media_root: Path | None = None
 ) -> list[dict]:
-    """All art images for a universe under Universes/assets folders.
-
-    Accepts stems like ``Wizarding World - Portrait``, ``Wizarding World_portrait``,
-    ``wizarding-world_banner``, ``universe_logo``, etc.
-    """
-    folders = _universe_art_dirs(media_root)
-    if not folders:
-        return []
-    name = (universe.uni_name or "").strip()
-    slug = _slugify(name)
-    name_cf = name.casefold()
-    prefixes = (
-        f"{name_cf} - ",
-        f"{name_cf}_",
-        f"{name_cf}-",
-        f"{slug}_",
-        f"{slug}-",
-        "universe_",
-    )
-    exact = {
-        name_cf,
-        slug,
-        f"{name_cf} - portrait",
-        f"{name_cf} - landscape",
-        f"{name_cf} - banner",
-        f"{name_cf} - logo",
-    }
-    seen: set[str] = set()
-    items: list[dict] = []
+    """Gallery items from the universe's DB art paths (existing Media files only)."""
     root = media_root or _media_root()
-    try:
-        for folder in folders:
-            for p in sorted(folder.iterdir(), key=lambda x: x.name.casefold()):
-                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
-                    continue
-                stem = p.stem.casefold()
-                if stem not in exact and not any(stem.startswith(pref) for pref in prefixes):
-                    continue
-                key = str(p.resolve())
-                if key in seen:
-                    continue
-                seen.add(key)
-                url = _art_url(p, root)
-                if not url:
-                    continue
-                # Title from stem after name/slug prefix
-                title = p.stem
-                for sep in (f"{name} - ", f"{name}_", f"{name}-", f"{slug}_", f"{slug}-", "universe_"):
-                    if title.casefold().startswith(sep.casefold()):
-                        title = title[len(sep) :].strip() or p.stem
-                        break
-                items.append(
-                    {
-                        "id": f"universe-art-{len(items)}-{p.stem}",
-                        "url": url,
-                        "title": title.replace("_", " ").strip() or p.stem,
-                        "folder_path": str(folder),
-                        "section": "art",
-                    }
-                )
-    except OSError:
-        return items
+    if not root:
+        return []
+    items: list[dict] = []
+    for kind in ART_KINDS:
+        attr = ART_KIND_TO_ATTR[kind]
+        rel = getattr(universe, attr, None)
+        f = resolve_media_rel(rel, root)
+        if not f:
+            continue
+        items.append(
+            {
+                "id": f"universe-art-{kind.casefold()}",
+                "url": _media_url(f, root),
+                "title": kind,
+                "folder_path": str(f.parent),
+                "section": "art",
+                "path": rel,
+            }
+        )
     return items
-
-
-def _file_url(path: Path) -> str | None:
-    """Serve project-local art via /api/assets when outside media root."""
-    try:
-        from app.paths import PROJECT_ROOT
-
-        resolved = path.resolve()
-        assets_root = (PROJECT_ROOT / "assets").resolve()
-        try:
-            # Prefer /api/assets/universes/... (assets router roots at assets/)
-            rel = resolved.relative_to(assets_root)
-            return f"/api/assets/{rel.as_posix()}"
-        except ValueError:
-            pass
-        rel = resolved.relative_to(PROJECT_ROOT.resolve())
-        # Drop leading assets/ so router does not double-nest
-        parts = rel.parts
-        if parts and parts[0].casefold() == "assets":
-            rel = Path(*parts[1:]) if len(parts) > 1 else Path()
-        return f"/api/assets/{rel.as_posix()}"
-    except Exception:
-        try:
-            return _media_url(path, path.parent)
-        except Exception:
-            return None
 
 
 def _member_rows(db: Session, universe_id: int) -> list[UniverseMember]:
@@ -315,6 +308,10 @@ def _serialize_universe(
         "banner_url": art.get("banner_url"),
         "logo_url": art.get("logo_url"),
         "cover_url": cover,
+        "portrait_path": art.get("portrait_path"),
+        "landscape_path": art.get("landscape_path"),
+        "banner_path": art.get("banner_path"),
+        "logo_path": art.get("logo_path"),
         "member_count": len(members),
         "members": [
             {
@@ -909,6 +906,10 @@ def create_universe(
     *,
     name: str,
     overview: str | None = None,
+    portrait_path: str | None = None,
+    landscape_path: str | None = None,
+    banner_path: str | None = None,
+    logo_path: str | None = None,
 ) -> Universe:
     clean = (name or "").strip()
     if not clean:
@@ -917,10 +918,19 @@ def create_universe(
     existing = db.scalar(select(Universe).where(Universe.uni_slug == slug))
     if existing:
         raise ValueError(f"Universe already exists: {existing.uni_name}")
+    def _opt_rel(raw: str | None) -> str | None:
+        if raw is None or not str(raw).strip():
+            return None
+        return media_relative_path(raw)
+
     row = Universe(
         uni_name=clean,
         uni_slug=slug,
         uni_overview=(overview or "").strip() or None,
+        uni_portrait_path=_opt_rel(portrait_path),
+        uni_landscape_path=_opt_rel(landscape_path),
+        uni_banner_path=_opt_rel(banner_path),
+        uni_logo_path=_opt_rel(logo_path),
         uni_created_at=_now(),
         uni_updated_at=_now(),
     )
@@ -934,18 +944,6 @@ def update_universe_overview(
     db: Session, universe_id: int, overview: str | None
 ) -> Universe | None:
     return update_universe(db, universe_id, overview=overview, set_overview=True)
-
-
-def _delete_universe_art_files(universe_name: str) -> None:
-    root = _media_root()
-    for kind in ART_KINDS:
-        path = _art_file(universe_name, kind, root)
-        if not path:
-            continue
-        try:
-            path.unlink()
-        except OSError:
-            pass
 
 
 def delete_universe(db: Session, universe_id: int) -> None:
@@ -967,10 +965,8 @@ def delete_universe(db: Session, universe_id: int) -> None:
     )
     for row in sync_rows:
         db.delete(row)
-    name = u.uni_name
     db.delete(u)
     db.commit()
-    _delete_universe_art_files(name)
     clear_universe_card_caches()
     _expand_cards_cache.pop(universe_id, None)
 
@@ -999,9 +995,7 @@ def update_universe(
         )
         if clash:
             raise ValueError(f"Universe {cleaned!r} already exists")
-        old_name = u.uni_name
-        if cleaned != old_name:
-            _rename_universe_art_files(old_name, cleaned)
+        if cleaned != u.uni_name:
             u.uni_name = cleaned
             u.uni_slug = new_slug
     if set_overview:
@@ -1012,52 +1006,42 @@ def update_universe(
     return u
 
 
-def _rename_universe_art_files(old_name: str, new_name: str) -> None:
-    root = _media_root()
-    folder = universes_dir(root) if root else None
-    if not folder or not folder.is_dir() or not root:
-        return
-    for kind in ART_KINDS:
-        src = _art_file(old_name, kind, root)
-        if not src:
-            continue
-        dest = folder / f"{new_name} - {kind}{src.suffix}"
-        try:
-            if dest.exists() and dest != src:
-                dest.unlink()
-            src.rename(dest)
-        except OSError:
-            pass
-
-
 def save_universe_art_bytes(
+    db: Session,
     universe: Universe,
     kind: str,
     data: bytes,
     suffix: str = ".png",
 ) -> str | None:
-    """Write `{Name} - {Kind}.png` under Media/Universes/. Returns media URL."""
+    """Persist fetched bytes under Media/.mystack/universe-art/ and store the path.
+
+    Used only for TMDb portrait fetch (user picks keep pointing at existing files).
+    """
     if kind not in ART_KINDS:
         raise ValueError(f"kind must be one of {ART_KINDS}")
     root = _media_root()
     if not root:
         raise ValueError("Media root not configured")
-    folder = universes_dir(root)
-    assert folder is not None
+    ext = suffix if suffix.startswith(".") else f".{suffix}"
+    if ext.lower() not in IMAGE_EXTS:
+        ext = ".png"
+    folder = root / ".mystack" / "universe-art"
     folder.mkdir(parents=True, exist_ok=True)
-    # Remove prior stems for this kind
-    stem = f"{universe.uni_name} - {kind}"
-    for p in list(folder.iterdir()) if folder.is_dir() else []:
-        if p.is_file() and p.stem.casefold() == stem.casefold():
+    slug = universe.uni_slug or _slugify(universe.uni_name)
+    dest = folder / f"{slug}-{kind.casefold()}{ext}"
+    # Replace prior fetch for this kind/slug
+    for p in folder.glob(f"{slug}-{kind.casefold()}.*"):
+        if p.is_file() and p != dest:
             try:
                 p.unlink()
             except OSError:
                 pass
-    ext = suffix if suffix.startswith(".") else f".{suffix}"
-    if ext.lower() not in IMAGE_EXTS:
-        ext = ".png"
-    dest = folder / f"{stem}{ext}"
     dest.write_bytes(data)
+    rel = media_relative_path(dest, root)
+    setattr(universe, ART_KIND_TO_ATTR[kind], rel)
+    universe.uni_updated_at = _now()
+    db.commit()
+    db.refresh(universe)
     return _media_url(dest, root)
 
 
@@ -1748,7 +1732,8 @@ def build_universe_hub(
     u = db.get(Universe, universe_id)
     if not u:
         return None
-    data = _serialize_universe(db, u, expand_cover=True)
+    # Universe art = DB media-relative paths only (never member covers).
+    data = _serialize_universe(db, u, expand_cover=False)
     cards = expand_universe_cards(db, universe_id)
     if not nsfw_unlocked:
         from app.adult_content import (
@@ -1803,33 +1788,9 @@ def build_universe_hub(
         key=lambda c: (c.get("date_iso") or "9999", title_key(c)),
     )
 
-    # Prefer universe art; fall back to earliest member for page chrome.
-    banner = data.get("banner_url") or data.get("landscape_url")
+    # Page chrome + About eras: only DB-linked Media paths.
     portrait = data.get("portrait_url") or data.get("cover_url")
-    if not banner or not portrait:
-        for c in carousel:
-            if not portrait:
-                portrait = (
-                    c.get("portrait_url")
-                    or c.get("cover_url")
-                    or c.get("landscape_url")
-                )
-            if not banner:
-                banner = (
-                    c.get("banner_url")
-                    or c.get("landscape_url")
-                    or c.get("cover_url")
-                )
-            if portrait and banner:
-                break
-        if portrait and not data.get("cover_url"):
-            data["cover_url"] = portrait
-        if portrait and not data.get("portrait_url"):
-            data["portrait_url"] = portrait
-        if banner and not data.get("banner_url"):
-            data["banner_url"] = banner
-        if banner and not data.get("landscape_url"):
-            data["landscape_url"] = banner
+    banner = data.get("banner_url") or data.get("landscape_url")
 
     agg = _hub_aggregate_meta(db, cards)
     media = _hub_media_flags(cards)
@@ -1868,26 +1829,12 @@ def build_universe_hub(
             publishers=agg["publishers"],
         )
 
-    # Logo-by-language stubs (universe_logo / universe_logo_{code})
     logo_by_language: dict[str, str] = {}
     if data.get("logo_url"):
         logo_by_language["default"] = data["logo_url"]
-    for code in lang_codes:
-        f = _art_file(u.uni_name, f"Logo_{code}", None) or _art_file(
-            u.uni_name, f"logo_{code}", None
-        )
-        if f:
-            root = _media_root()
-            under_media = False
-            if root:
-                try:
-                    f.resolve().relative_to(root.resolve())
-                    under_media = True
-                except ValueError:
-                    under_media = False
-            url = _media_url(f, root) if under_media and root else _file_url(f)
-            if url:
-                logo_by_language[code.casefold()] = url
+        for code in lang_codes:
+            # Per-language logos are not modeled separately; reuse the linked logo.
+            logo_by_language[code.casefold()] = data["logo_url"]
 
     eras = []
     if portrait:
@@ -2128,7 +2075,7 @@ def filter_similar_against_universe(
 
 
 async def pull_tmdb_portrait(db: Session, universe_id: int, api_key: str) -> dict:
-    """Search TMDb collection by universe name; save Portrait.png only (no collection id)."""
+    """Search TMDb collection by universe name; store Portrait under Media/.mystack/."""
     import httpx
 
     from app.services import tmdb
@@ -2181,7 +2128,7 @@ async def pull_tmdb_portrait(db: Session, universe_id: int, api_key: str) -> dic
             "Couldn't download the cover image. Try again in a moment."
         ) from exc
 
-    art_url = save_universe_art_bytes(u, "Portrait", raw, suffix=".png")
+    art_url = save_universe_art_bytes(db, u, "Portrait", raw, suffix=".png")
     overview = (data.get("overview") or "").strip()
     if overview and not u.uni_overview:
         u.uni_overview = overview

@@ -337,6 +337,18 @@ def migrate_schema(eng: Engine) -> None:
                 except Exception:
                     pass
 
+        # Universe art = media-relative paths stored on the universe row
+        if "universes" in tables:
+            uni_cols = {c["name"] for c in inspect(eng).get_columns("universes")}
+            for col in (
+                "uni_portrait_path",
+                "uni_landscape_path",
+                "uni_banner_path",
+                "uni_logo_path",
+            ):
+                if col not in uni_cols:
+                    conn.execute(text(f'ALTER TABLE universes ADD COLUMN "{col}" TEXT'))
+
         # Universe leaf members + franchise sync rules
         if "universe_members" in tables:
             ume_cols = {c["name"] for c in inspect(eng).get_columns("universe_members")}

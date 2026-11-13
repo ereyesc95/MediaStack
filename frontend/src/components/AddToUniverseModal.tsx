@@ -13,9 +13,9 @@ import {
   linkUniverseMember,
   lookupUniverse,
   patchUniverse,
+  pickUniverseMediaImage,
   pullUniverseTmdbPortrait,
   unlinkUniverseMember,
-  uploadUniverseArt,
 } from "../api";
 import { withMediaAccess } from "../mediaFileUrl";
 import type { Universe } from "../types";
@@ -97,8 +97,10 @@ export default function AddToUniverseModal({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [newOverview, setNewOverview] = useState("");
-  const [artFiles, setArtFiles] = useState<
-    Partial<Record<(typeof ART_KINDS)[number], File | null>>
+  const [artPicks, setArtPicks] = useState<
+    Partial<
+      Record<(typeof ART_KINDS)[number], { path: string; url: string | null }>
+    >
   >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +209,7 @@ export default function AddToUniverseModal({
   const backToPick = () => {
     setMode("pick");
     setEditingId(null);
-    setArtFiles({});
+    setArtPicks({});
     setOpenList(false);
     setError(null);
   };
@@ -217,7 +219,7 @@ export default function AddToUniverseModal({
     setEditingId(null);
     setNewName(query.trim());
     setNewOverview("");
-    setArtFiles({});
+    setArtPicks({});
     setSelectedId(null);
     setOpenList(false);
     setError(null);
@@ -230,9 +232,26 @@ export default function AddToUniverseModal({
     setQuery(u.name);
     setNewName(u.name);
     setNewOverview(u.overview || "");
-    setArtFiles({});
+    setArtPicks({});
     setOpenList(false);
     setError(null);
+  };
+
+  const browseArt = async (kind: (typeof ART_KINDS)[number]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const picked = await pickUniverseMediaImage(kind);
+      if (picked.cancelled || !picked.path) return;
+      setArtPicks((prev) => ({
+        ...prev,
+        [kind]: { path: picked.path!, url: picked.url },
+      }));
+    } catch (e) {
+      setError(calmErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveLink = async (universeId: number) => {
@@ -259,11 +278,11 @@ export default function AddToUniverseModal({
       const created = await createUniverse({
         name: newName.trim(),
         overview: newOverview.trim() || null,
+        portrait_path: artPicks.Portrait?.path ?? null,
+        landscape_path: artPicks.Landscape?.path ?? null,
+        banner_path: artPicks.Banner?.path ?? null,
+        logo_path: artPicks.Logo?.path ?? null,
       });
-      for (const kind of ART_KINDS) {
-        const file = artFiles[kind];
-        if (file) await uploadUniverseArt(created.id, kind, file);
-      }
       await linkUniverseMember(created.id, module, franchiseId, leafId);
       notifyUniversesChanged();
       onSaved();
@@ -283,11 +302,15 @@ export default function AddToUniverseModal({
       const updated = await patchUniverse(editingId, {
         name: newName.trim(),
         overview: newOverview.trim() || null,
+        ...(artPicks.Portrait
+          ? { portrait_path: artPicks.Portrait.path }
+          : {}),
+        ...(artPicks.Landscape
+          ? { landscape_path: artPicks.Landscape.path }
+          : {}),
+        ...(artPicks.Banner ? { banner_path: artPicks.Banner.path } : {}),
+        ...(artPicks.Logo ? { logo_path: artPicks.Logo.path } : {}),
       });
-      for (const kind of ART_KINDS) {
-        const file = artFiles[kind];
-        if (file) await uploadUniverseArt(editingId, kind, file);
-      }
       const list = await fetchUniverses();
       setUniverses(list.universes || []);
       setMemberships((prev) =>
@@ -527,15 +550,13 @@ export default function AddToUniverseModal({
                 <ArtPickSquare
                   key={kind}
                   label={kind.toLowerCase()}
-                  previewUrl={artUrl(formUniverse, kind)}
-                  file={artFiles[kind] ?? null}
-                  disabled={busy}
-                  onPick={(file) =>
-                    setArtFiles((prev) => ({
-                      ...prev,
-                      [kind]: file,
-                    }))
+                  previewUrl={
+                    artPicks[kind]?.url
+                      ? withMediaAccess(artPicks[kind]!.url!)
+                      : artUrl(formUniverse, kind)
                   }
+                  disabled={busy}
+                  onBrowseMedia={() => void browseArt(kind)}
                 />
               ))}
             </div>

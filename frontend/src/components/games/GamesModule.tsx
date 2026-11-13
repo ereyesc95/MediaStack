@@ -21,7 +21,10 @@ import {
   type OwnershipIndex,
 } from "../../leafOwnership";
 import { clearMediaTheme } from "../../mediaTheme";
-import { takePendingCatalogBrowse } from "../../mediaEntry";
+import {
+  getMediaEntrySource,
+  takePendingCatalogBrowse,
+} from "../../mediaEntry";
 import { shouldReturnToPhotosExclusive } from "../../photosExclusiveReturn";
 import {
   defaultSectionForSource,
@@ -133,7 +136,11 @@ type Props = {
     }
   ) => void;
   onOpenArtist?: (bandId: number, artistSection?: string) => void;
-  onOpenUniverse?: (universeId: number) => void;
+  onOpenUniverse?: (
+    universeId: number,
+    from?: "home" | "catalog",
+    universeName?: string
+  ) => void;
   onBackToPhotos?: () => void;
 };
 
@@ -811,6 +818,13 @@ export default function GamesModule({
               : undefined
           }
           onOpenSeriesFranchise={onOpenSeriesFranchise}
+          onOpenUniverseParent={(id, name) => {
+            onOpenUniverse?.(
+              id,
+              getMediaEntrySource() || "catalog",
+              name
+            );
+          }}
           onOpenMoviesPath={(path) => {
             void resolveMoviesPath(path)
               .then((hit) => {

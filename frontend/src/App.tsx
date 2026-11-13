@@ -2207,7 +2207,9 @@ export default function App() {
                 artistOverviewTab: "about",
               });
             }}
-            onOpenUniverse={(id) => openUniversePage(id, "games", "home")}
+            onOpenUniverse={(id, from, name) =>
+              openUniversePage(id, "games", from || "home", name)
+            }
             onBackToPhotos={() => {
               pushPhotosRootRoute();
               setView({ kind: "photos" });

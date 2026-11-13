@@ -1,7 +1,7 @@
 """Shared universe API (Movies + Series)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.deps import get_nsfw_unlocked, require_admin
 from app.database import get_db
 from app.universes import (
     ART_KINDS,
+    apply_universe_art_paths,
     build_universe_hub,
     create_universe,
     delete_universe,
@@ -18,8 +19,9 @@ from app.universes import (
     landing_franchise,
     link_franchise,
     list_universes,
+    pick_media_image_path,
     pull_tmdb_portrait,
-    save_universe_art_bytes,
+    set_universe_art_path,
     unlink_franchise,
     update_universe,
 )
@@ -30,6 +32,10 @@ router = APIRouter(prefix="/api/universes", tags=["universes"])
 class CreateUniverseBody(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     overview: str | None = None
+    portrait_path: str | None = None
+    landscape_path: str | None = None
+    banner_path: str | None = None
+    logo_path: str | None = None
 
 
 class LinkMemberBody(BaseModel):
@@ -42,6 +48,16 @@ class LinkMemberBody(BaseModel):
 class OverviewBody(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     overview: str | None = None
+    portrait_path: str | None = None
+    landscape_path: str | None = None
+    banner_path: str | None = None
+    logo_path: str | None = None
+
+
+class SetArtPathBody(BaseModel):
+    kind: str
+    """Media-relative or absolute path under Media/. Null clears the slot."""
+    path: str | None = None
 
 
 @router.get("")
@@ -67,10 +83,36 @@ def api_create_universe(
     _admin=Depends(require_admin),
 ):
     try:
-        row = create_universe(db, name=body.name, overview=body.overview)
+        row = create_universe(
+            db,
+            name=body.name,
+            overview=body.overview,
+            portrait_path=body.portrait_path,
+            landscape_path=body.landscape_path,
+            banner_path=body.banner_path,
+            logo_path=body.logo_path,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return get_universe(db, row.uni_id)
+
+
+@router.post("/pick-media-image")
+async def api_pick_media_image(
+    kind: str | None = Query(None),
+    _admin=Depends(require_admin),
+):
+    """Native dialog: pick an existing image inside Media/; return relative path + URL."""
+    import asyncio
+
+    label = (kind or "image").strip() or "image"
+    try:
+        result = await asyncio.to_thread(
+            lambda: pick_media_image_path(title=f"Choose universe {label}")
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return result
 
 
 @router.get("/lookup")
@@ -84,11 +126,9 @@ def api_lookup_universe(
         raise HTTPException(400, "module must be movies, series, books, or games")
     from app.universes import (
         franchise_has_sync,
-        universes_for_franchise,
+        universes_for_franchise_scope,
         universes_for_leaf,
     )
-
-    from app.universes import universes_for_franchise_scope
 
     if leaf_id:
         # Leaf scope: explicit leaf rows + franchise sync coverage.
@@ -140,10 +180,29 @@ def api_patch_universe(
             overview=fields.get("overview"),
             set_overview="overview" in fields,
         )
+        if not row:
+            raise HTTPException(404, "Universe not found")
+        art_keys = (
+            "portrait_path",
+            "landscape_path",
+            "banner_path",
+            "logo_path",
+        )
+        if any(k in fields for k in art_keys):
+            apply_universe_art_paths(
+                db,
+                row,
+                portrait_path=fields.get("portrait_path"),
+                landscape_path=fields.get("landscape_path"),
+                banner_path=fields.get("banner_path"),
+                logo_path=fields.get("logo_path"),
+                set_portrait="portrait_path" in fields,
+                set_landscape="landscape_path" in fields,
+                set_banner="banner_path" in fields,
+                set_logo="logo_path" in fields,
+            )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    if not row:
-        raise HTTPException(404, "Universe not found")
     return get_universe(db, universe_id)
 
 
@@ -240,31 +299,26 @@ def api_unlink_member(
 
 
 @router.post("/{universe_id}/art")
-async def api_upload_art(
+def api_set_art_path(
     universe_id: int,
-    kind: str = Form(...),
-    file: UploadFile = File(...),
+    body: SetArtPathBody,
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ):
-    from app.models import Universe
-
-    u = db.get(Universe, universe_id)
-    if not u:
-        raise HTTPException(404, "Universe not found")
-    if kind not in ART_KINDS:
+    """Point a universe art slot at an existing Media/ file (or clear it)."""
+    if body.kind not in ART_KINDS:
         raise HTTPException(400, f"kind must be one of {ART_KINDS}")
-    raw = await file.read()
-    if not raw:
-        raise HTTPException(400, "Empty file")
-    suffix = ".png"
-    if file.filename and "." in file.filename:
-        suffix = "." + file.filename.rsplit(".", 1)[-1].lower()
     try:
-        url = save_universe_art_bytes(u, kind, raw, suffix=suffix)
+        set_universe_art_path(db, universe_id, kind=body.kind, path=body.path)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return get_universe(db, universe_id) | {"uploaded": kind, "url": url}
+        msg = str(exc)
+        if msg == "Universe not found":
+            raise HTTPException(404, msg) from exc
+        raise HTTPException(400, msg) from exc
+    return get_universe(db, universe_id) | {
+        "uploaded": body.kind,
+        "path": body.path,
+    }
 
 
 @router.post("/{universe_id}/tmdb-portrait")

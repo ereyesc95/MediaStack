@@ -4,9 +4,16 @@ type Props = {
   label: string;
   /** Existing image URL (already media-access wrapped if needed). */
   previewUrl?: string | null;
+  /** Local File preview (browser file input mode). */
   file?: File | null;
   disabled?: boolean;
-  onPick: (file: File | null) => void;
+  /** Browser file input (default when onBrowseMedia is omitted). */
+  onPick?: (file: File | null) => void;
+  /**
+   * When set, opens a Media-library browse flow instead of uploading a copy.
+   * Used for universe art (path stored in DB).
+   */
+  onBrowseMedia?: () => void;
 };
 
 /** Small square image picker (+ Add / Change overlay) used in create/edit modals. */
@@ -16,6 +23,7 @@ export default function ArtPickSquare({
   file = null,
   disabled = false,
   onPick,
+  onBrowseMedia,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -31,22 +39,28 @@ export default function ArtPickSquare({
   }, [file]);
 
   const shown = objectUrl || previewUrl;
+  const browseOnly = typeof onBrowseMedia === "function";
 
   return (
     <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        hidden
-        disabled={disabled}
-        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-      />
+      {!browseOnly ? (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          disabled={disabled}
+          onChange={(e) => onPick?.(e.target.files?.[0] ?? null)}
+        />
+      ) : null}
       <button
         type="button"
         className={`art-pick-square${shown ? " art-pick-square--filled" : ""}`}
         disabled={disabled}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (browseOnly) onBrowseMedia();
+          else inputRef.current?.click();
+        }}
         aria-label={shown ? `Change ${label}` : `Add ${label}`}
       >
         {shown ? (
